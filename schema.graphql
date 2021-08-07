@@ -1,0 +1,50 @@
+type Event @entity {
+  id: ID!
+  block_id: Int!
+  event_idx: Int!
+  extrinsic_idx: Int
+  spec_version_id: Int!
+  module_id: String! @index(unique: false)
+  event_id: String! @index(unique: false)
+  attributes_txt: String!
+}
+type Debug @entity {
+  id: ID!
+}
+
+type Block @entity {
+  id: ID!
+  parent_id: Int!
+  hash: String!
+  parent_hash: String!
+  state_root: String!
+  extrinsics_root: String!
+  count_extrinsics: Int!
+  count_extrinsics_unsigned: Int!
+  count_extrinsics_signed: Int!
+  count_extrinsics_error: Int!
+  count_extrinsics_success: Int!
+  count_events: Int!
+  datetime: Date!
+  spec_version_id: String!
+}
+
+type Extrinsic @entity {
+  id: ID!
+  block_id: Int!
+  extrinsic_idx: Int!
+  extrinsic_hash: String
+  extrinsic_length: String!
+  extrinsic_version: String!
+  signed: Int!
+  address_length: String
+  address: String
+  signature: String
+  nonce: Int
+  era: String
+  module_id: String!
+  call_id: String!
+  params: String!
+  success: Int!
+  spec_version_id: Int!
+}

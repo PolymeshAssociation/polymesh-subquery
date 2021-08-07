@@ -1,0 +1,52 @@
+version: "3"
+
+services:
+  postgres:
+    image: postgres:12-alpine
+    ports:
+      - 5432:5432
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: postgres
+
+  subquery-node:
+    image: onfinality/subql-node:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - "postgres"
+    restart: always
+    environment:
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_DATABASE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+    volumes:
+      - ./:/app
+    command:
+      - --batch-size=500
+      - -f=/app
+      - --local
+
+  graphql-engine:
+    image: onfinality/subql-query:latest
+    ports:
+      - 3001:3000
+    depends_on:
+      - "postgres"
+      - "subquery-node"
+    restart: always
+    environment:
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_DATABASE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+    command:
+      - --name=app
+      - --playground
+
+volumes:
+  db-data:

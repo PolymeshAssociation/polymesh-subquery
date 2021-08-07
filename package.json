@@ -1,0 +1,43 @@
+{
+  "name": "polymesh-subql",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "compare": "scripts/run-compare.sh",
+    "prepack": "rm -rf dist && npm run build",
+    "test": "jest",
+    "codegen": "./node_modules/.bin/subql codegen",
+    "start:docker": "docker-compose pull && docker-compose up --remove-orphans",
+    "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
+    "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict"
+  },
+  "homepage": "https://github.com/subquery/subql-starter",
+  "repository": "github:subquery/subql-starter",
+  "files": [
+    "dist",
+    "schema.graphql",
+    "project.yaml"
+  ],
+  "dependencies": {
+    "@polkadot/api": "4.13.1",
+    "@polkadot/util": "6.11.1",
+    "@polkadot/util-crypto": "6.11.1",
+    "bn.js": "^4.11.9"
+  },
+  "author": "Diego",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@polkadot/typegen": "4.13.1",
+    "@subql/cli": "latest",
+    "@subql/types": "latest",
+    "@types/bn.js": "^4.11.6",
+    "expect": "^27.0.6",
+    "mysql2": "^2.2.5",
+    "pg": "^8.6.0",
+    "ts-node": "^8.10.2",
+    "typeorm": "^0.2.34",
+    "typescript": "^4.1.3"
+  }
+}
