@@ -43,15 +43,7 @@ CREATE VIEW data_extrinsic AS
 SELECT
   block_id,
   extrinsic_idx,
-  extrinsic_hash,
-  extrinsic_length,
-  extrinsic_version,
   signed,
-  address_length,
-  address,
-  signature,
-  nonce,
-  era,
   call_id,
   module_id,
   params::jsonb as params,
@@ -91,9 +83,9 @@ SELECT
    		  THEN
    			json_build_object(
               'type',
-              get_first_key(attributes #> '{1,value,claim,Jurisdiction,1}'),
+              get_first_key(attributes #> '{1,value,claim,Jurisdiction,col2}'),
               'value',
-              attributes #> '{1,value,claim,Jurisdiction,1}' -> get_first_key(attributes #> '{1,value,claim,Jurisdiction,1}')
+              attributes #> '{1,value,claim,Jurisdiction,col2}' -> get_first_key(attributes #> '{1,value,claim,Jurisdiction,col2}')
              )
      WHEN ((attributes #> '{1,value,claim}') ?|
           array['InvestorUniqueness'])

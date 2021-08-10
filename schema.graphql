@@ -8,8 +8,16 @@ type Event @entity {
   event_id: String! @index(unique: false)
   attributes_txt: String!
 }
+
 type Debug @entity {
   id: ID!
+  line: String
+  context: String
+}
+
+type FoundType @entity {
+  id: ID! # This is type
+  rawType: String!
 }
 
 type Block @entity {
@@ -33,15 +41,8 @@ type Extrinsic @entity {
   id: ID!
   block_id: Int!
   extrinsic_idx: Int!
-  extrinsic_hash: String
   extrinsic_length: String!
-  extrinsic_version: String!
   signed: Int!
-  address_length: String
-  address: String
-  signature: String
-  nonce: Int
-  era: String
   module_id: String!
   call_id: String!
   params: String!

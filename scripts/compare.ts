@@ -1,17 +1,21 @@
-import {
-  Connection,
-  createConnection,
-  QueryBuilder,
-  SelectQueryBuilder,
-} from "typeorm";
-import { isMaster, fork, on as clusterOn } from "cluster";
+import { Connection, createConnection, QueryBuilder } from "typeorm";
 import { createWriteStream } from "fs";
+import { env } from "process";
 import expect from "expect";
 
-const find_in_pairs = <T, K>(
+require("dotenv").config();
+
+/**
+ * This function runs the function `func` on pairs of items from `arr` returning the value
+ * returned by `func` whenever it is not undefined
+ */
+const findInPairs = <T, K>(
   arr: T[],
   func: (a: T, b: T) => K | undefined
 ): K | undefined => {
+  if (arr.length < 2) {
+    return undefined;
+  }
   for (var i = 0; i < arr.length - 1; i++) {
     const res = func(arr[i], arr[i + 1]);
     if (res !== undefined) {
@@ -20,8 +24,13 @@ const find_in_pairs = <T, K>(
   }
   return undefined;
 };
+
 const byteLength = (s: string) => new TextEncoder().encode(s).length;
-const crawl = (a: any) => {
+
+// This function is designed to modify objects returned by the database recursively
+// such that known inevitable differences between the harvester and subquery are not
+// detected in the diff.
+const compensateAcceptedDifferences = (a: any) => {
   if (typeof a === "object") {
     for (const i in a) {
       if (
@@ -33,32 +42,38 @@ const crawl = (a: any) => {
         // This is a heuristic that says:
         // If the column is 100 characters then it was probably truncated and
         // therefore we don't care about it.
+        //
+        // It is necessary because the null characters in mysql cause the truncation
+        // to be different between the harvester and subquery.
         a[i] = expect.anything();
       } else if (i === "offchainAccuracy") {
-        // as far as I can tell offchainAccuracy is deserialized wrong in the harvester
+        // As far as I can tell offchainAccuracy is deserialized wrong in the harvester.
         a[i] = expect.anything();
       } else if (a[i] === "null") {
-        // Coalesce "null" and null
+        // Coalesce "null" and null.
         a[i] = null;
       } else if (typeof a[i] === "string") {
-        // Remove null characters because postgresql doesn't support them
+        // Remove null characters because postgresql doesn't support them.
         a[i] = a[i].replace(/\0|\\u0000/g, "");
       } else if (typeof a[i] === "number") {
-        // reduce number precision to allow slight deviation between subquery and harvester
+        // Reduce number precision to allow slight deviation between subquery and harvester.
+        // Specifically for "score" in "staking::submit_election_solution_unsigned".
         a[i] = a[i].toPrecision(13);
       } else {
-        [crawl(a[i])];
+        compensateAcceptedDifferences(a[i]);
       }
     }
   }
 };
 
+/**
+ * @returns the index of the block before a block gap
+ */
 const findMissingBlock = (results: { block_id: number }[]) =>
-  find_in_pairs(results, (a, b) =>
+  findInPairs(results, (a, b) =>
     a.block_id !== b.block_id + 1 ? a.block_id : undefined
   );
 
-const BATCH_SIZE = 100;
 enum DB {
   POSTGRES,
   MYSQL,
@@ -70,8 +85,10 @@ type TableQuery = (
   blockStart: number,
   blockEnd: number
 ) => Promise<any[]>;
-const START_BLOCK = 1187881;
-const MAX_BLOCK = START_BLOCK + 10000 * BATCH_SIZE;
+
+const START_BLOCK = parseInt(env.START_BLOCK);
+const MAX_BLOCK = parseInt(env.MAX_BLOCK);
+const BATCH_SIZE = parseInt(env.BATCH_SIZE);
 
 const compareTable = async (
   q: TableQuery,
@@ -79,13 +96,18 @@ const compareTable = async (
   mysql: Connection,
   postgres: Connection
 ) => {
-  const errorStream = createWriteStream(`errors_${table_name}`, {
+  let hasError = false;
+
+  const errorFileName = `errors_${table_name}`;
+  const errorStream = createWriteStream(errorFileName, {
     flags: "w",
   });
+
   let i = START_BLOCK;
   while (true) {
     const blockStart = i;
     const blockEnd = Math.min(i + BATCH_SIZE, MAX_BLOCK);
+
     const harvester_result = await q(DB.MYSQL)(
       mysql.createQueryBuilder(),
       blockStart,
@@ -117,11 +139,12 @@ const compareTable = async (
     }
 
     for (const [s, h] of zip(subquery_result, harvester_result)) {
-      crawl(h);
-      crawl(s);
+      compensateAcceptedDifferences(h);
+      compensateAcceptedDifferences(s);
       try {
         expect(h).toMatchObject(s);
       } catch (e) {
+        hasError = true;
         if (
           !errorStream.write(
             `\n--------------------------------------------\n${e.toString()}`
@@ -139,13 +162,24 @@ const compareTable = async (
     console.log(
       `Processed blocks (${table_name}) [${blockStart}, ${blockEnd}]`
     );
+
     if (blockEnd >= MAX_BLOCK) {
-      return;
+      if (hasError) {
+        throw new Error(
+          `Table: ${table_name} contains errors, check the ${errorFileName} file`
+        );
+      } else {
+        return;
+      }
     }
     i = blockEnd;
   }
 };
 
+/**
+ * @returns an array of length min(a.length,b.length) of pairs of the items at the same
+ * index in `a` and `b`.
+ */
 const zip = <T, K>(a: T[], b: K[]): [T, K][] => a.map((k, i) => [k, b[i]]);
 
 const eventQuery: TableQuery = (db) => async (qb, blockStart, blockEnd) =>
@@ -175,6 +209,7 @@ const eventQuery: TableQuery = (db) => async (qb, blockStart, blockEnd) =>
     .orderBy("block_id", "ASC")
     .addOrderBy("event_idx", "ASC")
     .getRawMany();
+
 const blockQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
   qb
     .select("id", "block_id")
@@ -198,20 +233,13 @@ const blockQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
     })
     .orderBy("block_id", "ASC")
     .getRawMany();
+
 const extrinsicQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
   qb
     .select("block_id")
     .addSelect("extrinsic_idx")
-    // Only sometimes populated in the harvester .addSelect("extrinsic_hash")
     .addSelect("extrinsic_length")
-    // this doesn't match? 32 vs 84.addSelect("extrinsic_version")
     .addSelect("signed")
-    // Not populated by the harvester
-    //.addSelect("address_length")
-    //.addSelect("address")
-    //.addSelect("signature")
-    //.addSelect("nonce")
-    //.addSelect("era")
     .addSelect("call_id")
     .addSelect("module_id")
     .addSelect("params")
@@ -228,24 +256,26 @@ const extrinsicQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
 
 const main = async () => {
   const table = process.env.TABLE;
+
   const postgres = await createConnection({
     type: "postgres",
-    host: "0.0.0.0",
-    port: 5432,
-    username: "postgres",
-    password: "postgres",
-    database: "postgres",
+    host: env.PG_HOST,
+    port: parseInt(env.PG_PORT),
+    username: env.PG_USER,
+    password: env.PG_PASSWORD,
+    database: env.PG_DATABASE,
     name: "postgres",
   });
   const mysql = await createConnection({
     type: "mysql",
-    host: "localhost",
-    port: 33061,
-    username: "root",
-    password: "root",
-    database: "itn",
+    host: env.MYSQL_HOST,
+    port: parseInt(env.MYSQL_PORT),
+    username: env.MYSQL_USER,
+    password: env.MYSQL_PASSWORD,
+    database: env.MYSQL_DATABASE,
     name: "mysql",
   });
+
   switch (table) {
     case "data_event":
       return await compareTable(eventQuery, "data_event", mysql, postgres);
@@ -262,6 +292,7 @@ const main = async () => {
       throw new Error(`Unknown table: ${table}`);
   }
 };
+
 main()
   .then(() => process.exit(0))
   .catch((e) => {

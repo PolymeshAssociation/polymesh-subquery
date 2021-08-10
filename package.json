@@ -33,6 +33,7 @@
     "@subql/cli": "latest",
     "@subql/types": "latest",
     "@types/bn.js": "^4.11.6",
+    "dotenv": "^10.0.0",
     "expect": "^27.0.6",
     "mysql2": "^2.2.5",
     "pg": "^8.6.0",
