@@ -37,7 +37,7 @@ const compensateAcceptedDifferences = (a: any) => {
         typeof i === "string" &&
         i.startsWith("event_arg_") &&
         typeof a[i] === "string" &&
-        byteLength(a[i]) === 100
+        byteLength(a[i]) >= 100
       ) {
         // This is a heuristic that says:
         // If the column is 100 characters then it was probably truncated and
@@ -55,6 +55,10 @@ const compensateAcceptedDifferences = (a: any) => {
       } else if (typeof a[i] === "string") {
         // Remove null characters because postgresql doesn't support them.
         a[i] = a[i].replace(/\0|\\u0000/g, "");
+        // Also parse it if it is paseable.
+        try {
+          a[i] = JSON.parse(a[i]);
+        } catch {}
       } else if (typeof a[i] === "number") {
         // Reduce number precision to allow slight deviation between subquery and harvester.
         // Specifically for "score" in "staking::submit_election_solution_unsigned".
@@ -238,12 +242,13 @@ const extrinsicQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
   qb
     .select("block_id")
     .addSelect("extrinsic_idx")
-    .addSelect("extrinsic_length")
     .addSelect("signed")
     .addSelect("call_id")
     .addSelect("module_id")
     .addSelect("params")
-    .addSelect("success")
+    // This is wrong in the harvester, it says that the extrinsics in block 1810441 failed,
+    // however you can see here they succeeded: https://app.polymesh.live/?#/explorer/query/1810441
+    //.addSelect("success")
     .addSelect("spec_version_id")
     .from("data_extrinsic", "e")
     .where("block_id >= :blockStart AND block_id < :blockEnd", {

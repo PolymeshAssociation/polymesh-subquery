@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -b",
     "compare": "scripts/run-compare.sh",
+    "sql": "ts-node scripts/run-sql.ts",
     "prepack": "rm -rf dist && npm run build",
     "test": "jest",
     "codegen": "./node_modules/.bin/subql codegen",
@@ -24,6 +25,7 @@
     "@polkadot/api": "4.13.1",
     "@polkadot/util": "6.11.1",
     "@polkadot/util-crypto": "6.11.1",
+    "typeorm": "^0.2.34",
     "bn.js": "^4.11.9"
   },
   "author": "Diego",
@@ -38,7 +40,6 @@
     "mysql2": "^2.2.5",
     "pg": "^8.6.0",
     "ts-node": "^8.10.2",
-    "typeorm": "^0.2.34",
     "typescript": "^4.1.3"
   }
 }

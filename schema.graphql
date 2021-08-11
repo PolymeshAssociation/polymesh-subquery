@@ -7,6 +7,16 @@ type Event @entity {
   module_id: String! @index(unique: false)
   event_id: String! @index(unique: false)
   attributes_txt: String!
+  event_arg_0: String
+  event_arg_1: String
+  event_arg_2: String
+  event_arg_3: String
+  claim_type: String
+  claim_scope: String
+  claim_issuer: String
+  claim_expiry: String
+  corporate_action_ticker: String
+  fundraiser_offering_asset: String
 }
 
 type Debug @entity {
@@ -22,6 +32,7 @@ type FoundType @entity {
 
 type Block @entity {
   id: ID!
+  block_id: Int!
   parent_id: Int!
   hash: String!
   parent_hash: String!
@@ -45,7 +56,7 @@ type Extrinsic @entity {
   signed: Int!
   module_id: String!
   call_id: String!
-  params: String!
+  params_txt: String!
   success: Int!
   spec_version_id: Int!
 }

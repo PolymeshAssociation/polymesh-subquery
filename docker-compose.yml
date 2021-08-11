@@ -48,5 +48,23 @@ services:
       - --name=app
       - --playground
 
+  run-sql:
+    image: "node:14"
+    user: "node"
+    working_dir: /home/node/app
+    volumes:
+      - ./:/home/node/app
+    restart: on-failure
+    depends_on:
+      - "postgres"
+      - "subquery-node"
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: postgres
+    command: "npm run sql"
+
 volumes:
   db-data:
