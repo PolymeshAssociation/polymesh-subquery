@@ -1,5 +1,10 @@
 import { GenericExtrinsic } from "@polkadot/types/extrinsic";
-import { capitalizeFirstLetter, fromEntries, removeNullChars } from "./util";
+import {
+  capitalizeFirstLetter,
+  findTopLevelComma,
+  fromEntries,
+  removeNullChars,
+} from "./util";
 import {
   Enum,
   Option,
@@ -215,20 +220,23 @@ const isMap = (item: Codec): item is CodecMap<any> => {
   return type.startsWith("BTreeMap<") || type.startsWith("HashMap<");
 };
 
-// FIXME This does not support nested generics or tuples since it can't differentiate if a comma is at the top level
-// or in a nested type, a cleverer algorithm needs to be implemented.
 const extractMapTypes = (item: CodecMap): { key: string; value: string } => {
   const type = item.toRawType();
   let start = 0;
-  if (type.startsWith("BTreeMap<")) start = 9;
-  else if (type.startsWith("HashMap<")) {
+  if (type.startsWith("BTreeMap<")) {
+    start = 9;
+  } else if (type.startsWith("HashMap<")) {
     start = 8;
   } else {
     throw new Error(
       `Tried to decode ${item.toJSON()} as a Map, but it is not a map`
     );
   }
-  const [key, value] = type.slice(start, -1).split(",");
+
+  const commaPosition = findTopLevelComma(type);
+
+  const key = type.slice(start, commaPosition);
+  const value = type.slice(commaPosition + 1, -1);
   return { key, value };
 };
 const isEnum = (item: Codec): item is Enum => {

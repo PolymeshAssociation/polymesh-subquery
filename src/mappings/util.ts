@@ -23,3 +23,36 @@ export const capitalizeFirstLetter = (str: string) =>
   str[0].toUpperCase() + str.slice(1);
 
 export const removeNullChars = (s: string) => s.replace(/\0/g, "");
+
+/**
+ * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
+ * This is meant for rust types, for example "Map<Map<(u8,u32),String>,bool>"" would return 24.
+ * @param text
+ */
+export const findTopLevelComma = (text: string): number => {
+  let nestedLevel = 0;
+  let i = 0;
+  for (const char of text) {
+    switch (char) {
+      case "(":
+      case "<": {
+        nestedLevel++;
+        break;
+      }
+      case ")":
+      case ">": {
+        nestedLevel--;
+        break;
+      }
+      case ",": {
+        if (nestedLevel === 1) {
+          return i;
+        }
+      }
+    }
+    i++;
+  }
+  throw new Error(
+    `No top level comma found in ${text}, it probably isn't a map`
+  );
+};
