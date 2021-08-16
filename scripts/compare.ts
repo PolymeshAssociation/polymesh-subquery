@@ -3,7 +3,7 @@ import { createWriteStream } from "fs";
 import { env } from "process";
 import expect from "expect";
 
-require("dotenv").config();
+require("dotenv").config(); // eslint-disable-line @typescript-eslint/no-var-requires
 
 /**
  * This function runs the function `func` on pairs of items from `arr` returning the value
@@ -16,7 +16,7 @@ const findInPairs = <T, K>(
   if (arr.length < 2) {
     return undefined;
   }
-  for (var i = 0; i < arr.length - 1; i++) {
+  for (let i = 0; i < arr.length - 1; i++) {
     const res = func(arr[i], arr[i + 1]);
     if (res !== undefined) {
       return res;
@@ -49,16 +49,15 @@ const compensateAcceptedDifferences = (a: any) => {
       } else if (i === "offchainAccuracy") {
         // As far as I can tell offchainAccuracy is deserialized wrong in the harvester.
         a[i] = expect.anything();
-      } else if (a[i] === "null") {
-        // Coalesce "null" and null.
-        a[i] = null;
       } else if (typeof a[i] === "string") {
         // Remove null characters because postgresql doesn't support them.
         a[i] = a[i].replace(/\0|\\u0000/g, "");
         // Also parse it if it is paseable.
         try {
           a[i] = JSON.parse(a[i]);
-        } catch {}
+        } catch {
+          //ignore
+        }
       } else if (typeof a[i] === "number") {
         // Reduce number precision to allow slight deviation between subquery and harvester.
         // Specifically for "score" in "staking::submit_election_solution_unsigned".
@@ -108,6 +107,7 @@ const compareTable = async (
   });
 
   let i = START_BLOCK;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const blockStart = i;
     const blockEnd = Math.min(i + BATCH_SIZE, MAX_BLOCK);

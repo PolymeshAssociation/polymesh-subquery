@@ -2,7 +2,8 @@ import { createConnection } from "typeorm";
 import { env, chdir } from "process";
 import { readFileSync } from "fs";
 chdir(__dirname);
-require("dotenv").config();
+
+require("dotenv").config(); // eslint-disable-line @typescript-eslint/no-var-requires
 
 const sleep = (n: number) => new Promise((res) => setTimeout(res, n));
 
@@ -16,6 +17,7 @@ const main = async () => {
     database: env.PG_DATABASE,
     name: "postgres",
   });
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const query = postgres
       .createQueryBuilder()

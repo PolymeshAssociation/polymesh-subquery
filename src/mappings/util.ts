@@ -2,11 +2,11 @@
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
  */
-export const fromEntries = <K, V, V2>(
+export const fromEntries = <K extends string | number, V, V2>(
   iterable: Iterable<[K, V]>,
   map: (v: V, i: number, k: K) => V2
-) => {
-  const res: any = {};
+): Partial<Record<K, V2>> => {
+  const res: Partial<Record<K, V2>> = {};
 
   let i = 0;
   for (const [k, v] of iterable) {
@@ -16,22 +16,27 @@ export const fromEntries = <K, V, V2>(
   return res;
 };
 
-export const camelToSnakeCase = (str: string) =>
+export const camelToSnakeCase = (str: string): string =>
   str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
-export const capitalizeFirstLetter = (str: string) =>
+export const capitalizeFirstLetter = (str: string): string =>
   str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string) => s.replace(/\0/g, "");
+export const removeNullChars = (s: string): string => s.replace(/\0/g, "");
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
  * This is meant for rust types, for example "Map<Map<(u8,u32),String>,bool>"" would return 24.
  * @param text
  */
-export const findTopLevelComma = (text: string): number => {
+export const findTopLevelCommas = (
+  text: string,
+  exitOnFirst = false
+): number[] => {
   let nestedLevel = 0;
+  const commas = [];
   let i = 0;
+
   for (const char of text) {
     switch (char) {
       case "(":
@@ -46,13 +51,20 @@ export const findTopLevelComma = (text: string): number => {
       }
       case ",": {
         if (nestedLevel === 1) {
-          return i;
+          if (exitOnFirst) {
+            return [i];
+          } else {
+            commas.push(i);
+          }
         }
       }
     }
     i++;
   }
-  throw new Error(
-    `No top level comma found in ${text}, it probably isn't a map`
-  );
+  if (commas.length === 0) {
+    throw new Error(
+      `No top level comma found in ${text}, it probably isn't a map`
+    );
+  }
+  return commas;
 };
