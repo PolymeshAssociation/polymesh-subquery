@@ -46,5 +46,11 @@ test("findTopLevelCommas", () => {
     findTopLevelCommas("(Map<(u8,u32),String>,bool,u32)", true)
   ).toStrictEqual([21]);
 
+  expect(
+    findTopLevelCommas(
+      '(NominatorIndexCompact,[{"validatorIndex":"ValidatorIndexCompact","offchainAccuracy":"Compact<OffchainAccuracy>"};2],ValidatorIndexCompact)'
+    )
+  ).toStrictEqual([22, 116]);
+
   expect(() => findTopLevelCommas("Vec<i8>")).toThrowError();
 });

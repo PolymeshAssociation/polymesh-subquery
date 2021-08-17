@@ -40,11 +40,13 @@ export const findTopLevelCommas = (
   for (const char of text) {
     switch (char) {
       case "(":
+      case "{":
       case "<": {
         nestedLevel++;
         break;
       }
       case ")":
+      case "}":
       case ">": {
         nestedLevel--;
         break;
