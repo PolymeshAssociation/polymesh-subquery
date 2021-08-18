@@ -42,20 +42,20 @@ export const extractClaimScope = (
     }
     case "InvestorUniqueness": {
       const scope = args[1]?.value?.claim?.InvestorUniqueness?.col1;
-      const type = Object.keys(scope || {})?.[0];
-      const value = scope?.[type];
+      const type = Object.keys(scope || {})?.[0] || null;
+      const value = scope?.[type] || null;
       return { type, value };
     }
     case "Jurisdiction": {
-      const scope = args[1]?.value?.claim?.InvestorUniqueness?.col2;
-      const type = Object.keys(scope || {})?.[0];
-      const value = scope?.[type];
+      const scope = args[1]?.value?.claim?.Jurisdiction?.col2;
+      const type = Object.keys(scope || {})?.[0] || null;
+      const value = scope?.[type] || null;
       return { type, value };
     }
     default: {
       const scope = args[1]?.value?.claim?.[claim_type];
-      const type = Object.keys(scope || {})?.[0];
-      const value = scope?.[type];
+      const type = Object.keys(scope || {})?.[0] || null;
+      const value = scope?.[type] || null;
       return { type, value };
     }
   }
@@ -79,13 +79,13 @@ export const extractClaimInfo = (args: any[]) => {
 };
 
 export const extractCorporateActionTicker = (args: any[]) => {
-  const valueTicker = args[1]?.value?.ticker;
-  if (valueTicker !== undefined) {
-    return valueTicker;
+  const value1Ticker = args[1]?.value?.ticker;
+  if (value1Ticker !== undefined) {
+    return value1Ticker;
   }
-  const valueOfferingAsset = args[3]?.value?.offering_asset;
-  if (valueOfferingAsset !== undefined) {
-    return valueOfferingAsset;
+  const value2Ticker = args[2]?.value?.ticker;
+  if (value2Ticker !== undefined) {
+    return value2Ticker;
   }
   return null;
 };

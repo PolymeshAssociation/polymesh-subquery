@@ -7,6 +7,9 @@ network:
   types: {
       # <Harvester compatibility special cases>
       "HexBytes": "Bytes",
+      "Committee": { "_enum": { "Technical": "", "Upgrade": "()" } },
+      "SnapshotResult":
+        { "_enum": { "Approve": "", "Reject": "()", "Skip": "" } },
       "CompactAssignments": "CompactAssignmentsWith16",
       "FundraiserStatus":
         {

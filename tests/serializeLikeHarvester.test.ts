@@ -24,7 +24,7 @@ import "@subql/types/dist/global";
 import { stringToU8a } from "@polkadot/util";
 import rpcMetadata from "@polkadot/types-support/metadata/static-substrate";
 
-const registry = new TypeRegistry().init();
+const registry = new TypeRegistry();
 describe("parseType", () => {
   it("should work with structs", () => {
     const Struct = createClass(

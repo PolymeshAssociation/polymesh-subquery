@@ -27,7 +27,9 @@ const findInPairs = <T, K>(
 
 // blocks in the data_block table known to have been generated wrong in the harvester.
 const badDataBlocks = new Set([
-  // These were reporting 0 events and 0 successful extrinsics when there were clearly events in them.
+  // These were reporting 0 events and 0 successful extrinsics when there were clearly events  in them.
+  // https://app.polymesh.live/?rpc=wss%3A%2F%2Fitn-rpc.polymesh.live#/explorer/query/1900291
+  // all of them contain only the TimestampSet and ExtrinsicSuccess events.
   1810441,
   1810936, 1811370, 1811478, 1811556, 1811690, 1812012, 1812141, 1812300,
   1812467, 1813102, 1813113, 1813686, 1814591, 1815254, 1815973, 1816475,
@@ -103,9 +105,22 @@ const byteLength = (s: string) => new TextEncoder().encode(s).length;
 // This function is designed to modify objects returned by the database recursively
 // such that known inevitable differences between the harvester and subquery are not
 // detected in the diff.
-const compensateAcceptedDifferences = (a: any) => {
+const compensateAcceptedDifferences = (a: any, nested = false) => {
   if (typeof a === "object") {
     for (const i in a) {
+      if (
+        (!nested && (i === "attributes" || i === "params")) ||
+        i === "call_args"
+      ) {
+        // Subquery doesn't have access to the same type info as the harvester.
+        // Thankfully we don't use the type anywhere.
+        for (const j in a[i]) {
+          delete a[i][j]["type"];
+          // We don't produce valueRaw in subquery.
+          delete a[i][j]["valueRaw"];
+        }
+        compensateAcceptedDifferences(a[i], true);
+      }
       if (
         typeof i === "string" &&
         i.startsWith("event_arg_") &&
@@ -136,7 +151,7 @@ const compensateAcceptedDifferences = (a: any) => {
         // Specifically for "score" in "staking::submit_election_solution_unsigned".
         a[i] = a[i].toPrecision(13);
       } else {
-        compensateAcceptedDifferences(a[i]);
+        compensateAcceptedDifferences(a[i], true);
       }
     }
   }
@@ -189,12 +204,13 @@ const compareTable = async (
       mysql.createQueryBuilder(),
       blockStart,
       blockEnd
-    );
+    ).then((results) => results.filter((r) => !badDataBlocks.has(r.block_id)));
+
     const subquery_result = await q(DB.POSTGRES)(
       postgres.createQueryBuilder(),
       blockStart,
       blockEnd
-    );
+    ).then((results) => results.filter((r) => !badDataBlocks.has(r.block_id)));
 
     if (harvester_result.length < subquery_result.length) {
       throw new Error(
@@ -222,7 +238,7 @@ const compareTable = async (
       compensateAcceptedDifferences(h);
       compensateAcceptedDifferences(s);
       try {
-        expect(h).toMatchObject(s);
+        expect(h).toEqual(s);
       } catch (e) {
         hasError = true;
         if (
