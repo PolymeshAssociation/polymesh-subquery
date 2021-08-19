@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, beta, alpha]
   pull_request:
-    types: [assigned, opened, synchronize, reopened]
+    types: [assigned, opened, synchronize, reopened, edited]
 
 jobs:
   lint_test:
