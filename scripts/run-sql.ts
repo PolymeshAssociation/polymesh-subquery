@@ -5,37 +5,63 @@ chdir(__dirname);
 
 require("dotenv").config(); // eslint-disable-line @typescript-eslint/no-var-requires
 
-const sleep = (n: number) => new Promise((res) => setTimeout(res, n));
-
-const main = async () => {
-  const postgres = await createConnection({
-    type: "postgres",
-    host: env.PG_HOST,
-    port: parseInt(env.PG_PORT),
-    username: env.PG_USER,
-    password: env.PG_PASSWORD,
-    database: env.PG_DATABASE,
-    name: "postgres",
-  });
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const query = postgres
-      .createQueryBuilder()
-      .select("id")
-      .from("events", "e")
-      .limit(1);
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const retry = async <T>(
+  n: number,
+  ms: number,
+  f: () => Promise<T>,
+  onRetry: () => void = () => {}
+): Promise<T> => {
+  let err = undefined;
+  for (let i = 0; i < n; i++) {
     try {
-      await query.getRawOne();
-      break;
+      return await f();
     } catch (e) {
-      console.log("Database not ready, retrying in 1s");
+      err = e;
     }
 
-    await sleep(1000);
+    onRetry();
+    await sleep(ms);
   }
+  throw err;
+};
 
-  await postgres.query(readFileSync("../compat.sql", "utf-8"));
-  console.log("Applied initial SQL");
+const main = async () => {
+  const postgres = await retry(
+    10,
+    1000,
+    async () =>
+      await createConnection({
+        type: "postgres",
+        host: env.DB_HOST,
+        port: parseInt(env.DB_PORT),
+        username: env.DB_USER,
+        password: env.DB_PASS,
+        database: env.DB_DATABASE,
+        name: "postgres",
+      }),
+    () => {
+      console.log("Database not ready, retrying in 1s");
+    }
+  );
+
+  await retry(
+    100,
+    1000,
+    async () => {
+      const query = postgres
+        .createQueryBuilder()
+        .select("id")
+        .from("events", "e")
+        .limit(1);
+      await query.getRawOne();
+      await postgres.query(readFileSync("../compat.sql", "utf-8"));
+      console.log("Applied initial SQL");
+    },
+    () => {
+      console.log("Database not ready, retrying in 1s");
+    }
+  );
 };
 
 main()

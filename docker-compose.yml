@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: postgres
 
   subquery-node:
-    image: onfinality/subql-node:v0.19.2
+    build: ./
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -23,8 +23,6 @@ services:
       DB_DATABASE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
-    volumes:
-      - ./:/app
     command:
       - --batch-size=500
       - -f=/app
@@ -47,24 +45,6 @@ services:
     command:
       - --name=app
       - --playground
-
-  run-sql:
-    image: "node:14"
-    user: "node"
-    working_dir: /home/node/app
-    volumes:
-      - ./:/home/node/app
-    restart: on-failure
-    depends_on:
-      - "postgres"
-      - "subquery-node"
-    environment:
-      PG_HOST: postgres
-      PG_PORT: 5432
-      PG_USER: postgres
-      PG_PASSWORD: postgres
-      PG_DATABASE: postgres
-    command: "npm run sql"
 
 volumes:
   db-data:
