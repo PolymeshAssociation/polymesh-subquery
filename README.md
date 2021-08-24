@@ -12,7 +12,7 @@ This project has been initially created to replace [the harvester](https://githu
 ## Comparing output with harvester
 
 1. Set the right configuration in `scripts/.env`
-2. `npm run compare` 
+2. `yarn compare` 
 
 ## Using event_arg_x indexes.
 The event_arg_x columns are now text, in order for them to fit in BTree indexes they are truncated to 100 characters like in the harvester.

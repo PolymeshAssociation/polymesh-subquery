@@ -7,7 +7,7 @@
     "build": "tsc -b",
     "compare": "scripts/run-compare.sh",
     "sql": "ts-node scripts/run-sql.ts",
-    "prepack": "rm -rf dist && npm run build",
+    "prepack": "rm -rf dist && yarn build",
     "lint": "eslint . --ext .ts",
     "test": "jest",
     "codegen": "./node_modules/.bin/subql codegen",

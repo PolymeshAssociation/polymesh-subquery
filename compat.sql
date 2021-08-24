@@ -32,6 +32,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS data_extrinsic_id ON extrinsics (block_id, ext
 CREATE INDEX IF NOT EXISTS data_extrinsic_block_id ON extrinsics (block_id);
 CREATE INDEX IF NOT EXISTS data_extrinsic_extrinsic_idx ON extrinsics (extrinsic_idx);
 CREATE INDEX IF NOT EXISTS data_extrinsic_call_id ON extrinsics (call_id);
+CREATE INDEX IF NOT EXISTS data_extrinsic_address ON extrinsics (address);
 CREATE INDEX IF NOT EXISTS data_extrinsic_module_id ON extrinsics (module_id);
 CREATE INDEX IF NOT EXISTS data_extrinsic_signed ON extrinsics (signed);
 
@@ -44,6 +45,8 @@ SELECT
   signed,
   call_id,
   module_id,
+  address,
+  signedby_address,
   params,
   success,
   spec_version_id

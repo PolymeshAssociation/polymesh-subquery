@@ -54,6 +54,8 @@ type Extrinsic @entity {
   extrinsic_idx: Int!
   extrinsic_length: String!
   signed: Int!
+  signedby_address: Int!
+  address: String
   module_id: String!
   call_id: String!
   params_txt: String!

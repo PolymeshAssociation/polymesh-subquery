@@ -338,9 +338,9 @@ const extrinsicQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
     .addSelect("call_id")
     .addSelect("module_id")
     .addSelect("params")
-    // This is wrong in the harvester, it says that the extrinsics in block 1810441 failed,
-    // however you can see here they succeeded: https://app.polymesh.live/?#/explorer/query/1810441
-    //.addSelect("success")
+    .addSelect("success")
+    .addSelect("address")
+    .addSelect("signedby_address")
     .addSelect("spec_version_id")
     .from("data_extrinsic", "e")
     .where("block_id >= :blockStart AND block_id < :blockEnd", {

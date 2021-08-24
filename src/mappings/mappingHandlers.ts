@@ -18,6 +18,8 @@ import {
   extractEventArgs,
   extractOfferingAsset,
 } from "./generatedColumns";
+import { hexStripPrefix, u8aToHex } from "@polkadot/util";
+import { decodeAddress } from "@polkadot/util-crypto";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -118,6 +120,18 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const block_id = extrinsic.block.block.header.number.toNumber();
   const extrinsic_idx = extrinsic.idx;
+  const signedby_address = !extrinsic.extrinsic.signer.isEmpty;
+  const address = signedby_address
+    ? hexStripPrefix(
+        u8aToHex(
+          decodeAddress(
+            extrinsic.extrinsic.signer.toString(),
+            false,
+            extrinsic.extrinsic.registry.chainSS58
+          )
+        )
+      )
+    : null;
 
   await Extrinsic.create({
     id: `${block_id}/${extrinsic_idx}`,
@@ -131,6 +145,8 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
       serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)
     ),
     success: extrinsic.success ? 1 : 0,
+    signedby_address: signedby_address ? 1 : 0,
+    address,
     spec_version_id: extrinsic.block.specVersion,
   }).save();
 }
