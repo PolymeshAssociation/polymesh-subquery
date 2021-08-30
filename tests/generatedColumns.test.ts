@@ -22,7 +22,7 @@ test("extractEventArgs", () => {
   expect(
     extractEventArgs([
       { value: null },
-      { value: "hello" },
+      { value: '"hello"' },
       { value: { foo: 5 } },
     ])
   ).toStrictEqual({

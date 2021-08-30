@@ -142,7 +142,10 @@ const compensateAcceptedDifferences = (a: any, nested = false) => {
         a[i] = a[i].replace(/\0|\\u0000/g, "");
         // Also parse it if it is paseable.
         try {
-          a[i] = JSON.parse(a[i]);
+          const parsed = JSON.parse(a[i]);
+          if (typeof parsed === "object") {
+            a[i] = JSON.parse(a[i]);
+          }
         } catch {
           //ignore
         }
