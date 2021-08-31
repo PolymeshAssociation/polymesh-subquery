@@ -300,6 +300,9 @@ const eventQuery: TableQuery = (db) => async (qb, blockStart, blockEnd) =>
     )
     .addSelect("claim_issuer")
     .addSelect("claim_expiry")
+    .addSelect("corporate_action_ticker")
+    .addSelect("fundraiser_offering_assets")
+    .addSelect("transfer_to")
     .from("data_event", "e")
     .where("block_id >= :blockStart AND block_id < :blockEnd", {
       blockStart,
