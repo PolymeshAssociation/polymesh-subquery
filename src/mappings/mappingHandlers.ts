@@ -3,11 +3,11 @@ import {
   SubstrateEvent,
   SubstrateBlock,
 } from "@subql/types";
-import { Block, Event, Extrinsic, FoundType } from "../types";
+import { Block, Debug, Event, Extrinsic, FoundType } from "../types";
 import { GenericExtrinsic } from "@polkadot/types/extrinsic";
 import { Vec } from "@polkadot/types/codec";
 import { AnyTuple } from "@polkadot/types/types";
-import { camelToSnakeCase } from "./util";
+import { camelToSnakeCase, removeNullChars } from "./util";
 import {
   serializeLikeHarvester,
   serializeCallArgsLikeHarvester,
@@ -18,6 +18,7 @@ import {
   extractEventArgs,
   extractOfferingAsset,
   extractTransferTo,
+  JSONStringifyExceptStringAndNull,
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";

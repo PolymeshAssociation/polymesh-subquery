@@ -3,6 +3,8 @@
 // more readable code than relying on generated columns or materialized views and has
 // the same storage overhead.
 
+import { removeNullChars } from "./util";
+
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== "string") {
@@ -93,4 +95,5 @@ export const extractCorporateActionTicker = (args: any[]) => {
 export const extractOfferingAsset = (args: any[]) =>
   args[3]?.value?.offering_asset;
 
-export const extractTransferTo = (args: any[]) => args[3]?.value?.did;
+export const extractTransferTo = (args: any[]) =>
+  JSONStringifyExceptStringAndNull(args[3]?.value?.did);
