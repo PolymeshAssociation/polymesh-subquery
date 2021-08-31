@@ -17,6 +17,7 @@ type Event @entity {
   claim_expiry: String
   corporate_action_ticker: String
   fundraiser_offering_asset: String
+  transfer_to: String
 }
 
 type Debug @entity {

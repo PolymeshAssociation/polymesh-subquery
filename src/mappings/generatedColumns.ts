@@ -92,3 +92,5 @@ export const extractCorporateActionTicker = (args: any[]) => {
 
 export const extractOfferingAsset = (args: any[]) =>
   args[3]?.value?.offering_asset;
+
+export const extractTransferTo = (args: any[]) => args[3]?.value?.did;

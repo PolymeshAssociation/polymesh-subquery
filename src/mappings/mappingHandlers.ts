@@ -17,6 +17,7 @@ import {
   extractCorporateActionTicker,
   extractEventArgs,
   extractOfferingAsset,
+  extractTransferTo,
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
@@ -114,6 +115,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     claim_scope,
     corporate_action_ticker: extractCorporateActionTicker(harvesterLikeArgs),
     fundraiser_offering_asset: extractOfferingAsset(harvesterLikeArgs),
+    transfer_to: extractTransferTo(harvesterLikeArgs),
   }).save();
 }
 

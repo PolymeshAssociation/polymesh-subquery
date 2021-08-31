@@ -4,6 +4,7 @@ import {
   extractCorporateActionTicker,
   extractEventArgs,
   extractOfferingAsset,
+  extractTransferTo,
   JSONStringifyExceptStringAndNull,
 } from "../src/mappings/generatedColumns";
 
@@ -22,7 +23,7 @@ test("extractEventArgs", () => {
   expect(
     extractEventArgs([
       { value: null },
-      { value: '"hello"' },
+      { value: "hello" },
       { value: { foo: 5 } },
     ])
   ).toStrictEqual({
@@ -148,6 +149,24 @@ test("extractOfferingAsset", () => {
       { value: { offering_asset: "STONK" } },
     ])
   ).toBe("STONK");
+
+  expect(extractOfferingAsset([])).toBe(undefined);
+});
+
+test("extractTransferTo", () => {
+  expect(
+    extractTransferTo([
+      { value: "foo" },
+      { value: {} },
+      { value: "something_else" },
+      {
+        value: {
+          did: "0x9a8cf83420fcb598e04bc085303b90a640afa45f75a7548e508170ff291f2779",
+          kind: { Default: null },
+        },
+      },
+    ])
+  ).toBe("0x9a8cf83420fcb598e04bc085303b90a640afa45f75a7548e508170ff291f2779");
 
   expect(extractOfferingAsset([])).toBe(undefined);
 });
