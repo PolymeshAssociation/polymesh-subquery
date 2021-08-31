@@ -168,5 +168,5 @@ test("extractTransferTo", () => {
     ])
   ).toBe("0x9a8cf83420fcb598e04bc085303b90a640afa45f75a7548e508170ff291f2779");
 
-  expect(extractOfferingAsset([])).toBe(undefined);
+  expect(extractTransferTo([])).toBe(undefined);
 });

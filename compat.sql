@@ -91,7 +91,7 @@ SELECT
   claim_issuer,
   claim_expiry,
   corporate_action_ticker,
-  fundraiser_offering_asset
+  fundraiser_offering_asset,
   transfer_to
 FROM 
   events;
