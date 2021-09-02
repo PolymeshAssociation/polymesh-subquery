@@ -1,0 +1,57 @@
+{
+  "name": "polymesh-subql",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "compare": "scripts/run-compare.sh",
+    "sql": "ts-node scripts/run-sql.ts",
+    "prepack": "rm -rf dist && yarn build",
+    "lint": "eslint . --ext .ts",
+    "test": "jest",
+    "codegen": "./node_modules/.bin/subql codegen",
+    "start:docker": "docker-compose pull && docker-compose up --remove-orphans",
+    "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
+    "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict"
+  },
+  "homepage": "https://github.com/subquery/subql-starter",
+  "repository": "github:subquery/subql-starter",
+  "files": [
+    "dist",
+    "schema.graphql",
+    "project.yaml"
+  ],
+  "dependencies": {
+    "@babel/preset-typescript": "^7.15.0",
+    "@polkadot/api": "5.1.1",
+    "@polkadot/util": "7.2.1",
+    "@polkadot/util-crypto": "7.2.1",
+    "bn.js": "^4.11.9",
+    "typeorm": "^0.2.34"
+  },
+  "author": "raycar5",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@babel/plugin-transform-runtime": "^7.15.0",
+    "@babel/preset-env": "^7.15.0",
+    "@polkadot/typegen": "5.1.1",
+    "@polkadot/types-support": "5.5.1",
+    "@subql/cli": "latest",
+    "@subql/types": "latest",
+    "@types/bn.js": "^4.11.6",
+    "@types/jest": "^27.0.1",
+    "@typescript-eslint/eslint-plugin": "^4.29.2",
+    "@typescript-eslint/parser": "^4.29.2",
+    "babel-jest": "^27.0.6",
+    "dotenv": "^10.0.0",
+    "eslint": "^7.32.0",
+    "expect": "^27.0.6",
+    "jest": "^27.0.6",
+    "mysql2": "^2.2.5",
+    "pg": "^8.6.0",
+    "ts-jest": "^27.0.4",
+    "ts-node": "^8.10.2",
+    "typescript": "^4.1.3"
+  }
+}
