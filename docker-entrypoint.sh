@@ -1,4 +1,4 @@
 #!/bin/bash
 
 npm run sql &
-subql-node $@
+subql-node --network-endpoint="$CHAIN_ENDPOINT" $@
