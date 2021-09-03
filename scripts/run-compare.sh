@@ -11,3 +11,7 @@ TABLE=data_event npx ts-node compare.ts &
 
 # Wait for all child processes to finish and set the right exit code.
 wait
+
+wc errors_data_block
+wc errors_data_event
+wc errors_data_extrinsic
