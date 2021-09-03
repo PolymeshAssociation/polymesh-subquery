@@ -23,8 +23,8 @@ services:
       DB_DATABASE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
-      CHAIN_ENDPOINT: ws://host.docker.internal:9944
-      #CHAIN_ENDPOINT: wss://itn-rpc.polymesh.live
+      NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      #NETWORK_ENDPOINT: wss://itn-rpc.polymesh.live
     command:
       - --batch-size=500
       - -f=/app
