@@ -18,7 +18,6 @@ import {
   extractEventArgs,
   extractOfferingAsset,
   extractTransferTo,
-  JSONStringifyExceptStringAndNull,
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
