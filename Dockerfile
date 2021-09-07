@@ -4,5 +4,7 @@ RUN apk add --no-cache bash
 COPY . /app
 WORKDIR /app
 RUN yarn --frozen-lockfile
+RUN yarn codegen
+RUN yarn build
 USER subquery
 ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker-entrypoint.sh" ]
