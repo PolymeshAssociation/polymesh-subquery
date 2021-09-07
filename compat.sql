@@ -70,6 +70,7 @@ CREATE INDEX IF NOT EXISTS data_event_corporate_action_ticker ON events (corpora
 CREATE INDEX IF NOT EXISTS data_event_fundraiser_offering_asset ON events (fundraiser_offering_asset);
 CREATE INDEX IF NOT EXISTS data_event_spec_version_id ON events (spec_version_id);
 CREATE INDEX IF NOT EXISTS data_event_module_id_event_id_event_arg_2 ON events (module_id, event_id, left(event_arg_2, 100));
+CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from attributes #>> '{2,value,did}'));
 
 DROP VIEW IF EXISTS data_event;
 
