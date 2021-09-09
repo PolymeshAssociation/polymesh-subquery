@@ -1,0 +1,12 @@
+diff --git a/project.yaml b/project.yaml
+index f489739..5762601 100644
+--- a/project.yaml
++++ b/project.yaml
+@@ -9464,6 +9464,7 @@ network:
+ dataSources:
+   - name: main
+     kind: substrate/Runtime
++    startBlock: 3566427
+     mapping:
+       handlers:
+         - handler: handleBlock
