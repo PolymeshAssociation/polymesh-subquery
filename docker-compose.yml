@@ -54,3 +54,8 @@ services:
 
 volumes:
   db-data:
+
+networks:
+  default:
+    external: true
+    name: "mesh-local"
