@@ -24,11 +24,11 @@ services:
       DB_DATABASE: postgres
       NODE_ENV: local
       DB_HOST: postgres
-      START_BLOCK: 3566427
+      #START_BLOCK: 3566427
       DB_PORT: 5432
-      #NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      NETWORK_ENDPOINT: ws://host.docker.internal:9944
       #NETWORK_ENDPOINT: wss://itn-rpc.polymesh.live
-      NETWORK_ENDPOINT: wss://alcyone-rpc.polymesh.live
+      #NETWORK_ENDPOINT: wss://alcyone-rpc.polymesh.live
     command:
       - --batch-size=500
       - -f=/app
