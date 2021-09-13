@@ -9464,6 +9464,7 @@ network:
 dataSources:
   - name: main
     kind: substrate/Runtime
+    startBlock: ${START_BLOCK}
     mapping:
       handlers:
         - handler: handleBlock
