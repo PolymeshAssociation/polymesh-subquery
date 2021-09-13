@@ -1031,6 +1031,9 @@ const compensateAcceptedDifferences = (a: any, nested = false) => {
         // It is necessary because the null characters in mysql cause the truncation
         // to be different between the harvester and subquery.
         a[i] = expect.anything();
+      } else if ((i === "nonce" || i === "extrinsic_hash") && !a[i]) {
+        // The harvester has a bunch of empty data in these columns
+        a[i] = expect.anything();
       } else if (i === "offchainAccuracy") {
         // As far as I can tell offchainAccuracy is deserialized wrong in the harvester.
         a[i] = expect.anything();
@@ -1240,6 +1243,8 @@ const extrinsicQuery: TableQuery = () => (qb, blockStart, blockEnd) =>
     .addSelect("signed")
     .addSelect("call_id")
     .addSelect("module_id")
+    .addSelect("nonce")
+    .addSelect("extrinsic_hash")
     .addSelect("params")
     .addSelect("success")
     .addSelect("address")

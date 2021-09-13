@@ -45,6 +45,8 @@ SELECT
   signed,
   call_id,
   module_id,
+  nonce,
+  extrinsic_hash,
   address,
   signedby_address,
   params,

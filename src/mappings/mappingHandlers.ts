@@ -149,6 +149,8 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     success: extrinsic.success ? 1 : 0,
     signedby_address: signedby_address ? 1 : 0,
     address,
+    nonce: extrinsic.extrinsic.nonce.toJSON(),
+    extrinsic_hash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
     spec_version_id: extrinsic.block.specVersion,
   }).save();
 }
