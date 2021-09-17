@@ -24,7 +24,7 @@ for (const {
   const noColor = (string: string) => string;
   writeFileSync(
     join(__dirname, "../spec_diffs/", filename),
-    diff(types, previous, {
+    diff(previous, types, {
       aColor: noColor,
       bColor: noColor,
       changeColor: noColor,

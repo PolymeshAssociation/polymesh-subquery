@@ -1,96 +1,96 @@
 - Expected
 + Received
 
-@@ -1,7 +1,5 @@
+@@ -1,5 +1,7 @@
   Object {
     "AGId": "u32",
--   "AccountInfo": "AccountInfoWithDualRefCount",
--   "Address": "MultiAddress",
++   "AccountInfo": "AccountInfoWithDualRefCount",
++   "Address": "MultiAddress",
     "AffirmationStatus": Object {
       "_enum": Object {
         "Affirmed": "",
-@@ -110,6 +108,8 @@
+@@ -108,8 +110,6 @@
         "PortfolioCustody": "",
         "RotatePrimaryKey": "",
         "TransferAssetOwnership": "",
-+       "TransferCorporateActionAgent": "",
-+       "TransferPrimaryIssuanceAgent": "",
+-       "TransferCorporateActionAgent": "",
+-       "TransferPrimaryIssuanceAgent": "",
         "TransferTicker": "",
       },
     },
-@@ -238,23 +238,7 @@
+@@ -238,7 +238,23 @@
     "Claim2ndKey": Object {
       "issuer": "IdentityId",
       "scope": "Option<Scope>",
--   },
--   "ClaimType": Object {
--     "_enum": Object {
--       "Accredited": "",
--       "Affiliate": "",
--       "Blocked": "",
--       "BuyLockup": "",
--       "CustomerDueDiligence": "",
--       "Exempted": "",
--       "InvestorUniqueness": "",
--       "InvestorUniquenessV2": "",
--       "Jurisdiction": "",
--       "KnowYourCustomer": "",
--       "NoData": "",
--       "SellLockup": "",
-    },
--   },
++   },
++   "ClaimType": Object {
++     "_enum": Object {
++       "Accredited": "",
++       "Affiliate": "",
++       "Blocked": "",
++       "BuyLockup": "",
++       "CustomerDueDiligence": "",
++       "Exempted": "",
++       "InvestorUniqueness": "",
++       "InvestorUniquenessV2": "",
++       "Jurisdiction": "",
++       "KnowYourCustomer": "",
++       "NoData": "",
++       "SellLockup": "",
+      },
++   },
     "ClassicTickerImport": Object {
       "eth_owner": "EthereumAddress",
       "is_contract": "bool",
-@@ -631,9 +615,7 @@
+@@ -615,7 +631,9 @@
     "DocumentType": "Text",
     "DocumentUri": "Text",
     "EcdsaSignature": "[u8; 65]",
--   "ErrorAt": "(u32, DispatchError)",
++   "ErrorAt": "(u32, DispatchError)",
     "EthereumAddress": "[u8; 20]",
--   "EventCounts": "Vec<u32>",
++   "EventCounts": "Vec<u32>",
     "EventDid": "IdentityId",
     "ExtVersion": "u32",
     "ExtensionAttributes": Object {
-@@ -663,14 +645,6 @@
+@@ -645,6 +663,14 @@
       "venue_id": "u64",
     },
     "FundraiserName": "Text",
--   "FundraiserStatus": Object {
--     "_enum": Array [
--       "Live",
--       "Frozen",
--       "Closed",
--       "ClosedEarly",
--     ],
--   },
++   "FundraiserStatus": Object {
++     "_enum": Array [
++       "Live",
++       "Frozen",
++       "Closed",
++       "ClosedEarly",
++     ],
++   },
     "FundraiserTier": Object {
       "price": "Balance",
       "remaining": "Balance",
-@@ -780,7 +754,6 @@
+@@ -754,6 +780,7 @@
       "portfolio": "Option<Vec<PortfolioId>>",
     },
     "LocalCAId": "u32",
--   "LookupSource": "MultiAddress",
++   "LookupSource": "MultiAddress",
     "MaybeBlock": Object {
       "_enum": Object {
         "None": "",
-@@ -908,7 +881,7 @@
+@@ -881,7 +908,7 @@
     "ProposalData": Object {
       "_enum": Object {
         "Hash": "Hash",
--       "Proposal": "Vec<u8>",
-+       "Proposal": "HexBytes",
+-       "Proposal": "HexBytes",
++       "Proposal": "Vec<u8>",
       },
     },
     "ProposalDetails": Object {
-@@ -1178,6 +1151,9 @@
+@@ -1151,9 +1178,6 @@
       "nonce": "u64",
     },
     "Url": "Text",
-+   "ValidatorPrefsWithBlocked": Object {
-+     "commission": "Compact<Perbill>",
-+   },
+-   "ValidatorPrefsWithBlocked": Object {
+-     "commission": "Compact<Perbill>",
+-   },
     "Venue": Object {
       "creator": "IdentityId",
       "details": "VenueDetails",

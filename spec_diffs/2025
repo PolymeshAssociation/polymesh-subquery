@@ -5,96 +5,96 @@
     "AssetType": Object {
       "_enum": Object {
         "Commodity": "",
--       "Custom": "CustomAssetTypeId",
-+       "Custom": "Vec<u8>",
+-       "Custom": "Vec<u8>",
++       "Custom": "CustomAssetTypeId",
         "Derivative": "",
         "EquityCommon": "",
         "EquityPreferred": "",
-@@ -86,14 +86,13 @@
+@@ -86,13 +86,14 @@
     "AuthorizationData": Object {
       "_enum": Object {
         "AddMultiSigSigner": "AccountId",
--       "AddRelayerPayingKey": "(AccountId, AccountId, Balance)",
++       "AddRelayerPayingKey": "(AccountId, AccountId, Balance)",
         "AttestPrimaryKeyRotation": "IdentityId",
         "BecomeAgent": "(Ticker, AgentGroup)",
         "Custom": "Ticker",
         "JoinIdentity": "Permissions",
         "NoData": "",
         "PortfolioCustody": "PortfolioId",
--       "RotatePrimaryKey": "",
-+       "RotatePrimaryKey": "IdentityId",
+-       "RotatePrimaryKey": "IdentityId",
++       "RotatePrimaryKey": "",
         "TransferAssetOwnership": "Ticker",
         "TransferCorporateActionAgent": "Ticker",
         "TransferPrimaryIssuanceAgent": "Ticker",
-@@ -104,9 +103,7 @@
+@@ -103,7 +104,9 @@
     "AuthorizationType": Object {
       "_enum": Object {
         "AddMultiSigSigner": "",
--       "AddRelayerPayingKey": "",
++       "AddRelayerPayingKey": "",
         "AttestPrimaryKeyRotation": "",
--       "BecomeAgent": "",
++       "BecomeAgent": "",
         "Custom": "",
         "JoinIdentity": "",
         "NoData": "",
-@@ -305,6 +302,7 @@
+@@ -302,7 +305,6 @@
     "CorporateAction": Object {
       "decl_date": "Moment",
       "default_withholding_tax": "Tax",
-+     "details": "Text",
+-     "details": "Text",
       "kind": "CAKind",
       "record_date": "Option<RecordDate>",
       "targets": "TargetIdentities",
-@@ -565,7 +563,6 @@
+@@ -563,6 +565,7 @@
         "SX",
       ],
     },
--   "CustomAssetTypeId": "u32",
++   "CustomAssetTypeId": "u32",
     "DepositInfo": Object {
       "amount": "Balance",
       "owner": "AccountId",
-@@ -755,12 +752,6 @@
+@@ -752,6 +755,12 @@
         "Identity": "IdentityId",
       },
     },
--   "ItnRewardStatus": Object {
--     "_enum": Object {
--       "Claimed": "",
--       "Unclaimed": "Balance",
--     },
--   },
++   "ItnRewardStatus": Object {
++     "_enum": Object {
++       "Claimed": "",
++       "Unclaimed": "Balance",
++     },
++   },
     "KeyIdentityData": Object {
       "identity": "IdentityId",
       "permissions": "Option<Permissions>",
-@@ -1042,6 +1033,7 @@
+@@ -1033,7 +1042,6 @@
     "SecurityToken": Object {
       "asset_type": "AssetType",
       "divisible": "bool",
-+     "name": "AssetName",
+-     "name": "AssetName",
       "owner_did": "IdentityId",
       "total_supply": "Balance",
     },
-@@ -1107,10 +1099,6 @@
+@@ -1099,6 +1107,10 @@
       "id": "ScheduleId",
       "remaining": "u32",
       "schedule": "CheckpointSchedule",
--   },
--   "Subsidy": Object {
--     "paying_key": "AccountId",
--     "remaining": "Balance",
++   },
++   "Subsidy": Object {
++     "paying_key": "AccountId",
++     "remaining": "Balance",
     },
     "TargetIdAuthorization": Object {
       "expires_at": "Moment",
-@@ -1190,11 +1178,10 @@
+@@ -1178,10 +1190,11 @@
       "nonce": "u64",
     },
     "Url": "Text",
--   "ValidatorPrefsWithBlocked": Object {
--     "commission": "Compact<Perbill>",
--   },
++   "ValidatorPrefsWithBlocked": Object {
++     "commission": "Compact<Perbill>",
++   },
     "Venue": Object {
       "creator": "IdentityId",
-+     "details": "VenueDetails",
-+     "instructions": "Vec<u64>",
+-     "details": "VenueDetails",
+-     "instructions": "Vec<u64>",
       "venue_type": "VenueType",
     },
     "VenueDetails": "Text",
