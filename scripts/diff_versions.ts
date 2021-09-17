@@ -9,18 +9,19 @@ const project: any = load(
   })
 );
 
-let versions: { minmax: [number, number]; types: object }[] =
+let versions: { minmax: [number, number]; types: Record<string, string> }[] =
   project.network.typesBundle.spec.polymesh.types;
 versions = versions.reverse();
 versions.pop(); // remove last item as it is the hacks
 
 let previous = {};
-const noColor = (string: string) => string;
 for (const {
   minmax: [min, max],
   types,
 } of versions) {
-  let filename = min == max ? `${min}` : `${min}-${max}`;
+  const filename = min == max ? `${min}` : `${min}-${max}`;
+
+  const noColor = (string: string) => string;
   writeFileSync(
     join(__dirname, "../spec_diffs/", filename),
     diff(types, previous, {
