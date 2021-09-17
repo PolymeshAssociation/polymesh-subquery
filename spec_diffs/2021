@@ -1,0 +1,49 @@
+- Expected
++ Received
+
+@@ -1,4 +1,6 @@
+  Object {
++   "AccountInfo": "AccountInfoWithRefCount",
++   "Address": "IndicesLookupSource",
+    "AffirmationStatus": Object {
+      "_enum": Object {
+        "Affirmed": "",
+@@ -224,6 +226,22 @@
+    "Claim2ndKey": Object {
+      "issuer": "IdentityId",
+      "scope": "Option<Scope>",
++   },
++   "ClaimType": Object {
++     "_enum": Object {
++       "Accredited": "",
++       "Affiliate": "",
++       "Blocked": "",
++       "BuyLockup": "",
++       "CustomerDueDiligence": "",
++       "Exempted": "",
++       "InvestorUniqueness": "",
++       "InvestorUniquenessV2": "",
++       "Jurisdiction": "",
++       "KnowYourCustomer": "",
++       "NoData": "",
++       "SellLockup": "",
++     },
+    },
+    "ClassicTickerImport": Object {
+      "eth_owner": "EthereumAddress",
+@@ -733,6 +751,7 @@
+      "portfolio": "Option<Vec<PortfolioId>>",
+    },
+    "LocalCAId": "u32",
++   "LookupSource": "IndicesLookupSource",
+    "MaybeBlock": Object {
+      "_enum": Object {
+        "None": "",
+@@ -749,6 +768,7 @@
+        "Map": "AssetMigrationError",
+      },
+    },
++   "Moment": "u64",
+    "Motion": Object {
+      "choices": "Vec<ChoiceTitle>",
+      "info_link": "MotionInfoLink",

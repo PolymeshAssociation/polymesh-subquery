@@ -1,0 +1,28 @@
+- Expected
++ Received
+
+@@ -89,10 +89,14 @@
+        "AddRelayerPayingKey": "(AccountId, AccountId, Balance)",
+        "AttestPrimaryKeyRotation": "IdentityId",
+        "BecomeAgent": "(Ticker, AgentGroup)",
++       "Custom": "Ticker",
+        "JoinIdentity": "Permissions",
++       "NoData": "",
+        "PortfolioCustody": "PortfolioId",
+        "RotatePrimaryKey": "",
+        "TransferAssetOwnership": "Ticker",
++       "TransferCorporateActionAgent": "Ticker",
++       "TransferPrimaryIssuanceAgent": "Ticker",
+        "TransferTicker": "Ticker",
+      },
+    },
+@@ -103,7 +107,9 @@
+        "AddRelayerPayingKey": "",
+        "AttestPrimaryKeyRotation": "",
+        "BecomeAgent": "",
++       "Custom": "",
+        "JoinIdentity": "",
++       "NoData": "",
+        "PortfolioCustody": "",
+        "RotatePrimaryKey": "",
+        "TransferAssetOwnership": "",
