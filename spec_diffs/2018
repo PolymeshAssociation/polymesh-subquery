@@ -1,0 +1,41 @@
+- Expected
++ Received
+
+@@ -101,12 +101,6 @@
+        "TransferTicker": "",
+      },
+    },
+-   "BalanceAtResult": Object {
+-     "_enum": Object {
+-       "Err": "Vec<u8>",
+-       "Ok": "Vec<Balance>",
+-     },
+-   },
+    "BallotMeta": Object {
+      "motions": "Vec<Motion>",
+      "title": "BallotTitle",
+@@ -218,6 +212,7 @@
+        "CustomerDueDiligence": "CddId",
+        "Exempted": "Scope",
+        "InvestorUniqueness": "(Scope, ScopeId, CddId)",
++       "InvestorUniquenessV2": "(CddId)",
+        "Jurisdiction": "(CountryCode, Scope)",
+        "KnowYourCustomer": "Scope",
+        "NoData": "",
+@@ -241,6 +236,7 @@
+        "CustomerDueDiligence": "",
+        "Exempted": "",
+        "InvestorUniqueness": "",
++       "InvestorUniquenessV2": "",
+        "Jurisdiction": "",
+        "KnowYourCustomer": "",
+        "NoData": "",
+@@ -673,8 +669,6 @@
+        "Success": "",
+      },
+    },
+-   "HistoricalVotingByAddress": "Vec<VoteByPip>",
+-   "HistoricalVotingById": "Vec<(AccountId, HistoricalVotingByAddress)>",
+    "IdentityClaim": Object {
+      "claim": "Claim",
+      "claim_issuer": "IdentityId",
