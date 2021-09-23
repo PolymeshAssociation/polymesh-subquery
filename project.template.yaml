@@ -100,7 +100,7 @@ network:
             },
             ### </Harvester compatibility special cases>
             {
-              minmax: [2026, 2026],
+              minmax: [3000, 3000],
               types:
                 {
                   "Address": "MultiAddress",
