@@ -6,7 +6,7 @@ ADD COLUMN IF NOT EXISTS params JSONB GENERATED ALWAYS AS (params_txt::jsonb) ST
 
 CREATE UNIQUE INDEX IF NOT EXISTS data_block_id ON blocks (block_id);
 CREATE UNIQUE INDEX IF NOT EXISTS data_block_hash ON blocks (hash);
-CREATE UNIQUE INDEX IF NOT EXISTS data_block_datetime ON blocks (datetime);
+CREATE INDEX IF NOT EXISTS data_block_datetime ON blocks (datetime);
 CREATE INDEX IF NOT EXISTS data_block_parent_hash ON blocks (parent_hash);
 
 DROP VIEW IF EXISTS data_block;
