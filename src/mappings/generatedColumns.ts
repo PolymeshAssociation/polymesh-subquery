@@ -3,8 +3,6 @@
 // more readable code than relying on generated columns or materialized views and has
 // the same storage overhead.
 
-import { removeNullChars } from "./util";
-
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== "string") {
