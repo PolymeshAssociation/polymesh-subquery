@@ -3,11 +3,11 @@ import {
   SubstrateEvent,
   SubstrateBlock,
 } from "@subql/types";
-import { Block, Debug, Event, Extrinsic, FoundType } from "../types";
+import { Block, Event, Extrinsic, FoundType } from "../types";
 import { GenericExtrinsic } from "@polkadot/types/extrinsic";
 import { Vec } from "@polkadot/types/codec";
-import { AnyTuple } from "@polkadot/types/types";
-import { camelToSnakeCase, removeNullChars } from "./util";
+import { AnyTuple, Codec } from "@polkadot/types/types";
+import { camelToSnakeCase } from "./util";
 import {
   serializeLikeHarvester,
   serializeCallArgsLikeHarvester,
@@ -21,6 +21,8 @@ import {
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
+import { handleStakingEvent } from "./entities/stakingEvent";
+import { handleTickerExternalAgentAction } from "./entities/tickerExternalAgentAction";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -83,7 +85,23 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const block_id = block.block.header.number.toNumber();
   const event_idx = event.idx;
 
+  const module_id = event.event.section.toLowerCase();
+  const event_id = event.event.method;
+
   const args = event.event.data.toArray();
+
+  const handlerArgs: [number, string, string, Codec[], SubstrateEvent] = [
+    block_id,
+    event_id,
+    module_id,
+    args,
+    event,
+  ];
+  const handlerPromises = [
+    handleStakingEvent(...handlerArgs),
+    handleTickerExternalAgentAction(...handlerArgs),
+  ];
+
   const harvesterLikeArgs = args.map((arg, i) => ({
     value: serializeLikeHarvester(
       arg,
@@ -102,8 +120,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     event_idx,
     extrinsic_idx: event.extrinsic?.idx,
     spec_version_id: block.specVersion,
-    module_id: event.event.section.toLowerCase(),
-    event_id: event.event.method,
+    event_id,
+    module_id,
     attributes_txt: JSON.stringify(harvesterLikeArgs),
     event_arg_0,
     event_arg_1,
@@ -117,6 +135,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     fundraiser_offering_asset: extractOfferingAsset(harvesterLikeArgs),
     transfer_to: extractTransferTo(harvesterLikeArgs),
   }).save();
+
+  await Promise.all(handlerPromises);
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {

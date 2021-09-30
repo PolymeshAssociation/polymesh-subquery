@@ -65,3 +65,26 @@ type Extrinsic @entity {
   extrinsic_hash: String
   spec_version_id: Int!
 }
+
+type StakingEvent @entity {
+  id: ID!
+  block_id: Int! @index
+  event_idx: Int! @index
+  staking_event_id: String! @index
+  date: Date! @index
+  identity_id: String
+  stash_account: String
+  amount: BigInt
+  nominated_validators: [String!]
+}
+
+type TickerExternalAgentAction @entity {
+  id: ID!
+  block_id: Int! @index
+  event_idx: Int! @index
+  ticker: String! @index
+  pallet_name: String! @index
+  event_id: String! @index
+  caller_did: String! @index
+  datetime: Date!
+}
