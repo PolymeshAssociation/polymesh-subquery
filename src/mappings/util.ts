@@ -1,3 +1,5 @@
+import { hexStripPrefix } from "@polkadot/util";
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -70,3 +72,11 @@ export const findTopLevelCommas = (
   }
   return commas;
 };
+
+export function hexToAscii(input: string): string {
+  const hex = hexStripPrefix(input);
+  let str = "";
+  for (let i = 0; i < hex.length; i += 2)
+    str += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+  return removeNullChars(str);
+}

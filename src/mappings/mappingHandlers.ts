@@ -3,10 +3,10 @@ import {
   SubstrateEvent,
   SubstrateBlock,
 } from "@subql/types";
-import { Block, Event, Extrinsic, FoundType } from "../types";
-import { GenericExtrinsic } from "@polkadot/types/extrinsic";
 import { Vec } from "@polkadot/types/codec";
 import { AnyTuple, Codec } from "@polkadot/types/types";
+import { Block, Event, Extrinsic, FoundType } from "../types";
+import { GenericExtrinsic } from "@polkadot/types/extrinsic";
 import { camelToSnakeCase } from "./util";
 import {
   serializeLikeHarvester,
@@ -23,6 +23,7 @@ import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
 import { handleStakingEvent } from "./entities/stakingEvent";
 import { handleTickerExternalAgentAction } from "./entities/tickerExternalAgentAction";
+import { handleFundingEvent } from "./entities/fundingEvent";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -100,6 +101,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const handlerPromises = [
     handleStakingEvent(...handlerArgs),
     handleTickerExternalAgentAction(...handlerArgs),
+    handleFundingEvent(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

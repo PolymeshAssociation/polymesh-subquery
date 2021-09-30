@@ -26,7 +26,7 @@ export async function handleStakingEvent(
   module_id: string,
   params: Codec[],
   event: SubstrateEvent
-) {
+): Promise<void> {
   if (module_id === ModuleId.staking && isStakingEventType(event_id)) {
     await StakingEvent.create({
       id: `${block_id}/${event.idx}`,
