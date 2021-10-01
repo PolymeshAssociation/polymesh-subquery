@@ -97,3 +97,8 @@ type FundingEvent @entity {
   value: String!
   total_issued_in_funding_round: String!
 }
+
+type Sto @entity {
+  id: ID!
+  offering_asset: String!
+}

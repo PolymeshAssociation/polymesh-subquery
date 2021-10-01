@@ -1,7 +1,7 @@
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { StakingEvent } from "../../types";
-import { ModuleId } from "./common";
+import { ModuleIdEnum } from "./common";
 
 enum StakingEventType {
   Bonded = "Bonded",
@@ -27,7 +27,7 @@ export async function handleStakingEvent(
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (module_id === ModuleId.staking && isStakingEventType(event_id)) {
+  if (module_id === ModuleIdEnum.Staking && isStakingEventType(event_id)) {
     await StakingEvent.create({
       id: `${block_id}/${event.idx}`,
       block_id,
