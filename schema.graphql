@@ -128,3 +128,58 @@ type Investment @entity {
   raiseTokenAmount: BigInt!
   datetime: Date!
 }
+
+type Portfolio @entity {
+  id: ID!
+  blockId: Int!
+  identity: Identity! @index
+  kind: String
+  number: String! @index
+  name: String
+}
+
+type Leg @entity {
+  id: ID!
+  blockId: Int!
+  ticker: String! @index
+  amount: String!
+  from: Portfolio
+  to: Portfolio
+  instruction: Instruction @index
+  settlement: Settlement @index
+}
+
+type Settlement @entity {
+  id: ID!
+  blockId: Int!
+  identityId: String @index # required filter
+  ticker: String @index # optional filter
+  addresses: [String] @index # might need to break these into two columns to index
+  result: String!
+  legs: [Leg] @derivedFrom(field: "settlement")
+  sender: Identity
+  receiver: Identity
+}
+
+type Identity @entity {
+  id: ID!
+  blockId: Int!
+  # accountId: String
+  # secondaryKeys: [String]
+  sent: [Settlement] @derivedFrom(field: "sender")
+  received: [Settlement] @derivedFrom(field: "receiver")
+  portfolios: [Portfolio] @derivedFrom(field: "identity")
+}
+
+type Instruction @entity {
+  id: ID!
+  blockId: Int!
+  eventId: String!
+  status: String!
+  venueId: String @index
+  settlementType: String
+  tradeDate: String
+  valueDate: String
+  legs: [Leg] @derivedFrom(field: "instruction")
+  addresses: [String]
+}
