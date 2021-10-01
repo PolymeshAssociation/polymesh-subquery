@@ -1,6 +1,7 @@
 import { decodeAddress } from "@polkadot/keyring";
 import { Codec } from "@polkadot/types/types";
 import { u8aToHex, u8aToString } from "@polkadot/util";
+import { SubstrateExtrinsic } from "@subql/types";
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -113,4 +114,16 @@ export const getFirstValueFromJson = (item: Codec): string => {
 
 export const getTextValue = (item: Codec): string => {
   return item.toString().trim().length === 0 ? null : item.toString().trim();
+};
+
+export const hex2a = (hex: string): string => {
+  let str = "";
+  for (let i = 0; i < hex.length; i += 2)
+    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  return removeNullChars(str);
+};
+
+export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
+  const parsed = JSON.parse(extrinsic.extrinsic.toString());
+  return parsed.signature.signer.id;
 };

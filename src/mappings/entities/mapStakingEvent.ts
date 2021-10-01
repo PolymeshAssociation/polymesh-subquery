@@ -2,7 +2,7 @@ import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { StakingEvent } from "../../types";
 import { serializeAccount } from "../util";
-import { ModuleIdEnum } from "./common";
+import { EventIdEnum, ModuleIdEnum } from "./common";
 
 enum StakingEventType {
   Bonded = "Bonded",
@@ -25,7 +25,7 @@ const bondedUnbondedOrReward = new Set([
  */
 export async function mapStakingEvent(
   blockId: number,
-  eventId: string,
+  eventId: EventIdEnum,
   moduleId: string,
   params: Codec[],
   event: SubstrateEvent
