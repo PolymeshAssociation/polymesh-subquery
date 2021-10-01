@@ -1,3 +1,6 @@
+import { u8aToString } from "@polkadot/util";
+import { Codec } from "@polkadot/types/types";
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -70,3 +73,7 @@ export const findTopLevelCommas = (
   }
   return commas;
 };
+
+export function serializeTicker(input: Codec): string {
+  return removeNullChars(u8aToString(input.toU8a()));
+}

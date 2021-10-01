@@ -5,6 +5,7 @@ import {
   findTopLevelCommas,
   fromEntries,
   removeNullChars,
+  serializeTicker,
 } from "./util";
 import {
   Enum,
@@ -77,7 +78,7 @@ export const serializeLikeHarvester = (
   } else if (rawType === "Text") {
     return removeNullChars(item.toString());
   } else if (type === "Ticker") {
-    return removeNullChars(u8aToString(item.toU8a()));
+    return serializeTicker(item);
   } else if (rawType === "Call") {
     const e = item as unknown as GenericCall;
     return {

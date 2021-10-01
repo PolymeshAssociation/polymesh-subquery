@@ -8,6 +8,6 @@ export async function handleTickerExternalAgentAction(
   module_id: string,
   params: Codec[],
   event: SubstrateEvent
-) {
+): Promise<void> {
   // unimplemented
 }

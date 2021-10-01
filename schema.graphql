@@ -88,3 +88,12 @@ type TickerExternalAgentAction @entity {
   caller_did: String! @index
   datetime: Date!
 }
+
+type FundingEvent @entity {
+  id: ID!
+  block_id: Int!
+  ticker: String! @index(unique: false)
+  funding_name: String! @index(unique: false)
+  value: String!
+  total_issued_in_funding_round: String!
+}
