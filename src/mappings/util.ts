@@ -1,4 +1,5 @@
-import { hexStripPrefix } from "@polkadot/util";
+import { u8aToString } from "@polkadot/util";
+import { Codec } from "@polkadot/types/types";
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -73,10 +74,6 @@ export const findTopLevelCommas = (
   return commas;
 };
 
-export function hexToAscii(input: string): string {
-  const hex = hexStripPrefix(input);
-  let str = "";
-  for (let i = 0; i < hex.length; i += 2)
-    str += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
-  return removeNullChars(str);
+export function serializeTicker(input: Codec): string {
+  return removeNullChars(u8aToString(input.toU8a()));
 }

@@ -1,7 +1,7 @@
 import { SubstrateEvent } from "@subql/types";
 import { FundingEvent } from "../../types";
 import { Codec } from "@polkadot/types/types";
-import { hexToAscii } from "../util";
+import { serializeTicker } from "../util";
 
 export async function handleFundingEvent(
   block_id: number,
@@ -12,7 +12,7 @@ export async function handleFundingEvent(
 ): Promise<void> {
   if (module_id === "asset" && event_id === "Issued") {
     const rawTicker = params[1];
-    const ticker = hexToAscii(rawTicker.toString());
+    const ticker = serializeTicker(rawTicker);
     const value = params[3];
     const funding_name = params[4].toString();
     const total_issued_in_funding_round = params[5];
