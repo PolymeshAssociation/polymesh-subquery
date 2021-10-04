@@ -7,7 +7,7 @@ import { EventIdEnum, ModuleIdEnum } from "./common";
 /**
  * Subscribes to the events related to external agents
  */
-export async function mapExternalAgent(
+export async function mapExternalAgentAction(
   block_id: number,
   event_id: EventIdEnum,
   module_id: ModuleIdEnum,

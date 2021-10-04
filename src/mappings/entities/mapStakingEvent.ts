@@ -22,7 +22,7 @@ const bondedUnbondedOrReward = new Set([
 /**
  * Subscribes to events related to staking events
  */
-export async function mapStaking(
+export async function mapStakingEvent(
   block_id: number,
   event_id: string,
   module_id: string,

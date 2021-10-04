@@ -21,8 +21,8 @@ import {
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
-import { mapStaking } from "./entities/mapStaking";
-import { mapExternalAgent } from "./entities/mapExternalAgent";
+import { mapStakingEvent } from "./entities/mapStakingEvent";
+import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";
 import { mapSto } from "./entities/mapSto";
 import { EventIdEnum, ModuleIdEnum } from "./entities/common";
@@ -107,9 +107,9 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     event,
   ];
   const handlerPromises = [
-    mapStaking(...handlerArgs),
+    mapStakingEvent(...handlerArgs),
     mapSto(event_id, module_id, args),
-    mapExternalAgent(...handlerArgs),
+    mapExternalAgentAction(...handlerArgs),
     mapFunding(...handlerArgs),
   ];
 
