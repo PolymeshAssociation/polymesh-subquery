@@ -1,5 +1,4 @@
 import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
 import { Sto } from "../../types";
 import { serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
