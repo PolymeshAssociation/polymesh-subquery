@@ -19,8 +19,10 @@ const bondedUnbondedOrReward = new Set([
   StakingEventType.Unbonded,
   StakingEventType.Reward,
 ]);
-
-export async function handleStakingEvent(
+/**
+ * Subscribes to events related to staking events
+ */
+export async function mapStaking(
   block_id: number,
   event_id: string,
   module_id: string,

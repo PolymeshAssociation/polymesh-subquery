@@ -3,7 +3,10 @@ import { FundingEvent } from "../../types";
 import { Codec } from "@polkadot/types/types";
 import { serializeTicker } from "../util";
 
-export async function handleFundingEvent(
+/**
+ * Subscribes to events related to funding events
+ */
+export async function mapFunding(
   block_id: number,
   event_id: string,
   module_id: string,
