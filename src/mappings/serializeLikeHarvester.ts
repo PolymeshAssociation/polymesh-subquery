@@ -22,7 +22,7 @@ import { TextDecoder } from "util";
 import { AnyTuple, Codec, AnyJson } from "@polkadot/types/types";
 import { u64 } from "@polkadot/types";
 import BN from "bn.js";
-import { u8aToHex, u8aToString, hexStripPrefix } from "@polkadot/util";
+import { u8aToHex, hexStripPrefix } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
 
 /**

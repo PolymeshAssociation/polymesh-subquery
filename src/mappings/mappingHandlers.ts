@@ -24,6 +24,8 @@ import { decodeAddress } from "@polkadot/util-crypto";
 import { handleStakingEvent } from "./entities/stakingEvent";
 import { handleTickerExternalAgentAction } from "./entities/tickerExternalAgentAction";
 import { handleFundingEvent } from "./entities/fundingEvent";
+import { handleSto } from "./entities/sto";
+import { EventIdEnum, ModuleIdEnum } from "./entities/common";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -91,15 +93,22 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
   const args = event.event.data.toArray();
 
-  const handlerArgs: [number, string, string, Codec[], SubstrateEvent] = [
+  const handlerArgs: [
+    number,
+    EventIdEnum,
+    ModuleIdEnum,
+    Codec[],
+    SubstrateEvent
+  ] = [
     block_id,
-    event_id,
-    module_id,
+    event_id as EventIdEnum,
+    module_id as ModuleIdEnum,
     args,
     event,
   ];
   const handlerPromises = [
     handleStakingEvent(...handlerArgs),
+    handleSto(event_id, module_id, args),
     handleTickerExternalAgentAction(...handlerArgs),
     handleFundingEvent(...handlerArgs),
   ];
