@@ -91,3 +91,15 @@ export const getOrDefault = <K, V>(
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
+
+export const getFirstKeyFromJson = (item: Codec): string => {
+  return Object.keys(item.toJSON())[0];
+};
+
+export const getFirstValueFromJson = (item: Codec): string => {
+  return item.toJSON()[getFirstKeyFromJson(item)];
+};
+
+export const getTextValue = (item: Codec): string => {
+  return item.toString().trim().length === 0 ? null : item.toString().trim();
+};

@@ -1,17 +1,20 @@
-import {
-  SubstrateExtrinsic,
-  SubstrateEvent,
-  SubstrateBlock,
-} from "@subql/types";
 import { Vec } from "@polkadot/types/codec";
-import { AnyTuple, Codec } from "@polkadot/types/types";
-import { Block, Event, Extrinsic, FoundType } from "../types";
 import { GenericExtrinsic } from "@polkadot/types/extrinsic";
-import { camelToSnakeCase } from "./util";
+import { AnyTuple, Codec } from "@polkadot/types/types";
+import { hexStripPrefix, u8aToHex } from "@polkadot/util";
+import { decodeAddress } from "@polkadot/util-crypto";
 import {
-  serializeLikeHarvester,
-  serializeCallArgsLikeHarvester,
-} from "./serializeLikeHarvester";
+  SubstrateBlock,
+  SubstrateEvent,
+  SubstrateExtrinsic,
+} from "@subql/types";
+import { Block, Event, Extrinsic, FoundType } from "../types";
+import { mapAuthorization } from "./entities/authorization";
+import { EventIdEnum, ModuleIdEnum } from "./entities/common";
+import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
+import { mapFunding } from "./entities/mapFunding";
+import { mapStakingEvent } from "./entities/mapStakingEvent";
+import { mapSto } from "./entities/mapSto";
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -19,13 +22,11 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from "./generatedColumns";
-import { hexStripPrefix, u8aToHex } from "@polkadot/util";
-import { decodeAddress } from "@polkadot/util-crypto";
-import { mapStakingEvent } from "./entities/mapStakingEvent";
-import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
-import { mapFunding } from "./entities/mapFunding";
-import { mapSto } from "./entities/mapSto";
-import { EventIdEnum, ModuleIdEnum } from "./entities/common";
+import {
+  serializeCallArgsLikeHarvester,
+  serializeLikeHarvester,
+} from "./serializeLikeHarvester";
+import { camelToSnakeCase } from "./util";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -111,6 +112,12 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapSto(event_id, module_id, args),
     mapExternalAgentAction(...handlerArgs),
     mapFunding(...handlerArgs),
+    mapAuthorization(
+      block_id,
+      event_id as EventIdEnum,
+      module_id as ModuleIdEnum,
+      args
+    ),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

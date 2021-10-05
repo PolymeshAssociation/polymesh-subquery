@@ -1,6 +1,6 @@
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
-import { TickerExternalAgentAction, Sto } from "../../types";
+import { Sto, TickerExternalAgentAction } from "../../types";
 import { getOrDefault, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
