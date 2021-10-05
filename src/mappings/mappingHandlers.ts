@@ -26,6 +26,8 @@ import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";
 import { mapSto } from "./entities/mapSto";
 import { EventIdEnum, ModuleIdEnum } from "./entities/common";
+import { mapTickerExternalAgentAdded } from "./entities/tickerExternalAgentAdded";
+import { mapTickerExternalAgentHistory } from "./entities/tickerExternalAgentHistory";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -110,6 +112,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapStakingEvent(...handlerArgs),
     mapSto(event_id, module_id, args),
     mapExternalAgentAction(...handlerArgs),
+    mapTickerExternalAgentAdded(...handlerArgs),
+    mapTickerExternalAgentHistory(...handlerArgs),
     mapFunding(...handlerArgs),
   ];
 
