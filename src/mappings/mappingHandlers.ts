@@ -21,10 +21,10 @@ import {
 } from "./generatedColumns";
 import { hexStripPrefix, u8aToHex } from "@polkadot/util";
 import { decodeAddress } from "@polkadot/util-crypto";
-import { handleStakingEvent } from "./entities/stakingEvent";
-import { handleTickerExternalAgentAction } from "./entities/tickerExternalAgentAction";
-import { handleFundingEvent } from "./entities/fundingEvent";
-import { handleSto } from "./entities/sto";
+import { mapStakingEvent } from "./entities/mapStakingEvent";
+import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
+import { mapFunding } from "./entities/mapFunding";
+import { mapSto } from "./entities/mapSto";
 import { EventIdEnum, ModuleIdEnum } from "./entities/common";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
@@ -107,10 +107,10 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     event,
   ];
   const handlerPromises = [
-    handleStakingEvent(...handlerArgs),
-    handleSto(event_id, module_id, args),
-    handleTickerExternalAgentAction(...handlerArgs),
-    handleFundingEvent(...handlerArgs),
+    mapStakingEvent(...handlerArgs),
+    mapSto(event_id, module_id, args),
+    mapExternalAgentAction(...handlerArgs),
+    mapFunding(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

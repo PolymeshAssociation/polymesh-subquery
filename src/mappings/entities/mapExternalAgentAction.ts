@@ -4,7 +4,10 @@ import { TickerExternalAgentAction, Sto } from "../../types";
 import { getOrDefault, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
-export async function handleTickerExternalAgentAction(
+/**
+ * Subscribes to the events related to external agents
+ */
+export async function mapExternalAgentAction(
   block_id: number,
   event_id: EventIdEnum,
   module_id: ModuleIdEnum,

@@ -3,7 +3,10 @@ import { Sto } from "../../types";
 import { serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
-export async function handleSto(
+/**
+ * Subscribes to events related to STOs
+ */
+export async function mapSto(
   event_id: string,
   module_id: string,
   params: Codec[]

@@ -89,7 +89,7 @@ type TickerExternalAgentAction @entity {
   datetime: Date!
 }
 
-type FundingEvent @entity {
+type Funding @entity {
   id: ID!
   block_id: Int!
   ticker: String! @index(unique: false)

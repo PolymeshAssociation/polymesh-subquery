@@ -1,9 +1,12 @@
 import { SubstrateEvent } from "@subql/types";
-import { FundingEvent } from "../../types";
+import { Funding } from "../../types";
 import { Codec } from "@polkadot/types/types";
 import { serializeTicker } from "../util";
 
-export async function handleFundingEvent(
+/**
+ * Subscribes to events related to funding events
+ */
+export async function mapFunding(
   block_id: number,
   event_id: string,
   module_id: string,
@@ -16,7 +19,7 @@ export async function handleFundingEvent(
     const value = params[3];
     const funding_name = params[4].toString();
     const total_issued_in_funding_round = params[5];
-    await FundingEvent.create({
+    await Funding.create({
       id: `${block_id}/${event.idx}`,
       ticker,
       event_idx: event.idx,
