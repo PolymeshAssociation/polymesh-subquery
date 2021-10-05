@@ -9,7 +9,7 @@ import {
   SubstrateExtrinsic,
 } from "@subql/types";
 import { Block, Event, Extrinsic, FoundType } from "../types";
-import { mapAuthorization } from "./entities/authorization";
+import { mapAuthorization } from "./entities/mapAuthorization";
 import { EventIdEnum, ModuleIdEnum } from "./entities/common";
 import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";

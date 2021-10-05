@@ -1,3 +1,4 @@
+import { capitalizeFirstLetter } from "./../util";
 import { Codec } from "@polkadot/types/types";
 import { Authorization } from "../../types";
 import {
@@ -7,35 +8,30 @@ import {
 } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
-enum AuthorizationEventType {
-  AuthorizationAdded = "AuthorizationAdded",
-  AuthorizationRevoked = "AuthorizationRevoked",
-  AuthorizationRejected = "AuthorizationRejected",
-  AuthorizationConsumed = "AuthorizationConsumed",
-}
-
 enum AuthorizationStatus {
   Pending = "Pending",
   Consumed = "Consumed",
   Rejected = "Rejected",
   Revoked = "Revoked",
-  Expired = "Expired",
 }
 
-const authorizationEventTypes = new Set<string>(
-  Object.values(AuthorizationEventType)
-);
+const authorizationEvents = new Set<string>([
+  EventIdEnum.AuthorizationAdded,
+  EventIdEnum.AuthorizationConsumed,
+  EventIdEnum.AuthorizationRejected,
+  EventIdEnum.AuthorizationRevoked,
+]);
 
-const isAuthorizationEvent = (e: string): e is AuthorizationEventType =>
-  authorizationEventTypes.has(e);
+const isAuthorizationEvent = (e: string): e is EventIdEnum =>
+  authorizationEvents.has(e);
 
 const authorizationEventStatusMapping = new Map<
-  AuthorizationEventType,
+  EventIdEnum,
   AuthorizationStatus
 >([
-  [AuthorizationEventType.AuthorizationConsumed, AuthorizationStatus.Consumed],
-  [AuthorizationEventType.AuthorizationRevoked, AuthorizationStatus.Revoked],
-  [AuthorizationEventType.AuthorizationRejected, AuthorizationStatus.Rejected],
+  [EventIdEnum.AuthorizationConsumed, AuthorizationStatus.Consumed],
+  [EventIdEnum.AuthorizationRevoked, AuthorizationStatus.Revoked],
+  [EventIdEnum.AuthorizationRejected, AuthorizationStatus.Rejected],
 ]);
 
 export async function mapAuthorization(
@@ -54,13 +50,6 @@ export async function mapAuthorization(
         status: authorizationEventStatusMapping.get(event_id),
       }).save();
     } else {
-      const expiry = getTextValue(params[5]);
-
-      let status = AuthorizationStatus.Expired;
-      if (!expiry || +expiry > new Date().getTime()) {
-        status = AuthorizationStatus.Pending;
-      }
-
       await Authorization.create({
         id: params[3],
         block_id,
@@ -68,10 +57,10 @@ export async function mapAuthorization(
         from_did: getTextValue(params[0]),
         to_did: getTextValue(params[1]),
         to_key: getTextValue(params[2]),
-        type: getFirstKeyFromJson(params[4]),
+        type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
         data: getFirstValueFromJson(params[4]),
-        expiry,
-        status,
+        expiry: getTextValue(params[5]),
+        status: AuthorizationStatus.Pending,
       }).save();
     }
   }

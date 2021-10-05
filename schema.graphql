@@ -112,6 +112,6 @@ type Authorization @entity {
   to_did: String @index
   to_key: String @index
   data: String
-  expiry: String
+  expiry: Date @index
   status: String!
 }
