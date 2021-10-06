@@ -114,4 +114,5 @@ type Authorization @entity {
   data: String
   expiry: Date @index
   status: String!
+  updated_block: Int
 }

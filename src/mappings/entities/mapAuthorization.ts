@@ -44,6 +44,7 @@ export async function mapAuthorization(
     if (authorizationEventStatusMapping.has(event_id)) {
       await Authorization.create({
         id: params[2],
+        updated_block: block_id,
         auth_id: params[2],
         to_key: getTextValue(params[1]),
         status: authorizationEventStatusMapping.get(event_id),
