@@ -105,7 +105,7 @@ type Sto @entity {
 
 type Authorization @entity {
   id: ID!
-  block_id: Int!
+  created_block: Int
   auth_id: Int! @index
   type: String @index
   from_did: String @index
