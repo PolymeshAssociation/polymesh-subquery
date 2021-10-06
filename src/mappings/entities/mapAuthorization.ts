@@ -42,13 +42,10 @@ export async function mapAuthorization(
 ): Promise<void> {
   if (module_id === ModuleIdEnum.Identity && isAuthorizationEvent(event_id)) {
     if (authorizationEventStatusMapping.has(event_id)) {
-      await Authorization.create({
-        id: params[2],
-        updated_block: block_id,
-        auth_id: params[2],
-        to_key: getTextValue(params[1]),
-        status: authorizationEventStatusMapping.get(event_id),
-      }).save();
+      const auth = await Authorization.get(params[2].toString());
+      auth.status = authorizationEventStatusMapping.get(event_id);
+      auth.updated_block = block_id;
+      await auth.save();
     } else {
       await Authorization.create({
         id: params[3],
@@ -61,6 +58,7 @@ export async function mapAuthorization(
         data: getFirstValueFromJson(params[4]),
         expiry: getTextValue(params[5]),
         status: AuthorizationStatus.Pending,
+        updated_block: block_id,
       }).save();
     }
   }
