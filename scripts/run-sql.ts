@@ -28,7 +28,7 @@ const retry = async <T>(
 
 const main = async () => {
   const postgres = await retry(
-    10,
+    env.NODE_ENV === "local" ? 10 : 1,
     1000,
     async () =>
       await createConnection({
@@ -41,7 +41,7 @@ const main = async () => {
         name: "postgres",
       }),
     () => {
-      console.log("Database not ready, retrying in 1s");
+      console.log("Database connection not ready, retrying in 1s");
     }
   );
 
@@ -55,18 +55,19 @@ const main = async () => {
         .from("events", "e")
         .limit(1);
       await query.getRawOne();
-      await postgres.query(readFileSync("../compat.sql", "utf-8"));
-      console.log("Applied initial SQL");
     },
     () => {
-      console.log("Database not ready, retrying in 1s");
+      console.log("Database schema not ready, retrying in 1s");
     }
   );
+
+  await postgres.query(readFileSync("../compat.sql", "utf-8"));
+  console.log("Applied initial SQL");
 };
 
 main()
   .then(() => process.exit(0))
   .catch(async (e) => {
-    console.log(e);
+    console.error(e);
     process.exit(1);
   });

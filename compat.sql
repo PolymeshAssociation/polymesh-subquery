@@ -4,8 +4,11 @@ ADD COLUMN IF NOT EXISTS attributes JSONB GENERATED ALWAYS AS (attributes_txt::j
 ALTER TABLE extrinsics
 ADD COLUMN IF NOT EXISTS params JSONB GENERATED ALWAYS AS (params_txt::jsonb) STORED NULL;
 
+DROP INDEX IF EXISTS data_block_datetime;
+
 CREATE UNIQUE INDEX IF NOT EXISTS data_block_id ON blocks (block_id);
 CREATE UNIQUE INDEX IF NOT EXISTS data_block_hash ON blocks (hash);
+CREATE INDEX IF NOT EXISTS data_block_datetime_timestamp ON blocks (((datetime)::timestamp(0) without time zone));
 CREATE INDEX IF NOT EXISTS data_block_parent_hash ON blocks (parent_hash);
 
 DROP VIEW IF EXISTS data_block;
@@ -45,6 +48,8 @@ SELECT
   signed,
   call_id,
   module_id,
+  nonce,
+  extrinsic_hash,
   address,
   signedby_address,
   params,
@@ -69,6 +74,7 @@ CREATE INDEX IF NOT EXISTS data_event_claim_issuer ON events (claim_issuer);
 CREATE INDEX IF NOT EXISTS data_event_corporate_action_ticker ON events (corporate_action_ticker);
 CREATE INDEX IF NOT EXISTS data_event_fundraiser_offering_asset ON events (fundraiser_offering_asset);
 CREATE INDEX IF NOT EXISTS data_event_spec_version_id ON events (spec_version_id);
+CREATE INDEX IF NOT EXISTS data_event_module_id_event_id ON events (module_id, event_id);
 CREATE INDEX IF NOT EXISTS data_event_module_id_event_id_event_arg_2 ON events (module_id, event_id, left(event_arg_2, 100));
 CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from attributes #>> '{2,value,did}'));
 

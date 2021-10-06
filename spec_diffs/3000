@@ -1,0 +1,262 @@
+- Expected
++ Received
+
+@@ -6,7 +6,6 @@
+      "_enum": Object {
+        "Affirmed": "",
+        "Pending": "",
+-       "Rejected": "",
+        "Unknown": "",
+      },
+    },
+@@ -20,7 +19,7 @@
+      },
+    },
+    "AssetCompliance": Object {
+-     "is_paused": "bool",
++     "paused": "bool",
+      "requirements": "Vec<ComplianceRequirement>",
+    },
+    "AssetComplianceResult": Object {
+@@ -40,11 +39,6 @@
+        "CUSIP": "[u8; 9]",
+        "ISIN": "[u8; 12]",
+        "LEI": "[u8; 20]",
+-     },
+-   },
+-   "AssetMigrationError": Object {
+-     "_enum": Object {
+-       "AssetDocumentFail": "(Ticker, DocumentId)",
+      },
+    },
+    "AssetName": "Text",
+@@ -89,14 +83,10 @@
+        "AddRelayerPayingKey": "(AccountId, AccountId, Balance)",
+        "AttestPrimaryKeyRotation": "IdentityId",
+        "BecomeAgent": "(Ticker, AgentGroup)",
+-       "Custom": "Ticker",
+        "JoinIdentity": "Permissions",
+-       "NoData": "",
+        "PortfolioCustody": "PortfolioId",
+        "RotatePrimaryKey": "",
+        "TransferAssetOwnership": "Ticker",
+-       "TransferCorporateActionAgent": "Ticker",
+-       "TransferPrimaryIssuanceAgent": "Ticker",
+        "TransferTicker": "Ticker",
+      },
+    },
+@@ -107,9 +97,7 @@
+        "AddRelayerPayingKey": "",
+        "AttestPrimaryKeyRotation": "",
+        "BecomeAgent": "",
+-       "Custom": "",
+        "JoinIdentity": "",
+-       "NoData": "",
+        "PortfolioCustody": "",
+        "RotatePrimaryKey": "",
+        "TransferAssetOwnership": "",
+@@ -129,24 +117,15 @@
+      "fallback": "Option<u16>",
+      "power": "Balance",
+    },
+-   "BatchAddClaimItem": Object {
+-     "claim": "Claim",
+-     "expiry": "Option<Moment>",
+-     "target": "IdentityId",
+-   },
+-   "BatchRevokeClaimItem": Object {
+-     "claim": "Claim",
+-     "target": "IdentityId",
+-   },
+    "Beneficiary": Object {
+      "amount": "Balance",
+      "id": "IdentityId",
+    },
+    "BridgeTx": Object {
++     "amount": "Balance",
+      "nonce": "u32",
+      "recipient": "AccountId",
+      "tx_hash": "H256",
+-     "value": "Balance",
+    },
+    "BridgeTxDetail": Object {
+      "amount": "Balance",
+@@ -582,7 +561,7 @@
+    },
+    "DidRecordsSuccess": Object {
+      "primary_key": "AccountId",
+-     "secondary_key": "Vec<SecondaryKey>",
++     "secondary_keys": "Vec<SecondaryKey>",
+    },
+    "DidStatus": Object {
+      "_enum": Object {
+@@ -650,7 +629,6 @@
+        "Whole": "",
+      },
+    },
+-   "FeeOf": "Balance",
+    "FundingRoundName": "Text",
+    "Fundraiser": Object {
+      "creator": "IdentityId",
+@@ -707,10 +685,6 @@
+      "issuance_date": "Moment",
+      "last_update_date": "Moment",
+    },
+-   "IdentityClaimKey": Object {
+-     "claim_type": "ClaimType",
+-     "id": "IdentityId",
+-   },
+    "IdentityId": "[u8; 32]",
+    "IdentityRole": Object {
+      "_enum": Array [
+@@ -749,12 +723,6 @@
+    },
+    "InvestorUid": "[u8; 16]",
+    "InvestorZKProofData": "Signature",
+-   "IssueRecipient": Object {
+-     "_enum": Object {
+-       "Account": "AccountId",
+-       "Identity": "IdentityId",
+-     },
+-   },
+    "ItnRewardStatus": Object {
+      "_enum": Object {
+        "Claimed": "",
+@@ -800,12 +768,6 @@
+    "MetaDescription": "Text",
+    "MetaUrl": "Text",
+    "MetaVersion": "u32",
+-   "MigrationError": Object {
+-     "_enum": Object {
+-       "DecodeKey": "Vec<u8>",
+-       "Map": "AssetMigrationError",
+-     },
+-   },
+    "Moment": "u64",
+    "Motion": Object {
+      "choices": "Vec<ChoiceTitle>",
+@@ -830,16 +792,7 @@
+    "PalletPermissions": Object {
+      "dispatchable_names": "DispatchableNames",
+      "pallet_name": "PalletName",
+-   },
+-   "Payload": Object {
+-     "block_number": "BlockNumber",
+-     "nominators": "Vec<AccountId>",
+-     "public": "H256",
+    },
+-   "PendingTx": Object {
+-     "bridge_tx": "BridgeTx",
+-     "did": "IdentityId",
+-   },
+    "Percentage": "Permill",
+    "PermissionedIdentityPrefs": Object {
+      "intended_count": "u32",
+@@ -868,7 +821,6 @@
+    },
+    "PolymeshVotes": Object {
+      "ayes": "Vec<(IdentityId, Balance)>",
+-     "end": "BlockNumber",
+      "expiry": "MaybeBlock",
+      "index": "u32",
+      "nays": "Vec<(IdentityId, Balance)>",
+@@ -907,12 +859,6 @@
+    "PriceTier": Object {
+      "price": "Balance",
+      "total": "Balance",
+-   },
+-   "ProportionMatch": Object {
+-     "_enum": Array [
+-       "AtLeast",
+-       "MoreThan",
+-     ],
+    },
+    "ProposalData": Object {
+      "_enum": Object {
+@@ -956,27 +902,19 @@
+      "_enum": Array [
+        "AssetRegisterTicker",
+        "AssetIssue",
+-       "AssetAddDocument",
++       "AssetAddDocuments",
+        "AssetCreateAsset",
+-       "AssetCreateCheckpointSchedule",
+-       "DividendNew",
++       "CheckpointCreateSchedule",
+        "ComplianceManagerAddComplianceRequirement",
+-       "IdentityRegisterDid",
+        "IdentityCddRegisterDid",
+        "IdentityAddClaim",
+-       "IdentitySetPrimaryKey",
+        "IdentityAddSecondaryKeysWithAuthorization",
+        "PipsPropose",
+-       "VotingAddBallot",
+        "ContractsPutCode",
+-       "BallotAttachBallot",
+-       "DistributionDistribute",
++       "CorporateBallotAttachBallot",
++       "CapitalDistributionDistribute",
+      ],
+    },
+-   "ProverTickerKey": Object {
+-     "prover": "IdentityId",
+-     "ticker": "Ticker",
+-   },
+    "Receipt": Object {
+      "amount": "Balance",
+      "asset": "Ticker",
+@@ -1057,11 +995,6 @@
+        "Identity": "IdentityId",
+      },
+    },
+-   "SimpleTokenRecord": Object {
+-     "owner_did": "IdentityId",
+-     "ticker": "Ticker",
+-     "total_supply": "Balance",
+-   },
+    "SkippedCount": "u8",
+    "SlashingSwitch": Object {
+      "_enum": Array [
+@@ -1147,11 +1080,6 @@
+      "version": "MetaVersion",
+    },
+    "Ticker": "[u8; 12]",
+-   "TickerRangeProof": Object {
+-     "final_response": "Vec<u8>",
+-     "initial_message": "[u8; 32]",
+-     "max_two_exp": "u32",
+-   },
+    "TickerRegistration": Object {
+      "expiry": "Option<Moment>",
+      "owner": "IdentityId",
+@@ -1160,11 +1088,6 @@
+      "max_ticker_length": "u8",
+      "registration_length": "Option<Moment>",
+    },
+-   "TickerTransferApproval": Object {
+-     "authorized_by": "IdentityId",
+-     "next_ticker": "Option<Ticker>",
+-     "previous_ticker": "Option<Ticker>",
+-   },
+    "TransferManager": Object {
+      "_enum": Object {
+        "CountTransferManager": "Counter",
+@@ -1190,9 +1113,6 @@
+      "nonce": "u64",
+    },
+    "Url": "Text",
+-   "ValidatorPrefsWithBlocked": Object {
+-     "commission": "Compact<Perbill>",
+-   },
+    "Venue": Object {
+      "creator": "IdentityId",
+      "venue_type": "VenueType",
+@@ -1215,7 +1135,7 @@
+    "VoteCount": Object {
+      "_enum": Object {
+        "ProposalFound": "VoteCountProposalFound",
+-       "ProposalNotFound": "Vec<u8>",
++       "ProposalNotFound": "",
+      },
+    },
+    "VoteCountProposalFound": Object {

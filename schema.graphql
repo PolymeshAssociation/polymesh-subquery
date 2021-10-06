@@ -61,5 +61,7 @@ type Extrinsic @entity {
   call_id: String!
   params_txt: String!
   success: Int!
+  nonce: Int
+  extrinsic_hash: String
   spec_version_id: Int!
 }

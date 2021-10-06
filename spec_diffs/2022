@@ -1,0 +1,187 @@
+- Expected
++ Received
+
+@@ -1,10 +1,20 @@
+  Object {
++   "AGId": "u32",
+    "AffirmationStatus": Object {
+      "_enum": Object {
+        "Affirmed": "",
+        "Pending": "",
+        "Rejected": "",
+        "Unknown": "",
++     },
++   },
++   "AgentGroup": Object {
++     "_enum": Object {
++       "Custom": "AGId",
++       "ExceptMeta": "",
++       "Full": "",
++       "PolymeshV1CAA": "",
++       "PolymeshV1PIA": "",
+      },
+    },
+    "AssetCompliance": Object {
+@@ -42,7 +52,14 @@
+        "NotOwned": "",
+        "TickerOwned": "",
+      },
++   },
++   "AssetPermissions": Object {
++     "_enum": Object {
++       "Except": "Vec<Ticker>",
++       "These": "Vec<Ticker>",
++       "Whole": "",
+      },
++   },
+    "AssetType": Object {
+      "_enum": Object {
+        "Commodity": "",
+@@ -58,10 +75,6 @@
+        "StructuredProduct": "",
+      },
+    },
+-   "AuthIdentifier": Object {
+-     "auth_id": "u64",
+-     "signatory": "Signatory",
+-   },
+    "Authorization": Object {
+      "auth_id": "u64",
+      "authorization_data": "AuthorizationData",
+@@ -72,6 +85,7 @@
+      "_enum": Object {
+        "AddMultiSigSigner": "AccountId",
+        "AttestPrimaryKeyRotation": "IdentityId",
++       "BecomeAgent": "(Ticker, AgentGroup)",
+        "Custom": "Ticker",
+        "JoinIdentity": "Permissions",
+        "NoData": "",
+@@ -559,6 +573,13 @@
+      },
+    },
+    "DispatchableName": "Text",
++   "DispatchableNames": Object {
++     "_enum": Object {
++       "Except": "Vec<DispatchableName>",
++       "These": "Vec<DispatchableName>",
++       "Whole": "",
++     },
++   },
+    "Distribution": Object {
+      "amount": "Balance",
+      "currency": "Ticker",
+@@ -601,6 +622,13 @@
+      "usage_fee": "Balance",
+      "version": "MetaVersion",
+    },
++   "ExtrinsicPermissions": Object {
++     "_enum": Object {
++       "Except": "Vec<PalletPermissions>",
++       "These": "Vec<PalletPermissions>",
++       "Whole": "",
++     },
++   },
+    "FeeOf": "Balance",
+    "FundingRoundName": "Text",
+    "Fundraiser": Object {
+@@ -617,14 +645,6 @@
+      "venue_id": "u64",
+    },
+    "FundraiserName": "Text",
+-   "FundraiserStatus": Object {
+-     "_enum": Array [
+-       "Live",
+-       "Frozen",
+-       "Closed",
+-       "ClosedEarly",
+-     ],
+-   },
+    "FundraiserTier": Object {
+      "price": "Balance",
+      "remaining": "Balance",
+@@ -693,6 +713,7 @@
+    },
+    "InstructionStatus": Object {
+      "_enum": Object {
++       "Failed": "",
+        "Pending": "",
+        "Unknown": "",
+      },
+@@ -749,6 +770,7 @@
+        "Map": "AssetMigrationError",
+      },
+    },
++   "Moment": "u64",
+    "Motion": Object {
+      "choices": "Vec<ChoiceTitle>",
+      "info_link": "MotionInfoLink",
+@@ -758,6 +780,7 @@
+    "MotionTitle": "Text",
+    "MovePortfolioItem": Object {
+      "amount": "Balance",
++     "memo": "Option<Memo>",
+      "ticker": "Ticker",
+    },
+    "OffChainSignature": Object {
+@@ -769,7 +792,7 @@
+    },
+    "PalletName": "Text",
+    "PalletPermissions": Object {
+-     "dispatchable_names": "Option<Vec<DispatchableName>>",
++     "dispatchable_names": "DispatchableNames",
+      "pallet_name": "PalletName",
+    },
+    "Payload": Object {
+@@ -787,9 +810,9 @@
+      "running_count": "u32",
+    },
+    "Permissions": Object {
+-     "asset": "Option<Vec<Ticker>>",
+-     "extrinsic": "Option<Vec<PalletPermissions>>",
+-     "portfolio": "Option<Vec<PortfolioId>>",
++     "asset": "AssetPermissions",
++     "extrinsic": "ExtrinsicPermissions",
++     "portfolio": "PortfolioPermissions",
+    },
+    "Pip": Object {
+      "id": "PipId",
+@@ -826,6 +849,13 @@
+    },
+    "PortfolioName": "Text",
+    "PortfolioNumber": "u64",
++   "PortfolioPermissions": Object {
++     "_enum": Object {
++       "Except": "Vec<PortfolioId>",
++       "These": "Vec<PortfolioId>",
++       "Whole": "",
++     },
++   },
+    "PortfolioValidityResult": Object {
+      "receiver_is_same_portfolio": "bool",
+      "receiver_portfolio_does_not_exist": "bool",
+@@ -851,7 +881,7 @@
+    "ProposalData": Object {
+      "_enum": Object {
+        "Hash": "Hash",
+-       "Proposal": "Vec<u8>",
++       "Proposal": "HexBytes",
+      },
+    },
+    "ProposalDetails": Object {
+@@ -978,7 +1008,6 @@
+      "divisible": "bool",
+      "name": "AssetName",
+      "owner_did": "IdentityId",
+-     "primary_issuance_agent": "Option<IdentityId>",
+      "total_supply": "Balance",
+    },
+    "SettlementType": Object {
+@@ -1055,7 +1084,7 @@
+    },
+    "TargetIdentity": Object {
+      "_enum": Object {
+-       "PrimaryIssuanceAgent": "",
++       "ExternalAgent": "",
+        "Specific": "IdentityId",
+      },
+    },
