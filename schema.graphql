@@ -116,3 +116,15 @@ type Authorization @entity {
   status: String!
   updated_block: Int!
 }
+
+type Investment @entity {
+  id: ID!
+  block_id: Int!
+  investor: String!
+  sto_id: Int!
+  offering_token: String!
+  raise_token: String!
+  offering_token_amount: BigInt!
+  raise_token_amount: BigInt!
+  datetime: Date!
+}
