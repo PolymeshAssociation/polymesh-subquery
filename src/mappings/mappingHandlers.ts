@@ -119,7 +119,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       module_id as ModuleIdEnum,
       args
     ),
-    mapInvestment(block_id, event_id, args, event),
+    mapInvestment(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

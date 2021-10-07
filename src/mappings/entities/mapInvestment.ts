@@ -3,17 +3,19 @@ import { SubstrateEvent } from "@subql/types";
 import { getTextValue } from "../util";
 import { Investment } from "./../../types/models/Investment";
 import { serializeTicker } from "./../util";
+import { EventIdEnum, ModuleIdEnum } from "./common";
 
 /**
  * Subscribes to the STO Invested event
  */
 export async function mapInvestment(
   block_id: number,
-  event_id: string,
+  event_id: EventIdEnum,
+  module_id: ModuleIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (event_id === "Invested") {
+  if (module_id === ModuleIdEnum.Sto && event_id === EventIdEnum.Invested) {
     await Investment.create({
       id: `${block_id}/${event.idx}`,
       block_id,

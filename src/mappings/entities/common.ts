@@ -353,4 +353,5 @@ export enum EventIdEnum {
   AssetRulesResumed = "AssetRulesResumed",
   AssetRulesPaused = "AssetRulesPaused",
   AssetRuleChanged = "AssetRuleChanged",
+  Invested = "Invested",
 }
