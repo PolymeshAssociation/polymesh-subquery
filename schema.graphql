@@ -102,3 +102,17 @@ type Sto @entity {
   id: ID!
   offering_asset: String!
 }
+
+type Authorization @entity {
+  id: ID!
+  created_block: Int!
+  auth_id: Int! @index
+  type: String! @index
+  from_did: String! @index
+  to_did: String @index
+  to_key: String @index
+  data: String
+  expiry: Date @index
+  status: String!
+  updated_block: Int!
+}

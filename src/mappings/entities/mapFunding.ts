@@ -1,6 +1,6 @@
+import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { Funding } from "../../types";
-import { Codec } from "@polkadot/types/types";
 import { serializeTicker } from "../util";
 
 /**
