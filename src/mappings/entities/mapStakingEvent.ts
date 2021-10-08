@@ -23,33 +23,32 @@ const bondedUnbondedOrReward = new Set([
  * Subscribes to events related to staking events
  */
 export async function mapStakingEvent(
-  block_id: number,
-  event_id: string,
-  module_id: string,
+  blockId: number,
+  eventId: string,
+  moduleId: string,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (module_id === ModuleIdEnum.Staking && isStakingEventType(event_id)) {
+  if (moduleId === ModuleIdEnum.Staking && isStakingEventType(eventId)) {
     await StakingEvent.create({
-      id: `${block_id}/${event.idx}`,
-      block_id,
-      event_idx: event.idx,
-      staking_event_id: event.event.method,
+      id: `${blockId}/${event.idx}`,
+      blockId,
+      eventIdx: event.idx,
+      stakingEventId: event.event.method,
       date: event.block.timestamp,
-      identity_id:
-        event_id === StakingEventType.Slash ? null : params[0].toJSON(),
-      stash_account:
-        event_id === StakingEventType.Slash
+      identityId:
+        eventId === StakingEventType.Slash ? null : params[0].toJSON(),
+      stashAccount:
+        eventId === StakingEventType.Slash
           ? params[0].toJSON()
           : params[1].toJSON(),
       amount:
-        event_id === StakingEventType.Slash
+        eventId === StakingEventType.Slash
           ? params[1].toJSON()
-          : bondedUnbondedOrReward.has(event_id)
+          : bondedUnbondedOrReward.has(eventId)
           ? params[2].toJSON()
           : null,
-      nominated_validators:
-        event_id === "Nominated" ? params[2].toJSON() : null,
+      nominatedValidators: eventId === "Nominated" ? params[2].toJSON() : null,
     }).save();
   }
 }
