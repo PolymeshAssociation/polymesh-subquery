@@ -121,8 +121,8 @@ type Investment @entity {
   id: ID!
   block_id: Int!
   investor: String!
-  sto_id: Int!
-  offering_token: String!
+  sto_id: Int! @index
+  offering_token: String! @index
   raise_token: String!
   offering_token_amount: BigInt!
   raise_token_amount: BigInt!
