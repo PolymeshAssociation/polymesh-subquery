@@ -35,30 +35,30 @@ const authorizationEventStatusMapping = new Map<
 ]);
 
 export async function mapAuthorization(
-  block_id: number,
-  event_id: EventIdEnum,
-  module_id: ModuleIdEnum,
+  blockId: number,
+  eventId: EventIdEnum,
+  moduleId: ModuleIdEnum,
   params: Codec[]
 ): Promise<void> {
-  if (module_id === ModuleIdEnum.Identity && isAuthorizationEvent(event_id)) {
-    if (authorizationEventStatusMapping.has(event_id)) {
+  if (moduleId === ModuleIdEnum.Identity && isAuthorizationEvent(eventId)) {
+    if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
-      auth.status = authorizationEventStatusMapping.get(event_id);
-      auth.updated_block = block_id;
+      auth.status = authorizationEventStatusMapping.get(eventId);
+      auth.updatedBlock = blockId;
       await auth.save();
     } else {
       await Authorization.create({
         id: params[3],
-        created_block: block_id,
-        auth_id: params[3],
-        from_did: getTextValue(params[0]),
-        to_did: getTextValue(params[1]),
-        to_key: getTextValue(params[2]),
+        createdBlock: blockId,
+        authId: params[3],
+        fromDid: getTextValue(params[0]),
+        toDid: getTextValue(params[1]),
+        toKey: getTextValue(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
         data: getFirstValueFromJson(params[4]),
         expiry: getTextValue(params[5]),
         status: AuthorizationStatus.Pending,
-        updated_block: block_id,
+        updatedBlock: blockId,
       }).save();
     }
   }

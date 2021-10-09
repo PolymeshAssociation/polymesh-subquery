@@ -30,36 +30,36 @@ import { camelToSnakeCase } from "./util";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
-  const block_id = header.number.toNumber();
+  const blockId = header.number.toNumber();
 
-  let count_extrinsics_success = 0;
+  let countExtrinsicsSuccess = 0;
 
   for (const e of block.events) {
     if (e.event.method == "ExtrinsicSuccess") {
-      count_extrinsics_success++;
+      countExtrinsicsSuccess++;
     }
   }
 
-  const { count_extrinsics_signed, count_extrinsics_unsigned } =
+  const { countExtrinsicsSigned, countExtrinsicsUnsigned } =
     processBlockExtrinsics(block.block.extrinsics);
-  const count_extrinsics = block.block.extrinsics.length;
+  const countExtrinsics = block.block.extrinsics.length;
 
   await Block.create({
-    id: `${block_id}`,
-    block_id,
-    parent_id: block_id - 1,
+    id: `${blockId}`,
+    blockId,
+    parentId: blockId - 1,
     hash: header.hash.toHex(),
-    parent_hash: header.parentHash.toHex(),
-    state_root: header.stateRoot.toHex(),
-    extrinsics_root: header.extrinsicsRoot.toHex(),
-    count_extrinsics,
-    count_extrinsics_unsigned,
-    count_extrinsics_signed,
-    count_extrinsics_success,
-    count_extrinsics_error: count_extrinsics - count_extrinsics_success,
-    count_events: block.events.length,
+    parentHash: header.parentHash.toHex(),
+    stateRoot: header.stateRoot.toHex(),
+    extrinsicsRoot: header.extrinsicsRoot.toHex(),
+    countExtrinsics,
+    countExtrinsicsUnsigned,
+    countExtrinsicsSigned,
+    countExtrinsicsSuccess,
+    countExtrinsicsError: countExtrinsics - countExtrinsicsSuccess,
+    countEvents: block.events.length,
     datetime: block.timestamp,
-    spec_version_id: block.specVersion,
+    specVersionId: block.specVersion,
   }).save();
 }
 
@@ -71,14 +71,14 @@ const processBlockExtrinsics = (
   extrinsics: Vec<GenericExtrinsic<AnyTuple>>
 ) => {
   const ret = {
-    count_extrinsics_unsigned: 0,
-    count_extrinsics_signed: 0,
+    countExtrinsicsUnsigned: 0,
+    countExtrinsicsSigned: 0,
   };
   for (const extrinsic of extrinsics) {
     if (extrinsic.isSigned) {
-      ret.count_extrinsics_signed++;
+      ret.countExtrinsicsSigned++;
     } else {
-      ret.count_extrinsics_unsigned++;
+      ret.countExtrinsicsUnsigned++;
     }
   }
   return ret;
@@ -86,11 +86,11 @@ const processBlockExtrinsics = (
 
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
-  const block_id = block.block.header.number.toNumber();
-  const event_idx = event.idx;
+  const blockId = block.block.header.number.toNumber();
+  const eventIdx = event.idx;
 
-  const module_id = event.event.section.toLowerCase();
-  const event_id = event.event.method;
+  const moduleId = event.event.section.toLowerCase();
+  const eventId = event.event.method;
 
   const args = event.event.data.toArray();
 
@@ -100,22 +100,16 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     ModuleIdEnum,
     Codec[],
     SubstrateEvent
-  ] = [
-    block_id,
-    event_id as EventIdEnum,
-    module_id as ModuleIdEnum,
-    args,
-    event,
-  ];
+  ] = [blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args, event];
   const handlerPromises = [
     mapStakingEvent(...handlerArgs),
-    mapSto(event_id, module_id, args),
+    mapSto(eventId, moduleId, args),
     mapExternalAgentAction(...handlerArgs),
     mapFunding(...handlerArgs),
     mapAuthorization(
-      block_id,
-      event_id as EventIdEnum,
-      module_id as ModuleIdEnum,
+      blockId,
+      eventId as EventIdEnum,
+      moduleId as ModuleIdEnum,
       args
     ),
   ];
@@ -127,41 +121,41 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       logFoundType
     ),
   }));
-  const { event_arg_0, event_arg_1, event_arg_2, event_arg_3 } =
+  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } =
     extractEventArgs(harvesterLikeArgs);
-  const { claim_expiry, claim_issuer, claim_scope, claim_type } =
+  const { claimExpiry, claimIssuer, claimScope, claimType } =
     extractClaimInfo(harvesterLikeArgs);
 
   await Event.create({
-    id: `${block_id}/${event_idx}`,
-    block_id,
-    event_idx,
-    extrinsic_idx: event.extrinsic?.idx,
-    spec_version_id: block.specVersion,
-    event_id,
-    module_id,
-    attributes_txt: JSON.stringify(harvesterLikeArgs),
-    event_arg_0,
-    event_arg_1,
-    event_arg_2,
-    event_arg_3,
-    claim_type,
-    claim_expiry,
-    claim_issuer,
-    claim_scope,
-    corporate_action_ticker: extractCorporateActionTicker(harvesterLikeArgs),
-    fundraiser_offering_asset: extractOfferingAsset(harvesterLikeArgs),
-    transfer_to: extractTransferTo(harvesterLikeArgs),
+    id: `${blockId}/${eventIdx}`,
+    blockId,
+    eventIdx,
+    extrinsicIdx: event.extrinsic?.idx,
+    specVersionId: block.specVersion,
+    eventId,
+    moduleId,
+    attributesTxt: JSON.stringify(harvesterLikeArgs),
+    eventArg_0,
+    eventArg_1,
+    eventArg_2,
+    eventArg_3,
+    claimType,
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
+    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
+    transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
   await Promise.all(handlerPromises);
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
-  const block_id = extrinsic.block.block.header.number.toNumber();
-  const extrinsic_idx = extrinsic.idx;
-  const signedby_address = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedby_address
+  const blockId = extrinsic.block.block.header.number.toNumber();
+  const extrinsicIdx = extrinsic.idx;
+  const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
+  const address = signedbyAddress
     ? hexStripPrefix(
         u8aToHex(
           decodeAddress(
@@ -174,21 +168,21 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     : null;
 
   await Extrinsic.create({
-    id: `${block_id}/${extrinsic_idx}`,
-    block_id,
-    extrinsic_idx,
-    extrinsic_length: extrinsic.extrinsic.length,
+    id: `${blockId}/${extrinsicIdx}`,
+    blockId,
+    extrinsicIdx,
+    extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    module_id: extrinsic.extrinsic.method.section.toLowerCase(),
-    call_id: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    params_txt: JSON.stringify(
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
+    paramsTxt: JSON.stringify(
       serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)
     ),
     success: extrinsic.success ? 1 : 0,
-    signedby_address: signedby_address ? 1 : 0,
+    signedbyAddress: signedbyAddress ? 1 : 0,
     address,
     nonce: extrinsic.extrinsic.nonce.toJSON(),
-    extrinsic_hash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
-    spec_version_id: extrinsic.block.specVersion,
+    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+    specVersionId: extrinsic.block.specVersion,
   }).save();
 }

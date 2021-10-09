@@ -8,22 +8,22 @@ import { EventIdEnum, ModuleIdEnum } from "./common";
  * Subscribes to the events related to external agents
  */
 export async function mapExternalAgentAction(
-  block_id: number,
-  event_id: EventIdEnum,
-  module_id: ModuleIdEnum,
+  blockId: number,
+  eventId: EventIdEnum,
+  moduleId: ModuleIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  const ticker = await mgr.getTicker(module_id, event_id, block_id, params);
+  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params);
   if (ticker) {
     await TickerExternalAgentAction.create({
-      id: `${block_id}/${event.idx}`,
-      block_id,
-      event_idx: event.idx,
+      id: `${blockId}/${event.idx}`,
+      blockId,
+      eventIdx: event.idx,
       ticker,
-      pallet_name: module_id,
-      event_id,
-      caller_did: params[0].toString(),
+      palletName: moduleId,
+      eventId,
+      callerDid: params[0].toString(),
       datetime: event.block.timestamp,
     }).save();
   }
@@ -68,22 +68,22 @@ class ExternalAgentEventsManager {
   // eslint-disable-next-line no-useless-constructor, @typescript-eslint/no-empty-function
   private constructor() {}
   public async getTicker(
-    module_id: ModuleIdEnum,
-    event_id: EventIdEnum,
-    block_id: number,
+    moduleId: ModuleIdEnum,
+    eventId: EventIdEnum,
+    blockId: number,
     params: Codec[]
   ): Promise<string | undefined> {
-    const entries = this.entries.get(module_id)?.get(event_id);
+    const entries = this.entries.get(moduleId)?.get(eventId);
 
     if (!entries) {
       return undefined;
     }
 
     for (const entry of entries) {
-      if (entry.options.maxBlock && block_id > entry.options.maxBlock) {
+      if (entry.options.maxBlock && blockId > entry.options.maxBlock) {
         continue;
       }
-      if (entry.options.minBlock && block_id < entry.options.minBlock) {
+      if (entry.options.minBlock && blockId < entry.options.minBlock) {
         continue;
       }
       if (entry.type === "standard") {
@@ -230,14 +230,14 @@ class ExternalAgentEventsManager {
         ModuleIdEnum.Sto,
         [EventIdEnum.FundraiserCreated],
         async (params) => {
-          const offering_asset =
+          const offeringAsset =
             params[3] instanceof Map
               ? params[3].get("offering_asset")
               : undefined;
-          if (!offering_asset) {
-            throw new Error("Couldn't find offering_asset for sto");
+          if (!offeringAsset) {
+            throw new Error("Couldn't find offeringAsset for sto");
           }
-          return serializeTicker(offering_asset);
+          return serializeTicker(offeringAsset);
         }
       )
       .add(
@@ -251,7 +251,7 @@ class ExternalAgentEventsManager {
         async (params) => {
           const stoId = params[1].toString();
           const sto = await Sto.get(stoId);
-          return sto.offering_asset;
+          return sto.offeringAsset;
         }
       );
     return mgr;

@@ -25,18 +25,18 @@ export const extractEventArg = (arg: any, exists: boolean) => {
 export const extractEventArgs = (args: any[]) => {
   const [arg0, arg1, arg2, arg3] = args;
   return {
-    event_arg_0: extractEventArg(arg0, args.length > 0),
-    event_arg_1: extractEventArg(arg1, args.length > 1),
-    event_arg_2: extractEventArg(arg2, args.length > 2),
-    event_arg_3: extractEventArg(arg3, args.length > 3),
+    eventArg_0: extractEventArg(arg0, args.length > 0),
+    eventArg_1: extractEventArg(arg1, args.length > 1),
+    eventArg_2: extractEventArg(arg2, args.length > 2),
+    eventArg_3: extractEventArg(arg3, args.length > 3),
   };
 };
 
 export const extractClaimScope = (
-  claim_type: string,
+  claimType: string,
   args: any[]
 ): { type: string; value: string } => {
-  switch (claim_type) {
+  switch (claimType) {
     case "CustomerDueDiligence": {
       return null;
     }
@@ -53,7 +53,7 @@ export const extractClaimScope = (
       return { type, value };
     }
     default: {
-      const scope = args[1]?.value?.claim?.[claim_type];
+      const scope = args[1]?.value?.claim?.[claimType];
       const type = Object.keys(scope || {})?.[0] || null;
       const value = scope?.[type] || null;
       return { type, value };
@@ -62,19 +62,17 @@ export const extractClaimScope = (
 };
 
 export const extractClaimInfo = (args: any[]) => {
-  const claim_type: string | undefined = Object.keys(
+  const claimType: string | undefined = Object.keys(
     args?.[1]?.value?.claim || {}
   )[0];
 
   return {
-    claim_type,
-    claim_scope: JSONStringifyExceptStringAndNull(
-      extractClaimScope(claim_type, args)
+    claimType,
+    claimScope: JSONStringifyExceptStringAndNull(
+      extractClaimScope(claimType, args)
     ),
-    claim_issuer: JSONStringifyExceptStringAndNull(
-      args[1]?.value?.claim_issuer
-    ),
-    claim_expiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
+    claimIssuer: JSONStringifyExceptStringAndNull(args[1]?.value?.claim_issuer),
+    claimExpiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
   };
 };
 
