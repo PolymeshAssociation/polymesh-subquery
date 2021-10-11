@@ -1,23 +1,23 @@
 type Event @entity {
   id: ID!
-  block_id: Int!
-  event_idx: Int!
-  extrinsic_idx: Int
-  spec_version_id: Int!
-  module_id: String! @index(unique: false)
-  event_id: String! @index(unique: false)
-  attributes_txt: String!
-  event_arg_0: String
-  event_arg_1: String
-  event_arg_2: String
-  event_arg_3: String
-  claim_type: String
-  claim_scope: String
-  claim_issuer: String
-  claim_expiry: String
-  corporate_action_ticker: String
-  fundraiser_offering_asset: String
-  transfer_to: String
+  blockId: Int!
+  eventIdx: Int!
+  extrinsicIdx: Int
+  specVersionId: Int!
+  moduleId: String! @index(unique: false)
+  eventId: String! @index(unique: false)
+  attributesTxt: String!
+  eventArg_0: String
+  eventArg_1: String
+  eventArg_2: String
+  eventArg_3: String
+  claimType: String
+  claimScope: String
+  claimIssuer: String
+  claimExpiry: String
+  corporateActionTicker: String
+  fundraiserOfferingAsset: String
+  transferTo: String
 }
 
 type Debug @entity {
@@ -33,98 +33,98 @@ type FoundType @entity {
 
 type Block @entity {
   id: ID!
-  block_id: Int!
-  parent_id: Int!
+  blockId: Int!
+  parentId: Int!
   hash: String!
-  parent_hash: String!
-  state_root: String!
-  extrinsics_root: String!
-  count_extrinsics: Int!
-  count_extrinsics_unsigned: Int!
-  count_extrinsics_signed: Int!
-  count_extrinsics_error: Int!
-  count_extrinsics_success: Int!
-  count_events: Int!
+  parentHash: String!
+  stateRoot: String!
+  extrinsicsRoot: String!
+  countExtrinsics: Int!
+  countExtrinsicsUnsigned: Int!
+  countExtrinsicsSigned: Int!
+  countExtrinsicsError: Int!
+  countExtrinsicsSuccess: Int!
+  countEvents: Int!
   datetime: Date!
-  spec_version_id: String!
+  specVersionId: String!
 }
 
 type Extrinsic @entity {
   id: ID!
-  block_id: Int!
-  extrinsic_idx: Int!
-  extrinsic_length: String!
+  blockId: Int!
+  extrinsicIdx: Int!
+  extrinsicLength: String!
   signed: Int!
-  signedby_address: Int!
+  signedbyAddress: Int!
   address: String
-  module_id: String!
-  call_id: String!
-  params_txt: String!
+  moduleId: String!
+  callId: String!
+  paramsTxt: String!
   success: Int!
   nonce: Int
-  extrinsic_hash: String
-  spec_version_id: Int!
+  extrinsicHash: String
+  specVersionId: Int!
 }
 
 type StakingEvent @entity {
   id: ID!
-  block_id: Int! @index
-  event_idx: Int! @index
-  staking_event_id: String! @index
+  blockId: Int! @index
+  eventIdx: Int! @index
+  stakingEventId: String! @index
   date: Date! @index
-  identity_id: String
-  stash_account: String
+  identityId: String
+  stashAccount: String
   amount: BigInt
-  nominated_validators: [String!]
+  nominatedValidators: [String!]
 }
 
 type TickerExternalAgentAction @entity {
   id: ID!
-  block_id: Int! @index
-  event_idx: Int! @index
+  blockId: Int! @index
+  eventIdx: Int! @index
   ticker: String! @index
-  pallet_name: String! @index
-  event_id: String! @index
-  caller_did: String! @index
+  palletName: String! @index
+  eventId: String! @index
+  callerDid: String! @index
   datetime: Date!
 }
 
 type Funding @entity {
   id: ID!
-  block_id: Int!
+  blockId: Int!
   ticker: String! @index(unique: false)
-  funding_name: String! @index(unique: false)
+  fundingName: String! @index(unique: false)
   value: String!
-  total_issued_in_funding_round: String!
+  totalIssuedInFundingRound: String!
 }
 
 type Sto @entity {
   id: ID!
-  offering_asset: String!
+  offeringAsset: String!
 }
 
 type Authorization @entity {
   id: ID!
-  created_block: Int!
-  auth_id: Int! @index
+  createdBlock: Int!
+  authId: Int! @index
   type: String! @index
-  from_did: String! @index
-  to_did: String @index
-  to_key: String @index
+  fromDid: String! @index
+  toDid: String @index
+  toKey: String @index
   data: String
   expiry: Date @index
   status: String!
-  updated_block: Int!
+  updatedBlock: Int!
 }
 
 type Investment @entity {
   id: ID!
-  block_id: Int!
+  blockId: Int!
   investor: String!
-  sto_id: Int! @index
-  offering_token: String! @index
-  raise_token: String!
-  offering_token_amount: BigInt!
-  raise_token_amount: BigInt!
+  stoId: Int! @index
+  offeringToken: String! @index
+  raiseToken: String!
+  offeringTokenAmount: BigInt!
+  raiseTokenAmount: BigInt!
   datetime: Date!
 }
