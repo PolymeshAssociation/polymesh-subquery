@@ -27,6 +27,7 @@ import {
   serializeLikeHarvester,
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
+import { mapInvestment } from "./entities/mapInvestment";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -112,6 +113,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       moduleId as ModuleIdEnum,
       args
     ),
+    mapInvestment(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
