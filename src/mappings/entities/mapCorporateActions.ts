@@ -1,8 +1,8 @@
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { getTextValue } from "../util";
-import { HistoryOfPaymentEventsForCA } from "./../../types/models/HistoryOfPaymentEventsForCA";
-import { WithholdingTaxesOfCA } from "./../../types/models/WithholdingTaxesOfCA";
+import { HistoryOfPaymentEventsForCa } from "./../../types/models/HistoryOfPaymentEventsForCA";
+import { WithholdingTaxesOfCa } from "./../../types/models/WithholdingTaxesOfCA";
 import { serializeTicker } from "./../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
@@ -83,15 +83,21 @@ async function handleHistoryOfPaymentEventsForCA(
   params: Codec[],
   event: SubstrateEvent
 ) {
-  await HistoryOfPaymentEventsForCA.create({
+  const eventDid = getTextValue(params[0]);
+  const ticker = await getTickerFromCaId(params, eventId);
+  const localId = await getLocalIdFromCaId(params, eventId);
+  const balance = await getBalanceForCa(params, eventId);
+  const tax = (await getTextValue(params[5])) || 0;
+  await HistoryOfPaymentEventsForCa.create({
     id: `${blockId}/${event.idx}`,
     blockId,
     eventId,
+    eventDid,
     eventIdx: event.idx,
-    ticker: getTickerFromCaId(params, eventId),
-    localId: getLocalIdFromCaId(params, eventId),
-    balance: getBalanceForCa(params, eventId),
-    tax: getTextValue(params[5]) || 0,
+    ticker,
+    localId,
+    balance,
+    tax,
     datetime: event.block.timestamp,
   }).save();
 }
@@ -107,22 +113,23 @@ async function handleWithholdingTaxesOfCA(
   params: Codec[],
   event: SubstrateEvent
 ) {
-  const ticker = getTickerFromCaId(params, eventId);
-  const localId = getLocalIdFromCaId(params, eventId);
-  const balance = getBalanceForCa(params, eventId);
-  const tax = getTextValue(params[5]) || 0;
-  const corporateAction = await WithholdingTaxesOfCA.get(
+  const ticker = await getTickerFromCaId(params, eventId);
+  const localId = await getLocalIdFromCaId(params, eventId);
+  const balance = await getBalanceForCa(params, eventId);
+  const tax = (await getTextValue(params[5])) || 0;
+  const taxes = (Number(balance) * Number(tax)) / 1000000;
+  const corporateAction = await WithholdingTaxesOfCa.get(
     `${ticker}/${localId}`
   );
-  if (corporateAction !== null) {
-    corporateAction.taxes += (Number(balance) * Number(tax)) / 1000000;
+  if (corporateAction !== undefined) {
+    corporateAction.taxes += taxes;
     await corporateAction.save();
   } else {
-    await WithholdingTaxesOfCA.create({
+    await WithholdingTaxesOfCa.create({
       id: `${ticker}/${localId}`,
-      ticker: getTickerFromCaId(params, eventId),
-      localId: getLocalIdFromCaId(params, eventId),
-      taxes: getTextValue(params[5]) || 0,
+      ticker,
+      localId,
+      taxes,
       datetime: event.block.timestamp,
     }).save();
   }
