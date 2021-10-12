@@ -16,7 +16,7 @@ export async function mapSto(
     eventId === EventIdEnum.FundraiserCreated
   ) {
     const offeringAsset =
-      params[3] instanceof Map ? params[3].get("offeringAsset") : undefined;
+      params[3] instanceof Map ? params[3].get("offering_asset") : undefined;
     if (!offeringAsset) {
       throw new Error("Couldn't find offeringAsset for sto");
     }
