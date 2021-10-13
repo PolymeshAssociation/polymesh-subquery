@@ -1,5 +1,6 @@
+import { decodeAddress } from "@polkadot/keyring";
 import { Codec } from "@polkadot/types/types";
-import { u8aToString } from "@polkadot/util";
+import { u8aToHex, u8aToString } from "@polkadot/util";
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -90,6 +91,16 @@ export const getOrDefault = <K, V>(
 
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
+};
+export const serializeAccount = (item: Codec): string | null => {
+  const s = item.toString();
+
+  if (s.trim().length === 0) {
+    return null;
+  }
+  return u8aToHex(
+    decodeAddress(item.toString(), false, item.registry.chainSS58)
+  );
 };
 
 export const getFirstKeyFromJson = (item: Codec): string => {

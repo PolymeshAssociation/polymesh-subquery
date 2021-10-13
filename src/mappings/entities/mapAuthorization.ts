@@ -1,4 +1,4 @@
-import { capitalizeFirstLetter } from "./../util";
+import { capitalizeFirstLetter, serializeAccount } from "./../util";
 import { Codec } from "@polkadot/types/types";
 import { Authorization } from "../../types";
 import {
@@ -53,7 +53,7 @@ export async function mapAuthorization(
         authId: params[3],
         fromDid: getTextValue(params[0]),
         toDid: getTextValue(params[1]),
-        toKey: getTextValue(params[2]),
+        toKey: serializeAccount(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
         data: getFirstValueFromJson(params[4]),
         expiry: getTextValue(params[5]),
