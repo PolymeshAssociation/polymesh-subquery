@@ -25,8 +25,28 @@ Object {
         "stakingEventId": "Nominated",
         "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
       },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": "100",
+        "date": "2021-10-06T12:38:10",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": null,
+        "stakingEventId": "Unbonded",
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "date": "2021-10-06T12:38:10.5",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        ],
+        "stakingEventId": "Nominated",
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
     ],
-    "totalCount": 2,
+    "totalCount": 4,
   },
 }
 `;
@@ -47,8 +67,19 @@ Object {
         "stakingEventId": "Nominated",
         "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
       },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "date": "2021-10-06T12:38:10.5",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        ],
+        "stakingEventId": "Nominated",
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
     ],
-    "totalCount": 1,
+    "totalCount": 2,
   },
 }
 `;
@@ -96,8 +127,28 @@ Object {
         "stakingEventId": "Reward",
         "stashAccount": "0xfe65717dad0447d715f660a0a58411de509b42e6efb8375f562f58a554d5860e",
       },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": "100",
+        "date": "2021-10-06T12:38:10",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": null,
+        "stakingEventId": "Unbonded",
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "date": "2021-10-06T12:38:10.5",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        ],
+        "stakingEventId": "Nominated",
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
     ],
-    "totalCount": 4,
+    "totalCount": 6,
   },
 }
 `;
