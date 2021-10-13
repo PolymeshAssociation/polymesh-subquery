@@ -1,8 +1,8 @@
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { getTextValue } from "../util";
-import { HistoryOfPaymentEventsForCa } from "./../../types/models/HistoryOfPaymentEventsForCA";
-import { WithholdingTaxesOfCa } from "./../../types/models/WithholdingTaxesOfCA";
+import { HistoryOfPaymentEventsForCa } from "./../../types/models/HistoryOfPaymentEventsForCa";
+import { WithholdingTaxesOfCa } from "./../../types/models/WithholdingTaxesOfCa";
 import { serializeTicker } from "./../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
