@@ -9,16 +9,16 @@ import { serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
 export async function mapTickerExternalAgentHistory(
-  block_id: number,
-  event_id: string,
-  module_id: string,
+  blockId: number,
+  eventId: string,
+  moduleId: string,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  const event_idx = event.idx;
+  const eventIdx = event.idx;
   if (
-    module_id === ModuleIdEnum.Externalagents &&
-    event_id === EventIdEnum.GroupCreated
+    moduleId === ModuleIdEnum.Externalagents &&
+    eventId === EventIdEnum.GroupCreated
   ) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
@@ -33,8 +33,8 @@ export async function mapTickerExternalAgentHistory(
   }
 
   if (
-    module_id === ModuleIdEnum.Externalagents &&
-    event_id === EventIdEnum.GroupPermissionsUpdated
+    moduleId === ModuleIdEnum.Externalagents &&
+    eventId === EventIdEnum.GroupPermissionsUpdated
   ) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
@@ -51,11 +51,11 @@ export async function mapTickerExternalAgentHistory(
     for (const member of members) {
       promises.push(
         TickerExternalAgentHistory.create({
-          id: `${block_id}/${event_idx}/${member.member}`,
+          id: `${blockId}/${eventIdx}/${member.member}`,
           ticker,
           did: member.member,
-          block_id,
-          event_idx,
+          blockId,
+          eventIdx,
           datetime: event.block.timestamp,
           type: "AgentPermissionsChanged",
           permissions,
@@ -67,8 +67,8 @@ export async function mapTickerExternalAgentHistory(
   }
 
   if (
-    module_id === ModuleIdEnum.Externalagents &&
-    event_id === EventIdEnum.AgentAdded
+    moduleId === ModuleIdEnum.Externalagents &&
+    eventId === EventIdEnum.AgentAdded
   ) {
     const did = params[0].toString();
     const group = params[2].toJSON() as AgentGroup;
@@ -85,11 +85,11 @@ export async function mapTickerExternalAgentHistory(
           }
         );
         await TickerExternalAgentHistory.create({
-          id: `${block_id}/${event_idx}/${did}`,
+          id: `${blockId}/${eventIdx}/${did}`,
           ticker,
           did,
-          block_id,
-          event_idx,
+          blockId,
+          eventIdx,
           datetime: event.block.timestamp,
           type: "AgentAdded",
           permissions,
@@ -112,8 +112,8 @@ export async function mapTickerExternalAgentHistory(
   }
 
   if (
-    module_id === ModuleIdEnum.Externalagents &&
-    event_id === EventIdEnum.GroupChanged
+    moduleId === ModuleIdEnum.Externalagents &&
+    eventId === EventIdEnum.GroupChanged
   ) {
     const did = params[2].toString();
     const group = params[3].toJSON() as AgentGroup;
@@ -131,11 +131,11 @@ export async function mapTickerExternalAgentHistory(
           }
         );
         await TickerExternalAgentHistory.create({
-          id: `${block_id}/${event_idx}/${did}`,
+          id: `${blockId}/${eventIdx}/${did}`,
           ticker,
           did,
-          block_id,
-          event_idx,
+          blockId,
+          eventIdx,
           datetime: event.block.timestamp,
           type: "AgentPermissionsChanged",
           permissions,
@@ -158,8 +158,8 @@ export async function mapTickerExternalAgentHistory(
   }
 
   if (
-    module_id === ModuleIdEnum.Externalagents &&
-    event_id === EventIdEnum.AgentRemoved
+    moduleId === ModuleIdEnum.Externalagents &&
+    eventId === EventIdEnum.AgentRemoved
   ) {
     const did = params[2].toString();
     const ticker = serializeTicker(params[1]);
@@ -168,11 +168,11 @@ export async function mapTickerExternalAgentHistory(
       removeMember(did, ticker),
       (async () => {
         await TickerExternalAgentHistory.create({
-          id: `${block_id}/${event_idx}/${did}`,
+          id: `${blockId}/${eventIdx}/${did}`,
           ticker,
           did,
-          block_id,
-          event_idx,
+          blockId,
+          eventIdx,
           datetime: event.block.timestamp,
           type: "AgentRemoved",
         }).save();

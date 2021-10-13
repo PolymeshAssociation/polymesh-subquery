@@ -132,9 +132,9 @@ type Investment @entity {
 type TickerExternalAgentAdded @entity {
   id: ID! #ticker/caller_did
   ticker: String! @index
-  caller_did: String! @index
-  block_id: Int!
-  event_idx: Int!
+  callerDid: String! @index
+  blockId: Int!
+  eventIdx: Int!
   datetime: Date!
 }
 
@@ -144,8 +144,8 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
   ticker: String! @index
   did: String! @index
-  block_id: Int!
-  event_idx: Int!
+  blockId: Int!
+  eventIdx: Int!
   datetime: Date!
   type: String!
   permissions: String

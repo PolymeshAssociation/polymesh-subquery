@@ -28,8 +28,8 @@ import {
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
 import { mapInvestment } from "./entities/mapInvestment";
-import { mapTickerExternalAgentAdded } from "./entities/tickerExternalAgentAdded";
-import { mapTickerExternalAgentHistory } from "./entities/tickerExternalAgentHistory";
+import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
+import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
