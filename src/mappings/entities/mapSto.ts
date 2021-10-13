@@ -7,22 +7,22 @@ import { EventIdEnum, ModuleIdEnum } from "./common";
  * Subscribes to events related to STOs
  */
 export async function mapSto(
-  event_id: string,
-  module_id: string,
+  eventId: string,
+  moduleId: string,
   params: Codec[]
 ): Promise<void> {
   if (
-    module_id === ModuleIdEnum.Sto &&
-    event_id === EventIdEnum.FundraiserCreated
+    moduleId === ModuleIdEnum.Sto &&
+    eventId === EventIdEnum.FundraiserCreated
   ) {
-    const offering_asset =
+    const offeringAsset =
       params[3] instanceof Map ? params[3].get("offering_asset") : undefined;
-    if (!offering_asset) {
-      throw new Error("Couldn't find offering_asset for sto");
+    if (!offeringAsset) {
+      throw new Error("Couldn't find offeringAsset for sto");
     }
     await Sto.create({
       id: params[1].toString(),
-      offering_asset: serializeTicker(offering_asset),
+      offeringAsset: serializeTicker(offeringAsset),
     }).save();
   }
 }

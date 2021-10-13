@@ -53,3 +53,5 @@ Thumbs.db
 scripts/errors_*
 scripts/archive
 coverage
+
+project.yaml
