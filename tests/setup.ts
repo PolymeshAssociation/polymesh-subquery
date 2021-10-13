@@ -42,7 +42,7 @@ export = async () => {
     ]);
     console.log("Test environment started, waiting for subquery to catch up");
     await sleep(20000);
-    await retry(30, 2000, async () => {
+    await retry(200, 2000, async () => {
       const { errors, data } = await query({
         query: gql`
           query {
