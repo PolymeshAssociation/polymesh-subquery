@@ -29,7 +29,7 @@ const retry = async <T>(
   }
   throw err;
 };
-const WAIT_UNTIL_BLOCK = 500;
+const WAIT_UNTIL_BLOCK = 1000;
 export = async () => {
   try {
     console.log("");
