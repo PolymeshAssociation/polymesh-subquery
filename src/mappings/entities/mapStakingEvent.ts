@@ -1,6 +1,7 @@
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { StakingEvent } from "../../types";
+import { serializeAccount } from "../util";
 import { ModuleIdEnum } from "./common";
 
 enum StakingEventType {
@@ -38,10 +39,9 @@ export async function mapStakingEvent(
       date: event.block.timestamp,
       identityId:
         eventId === StakingEventType.Slash ? null : params[0].toJSON(),
-      stashAccount:
-        eventId === StakingEventType.Slash
-          ? params[0].toJSON()
-          : params[1].toJSON(),
+      stashAccount: serializeAccount(
+        eventId === StakingEventType.Slash ? params[0] : params[1]
+      ),
       amount:
         eventId === StakingEventType.Slash
           ? params[1].toJSON()
