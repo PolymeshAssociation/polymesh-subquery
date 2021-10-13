@@ -4,7 +4,7 @@ import { join } from "path";
 const execAsync = promisify(exec);
 
 const cwd = join(__dirname, "..");
-export = async () => {
+export = async (): Promise<void> => {
   await Promise.all([
     execAsync("polymesh-local stop -c", { cwd }),
     execAsync("docker-compose down -v", { cwd }),

@@ -30,7 +30,7 @@ const retry = async <T>(
   throw err;
 };
 const WAIT_UNTIL_BLOCK = 1000;
-export = async () => {
+export = async (): Promise<void> => {
   try {
     console.log("");
     console.log("Starting test environment, might take a minute or two...");
