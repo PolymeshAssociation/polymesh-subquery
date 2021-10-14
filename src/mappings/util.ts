@@ -1,5 +1,7 @@
+import { decodeAddress } from "@polkadot/keyring";
 import { Codec } from "@polkadot/types/types";
-import { u8aToString } from "@polkadot/util";
+import { u8aToHex, u8aToString } from "@polkadot/util";
+import { SubstrateExtrinsic } from "@subql/types";
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -91,6 +93,16 @@ export const getOrDefault = <K, V>(
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
+export const serializeAccount = (item: Codec): string | null => {
+  const s = item.toString();
+
+  if (s.trim().length === 0) {
+    return null;
+  }
+  return u8aToHex(
+    decodeAddress(item.toString(), false, item.registry.chainSS58)
+  );
+};
 
 export const getFirstKeyFromJson = (item: Codec): string => {
   return Object.keys(item.toJSON())[0];
@@ -102,4 +114,16 @@ export const getFirstValueFromJson = (item: Codec): string => {
 
 export const getTextValue = (item: Codec): string => {
   return item.toString().trim().length === 0 ? null : item.toString().trim();
+};
+
+export const hex2a = (hex: string): string => {
+  let str = "";
+  for (let i = 0; i < hex.length; i += 2)
+    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  return removeNullChars(str);
+};
+
+export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
+  const parsed = JSON.parse(extrinsic.extrinsic.toString());
+  return parsed.signature.signer.id;
 };

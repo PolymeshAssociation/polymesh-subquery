@@ -28,9 +28,7 @@ import {
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
 import { mapInvestment } from "./entities/mapInvestment";
-import { mapPortfolio } from "./entities/mapPortfolio";
 import { mapSettlement } from "./entities/mapSettlement";
-import { mapIdentity } from "./entities/mapIdentity";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -117,8 +115,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       args
     ),
     mapInvestment(...handlerArgs),
-    mapIdentity(...handlerArgs),
-    mapPortfolio(...handlerArgs),
     mapSettlement(...handlerArgs),
   ];
 
@@ -156,7 +152,9 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
-  await Promise.all(handlerPromises);
+  await Promise.all(handlerPromises).catch((err) => {
+    logger.error(err);
+  });
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
