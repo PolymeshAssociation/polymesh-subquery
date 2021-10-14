@@ -9,10 +9,12 @@ import {
   SubstrateExtrinsic,
 } from "@subql/types";
 import { Block, Event, Extrinsic, FoundType } from "../types";
-import { mapAuthorization } from "./entities/mapAuthorization";
 import { EventIdEnum, ModuleIdEnum } from "./entities/common";
+import { mapAuthorization } from "./entities/mapAuthorization";
+import { mapCorporateActions } from "./entities/mapCorporateActions";
 import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";
+import { mapInvestment } from "./entities/mapInvestment";
 import { mapStakingEvent } from "./entities/mapStakingEvent";
 import { mapSto } from "./entities/mapSto";
 import {
@@ -27,7 +29,6 @@ import {
   serializeLikeHarvester,
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
-import { mapInvestment } from "./entities/mapInvestment";
 import { mapSettlement } from "./entities/mapSettlement";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
@@ -116,6 +117,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     ),
     mapInvestment(...handlerArgs),
     mapSettlement(...handlerArgs),
+    mapCorporateActions(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
