@@ -80,11 +80,11 @@ async function handlePortfolioMovement(
       amount,
       from: {
         did: from.did,
-        number: from.kind.user ? from.kind.user : 0,
+        number: from.kind.user || 0,
       },
       to: {
         did: to.did,
-        number: to.kind.user ? to.kind.user : 0,
+        number: to.kind.user || 0,
       },
     },
   ];

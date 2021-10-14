@@ -137,16 +137,16 @@ type PortfolioJson @jsonField {
 type Leg @jsonField {
   ticker: String!
   amount: String!
-  from: PortfolioJson
-  to: PortfolioJson
+  from: PortfolioJson!
+  to: PortfolioJson!
 }
 
 type Settlement @entity {
   id: ID!
   blockId: Int!
-  addresses: [String] @index
+  addresses: [String!]! @index
   result: String!
-  legs: [Leg]
+  legs: [Leg!]!
 }
 
 type Instruction @entity {
@@ -154,10 +154,10 @@ type Instruction @entity {
   blockId: Int!
   eventId: String!
   status: String!
-  venueId: String @index
-  settlementType: String
-  legs: [Leg]
-  addresses: [String]
+  venueId: String! @index
+  settlementType: String!
+  legs: [Leg!]!
+  addresses: [String!]!
 }
 
 type WithholdingTaxesOfCa @entity {
