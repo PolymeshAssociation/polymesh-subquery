@@ -161,6 +161,8 @@ type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
   member: String! @index
   group: AgentGroup! @index
+}
+
 type WithholdingTaxesOfCa @entity {
   id: ID!
   ticker: String! @index
