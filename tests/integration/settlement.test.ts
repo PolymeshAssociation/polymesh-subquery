@@ -26,20 +26,29 @@ describe("getSettlements", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("test getting settlements with filters", async () => {
+  test("test getting settlements with from filter", async () => {
     const q = {
       query: gql`
         query {
-          query {
-            portfolios(filter: { name: { likeInsensitive: "4_portfolio" } }) {
-              totalCount
-              nodes {
-                id
-                identityId
-                kind
-                number
-                name
+          settlements(
+            filter: {
+              legs: {
+                contains: [
+                  {
+                    from: {
+                      did: "0x0500000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  }
+                ]
               }
+            }
+          ) {
+            totalCount
+            nodes {
+              id
+              blockId
+              legs
+              addresses
             }
           }
         }

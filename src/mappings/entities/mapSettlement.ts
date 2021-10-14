@@ -75,7 +75,6 @@ async function handlePortfolioMovement(
   params: Codec[],
   event: SubstrateEvent
 ) {
-  logger.info("Portfolio movement event");
   const signer = getSigner(event.extrinsic);
   const identityId = getTextValue(params[0]);
   const from = JSON.parse(params[1].toString());
@@ -118,17 +117,13 @@ async function handleInstructionCreated(
   params: Codec[],
   event: SubstrateEvent
 ) {
-  logger.info("create event");
-  logger.info(`block id: ${blockId}`);
   const signer = getSigner(event.extrinsic);
 
-  // store the instructions legs
   const legs = [];
   const rawLegs = params[6].toJSON() as any;
   for (let i = 0; i < rawLegs.length; i++) {
     const leg = rawLegs[i];
     const { from, to, asset, amount } = leg;
-    logger.info(`Amount: ${amount}`);
     const serializedTicker = hex2a(hexStripPrefix(asset));
     legs.push({
       ticker: serializedTicker,
@@ -165,7 +160,7 @@ async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
     instruction.addresses = instruction.addresses.filter(onlyUnique);
     await instruction.save();
   } else {
-    logger.error(`[UPDATE] could not find instruction by id: ${instructionId}`);
+    logger.error(`Could not find instruction by id: ${instructionId}`);
   }
 }
 
@@ -175,7 +170,6 @@ async function handleInstructionFinalizedEvent(
   params: Codec[],
   event: SubstrateEvent
 ) {
-  logger.info("Received finalized event");
   let signer: string;
   if (event.extrinsic) {
     // might not be present on any
