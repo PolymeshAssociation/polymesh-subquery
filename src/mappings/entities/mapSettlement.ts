@@ -1,11 +1,9 @@
 import { Codec } from "@polkadot/types/types";
 import { hexStripPrefix } from "@polkadot/util";
 import { SubstrateEvent } from "@subql/types";
-import { Settlement, Instruction, Leg } from "../../types";
+import { Settlement, Instruction } from "../../types";
 import { getSigner, getTextValue, hex2a, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
-import { findOrCreateIdentity } from "./mapIdentity";
-import { findOrCreatePortfolio } from "./mapPortfolio";
 
 // A settlement is an asset moved between portofolios or a leg of a completed instruction
 
@@ -40,8 +38,8 @@ const finalizedEvents: EventIdEnum[] = [
   EventIdEnum.InstructionRejected,
   EventIdEnum.InstructionFailed,
 ];
-// In addition we need to track transfers between a users portfolio as well
-// Translates events into a settlements table. This inlcudes transfers between a users portfolio combined with completed settlements between accounts.
+
+// Translates events into a settlements table. This inlcudes transfers between a users portfolio combined with completed Instructions.
 export async function mapSettlement(
   blockId: number,
   eventId: EventIdEnum,
@@ -56,19 +54,19 @@ export async function mapSettlement(
     await handlePortfolioMovement(blockId, eventId, params, event);
   }
 
-  // if (moduleId === ModuleIdEnum.Settlement) {
-  //   if (eventId === EventIdEnum.InstructionCreated) {
-  //     await handleInstructionCreated(blockId, eventId, params, event);
-  //   }
+  if (moduleId === ModuleIdEnum.Settlement) {
+    if (eventId === EventIdEnum.InstructionCreated) {
+      await handleInstructionCreated(blockId, eventId, params, event);
+    }
 
-  //   if (updateEvents.includes(eventId)) {
-  //     await handleInstructionUpdate(params, event);
-  //   }
+    if (updateEvents.includes(eventId)) {
+      await handleInstructionUpdate(params, event);
+    }
 
-  //   if (finalizedEvents.includes(eventId)) {
-  //     await handleInstructionFinalizedEvent(blockId, eventId, params, event);
-  //   }
-  // }
+    if (finalizedEvents.includes(eventId)) {
+      await handleInstructionFinalizedEvent(blockId, eventId, params, event);
+    }
+  }
 }
 
 async function handlePortfolioMovement(
@@ -84,26 +82,21 @@ async function handlePortfolioMovement(
   const to = JSON.parse(params[2].toString());
   const ticker = serializeTicker(params[3]);
   const amount = getTextValue(params[4]);
-  logger.info(`human params[1]: ${params[1].toHuman()}`);
-  logger.info(`from: ${from} , falsy? ${!!from}`);
-  logger.info(`raw from: ${from.toString()} , falsy? ${!!from}`);
-  logger.info(`raw to: ${to.toString()}`);
 
-  // const fromPorfolio = await findOrCreatePortfolio(
-  //   from.did,
-  //   from.kind.user ? from.kind.user : "0",
-  //   blockId,
-  //   eventId,
-  //   event.idx
-  // );
-  // const toPortfolio = await findOrCreatePortfolio(
-  //   to.did,
-  //   to.kind.user ? to.kind.user : "0",
-  //   blockId,
-  //   eventId,
-  //   event.idx
-  // );
-
+  const legs = [
+    {
+      ticker,
+      amount,
+      from: {
+        did: from.did,
+        number: from.kind.user ? from.kind.user.toString() : "0",
+      },
+      to: {
+        did: to.did,
+        number: to.kind.user ? to.kind.user.toString() : "0",
+      },
+    },
+  ];
   const settlement = Settlement.create({
     id: `${blockId}/${event.idx}`,
     blockId,
@@ -114,21 +107,9 @@ async function handlePortfolioMovement(
     amount,
     result: SettlementResultEnum.Executed,
     addresses: [signer],
+    legs,
   });
   await settlement.save();
-  // TODO need to get the from + to portfolios
-  const fromId = `${identityId}/${from.user.number || "0"}`;
-  const toId = `${identityId}/${to.user.number || "0"}`;
-  await Leg.create({
-    id: `${blockId}/${event.idx}`,
-    blockId,
-    eventId,
-    ticker,
-    amount,
-    settlementId: settlement.id,
-    fromId,
-    toId,
-  }).save();
 }
 
 async function handleInstructionCreated(
@@ -141,6 +122,27 @@ async function handleInstructionCreated(
   logger.info(`block id: ${blockId}`);
   const signer = getSigner(event.extrinsic);
 
+  // store the instructions legs
+  const legs = [];
+  const rawLegs = params[6].toJSON() as any;
+  for (let i = 0; i < rawLegs.length; i++) {
+    const leg = rawLegs[i];
+    const { from, to, asset, amount } = leg;
+    logger.info(`Amount: ${amount}`);
+    const serializedTicker = hex2a(hexStripPrefix(asset));
+    legs.push({
+      ticker: serializedTicker,
+      amount,
+      from: {
+        did: from.did,
+        number: from.kind.user ? from.kind.user.toString() : "0",
+      },
+      to: {
+        did: to.did,
+        number: to.kind.user ? to.kind.user.toString() : "0",
+      },
+    });
+  }
   const instruction = Instruction.create({
     id: getTextValue(params[2]),
     eventId,
@@ -148,64 +150,13 @@ async function handleInstructionCreated(
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(params[1]),
     settlementType: params[3] ? getTextValue(params[3]) : "",
-    tradeDate: params[4] ? getTextValue(params[4]) : "",
-    valueDate: params[5] ? getTextValue(params[5]) : "",
     addresses: [signer],
+    legs,
   });
   await instruction.save();
-
-  // store the instructions legs
-  const legs = params[6].toJSON() as any;
-  for (let i = 0; i < legs.length; i++) {
-    const leg = legs[i];
-    const { from, to, asset, amount } = leg;
-    const fromDid = getTextValue(from.did);
-    const toDid = getTextValue(to.did);
-    const decoddeAsset = hex2a(hexStripPrefix(asset));
-    let fromPortfolioNumber = "0";
-    if (from.kind === "User") {
-      fromPortfolioNumber = from.kind.User.toString();
-    }
-    let toPortfolioNumber = "0";
-    if (to.kind === "User") {
-      toPortfolioNumber = to.kind.User.toString()();
-    }
-
-    // Find or create is needed to deal with address prebaked into the chain like "0x0500000000000000000000000000000000000000000000000000000000000000"
-    await findOrCreateIdentity(fromDid, blockId, eventId);
-    const fromPorfolio = await findOrCreatePortfolio(
-      fromDid,
-      fromPortfolioNumber,
-      blockId,
-      eventId,
-      event.idx
-    );
-    await findOrCreateIdentity(toDid, blockId, eventId);
-    const toPortfolio = await findOrCreatePortfolio(
-      toDid,
-      toPortfolioNumber,
-      blockId,
-      eventId,
-      event.idx
-    );
-
-    await Leg.create({
-      id: `${blockId}/${event.idx}-${i}`,
-      eventId,
-      blockId,
-      ticker: decoddeAsset,
-      instructionId: instruction.id,
-      amount: amount ? getTextValue(amount) : "unknown",
-      fromId: fromPorfolio.id,
-      toId: toPortfolio.id,
-    })
-      .save()
-      .catch((err) => logger.error(err));
-  }
 }
 
 async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
-  logger.info("Instruction update event received");
   const signer = getSigner(event.extrinsic);
   const instructionId = getTextValue(params[2]);
   const instruction = await Instruction.get(instructionId);
@@ -225,7 +176,7 @@ async function handleInstructionFinalizedEvent(
   event: SubstrateEvent
 ) {
   logger.info("Received finalized event");
-  let signer;
+  let signer: string;
   if (event.extrinsic) {
     // might not be present on any
     signer = getSigner(event.extrinsic);
@@ -241,7 +192,6 @@ async function handleInstructionFinalizedEvent(
     result = SettlementResultEnum.Failed;
 
   const instructionId = getTextValue(params[1]);
-  const legs = await Leg.getByInstructionId(instructionId);
 
   const instruction = await Instruction.get(instructionId);
   if (instruction) {
@@ -253,27 +203,17 @@ async function handleInstructionFinalizedEvent(
     logger.error(`[FINAL] could not find instruction by id: ${instructionId}`);
   }
 
-  logger.info(
-    `updating ${legs.length} legs from instruction id ${instructionId}`
-  );
-  legs.forEach(async (leg, i) => {
-    const settlement = Settlement.create({
-      id: `${blockId}/${event.idx}-${i}`,
-      eventId,
-      blockId,
-      result,
-      ticker: leg.ticker,
-      // need to take off portfolio suffix /number
-      senderId: leg.fromId ? leg.fromId.replace(/\/\d+/, "") : null,
-      receiverId: leg.toId ? leg.toId.replace(/\/\d+/, "") : null,
-      addresses: instruction.addresses,
-    });
-    await settlement.save();
-    leg.settlementId = settlement.id;
-    await leg.save();
+  const settlement = Settlement.create({
+    id: `${blockId}/${event.idx}`,
+    eventId,
+    blockId,
+    result,
+    addresses: instruction.addresses,
+    legs: instruction.legs,
   });
+  await settlement.save();
 }
 
-function onlyUnique(value, index, self) {
+function onlyUnique(value: string, index: number, self: string[]) {
   return self.indexOf(value) === index;
 }

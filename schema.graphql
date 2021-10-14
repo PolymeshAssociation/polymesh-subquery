@@ -129,45 +129,24 @@ type Investment @entity {
   datetime: Date!
 }
 
-type Portfolio @entity {
-  id: ID!
-  blockId: Int!
-  identity: Identity! @index
-  kind: String
-  number: String! @index
-  name: String
+type PortfolioJson @jsonField {
+  did: String!
+  number: String!
 }
 
-type Leg @entity {
-  id: ID!
-  blockId: Int!
+type Leg @jsonField {
   ticker: String! @index
   amount: String!
-  from: Portfolio
-  to: Portfolio
-  instruction: Instruction @index
-  settlement: Settlement @index
+  from: PortfolioJson
+  to: PortfolioJson
 }
 
 type Settlement @entity {
   id: ID!
   blockId: Int!
-  ticker: String @index # optional filter
   addresses: [String] @index
   result: String!
-  legs: [Leg] @derivedFrom(field: "settlement")
-  sender: Identity
-  receiver: Identity
-}
-
-type Identity @entity {
-  id: ID!
-  blockId: Int!
-  # accountId: String
-  # secondaryKeys: [String]
-  sent: [Settlement] @derivedFrom(field: "sender")
-  received: [Settlement] @derivedFrom(field: "receiver")
-  portfolios: [Portfolio] @derivedFrom(field: "identity")
+  legs: [Leg]
 }
 
 type Instruction @entity {
@@ -177,8 +156,6 @@ type Instruction @entity {
   status: String!
   venueId: String @index
   settlementType: String
-  tradeDate: String
-  valueDate: String
-  legs: [Leg] @derivedFrom(field: "instruction")
+  legs: [Leg]
   addresses: [String]
 }
