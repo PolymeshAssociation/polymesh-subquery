@@ -161,4 +161,23 @@ type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
   member: String! @index
   group: AgentGroup! @index
+type WithholdingTaxesOfCa @entity {
+  id: ID!
+  ticker: String! @index
+  localId: Int! @index
+  datetime: Date!
+  taxes: Int!
+}
+
+type HistoryOfPaymentEventsForCa @entity {
+  id: ID!
+  blockId: Int!
+  eventId: String!
+  eventIdx: Int!
+  eventDid: String!
+  ticker: String! @index
+  localId: Int! @index
+  balance: Int!
+  tax: Int!
+  datetime: Date!
 }
