@@ -2,7 +2,7 @@ import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
 import { Funding } from "../../types";
 import { serializeTicker } from "../util";
-import { EventIdEnum } from "./common";
+import { EventIdEnum, ModuleIdEnum } from "./common";
 
 /**
  * Subscribes to events related to funding events
@@ -10,7 +10,7 @@ import { EventIdEnum } from "./common";
 export async function mapFunding(
   blockId: number,
   eventId: EventIdEnum,
-  moduleId: string,
+  moduleId: ModuleIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {

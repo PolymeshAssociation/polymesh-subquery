@@ -35,7 +35,7 @@ const finalizedEvents: EventIdEnum[] = [
 export async function mapSettlement(
   blockId: number,
   eventId: EventIdEnum,
-  moduleId: string,
+  moduleId: ModuleIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
@@ -122,11 +122,11 @@ async function handleInstructionCreated(
       amount,
       from: {
         did: from.did,
-        number: from.kind.user ? from.kind.user : 0,
+        number: from.kind.user || 0,
       },
       to: {
         did: to.did,
-        number: to.kind.user ? to.kind.user : 0,
+        number: to.kind.user || 0,
       },
     });
   }
@@ -136,7 +136,7 @@ async function handleInstructionCreated(
     blockId,
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(params[1]),
-    settlementType: params[3] ? getTextValue(params[3]) : "",
+    settlementType: getTextValue(params[3]),
     addresses: [signer],
     legs,
   });

@@ -135,7 +135,7 @@ type PortfolioJson @jsonField {
 }
 
 type Leg @jsonField {
-  ticker: String! @index
+  ticker: String!
   amount: String!
   from: PortfolioJson
   to: PortfolioJson

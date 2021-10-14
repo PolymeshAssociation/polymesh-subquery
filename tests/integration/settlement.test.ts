@@ -2,7 +2,7 @@ import { gql } from "@apollo/client/core";
 import { getApolloClient } from "../util";
 const { query } = getApolloClient();
 
-describe("getSettlements", () => {
+describe("settlements", () => {
   test("with no filter", async () => {
     const q = {
       query: gql`
