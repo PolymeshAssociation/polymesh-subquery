@@ -80,11 +80,11 @@ async function handlePortfolioMovement(
       amount,
       from: {
         did: from.did,
-        number: from.kind.user ? from.kind.user.toString() : "0",
+        number: from.kind.user ? from.kind.user : 0,
       },
       to: {
         did: to.did,
-        number: to.kind.user ? to.kind.user.toString() : "0",
+        number: to.kind.user ? to.kind.user : 0,
       },
     },
   ];
@@ -122,11 +122,11 @@ async function handleInstructionCreated(
       amount,
       from: {
         did: from.did,
-        number: from.kind.user ? from.kind.user.toString() : "0",
+        number: from.kind.user ? from.kind.user : 0,
       },
       to: {
         did: to.did,
-        number: to.kind.user ? to.kind.user.toString() : "0",
+        number: to.kind.user ? to.kind.user : 0,
       },
     });
   }
@@ -152,7 +152,7 @@ async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
     instruction.addresses = instruction.addresses.filter(onlyUnique);
     await instruction.save();
   } else {
-    logger.error(`Could not find instruction by id: ${instructionId}`);
+    throw new Error(`could not find instruction by id: ${instructionId}`);
   }
 }
 
@@ -184,7 +184,7 @@ async function handleInstructionFinalizedEvent(
     if (signer) instruction.addresses.push(signer);
     instruction.addresses = instruction.addresses.filter(onlyUnique);
   } else {
-    logger.error(`[FINAL] could not find instruction by id: ${instructionId}`);
+    throw new Error(`could not find instruction by id: ${instructionId}`);
   }
 
   const settlement = Settlement.create({

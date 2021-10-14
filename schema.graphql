@@ -131,7 +131,7 @@ type Investment @entity {
 
 type PortfolioJson @jsonField {
   did: String!
-  number: String!
+  number: Int!
 }
 
 type Leg @jsonField {
