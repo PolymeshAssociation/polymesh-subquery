@@ -1,17 +1,9 @@
 import { Codec } from "@polkadot/types/types";
-import { hexStripPrefix } from "@polkadot/util";
 import { SubstrateEvent } from "@subql/types";
 import { Settlement, Instruction } from "../../types";
-import { getSigner, getTextValue, hex2a, serializeTicker } from "../util";
+import { getSigner, getTextValue, hexToString, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
-// A settlement is an asset moved between portofolios or a leg of a completed instruction
-
-// A settlement is a movement of an asset. This can be from completed instructions and from portfolio movements
-
-// Each event needs to update two accounts / identities (incoming / outgoing)
-// If each account optionally provides an portfolio
-// Might need an identity handler as well
 enum SettlementResultEnum {
   None = "None",
   Executed = "Executed",
@@ -124,7 +116,7 @@ async function handleInstructionCreated(
   for (let i = 0; i < rawLegs.length; i++) {
     const leg = rawLegs[i];
     const { from, to, asset, amount } = leg;
-    const serializedTicker = hex2a(hexStripPrefix(asset));
+    const serializedTicker = hexToString(asset);
     legs.push({
       ticker: serializedTicker,
       amount,
@@ -172,7 +164,6 @@ async function handleInstructionFinalizedEvent(
 ) {
   let signer: string;
   if (event.extrinsic) {
-    // might not be present on any
     signer = getSigner(event.extrinsic);
   }
 
