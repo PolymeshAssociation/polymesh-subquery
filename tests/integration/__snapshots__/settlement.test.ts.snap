@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`getSettlements with address filter 1`] = `
+exports[`settlements with address filter 1`] = `
 Object {
   "settlements": Object {
     "__typename": "SettlementsConnection",
@@ -33,7 +33,7 @@ Object {
 }
 `;
 
-exports[`getSettlements with from filter 1`] = `
+exports[`settlements with from filter 1`] = `
 Object {
   "settlements": Object {
     "__typename": "SettlementsConnection",
@@ -255,7 +255,7 @@ Object {
 }
 `;
 
-exports[`getSettlements with no filter 1`] = `
+exports[`settlements with no filter 1`] = `
 Object {
   "settlements": Object {
     "__typename": "SettlementsConnection",
@@ -544,7 +544,7 @@ Object {
 }
 `;
 
-exports[`getSettlements with ticker filter 1`] = `
+exports[`settlements with ticker filter 1`] = `
 Object {
   "settlements": Object {
     "__typename": "SettlementsConnection",

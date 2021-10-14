@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`getInstructions test getting instructions 1`] = `
+exports[`instructions getting instructions 1`] = `
 Object {
   "instructions": Object {
     "__typename": "InstructionsConnection",
