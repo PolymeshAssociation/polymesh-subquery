@@ -128,3 +128,24 @@ type Investment @entity {
   raiseTokenAmount: BigInt!
   datetime: Date!
 }
+
+type WithholdingTaxesOfCa @entity {
+  id: ID!
+  ticker: String! @index
+  localId: Int! @index
+  datetime: Date!
+  taxes: Int!
+}
+
+type HistoryOfPaymentEventsForCa @entity {
+  id: ID!
+  blockId: Int!
+  eventId: String!
+  eventIdx: Int!
+  eventDid: String!
+  ticker: String! @index
+  localId: Int! @index
+  balance: Int!
+  tax: Int!
+  datetime: Date!
+}
