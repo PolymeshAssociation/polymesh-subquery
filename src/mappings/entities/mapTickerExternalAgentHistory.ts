@@ -166,17 +166,15 @@ export async function mapTickerExternalAgentHistory(
 
     const promises = [
       removeMember(did, ticker),
-      (async () => {
-        await TickerExternalAgentHistory.create({
-          id: `${blockId}/${eventIdx}/${did}`,
-          ticker,
-          did,
-          blockId,
-          eventIdx,
-          datetime: event.block.timestamp,
-          type: "AgentRemoved",
-        }).save();
-      })(),
+      TickerExternalAgentHistory.create({
+        id: `${blockId}/${eventIdx}/${did}`,
+        ticker,
+        did,
+        blockId,
+        eventIdx,
+        datetime: event.block.timestamp,
+        type: "AgentRemoved",
+      }).save(),
     ];
 
     await Promise.all(promises);
