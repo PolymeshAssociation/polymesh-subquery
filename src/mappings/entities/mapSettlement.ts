@@ -183,7 +183,6 @@ async function handleInstructionFinalizedEvent(
     instruction.status = result;
     if (signer) instruction.addresses.push(signer);
     instruction.addresses = instruction.addresses.filter(onlyUnique);
-    await instruction.save();
   } else {
     logger.error(`[FINAL] could not find instruction by id: ${instructionId}`);
   }
@@ -196,7 +195,7 @@ async function handleInstructionFinalizedEvent(
     addresses: instruction.addresses,
     legs: instruction.legs,
   });
-  await settlement.save();
+  await Promise.all([settlement.save(), instruction.save()]);
 }
 
 function onlyUnique(value: string, index: number, self: string[]) {
