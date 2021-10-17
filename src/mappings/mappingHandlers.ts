@@ -31,6 +31,7 @@ import {
 import { camelToSnakeCase } from "./util";
 import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
 import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
+import { mapSettlement } from "./entities/mapSettlement";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -119,6 +120,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       args
     ),
     mapInvestment(...handlerArgs),
+    mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
   ];
 
