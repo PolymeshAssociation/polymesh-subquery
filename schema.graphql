@@ -180,3 +180,35 @@ type HistoryOfPaymentEventsForCa @entity {
   tax: Int!
   datetime: Date!
 }
+
+type Scope @jsonField {
+  type: String
+  value: String
+}
+
+type ClaimScope @entity {
+  id: ID!
+  targetDid: String!
+  ticker: String
+  scope: Scope
+}
+
+type Claim @entity {
+  id: ID!
+  targetDid: String!
+  issuer: String!
+  issuanceDate: BigInt!
+  lastUpdateDate: BigInt!
+  expiry: BigInt
+  type: String!
+  jurisdiction: String
+  scope: Scope
+  cddId: String
+  identityWithClaims: IdentityWithClaims
+}
+
+type IdentityWithClaims @entity {
+  id: ID!
+  did: String!
+  claims: [Claim!]! @derivedFrom(field: "identityWithClaims")
+}

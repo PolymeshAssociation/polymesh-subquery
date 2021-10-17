@@ -66,6 +66,13 @@ export const extractClaimInfo = (args: any[]) => {
     args?.[1]?.value?.claim || {}
   )[0];
 
+  let cddId;
+  if (claimType === "CustomerDueDiligence") {
+    cddId = JSONStringifyExceptStringAndNull(
+      args?.[1]?.value?.claim?.CustomerDueDiligence
+    );
+  }
+
   return {
     claimType,
     claimScope: JSONStringifyExceptStringAndNull(
@@ -73,6 +80,13 @@ export const extractClaimInfo = (args: any[]) => {
     ),
     claimIssuer: JSONStringifyExceptStringAndNull(args[1]?.value?.claim_issuer),
     claimExpiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
+    issuanceDate: JSONStringifyExceptStringAndNull(
+      args[1]?.value?.issuance_date
+    ),
+    lastUpdateDate: JSONStringifyExceptStringAndNull(
+      args[1]?.value?.last_update_date
+    ),
+    cddId,
   };
 };
 

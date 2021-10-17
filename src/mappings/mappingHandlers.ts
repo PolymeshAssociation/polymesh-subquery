@@ -30,6 +30,7 @@ import {
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
 import { mapSettlement } from "./entities/mapSettlement";
+import { mapClaim } from "./entities/mapClaim";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -129,8 +130,27 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   }));
   const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } =
     extractEventArgs(harvesterLikeArgs);
-  const { claimExpiry, claimIssuer, claimScope, claimType } =
-    extractClaimInfo(harvesterLikeArgs);
+  const {
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    claimType,
+    issuanceDate,
+    lastUpdateDate,
+    cddId,
+  } = extractClaimInfo(harvesterLikeArgs);
+
+  handlerPromises.push(
+    mapClaim(...handlerArgs, {
+      claimExpiry,
+      claimIssuer,
+      claimScope,
+      claimType,
+      issuanceDate,
+      lastUpdateDate,
+      cddId,
+    })
+  );
 
   await Event.create({
     id: `${blockId}/${eventIdx}`,
