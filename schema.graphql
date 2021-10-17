@@ -129,6 +129,37 @@ type Investment @entity {
   datetime: Date!
 }
 
+type PortfolioJson @jsonField {
+  did: String!
+  number: Int!
+}
+
+type Leg @jsonField {
+  ticker: String!
+  amount: String!
+  from: PortfolioJson!
+  to: PortfolioJson!
+}
+
+type Settlement @entity {
+  id: ID!
+  blockId: Int!
+  addresses: [String!]! @index
+  result: String!
+  legs: [Leg!]!
+}
+
+type Instruction @entity {
+  id: ID!
+  blockId: Int!
+  eventId: String!
+  status: String!
+  venueId: String! @index
+  settlementType: String!
+  legs: [Leg!]!
+  addresses: [String!]!
+}
+
 type WithholdingTaxesOfCa @entity {
   id: ID!
   ticker: String! @index
