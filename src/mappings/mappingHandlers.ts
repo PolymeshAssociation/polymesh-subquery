@@ -33,6 +33,7 @@ import { camelToSnakeCase } from "./util";
 import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
 import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 import { mapSettlement } from "./entities/mapSettlement";
+import { mapHeldTokens } from "./entities/mapHeldTokens";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -124,6 +125,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
+    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -160,7 +162,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
-  await Promise.all(handlerPromises)
+  await Promise.all(handlerPromises);
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {

@@ -237,3 +237,9 @@ type Proposal @entity {
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
   snapshotted: Boolean!
 }
+
+type HeldToken @entity {
+  id: ID! # did/ticker
+  did: String! @index
+  token: String!
+}
