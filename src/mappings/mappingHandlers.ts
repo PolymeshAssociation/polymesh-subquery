@@ -33,7 +33,7 @@ import { camelToSnakeCase } from "./util";
 import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
 import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 import { mapSettlement } from "./entities/mapSettlement";
-import { mapTokensHeld } from "./entities/mapTokensHeld";
+import { mapHeldTokens } from "./entities/mapHeldTokens";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -125,7 +125,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
-    mapTokensHeld(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

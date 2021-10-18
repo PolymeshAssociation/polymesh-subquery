@@ -1,12 +1,12 @@
 import { Codec } from "@polkadot/types/types";
-import { TokensHeld } from "../../types";
+import { HeldToken } from "../../types";
 import { serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
 /**
  * Maps tokens ever held by a DID
  */
-export async function mapTokensHeld(
+export async function mapHeldTokens(
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[]
@@ -17,7 +17,7 @@ export async function mapTokensHeld(
     const did = params[3].toJSON()["did"];
     const token = serializeTicker(params[1]);
 
-    await TokensHeld.create({
+    await HeldToken.create({
       id: `${did}/${token}`,
       did,
       token,
@@ -28,7 +28,7 @@ export async function mapTokensHeld(
     const token = serializeTicker(params[1]);
     const did = params[2].toJSON()["did"];
 
-    await TokensHeld.create({
+    await HeldToken.create({
       id: `${did}/${token}`,
       did,
       token,

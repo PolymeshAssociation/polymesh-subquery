@@ -238,7 +238,7 @@ type Proposal @entity {
   snapshotted: Boolean!
 }
 
-type TokensHeld @entity {
+type HeldToken @entity {
   id: ID! # did/ticker
   did: String! @index
   token: String!
