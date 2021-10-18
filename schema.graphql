@@ -129,6 +129,40 @@ type Investment @entity {
   datetime: Date!
 }
 
+type TickerExternalAgentAdded @entity {
+  id: ID! #ticker/caller_did
+  ticker: String! @index
+  callerDid: String! @index
+  blockId: Int!
+  eventIdx: Int!
+  datetime: Date!
+}
+
+# Type can be "AgentAdded", "AgentPermissionsChanged" or "AgentRemoved".
+# permissions is only present in "AgentAdded" and "AgentPermissionsChanged".
+type TickerExternalAgentHistory @entity {
+  id: ID! #block_di/event_idx/did
+  ticker: String! @index
+  did: String! @index
+  blockId: Int!
+  eventIdx: Int!
+  datetime: Date!
+  type: String!
+  permissions: String
+}
+
+type AgentGroup @entity {
+  id: ID! #ticker/group_id
+  permissions: String!
+  members: [AgentGroupMembership!]! @derivedFrom(field: "group")
+}
+
+type AgentGroupMembership @entity {
+  id: ID! #ticker/group_id/member
+  member: String! @index
+  group: AgentGroup! @index
+}
+
 type PortfolioJson @jsonField {
   did: String!
   number: Int!

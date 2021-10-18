@@ -29,6 +29,8 @@ import {
   serializeLikeHarvester,
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
+import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
+import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 import { mapSettlement } from "./entities/mapSettlement";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
@@ -108,6 +110,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapStakingEvent(...handlerArgs),
     mapSto(eventId, moduleId, args),
     mapExternalAgentAction(...handlerArgs),
+    mapTickerExternalAgentAdded(...handlerArgs),
+    mapTickerExternalAgentHistory(...handlerArgs),
     mapFunding(...handlerArgs),
     mapAuthorization(
       blockId,
