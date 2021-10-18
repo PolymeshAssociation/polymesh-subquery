@@ -238,6 +238,12 @@ type Proposal @entity {
   snapshotted: Boolean!
 }
 
+type HeldToken @entity {
+  id: ID! # did/ticker
+  did: String! @index
+  token: String!
+}
+
 type Scope @jsonField {
   type: String
   value: String
