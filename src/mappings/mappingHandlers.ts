@@ -15,6 +15,7 @@ import { mapCorporateActions } from "./entities/mapCorporateActions";
 import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";
 import { mapInvestment } from "./entities/mapInvestment";
+import { mapProposal } from "./entities/mapProposal";
 import { mapStakingEvent } from "./entities/mapStakingEvent";
 import { mapSto } from "./entities/mapSto";
 import {
@@ -122,6 +123,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapInvestment(...handlerArgs),
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
+    mapProposal(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -158,7 +160,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
-  await Promise.all(handlerPromises);
+  await Promise.all(handlerPromises)
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {

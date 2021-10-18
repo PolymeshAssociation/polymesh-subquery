@@ -214,3 +214,26 @@ type HistoryOfPaymentEventsForCa @entity {
   tax: Int!
   datetime: Date!
 }
+
+type ProposalVote @entity {
+  id: ID!
+  proposal: Proposal!
+  blockId: Int!
+  eventIdx: Int!
+  account: String!
+  vote: Boolean!
+  weight: BigInt!
+}
+
+type Proposal @entity {
+  id: ID!
+  blockId: Int!
+  proposer: String! @index
+  state: String! @index
+  identityId: String!
+  balance: BigInt!
+  url: String
+  description: String
+  votes: [ProposalVote]! @derivedFrom(field: "proposal")
+  snapshotted: Boolean!
+}
