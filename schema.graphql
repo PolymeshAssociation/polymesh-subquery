@@ -193,8 +193,7 @@ type ClaimScope @entity {
   scope: Scope
 }
 
-type Claim @entity {
-  id: ID!
+type Claim @jsonField {
   targetDid: String!
   issuer: String!
   issuanceDate: BigInt!
@@ -204,11 +203,16 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
-  identityWithClaims: IdentityWithClaims
 }
 
 type IdentityWithClaims @entity {
   id: ID!
   did: String!
-  claims: [Claim!]! @derivedFrom(field: "identityWithClaims")
+  claims: [Claim!]!
+}
+
+type IssuerIdentityWithClaims @entity {
+  id: ID!
+  did: String!
+  claims: [Claim!]!
 }

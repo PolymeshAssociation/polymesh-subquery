@@ -1,8 +1,8 @@
+import { IssuerIdentityWithClaims } from "./../../types/models/IssuerIdentityWithClaims";
+import { IdentityWithClaims } from "./../../types/models/IdentityWithClaims";
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
-import { Claim } from "../../types/models/Claim";
 import { ClaimScope } from "../../types/models/ClaimScope";
-import { IdentityWithClaims } from "../../types/models/IdentityWithClaims";
 import { getTextValue, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
@@ -35,12 +35,12 @@ export enum ClaimTypeEnum {
 }
 
 type ClaimParams = {
-  claimExpiry: string;
+  claimExpiry: bigint;
   claimIssuer: string;
   claimScope: string;
   claimType: string;
-  issuanceDate: BigInt;
-  lastUpdateDate: BigInt;
+  issuanceDate: bigint;
+  lastUpdateDate: bigint;
   cddId: string;
 };
 
@@ -66,17 +66,7 @@ export async function mapClaim(
 
     const scope = JSON.parse(claimData.claimScope);
 
-    const identityWithClaims = await IdentityWithClaims.get(targetDid);
-    if (!identityWithClaims) {
-      await IdentityWithClaims.create({
-        id: targetDid,
-        did: targetDid,
-      }).save();
-    }
-
-    await Claim.create({
-      id: `${blockId}/${event.idx}`,
-      blockId,
+    const claim = {
       targetDid,
       issuer: claimData.claimIssuer,
       issuanceDate: claimData.issuanceDate,
@@ -86,13 +76,36 @@ export async function mapClaim(
       scope: JSON.parse(claimData.claimScope),
       jurisdiction,
       cddId: claimData.cddId,
-      identityWithClaimId: targetDid,
-    }).save();
+    };
+
+    const identityWithClaims = await IdentityWithClaims.get(targetDid);
+    if (identityWithClaims) {
+      identityWithClaims.claims.push(claim);
+      await identityWithClaims.save();
+    } else {
+      await IdentityWithClaims.create({
+        id: targetDid,
+        did: targetDid,
+        claims: [claim],
+      }).save();
+    }
+
+    const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(
+      targetDid
+    );
+    if (issuerIdentityWithClaims) {
+      issuerIdentityWithClaims.claims.push(claim);
+      await issuerIdentityWithClaims.save();
+    } else {
+      await IssuerIdentityWithClaims.create({
+        id: claimData.claimIssuer,
+        did: claimData.claimIssuer,
+        claims: [claim],
+      }).save();
+    }
 
     if (scope) {
       handleScopes(
-        blockId,
-        event,
         targetDid,
         scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
         scope
@@ -106,21 +119,23 @@ export async function mapClaim(
   ) {
     const targetDid = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
-    handleScopes(blockId, event, targetDid, ticker);
+    handleScopes(targetDid, ticker);
   }
 }
 
 async function handleScopes(
-  blockId: number,
-  event: SubstrateEvent,
   targetDid: string,
   ticker?: string,
   scope?: { type: string; value: string }
 ) {
-  await ClaimScope.create({
-    id: `${blockId}/${event.idx}`,
-    targetDid,
-    ticker,
-    scope,
-  }).save();
+  const id = `${targetDid}/${scope?.value || ticker}`;
+  const scopeByDid = await ClaimScope.get(id);
+  if (!scopeByDid) {
+    await ClaimScope.create({
+      id,
+      targetDid,
+      ticker,
+      scope,
+    }).save();
+  }
 }

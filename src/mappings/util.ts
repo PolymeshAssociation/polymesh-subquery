@@ -128,3 +128,8 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   const parsed = JSON.parse(extrinsic.extrinsic.toString());
   return parsed.signature.signer.id;
 };
+
+const NULL_12 = "\0".repeat(12);
+export const padTicker = (ticker: string): string => {
+  return (ticker + NULL_12).substring(0, 12);
+};

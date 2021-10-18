@@ -40,6 +40,9 @@ test("extractClaimInfo", () => {
     claimIssuer: undefined,
     claimScope: '{"type":null,"value":null}',
     claimType: undefined,
+    lastUpdateDate: undefined,
+    issuanceDate: undefined,
+    cddId: undefined,
   });
 
   expect(
@@ -47,9 +50,11 @@ test("extractClaimInfo", () => {
       { value: "hello" },
       {
         value: {
-          claim: { CustomerDueDiligence: {} },
+          claim: { CustomerDueDiligence: "0x000001" },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
@@ -58,6 +63,9 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: null,
     claimType: "CustomerDueDiligence",
+    lastUpdateDate: 12345,
+    issuanceDate: 12345,
+    cddId: "0x000001",
   });
 
   expect(
@@ -70,6 +78,8 @@ test("extractClaimInfo", () => {
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
@@ -78,6 +88,9 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "InvestorUniqueness",
+    lastUpdateDate: 12345,
+    issuanceDate: 12345,
+    cddId: undefined,
   });
 
   expect(
@@ -90,6 +103,8 @@ test("extractClaimInfo", () => {
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
@@ -98,6 +113,9 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "Jurisdiction",
+    lastUpdateDate: 12345,
+    issuanceDate: 12345,
+    cddId: undefined,
   });
 
   expect(
@@ -110,6 +128,8 @@ test("extractClaimInfo", () => {
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
@@ -118,6 +138,9 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "Affiliate",
+    lastUpdateDate: 12345,
+    issuanceDate: 12345,
+    cddId: undefined,
   });
 });
 
