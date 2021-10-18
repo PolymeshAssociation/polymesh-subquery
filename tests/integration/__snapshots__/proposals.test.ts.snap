@@ -63,6 +63,8 @@ Object {
         },
         "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
         "state": "Rejected",
+        "totalAyeWeight": "0",
+        "totalNayWeight": "0",
         "url": "google.com",
         "yay": Object {
           "__typename": "ProposalVotesConnection",
@@ -81,6 +83,8 @@ Object {
         },
         "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
         "state": "Executed",
+        "totalAyeWeight": "10",
+        "totalNayWeight": "0",
         "url": "google.com",
         "yay": Object {
           "__typename": "ProposalVotesConnection",

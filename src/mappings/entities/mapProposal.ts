@@ -35,7 +35,12 @@ export async function mapProposal(
       balance: getTextValue(params[3]),
       url: getTextValue(params[4]),
       description: getTextValue(params[5]),
+      endBlock: getTextValue(params[6]),
+      proposal: getTextValue(params[7]),
       snapshotted: false,
+      totalAyeWeight: 0,
+      totalNayWeight: 0,
+      lastStateUpdatedAt: blockId,
     }).save();
   }
 
@@ -43,6 +48,7 @@ export async function mapProposal(
     const pipId = getTextValue(params[1]);
     const proposal = await Proposal.get(pipId);
     proposal.state = getTextValue(params[2]);
+    proposal.lastStateUpdatedAt = blockId;
     await proposal.save();
   }
 
@@ -52,15 +58,30 @@ export async function mapProposal(
     const vote = getTextValue(params[3]);
     const weight = getTextValue(params[4]);
 
-    await ProposalVote.create({
-      id: `${blockId}/${event.idx}`,
-      proposalId: pipId,
-      blockId,
-      eventIdx: event.idx,
-      account,
-      vote,
-      weight,
-    }).save();
+    const promises = [
+      (async () => {
+        const proposal = await Proposal.get(pipId);
+        if (vote) {
+          proposal.totalAyeWeight += BigInt(weight);
+        } else {
+          proposal.totalNayWeight += BigInt(weight);
+        }
+        await proposal.save();
+      })(),
+    ];
+
+    promises.push(
+      ProposalVote.create({
+        id: `${blockId}/${event.idx}`,
+        proposalId: pipId,
+        blockId,
+        eventIdx: event.idx,
+        account,
+        vote,
+        weight,
+      }).save()
+    );
+    await Promise.all(promises);
   }
 
   if (eventId === EventIdEnum.SnapshotTaken) {

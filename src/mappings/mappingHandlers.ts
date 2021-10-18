@@ -160,7 +160,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
-  await Promise.all(handlerPromises)
+  await Promise.all(handlerPromises);
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
