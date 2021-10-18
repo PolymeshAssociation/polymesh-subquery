@@ -35,8 +35,6 @@ export async function mapProposal(
       balance: getTextValue(params[3]),
       url: getTextValue(params[4]),
       description: getTextValue(params[5]),
-      endBlock: getTextValue(params[6]),
-      proposal: getTextValue(params[7]),
       snapshotted: false,
       totalAyeWeight: 0,
       totalNayWeight: 0,

@@ -18,8 +18,6 @@ describe("proposals", () => {
               description
               balance
               lastStateUpdatedAt
-              proposal
-              endBlock
               yay: votes(filter: { vote: { equalTo: true } }) {
                 totalCount
               }

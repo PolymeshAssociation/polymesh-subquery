@@ -57,6 +57,7 @@ Object {
         "description": "first",
         "id": "0",
         "identityId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+        "lastStateUpdatedAt": 245,
         "nay": Object {
           "__typename": "ProposalVotesConnection",
           "totalCount": 0,
@@ -77,6 +78,7 @@ Object {
         "description": "second",
         "id": "1",
         "identityId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+        "lastStateUpdatedAt": 247,
         "nay": Object {
           "__typename": "ProposalVotesConnection",
           "totalCount": 0,
