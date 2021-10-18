@@ -15,6 +15,7 @@ import { mapCorporateActions } from "./entities/mapCorporateActions";
 import { mapExternalAgentAction } from "./entities/mapExternalAgentAction";
 import { mapFunding } from "./entities/mapFunding";
 import { mapInvestment } from "./entities/mapInvestment";
+import { mapProposal } from "./entities/mapProposal";
 import { mapStakingEvent } from "./entities/mapStakingEvent";
 import { mapSto } from "./entities/mapSto";
 import {
@@ -29,6 +30,8 @@ import {
   serializeLikeHarvester,
 } from "./serializeLikeHarvester";
 import { camelToSnakeCase } from "./util";
+import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
+import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 import { mapSettlement } from "./entities/mapSettlement";
 import { mapClaim } from "./entities/mapClaim";
 
@@ -109,6 +112,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapStakingEvent(...handlerArgs),
     mapSto(eventId, moduleId, args),
     mapExternalAgentAction(...handlerArgs),
+    mapTickerExternalAgentAdded(...handlerArgs),
+    mapTickerExternalAgentHistory(...handlerArgs),
     mapFunding(...handlerArgs),
     mapAuthorization(
       blockId,
@@ -119,6 +124,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapInvestment(...handlerArgs),
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
+    mapProposal(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -174,7 +180,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
 
-  await Promise.all(handlerPromises);
+  await Promise.all(handlerPromises)
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
