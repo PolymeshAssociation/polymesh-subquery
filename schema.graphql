@@ -235,7 +235,10 @@ type Proposal @entity {
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
+  lastStateUpdatedAt: Int!
   snapshotted: Boolean!
+  totalAyeWeight: BigInt!
+  totalNayWeight: BigInt!
 }
 
 type HeldToken @entity {

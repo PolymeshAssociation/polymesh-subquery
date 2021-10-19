@@ -1,6 +1,6 @@
 import { Codec } from "@polkadot/types/types";
 import { HeldToken } from "../../types";
-import { serializeTicker } from "../util";
+import { getTextValue, serializeTicker } from "../util";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
 /**
@@ -26,12 +26,12 @@ export async function mapHeldTokens(
 
   if (eventId === EventIdEnum.Issued) {
     const token = serializeTicker(params[1]);
-    const did = params[2].toJSON()["did"];
+    const did = getTextValue(params[2]);
 
     await HeldToken.create({
       id: `${did}/${token}`,
       did,
       token,
-    });
+    }).save();
   }
 }

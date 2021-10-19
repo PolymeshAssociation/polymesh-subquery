@@ -17,12 +17,15 @@ describe("proposals", () => {
               url
               description
               balance
+              lastStateUpdatedAt
               yay: votes(filter: { vote: { equalTo: true } }) {
                 totalCount
               }
+              totalAyeWeight
               nay: votes(filter: { vote: { equalTo: false } }) {
                 totalCount
               }
+              totalNayWeight
             }
           }
         }
