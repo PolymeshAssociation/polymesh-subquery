@@ -259,7 +259,21 @@ type ClaimScope @entity {
   scope: Scope
 }
 
-type Claim @jsonField {
+type Claim @entity {
+  id: ID!
+  targetDid: String! @index
+  issuer: String! @index
+  issuanceDate: BigInt!
+  lastUpdateDate: BigInt!
+  expiry: BigInt
+  filterExpiry: BigInt! @index
+  type: String! @index
+  jurisdiction: String
+  scope: Scope
+  cddId: String
+}
+
+type ClaimJson @jsonField {
   targetDid: String!
   issuer: String!
   issuanceDate: BigInt!
@@ -274,11 +288,11 @@ type Claim @jsonField {
 type IdentityWithClaims @entity {
   id: ID!
   did: String! @index
-  claims: [Claim!]!
+  claims: [ClaimJson!]!
 }
 
 type IssuerIdentityWithClaims @entity {
   id: ID!
   did: String! @index
-  claims: [Claim!]!
+  claims: [ClaimJson!]!
 }
