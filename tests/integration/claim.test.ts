@@ -1,6 +1,5 @@
 import { gql } from "@apollo/client/core";
 import { getApolloClient } from "../util";
-import { ClaimScopeTypeEnum } from "./../../src/mappings/entities/mapClaim";
 const { query } = getApolloClient();
 
 describe("identityWithClaims", () => {
@@ -60,7 +59,7 @@ describe("identityWithClaims", () => {
   });
 
   test("should return identities and claims filtered", async () => {
-    const scopeType = ClaimScopeTypeEnum.Ticker;
+    const scopeType = "Ticker";
     const scopeValue = "5TICKER";
     const trustedClaimIssuer =
       "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c";
@@ -167,7 +166,7 @@ describe("issuerIdentityWithClaims", () => {
   test("should return identities and claims filtered", async () => {
     const target =
       "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3";
-    const scopeType = ClaimScopeTypeEnum.Identity;
+    const scopeType = "Identity";
     const scopeValue =
       "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01";
     const trustedClaimIssuer =
