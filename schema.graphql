@@ -254,7 +254,7 @@ type Scope @jsonField {
 
 type ClaimScope @entity {
   id: ID!
-  targetDid: String!
+  targetDid: String! @index
   ticker: String
   scope: Scope
 }

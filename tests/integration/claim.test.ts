@@ -1,7 +1,6 @@
-import { ClaimScopeTypeEnum } from "./../../src/mappings/entities/mapClaim";
 import { gql } from "@apollo/client/core";
 import { getApolloClient } from "../util";
-import { padTicker } from "../../src/mappings/util";
+import { ClaimScopeTypeEnum } from "./../../src/mappings/entities/mapClaim";
 const { query } = getApolloClient();
 
 describe("identityWithClaims", () => {
@@ -92,40 +91,6 @@ describe("identityWithClaims", () => {
 
     expect(subquery?.data?.identityWithClaims).toMatchSnapshot();
   });
-
-  // test("should return identities and claims including expired", async () => {
-  //   const scopeType = ClaimScopeTypeEnum.Ticker;
-  //   const scopeValue = padTicker("5TICKER");
-  //   const q = {
-  //     variables: { scopeValue },
-  //     query: gql`
-  //       query q($scopeValue: String!) {
-  //         identityWithClaims(scope: {type: ${scopeType}, value: $scopeValue}, includeExpired: true) {
-  //           totalCount
-  //           nodes {
-  //             did
-  //             claims {
-  //               type
-  //               scope {
-  //                 type
-  //                 value
-  //               }
-  //               issuer
-  //               expiry
-  //               jurisdiction
-  //             }
-  //           }
-  //         }
-  //       }
-  //     `,
-  //   };
-
-  //   const subquery = await query(q);
-
-  //   expect(subquery?.errors).toBeFalsy();
-
-  //   expect(subquery?.data).toMatchSnapshot();
-  // });
 });
 
 describe("issuerIdentityWithClaims", () => {

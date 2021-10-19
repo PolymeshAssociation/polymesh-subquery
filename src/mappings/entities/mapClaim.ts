@@ -1,9 +1,9 @@
-import { IssuerIdentityWithClaims } from "./../../types/models/IssuerIdentityWithClaims";
-import { IdentityWithClaims } from "./../../types/models/IdentityWithClaims";
 import { Codec } from "@polkadot/types/types";
 import { SubstrateEvent } from "@subql/types";
-import { ClaimScope } from "../../types/models/ClaimScope";
 import { getTextValue, serializeTicker } from "../util";
+import { ClaimScope } from "./../../types/models/ClaimScope";
+import { IdentityWithClaims } from "./../../types/models/IdentityWithClaims";
+import { IssuerIdentityWithClaims } from "./../../types/models/IssuerIdentityWithClaims";
 import { EventIdEnum, ModuleIdEnum } from "./common";
 
 const claimEvents = new Set<string>([
