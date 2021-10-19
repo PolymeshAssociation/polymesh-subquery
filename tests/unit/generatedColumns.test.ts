@@ -63,8 +63,8 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: null,
     claimType: "CustomerDueDiligence",
-    lastUpdateDate: 12345,
-    issuanceDate: 12345,
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
     cddId: "0x000001",
   });
 
@@ -88,8 +88,8 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "InvestorUniqueness",
-    lastUpdateDate: 12345,
-    issuanceDate: 12345,
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
     cddId: undefined,
   });
 
@@ -113,8 +113,8 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "Jurisdiction",
-    lastUpdateDate: 12345,
-    issuanceDate: 12345,
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
     cddId: undefined,
   });
 
@@ -138,8 +138,8 @@ test("extractClaimInfo", () => {
     claimIssuer: "me",
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: "Affiliate",
-    lastUpdateDate: 12345,
-    issuanceDate: 12345,
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
     cddId: undefined,
   });
 });

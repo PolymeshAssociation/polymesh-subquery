@@ -61,9 +61,8 @@ describe("identityWithClaims", () => {
   });
 
   test("should return identities and claims filtered", async () => {
-    // TODO add more claim types in integration tests
     const scopeType = ClaimScopeTypeEnum.Ticker;
-    const scopeValue = padTicker("5TICKER");
+    const scopeValue = "5TICKER";
     const trustedClaimIssuer =
       "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c";
     const q = {
@@ -93,6 +92,7 @@ describe("identityWithClaims", () => {
 
     expect(subquery?.data?.identityWithClaims).toMatchSnapshot();
   });
+
   // test("should return identities and claims including expired", async () => {
   //   const scopeType = ClaimScopeTypeEnum.Ticker;
   //   const scopeValue = padTicker("5TICKER");
@@ -168,7 +168,7 @@ describe("issuerIdentityWithClaims", () => {
       `,
     });
 
-    expect(res?.data?.issuerIdentityWithClaims.totalCount).toEqual(3);
+    expect(res?.data?.issuerIdentityWithClaims.totalCount).toEqual(0);
   });
 
   test("should return all issuers with their claims for given did", async () => {
@@ -198,6 +198,7 @@ describe("issuerIdentityWithClaims", () => {
 
     expect(subquery?.data).toMatchSnapshot();
   });
+
   test("should return identities and claims filtered", async () => {
     const target =
       "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3";
@@ -211,7 +212,7 @@ describe("issuerIdentityWithClaims", () => {
         query {
           issuerIdentityWithClaims(filter: {
             did: {
-              equalTo: "${target}"
+              in: ["${trustedClaimIssuer}"]
             },
             claims: {
               contains: [{
@@ -219,7 +220,7 @@ describe("issuerIdentityWithClaims", () => {
                   type: ${scopeType}, 
                   value: "${scopeValue}"
                 },
-                issuer: "${trustedClaimIssuer}"
+                targetDid: "${target}"
               }]
             }
           }) {
@@ -264,7 +265,7 @@ describe("claimScopes", () => {
       `,
     });
 
-    return expect(res?.data).toEqual([]);
+    return expect(res?.data?.claimScopes?.nodes?.length).toEqual(0);
   });
 
   test("should return a list of scopes for given identity", async () => {

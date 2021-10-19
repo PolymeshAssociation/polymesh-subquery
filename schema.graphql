@@ -270,12 +270,12 @@ type Claim @jsonField {
 
 type IdentityWithClaims @entity {
   id: ID!
-  did: String!
+  did: String! @index
   claims: [Claim!]!
 }
 
 type IssuerIdentityWithClaims @entity {
   id: ID!
-  did: String!
+  did: String! @index
   claims: [Claim!]!
 }

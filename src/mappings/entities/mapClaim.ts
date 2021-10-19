@@ -91,7 +91,7 @@ export async function mapClaim(
     }
 
     const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(
-      targetDid
+      claimData.claimIssuer
     );
     if (issuerIdentityWithClaims) {
       issuerIdentityWithClaims.claims.push(claim);
