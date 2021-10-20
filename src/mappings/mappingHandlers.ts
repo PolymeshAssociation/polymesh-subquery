@@ -146,6 +146,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     issuanceDate,
     lastUpdateDate,
     cddId,
+    jurisdiction,
   } = extractClaimInfo(harvesterLikeArgs);
 
   handlerPromises.push(
@@ -157,6 +158,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       issuanceDate,
       lastUpdateDate,
       cddId,
+      jurisdiction,
     })
   );
 

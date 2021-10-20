@@ -43,6 +43,7 @@ type ClaimParams = {
   issuanceDate: bigint;
   lastUpdateDate: bigint;
   cddId: string;
+  jurisdiction: string;
 };
 
 /**
@@ -57,12 +58,6 @@ export async function mapClaim(
   claimData: ClaimParams
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.Identity && isClaimEvent(eventId)) {
-    let jurisdiction;
-    if (claimData.claimType === ClaimTypeEnum.Jurisdiction) {
-      const col1: string = JSON.parse(claimData.claimScope).col1;
-      jurisdiction = col1.substring(0, 2);
-    }
-
     const targetDid = getTextValue(params[0]);
 
     const scope = JSON.parse(claimData.claimScope);
@@ -75,7 +70,7 @@ export async function mapClaim(
       expiry: claimData.claimExpiry,
       type: claimData.claimType,
       scope: JSON.parse(claimData.claimScope),
-      jurisdiction,
+      jurisdiction: claimData.jurisdiction,
       cddId: claimData.cddId,
     };
 

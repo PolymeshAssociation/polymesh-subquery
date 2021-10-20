@@ -43,6 +43,7 @@ test("extractClaimInfo", () => {
     lastUpdateDate: undefined,
     issuanceDate: undefined,
     cddId: undefined,
+    jurisdiction: undefined,
   });
 
   expect(
@@ -66,6 +67,7 @@ test("extractClaimInfo", () => {
     lastUpdateDate: "12345",
     issuanceDate: "12345",
     cddId: "0x000001",
+    jurisdiction: undefined,
   });
 
   expect(
@@ -91,6 +93,7 @@ test("extractClaimInfo", () => {
     lastUpdateDate: "12345",
     issuanceDate: "12345",
     cddId: undefined,
+    jurisdiction: undefined,
   });
 
   expect(
@@ -99,7 +102,10 @@ test("extractClaimInfo", () => {
       {
         value: {
           claim: {
-            Jurisdiction: { col2: { type: "Ticker", value: "STONK" } },
+            Jurisdiction: {
+              col1: "IN",
+              col2: { type: "Ticker", value: "STONK" },
+            },
           },
           claim_issuer: "me",
           expiry: 400,
@@ -116,6 +122,7 @@ test("extractClaimInfo", () => {
     lastUpdateDate: "12345",
     issuanceDate: "12345",
     cddId: undefined,
+    jurisdiction: "IN",
   });
 
   expect(
@@ -141,6 +148,7 @@ test("extractClaimInfo", () => {
     lastUpdateDate: "12345",
     issuanceDate: "12345",
     cddId: undefined,
+    jurisdiction: undefined,
   });
 });
 

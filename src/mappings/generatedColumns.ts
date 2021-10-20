@@ -67,9 +67,14 @@ export const extractClaimInfo = (args: any[]) => {
   )[0];
 
   let cddId;
+  let jurisdiction;
   if (claimType === "CustomerDueDiligence") {
     cddId = JSONStringifyExceptStringAndNull(
       args?.[1]?.value?.claim?.CustomerDueDiligence
+    );
+  } else if (claimType === "Jurisdiction") {
+    jurisdiction = JSONStringifyExceptStringAndNull(
+      args?.[1]?.value?.claim?.Jurisdiction?.col1
     );
   }
 
@@ -87,6 +92,7 @@ export const extractClaimInfo = (args: any[]) => {
       args[1]?.value?.last_update_date
     ),
     cddId,
+    jurisdiction,
   };
 };
 
