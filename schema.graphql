@@ -248,8 +248,8 @@ type HeldToken @entity {
 }
 
 type Scope @jsonField {
-  type: String
-  value: String
+  type: String!
+  value: String!
 }
 
 type ClaimScope @entity {

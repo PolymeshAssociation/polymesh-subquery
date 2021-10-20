@@ -14,13 +14,13 @@ const claimEvents = new Set<string>([
 
 const isClaimEvent = (e: string): e is EventIdEnum => claimEvents.has(e);
 
-export enum ClaimScopeTypeEnum {
+enum ClaimScopeTypeEnum {
   Identity = "Identity",
   Ticker = "Ticker",
   Custom = "Custom",
 }
 
-export enum ClaimTypeEnum {
+enum ClaimTypeEnum {
   Accredited = "Accredited",
   Affiliate = "Affiliate",
   BuyLockup = "BuyLockup",
@@ -112,7 +112,7 @@ export async function mapClaim(
     }
 
     if (scope) {
-      handleScopes(
+      await handleScopes(
         targetDid,
         scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
         scope
@@ -126,7 +126,7 @@ export async function mapClaim(
   ) {
     const targetDid = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
-    handleScopes(targetDid, ticker);
+    await handleScopes(targetDid, ticker);
   }
 }
 
@@ -136,13 +136,10 @@ async function handleScopes(
   scope?: { type: string; value: string }
 ) {
   const id = `${targetDid}/${scope?.value || ticker}`;
-  const scopeByDid = await ClaimScope.get(id);
-  if (!scopeByDid) {
-    await ClaimScope.create({
-      id,
-      targetDid,
-      ticker,
-      scope,
-    }).save();
-  }
+  await ClaimScope.create({
+    id,
+    targetDid,
+    ticker,
+    scope,
+  }).save();
 }
