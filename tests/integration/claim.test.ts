@@ -88,7 +88,7 @@ describe("identityWithClaims", () => {
 
     expect(subquery?.errors).toBeFalsy();
 
-    expect(subquery?.data?.identityWithClaims).toMatchSnapshot();
+    expect(subquery?.data).toMatchSnapshot();
   });
 });
 
@@ -254,6 +254,116 @@ describe("claimScopes", () => {
       `,
     };
 
+    const subquery = await query(q);
+
+    expect(subquery?.errors).toBeFalsy();
+
+    expect(subquery?.data).toMatchSnapshot();
+  });
+});
+
+describe("claims", () => {
+  test("should return no registries as given identity has no claims", async () => {
+    const identityId =
+      "0x9900000000000000000000000000000000000000000000000000000000000000";
+    const res = await query({
+      query: gql`
+        query{
+          claims(filter: {
+              targetDid: {
+                in: ["${identityId}"]
+              }
+            }) {
+            totalCount
+          }
+        }
+      `,
+    });
+
+    return expect(res?.data?.claims?.totalCount).toEqual(0);
+  });
+
+  test("should return just total count", async () => {
+    const res = await query({
+      query: gql`
+        query {
+          claims {
+            totalCount
+          }
+        }
+      `,
+    });
+
+    expect(res?.data).toMatchSnapshot();
+  });
+
+  test("should return all claims as there are no filters", async () => {
+    const q = {
+      query: gql`
+        query {
+          claims(first: 10) {
+            totalCount
+            nodes {
+              targetDid
+              issuer
+              issuanceDate
+              lastUpdateDate
+              expiry
+              filterExpiry
+              type
+              jurisdiction
+              scope
+              cddId
+            }
+          }
+        }
+      `,
+    };
+
+    const subquery = await query(q);
+
+    expect(subquery?.errors).toBeFalsy();
+
+    expect(subquery?.data).toMatchSnapshot();
+  });
+
+  test("should return filtered claims", async () => {
+    const scopeType = "Identity";
+    const scopeValue = "5TICKER";
+    const trustedClaimIssuer =
+      "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01";
+    const q = {
+      variables: { scopeValue },
+      query: gql`
+        query q($scopeValue: String!){
+          claims(filter: {
+            scope: {
+              equalTo: {
+                type: ${scopeType}, 
+                value: $scopeValue
+              }
+            },
+            issuer: {
+              equalTo: "${trustedClaimIssuer}"
+            }
+          }) {
+            totalCount
+            nodes {
+              targetDid
+              issuer
+              issuanceDate
+              lastUpdateDate
+              expiry
+              filterExpiry
+              type
+              jurisdiction
+              scope
+              cddId
+            }
+          }
+        }
+      `,
+    };
     const subquery = await query(q);
 
     expect(subquery?.errors).toBeFalsy();

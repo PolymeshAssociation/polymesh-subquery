@@ -26,6 +26,169 @@ Object {
 }
 `;
 
+exports[`claims should return all claims as there are no filters 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523581000",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523581000",
+        "scope": null,
+        "targetDid": "0xd066bfeefcb60c5a33bfa79d4466ad016a12e80fa0149b85f95884ed4327071e",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523581500",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523581500",
+        "scope": null,
+        "targetDid": "0x6f6e1b8b1554b91f186a5040bad955e00b526e7d27dab20c0f4f4fdedd94cd0b",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523588000",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523588000",
+        "scope": null,
+        "targetDid": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523600500",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523600500",
+        "scope": null,
+        "targetDid": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523601000",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523601000",
+        "scope": null,
+        "targetDid": "0x9e0f63e20537f9e5dddd47540266080e25177a329a1b5a0bff9c950fe7a7da1d",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523602500",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523602500",
+        "scope": null,
+        "targetDid": "0x7e5f745cee5e53daac1ef84b48f35fb4428bdb4d336a149c9659380ae04cfb46",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523603000",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523603000",
+        "scope": null,
+        "targetDid": "0xa8956503dc6eebc7db2edf4d9656e5030fcbb03d159492b2651c665d1be57b52",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523604500",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523604500",
+        "scope": null,
+        "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523605000",
+        "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523605000",
+        "scope": null,
+        "targetDid": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": null,
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523608500",
+        "issuer": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523608500",
+        "scope": Object {
+          "type": "Identity",
+          "value": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+        },
+        "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+        "type": "Exempted",
+      },
+    ],
+    "totalCount": 42,
+  },
+}
+`;
+
+exports[`claims should return filtered claims 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "nodes": Array [],
+    "totalCount": 0,
+  },
+}
+`;
+
+exports[`claims should return just total count 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "totalCount": 42,
+  },
+}
+`;
+
 exports[`identityWithClaims should return all identities with their claims as there are no filters 1`] = `
 Object {
   "identityWithClaims": Object {
@@ -211,74 +374,76 @@ Object {
 
 exports[`identityWithClaims should return identities and claims filtered 1`] = `
 Object {
-  "__typename": "IdentityWithClaimsConnection",
-  "nodes": Array [
-    Object {
-      "__typename": "IdentityWithClaim",
-      "claims": Array [
-        Object {
-          "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
-          "expiry": null,
-          "issuanceDate": "1633523604500",
-          "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
-          "lastUpdateDate": "1633523604500",
-          "scope": null,
-          "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-          "type": "CustomerDueDiligence",
-        },
-        Object {
-          "expiry": null,
-          "issuanceDate": "1633523608500",
-          "issuer": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
-          "lastUpdateDate": "1633523608500",
-          "scope": Object {
-            "type": "Identity",
-            "value": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+  "identityWithClaims": Object {
+    "__typename": "IdentityWithClaimsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "IdentityWithClaim",
+        "claims": Array [
+          Object {
+            "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "expiry": null,
+            "issuanceDate": "1633523604500",
+            "issuer": "0x0500000000000000000000000000000000000000000000000000000000000000",
+            "lastUpdateDate": "1633523604500",
+            "scope": null,
+            "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+            "type": "CustomerDueDiligence",
           },
-          "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-          "type": "Exempted",
-        },
-        Object {
-          "expiry": null,
-          "issuanceDate": "1633523609000",
-          "issuer": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
-          "lastUpdateDate": "1633523609000",
-          "scope": Object {
-            "type": "Ticker",
-            "value": "5TICKER",
+          Object {
+            "expiry": null,
+            "issuanceDate": "1633523608500",
+            "issuer": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
+            "lastUpdateDate": "1633523608500",
+            "scope": Object {
+              "type": "Identity",
+              "value": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+            },
+            "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+            "type": "Exempted",
           },
-          "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-          "type": "SellLockup",
-        },
-        Object {
-          "expiry": null,
-          "issuanceDate": "1633523609500",
-          "issuer": "0x7e5f745cee5e53daac1ef84b48f35fb4428bdb4d336a149c9659380ae04cfb46",
-          "lastUpdateDate": "1633523609500",
-          "scope": Object {
-            "type": "Ticker",
-            "value": "5TICKER",
+          Object {
+            "expiry": null,
+            "issuanceDate": "1633523609000",
+            "issuer": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
+            "lastUpdateDate": "1633523609000",
+            "scope": Object {
+              "type": "Ticker",
+              "value": "5TICKER",
+            },
+            "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+            "type": "SellLockup",
           },
-          "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-          "type": "Accredited",
-        },
-        Object {
-          "expiry": "1633538025928",
-          "issuanceDate": "1633523610000",
-          "issuer": "0x7e5f745cee5e53daac1ef84b48f35fb4428bdb4d336a149c9659380ae04cfb46",
-          "lastUpdateDate": "1633523610000",
-          "scope": Object {
-            "type": "Ticker",
-            "value": "5TICKER",
+          Object {
+            "expiry": null,
+            "issuanceDate": "1633523609500",
+            "issuer": "0x7e5f745cee5e53daac1ef84b48f35fb4428bdb4d336a149c9659380ae04cfb46",
+            "lastUpdateDate": "1633523609500",
+            "scope": Object {
+              "type": "Ticker",
+              "value": "5TICKER",
+            },
+            "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+            "type": "Accredited",
           },
-          "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-          "type": "Affiliate",
-        },
-      ],
-      "did": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
-    },
-  ],
-  "totalCount": 1,
+          Object {
+            "expiry": "1633538025928",
+            "issuanceDate": "1633523610000",
+            "issuer": "0x7e5f745cee5e53daac1ef84b48f35fb4428bdb4d336a149c9659380ae04cfb46",
+            "lastUpdateDate": "1633523610000",
+            "scope": Object {
+              "type": "Ticker",
+              "value": "5TICKER",
+            },
+            "targetDid": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+            "type": "Affiliate",
+          },
+        ],
+        "did": "0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3",
+      },
+    ],
+    "totalCount": 1,
+  },
 }
 `;
 
