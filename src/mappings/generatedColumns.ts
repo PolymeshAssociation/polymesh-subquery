@@ -6,7 +6,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== 'string') {
-    return JSON.stringify(arg).replace(/^"|"$/g, '');
+    return JSON.stringify(arg).replace(/(?:^")|(?:"$)/g, '');
   } else {
     return arg;
   }

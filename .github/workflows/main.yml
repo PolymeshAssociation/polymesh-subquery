@@ -22,4 +22,8 @@ jobs:
         run: yarn lint
       - name: test
         run: yarn test
-# Here goes docker image publishing on release
+      - name: sonarcloud scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
