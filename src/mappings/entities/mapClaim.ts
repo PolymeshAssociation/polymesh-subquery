@@ -20,21 +20,6 @@ enum ClaimScopeTypeEnum {
   Custom = "Custom",
 }
 
-enum ClaimTypeEnum {
-  Accredited = "Accredited",
-  Affiliate = "Affiliate",
-  BuyLockup = "BuyLockup",
-  SellLockup = "SellLockup",
-  CustomerDueDiligence = "CustomerDueDiligence",
-  KnowYourCustomer = "KnowYourCustomer",
-  Jurisdiction = "Jurisdiction",
-  Exempted = "Exempted",
-  Blocked = "Blocked",
-  InvestorUniqueness = "InvestorUniqueness",
-  NoData = "NoData",
-  InvestorUniquenessV2 = "InvestorUniquenessV2",
-}
-
 type ClaimParams = {
   claimExpiry: bigint;
   claimIssuer: string;

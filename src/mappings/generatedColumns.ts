@@ -3,6 +3,8 @@
 // more readable code than relying on generated columns or materialized views and has
 // the same storage overhead.
 
+import { ClaimTypeEnum } from "./entities/common";
+
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== "string") {
@@ -37,16 +39,16 @@ export const extractClaimScope = (
   args: any[]
 ): { type: string; value: string } => {
   switch (claimType) {
-    case "CustomerDueDiligence": {
+    case ClaimTypeEnum.CustomerDueDiligence: {
       return null;
     }
-    case "InvestorUniqueness": {
+    case ClaimTypeEnum.InvestorUniqueness: {
       const scope = args[1]?.value?.claim?.InvestorUniqueness?.col1;
       const type = Object.keys(scope || {})?.[0] || null;
       const value = scope?.[type] || null;
       return { type, value };
     }
-    case "Jurisdiction": {
+    case ClaimTypeEnum.Jurisdiction: {
       const scope = args[1]?.value?.claim?.Jurisdiction?.col2;
       const type = Object.keys(scope || {})?.[0] || null;
       const value = scope?.[type] || null;
@@ -68,11 +70,11 @@ export const extractClaimInfo = (args: any[]) => {
 
   let cddId;
   let jurisdiction;
-  if (claimType === "CustomerDueDiligence") {
+  if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
     cddId = JSONStringifyExceptStringAndNull(
       args?.[1]?.value?.claim?.CustomerDueDiligence
     );
-  } else if (claimType === "Jurisdiction") {
+  } else if (claimType === ClaimTypeEnum.Jurisdiction) {
     jurisdiction = JSONStringifyExceptStringAndNull(
       args?.[1]?.value?.claim?.Jurisdiction?.col1
     );
