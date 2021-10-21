@@ -246,3 +246,53 @@ type HeldToken @entity {
   did: String! @index
   token: String!
 }
+
+type Scope @jsonField {
+  type: String!
+  value: String!
+}
+
+type ClaimScope @entity {
+  id: ID!
+  targetDid: String! @index
+  ticker: String
+  scope: Scope
+}
+
+type Claim @entity {
+  id: ID!
+  targetDid: String! @index
+  issuer: String! @index
+  issuanceDate: BigInt!
+  lastUpdateDate: BigInt!
+  expiry: BigInt
+  filterExpiry: BigInt! @index
+  type: String! @index
+  jurisdiction: String
+  scope: Scope
+  cddId: String
+}
+
+type ClaimJson @jsonField {
+  targetDid: String!
+  issuer: String!
+  issuanceDate: BigInt!
+  lastUpdateDate: BigInt!
+  expiry: BigInt
+  type: String!
+  jurisdiction: String
+  scope: Scope
+  cddId: String
+}
+
+type IdentityWithClaims @entity {
+  id: ID!
+  did: String! @index
+  claims: [ClaimJson!]!
+}
+
+type IssuerIdentityWithClaims @entity {
+  id: ID!
+  did: String! @index
+  claims: [ClaimJson!]!
+}

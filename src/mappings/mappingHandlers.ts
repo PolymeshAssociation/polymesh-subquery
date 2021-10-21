@@ -33,6 +33,7 @@ import { camelToSnakeCase } from "./util";
 import { mapTickerExternalAgentAdded } from "./entities/mapTickerExternalAgentAdded";
 import { mapTickerExternalAgentHistory } from "./entities/mapTickerExternalAgentHistory";
 import { mapSettlement } from "./entities/mapSettlement";
+import { mapClaim } from "./entities/mapClaim";
 import { mapHeldTokens } from "./entities/mapHeldTokens";
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
@@ -137,8 +138,29 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   }));
   const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } =
     extractEventArgs(harvesterLikeArgs);
-  const { claimExpiry, claimIssuer, claimScope, claimType } =
-    extractClaimInfo(harvesterLikeArgs);
+  const {
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    claimType,
+    issuanceDate,
+    lastUpdateDate,
+    cddId,
+    jurisdiction,
+  } = extractClaimInfo(harvesterLikeArgs);
+
+  handlerPromises.push(
+    mapClaim(...handlerArgs, {
+      claimExpiry,
+      claimIssuer,
+      claimScope,
+      claimType,
+      issuanceDate,
+      lastUpdateDate,
+      cddId,
+      jurisdiction,
+    })
+  );
 
   await Event.create({
     id: `${blockId}/${eventIdx}`,

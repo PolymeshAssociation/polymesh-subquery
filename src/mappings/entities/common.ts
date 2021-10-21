@@ -355,3 +355,18 @@ export enum EventIdEnum {
   AssetRuleChanged = "AssetRuleChanged",
   Invested = "Invested",
 }
+
+export enum ClaimTypeEnum {
+  Accredited = "Accredited",
+  Affiliate = "Affiliate",
+  BuyLockup = "BuyLockup",
+  SellLockup = "SellLockup",
+  CustomerDueDiligence = "CustomerDueDiligence",
+  KnowYourCustomer = "KnowYourCustomer",
+  Jurisdiction = "Jurisdiction",
+  Exempted = "Exempted",
+  Blocked = "Blocked",
+  InvestorUniqueness = "InvestorUniqueness",
+  NoData = "NoData",
+  InvestorUniquenessV2 = "InvestorUniquenessV2",
+}
