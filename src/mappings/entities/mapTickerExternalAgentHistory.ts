@@ -1,12 +1,12 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   TickerExternalAgentHistory,
   AgentGroupMembership,
-} from "../../types";
-import { serializeTicker } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+} from '../../types';
+import { serializeTicker } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 export async function mapTickerExternalAgentHistory(
   blockId: number,
@@ -16,10 +16,10 @@ export async function mapTickerExternalAgentHistory(
   event: SubstrateEvent
 ): Promise<void> {
   const eventIdx = event.idx;
-  if (
-    moduleId === ModuleIdEnum.Externalagents &&
-    eventId === EventIdEnum.GroupCreated
-  ) {
+  if (moduleId !== ModuleIdEnum.Externalagents) {
+    return;
+  }
+  if (eventId === EventIdEnum.GroupCreated) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
     const ticker = serializeTicker(params[1]);
@@ -32,10 +32,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (
-    moduleId === ModuleIdEnum.Externalagents &&
-    eventId === EventIdEnum.GroupPermissionsUpdated
-  ) {
+  if (eventId === EventIdEnum.GroupPermissionsUpdated) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
     const ticker = serializeTicker(params[1]);
@@ -44,9 +41,7 @@ export async function mapTickerExternalAgentHistory(
     ag.permissions = permissions;
 
     const promises = [ag.save()];
-    const members = await AgentGroupMembership.getByGroupId(
-      `${ticker}/${group}`
-    );
+    const members = await AgentGroupMembership.getByGroupId(`${ticker}/${group}`);
 
     for (const member of members) {
       promises.push(
@@ -57,7 +52,7 @@ export async function mapTickerExternalAgentHistory(
           blockId,
           eventIdx,
           datetime: event.block.timestamp,
-          type: "AgentPermissionsChanged",
+          type: 'AgentPermissionsChanged',
           permissions,
         }).save()
       );
@@ -66,24 +61,17 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (
-    moduleId === ModuleIdEnum.Externalagents &&
-    eventId === EventIdEnum.AgentAdded
-  ) {
+  if (eventId === EventIdEnum.AgentAdded) {
     const did = params[0].toString();
     const group = params[2].toJSON() as AgentGroup;
     const ticker = serializeTicker(params[1]);
 
     const promises = [
       (async () => {
-        const permissions = await permissionsFromAgentGroup(
-          ticker,
-          group,
-          async (n) => {
-            const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
-            return ag.permissions;
-          }
-        );
+        const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
+          const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
+          return ag.permissions;
+        });
         await TickerExternalAgentHistory.create({
           id: `${blockId}/${eventIdx}/${did}`,
           ticker,
@@ -91,7 +79,7 @@ export async function mapTickerExternalAgentHistory(
           blockId,
           eventIdx,
           datetime: event.block.timestamp,
-          type: "AgentAdded",
+          type: 'AgentAdded',
           permissions,
         }).save();
       })(),
@@ -111,10 +99,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (
-    moduleId === ModuleIdEnum.Externalagents &&
-    eventId === EventIdEnum.GroupChanged
-  ) {
+  if (eventId === EventIdEnum.GroupChanged) {
     const did = params[2].toString();
     const group = params[3].toJSON() as AgentGroup;
     const ticker = serializeTicker(params[1]);
@@ -122,14 +107,10 @@ export async function mapTickerExternalAgentHistory(
     const promises = [
       removeMember(did, ticker),
       (async () => {
-        const permissions = await permissionsFromAgentGroup(
-          ticker,
-          group,
-          async (n) => {
-            const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
-            return ag.permissions;
-          }
-        );
+        const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
+          const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
+          return ag.permissions;
+        });
         await TickerExternalAgentHistory.create({
           id: `${blockId}/${eventIdx}/${did}`,
           ticker,
@@ -137,7 +118,7 @@ export async function mapTickerExternalAgentHistory(
           blockId,
           eventIdx,
           datetime: event.block.timestamp,
-          type: "AgentPermissionsChanged",
+          type: 'AgentPermissionsChanged',
           permissions,
         }).save();
       })(),
@@ -157,10 +138,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (
-    moduleId === ModuleIdEnum.Externalagents &&
-    eventId === EventIdEnum.AgentRemoved
-  ) {
+  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentRemoved) {
     const did = params[2].toString();
     const ticker = serializeTicker(params[1]);
 
@@ -173,7 +151,7 @@ export async function mapTickerExternalAgentHistory(
         blockId,
         eventIdx,
         datetime: event.block.timestamp,
-        type: "AgentRemoved",
+        type: 'AgentRemoved',
       }).save(),
     ];
 
@@ -184,7 +162,7 @@ export async function mapTickerExternalAgentHistory(
 const removeMember = async (did: string, ticker: string) => {
   const memberships = await AgentGroupMembership.getByMember(did);
   for (const membership of memberships) {
-    const t = membership.groupId.split("/")[0];
+    const t = membership.groupId.split('/')[0];
     if (ticker === t) {
       await AgentGroupMembership.remove(`${membership.groupId}/${did}`);
       return;
@@ -192,12 +170,7 @@ const removeMember = async (did: string, ticker: string) => {
   }
 };
 
-type AgentGroup =
-  | FullAG
-  | CustomAG
-  | ExceptMetaAG
-  | PolymeshV1CAAAG
-  | PolymeshV1PIAAG;
+type AgentGroup = FullAG | CustomAG | ExceptMetaAG | PolymeshV1CAAAG | PolymeshV1PIAAG;
 type FullAG = { full: null };
 type CustomAG = { custom: number };
 type ExceptMetaAG = { exceptMeta: null };
@@ -205,8 +178,7 @@ type PolymeshV1CAAAG = { polymeshV1CAA: null };
 type PolymeshV1PIAAG = { polymeshV1PIA: null };
 
 const isFull = (ag: AgentGroup): ag is FullAG => (ag as FullAG).full === null;
-const isCustom = (ag: AgentGroup): ag is CustomAG =>
-  (ag as CustomAG).custom !== undefined;
+const isCustom = (ag: AgentGroup): ag is CustomAG => (ag as CustomAG).custom !== undefined;
 const isExceptMeta = (ag: AgentGroup): ag is ExceptMetaAG =>
   (ag as ExceptMetaAG).exceptMeta === null;
 const isCAA = (ag: AgentGroup): ag is PolymeshV1CAAAG =>
@@ -215,7 +187,7 @@ const isPIA = (ag: AgentGroup): ag is PolymeshV1PIAAG =>
   (ag as PolymeshV1PIAAG).polymeshV1PIA === null;
 
 const wholePallets = (...pallets: string[]): ExtrinsicPermissions => ({
-  these: pallets.map((pallet_name) => ({
+  these: pallets.map(pallet_name => ({
     pallet_name,
     dispatchable_names: { whole: null },
   })),
@@ -237,23 +209,21 @@ const permissionsFromAgentGroup = async (
     return JSON.stringify(p);
   } else if (isExceptMeta(ag)) {
     const p: ExtrinsicPermissions = {
-      except: [
-        { pallet_name: "ExternalAgents", dispatchable_names: { whole: null } },
-      ],
+      except: [{ pallet_name: 'ExternalAgents', dispatchable_names: { whole: null } }],
     };
     return JSON.stringify(p);
   } else if (isCAA(ag)) {
     return JSON.stringify(
-      wholePallets("CorporateAction", "CorporateBallot", "CapitalDistribution")
+      wholePallets('CorporateAction', 'CorporateBallot', 'CapitalDistribution')
     );
   } else if (isPIA(ag)) {
     const p: ExtrinsicPermissions = {
       these: [
-        { pallet_name: "Sto", dispatchable_names: { except: ["invest"] } },
+        { pallet_name: 'Sto', dispatchable_names: { except: ['invest'] } },
         {
-          pallet_name: "Asset",
+          pallet_name: 'Asset',
           dispatchable_names: {
-            these: ["issue", "redeem", "controller_transfer"],
+            these: ['issue', 'redeem', 'controller_transfer'],
           },
         },
       ],
@@ -268,9 +238,7 @@ const permissionsFromAgentGroup = async (
     }
     return p;
   }
-  throw new Error(
-    `unknown agent group type: ${JSON.stringify(ag)} in ticker ${ticker}`
-  );
+  throw new Error(`unknown agent group type: ${JSON.stringify(ag)} in ticker ${ticker}`);
 };
 
 type GetCustomGroupPermissions = (gn: number) => Promise<string>;
@@ -283,7 +251,4 @@ type Whole = { whole: null };
 type These<T> = { these: T[] };
 type Except<T> = { except: T[] };
 type DispatchableNames = Whole | These<string> | Except<string>;
-type ExtrinsicPermissions =
-  | Whole
-  | These<PalletPermissions>
-  | Except<PalletPermissions>;
+type ExtrinsicPermissions = Whole | These<PalletPermissions> | Except<PalletPermissions>;

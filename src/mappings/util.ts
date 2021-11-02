@@ -1,7 +1,7 @@
-import { decodeAddress } from "@polkadot/keyring";
-import { Codec } from "@polkadot/types/types";
-import { hexStripPrefix, u8aToHex, u8aToString } from "@polkadot/util";
-import { SubstrateExtrinsic } from "@subql/types";
+import { decodeAddress } from '@polkadot/keyring';
+import { Codec } from '@polkadot/types/types';
+import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
+import { SubstrateExtrinsic } from '@subql/types';
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -21,41 +21,37 @@ export const fromEntries = <K extends string | number, V, V2>(
 };
 
 export const camelToSnakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
-export const capitalizeFirstLetter = (str: string): string =>
-  str[0].toUpperCase() + str.slice(1);
+export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string): string => s.replace(/\0/g, "");
+export const removeNullChars = (s: string): string => s.replace(/\0/g, '');
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
  * This is meant for rust types, for example "Map<Map<(u8,u32),String>,bool>"" would return 24.
  * @param text
  */
-export const findTopLevelCommas = (
-  text: string,
-  exitOnFirst = false
-): number[] => {
+export const findTopLevelCommas = (text: string, exitOnFirst = false): number[] => {
   let nestedLevel = 0;
   const commas = [];
   let i = 0;
 
   for (const char of text) {
     switch (char) {
-      case "(":
-      case "{":
-      case "<": {
+      case '(':
+      case '{':
+      case '<': {
         nestedLevel++;
         break;
       }
-      case ")":
-      case "}":
-      case ">": {
+      case ')':
+      case '}':
+      case '>': {
         nestedLevel--;
         break;
       }
-      case ",": {
+      case ',': {
         if (nestedLevel === 1) {
           if (exitOnFirst) {
             return [i];
@@ -68,18 +64,12 @@ export const findTopLevelCommas = (
     i++;
   }
   if (commas.length === 0) {
-    throw new Error(
-      `No top level comma found in ${text}, it probably isn't a map`
-    );
+    throw new Error(`No top level comma found in ${text}, it probably isn't a map`);
   }
   return commas;
 };
 
-export const getOrDefault = <K, V>(
-  map: Map<K, V>,
-  key: K,
-  getDefault: () => V
-): V => {
+export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V): V => {
   const v = map.get(key);
   if (v !== undefined) {
     return v;
@@ -99,9 +89,7 @@ export const serializeAccount = (item: Codec): string | null => {
   if (s.trim().length === 0) {
     return null;
   }
-  return u8aToHex(
-    decodeAddress(item.toString(), false, item.registry.chainSS58)
-  );
+  return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
 };
 
 export const getFirstKeyFromJson = (item: Codec): string => {
@@ -118,7 +106,7 @@ export const getTextValue = (item: Codec): string => {
 
 export const hexToString = (input: string): string => {
   const hex = hexStripPrefix(input);
-  let str = "";
+  let str = '';
   for (let i = 0; i < hex.length; i += 2)
     str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
   return removeNullChars(str);

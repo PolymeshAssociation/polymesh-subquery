@@ -3,12 +3,12 @@
 // more readable code than relying on generated columns or materialized views and has
 // the same storage overhead.
 
-import { ClaimTypeEnum } from "./entities/common";
+import { ClaimTypeEnum } from './entities/common';
 
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
-  if (arg !== undefined && arg !== null && typeof arg !== "string") {
-    return JSON.stringify(arg).replace(/^"|"$/g, "");
+  if (arg !== undefined && arg !== null && typeof arg !== 'string') {
+    return JSON.stringify(arg).replace(/(?:^")|(?:"$)/g, '');
   } else {
     return arg;
   }
@@ -18,7 +18,7 @@ export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {
     return JSONStringifyExceptStringAndNull(arg?.value);
   } else if (exists) {
-    return "null";
+    return 'null';
   } else {
     return null;
   }
@@ -64,35 +64,23 @@ export const extractClaimScope = (
 };
 
 export const extractClaimInfo = (args: any[]) => {
-  const claimType: string | undefined = Object.keys(
-    args?.[1]?.value?.claim || {}
-  )[0];
+  const claimType: string | undefined = Object.keys(args?.[1]?.value?.claim || {})[0];
 
   let cddId;
   let jurisdiction;
   if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
-    cddId = JSONStringifyExceptStringAndNull(
-      args?.[1]?.value?.claim?.CustomerDueDiligence
-    );
+    cddId = JSONStringifyExceptStringAndNull(args?.[1]?.value?.claim?.CustomerDueDiligence);
   } else if (claimType === ClaimTypeEnum.Jurisdiction) {
-    jurisdiction = JSONStringifyExceptStringAndNull(
-      args?.[1]?.value?.claim?.Jurisdiction?.col1
-    );
+    jurisdiction = JSONStringifyExceptStringAndNull(args?.[1]?.value?.claim?.Jurisdiction?.col1);
   }
 
   return {
     claimType,
-    claimScope: JSONStringifyExceptStringAndNull(
-      extractClaimScope(claimType, args)
-    ),
+    claimScope: JSONStringifyExceptStringAndNull(extractClaimScope(claimType, args)),
     claimIssuer: JSONStringifyExceptStringAndNull(args[1]?.value?.claim_issuer),
     claimExpiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
-    issuanceDate: JSONStringifyExceptStringAndNull(
-      args[1]?.value?.issuance_date
-    ),
-    lastUpdateDate: JSONStringifyExceptStringAndNull(
-      args[1]?.value?.last_update_date
-    ),
+    issuanceDate: JSONStringifyExceptStringAndNull(args[1]?.value?.issuance_date),
+    lastUpdateDate: JSONStringifyExceptStringAndNull(args[1]?.value?.last_update_date),
     cddId,
     jurisdiction,
   };
@@ -110,8 +98,7 @@ export const extractCorporateActionTicker = (args: any[]) => {
   return null;
 };
 
-export const extractOfferingAsset = (args: any[]) =>
-  args[3]?.value?.offering_asset;
+export const extractOfferingAsset = (args: any[]) => args[3]?.value?.offering_asset;
 
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);

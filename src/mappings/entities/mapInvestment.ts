@@ -1,9 +1,9 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { getTextValue } from "../util";
-import { Investment } from "./../../types/models/Investment";
-import { serializeTicker } from "./../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { getTextValue } from '../util';
+import { Investment } from './../../types/models/Investment';
+import { serializeTicker } from './../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
  * Subscribes to the STO Invested event

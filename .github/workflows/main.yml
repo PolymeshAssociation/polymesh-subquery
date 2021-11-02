@@ -22,4 +22,3 @@ jobs:
         run: yarn lint
       - name: test
         run: yarn test
-# Here goes docker image publishing on release

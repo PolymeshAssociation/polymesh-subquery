@@ -1,19 +1,18 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { StakingEvent } from "../../types";
-import { serializeAccount } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { StakingEvent } from '../../types';
+import { serializeAccount } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum StakingEventType {
-  Bonded = "Bonded",
-  Unbonded = "Unbonded",
-  Nominated = "Nominated",
-  Reward = "Reward",
-  Slash = "Slash",
+  Bonded = 'Bonded',
+  Unbonded = 'Unbonded',
+  Nominated = 'Nominated',
+  Reward = 'Reward',
+  Slash = 'Slash',
 }
 const stakingEventTypes = new Set<string>(Object.values(StakingEventType));
-const isStakingEventType = (e: string): e is StakingEventType =>
-  stakingEventTypes.has(e);
+const isStakingEventType = (e: string): e is StakingEventType => stakingEventTypes.has(e);
 
 const bondedUnbondedOrReward = new Set([
   StakingEventType.Bonded,
@@ -37,18 +36,15 @@ export async function mapStakingEvent(
       eventIdx: event.idx,
       stakingEventId: event.event.method,
       date: event.block.timestamp,
-      identityId:
-        eventId === StakingEventType.Slash ? null : params[0].toJSON(),
-      stashAccount: serializeAccount(
-        eventId === StakingEventType.Slash ? params[0] : params[1]
-      ),
+      identityId: eventId === StakingEventType.Slash ? null : params[0].toJSON(),
+      stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
       amount:
         eventId === StakingEventType.Slash
           ? params[1].toJSON()
           : bondedUnbondedOrReward.has(eventId)
           ? params[2].toJSON()
           : null,
-      nominatedValidators: eventId === "Nominated" ? params[2].toJSON() : null,
+      nominatedValidators: eventId === 'Nominated' ? params[2].toJSON() : null,
     }).save();
   }
 }
