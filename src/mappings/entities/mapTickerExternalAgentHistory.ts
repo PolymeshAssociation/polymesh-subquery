@@ -16,7 +16,10 @@ export async function mapTickerExternalAgentHistory(
   event: SubstrateEvent
 ): Promise<void> {
   const eventIdx = event.idx;
-  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.GroupCreated) {
+  if (moduleId !== ModuleIdEnum.Externalagents) {
+    return;
+  }
+  if (eventId === EventIdEnum.GroupCreated) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
     const ticker = serializeTicker(params[1]);
@@ -29,7 +32,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.GroupPermissionsUpdated) {
+  if (eventId === EventIdEnum.GroupPermissionsUpdated) {
     const group = params[2].toJSON();
     const permissions = JSON.stringify(params[3].toJSON());
     const ticker = serializeTicker(params[1]);
@@ -58,7 +61,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentAdded) {
+  if (eventId === EventIdEnum.AgentAdded) {
     const did = params[0].toString();
     const group = params[2].toJSON() as AgentGroup;
     const ticker = serializeTicker(params[1]);
@@ -96,7 +99,7 @@ export async function mapTickerExternalAgentHistory(
     return;
   }
 
-  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.GroupChanged) {
+  if (eventId === EventIdEnum.GroupChanged) {
     const did = params[2].toString();
     const group = params[3].toJSON() as AgentGroup;
     const ticker = serializeTicker(params[1]);

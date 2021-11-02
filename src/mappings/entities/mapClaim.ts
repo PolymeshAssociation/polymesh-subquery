@@ -39,7 +39,10 @@ export async function mapClaim(
   event: SubstrateEvent,
   claimData: ClaimParams
 ): Promise<void> {
-  if (moduleId === ModuleIdEnum.Identity && isClaimEvent(eventId)) {
+  if (moduleId !== ModuleIdEnum.Identity) {
+    return;
+  }
+  if (isClaimEvent(eventId)) {
     const targetDid = getTextValue(params[0]);
 
     const scope = JSON.parse(claimData.claimScope);
@@ -95,7 +98,7 @@ export async function mapClaim(
     }
   }
 
-  if (moduleId === ModuleIdEnum.Identity && eventId === EventIdEnum.AssetDidRegistered) {
+  if (eventId === EventIdEnum.AssetDidRegistered) {
     const targetDid = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
     await handleScopes(targetDid, ticker);
