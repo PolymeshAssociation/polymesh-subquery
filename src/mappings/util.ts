@@ -17,41 +17,37 @@ export const fromEntries = <K extends string | number, V, V2>(
 };
 
 export const camelToSnakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
-export const capitalizeFirstLetter = (str: string): string =>
-  str[0].toUpperCase() + str.slice(1);
+export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string): string => s.replace(/\0/g, "");
+export const removeNullChars = (s: string): string => s.replace(/\0/g, '');
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
  * This is meant for rust types, for example "Map<Map<(u8,u32),String>,bool>"" would return 24.
  * @param text
  */
-export const findTopLevelCommas = (
-  text: string,
-  exitOnFirst = false
-): number[] => {
+export const findTopLevelCommas = (text: string, exitOnFirst = false): number[] => {
   let nestedLevel = 0;
   const commas = [];
   let i = 0;
 
   for (const char of text) {
     switch (char) {
-      case "(":
-      case "{":
-      case "<": {
+      case '(':
+      case '{':
+      case '<': {
         nestedLevel++;
         break;
       }
-      case ")":
-      case "}":
-      case ">": {
+      case ')':
+      case '}':
+      case '>': {
         nestedLevel--;
         break;
       }
-      case ",": {
+      case ',': {
         if (nestedLevel === 1) {
           if (exitOnFirst) {
             return [i];
@@ -64,9 +60,7 @@ export const findTopLevelCommas = (
     i++;
   }
   if (commas.length === 0) {
-    throw new Error(
-      `No top level comma found in ${text}, it probably isn't a map`
-    );
+    throw new Error(`No top level comma found in ${text}, it probably isn't a map`);
   }
   return commas;
 };

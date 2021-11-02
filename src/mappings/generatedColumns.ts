@@ -5,8 +5,8 @@
 
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
-  if (arg !== undefined && arg !== null && typeof arg !== "string") {
-    return JSON.stringify(arg).replace(/^"|"$/g, "");
+  if (arg !== undefined && arg !== null && typeof arg !== 'string') {
+    return JSON.stringify(arg).replace(/(?:^")|(?:"$)/g, '');
   } else {
     return arg;
   }
@@ -16,7 +16,7 @@ export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {
     return JSONStringifyExceptStringAndNull(arg?.value);
   } else if (exists) {
-    return "null";
+    return 'null';
   } else {
     return null;
   }
@@ -37,16 +37,16 @@ export const extractClaimScope = (
   args: any[]
 ): { type: string; value: string } => {
   switch (claim_type) {
-    case "CustomerDueDiligence": {
+    case 'CustomerDueDiligence': {
       return null;
     }
-    case "InvestorUniqueness": {
+    case 'InvestorUniqueness': {
       const scope = args[1]?.value?.claim?.InvestorUniqueness?.col1;
       const type = Object.keys(scope || {})?.[0] || null;
       const value = scope?.[type] || null;
       return { type, value };
     }
-    case "Jurisdiction": {
+    case 'Jurisdiction': {
       const scope = args[1]?.value?.claim?.Jurisdiction?.col2;
       const type = Object.keys(scope || {})?.[0] || null;
       const value = scope?.[type] || null;
@@ -62,18 +62,12 @@ export const extractClaimScope = (
 };
 
 export const extractClaimInfo = (args: any[]) => {
-  const claim_type: string | undefined = Object.keys(
-    args?.[1]?.value?.claim || {}
-  )[0];
+  const claim_type: string | undefined = Object.keys(args?.[1]?.value?.claim || {})[0];
 
   return {
     claim_type,
-    claim_scope: JSONStringifyExceptStringAndNull(
-      extractClaimScope(claim_type, args)
-    ),
-    claim_issuer: JSONStringifyExceptStringAndNull(
-      args[1]?.value?.claim_issuer
-    ),
+    claim_scope: JSONStringifyExceptStringAndNull(extractClaimScope(claim_type, args)),
+    claim_issuer: JSONStringifyExceptStringAndNull(args[1]?.value?.claim_issuer),
     claim_expiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
   };
 };
@@ -90,8 +84,7 @@ export const extractCorporateActionTicker = (args: any[]) => {
   return null;
 };
 
-export const extractOfferingAsset = (args: any[]) =>
-  args[3]?.value?.offering_asset;
+export const extractOfferingAsset = (args: any[]) => args[3]?.value?.offering_asset;
 
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);
