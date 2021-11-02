@@ -1,18 +1,14 @@
-import { capitalizeFirstLetter, serializeAccount } from "./../util";
-import { Codec } from "@polkadot/types/types";
-import { Authorization } from "../../types";
-import {
-  getFirstKeyFromJson,
-  getFirstValueFromJson,
-  getTextValue,
-} from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { capitalizeFirstLetter, serializeAccount } from './../util';
+import { Codec } from '@polkadot/types/types';
+import { Authorization } from '../../types';
+import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum AuthorizationStatus {
-  Pending = "Pending",
-  Consumed = "Consumed",
-  Rejected = "Rejected",
-  Revoked = "Revoked",
+  Pending = 'Pending',
+  Consumed = 'Consumed',
+  Rejected = 'Rejected',
+  Revoked = 'Revoked',
 }
 
 const authorizationEvents = new Set<string>([
@@ -22,13 +18,9 @@ const authorizationEvents = new Set<string>([
   EventIdEnum.AuthorizationRevoked,
 ]);
 
-const isAuthorizationEvent = (e: string): e is EventIdEnum =>
-  authorizationEvents.has(e);
+const isAuthorizationEvent = (e: string): e is EventIdEnum => authorizationEvents.has(e);
 
-const authorizationEventStatusMapping = new Map<
-  EventIdEnum,
-  AuthorizationStatus
->([
+const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus>([
   [EventIdEnum.AuthorizationConsumed, AuthorizationStatus.Consumed],
   [EventIdEnum.AuthorizationRevoked, AuthorizationStatus.Revoked],
   [EventIdEnum.AuthorizationRejected, AuthorizationStatus.Rejected],

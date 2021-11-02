@@ -1,8 +1,8 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { Funding } from "../../types";
-import { serializeTicker } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { Funding } from '../../types';
+import { serializeTicker } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
  * Subscribes to events related to funding events
@@ -14,7 +14,7 @@ export async function mapFunding(
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (moduleId === "asset" && eventId === "Issued") {
+  if (moduleId === 'asset' && eventId === 'Issued') {
     const rawTicker = params[1];
     const ticker = serializeTicker(rawTicker);
     const value = params[3];

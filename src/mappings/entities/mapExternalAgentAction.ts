@@ -1,8 +1,8 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { Sto, TickerExternalAgentAction } from "../../types";
-import { getOrDefault, serializeTicker } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { Sto, TickerExternalAgentAction } from '../../types';
+import { getOrDefault, serializeTicker } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
  * Subscribes to the events related to external agents
@@ -34,23 +34,23 @@ type EntryOptions = {
   minBlock?: number;
 };
 type StandardEntry = {
-  type: "standard";
+  type: 'standard';
   paramIndex: number;
   options: EntryOptions;
 };
 type TickerFromParams = (params: Codec[]) => Promise<string>;
 type SpecialEntry = {
-  type: "special";
+  type: 'special';
   tickerFromParams: TickerFromParams;
   options: EntryOptions;
 };
 type Entry = StandardEntry | SpecialEntry;
-const tickerFromCorporateAction: TickerFromParams = async (params) => {
-  if (params[1] instanceof Map && params[1].get("ticker")) {
-    return serializeTicker(params[1].get("ticker"));
+const tickerFromCorporateAction: TickerFromParams = async params => {
+  if (params[1] instanceof Map && params[1].get('ticker')) {
+    return serializeTicker(params[1].get('ticker'));
   }
-  if (params[2] instanceof Map && params[2].get("ticker")) {
-    return serializeTicker(params[2].get("ticker"));
+  if (params[2] instanceof Map && params[2].get('ticker')) {
+    return serializeTicker(params[2].get('ticker'));
   }
   throw new Error("Event didn't have a CaID parameter");
 };
@@ -86,7 +86,7 @@ class ExternalAgentEventsManager {
       if (entry.options.minBlock && blockId < entry.options.minBlock) {
         continue;
       }
-      if (entry.type === "standard") {
+      if (entry.type === 'standard') {
         return serializeTicker(params[entry.paramIndex]);
       } else {
         return await entry.tickerFromParams(params);
@@ -169,11 +169,7 @@ class ExternalAgentEventsManager {
       )
       .add(
         ModuleIdEnum.Checkpoint,
-        [
-          EventIdEnum.CheckpointCreated,
-          EventIdEnum.ScheduleCreated,
-          EventIdEnum.ScheduleRemoved,
-        ],
+        [EventIdEnum.CheckpointCreated, EventIdEnum.ScheduleCreated, EventIdEnum.ScheduleRemoved],
         1
       )
       .add(
@@ -226,20 +222,14 @@ class ExternalAgentEventsManager {
       )
       // Special case for the Sto pallet because most events don't contain the ticker,
       // they contain a reference to a previously created fundraiser instead.
-      .add(
-        ModuleIdEnum.Sto,
-        [EventIdEnum.FundraiserCreated],
-        async (params) => {
-          const offeringAsset =
-            params[3] instanceof Map
-              ? params[3].get("offering_asset")
-              : undefined;
-          if (!offeringAsset) {
-            throw new Error("Couldn't find offeringAsset for sto");
-          }
-          return serializeTicker(offeringAsset);
+      .add(ModuleIdEnum.Sto, [EventIdEnum.FundraiserCreated], async params => {
+        const offeringAsset =
+          params[3] instanceof Map ? params[3].get('offering_asset') : undefined;
+        if (!offeringAsset) {
+          throw new Error("Couldn't find offeringAsset for sto");
         }
-      )
+        return serializeTicker(offeringAsset);
+      })
       .add(
         ModuleIdEnum.Sto,
         [
@@ -248,7 +238,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (params) => {
+        async params => {
           const stoId = params[1].toString();
           const sto = await Sto.get(stoId);
           return sto.offeringAsset;
@@ -264,16 +254,12 @@ class ExternalAgentEventsManager {
     options: EntryOptions = {}
   ) {
     // entries
-    const map = getOrDefault(
-      this.entries,
-      moduleId,
-      () => new Map<EventIdEnum, Entry[]>()
-    );
+    const map = getOrDefault(this.entries, moduleId, () => new Map<EventIdEnum, Entry[]>());
     for (const event of eventIds) {
       const entry: Entry =
-        typeof param === "number"
-          ? { type: "standard", paramIndex: param, options }
-          : { type: "special", tickerFromParams: param, options };
+        typeof param === 'number'
+          ? { type: 'standard', paramIndex: param, options }
+          : { type: 'special', tickerFromParams: param, options };
       getOrDefault(map, event, () => []).push(entry);
     }
 

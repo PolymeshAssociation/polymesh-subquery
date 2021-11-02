@@ -1,15 +1,12 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { getTextValue } from "../util";
-import { HistoryOfPaymentEventsForCa } from "./../../types/models/HistoryOfPaymentEventsForCa";
-import { WithholdingTaxesOfCa } from "./../../types/models/WithholdingTaxesOfCa";
-import { serializeTicker } from "./../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { getTextValue } from '../util';
+import { HistoryOfPaymentEventsForCa } from './../../types/models/HistoryOfPaymentEventsForCa';
+import { WithholdingTaxesOfCa } from './../../types/models/WithholdingTaxesOfCa';
+import { serializeTicker } from './../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
-type CapitalDistributionParams = (
-  params: Codec[],
-  eventId: EventIdEnum
-) => Promise<string>;
+type CapitalDistributionParams = (params: Codec[], eventId: EventIdEnum) => Promise<string>;
 
 const getBalanceForCa: CapitalDistributionParams = async (params, eventId) => {
   if (eventId === EventIdEnum.BenefitClaimed) {
@@ -21,33 +18,27 @@ const getBalanceForCa: CapitalDistributionParams = async (params, eventId) => {
   throw new Error("Event didn't have a balance parameter");
 };
 
-const getTickerFromCaId: CapitalDistributionParams = async (
-  params,
-  eventId
-) => {
+const getTickerFromCaId: CapitalDistributionParams = async (params, eventId) => {
   if (eventId === EventIdEnum.BenefitClaimed) {
-    if (params[2] instanceof Map && params[2].get("ticker")) {
-      return serializeTicker(params[2].get("ticker"));
+    if (params[2] instanceof Map && params[2].get('ticker')) {
+      return serializeTicker(params[2].get('ticker'));
     }
   } else if (eventId === EventIdEnum.Reclaimed) {
-    if (params[1] instanceof Map && params[1].get("ticker")) {
-      return serializeTicker(params[1].get("ticker"));
+    if (params[1] instanceof Map && params[1].get('ticker')) {
+      return serializeTicker(params[1].get('ticker'));
     }
   }
   throw new Error("Event didn't have a ticker parameter within Ca_Id");
 };
 
-const getLocalIdFromCaId: CapitalDistributionParams = async (
-  params,
-  eventId
-) => {
+const getLocalIdFromCaId: CapitalDistributionParams = async (params, eventId) => {
   if (eventId === EventIdEnum.BenefitClaimed) {
-    if (params[2] instanceof Map && params[2].get("local_id")) {
-      return getTextValue(params[2].get("local_id"));
+    if (params[2] instanceof Map && params[2].get('local_id')) {
+      return getTextValue(params[2].get('local_id'));
     }
   } else if (eventId === EventIdEnum.Reclaimed) {
-    if (params[1] instanceof Map && params[1].get("local_id")) {
-      return getTextValue(params[1].get("local_id"));
+    if (params[1] instanceof Map && params[1].get('local_id')) {
+      return getTextValue(params[1].get('local_id'));
     }
   }
   throw new Error("Event didn't have a CaID local_id parameter within Ca_Id");
@@ -118,9 +109,7 @@ async function handleWithholdingTaxesOfCA(
   const balance = await getBalanceForCa(params, eventId);
   const tax = (await getTextValue(params[5])) || 0;
   const taxes = (Number(balance) * Number(tax)) / 1000000;
-  const corporateAction = await WithholdingTaxesOfCa.get(
-    `${ticker}/${localId}`
-  );
+  const corporateAction = await WithholdingTaxesOfCa.get(`${ticker}/${localId}`);
   if (corporateAction !== undefined) {
     corporateAction.taxes += taxes;
     await corporateAction.save();

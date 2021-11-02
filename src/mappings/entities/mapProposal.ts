@@ -1,16 +1,16 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { Proposal, ProposalVote } from "../../types";
-import { getFirstValueFromJson, getTextValue } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { Proposal, ProposalVote } from '../../types';
+import { getFirstValueFromJson, getTextValue } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum ProposalState {
-  Pending = "Pending",
-  Rejected = "Rejected",
-  Scheduled = "Scheduled",
-  Failed = "Failed",
-  Executed = "Executed",
-  Expired = "Expired",
+  Pending = 'Pending',
+  Rejected = 'Rejected',
+  Scheduled = 'Scheduled',
+  Failed = 'Failed',
+  Executed = 'Executed',
+  Expired = 'Expired',
 }
 
 /**
@@ -85,7 +85,7 @@ export async function mapProposal(
   if (eventId === EventIdEnum.SnapshotTaken) {
     const pips = params[2].toJSON() as any;
     const promises = [];
-    pips.forEach((pip) => {
+    pips.forEach(pip => {
       const job = async () => {
         const proposal = await Proposal.get(pip.id);
         proposal.snapshotted = true;

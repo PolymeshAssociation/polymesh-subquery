@@ -1,7 +1,7 @@
-import { Codec } from "@polkadot/types/types";
-import { HeldToken } from "../../types";
-import { getTextValue, serializeTicker } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { HeldToken } from '../../types';
+import { getTextValue, serializeTicker } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
  * Maps tokens ever held by a DID
@@ -14,7 +14,7 @@ export async function mapHeldTokens(
   if (moduleId !== ModuleIdEnum.Asset) return;
 
   if (eventId === EventIdEnum.Transfer) {
-    const did = params[3].toJSON()["did"];
+    const did = params[3].toJSON()['did'];
     const token = serializeTicker(params[1]);
 
     await HeldToken.create({

@@ -1,23 +1,20 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { getTextValue, serializeTicker } from "../util";
-import { Claim } from "./../../types/models/Claim";
-import { ClaimScope } from "./../../types/models/ClaimScope";
-import { IdentityWithClaims } from "./../../types/models/IdentityWithClaims";
-import { IssuerIdentityWithClaims } from "./../../types/models/IssuerIdentityWithClaims";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { getTextValue, serializeTicker } from '../util';
+import { Claim } from './../../types/models/Claim';
+import { ClaimScope } from './../../types/models/ClaimScope';
+import { IdentityWithClaims } from './../../types/models/IdentityWithClaims';
+import { IssuerIdentityWithClaims } from './../../types/models/IssuerIdentityWithClaims';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
-const claimEvents = new Set<string>([
-  EventIdEnum.ClaimAdded,
-  EventIdEnum.ClaimRevoked,
-]);
+const claimEvents = new Set<string>([EventIdEnum.ClaimAdded, EventIdEnum.ClaimRevoked]);
 
 const isClaimEvent = (e: string): e is EventIdEnum => claimEvents.has(e);
 
 enum ClaimScopeTypeEnum {
-  Identity = "Identity",
-  Ticker = "Ticker",
-  Custom = "Custom",
+  Identity = 'Identity',
+  Ticker = 'Ticker',
+  Custom = 'Custom',
 }
 
 type ClaimParams = {
@@ -62,7 +59,7 @@ export async function mapClaim(
     await Claim.create({
       id: `${blockId}/${event.idx}`,
       ...claim,
-      filterExpiry: claimData.claimExpiry || "253402194600000",
+      filterExpiry: claimData.claimExpiry || '253402194600000',
     }).save();
 
     const identityWithClaims = await IdentityWithClaims.get(targetDid);
@@ -77,9 +74,7 @@ export async function mapClaim(
       }).save();
     }
 
-    const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(
-      claimData.claimIssuer
-    );
+    const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(claimData.claimIssuer);
     if (issuerIdentityWithClaims) {
       issuerIdentityWithClaims.claims.push(claim);
       await issuerIdentityWithClaims.save();
@@ -100,10 +95,7 @@ export async function mapClaim(
     }
   }
 
-  if (
-    moduleId === ModuleIdEnum.Identity &&
-    eventId === EventIdEnum.AssetDidRegistered
-  ) {
+  if (moduleId === ModuleIdEnum.Identity && eventId === EventIdEnum.AssetDidRegistered) {
     const targetDid = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
     await handleScopes(targetDid, ticker);

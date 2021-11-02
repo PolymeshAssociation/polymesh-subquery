@@ -1,21 +1,21 @@
-import { Codec } from "@polkadot/types/types";
-import { SubstrateEvent } from "@subql/types";
-import { Settlement, Instruction } from "../../types";
-import { getSigner, getTextValue, hexToString, serializeTicker } from "../util";
-import { EventIdEnum, ModuleIdEnum } from "./common";
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { Settlement, Instruction } from '../../types';
+import { getSigner, getTextValue, hexToString, serializeTicker } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum SettlementResultEnum {
-  None = "None",
-  Executed = "Executed",
-  Failed = "Failed",
-  Rejected = "Rejected",
+  None = 'None',
+  Executed = 'Executed',
+  Failed = 'Failed',
+  Rejected = 'Rejected',
 }
 
 enum InstructionStatusEnum {
-  Created = "Created",
-  Executed = "Executed",
-  Rejected = "Rejected",
-  Failed = "Failed",
+  Created = 'Created',
+  Executed = 'Executed',
+  Rejected = 'Rejected',
+  Failed = 'Failed',
 }
 
 const updateEvents: EventIdEnum[] = [
@@ -39,10 +39,7 @@ export async function mapSettlement(
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (
-    moduleId === ModuleIdEnum.Portfolio &&
-    eventId === EventIdEnum.MovedBetweenPortfolios
-  ) {
+  if (moduleId === ModuleIdEnum.Portfolio && eventId === EventIdEnum.MovedBetweenPortfolios) {
     await handlePortfolioMovement(blockId, eventId, params, event);
   }
 
@@ -169,12 +166,9 @@ async function handleInstructionFinalizedEvent(
 
   let result: SettlementResultEnum = SettlementResultEnum.None;
 
-  if (eventId === EventIdEnum.InstructionExecuted)
-    result = SettlementResultEnum.Executed;
-  else if (eventId === EventIdEnum.InstructionRejected)
-    result = SettlementResultEnum.Rejected;
-  else if (eventId === EventIdEnum.InstructionFailed)
-    result = SettlementResultEnum.Failed;
+  if (eventId === EventIdEnum.InstructionExecuted) result = SettlementResultEnum.Executed;
+  else if (eventId === EventIdEnum.InstructionRejected) result = SettlementResultEnum.Rejected;
+  else if (eventId === EventIdEnum.InstructionFailed) result = SettlementResultEnum.Failed;
 
   const instructionId = getTextValue(params[1]);
 
