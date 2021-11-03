@@ -102,7 +102,7 @@
     },
     "publish": {
       "path": "semantic-release-docker",
-      "name": "polymathnet/polymesh-subquery"
+      "name": "docker.io/polymathnet/polymesh-subquery"
     }
   }
 }
