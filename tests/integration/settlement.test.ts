@@ -1,9 +1,9 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("settlements", () => {
-  test("with no filter", async () => {
+describe('settlements', () => {
+  test('with no filter', async () => {
     const q = {
       query: gql`
         query {
@@ -26,7 +26,7 @@ describe("settlements", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("with from filter", async () => {
+  test('with from filter', async () => {
     const q = {
       query: gql`
         query {
@@ -61,7 +61,7 @@ describe("settlements", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("with ticker filter", async () => {
+  test('with ticker filter', async () => {
     const q = {
       query: gql`
         query {
@@ -84,14 +84,14 @@ describe("settlements", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("with address filter", async () => {
+  test('with address filter', async () => {
     const q = {
       query: gql`
         query {
           settlements(
             filter: {
               addresses: {
-                contains: ["5GKLEq7o3zZCGAeokuSoAMbmxamJ2uXJ984Fg8xYpaaWMUPr"]
+                contains: ["0xbc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915"]
               }
             }
           ) {

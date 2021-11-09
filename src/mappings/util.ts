@@ -114,5 +114,7 @@ export const hexToString = (input: string): string => {
 
 export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   const parsed = JSON.parse(extrinsic.extrinsic.toString());
-  return parsed.signature.signer.id;
+  return u8aToHex(
+    decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
+  );
 };
