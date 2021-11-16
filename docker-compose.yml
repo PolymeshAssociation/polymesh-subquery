@@ -1,4 +1,4 @@
-version: "3"
+version: '3'
 
 services:
   postgres:
@@ -13,9 +13,9 @@ services:
   subquery-node:
     build: ./
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     depends_on:
-      - "postgres"
+      - 'postgres'
     restart: always
     environment:
       DB_USER: postgres
@@ -40,8 +40,8 @@ services:
     ports:
       - 3001:3000
     depends_on:
-      - "postgres"
-      - "subquery-node"
+      - 'postgres'
+      - 'subquery-node'
     restart: always
     environment:
       DB_USER: postgres

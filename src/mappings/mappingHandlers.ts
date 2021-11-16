@@ -28,6 +28,7 @@ import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgent
 import { mapSettlement } from './entities/mapSettlement';
 import { mapClaim } from './entities/mapClaim';
 import { mapHeldTokens } from './entities/mapHeldTokens';
+import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -113,6 +114,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
+    mapTrustedClaimIssuerTicker(...handlerArgs),
     mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
   ];
 
@@ -147,6 +149,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   await Event.create({
     id: `${blockId}/${eventIdx}`,
     blockId,
+    parentBlockId: `${blockId}`,
     eventIdx,
     extrinsicIdx: event.extrinsic?.idx,
     specVersionId: block.specVersion,

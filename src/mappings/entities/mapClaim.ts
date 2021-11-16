@@ -1,15 +1,11 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { getTextValue, serializeTicker } from '../util';
-import { Claim } from './../../types/models/Claim';
-import { ClaimScope } from './../../types/models/ClaimScope';
-import { IdentityWithClaims } from './../../types/models/IdentityWithClaims';
-import { IssuerIdentityWithClaims } from './../../types/models/IssuerIdentityWithClaims';
+import { Claim } from '../../types/models/Claim';
+import { ClaimScope } from '../../types/models/ClaimScope';
+import { IdentityWithClaims } from '../../types/models/IdentityWithClaims';
+import { IssuerIdentityWithClaims } from '../../types/models/IssuerIdentityWithClaims';
 import { EventIdEnum, ModuleIdEnum } from './common';
-
-const claimEvents = new Set<string>([EventIdEnum.ClaimAdded, EventIdEnum.ClaimRevoked]);
-
-const isClaimEvent = (e: string): e is EventIdEnum => claimEvents.has(e);
 
 enum ClaimScopeTypeEnum {
   Identity = 'Identity',
@@ -18,7 +14,7 @@ enum ClaimScopeTypeEnum {
 }
 
 type ClaimParams = {
-  claimExpiry: bigint;
+  claimExpiry: bigint | undefined;
   claimIssuer: string;
   claimScope: string;
   claimType: string;
@@ -27,7 +23,7 @@ type ClaimParams = {
   cddId: string;
   jurisdiction: string;
 };
-
+const END_OF_TIME = BigInt('253402194600000');
 /**
  * Subscribes to the Claim events
  */
@@ -37,57 +33,79 @@ export async function mapClaim(
   moduleId: ModuleIdEnum,
   params: Codec[],
   event: SubstrateEvent,
-  claimData: ClaimParams
+  {
+    claimScope,
+    claimExpiry,
+    claimIssuer,
+    claimType,
+    issuanceDate,
+    cddId,
+    lastUpdateDate,
+    jurisdiction,
+  }: ClaimParams
 ): Promise<void> {
   if (moduleId !== ModuleIdEnum.Identity) {
     return;
   }
-  if (isClaimEvent(eventId)) {
+  if (eventId === EventIdEnum.ClaimAdded) {
     const targetDid = getTextValue(params[0]);
 
-    const scope = JSON.parse(claimData.claimScope);
-
-    const claim = {
-      targetDid,
-      issuer: claimData.claimIssuer,
-      issuanceDate: claimData.issuanceDate,
-      lastUpdateDate: claimData.lastUpdateDate,
-      expiry: claimData.claimExpiry,
-      type: claimData.claimType,
-      scope: JSON.parse(claimData.claimScope),
-      jurisdiction: claimData.jurisdiction,
-      cddId: claimData.cddId,
-    };
-
-    await Claim.create({
-      id: `${blockId}/${event.idx}`,
-      ...claim,
-      filterExpiry: claimData.claimExpiry || '253402194600000',
-    }).save();
+    const scope = JSON.parse(claimScope);
+    const filterExpiry = claimExpiry || END_OF_TIME;
 
     const identityWithClaims = await IdentityWithClaims.get(targetDid);
     if (identityWithClaims) {
-      identityWithClaims.claims.push(claim);
+      addIfNotIncludes(identityWithClaims.typeIndex, claimType);
+      addIfNotIncludes(identityWithClaims.scopeIndex, scope);
+      addIfNotIncludes(identityWithClaims.issuerIndex, claimIssuer);
+      identityWithClaims.maxExpiry =
+        filterExpiry > identityWithClaims.maxExpiry ? filterExpiry : identityWithClaims.maxExpiry;
       await identityWithClaims.save();
     } else {
       await IdentityWithClaims.create({
         id: targetDid,
-        did: targetDid,
-        claims: [claim],
+        typeIndex: [claimType],
+        scopeIndex: [scope],
+        issuerIndex: [claimIssuer],
+        maxExpiry: filterExpiry,
       }).save();
     }
 
-    const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(claimData.claimIssuer);
+    const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(claimIssuer);
     if (issuerIdentityWithClaims) {
-      issuerIdentityWithClaims.claims.push(claim);
+      addIfNotIncludes(issuerIdentityWithClaims.typeIndex, claimType);
+      addIfNotIncludes(issuerIdentityWithClaims.scopeIndex, scope);
+      addIfNotIncludes(issuerIdentityWithClaims.targetIndex, targetDid);
+      issuerIdentityWithClaims.maxExpiry =
+        filterExpiry > issuerIdentityWithClaims.maxExpiry
+          ? filterExpiry
+          : issuerIdentityWithClaims.maxExpiry;
       await issuerIdentityWithClaims.save();
     } else {
       await IssuerIdentityWithClaims.create({
-        id: claimData.claimIssuer,
-        did: claimData.claimIssuer,
-        claims: [claim],
+        id: claimIssuer,
+        typeIndex: [claimType],
+        scopeIndex: [scope],
+        targetIndex: [targetDid],
+        maxExpiry: filterExpiry,
       }).save();
     }
+
+    await Claim.create({
+      id: `${blockId}/${event.idx}`,
+      blockId,
+      eventIdx: event.idx,
+      targetDidId: targetDid,
+      issuerId: claimIssuer,
+      issuanceDate,
+      lastUpdateDate,
+      expiry: claimExpiry,
+      type: claimType,
+      scope,
+      jurisdiction,
+      cddId: cddId,
+      filterExpiry,
+    }).save();
 
     if (scope) {
       await handleScopes(
@@ -117,4 +135,12 @@ async function handleScopes(
     ticker,
     scope,
   }).save();
+}
+
+function addIfNotIncludes<T>(arr: T[], item: T) {
+  if (arr.includes(item)) {
+    return;
+  } else {
+    arr.push(item);
+  }
 }
