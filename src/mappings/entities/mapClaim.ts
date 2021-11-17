@@ -54,24 +54,6 @@ export async function mapClaim(
     const scope = JSON.parse(claimScope);
     const filterExpiry = claimExpiry || END_OF_TIME;
 
-    const identityWithClaims = await IdentityWithClaims.get(targetDid);
-    if (identityWithClaims) {
-      addIfNotIncludes(identityWithClaims.typeIndex, claimType);
-      addIfNotIncludes(identityWithClaims.scopeIndex, scope);
-      addIfNotIncludes(identityWithClaims.issuerIndex, claimIssuer);
-      identityWithClaims.maxExpiry =
-        filterExpiry > identityWithClaims.maxExpiry ? filterExpiry : identityWithClaims.maxExpiry;
-      await identityWithClaims.save();
-    } else {
-      await IdentityWithClaims.create({
-        id: targetDid,
-        typeIndex: [claimType],
-        scopeIndex: [scope],
-        issuerIndex: [claimIssuer],
-        maxExpiry: filterExpiry,
-      }).save();
-    }
-
     const args: IdentityWithClaimsArgs = { scope, filterExpiry, claimType, claimIssuer, targetDid };
     handleIdentityWithClaims(args);
     handleIssuerIdentityWithClaims(args);
