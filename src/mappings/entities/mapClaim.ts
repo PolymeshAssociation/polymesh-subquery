@@ -55,8 +55,8 @@ export async function mapClaim(
     const filterExpiry = claimExpiry || END_OF_TIME;
 
     const args: IdentityWithClaimsArgs = { scope, filterExpiry, claimType, claimIssuer, targetDid };
-    handleIdentityWithClaims(args);
-    handleIssuerIdentityWithClaims(args);
+
+    await Promise.all([handleIdentityWithClaims(args), handleIssuerIdentityWithClaims(args)]);
 
     await Claim.create({
       id: `${blockId}/${event.idx}`,
