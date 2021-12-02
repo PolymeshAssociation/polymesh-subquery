@@ -1,0 +1,85 @@
+- Expected
++ Received
+
+@@ -86,6 +86,7 @@
+        "JoinIdentity": "Permissions",
+        "PortfolioCustody": "PortfolioId",
+        "RotatePrimaryKey": "",
++       "RotatePrimaryKeyToSecondary": "Permissions",
+        "TransferAssetOwnership": "Ticker",
+        "TransferTicker": "Ticker",
+      },
+@@ -100,6 +101,7 @@
+        "JoinIdentity": "",
+        "PortfolioCustody": "",
+        "RotatePrimaryKey": "",
++       "RotatePrimaryKeyToSecondary": "",
+        "TransferAssetOwnership": "",
+        "TransferTicker": "",
+      },
+@@ -641,8 +643,9 @@
+      "start": "Moment",
+      "status": "FundraiserStatus",
+      "tiers": "Vec<FundraiserTier>",
+-     "venue_id": "u64",
++     "venue_id": "VenueId",
+    },
++   "FundraiserId": "u64",
+    "FundraiserName": "Text",
+    "FundraiserStatus": Object {
+      "_enum": Array [
+@@ -707,13 +710,14 @@
+    },
+    "Instruction": Object {
+      "created_at": "Option<Moment>",
+-     "instruction_id": "u64",
++     "instruction_id": "InstructionId",
+      "settlement_type": "SettlementType",
+      "status": "InstructionStatus",
+      "trade_date": "Option<Moment>",
+      "value_date": "Option<Moment>",
+-     "venue_id": "u64",
++     "venue_id": "VenueId",
+    },
++   "InstructionId": "u64",
+    "InstructionStatus": Object {
+      "_enum": Object {
+        "Failed": "",
+@@ -739,6 +743,7 @@
+      "from": "PortfolioId",
+      "to": "PortfolioId",
+    },
++   "LegId": "u64",
+    "LegStatus": Object {
+      "_enum": Object {
+        "ExecutionPending": "",
+@@ -820,10 +825,10 @@
+      "url": "Option<Url>",
+    },
+    "PolymeshVotes": Object {
+-     "ayes": "Vec<(IdentityId, Balance)>",
++     "ayes": "Vec<IdentityId>",
+      "expiry": "MaybeBlock",
+      "index": "u32",
+-     "nays": "Vec<(IdentityId, Balance)>",
++     "nays": "Vec<IdentityId>",
+    },
+    "PortfolioId": Object {
+      "did": "IdentityId",
+@@ -923,7 +928,7 @@
+      "to": "PortfolioId",
+    },
+    "ReceiptDetails": Object {
+-     "leg_id": "u64",
++     "leg_id": "LegId",
+      "metadata": "ReceiptMetadata",
+      "receipt_uid": "u64",
+      "signature": "OffChainSignature",
+@@ -1118,6 +1123,7 @@
+      "venue_type": "VenueType",
+    },
+    "VenueDetails": "Text",
++   "VenueId": "u64",
+    "VenueType": Object {
+      "_enum": Array [
+        "Other",
