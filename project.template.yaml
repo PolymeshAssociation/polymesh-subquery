@@ -100,7 +100,7 @@ network:
             },
             ### </Harvester compatibility special cases>
             {
-              minmax: [3000, 3000],
+              minmax: [3000, 3001],
               types:
                 {
                   "Address": "MultiAddress",
