@@ -93,7 +93,7 @@ network:
         types:
           [
             {
-              minmax: [3001, 3001],
+              minmax: [3001, 3002],
               types:
                 {
                   "Address": "MultiAddress",
