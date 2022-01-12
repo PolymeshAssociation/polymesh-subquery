@@ -1,4 +1,4 @@
-import { GenericCall, GenericExtrinsic } from '@polkadot/types';
+import { GenericCall, GenericExtrinsic, u64 } from '@polkadot/types';
 import {
   camelToSnakeCase,
   capitalizeFirstLetter,
@@ -19,7 +19,6 @@ import {
 import { CodecMap } from '@polkadot/types/codec/Map';
 import { TextDecoder } from 'util';
 import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
-import { u64 } from '@polkadot/types';
 import BN from 'bn.js';
 import { u8aToHex, u8aToString, hexStripPrefix } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
