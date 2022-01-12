@@ -1,11 +1,11 @@
-import { GenericCall, GenericExtrinsic } from "@polkadot/types";
+import { GenericCall, GenericExtrinsic } from '@polkadot/types';
 import {
   camelToSnakeCase,
   capitalizeFirstLetter,
   findTopLevelCommas,
   fromEntries,
   removeNullChars,
-} from "./util";
+} from './util';
 import {
   Enum,
   Option,
@@ -15,14 +15,14 @@ import {
   Tuple,
   Result,
   VecFixed,
-} from "@polkadot/types/codec";
-import { CodecMap } from "@polkadot/types/codec/Map";
-import { TextDecoder } from "util";
-import { AnyTuple, Codec, AnyJson } from "@polkadot/types/types";
-import { u64 } from "@polkadot/types";
-import BN from "bn.js";
-import { u8aToHex, u8aToString, hexStripPrefix } from "@polkadot/util";
-import { decodeAddress } from "@polkadot/util-crypto";
+} from '@polkadot/types/codec';
+import { CodecMap } from '@polkadot/types/codec/Map';
+import { TextDecoder } from 'util';
+import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
+import { u64 } from '@polkadot/types';
+import BN from 'bn.js';
+import { u8aToHex, u8aToString, hexStripPrefix } from '@polkadot/util';
+import { decodeAddress } from '@polkadot/util-crypto';
 
 /**
  * @returns A json representation of `item` serialized using the same rules as the harvester.
@@ -34,9 +34,9 @@ export const serializeLikeHarvester = (
   item: Codec,
   type: string,
   logFoundType: (type: string, rawType: string) => void,
-  isCallArg = false
+  isCallArg = false,
 ): AnyJson => {
-  if (typeof item !== "object") {
+  if (typeof item !== 'object') {
     return item;
   }
 
@@ -48,37 +48,37 @@ export const serializeLikeHarvester = (
   //
   // I have decided to keep all harvester special cases in one file to make it easy to keep track of them, this might seem "ugly" but the alternative
   // of keeping each one in it's own file makes it much more cumbersome to search through them.
-  if (rawType === "Compact<Moment>") {
+  if (rawType === 'Compact<Moment>') {
     const isoParts = new Date((item as Compact<u64>).toNumber())
       .toISOString()
       .slice(0, -1) // remove Z
-      .split(".");
+      .split('.');
     if (parseInt(isoParts[1])) {
-      isoParts[1] = (isoParts[1] + "000000").slice(0, 6); // the harvester likes 6 digits of precision but only when it is not 0 ¯\_(ツ)_/¯
-      return isoParts.join(".");
+      isoParts[1] = (isoParts[1] + '000000').slice(0, 6); // the harvester likes 6 digits of precision but only when it is not 0 ¯\_(ツ)_/¯
+      return isoParts.join('.');
     } else {
       return isoParts[0];
     }
-  } else if (rawType === "AccountId") {
+  } else if (rawType === 'AccountId') {
     return item.toHex();
-  } else if (rawType === "()") {
+  } else if (rawType === '()') {
     return null;
-  } else if (type == "HexBytes") {
+  } else if (type == 'HexBytes') {
     return item.toJSON();
-  } else if (rawType === "Bytes") {
-    const decoder = new TextDecoder("utf-8", { fatal: true });
+  } else if (rawType === 'Bytes') {
+    const decoder = new TextDecoder('utf-8', { fatal: true });
     try {
       return removeNullChars(
-        decoder.decode(Buffer.from(hexStripPrefix(item.toString()), "hex"))
+        decoder.decode(Buffer.from(hexStripPrefix(item.toString()), 'hex')),
       );
     } catch {
       return item.toJSON();
     }
-  } else if (rawType === "Text") {
+  } else if (rawType === 'Text') {
     return removeNullChars(item.toString());
-  } else if (type === "Ticker") {
+  } else if (type === 'Ticker') {
     return removeNullChars(u8aToString(item.toU8a()));
-  } else if (rawType === "Call") {
+  } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
     return {
       call_index: hexStripPrefix(u8aToHex(e.callIndex)),
@@ -86,25 +86,25 @@ export const serializeLikeHarvester = (
       call_module: capitalizeFirstLetter(e.section),
       call_args: serializeCallArgsLikeHarvester(e, logFoundType),
     };
-  } else if (isCallArg && type === "Vec<LookupSource>") {
+  } else if (isCallArg && type === 'Vec<LookupSource>') {
     return (item as Vec<any>).map((i) =>
       hexStripPrefix(
-        u8aToHex(decodeAddress(i.toString(), false, item.registry.chainSS58))
-      )
+        u8aToHex(decodeAddress(i.toString(), false, item.registry.chainSS58)),
+      ),
     );
-  } else if (type === "LookupSource") {
+  } else if (type === 'LookupSource') {
     return u8aToHex(
-      decodeAddress(item.toString(), false, item.registry.chainSS58)
+      decodeAddress(item.toString(), false, item.registry.chainSS58),
     );
-  } else if (type === "Balance") {
+  } else if (type === 'Balance') {
     return parseInt(item.toString()); // This might not work for big numbers but it's the way the harvester does it.
-  } else if (type === "ElectionScore") {
+  } else if (type === 'ElectionScore') {
     return (item as unknown as BN[]).map((n) => parseInt(n.toString())); // This might not work for big numbers but that's the way the harvester does it.
   } else if (isTuple(item)) {
     const types = extractTupleTypes(item, type);
     return fromEntries(
       (item as unknown as AnyTuple).map((v, i) => [`col${i + 1}`, v]),
-      (v, i) => serializeLikeHarvester(v, types[i], logFoundType)
+      (v, i) => serializeLikeHarvester(v, types[i], logFoundType),
     );
   } else if (isArray(item)) {
     // item.Type === "Type" therefore string manipulation.
@@ -137,31 +137,33 @@ export const serializeLikeHarvester = (
   } else if (isStruct(item)) {
     const types = extractStructTypes(item, type);
     return fromEntries(item.entries(), (v, _, k) =>
-      serializeLikeHarvester(v, types[k], logFoundType)
+      serializeLikeHarvester(v, types[k], logFoundType),
     );
   } else if (isOption(item)) {
     return item.isSome
       ? serializeLikeHarvester(
           item.value,
           extractOptionType(item, type),
-          logFoundType
+          logFoundType,
         )
       : null;
   } else if (isMap(item)) {
     // It is a BTreeMap or HashMap
     const { value } = extractMapTypes(item, type);
     return fromEntries(item.entries(), (v) =>
-      serializeLikeHarvester(v, value, logFoundType)
+      serializeLikeHarvester(v, value, logFoundType),
     );
   } else {
     return item.toJSON();
   }
 };
 
+export type HarvesterLikeCallArgs = { name: string; value: any }[];
+
 export const serializeCallArgsLikeHarvester = (
   extrinsic: GenericCall | GenericExtrinsic,
-  logFoundType: (type: string, rawType: string) => void
-): AnyJson => {
+  logFoundType: (type: string, rawType: string) => void,
+): HarvesterLikeCallArgs => {
   const meta = extrinsic.meta.args;
   return extrinsic.args.map((arg, i) => ({
     name: meta[i].name.toString(),
@@ -169,7 +171,7 @@ export const serializeCallArgsLikeHarvester = (
       arg,
       meta[i].type.toString(),
       logFoundType,
-      true
+      true,
     ),
   }));
 };
@@ -183,7 +185,7 @@ export const serializeCallArgsLikeHarvester = (
  * the raw type as JSON.
  */
 export const parseType = (type: string): any => {
-  if (type.startsWith("{")) {
+  if (type.startsWith('{')) {
     return JSON.parse(type);
   } else {
     return undefined;
@@ -191,29 +193,29 @@ export const parseType = (type: string): any => {
 };
 
 const isTupleType = (type: string) =>
-  type.length > 2 && type.startsWith("(") && type.endsWith(")");
+  type.length > 2 && type.startsWith('(') && type.endsWith(')');
 export const isTuple = (item: Codec): item is Tuple =>
   isTupleType(item.toRawType());
 
-const isVecType = (type: string) => type.startsWith("Vec<");
+const isVecType = (type: string) => type.startsWith('Vec<');
 export const isVec = (item: Codec): item is Vec<any> =>
   isVecType(item.toRawType());
 
 const isArrayType = (type: string) =>
-  type.startsWith("[") && type.endsWith("]");
+  type.startsWith('[') && type.endsWith(']');
 export const isArray = (item: Codec): item is VecFixed<any> =>
   isArrayType(item.toRawType());
 
-const isOptionType = (type: string) => type.startsWith("Option<");
+const isOptionType = (type: string) => type.startsWith('Option<');
 export const isOption = (item: Codec): item is Option<any> =>
   isOptionType(item.toRawType());
 
-const isResultType = (type: string) => type.startsWith("Result<");
+const isResultType = (type: string) => type.startsWith('Result<');
 export const isResult = (item: Codec): item is Result<any, any> =>
   isResultType(item.toRawType());
 
 const isMapType = (type: string) =>
-  type.startsWith("BTreeMap<") || type.startsWith("HashMap<");
+  type.startsWith('BTreeMap<') || type.startsWith('HashMap<');
 export const isMap = (item: Codec): item is CodecMap<any> =>
   isMapType(item.toRawType());
 
@@ -238,7 +240,7 @@ export const extractVecType = (item: Vec<any>, t: string): string => {
 };
 export const extractArrayType = (item: VecFixed<any>, t: string): string => {
   const type = isArrayType(t) ? t : item.toRawType();
-  return type.slice(1, type.lastIndexOf(";"));
+  return type.slice(1, type.lastIndexOf(';'));
 };
 export const extractTupleTypes = (item: Tuple, t: string): string[] => {
   const type = isTupleType(t) ? t : item.toRawType();
@@ -256,17 +258,17 @@ export const extractTupleTypes = (item: Tuple, t: string): string[] => {
 };
 export const extractMapTypes = (
   item: CodecMap,
-  t: string
+  t: string,
 ): { key: string; value: string } => {
   const type = isMapType(t) ? t : item.toRawType();
   let start = 0;
-  if (type.startsWith("BTreeMap<")) {
+  if (type.startsWith('BTreeMap<')) {
     start = 9;
-  } else if (type.startsWith("HashMap<")) {
+  } else if (type.startsWith('HashMap<')) {
     start = 8;
   } else {
     throw new Error(
-      `Tried to decode ${item.toJSON()} as a Map, but it is not a map`
+      `Tried to decode ${item.toJSON()} as a Map, but it is not a map`,
     );
   }
 
@@ -278,7 +280,7 @@ export const extractMapTypes = (
 };
 export const extractResultTypes = (
   item: Result<any, any>,
-  t: string
+  t: string,
 ): { ok: string; err: string } => {
   const type = isResultType(t) ? t : item.toRawType();
 
@@ -291,7 +293,7 @@ export const extractResultTypes = (
 // item.Type would return raw types
 export const extractStructTypes = (
   item: Struct,
-  t: string
+  t: string,
 ): { [name: string]: string } => {
   const type = isStructType(t) ? t : item.toRawType();
   return parseType(type);
@@ -300,7 +302,7 @@ export const extractStructTypes = (
 export const extractEnumType = (
   item: Enum,
   t: string,
-  variant: string
+  variant: string,
 ): string => {
   const type = isEnumType(t) ? t : item.toRawType();
   return parseType(type)._enum[variant];

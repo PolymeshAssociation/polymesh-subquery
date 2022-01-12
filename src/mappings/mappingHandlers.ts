@@ -3,11 +3,13 @@ import {
   SubstrateEvent,
   SubstrateBlock,
 } from "@subql/types";
-import { Block, Event, Extrinsic, FoundType } from "../types";
+import { Block, Event, Extrinsic } from "../types";
+import { ModuleIdEnum, CallIdEnum } from './entities/common';
+import { mapToken } from './entities/mapToken';
 import { GenericExtrinsic } from "@polkadot/types/extrinsic";
 import { Vec } from "@polkadot/types/codec";
 import { AnyTuple } from "@polkadot/types/types";
-import { camelToSnakeCase } from "./util";
+import { camelToSnakeCase, logFoundType, formatParams } from "./util";
 import {
   serializeLikeHarvester,
   serializeCallArgsLikeHarvester,
@@ -57,10 +59,6 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
   }).save();
 }
 
-const logFoundType = (type: string, rawType: string) => {
-  FoundType.create({ id: type, rawType }).save();
-};
-
 const processBlockExtrinsics = (
   extrinsics: Vec<GenericExtrinsic<AnyTuple>>
 ) => {
@@ -81,8 +79,9 @@ const processBlockExtrinsics = (
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
   const block_id = block.block.header.number.toNumber();
+  const module_id = event.event.section.toLowerCase();
+  const event_id = event.event.method;
   const event_idx = event.idx;
-
   const args = event.event.data.toArray();
   const harvesterLikeArgs = args.map((arg, i) => ({
     value: serializeLikeHarvester(
@@ -95,15 +94,15 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     extractEventArgs(harvesterLikeArgs);
   const { claim_expiry, claim_issuer, claim_scope, claim_type } =
     extractClaimInfo(harvesterLikeArgs);
-
+  
   await Event.create({
     id: `${block_id}/${event_idx}`,
     block_id,
     event_idx,
     extrinsic_idx: event.extrinsic?.idx,
     spec_version_id: block.specVersion,
-    module_id: event.event.section.toLowerCase(),
-    event_id: event.event.method,
+    module_id,
+    event_id,
     attributes_txt: JSON.stringify(harvesterLikeArgs),
     event_arg_0,
     event_arg_1,
@@ -121,6 +120,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const block_id = extrinsic.block.block.header.number.toNumber();
+  const module_id = extrinsic.extrinsic.method.section.toLowerCase();
+  const call_id = extrinsic.extrinsic.method.method;
   const extrinsic_idx = extrinsic.idx;
   const signedby_address = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedby_address
@@ -134,6 +135,20 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
         )
       )
     : null;
+  const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
+  const formattedParams = formatParams(params);
+
+  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+    block_id,
+    call_id as CallIdEnum,
+    module_id as ModuleIdEnum,
+    formattedParams,
+    extrinsic,
+  ];
+
+  const handlerPromises = [
+    mapToken(...handlerArgs),
+  ];
 
   await Extrinsic.create({
     id: `${block_id}/${extrinsic_idx}`,
@@ -141,11 +156,9 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsic_idx,
     extrinsic_length: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    module_id: extrinsic.extrinsic.method.section.toLowerCase(),
-    call_id: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    params_txt: JSON.stringify(
-      serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)
-    ),
+    module_id,
+    call_id: camelToSnakeCase(call_id),
+    params_txt: JSON.stringify(params),
     success: extrinsic.success ? 1 : 0,
     signedby_address: signedby_address ? 1 : 0,
     address,
@@ -153,4 +166,6 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsic_hash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
     spec_version_id: extrinsic.block.specVersion,
   }).save();
+
+  await Promise.all(handlerPromises);
 }

@@ -27,7 +27,7 @@ type Debug @entity {
 }
 
 type FoundType @entity {
-  id: ID! # This is type
+  id: ID!
   rawType: String!
 }
 
@@ -64,4 +64,36 @@ type Extrinsic @entity {
   nonce: Int
   extrinsic_hash: String
   spec_version_id: Int!
+}
+
+type TokenHolder @jsonField {
+  did: String!
+  amount: String!
+}
+
+type TokenDocument @jsonField {
+  name: String!
+  link: String!
+}
+
+type Token @entity {
+  id: ID! # ticker
+  ticker: String! @index(unique: true)
+  name: String
+  type: String
+  fundingRound: String
+  isDivisible: Boolean!
+  isFrozen: Boolean!
+  isUniquenessRequired: Boolean!
+  documents: [TokenDocument]!
+  identifiers: String! # JsonString
+  ownerDid: String!
+  fullAgents: [String!]!
+  holders: [TokenHolder]!
+  totalSupply: String!
+  # totalDistributions: String!
+  # totalTransfers: String!
+  # totalDividends: String!
+  # complianceRules: [ComplianceRule]
+  # stos: [STO]!
 }
