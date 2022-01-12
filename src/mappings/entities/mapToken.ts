@@ -67,12 +67,12 @@ export async function mapToken(
 
   if (callId === CallIdEnum.AddDocuments) {
     const { ticker, docs } = params;
+    const token = await Token.getByTicker(ticker);
+    if (!token) return;
     const formattedDocs = docs.map((d: any) => ({
       name: d.name,
       link: d.uri,
     }));
-    const token = await Token.getByTicker(ticker);
-    if (!token) return;
     await Token.create({
       ...token,
       documents: formattedDocs,
