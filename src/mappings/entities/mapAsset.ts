@@ -56,9 +56,9 @@ const handleSetFundingRound = async (params: Record<string, any>) => {
 type NewAssetDocument = {
   name: string;
   uri: string;
-  content_hash: any;
-  doc_type: any;
-  filing_date: any;
+  content_hash?: string;
+  doc_type?: string;
+  filing_date?: Date;
 };
 
 const handleAddDocuments = async (params: Record<string, any>) => {
@@ -172,7 +172,7 @@ export async function mapAsset(
   }
 
   if (callId === CallIdEnum.UpdateIdentifiers) {
-    handleUpdateIdentifiers(params);
+    await handleUpdateIdentifiers(params);
   }
 
   if (callId === CallIdEnum.MakeDivisible) {
@@ -180,7 +180,7 @@ export async function mapAsset(
   }
 
   if (callId === CallIdEnum.Issue) {
-    handleIssue(params);
+    await handleIssue(params);
   }
 
   if (callId === CallIdEnum.Redeem) {

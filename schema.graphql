@@ -86,9 +86,9 @@ type AssetIdentifier @jsonField {
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
-  name: String
-  type: String
-  fundingRound: String
+  name: String @index(unique: false)
+  type: String @index(unique: false)
+  fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
