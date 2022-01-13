@@ -56,19 +56,31 @@ const handleSetFundingRound = async (params: Record<string, any>) => {
 type NewAssetDocument = {
   name: string;
   uri: string;
-  content_hash?: string;
+  content_hash?: any;
   doc_type?: string;
   filing_date?: Date;
 };
 
-const handleAddDocuments = async (params: Record<string, any>) => {
+const handleAddDocuments = async (
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
   const { ticker, docs } = params;
   const token = await Asset.getByTicker(ticker);
   if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.documents = docs.map((d: NewAssetDocument) => ({
-    name: d.name,
-    link: d.uri,
+  token.documents = docs.map((doc: NewAssetDocument, i: number) => ({
+    id: Number(extrinsic.events[i].event.data[2].toString()),
+    name: doc.name,
+    link: doc.uri,
   }));
+  await token.save();
+};
+
+const handleRemoveDocuments = async (params: Record<string, any>) => {
+  const { ticker, ids } = params;
+  const token = await Asset.getByTicker(ticker);
+  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
+  token.documents = token.documents.filter((doc) => !ids.includes(doc.id));
   await token.save();
 };
 
@@ -168,7 +180,11 @@ export async function mapAsset(
   }
 
   if (callId === CallIdEnum.AddDocuments) {
-    await handleAddDocuments(params);
+    await handleAddDocuments(params, extrinsic);
+  }
+
+  if (callId === CallIdEnum.RemoveDocuments) {
+    await handleRemoveDocuments(params);
   }
 
   if (callId === CallIdEnum.UpdateIdentifiers) {

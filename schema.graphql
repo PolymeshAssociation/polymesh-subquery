@@ -72,6 +72,7 @@ type AssetHolder @jsonField {
 }
 
 type AssetDocument @jsonField {
+  id: BigInt! # document ID
   name: String!
   link: String!
 }
