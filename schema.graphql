@@ -76,6 +76,13 @@ type AssetDocument @jsonField {
   link: String!
 }
 
+type AssetIdentifier @jsonField {
+  isin: String
+  cusip: String
+  cins: String
+  lei: String
+}
+
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
@@ -86,7 +93,7 @@ type Asset @entity {
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
   documents: [AssetDocument]!
-  identifiers: String! # JsonString
+  identifiers: [AssetIdentifier]!
   ownerDid: String!
   fullAgents: [String!]!
   holders: [AssetHolder]!

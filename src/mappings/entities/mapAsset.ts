@@ -29,7 +29,7 @@ const handleCreateAsset = async (
     isFrozen: false,
     isUniquenessRequired: !disableIu,
     documents: [],
-    identifiers: JSON.stringify(identifiers),
+    identifiers,
     ownerDid,
     fullAgents: [ownerDid],
     holders: [],
@@ -53,11 +53,19 @@ const handleSetFundingRound = async (params: Record<string, any>) => {
   await token.save();
 };
 
+type NewAssetDocument = {
+  name: string;
+  uri: string;
+  content_hash: any;
+  doc_type: any;
+  filing_date: any;
+};
+
 const handleAddDocuments = async (params: Record<string, any>) => {
   const { ticker, docs } = params;
   const token = await Asset.getByTicker(ticker);
   if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.documents = docs.map((d: any) => ({
+  token.documents = docs.map((d: NewAssetDocument) => ({
     name: d.name,
     link: d.uri,
   }));
@@ -65,10 +73,10 @@ const handleAddDocuments = async (params: Record<string, any>) => {
 };
 
 const handleUpdateIdentifiers = async (params: Record<string, any>) => {
-  const { ticker, identifiers } = params;
+  const { ticker, identifiers: newIdentifiers } = params;
   const token = await Asset.getByTicker(ticker);
   if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.identifiers = JSON.stringify(identifiers);
+  token.identifiers = newIdentifiers;
   await token.save();
 };
 
