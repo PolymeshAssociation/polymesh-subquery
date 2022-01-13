@@ -6,6 +6,12 @@ import { formatAssetIdentifiers } from '../util';
 
 const chainNumberMultiplier = new BN(1000000);
 
+const getAsset = async (ticker: string) => {
+  const asset = await Asset.getByTicker(ticker);
+  if (!asset) throw new Error(`Asset with ticker ${ticker} was not found.`);
+  return asset;
+};
+
 const handleCreateAsset = async (
   params: Record<string, any>,
   extrinsic: any,
@@ -40,18 +46,16 @@ const handleCreateAsset = async (
 
 const handleRenameAsset = async (params: Record<string, any>) => {
   const { ticker, name: newName } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.name = newName;
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.name = newName;
+  await asset.save();
 };
 
 const handleSetFundingRound = async (params: Record<string, any>) => {
   const { ticker, name: newFundingRound } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.fundingRound = newFundingRound;
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.fundingRound = newFundingRound;
+  await asset.save();
 };
 
 type AssetNewDocument = {
@@ -67,94 +71,86 @@ const handleAddDocuments = async (
   extrinsic: any,
 ) => {
   const { ticker, docs } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.documents = docs.map((doc: AssetNewDocument, i: number) => ({
+  const asset = await getAsset(ticker);
+  asset.documents = docs.map((doc: AssetNewDocument, i: number) => ({
     id: Number(extrinsic.events[i].event.data[2].toString()),
     name: doc.name,
     link: doc.uri,
   }));
-  await token.save();
+  await asset.save();
 };
 
 const handleRemoveDocuments = async (params: Record<string, any>) => {
   const { ticker, ids } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.documents = token.documents.filter((doc) => !ids.includes(doc.id));
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.documents = asset.documents.filter((doc) => !ids.includes(doc.id));
+  await asset.save();
 };
 
 const handleUpdateIdentifiers = async (params: Record<string, any>) => {
   const { ticker, identifiers: newIdentifiers } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.identifiers = formatAssetIdentifiers(newIdentifiers);
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.identifiers = formatAssetIdentifiers(newIdentifiers);
+  await asset.save();
 };
 
 const handleMakeDivisible = async (params: Record<string, any>) => {
   const { ticker } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.isDivisible = true;
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.isDivisible = true;
+  await asset.save();
 };
 
 const handleIssue = async (params: Record<string, any>) => {
   const { ticker, amount } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
+  const asset = await getAsset(ticker);
   const formattedAmount = new BN(amount).div(chainNumberMultiplier);
-  const newTotalSupply = new BN(token.totalSupply).add(formattedAmount);
+  const newTotalSupply = new BN(asset.totalSupply).add(formattedAmount);
   const ownerAmount =
-    new BN(token.holders.find((h) => h.did === token.ownerDid)?.amount) ||
+    new BN(asset.holders.find((h) => h.did === asset.ownerDid)?.amount) ||
     new BN(0);
   const ownerNewAmount = ownerAmount.add(formattedAmount);
-  const otherHolders = token.holders.filter((h) => h.did !== token.ownerDid);
-  token.holders = [
+  const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
+  asset.holders = [
     ...otherHolders,
-    { did: token.ownerDid, amount: ownerNewAmount.toString() },
+    { did: asset.ownerDid, amount: ownerNewAmount.toString() },
   ];
-  token.totalSupply = newTotalSupply.toString();
-  await token.save();
+  asset.totalSupply = newTotalSupply.toString();
+  await asset.save();
 };
 
 const handleRedeem = async (params: Record<string, any>) => {
   const { ticker, value: amount } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
+  const asset = await getAsset(ticker);
   const formattedAmount = new BN(amount).div(chainNumberMultiplier);
-  const newTotalSupply = new BN(token.totalSupply).sub(formattedAmount);
+  const newTotalSupply = new BN(asset.totalSupply).sub(formattedAmount);
   const ownerAmount =
-    new BN(token.holders.find((h) => h.did === token.ownerDid)?.amount) ||
+    new BN(asset.holders.find((h) => h.did === asset.ownerDid)?.amount) ||
     new BN(0);
   const ownerNewAmount = ownerAmount.sub(formattedAmount);
-  const otherHolders = token.holders.filter((h) => h.did !== token.ownerDid);
-  token.holders = [
+  const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
+  asset.holders = [
     ...otherHolders,
     ...(ownerNewAmount.gt(new BN(0))
-      ? [{ did: token.ownerDid, amount: ownerNewAmount.toString() }]
+      ? [{ did: asset.ownerDid, amount: ownerNewAmount.toString() }]
       : []),
   ];
-  token.totalSupply = newTotalSupply.toString();
-  await token.save();
+  asset.totalSupply = newTotalSupply.toString();
+  await asset.save();
 };
 
 const handleFreeze = async (params: Record<string, any>) => {
   const { ticker } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.isFrozen = true;
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.isFrozen = true;
+  await asset.save();
 };
 
 const handleUnfreeze = async (params: Record<string, any>) => {
   const { ticker } = params;
-  const token = await Asset.getByTicker(ticker);
-  if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.isFrozen = false;
-  await token.save();
+  const asset = await getAsset(ticker);
+  asset.isFrozen = false;
+  await asset.save();
 };
 
 export async function mapAsset(
