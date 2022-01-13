@@ -72,16 +72,14 @@ type AssetHolder @jsonField {
 }
 
 type AssetDocument @jsonField {
-  id: BigInt! # document ID
+  id: Int! # document ID
   name: String!
   link: String!
 }
 
 type AssetIdentifier @jsonField {
-  isin: String
-  cusip: String
-  cins: String
-  lei: String
+  type: String
+  value: String
 }
 
 type Asset @entity {

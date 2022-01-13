@@ -1,5 +1,5 @@
 import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { FoundType } from '../types';
+import { AssetIdentifier, FoundType } from '../types';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -81,7 +81,7 @@ export const findTopLevelCommas = (
   return commas;
 };
 
-export const formatParams = (
+export const formatHarvesterLikeParams = (
   params: HarvesterLikeCallArgs,
   formatKey = true,
 ): Record<string, any> => {
@@ -92,6 +92,17 @@ export const formatParams = (
   });
   return obj;
 };
+
+export const formatAssetIdentifiers = (
+  identifiers: Record<string, string>[],
+): AssetIdentifier[] =>
+  identifiers.map((i) => {
+    const type = Object.keys(i)[0];
+    return {
+      type,
+      value: i[type],
+    };
+  });
 
 export const logFoundType = (type: string, rawType: string): void => {
   FoundType.create({ id: type, rawType }).save();

@@ -2,6 +2,7 @@ import BN from 'bn.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
 import { Asset } from '../../types';
+import { formatAssetIdentifiers } from '../util';
 
 const chainNumberMultiplier = new BN(1000000);
 
@@ -29,7 +30,7 @@ const handleCreateAsset = async (
     isFrozen: false,
     isUniquenessRequired: !disableIu,
     documents: [],
-    identifiers,
+    identifiers: formatAssetIdentifiers(identifiers),
     ownerDid,
     fullAgents: [ownerDid],
     holders: [],
@@ -53,7 +54,7 @@ const handleSetFundingRound = async (params: Record<string, any>) => {
   await token.save();
 };
 
-type NewAssetDocument = {
+type AssetNewDocument = {
   name: string;
   uri: string;
   content_hash?: any;
@@ -68,7 +69,7 @@ const handleAddDocuments = async (
   const { ticker, docs } = params;
   const token = await Asset.getByTicker(ticker);
   if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.documents = docs.map((doc: NewAssetDocument, i: number) => ({
+  token.documents = docs.map((doc: AssetNewDocument, i: number) => ({
     id: Number(extrinsic.events[i].event.data[2].toString()),
     name: doc.name,
     link: doc.uri,
@@ -88,7 +89,7 @@ const handleUpdateIdentifiers = async (params: Record<string, any>) => {
   const { ticker, identifiers: newIdentifiers } = params;
   const token = await Asset.getByTicker(ticker);
   if (!token) throw new Error(`Ticker ${ticker} was not found.`);
-  token.identifiers = newIdentifiers;
+  token.identifiers = formatAssetIdentifiers(newIdentifiers);
   await token.save();
 };
 

@@ -9,7 +9,11 @@ import { mapAsset } from './entities/mapAsset';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
 import { AnyTuple } from '@polkadot/types/types';
-import { camelToSnakeCase, logFoundType, formatParams } from './util';
+import {
+  camelToSnakeCase,
+  logFoundType,
+  formatHarvesterLikeParams,
+} from './util';
 import {
   serializeLikeHarvester,
   serializeCallArgsLikeHarvester,
@@ -139,7 +143,7 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsic.extrinsic,
     logFoundType,
   );
-  const formattedParams = formatParams(params);
+  const formattedParams = formatHarvesterLikeParams(params);
 
   const handlerArgs: [
     number,
