@@ -1,10 +1,11 @@
-import BN from 'bn.js';
+import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset } from '../../types';
+import { Asset, AssetHolder, Settlement } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
-const chainNumberMultiplier = new BN(1000000);
+const chainAmountToBigNumber = (amount: number): BigNumber =>
+  new BigNumber(amount).div(new BigNumber(1000000));
 
 const getAsset = async (ticker: string) => {
   const asset = await Asset.getByTicker(ticker);
@@ -12,6 +13,18 @@ const getAsset = async (ticker: string) => {
   return asset;
 };
 
+const getSettlement = async (id: string) => {
+  const settlement = await Settlement.get(id);
+  if (!settlement) throw new Error(`Settlement with id ${id} was not found.`);
+  return settlement;
+};
+
+const getHolderAmount = (did: string, holders: AssetHolder[]) => {
+  const holder = holders.find((h) => h.did === did);
+  return holder ? new BigNumber(holder.amount) : new BigNumber(0);
+};
+
+// #region ModuleIdEnum.Asset
 const handleCreateAsset = async (
   params: Record<string, any>,
   extrinsic: any,
@@ -41,6 +54,7 @@ const handleCreateAsset = async (
     fullAgents: [ownerDid],
     holders: [],
     totalSupply: '0',
+    totalTransfers: '0',
   }).save();
 };
 
@@ -104,38 +118,38 @@ const handleMakeDivisible = async (params: Record<string, any>) => {
 const handleIssue = async (params: Record<string, any>) => {
   const { ticker, amount } = params;
   const asset = await getAsset(ticker);
-  const formattedAmount = new BN(amount).div(chainNumberMultiplier);
-  const newTotalSupply = new BN(asset.totalSupply).add(formattedAmount);
-  const ownerAmount =
-    new BN(asset.holders.find((h) => h.did === asset.ownerDid)?.amount) ||
-    new BN(0);
-  const ownerNewAmount = ownerAmount.add(formattedAmount);
+  const formattedAmount = chainAmountToBigNumber(amount);
+  const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
   const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
   asset.holders = [
     ...otherHolders,
-    { did: asset.ownerDid, amount: ownerNewAmount.toString() },
+    {
+      did: asset.ownerDid,
+      amount: ownerAmount.plus(formattedAmount).toString(),
+    },
   ];
-  asset.totalSupply = newTotalSupply.toString();
+  asset.totalSupply = new BigNumber(asset.totalSupply)
+    .plus(formattedAmount)
+    .toString();
   await asset.save();
 };
 
 const handleRedeem = async (params: Record<string, any>) => {
   const { ticker, value: amount } = params;
   const asset = await getAsset(ticker);
-  const formattedAmount = new BN(amount).div(chainNumberMultiplier);
-  const newTotalSupply = new BN(asset.totalSupply).sub(formattedAmount);
-  const ownerAmount =
-    new BN(asset.holders.find((h) => h.did === asset.ownerDid)?.amount) ||
-    new BN(0);
-  const ownerNewAmount = ownerAmount.sub(formattedAmount);
+  const formattedAmount = chainAmountToBigNumber(amount);
+  const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
   const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
   asset.holders = [
     ...otherHolders,
-    ...(ownerNewAmount.gt(new BN(0))
-      ? [{ did: asset.ownerDid, amount: ownerNewAmount.toString() }]
-      : []),
+    {
+      did: asset.ownerDid,
+      amount: ownerAmount.minus(formattedAmount).toString(),
+    },
   ];
-  asset.totalSupply = newTotalSupply.toString();
+  asset.totalSupply = new BigNumber(asset.totalSupply)
+    .minus(formattedAmount)
+    .toString();
   await asset.save();
 };
 
@@ -152,6 +166,62 @@ const handleUnfreeze = async (params: Record<string, any>) => {
   asset.isFrozen = false;
   await asset.save();
 };
+// #endregion
+
+// #region ModuleIdEnum.Settlement
+const handleAddAndAffirmInstruction = async (
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  const { legs } = params;
+  await Settlement.create({
+    id: Number(extrinsic.events[0].event.data[2].toString()),
+    legs: legs.map((l: any) => ({
+      from: l.from.did.toString(),
+      to: l.to.did.toString(),
+      ticker: l.asset.toString(),
+      amount: chainAmountToBigNumber(l.amount).toString(),
+    })),
+  }).save();
+};
+
+const handleAffirmInstruction = async (params: Record<string, any>) => {
+  const { instructionId } = params;
+  const settlement = await getSettlement(instructionId);
+  await Promise.all(
+    settlement.legs.map(async (leg) => {
+      const asset = await getAsset(leg.ticker);
+      const settlementAmount = new BigNumber(leg.amount);
+      const currentFromAmount = getHolderAmount(leg.from, asset.holders);
+      const currentToAmount = getHolderAmount(leg.to, asset.holders);
+      const otherHolders = asset.holders.filter(
+        (h) => ![leg.from, leg.to].includes(h.did),
+      );
+      asset.holders = [
+        ...otherHolders,
+        {
+          did: leg.from,
+          amount: currentFromAmount.minus(settlementAmount).toString(),
+        },
+        {
+          did: leg.to,
+          amount: currentToAmount.plus(settlementAmount).toString(),
+        },
+      ];
+      asset.totalTransfers = new BigNumber(asset.totalTransfers)
+        .plus(new BigNumber(1))
+        .toString();
+      await asset.save();
+    }),
+  );
+  await Settlement.remove(instructionId);
+};
+
+const handleRejectInstruction = async (params: Record<string, any>) => {
+  const { instructionId } = params;
+  await Settlement.remove(instructionId);
+};
+// #endregion
 
 export async function mapAsset(
   blockId: number,
@@ -160,10 +230,14 @@ export async function mapAsset(
   params: Record<string, any>,
   extrinsic: SubstrateExtrinsic,
 ): Promise<void> {
-  if (!extrinsic.success || ![ModuleIdEnum.Asset].includes(moduleId)) {
+  if (
+    !extrinsic.success ||
+    ![ModuleIdEnum.Asset, ModuleIdEnum.Settlement].includes(moduleId)
+  ) {
     return;
   }
 
+  // #region ModuleIdEnum.Asset
   if (callId === CallIdEnum.CreateAsset) {
     await handleCreateAsset(params, extrinsic);
   }
@@ -207,4 +281,19 @@ export async function mapAsset(
   if (callId === CallIdEnum.Unfreeze) {
     await handleUnfreeze(params);
   }
+  // #endregion
+
+  // #region ModuleIdEnum.Settlement
+  if (callId === CallIdEnum.AddAndAffirmInstruction) {
+    await handleAddAndAffirmInstruction(params, extrinsic);
+  }
+
+  if (callId === CallIdEnum.AffirmInstruction) {
+    await handleAffirmInstruction(params);
+  }
+
+  if (callId === CallIdEnum.RejectInstruction) {
+    await handleRejectInstruction(params);
+  }
+  // #endregion
 }

@@ -72,14 +72,26 @@ type AssetHolder @jsonField {
 }
 
 type AssetDocument @jsonField {
-  id: Int! # document ID
+  id: Int! # document id
   name: String!
   link: String!
 }
 
 type AssetIdentifier @jsonField {
-  type: String
-  value: String
+  type: String!
+  value: String!
+}
+
+type SettlementLeg @jsonField {
+  from: String!
+  to: String!
+  ticker: String!
+  amount: String!
+}
+
+type Settlement @entity {
+  id: ID! # settlement id
+  legs: [SettlementLeg!]!
 }
 
 type Asset @entity {
@@ -97,9 +109,9 @@ type Asset @entity {
   fullAgents: [String!]!
   holders: [AssetHolder]!
   totalSupply: String!
-  # totalDistributions: String!
-  # totalTransfers: String!
+  totalTransfers: String!
   # totalDividends: String!
+  # settlements: [Settlement]!
   # complianceRules: [ComplianceRule]
   # stos: [STO]!
 }

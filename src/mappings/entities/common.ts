@@ -368,6 +368,10 @@ export enum CallIdEnum {
   Redeem = 'redeem',
   Freeze = 'freeze',
   Unfreeze = 'unfreeze',
+  AddAndAffirmInstruction = 'addAndAffirmInstruction',
+  AffirmInstruction = 'affirmInstruction',
+  RejectInstruction = 'rejectInstruction',
+  AcceptAssetOwnershipTransfer = 'acceptAssetOwnershipTransfer',
 }
 
 export enum ClaimTypeEnum {
