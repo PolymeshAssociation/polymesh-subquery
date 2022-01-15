@@ -273,11 +273,9 @@ const handleSettlement = async (
   if (callId === CallIdEnum.AddAndAffirmInstruction) {
     await handleAddAndAffirmInstruction(params, extrinsic);
   }
-
   if (callId === CallIdEnum.AffirmInstruction) {
     await handleAffirmInstruction(params);
   }
-
   if (callId === CallIdEnum.RejectInstruction) {
     await handleRejectInstruction(params);
   }
@@ -296,11 +294,9 @@ export async function mapAsset(
   ) {
     return;
   }
-
   if (moduleId === ModuleIdEnum.Asset) {
     await handleAsset(callId, params, extrinsic);
   }
-
   if (moduleId === ModuleIdEnum.Settlement) {
     await handleSettlement(callId, params, extrinsic);
   }
