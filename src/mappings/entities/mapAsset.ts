@@ -4,6 +4,7 @@ import { ModuleIdEnum, CallIdEnum } from './common';
 import { Asset, AssetHolder, Settlement } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
+// #region Utils
 const chainAmountToBigNumber = (amount: number): BigNumber =>
   new BigNumber(amount).div(new BigNumber(1000000));
 
@@ -23,6 +24,7 @@ const getHolderAmount = (did: string, holders: AssetHolder[]) => {
   const holder = holders.find((h) => h.did === did);
   return holder ? new BigNumber(holder.amount) : new BigNumber(0);
 };
+// #endregion
 
 // #region ModuleIdEnum.Asset
 const handleCreateAsset = async (
@@ -223,6 +225,64 @@ const handleRejectInstruction = async (params: Record<string, any>) => {
 };
 // #endregion
 
+const handleAsset = async (
+  callId: CallIdEnum,
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  if (callId === CallIdEnum.CreateAsset) {
+    await handleCreateAsset(params, extrinsic);
+  }
+  if (callId === CallIdEnum.RenameAsset) {
+    await handleRenameAsset(params);
+  }
+  if (callId === CallIdEnum.SetFundingRound) {
+    await handleSetFundingRound(params);
+  }
+  if (callId === CallIdEnum.AddDocuments) {
+    await handleAddDocuments(params, extrinsic);
+  }
+  if (callId === CallIdEnum.RemoveDocuments) {
+    await handleRemoveDocuments(params);
+  }
+  if (callId === CallIdEnum.UpdateIdentifiers) {
+    await handleUpdateIdentifiers(params);
+  }
+  if (callId === CallIdEnum.MakeDivisible) {
+    await handleMakeDivisible(params);
+  }
+  if (callId === CallIdEnum.Issue) {
+    await handleIssue(params);
+  }
+  if (callId === CallIdEnum.Redeem) {
+    await handleRedeem(params);
+  }
+  if (callId === CallIdEnum.Freeze) {
+    await handleFreeze(params);
+  }
+  if (callId === CallIdEnum.Unfreeze) {
+    await handleUnfreeze(params);
+  }
+};
+
+const handleSettlement = async (
+  callId: CallIdEnum,
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  if (callId === CallIdEnum.AddAndAffirmInstruction) {
+    await handleAddAndAffirmInstruction(params, extrinsic);
+  }
+
+  if (callId === CallIdEnum.AffirmInstruction) {
+    await handleAffirmInstruction(params);
+  }
+
+  if (callId === CallIdEnum.RejectInstruction) {
+    await handleRejectInstruction(params);
+  }
+};
+
 export async function mapAsset(
   blockId: number,
   callId: CallIdEnum,
@@ -237,63 +297,11 @@ export async function mapAsset(
     return;
   }
 
-  // #region ModuleIdEnum.Asset
-  if (callId === CallIdEnum.CreateAsset) {
-    await handleCreateAsset(params, extrinsic);
+  if (moduleId === ModuleIdEnum.Asset) {
+    await handleAsset(callId, params, extrinsic);
   }
 
-  if (callId === CallIdEnum.RenameAsset) {
-    await handleRenameAsset(params);
+  if (moduleId === ModuleIdEnum.Settlement) {
+    await handleSettlement(callId, params, extrinsic);
   }
-
-  if (callId === CallIdEnum.SetFundingRound) {
-    await handleSetFundingRound(params);
-  }
-
-  if (callId === CallIdEnum.AddDocuments) {
-    await handleAddDocuments(params, extrinsic);
-  }
-
-  if (callId === CallIdEnum.RemoveDocuments) {
-    await handleRemoveDocuments(params);
-  }
-
-  if (callId === CallIdEnum.UpdateIdentifiers) {
-    await handleUpdateIdentifiers(params);
-  }
-
-  if (callId === CallIdEnum.MakeDivisible) {
-    await handleMakeDivisible(params);
-  }
-
-  if (callId === CallIdEnum.Issue) {
-    await handleIssue(params);
-  }
-
-  if (callId === CallIdEnum.Redeem) {
-    await handleRedeem(params);
-  }
-
-  if (callId === CallIdEnum.Freeze) {
-    await handleFreeze(params);
-  }
-
-  if (callId === CallIdEnum.Unfreeze) {
-    await handleUnfreeze(params);
-  }
-  // #endregion
-
-  // #region ModuleIdEnum.Settlement
-  if (callId === CallIdEnum.AddAndAffirmInstruction) {
-    await handleAddAndAffirmInstruction(params, extrinsic);
-  }
-
-  if (callId === CallIdEnum.AffirmInstruction) {
-    await handleAffirmInstruction(params);
-  }
-
-  if (callId === CallIdEnum.RejectInstruction) {
-    await handleRejectInstruction(params);
-  }
-  // #endregion
 }
