@@ -371,7 +371,10 @@ export enum CallIdEnum {
   AddAndAffirmInstruction = 'addAndAffirmInstruction',
   AffirmInstruction = 'affirmInstruction',
   RejectInstruction = 'rejectInstruction',
+  AddAuthorization = 'addAuthorization',
+  RemoveAuthorization = 'removeAuthorization',
   AcceptAssetOwnershipTransfer = 'acceptAssetOwnershipTransfer',
+  AcceptBecomeAgent = 'acceptBecomeAgent',
 }
 
 export enum ClaimTypeEnum {

@@ -94,6 +94,14 @@ type Settlement @entity {
   legs: [SettlementLeg!]!
 }
 
+type Authorization @entity {
+  id: ID! # authorization id
+  target: String! @index(unique: false)
+  type: String! @index(unique: false)
+  ticker: String @index(unique: false)
+  data: String
+}
+
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)

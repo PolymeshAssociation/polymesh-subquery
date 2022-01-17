@@ -1,7 +1,7 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, Settlement } from '../../types';
+import { Asset, AssetHolder, Authorization, Settlement } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
@@ -18,6 +18,13 @@ const getSettlement = async (id: string) => {
   const settlement = await Settlement.get(id);
   if (!settlement) throw new Error(`Settlement with id ${id} was not found.`);
   return settlement;
+};
+
+const getAuthorization = async (id: string) => {
+  const authorization = await Authorization.get(id);
+  if (!authorization)
+    throw new Error(`Authorization with id ${id} was not found.`);
+  return authorization;
 };
 
 const getHolderAmount = (did: string, holders: AssetHolder[]) => {
@@ -168,6 +175,18 @@ const handleUnfreeze = async (params: Record<string, any>) => {
   asset.isFrozen = false;
   await asset.save();
 };
+
+const handleAcceptAssetOwnershipTransfer = async (
+  params: Record<string, any>,
+) => {
+  const { authId } = params;
+  const authorization = await getAuthorization(authId);
+  if (!authorization.ticker) return;
+  const asset = await getAsset(authorization.ticker);
+  asset.ownerDid = authorization.target;
+  await asset.save();
+  await Authorization.remove(authId);
+};
 // #endregion
 
 // #region ModuleIdEnum.Settlement
@@ -225,6 +244,65 @@ const handleRejectInstruction = async (params: Record<string, any>) => {
 };
 // #endregion
 
+// #region ModuleIdEnum.Identity
+const handleAddAuthorization = async (
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  const { target: targetData, authorizationData } = params;
+  const type = Object.keys(authorizationData)[0];
+  const id = Number(extrinsic.events[0].event.data[3].toString());
+  const target = targetData.Identity.toString();
+  if (type === 'TransferAssetOwnership') {
+    const ticker = authorizationData[type].toString();
+    await Authorization.create({
+      id,
+      target,
+      type,
+      ticker,
+    }).save();
+  }
+  if (type === 'BecomeAgent') {
+    const ticker = authorizationData[type].col1.toString();
+    const group = Object.keys(authorizationData[type].col2)[0];
+    if (group === 'Full') {
+      const prevOwner = extrinsic.events[0].event.data[0].toString();
+      await Authorization.create({
+        id,
+        target,
+        type,
+        ticker,
+        data: JSON.stringify({ group, prevOwner }),
+      }).save();
+    }
+  }
+};
+
+const handleRemoveAuthorization = async (params: Record<string, any>) => {
+  const { authId } = params;
+  await Authorization.remove(authId);
+};
+// #endregion
+
+// #region ModuleIdEnum.Externalagents
+const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
+  const { authId } = params;
+  const authorization = await getAuthorization(authId);
+  const authorizationData = JSON.parse(authorization.data || '{}');
+  if (!authorization.ticker || authorizationData.group !== 'Full') {
+    return;
+  }
+  const asset = await getAsset(authorization.ticker);
+  const previousOwner = authorizationData.prevOwner;
+  const currentAgents = previousOwner
+    ? asset.fullAgents.filter((a) => a !== previousOwner)
+    : asset.fullAgents;
+  asset.fullAgents = [...currentAgents, authorization.target];
+  await asset.save();
+  await Authorization.remove(authId);
+};
+// #endregion
+
 const handleAsset = async (
   callId: CallIdEnum,
   params: Record<string, any>,
@@ -263,6 +341,9 @@ const handleAsset = async (
   if (callId === CallIdEnum.Unfreeze) {
     await handleUnfreeze(params);
   }
+  if (callId === CallIdEnum.AcceptAssetOwnershipTransfer) {
+    await handleAcceptAssetOwnershipTransfer(params);
+  }
 };
 
 const handleSettlement = async (
@@ -281,6 +362,28 @@ const handleSettlement = async (
   }
 };
 
+const handleIdentity = async (
+  callId: CallIdEnum,
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  if (callId === CallIdEnum.AddAuthorization) {
+    await handleAddAuthorization(params, extrinsic);
+  }
+  if (callId === CallIdEnum.RemoveAuthorization) {
+    await handleRemoveAuthorization(params);
+  }
+};
+
+const handleExternalAgents = async (
+  callId: CallIdEnum,
+  params: Record<string, any>,
+) => {
+  if (callId === CallIdEnum.AcceptBecomeAgent) {
+    await handleAcceptBecomeAgent(params);
+  }
+};
+
 export async function mapAsset(
   blockId: number,
   callId: CallIdEnum,
@@ -290,7 +393,12 @@ export async function mapAsset(
 ): Promise<void> {
   if (
     !extrinsic.success ||
-    ![ModuleIdEnum.Asset, ModuleIdEnum.Settlement].includes(moduleId)
+    ![
+      ModuleIdEnum.Asset,
+      ModuleIdEnum.Settlement,
+      ModuleIdEnum.Identity,
+      ModuleIdEnum.Externalagents,
+    ].includes(moduleId)
   ) {
     return;
   }
@@ -299,5 +407,11 @@ export async function mapAsset(
   }
   if (moduleId === ModuleIdEnum.Settlement) {
     await handleSettlement(callId, params, extrinsic);
+  }
+  if (moduleId === ModuleIdEnum.Identity) {
+    await handleIdentity(callId, params, extrinsic);
+  }
+  if (moduleId === ModuleIdEnum.Externalagents) {
+    await handleExternalAgents(callId, params);
   }
 }
