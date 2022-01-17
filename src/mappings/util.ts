@@ -81,7 +81,7 @@ export const findTopLevelCommas = (
   return commas;
 };
 
-export const formatHarvesterLikeParams = (
+export const harvesterLikeParamsToObj = (
   params: HarvesterLikeCallArgs,
   formatKey = true,
 ): Record<string, any> => {

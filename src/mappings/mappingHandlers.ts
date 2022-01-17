@@ -12,7 +12,7 @@ import { AnyTuple } from '@polkadot/types/types';
 import {
   camelToSnakeCase,
   logFoundType,
-  formatHarvesterLikeParams,
+  harvesterLikeParamsToObj,
 } from './util';
 import {
   serializeLikeHarvester,
@@ -143,7 +143,7 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsic.extrinsic,
     logFoundType,
   );
-  const formattedParams = formatHarvesterLikeParams(params);
+  const formattedParams = harvesterLikeParamsToObj(params);
 
   const handlerArgs: [
     number,
