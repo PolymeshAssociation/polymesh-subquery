@@ -259,13 +259,15 @@ const handleAddAuthorization = async (
   extrinsic: any,
 ) => {
   const { target: targetData, authorizationData } = params;
-  const type = Object.keys(authorizationData)[0];
   const id = extrinsic.events[0].event.data[3].toString();
+  const source = extrinsic.events[0].event.data[0].toString();
   const target = targetData.Identity.toString();
+  const type = Object.keys(authorizationData)[0];
   if (type === 'TransferAssetOwnership') {
     const ticker = authorizationData[type].toString();
     await Authorization.create({
       id,
+      source,
       target,
       type,
       ticker,
@@ -275,13 +277,13 @@ const handleAddAuthorization = async (
     const ticker = authorizationData[type].col1.toString();
     const group = Object.keys(authorizationData[type].col2)[0];
     if (group === 'Full') {
-      const prevOwner = extrinsic.events[0].event.data[0].toString();
       await Authorization.create({
         id,
+        source,
         target,
         type,
         ticker,
-        data: JSON.stringify({ group, prevOwner }),
+        data: JSON.stringify({ group }),
       }).save();
     }
   }
@@ -302,11 +304,10 @@ const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
     return;
   }
   const asset = await getAsset(authorization.ticker);
-  const previousOwner = authorizationData.prevOwner;
-  const currentAgents = previousOwner
-    ? asset.fullAgents.filter((a) => a !== previousOwner)
-    : asset.fullAgents;
-  asset.fullAgents = [...currentAgents, authorization.target];
+  const otherAgents = asset.fullAgents.filter(
+    (a) => a !== authorization.source,
+  );
+  asset.fullAgents = [...otherAgents, authorization.target];
   await asset.save();
   await Authorization.remove(authId);
 };

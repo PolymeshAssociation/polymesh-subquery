@@ -93,6 +93,7 @@ type Settlement @entity {
 
 type Authorization @entity {
   id: ID! # authorization id
+  source: String! @index(unique: false)
   target: String! @index(unique: false)
   type: String! @index(unique: false)
   ticker: String @index(unique: false)
