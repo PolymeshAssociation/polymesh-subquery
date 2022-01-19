@@ -14,8 +14,8 @@ const getAsset = async (ticker: string) => {
   return asset;
 };
 
-const getSettlement = async (id: string) => {
-  const settlement = await Settlement.get(id);
+const getSettlementLegs = async (id: number) => {
+  const settlement = await Settlement.getBySettlementId(id);
   if (!settlement) throw new Error(`Settlement with id ${id} was not found.`);
   return settlement;
 };
@@ -195,22 +195,26 @@ const handleAddAndAffirmInstruction = async (
   extrinsic: any,
 ) => {
   const { legs } = params;
-  await Settlement.create({
-    id: Number(extrinsic.events[0].event.data[2].toString()),
-    legs: legs.map((l: any) => ({
-      from: l.from.did.toString(),
-      to: l.to.did.toString(),
-      ticker: l.asset.toString(),
-      amount: chainAmountToBigNumber(l.amount).toString(),
-    })),
-  }).save();
+  await Promise.all(
+    legs.map(async (l: any, i: number) => {
+      const settlementId = Number(extrinsic.events[0].event.data[2].toString());
+      await Settlement.create({
+        id: `${settlementId}-${i + 1}`,
+        settlementId,
+        from: l.from.did.toString(),
+        to: l.to.did.toString(),
+        ticker: l.asset.toString(),
+        amount: chainAmountToBigNumber(l.amount).toString(),
+      }).save();
+    }),
+  );
 };
 
 const handleAffirmInstruction = async (params: Record<string, any>) => {
   const { instructionId } = params;
-  const settlement = await getSettlement(instructionId);
+  const settlementLegs = await getSettlementLegs(instructionId);
   await Promise.all(
-    settlement.legs.map(async (leg) => {
+    settlementLegs.map(async (leg) => {
       const asset = await getAsset(leg.ticker);
       const settlementAmount = new BigNumber(leg.amount);
       const currentFromAmount = getHolderAmount(leg.from, asset.holders);
@@ -233,14 +237,19 @@ const handleAffirmInstruction = async (params: Record<string, any>) => {
         .plus(new BigNumber(1))
         .toString();
       await asset.save();
+      await Settlement.remove(leg.id);
     }),
   );
-  await Settlement.remove(instructionId);
 };
 
 const handleRejectInstruction = async (params: Record<string, any>) => {
   const { instructionId } = params;
-  await Settlement.remove(instructionId);
+  const settlementLegs = await getSettlementLegs(instructionId);
+  await Promise.all(
+    settlementLegs.map(async (leg) => {
+      await Settlement.remove(leg.id);
+    }),
+  );
 };
 // #endregion
 
@@ -251,7 +260,7 @@ const handleAddAuthorization = async (
 ) => {
   const { target: targetData, authorizationData } = params;
   const type = Object.keys(authorizationData)[0];
-  const id = Number(extrinsic.events[0].event.data[3].toString());
+  const id = extrinsic.events[0].event.data[3].toString();
   const target = targetData.Identity.toString();
   if (type === 'TransferAssetOwnership') {
     const ticker = authorizationData[type].toString();

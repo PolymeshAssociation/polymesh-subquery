@@ -82,16 +82,13 @@ type AssetIdentifier @jsonField {
   value: String!
 }
 
-type SettlementLeg @jsonField {
-  from: String!
-  to: String!
-  ticker: String!
-  amount: String!
-}
-
 type Settlement @entity {
-  id: ID! # settlement id
-  legs: [SettlementLeg!]!
+  id: ID!
+  settlementId: Int! @index(unique: false) # not unique due to multiple legs
+  from: String! @index(unique: false)
+  to: String! @index(unique: false)
+  ticker: String! @index(unique: false)
+  amount: String!
 }
 
 type Authorization @entity {
