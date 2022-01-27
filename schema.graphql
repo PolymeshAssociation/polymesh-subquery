@@ -100,6 +100,17 @@ type Authorization @entity {
   data: String
 }
 
+type AssetComplianceRequirement @jsonField {
+  id: Int! # requirement id
+  data: String!
+}
+
+type AssetCompliance @jsonField {
+  isPaused: Boolean!
+  sender: [AssetComplianceRequirement]!
+  receiver: [AssetComplianceRequirement]!
+}
+
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
@@ -116,8 +127,5 @@ type Asset @entity {
   holders: [AssetHolder]!
   totalSupply: String!
   totalTransfers: String!
-  # totalDividends: String!
-  # settlements: [Settlement]!
-  # complianceRules: [ComplianceRule]
-  # stos: [STO]!
+  compliance: AssetCompliance!
 }

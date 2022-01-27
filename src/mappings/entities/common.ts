@@ -375,6 +375,11 @@ export enum CallIdEnum {
   RemoveAuthorization = 'removeAuthorization',
   AcceptAssetOwnershipTransfer = 'acceptAssetOwnershipTransfer',
   AcceptBecomeAgent = 'acceptBecomeAgent',
+  PauseAssetCompliance = 'pauseAssetCompliance',
+  ResumeAssetCompliance = 'resumeAssetCompliance',
+  ResetAssetCompliance = 'resetAssetCompliance',
+  AddComplianceRequirement = 'addComplianceRequirement',
+  RemoveComplianceRequirement = 'removeComplianceRequirement',
 }
 
 export enum ClaimTypeEnum {

@@ -31,6 +31,12 @@ const getHolderAmount = (did: string, holders: AssetHolder[]) => {
   const holder = holders.find((h) => h.did === did);
   return holder ? new BigNumber(holder.amount) : new BigNumber(0);
 };
+
+const getComplianceConditions = (conditions: any[], extrinsic: any) =>
+  conditions.map((c: any) => ({
+    id: Number(extrinsic.events[0].event.data[2].id.toString()),
+    data: JSON.stringify(c),
+  }));
 // #endregion
 
 // #region ModuleIdEnum.Asset
@@ -64,6 +70,7 @@ const handleCreateAsset = async (
     holders: [],
     totalSupply: '0',
     totalTransfers: '0',
+    compliance: { isPaused: false, sender: [], receiver: [] },
   }).save();
 };
 
@@ -313,6 +320,67 @@ const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
 };
 // #endregion
 
+// #region ModuleIdEnum.Compliancemanager
+const handlePauseAssetCompliance = async (params: Record<string, any>) => {
+  const { ticker } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.isPaused = true;
+  await asset.save();
+};
+
+const handleResumeAssetCompliance = async (params: Record<string, any>) => {
+  const { ticker } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.isPaused = false;
+  await asset.save();
+};
+
+const handleResetAssetCompliance = async (params: Record<string, any>) => {
+  const { ticker } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.sender = [];
+  asset.compliance.receiver = [];
+  await asset.save();
+};
+
+const handleAddComplianceRequirement = async (
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  const { ticker, senderConditions, receiverConditions } = params;
+  const newSenderConditions = getComplianceConditions(
+    senderConditions,
+    extrinsic,
+  );
+  const newReceiverConditions = getComplianceConditions(
+    receiverConditions,
+    extrinsic,
+  );
+  const asset = await getAsset(ticker);
+  asset.compliance.sender = [
+    ...asset.compliance.sender,
+    ...newSenderConditions,
+  ];
+  asset.compliance.receiver = [
+    ...asset.compliance.receiver,
+    ...newReceiverConditions,
+  ];
+  await asset.save();
+};
+
+const handleRemoveComplianceRequirement = async (
+  params: Record<string, any>,
+) => {
+  const { ticker, id } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.sender = asset.compliance.sender.filter((s) => s.id !== id);
+  asset.compliance.receiver = asset.compliance.receiver.filter(
+    (s) => s.id !== id,
+  );
+  await asset.save();
+};
+// #endregion
+
 const handleAsset = async (
   callId: CallIdEnum,
   params: Record<string, any>,
@@ -394,6 +462,28 @@ const handleExternalAgents = async (
   }
 };
 
+const handleComplianceManager = async (
+  callId: CallIdEnum,
+  params: Record<string, any>,
+  extrinsic: any,
+) => {
+  if (callId === CallIdEnum.PauseAssetCompliance) {
+    await handlePauseAssetCompliance(params);
+  }
+  if (callId === CallIdEnum.ResumeAssetCompliance) {
+    await handleResumeAssetCompliance(params);
+  }
+  if (callId === CallIdEnum.ResetAssetCompliance) {
+    await handleResetAssetCompliance(params);
+  }
+  if (callId === CallIdEnum.AddComplianceRequirement) {
+    await handleAddComplianceRequirement(params, extrinsic);
+  }
+  if (callId === CallIdEnum.RemoveComplianceRequirement) {
+    await handleRemoveComplianceRequirement(params);
+  }
+};
+
 export async function mapAsset(
   blockId: number,
   callId: CallIdEnum,
@@ -408,6 +498,7 @@ export async function mapAsset(
       ModuleIdEnum.Settlement,
       ModuleIdEnum.Identity,
       ModuleIdEnum.Externalagents,
+      ModuleIdEnum.Compliancemanager,
     ].includes(moduleId)
   ) {
     return;
@@ -423,5 +514,8 @@ export async function mapAsset(
   }
   if (moduleId === ModuleIdEnum.Externalagents) {
     await handleExternalAgents(callId, params);
+  }
+  if (moduleId === ModuleIdEnum.Compliancemanager) {
+    await handleComplianceManager(callId, params, extrinsic);
   }
 }
