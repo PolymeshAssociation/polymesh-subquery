@@ -88,7 +88,8 @@ network:
   typesBundle:
     spec:
       polymesh_dev: &types
-        types: [
+        types:
+          [
             {
               minmax: [2021, 2023],
               types:
@@ -2362,7 +2363,7 @@ network:
                 },
             },
             {
-              minmax: [2025, 2025],
+              minmax: [3000, 3001],
               types:
                 {
                   'Address': 'MultiAddress',

@@ -7,7 +7,7 @@ import { AssetIdentifier, FoundType } from '../types';
  */
 export const fromEntries = <K extends string | number, V, V2>(
   iterable: Iterable<[K, V]>,
-  map: (v: V, i: number, k: K) => V2,
+  map: (v: V, i: number, k: K) => V2
 ): Partial<Record<K, V2>> => {
   const res: Partial<Record<K, V2>> = {};
 
@@ -20,17 +20,14 @@ export const fromEntries = <K extends string | number, V, V2>(
 };
 
 export const camelToSnakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
 export const snakeToCamelCase = (value: string): string =>
   value
     .toLowerCase()
-    .replace(/([-_][a-z])/g, (group) =>
-      group.toUpperCase().replace('-', '').replace('_', ''),
-    );
+    .replace(/([-_][a-z])/g, group => group.toUpperCase().replace('-', '').replace('_', ''));
 
-export const capitalizeFirstLetter = (str: string): string =>
-  str[0].toUpperCase() + str.slice(1);
+export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
 export const removeNullChars = (s: string): string => s.replace(/\0/g, '');
 
@@ -39,10 +36,7 @@ export const removeNullChars = (s: string): string => s.replace(/\0/g, '');
  * This is meant for rust types, for example "Map<Map<(u8,u32),String>,bool>"" would return 24.
  * @param text
  */
-export const findTopLevelCommas = (
-  text: string,
-  exitOnFirst = false,
-): number[] => {
+export const findTopLevelCommas = (text: string, exitOnFirst = false): number[] => {
   let nestedLevel = 0;
   const commas = [];
   let i = 0;
@@ -74,29 +68,25 @@ export const findTopLevelCommas = (
     i++;
   }
   if (commas.length === 0) {
-    throw new Error(
-      `No top level comma found in ${text}, it probably isn't a map`,
-    );
+    throw new Error(`No top level comma found in ${text}, it probably isn't a map`);
   }
   return commas;
 };
 
 export const harvesterLikeParamsToObj = (
   params: HarvesterLikeCallArgs,
-  formatKey = true,
+  formatKey = true
 ): Record<string, any> => {
   const obj: Record<string, any> = {};
-  params.forEach((p) => {
+  params.forEach(p => {
     obj[formatKey ? snakeToCamelCase(p.name) : p.name] =
       p.name === 'asset_type' ? Object.keys(p.value)[0] : p.value;
   });
   return obj;
 };
 
-export const formatAssetIdentifiers = (
-  identifiers: Record<string, string>[],
-): AssetIdentifier[] =>
-  identifiers.map((i) => {
+export const formatAssetIdentifiers = (identifiers: Record<string, string>[]): AssetIdentifier[] =>
+  identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
       type,

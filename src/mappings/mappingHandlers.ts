@@ -1,23 +1,12 @@
-import {
-  SubstrateExtrinsic,
-  SubstrateEvent,
-  SubstrateBlock,
-} from '@subql/types';
+import { SubstrateExtrinsic, SubstrateEvent, SubstrateBlock } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
 import { ModuleIdEnum, CallIdEnum } from './entities/common';
 import { mapAsset } from './entities/mapAsset';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
 import { AnyTuple } from '@polkadot/types/types';
-import {
-  camelToSnakeCase,
-  logFoundType,
-  harvesterLikeParamsToObj,
-} from './util';
-import {
-  serializeLikeHarvester,
-  serializeCallArgsLikeHarvester,
-} from './serializeLikeHarvester';
+import { camelToSnakeCase, logFoundType, harvesterLikeParamsToObj } from './util';
+import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -40,8 +29,9 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     }
   }
 
-  const { count_extrinsics_signed, count_extrinsics_unsigned } =
-    processBlockExtrinsics(block.block.extrinsics);
+  const { count_extrinsics_signed, count_extrinsics_unsigned } = processBlockExtrinsics(
+    block.block.extrinsics
+  );
   const count_extrinsics = block.block.extrinsics.length;
 
   await Block.create({
@@ -63,9 +53,7 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
   }).save();
 }
 
-const processBlockExtrinsics = (
-  extrinsics: Vec<GenericExtrinsic<AnyTuple>>,
-) => {
+const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => {
   const ret = {
     count_extrinsics_unsigned: 0,
     count_extrinsics_signed: 0,
@@ -88,11 +76,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const event_idx = event.idx;
   const args = event.event.data.toArray();
   const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(
-      arg,
-      event.event.meta.args[i].toString(),
-      logFoundType,
-    ),
+    value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
   }));
   const { event_arg_0, event_arg_1, event_arg_2, event_arg_3 } =
     extractEventArgs(harvesterLikeArgs);
@@ -134,24 +118,15 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
           decodeAddress(
             extrinsic.extrinsic.signer.toString(),
             false,
-            extrinsic.extrinsic.registry.chainSS58,
-          ),
-        ),
+            extrinsic.extrinsic.registry.chainSS58
+          )
+        )
       )
     : null;
-  const params = serializeCallArgsLikeHarvester(
-    extrinsic.extrinsic,
-    logFoundType,
-  );
+  const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
   const formattedParams = harvesterLikeParamsToObj(params);
 
-  const handlerArgs: [
-    number,
-    CallIdEnum,
-    ModuleIdEnum,
-    Record<string, any>,
-    SubstrateExtrinsic,
-  ] = [
+  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
     block_id,
     call_id as CallIdEnum,
     module_id as ModuleIdEnum,
