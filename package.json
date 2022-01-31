@@ -92,13 +92,21 @@
     }
   },
   "release": {
+    "branches": [
+      "master"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "semantic-release-docker"
+    ],
     "verifyConditions": {
       "path": "semantic-release-docker",
       "registryUrl": "docker.io"
     },
     "publish": {
       "path": "semantic-release-docker",
-      "name": "polymathnet/polymesh-subquery"
+      "name": "docker.io/polymathnet/polymesh-subquery"
     }
   }
 }

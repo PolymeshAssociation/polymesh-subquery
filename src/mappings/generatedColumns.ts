@@ -66,8 +66,8 @@ export const extractClaimScope = (
 export const extractClaimInfo = (args: any[]) => {
   const claimType: string | undefined = Object.keys(args?.[1]?.value?.claim || {})[0];
 
-  let cddId;
-  let jurisdiction;
+  let cddId: any;
+  let jurisdiction: any;
   if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
     cddId = JSONStringifyExceptStringAndNull(args?.[1]?.value?.claim?.CustomerDueDiligence);
   } else if (claimType === ClaimTypeEnum.Jurisdiction) {
