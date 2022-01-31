@@ -78,7 +78,7 @@ async function handleHistoryOfPaymentEventsForCA(
   const ticker = await getTickerFromCaId(params, eventId);
   const localId = await getLocalIdFromCaId(params, eventId);
   const balance = await getBalanceForCa(params, eventId);
-  const tax = (await getTextValue(params[5])) || 0;
+  const tax = getTextValue(params[5]) || 0;
   await HistoryOfPaymentEventsForCa.create({
     id: `${blockId}/${event.idx}`,
     blockId,
@@ -107,7 +107,7 @@ async function handleWithholdingTaxesOfCA(
   const ticker = await getTickerFromCaId(params, eventId);
   const localId = await getLocalIdFromCaId(params, eventId);
   const balance = await getBalanceForCa(params, eventId);
-  const tax = (await getTextValue(params[5])) || 0;
+  const tax = getTextValue(params[5]) || 0;
   const taxes = (Number(balance) * Number(tax)) / 1000000;
   const corporateAction = await WithholdingTaxesOfCa.get(`${ticker}/${localId}`);
   if (corporateAction !== undefined) {

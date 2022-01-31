@@ -89,14 +89,14 @@ class ExternalAgentEventsManager {
       if (entry.type === 'standard') {
         return serializeTicker(params[entry.paramIndex]);
       } else {
-        return await entry.tickerFromParams(params);
+        return entry.tickerFromParams(params);
       }
     }
     return undefined;
   }
 
   public static production() {
-    const mgr = new ExternalAgentEventsManager();
+    const eventsManager = new ExternalAgentEventsManager();
 
     /**
      *  _____ _  _ ___   _____   _____ _  _ _____   _    ___ ___ _____
@@ -106,7 +106,7 @@ class ExternalAgentEventsManager {
      *
      * (Here is the source of truth for events that come from external agent authorized extrinsics)
      */
-    mgr
+    eventsManager
       .add(
         ModuleIdEnum.Statistics,
         [
@@ -244,7 +244,7 @@ class ExternalAgentEventsManager {
           return sto.offeringAsset;
         }
       );
-    return mgr;
+    return eventsManager;
   }
 
   private add(
