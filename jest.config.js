@@ -6,6 +6,8 @@ module.exports = {
     },
   },
 
+  globalSetup: "./tests/setup.ts",
+  globalTeardown: "./tests/teardown.ts",
   testEnvironment: "node",
 
   collectCoverage: true,

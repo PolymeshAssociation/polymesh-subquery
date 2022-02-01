@@ -1,4 +1,4 @@
-version: "3"
+version: '3'
 
 services:
   postgres:
@@ -11,12 +11,11 @@ services:
       POSTGRES_PASSWORD: postgres
 
   subquery-node:
-    #image: polymathnet/polymesh-subquery:v0.0.4-alcyone
     build: ./
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     depends_on:
-      - "postgres"
+      - 'postgres'
     restart: always
     environment:
       DB_USER: postgres
@@ -24,11 +23,10 @@ services:
       DB_DATABASE: postgres
       NODE_ENV: local
       DB_HOST: postgres
-      #START_BLOCK: 3566427
       DB_PORT: 5432
+      # START_BLOCK: 1576010
+      # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
-      #NETWORK_ENDPOINT: wss://mainnet-rpc.polymesh.network
-      #NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
     command:
       - --batch-size=500
       - -f=/app
@@ -39,8 +37,8 @@ services:
     ports:
       - 3001:3000
     depends_on:
-      - "postgres"
-      - "subquery-node"
+      - 'postgres'
+      - 'subquery-node'
     restart: always
     environment:
       DB_USER: postgres

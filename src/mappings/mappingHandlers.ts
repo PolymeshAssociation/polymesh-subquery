@@ -1,10 +1,19 @@
-import { SubstrateExtrinsic, SubstrateEvent, SubstrateBlock } from '@subql/types';
-import { Block, Event, Extrinsic, FoundType } from '../types';
-import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
-import { AnyTuple } from '@polkadot/types/types';
-import { camelToSnakeCase } from './util';
-import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
+import { GenericExtrinsic } from '@polkadot/types/extrinsic';
+import { AnyTuple, Codec } from '@polkadot/types/types';
+import { hexStripPrefix, u8aToHex } from '@polkadot/util';
+import { decodeAddress } from '@polkadot/util-crypto';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { Block, Event, Extrinsic, FoundType } from '../types';
+import { EventIdEnum, ModuleIdEnum } from './entities/common';
+import { mapAuthorization } from './entities/mapAuthorization';
+import { mapCorporateActions } from './entities/mapCorporateActions';
+import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
+import { mapFunding } from './entities/mapFunding';
+import { mapInvestment } from './entities/mapInvestment';
+import { mapProposal } from './entities/mapProposal';
+import { mapStakingEvent } from './entities/mapStakingEvent';
+import { mapSto } from './entities/mapSto';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -12,42 +21,47 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
-import { hexStripPrefix, u8aToHex } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
+import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
+import { camelToSnakeCase } from './util';
+import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
+import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
+import { mapSettlement } from './entities/mapSettlement';
+import { mapClaim } from './entities/mapClaim';
+import { mapHeldTokens } from './entities/mapHeldTokens';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
-  const block_id = header.number.toNumber();
+  const blockId = header.number.toNumber();
 
-  let count_extrinsics_success = 0;
+  let countExtrinsicsSuccess = 0;
 
   for (const e of block.events) {
     if (e.event.method == 'ExtrinsicSuccess') {
-      count_extrinsics_success++;
+      countExtrinsicsSuccess++;
     }
   }
 
-  const { count_extrinsics_signed, count_extrinsics_unsigned } = processBlockExtrinsics(
+  const { countExtrinsicsSigned, countExtrinsicsUnsigned } = processBlockExtrinsics(
     block.block.extrinsics
   );
-  const count_extrinsics = block.block.extrinsics.length;
+  const countExtrinsics = block.block.extrinsics.length;
 
   await Block.create({
-    id: `${block_id}`,
-    block_id,
-    parent_id: block_id - 1,
+    id: `${blockId}`,
+    blockId,
+    parentId: blockId - 1,
     hash: header.hash.toHex(),
-    parent_hash: header.parentHash.toHex(),
-    state_root: header.stateRoot.toHex(),
-    extrinsics_root: header.extrinsicsRoot.toHex(),
-    count_extrinsics,
-    count_extrinsics_unsigned,
-    count_extrinsics_signed,
-    count_extrinsics_success,
-    count_extrinsics_error: count_extrinsics - count_extrinsics_success,
-    count_events: block.events.length,
+    parentHash: header.parentHash.toHex(),
+    stateRoot: header.stateRoot.toHex(),
+    extrinsicsRoot: header.extrinsicsRoot.toHex(),
+    countExtrinsics,
+    countExtrinsicsUnsigned,
+    countExtrinsicsSigned,
+    countExtrinsicsSuccess,
+    countExtrinsicsError: countExtrinsics - countExtrinsicsSuccess,
+    countEvents: block.events.length,
     datetime: block.timestamp,
-    spec_version_id: block.specVersion,
+    specVersionId: block.specVersion,
   }).save();
 }
 
@@ -57,14 +71,14 @@ const logFoundType = (type: string, rawType: string) => {
 
 const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => {
   const ret = {
-    count_extrinsics_unsigned: 0,
-    count_extrinsics_signed: 0,
+    countExtrinsicsUnsigned: 0,
+    countExtrinsicsSigned: 0,
   };
   for (const extrinsic of extrinsics) {
     if (extrinsic.isSigned) {
-      ret.count_extrinsics_signed++;
+      ret.countExtrinsicsSigned++;
     } else {
-      ret.count_extrinsics_unsigned++;
+      ret.countExtrinsicsUnsigned++;
     }
   }
   return ret;
@@ -72,46 +86,94 @@ const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => 
 
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
-  const block_id = block.block.header.number.toNumber();
-  const event_idx = event.idx;
+  const blockId = block.block.header.number.toNumber();
+  const eventIdx = event.idx;
+
+  const moduleId = event.event.section.toLowerCase();
+  const eventId = event.event.method;
 
   const args = event.event.data.toArray();
+
+  const handlerArgs: [number, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
+    blockId,
+    eventId as EventIdEnum,
+    moduleId as ModuleIdEnum,
+    args,
+    event,
+  ];
+  const handlerPromises = [
+    mapStakingEvent(...handlerArgs),
+    mapSto(eventId, moduleId, args),
+    mapExternalAgentAction(...handlerArgs),
+    mapTickerExternalAgentAdded(...handlerArgs),
+    mapTickerExternalAgentHistory(...handlerArgs),
+    mapFunding(...handlerArgs),
+    mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapInvestment(...handlerArgs),
+    mapSettlement(...handlerArgs),
+    mapCorporateActions(...handlerArgs),
+    mapProposal(...handlerArgs),
+    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+  ];
+
   const harvesterLikeArgs = args.map((arg, i) => ({
     value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
   }));
-  const { event_arg_0, event_arg_1, event_arg_2, event_arg_3 } =
-    extractEventArgs(harvesterLikeArgs);
-  const { claim_expiry, claim_issuer, claim_scope, claim_type } =
-    extractClaimInfo(harvesterLikeArgs);
+  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
+  const {
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    claimType,
+    issuanceDate,
+    lastUpdateDate,
+    cddId,
+    jurisdiction,
+  } = extractClaimInfo(harvesterLikeArgs);
+
+  handlerPromises.push(
+    mapClaim(...handlerArgs, {
+      claimExpiry,
+      claimIssuer,
+      claimScope,
+      claimType,
+      issuanceDate,
+      lastUpdateDate,
+      cddId,
+      jurisdiction,
+    })
+  );
 
   await Event.create({
-    id: `${block_id}/${event_idx}`,
-    block_id,
-    event_idx,
-    extrinsic_idx: event.extrinsic?.idx,
-    spec_version_id: block.specVersion,
-    module_id: event.event.section.toLowerCase(),
-    event_id: event.event.method,
-    attributes_txt: JSON.stringify(harvesterLikeArgs),
-    event_arg_0,
-    event_arg_1,
-    event_arg_2,
-    event_arg_3,
-    claim_type,
-    claim_expiry,
-    claim_issuer,
-    claim_scope,
-    corporate_action_ticker: extractCorporateActionTicker(harvesterLikeArgs),
-    fundraiser_offering_asset: extractOfferingAsset(harvesterLikeArgs),
-    transfer_to: extractTransferTo(harvesterLikeArgs),
+    id: `${blockId}/${eventIdx}`,
+    blockId,
+    eventIdx,
+    extrinsicIdx: event.extrinsic?.idx,
+    specVersionId: block.specVersion,
+    eventId,
+    moduleId,
+    attributesTxt: JSON.stringify(harvesterLikeArgs),
+    eventArg_0,
+    eventArg_1,
+    eventArg_2,
+    eventArg_3,
+    claimType,
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
+    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
+    transferTo: extractTransferTo(harvesterLikeArgs),
   }).save();
+
+  await Promise.all(handlerPromises);
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
-  const block_id = extrinsic.block.block.header.number.toNumber();
-  const extrinsic_idx = extrinsic.idx;
-  const signedby_address = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedby_address
+  const blockId = extrinsic.block.block.header.number.toNumber();
+  const extrinsicIdx = extrinsic.idx;
+  const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
+  const address = signedbyAddress
     ? hexStripPrefix(
         u8aToHex(
           decodeAddress(
@@ -124,19 +186,19 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     : null;
 
   await Extrinsic.create({
-    id: `${block_id}/${extrinsic_idx}`,
-    block_id,
-    extrinsic_idx,
-    extrinsic_length: extrinsic.extrinsic.length,
+    id: `${blockId}/${extrinsicIdx}`,
+    blockId,
+    extrinsicIdx,
+    extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    module_id: extrinsic.extrinsic.method.section.toLowerCase(),
-    call_id: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    params_txt: JSON.stringify(serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)),
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
+    paramsTxt: JSON.stringify(serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)),
     success: extrinsic.success ? 1 : 0,
-    signedby_address: signedby_address ? 1 : 0,
+    signedbyAddress: signedbyAddress ? 1 : 0,
     address,
     nonce: extrinsic.extrinsic.nonce.toJSON(),
-    extrinsic_hash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
-    spec_version_id: extrinsic.block.specVersion,
+    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+    specVersionId: extrinsic.block.specVersion,
   }).save();
 }
