@@ -1,6 +1,9 @@
+import { decodeAddress } from '@polkadot/keyring';
+import { Codec } from '@polkadot/types/types';
+import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
+import { SubstrateExtrinsic } from '@subql/types';
 import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
 import { AssetIdentifier, FoundType } from '../types';
-
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -71,6 +74,56 @@ export const findTopLevelCommas = (text: string, exitOnFirst = false): number[] 
     throw new Error(`No top level comma found in ${text}, it probably isn't a map`);
   }
   return commas;
+};
+
+export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V): V => {
+  const v = map.get(key);
+  if (v !== undefined) {
+    return v;
+  } else {
+    const def = getDefault();
+    map.set(key, def);
+    return def;
+  }
+};
+
+export const serializeTicker = (item: Codec): string => {
+  return removeNullChars(u8aToString(item.toU8a()));
+};
+export const serializeAccount = (item: Codec): string | null => {
+  const s = item.toString();
+
+  if (s.trim().length === 0) {
+    return null;
+  }
+  return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
+};
+
+export const getFirstKeyFromJson = (item: Codec): string => {
+  return Object.keys(item.toJSON())[0];
+};
+
+export const getFirstValueFromJson = (item: Codec): string => {
+  return item.toJSON()[getFirstKeyFromJson(item)];
+};
+
+export const getTextValue = (item: Codec): string => {
+  return item.toString().trim().length === 0 ? null : item.toString().trim();
+};
+
+export const hexToString = (input: string): string => {
+  const hex = hexStripPrefix(input);
+  let str = '';
+  for (let i = 0; i < hex.length; i += 2)
+    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  return removeNullChars(str);
+};
+
+export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
+  const parsed = JSON.parse(extrinsic.extrinsic.toString());
+  return u8aToHex(
+    decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
+  );
 };
 
 export const harvesterLikeParamsToObj = (

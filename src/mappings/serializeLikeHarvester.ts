@@ -5,13 +5,14 @@ import {
   findTopLevelCommas,
   fromEntries,
   removeNullChars,
+  serializeTicker,
 } from './util';
 import { Enum, Option, Vec, Compact, Struct, Tuple, Result, VecFixed } from '@polkadot/types/codec';
 import { CodecMap } from '@polkadot/types/codec/Map';
 import { TextDecoder } from 'util';
 import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
 import BN from 'bn.js';
-import { u8aToHex, u8aToString, hexStripPrefix } from '@polkadot/util';
+import { u8aToHex, hexStripPrefix } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 
 /**
@@ -65,7 +66,7 @@ export const serializeLikeHarvester = (
   } else if (rawType === 'Text') {
     return removeNullChars(item.toString());
   } else if (type === 'Ticker') {
-    return removeNullChars(u8aToString(item.toU8a()));
+    return serializeTicker(item);
   } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
     return {

@@ -1,7 +1,7 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, Authorization, Settlement } from '../../types';
+import { Asset, AssetHolder, AssetAuthorization, AssetSettlement } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
@@ -15,20 +15,19 @@ const getAsset = async (ticker: string) => {
 };
 
 const getSettlementLegs = async (id: number) => {
-  const settlement = await Settlement.getBySettlementId(id);
+  const settlement = await AssetSettlement.getBySettlementId(id);
   if (!settlement) throw new Error(`Settlement with id ${id} was not found.`);
   return settlement;
 };
 
 const getAuthorization = async (id: string) => {
-  const authorization = await Authorization.get(id);
-  if (!authorization)
-    throw new Error(`Authorization with id ${id} was not found.`);
+  const authorization = await AssetAuthorization.get(id);
+  if (!authorization) throw new Error(`Authorization with id ${id} was not found.`);
   return authorization;
 };
 
 const getHolderAmount = (did: string, holders: AssetHolder[]) => {
-  const holder = holders.find((h) => h.did === did);
+  const holder = holders.find(h => h.did === did);
   return holder ? new BigNumber(holder.amount) : new BigNumber(0);
 };
 
@@ -40,19 +39,8 @@ const getComplianceConditions = (conditions: any[], extrinsic: any) =>
 // #endregion
 
 // #region ModuleIdEnum.Asset
-const handleCreateAsset = async (
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
-  const {
-    name,
-    ticker,
-    assetType: type,
-    fundingRound,
-    divisible,
-    disableIu,
-    identifiers,
-  } = params;
+const handleCreateAsset = async (params: Record<string, any>, extrinsic: any) => {
+  const { name, ticker, assetType: type, fundingRound, divisible, disableIu, identifiers } = params;
   const ownerDid = extrinsic.events[1].event.data[0].toString();
   await Asset.create({
     id: ticker,
@@ -96,10 +84,7 @@ type AssetNewDocument = {
   filing_date?: Date;
 };
 
-const handleAddDocuments = async (
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleAddDocuments = async (params: Record<string, any>, extrinsic: any) => {
   const { ticker, docs } = params;
   const asset = await getAsset(ticker);
   asset.documents = docs.map((doc: AssetNewDocument, i: number) => ({
@@ -113,7 +98,7 @@ const handleAddDocuments = async (
 const handleRemoveDocuments = async (params: Record<string, any>) => {
   const { ticker, ids } = params;
   const asset = await getAsset(ticker);
-  asset.documents = asset.documents.filter((doc) => !ids.includes(doc.id));
+  asset.documents = asset.documents.filter(doc => !ids.includes(doc.id));
   await asset.save();
 };
 
@@ -136,7 +121,7 @@ const handleIssue = async (params: Record<string, any>) => {
   const asset = await getAsset(ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
   const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
-  const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
+  const otherHolders = asset.holders.filter(h => h.did !== asset.ownerDid);
   asset.holders = [
     ...otherHolders,
     {
@@ -144,9 +129,7 @@ const handleIssue = async (params: Record<string, any>) => {
       amount: ownerAmount.plus(formattedAmount).toString(),
     },
   ];
-  asset.totalSupply = new BigNumber(asset.totalSupply)
-    .plus(formattedAmount)
-    .toString();
+  asset.totalSupply = new BigNumber(asset.totalSupply).plus(formattedAmount).toString();
   await asset.save();
 };
 
@@ -155,7 +138,7 @@ const handleRedeem = async (params: Record<string, any>) => {
   const asset = await getAsset(ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
   const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
-  const otherHolders = asset.holders.filter((h) => h.did !== asset.ownerDid);
+  const otherHolders = asset.holders.filter(h => h.did !== asset.ownerDid);
   asset.holders = [
     ...otherHolders,
     {
@@ -163,9 +146,7 @@ const handleRedeem = async (params: Record<string, any>) => {
       amount: ownerAmount.minus(formattedAmount).toString(),
     },
   ];
-  asset.totalSupply = new BigNumber(asset.totalSupply)
-    .minus(formattedAmount)
-    .toString();
+  asset.totalSupply = new BigNumber(asset.totalSupply).minus(formattedAmount).toString();
   await asset.save();
 };
 
@@ -183,29 +164,24 @@ const handleUnfreeze = async (params: Record<string, any>) => {
   await asset.save();
 };
 
-const handleAcceptAssetOwnershipTransfer = async (
-  params: Record<string, any>,
-) => {
+const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) => {
   const { authId } = params;
   const authorization = await getAuthorization(authId);
   if (!authorization.ticker) return;
   const asset = await getAsset(authorization.ticker);
   asset.ownerDid = authorization.target;
   await asset.save();
-  await Authorization.remove(authId);
+  await AssetAuthorization.remove(authId);
 };
 // #endregion
 
 // #region ModuleIdEnum.Settlement
-const handleAddAndAffirmInstruction = async (
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleAddAndAffirmInstruction = async (params: Record<string, any>, extrinsic: any) => {
   const { legs } = params;
   await Promise.all(
     legs.map(async (l: any, i: number) => {
       const settlementId = Number(extrinsic.events[0].event.data[2].toString());
-      await Settlement.create({
+      await AssetSettlement.create({
         id: `${settlementId}-${i + 1}`,
         settlementId,
         from: l.from.did.toString(),
@@ -213,7 +189,7 @@ const handleAddAndAffirmInstruction = async (
         ticker: l.asset.toString(),
         amount: chainAmountToBigNumber(l.amount).toString(),
       }).save();
-    }),
+    })
   );
 };
 
@@ -221,14 +197,12 @@ const handleAffirmInstruction = async (params: Record<string, any>) => {
   const { instructionId } = params;
   const settlementLegs = await getSettlementLegs(instructionId);
   await Promise.all(
-    settlementLegs.map(async (leg) => {
+    settlementLegs.map(async leg => {
       const asset = await getAsset(leg.ticker);
       const settlementAmount = new BigNumber(leg.amount);
       const currentFromAmount = getHolderAmount(leg.from, asset.holders);
       const currentToAmount = getHolderAmount(leg.to, asset.holders);
-      const otherHolders = asset.holders.filter(
-        (h) => ![leg.from, leg.to].includes(h.did),
-      );
+      const otherHolders = asset.holders.filter(h => ![leg.from, leg.to].includes(h.did));
       asset.holders = [
         ...otherHolders,
         {
@@ -240,12 +214,10 @@ const handleAffirmInstruction = async (params: Record<string, any>) => {
           amount: currentToAmount.plus(settlementAmount).toString(),
         },
       ];
-      asset.totalTransfers = new BigNumber(asset.totalTransfers)
-        .plus(new BigNumber(1))
-        .toString();
+      asset.totalTransfers = new BigNumber(asset.totalTransfers).plus(new BigNumber(1)).toString();
       await asset.save();
-      await Settlement.remove(leg.id);
-    }),
+      await AssetSettlement.remove(leg.id);
+    })
   );
 };
 
@@ -253,18 +225,15 @@ const handleRejectInstruction = async (params: Record<string, any>) => {
   const { instructionId } = params;
   const settlementLegs = await getSettlementLegs(instructionId);
   await Promise.all(
-    settlementLegs.map(async (leg) => {
-      await Settlement.remove(leg.id);
-    }),
+    settlementLegs.map(async leg => {
+      await AssetSettlement.remove(leg.id);
+    })
   );
 };
 // #endregion
 
 // #region ModuleIdEnum.Identity
-const handleAddAuthorization = async (
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleAddAuthorization = async (params: Record<string, any>, extrinsic: any) => {
   const { target: targetData, authorizationData } = params;
   const id = extrinsic.events[0].event.data[3].toString();
   const source = extrinsic.events[0].event.data[0].toString();
@@ -272,7 +241,7 @@ const handleAddAuthorization = async (
   const type = Object.keys(authorizationData)[0];
   if (type === 'TransferAssetOwnership') {
     const ticker = authorizationData[type].toString();
-    await Authorization.create({
+    await AssetAuthorization.create({
       id,
       source,
       target,
@@ -284,7 +253,7 @@ const handleAddAuthorization = async (
     const ticker = authorizationData[type].col1.toString();
     const group = Object.keys(authorizationData[type].col2)[0];
     if (group === 'Full') {
-      await Authorization.create({
+      await AssetAuthorization.create({
         id,
         source,
         target,
@@ -298,7 +267,7 @@ const handleAddAuthorization = async (
 
 const handleRemoveAuthorization = async (params: Record<string, any>) => {
   const { authId } = params;
-  await Authorization.remove(authId);
+  await AssetAuthorization.remove(authId);
 };
 // #endregion
 
@@ -311,12 +280,10 @@ const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
     return;
   }
   const asset = await getAsset(authorization.ticker);
-  const otherAgents = asset.fullAgents.filter(
-    (a) => a !== authorization.source,
-  );
+  const otherAgents = asset.fullAgents.filter(a => a !== authorization.source);
   asset.fullAgents = [...otherAgents, authorization.target];
   await asset.save();
-  await Authorization.remove(authId);
+  await AssetAuthorization.remove(authId);
 };
 // #endregion
 
@@ -343,49 +310,26 @@ const handleResetAssetCompliance = async (params: Record<string, any>) => {
   await asset.save();
 };
 
-const handleAddComplianceRequirement = async (
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleAddComplianceRequirement = async (params: Record<string, any>, extrinsic: any) => {
   const { ticker, senderConditions, receiverConditions } = params;
-  const newSenderConditions = getComplianceConditions(
-    senderConditions,
-    extrinsic,
-  );
-  const newReceiverConditions = getComplianceConditions(
-    receiverConditions,
-    extrinsic,
-  );
+  const newSenderConditions = getComplianceConditions(senderConditions, extrinsic);
+  const newReceiverConditions = getComplianceConditions(receiverConditions, extrinsic);
   const asset = await getAsset(ticker);
-  asset.compliance.sender = [
-    ...asset.compliance.sender,
-    ...newSenderConditions,
-  ];
-  asset.compliance.receiver = [
-    ...asset.compliance.receiver,
-    ...newReceiverConditions,
-  ];
+  asset.compliance.sender = [...asset.compliance.sender, ...newSenderConditions];
+  asset.compliance.receiver = [...asset.compliance.receiver, ...newReceiverConditions];
   await asset.save();
 };
 
-const handleRemoveComplianceRequirement = async (
-  params: Record<string, any>,
-) => {
+const handleRemoveComplianceRequirement = async (params: Record<string, any>) => {
   const { ticker, id } = params;
   const asset = await getAsset(ticker);
-  asset.compliance.sender = asset.compliance.sender.filter((s) => s.id !== id);
-  asset.compliance.receiver = asset.compliance.receiver.filter(
-    (s) => s.id !== id,
-  );
+  asset.compliance.sender = asset.compliance.sender.filter(s => s.id !== id);
+  asset.compliance.receiver = asset.compliance.receiver.filter(s => s.id !== id);
   await asset.save();
 };
 // #endregion
 
-const handleAsset = async (
-  callId: CallIdEnum,
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleAsset = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
   if (callId === CallIdEnum.CreateAsset) {
     await handleCreateAsset(params, extrinsic);
   }
@@ -427,7 +371,7 @@ const handleAsset = async (
 const handleSettlement = async (
   callId: CallIdEnum,
   params: Record<string, any>,
-  extrinsic: any,
+  extrinsic: any
 ) => {
   if (callId === CallIdEnum.AddAndAffirmInstruction) {
     await handleAddAndAffirmInstruction(params, extrinsic);
@@ -440,11 +384,7 @@ const handleSettlement = async (
   }
 };
 
-const handleIdentity = async (
-  callId: CallIdEnum,
-  params: Record<string, any>,
-  extrinsic: any,
-) => {
+const handleIdentity = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
   if (callId === CallIdEnum.AddAuthorization) {
     await handleAddAuthorization(params, extrinsic);
   }
@@ -453,10 +393,7 @@ const handleIdentity = async (
   }
 };
 
-const handleExternalAgents = async (
-  callId: CallIdEnum,
-  params: Record<string, any>,
-) => {
+const handleExternalAgents = async (callId: CallIdEnum, params: Record<string, any>) => {
   if (callId === CallIdEnum.AcceptBecomeAgent) {
     await handleAcceptBecomeAgent(params);
   }
@@ -465,7 +402,7 @@ const handleExternalAgents = async (
 const handleComplianceManager = async (
   callId: CallIdEnum,
   params: Record<string, any>,
-  extrinsic: any,
+  extrinsic: any
 ) => {
   if (callId === CallIdEnum.PauseAssetCompliance) {
     await handlePauseAssetCompliance(params);
@@ -489,7 +426,7 @@ export async function mapAsset(
   callId: CallIdEnum,
   moduleId: ModuleIdEnum,
   params: Record<string, any>,
-  extrinsic: SubstrateExtrinsic,
+  extrinsic: SubstrateExtrinsic
 ): Promise<void> {
   if (
     !extrinsic.success ||
