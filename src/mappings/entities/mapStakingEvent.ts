@@ -30,6 +30,12 @@ export async function mapStakingEvent(
   event: SubstrateEvent
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.Staking && isStakingEventType(eventId)) {
+    let amount: any = null;
+    if (eventId === StakingEventType.Slash) {
+      amount = params[1].toJSON();
+    } else if (bondedUnbondedOrReward.has(eventId)) {
+      amount = params[2].toJSON();
+    }
     await StakingEvent.create({
       id: `${blockId}/${event.idx}`,
       blockId,
@@ -38,12 +44,7 @@ export async function mapStakingEvent(
       date: event.block.timestamp,
       identityId: eventId === StakingEventType.Slash ? null : params[0].toJSON(),
       stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
-      amount:
-        eventId === StakingEventType.Slash
-          ? params[1].toJSON()
-          : bondedUnbondedOrReward.has(eventId)
-          ? params[2].toJSON()
-          : null,
+      amount,
       nominatedValidators: eventId === 'Nominated' ? params[2].toJSON() : null,
     }).save();
   }

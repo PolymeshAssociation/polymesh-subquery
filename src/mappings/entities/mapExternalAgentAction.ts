@@ -66,7 +66,9 @@ class ExternalAgentEventsManager {
 
   // explicit private empty constructor
   // eslint-disable-next-line no-useless-constructor, @typescript-eslint/no-empty-function
-  private constructor() {}
+  private constructor() {
+    // This is intentional
+  }
   public async getTicker(
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,

@@ -107,26 +107,19 @@ async function handleInstructionCreated(
   event: SubstrateEvent
 ) {
   const signer = getSigner(event.extrinsic);
-
-  const legs = [];
-  const rawLegs = params[6].toJSON() as any;
-  for (let i = 0; i < rawLegs.length; i++) {
-    const leg = rawLegs[i];
-    const { from, to, asset, amount } = leg;
-    const serializedTicker = hexToString(asset);
-    legs.push({
-      ticker: serializedTicker,
-      amount,
-      from: {
-        did: from.did,
-        number: from.kind.user || 0,
-      },
-      to: {
-        did: to.did,
-        number: to.kind.user || 0,
-      },
-    });
-  }
+  const rawLegs = params[6].toJSON() as any[];
+  const legs = rawLegs.map(({ asset, amount, from, to }) => ({
+    ticker: hexToString(asset),
+    amount,
+    from: {
+      did: from.did,
+      number: from.kind.user || 0,
+    },
+    to: {
+      did: to.did,
+      number: to.kind.user || 0,
+    },
+  }));
   const instruction = Instruction.create({
     id: getTextValue(params[2]),
     eventId,
