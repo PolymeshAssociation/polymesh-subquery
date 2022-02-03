@@ -1,23 +1,17 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, AssetAuthorization, AssetSettlement } from '../../types';
+import { Asset, AssetHolder, AssetAuthorization } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
 const chainAmountToBigNumber = (amount: number): BigNumber =>
   new BigNumber(amount).div(new BigNumber(1000000));
 
-const getAsset = async (ticker: string) => {
+export const getAsset = async (ticker: string): Promise<Asset> => {
   const asset = await Asset.getByTicker(ticker);
   if (!asset) throw new Error(`Asset with ticker ${ticker} was not found.`);
   return asset;
-};
-
-const getSettlementLegs = async (id: number) => {
-  const settlement = await AssetSettlement.getBySettlementId(id);
-  if (!settlement) throw new Error(`Settlement with id ${id} was not found.`);
-  return settlement;
 };
 
 const getAuthorization = async (id: string) => {
@@ -26,7 +20,7 @@ const getAuthorization = async (id: string) => {
   return authorization;
 };
 
-const getHolderAmount = (did: string, holders: AssetHolder[]) => {
+export const getHolderAmount = (did: string, holders: AssetHolder[]): BigNumber => {
   const holder = holders.find(h => h.did === did);
   return holder ? new BigNumber(holder.amount) : new BigNumber(0);
 };
@@ -175,63 +169,6 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
 };
 // #endregion
 
-// #region ModuleIdEnum.Settlement
-const handleAddAndAffirmInstruction = async (params: Record<string, any>, extrinsic: any) => {
-  const { legs } = params;
-  await Promise.all(
-    legs.map(async (l: any, i: number) => {
-      const settlementId = Number(extrinsic.events[0].event.data[2].toString());
-      await AssetSettlement.create({
-        id: `${settlementId}-${i + 1}`,
-        settlementId,
-        from: l.from.did.toString(),
-        to: l.to.did.toString(),
-        ticker: l.asset.toString(),
-        amount: chainAmountToBigNumber(l.amount).toString(),
-      }).save();
-    })
-  );
-};
-
-const handleAffirmInstruction = async (params: Record<string, any>) => {
-  const { instructionId } = params;
-  const settlementLegs = await getSettlementLegs(instructionId);
-  await Promise.all(
-    settlementLegs.map(async leg => {
-      const asset = await getAsset(leg.ticker);
-      const settlementAmount = new BigNumber(leg.amount);
-      const currentFromAmount = getHolderAmount(leg.from, asset.holders);
-      const currentToAmount = getHolderAmount(leg.to, asset.holders);
-      const otherHolders = asset.holders.filter(h => ![leg.from, leg.to].includes(h.did));
-      asset.holders = [
-        ...otherHolders,
-        {
-          did: leg.from,
-          amount: currentFromAmount.minus(settlementAmount).toString(),
-        },
-        {
-          did: leg.to,
-          amount: currentToAmount.plus(settlementAmount).toString(),
-        },
-      ];
-      asset.totalTransfers = new BigNumber(asset.totalTransfers).plus(new BigNumber(1)).toString();
-      await asset.save();
-      await AssetSettlement.remove(leg.id);
-    })
-  );
-};
-
-const handleRejectInstruction = async (params: Record<string, any>) => {
-  const { instructionId } = params;
-  const settlementLegs = await getSettlementLegs(instructionId);
-  await Promise.all(
-    settlementLegs.map(async leg => {
-      await AssetSettlement.remove(leg.id);
-    })
-  );
-};
-// #endregion
-
 // #region ModuleIdEnum.Identity
 const handleAddAuthorization = async (params: Record<string, any>, extrinsic: any) => {
   const { target: targetData, authorizationData } = params;
@@ -368,22 +305,6 @@ const handleAsset = async (callId: CallIdEnum, params: Record<string, any>, extr
   }
 };
 
-const handleSettlement = async (
-  callId: CallIdEnum,
-  params: Record<string, any>,
-  extrinsic: any
-) => {
-  if (callId === CallIdEnum.AddAndAffirmInstruction) {
-    await handleAddAndAffirmInstruction(params, extrinsic);
-  }
-  if (callId === CallIdEnum.AffirmInstruction) {
-    await handleAffirmInstruction(params);
-  }
-  if (callId === CallIdEnum.RejectInstruction) {
-    await handleRejectInstruction(params);
-  }
-};
-
 const handleIdentity = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
   if (callId === CallIdEnum.AddAuthorization) {
     await handleAddAuthorization(params, extrinsic);
@@ -428,23 +349,10 @@ export async function mapAsset(
   params: Record<string, any>,
   extrinsic: SubstrateExtrinsic
 ): Promise<void> {
-  if (
-    !extrinsic.success ||
-    ![
-      ModuleIdEnum.Asset,
-      ModuleIdEnum.Settlement,
-      ModuleIdEnum.Identity,
-      ModuleIdEnum.Externalagents,
-      ModuleIdEnum.Compliancemanager,
-    ].includes(moduleId)
-  ) {
-    return;
-  }
+  if (!extrinsic.success) return;
+
   if (moduleId === ModuleIdEnum.Asset) {
     await handleAsset(callId, params, extrinsic);
-  }
-  if (moduleId === ModuleIdEnum.Settlement) {
-    await handleSettlement(callId, params, extrinsic);
   }
   if (moduleId === ModuleIdEnum.Identity) {
     await handleIdentity(callId, params, extrinsic);

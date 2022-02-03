@@ -313,15 +313,6 @@ type AssetIdentifier @jsonField {
   value: String!
 }
 
-type AssetSettlement @entity {
-  id: ID!
-  settlementId: Int! @index(unique: false) # not unique due to multiple legs
-  from: String! @index(unique: false)
-  to: String! @index(unique: false)
-  ticker: String! @index(unique: false)
-  amount: String!
-}
-
 type AssetAuthorization @entity {
   id: ID! # authorization id
   source: String! @index(unique: false)
