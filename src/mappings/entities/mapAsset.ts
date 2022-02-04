@@ -1,7 +1,7 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, AssetPendingOwnership } from '../../types';
+import { Asset, AssetHolder, AssetPendingOwnership, AssetAdvancedCompliance } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
@@ -30,6 +30,26 @@ const getComplianceConditions = (conditions: any[], extrinsic: any) =>
     id: Number(extrinsic.events[0].event.data[2].id.toString()),
     data: JSON.stringify(c),
   }));
+
+const getTargetTransferManager = (
+  manager: AssetAdvancedCompliance,
+  managers: AssetAdvancedCompliance[]
+) =>
+  managers.find(
+    e =>
+      e.CountTransferManager === manager.CountTransferManager &&
+      e.PercentageTransferManager === manager.PercentageTransferManager
+  );
+
+const excludeTransferManager = (
+  manager: AssetAdvancedCompliance,
+  managers: AssetAdvancedCompliance[]
+) =>
+  managers.filter(
+    e =>
+      e.CountTransferManager !== manager.CountTransferManager ||
+      e.PercentageTransferManager !== manager.PercentageTransferManager
+  );
 // #endregion
 
 // #region ModuleIdEnum.Asset
@@ -52,7 +72,7 @@ const handleCreateAsset = async (params: Record<string, any>, extrinsic: any) =>
     holders: [],
     totalSupply: '0',
     totalTransfers: '0',
-    compliance: { isPaused: false, sender: [], receiver: [] },
+    compliance: { isPaused: false, sender: [], receiver: [], advanced: [] },
   }).save();
 };
 
@@ -264,6 +284,57 @@ const handleRemoveComplianceRequirement = async (params: Record<string, any>) =>
 };
 // #endregion
 
+// #region ModuleIdEnum.Externalagents
+const handleAddTransferManager = async (params: Record<string, any>) => {
+  const { ticker, newTransferManager } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.advanced = [...asset.compliance.advanced, newTransferManager];
+  await asset.save();
+};
+
+const handleRemoveTransferManager = async (params: Record<string, any>) => {
+  const { ticker, transferManager } = params;
+  const asset = await getAsset(ticker);
+  asset.compliance.advanced = excludeTransferManager(transferManager, asset.compliance.advanced);
+  await asset.save();
+};
+
+const handleAddExemptedEntities = async (params: Record<string, any>) => {
+  const { ticker, transferManager } = params;
+  const asset = await getAsset(ticker);
+  const targetTransferManager = getTargetTransferManager(
+    transferManager,
+    asset.compliance.advanced
+  );
+  if (!targetTransferManager) return;
+  targetTransferManager.ExemptedEntities = [
+    ...new Set<string>([
+      ...targetTransferManager.ExemptedEntities,
+      ...transferManager.exemptedEntities,
+    ]),
+  ];
+  const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
+  asset.compliance.advanced = [...otherTransferManagers, targetTransferManager];
+  await asset.save();
+};
+
+const handleRemoveExemptedEntities = async (params: Record<string, any>) => {
+  const { ticker, transferManager } = params;
+  const asset = await getAsset(ticker);
+  const targetTransferManager = getTargetTransferManager(
+    transferManager,
+    asset.compliance.advanced
+  );
+  if (!targetTransferManager) return;
+  targetTransferManager.ExemptedEntities = targetTransferManager.ExemptedEntities.filter(
+    e => !transferManager.exemptedEntities.includes(e)
+  );
+  const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
+  asset.compliance.advanced = [...otherTransferManagers, targetTransferManager];
+  await asset.save();
+};
+// #endregion
+
 const handleAsset = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
   if (callId === CallIdEnum.CreateAsset) {
     await handleCreateAsset(params, extrinsic);
@@ -340,6 +411,21 @@ const handleComplianceManager = async (
   }
 };
 
+const handleStatistics = async (callId: CallIdEnum, params: Record<string, any>) => {
+  if (callId === CallIdEnum.AddTransferManager) {
+    await handleAddTransferManager(params);
+  }
+  if (callId === CallIdEnum.RemoveTransferManager) {
+    await handleRemoveTransferManager(params);
+  }
+  if (callId === CallIdEnum.AddExemptedEntities) {
+    await handleAddExemptedEntities(params);
+  }
+  if (callId === CallIdEnum.RemoveExemptedEntities) {
+    await handleRemoveExemptedEntities(params);
+  }
+};
+
 export async function mapAsset(
   blockId: number,
   callId: CallIdEnum,
@@ -360,5 +446,8 @@ export async function mapAsset(
   }
   if (moduleId === ModuleIdEnum.Compliancemanager) {
     await handleComplianceManager(callId, params, extrinsic);
+  }
+  if (moduleId === ModuleIdEnum.Statistics) {
+    await handleStatistics(callId, params);
   }
 }

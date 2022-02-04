@@ -327,10 +327,17 @@ type AssetComplianceRequirement @jsonField {
   data: String!
 }
 
+type AssetAdvancedCompliance @jsonField {
+  CountTransferManager: String
+  PercentageTransferManager: String
+  ExemptedEntities: [String]!
+}
+
 type AssetCompliance @jsonField {
   isPaused: Boolean!
   sender: [AssetComplianceRequirement]!
   receiver: [AssetComplianceRequirement]!
+  advanced: [AssetAdvancedCompliance]!
 }
 
 type Asset @entity {

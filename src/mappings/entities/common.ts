@@ -380,6 +380,10 @@ export enum CallIdEnum {
   ResetAssetCompliance = 'resetAssetCompliance',
   AddComplianceRequirement = 'addComplianceRequirement',
   RemoveComplianceRequirement = 'removeComplianceRequirement',
+  AddTransferManager = 'addTransferManager',
+  RemoveTransferManager = 'removeTransferManager',
+  AddExemptedEntities = 'addExemptedEntities',
+  RemoveExemptedEntities = 'removeExemptedEntities',
 }
 
 export enum ClaimTypeEnum {
