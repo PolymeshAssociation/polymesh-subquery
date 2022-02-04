@@ -1,7 +1,7 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, AssetAuthorization } from '../../types';
+import { Asset, AssetHolder, AssetPendingOwnership } from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
@@ -15,7 +15,7 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
 };
 
 const getAuthorization = async (id: string) => {
-  const authorization = await AssetAuthorization.get(id);
+  const authorization = await AssetPendingOwnership.get(id);
   if (!authorization) throw new Error(`Authorization with id ${id} was not found.`);
   return authorization;
 };
@@ -163,48 +163,46 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
   const authorization = await getAuthorization(authId);
   if (!authorization.ticker) return;
   const asset = await getAsset(authorization.ticker);
-  asset.ownerDid = authorization.target;
+  asset.ownerDid = authorization.to;
   await asset.save();
-  await AssetAuthorization.remove(authId);
+  await AssetPendingOwnership.remove(authId);
 };
 // #endregion
 
 // #region ModuleIdEnum.Identity
-const handleAddAuthorization = async (params: Record<string, any>, extrinsic: any) => {
+const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
   const { target: targetData, authorizationData } = params;
   const id = extrinsic.events[0].event.data[3].toString();
-  const source = extrinsic.events[0].event.data[0].toString();
-  const target = targetData.Identity.toString();
+  let ticker: string;
+  const from = extrinsic.events[0].event.data[0].toString();
+  const to = targetData.Identity.toString();
   const type = Object.keys(authorizationData)[0];
+  let data: any;
   if (type === 'TransferAssetOwnership') {
-    const ticker = authorizationData[type].toString();
-    await AssetAuthorization.create({
-      id,
-      source,
-      target,
-      type,
-      ticker,
-    }).save();
+    ticker = authorizationData[type].toString();
   }
   if (type === 'BecomeAgent') {
-    const ticker = authorizationData[type].col1.toString();
+    ticker = authorizationData[type].col1.toString();
     const group = Object.keys(authorizationData[type].col2)[0];
     if (group === 'Full') {
-      await AssetAuthorization.create({
-        id,
-        source,
-        target,
-        type,
-        ticker,
-        data: JSON.stringify({ group }),
-      }).save();
+      data = JSON.stringify({ group });
     }
   }
+  await AssetPendingOwnership.create({
+    id,
+    ticker,
+    from,
+    to,
+    type,
+    data,
+  }).save();
 };
 
-const handleRemoveAuthorization = async (params: Record<string, any>) => {
+const handleRemovePendingOwnership = async (params: Record<string, any>) => {
   const { authId } = params;
-  await AssetAuthorization.remove(authId);
+  await AssetPendingOwnership.remove(authId).catch(() => {
+    // if authorization not found, ignore it
+  });
 };
 // #endregion
 
@@ -217,10 +215,10 @@ const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
     return;
   }
   const asset = await getAsset(authorization.ticker);
-  const otherAgents = asset.fullAgents.filter(a => a !== authorization.source);
-  asset.fullAgents = [...otherAgents, authorization.target];
+  const otherAgents = asset.fullAgents.filter(a => a !== authorization.from);
+  asset.fullAgents = [...otherAgents, authorization.to];
   await asset.save();
-  await AssetAuthorization.remove(authId);
+  await AssetPendingOwnership.remove(authId);
 };
 // #endregion
 
@@ -307,10 +305,10 @@ const handleAsset = async (callId: CallIdEnum, params: Record<string, any>, extr
 
 const handleIdentity = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
   if (callId === CallIdEnum.AddAuthorization) {
-    await handleAddAuthorization(params, extrinsic);
+    await handleAddPendingOwnership(params, extrinsic);
   }
   if (callId === CallIdEnum.RemoveAuthorization) {
-    await handleRemoveAuthorization(params);
+    await handleRemovePendingOwnership(params);
   }
 };
 
