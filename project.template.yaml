@@ -80,7 +80,7 @@ network:
       'AuthorityList': 'Vec<NextAuthority>',
       'ElectionCompute':
         { '_enum': ['OnChain', 'Signed', 'Authority'] }
-        ### </Harvester compatibility special cases>,,,,,
+        ### </Harvester compatibility special cases>,,,,,,
     }
   typesBundle:
     spec:
@@ -88,9 +88,9 @@ network:
         types:
           [
             {
-              minmax: [3002, 3002],
+              minmax: [3010, 3010],
               types:
-                {
+                &4.1.x {
                   'Address': 'MultiAddress',
                   'LookupSource': 'MultiAddress',
                   'AccountInfo': 'AccountInfoWithDualRefCount',
@@ -1049,6 +1049,7 @@ network:
                   'ItnRewardStatus': { '_enum': { 'Unclaimed': 'Balance', 'Claimed': '' } },
                 },
             },
+            { minmax: [3002, 3002], types: *4.1.x },
             {
               minmax: [3000, 3001],
               types:
