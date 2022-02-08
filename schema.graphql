@@ -313,7 +313,7 @@ type SecurityIdentifier @jsonField {
   value: String!
 }
 
-type AssetPendingOwnership @entity {
+type AssetPendingOwnershipTransfer @entity {
   id: ID! # authorization id
   ticker: String! @index(unique: false)
   from: String! @index(unique: false)

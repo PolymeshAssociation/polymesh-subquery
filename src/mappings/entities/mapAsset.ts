@@ -1,7 +1,12 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
 import { ModuleIdEnum, CallIdEnum } from './common';
-import { Asset, AssetHolder, AssetPendingOwnership, AssetAdvancedCompliance } from '../../types';
+import {
+  Asset,
+  AssetHolder,
+  AssetPendingOwnershipTransfer,
+  AssetAdvancedCompliance,
+} from '../../types';
 import { formatAssetIdentifiers } from '../util';
 
 // #region Utils
@@ -15,7 +20,7 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
 };
 
 const getAuthorization = async (id: string) => {
-  const authorization = await AssetPendingOwnership.get(id);
+  const authorization = await AssetPendingOwnershipTransfer.get(id);
   if (!authorization) throw new Error(`Authorization with id ${id} was not found.`);
   return authorization;
 };
@@ -185,7 +190,7 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
   const asset = await getAsset(authorization.ticker);
   asset.ownerDid = authorization.to;
   await asset.save();
-  await AssetPendingOwnership.remove(authId);
+  await AssetPendingOwnershipTransfer.remove(authId);
 };
 // #endregion
 
@@ -208,7 +213,7 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
       data = JSON.stringify({ group });
     }
   }
-  await AssetPendingOwnership.create({
+  await AssetPendingOwnershipTransfer.create({
     id,
     ticker,
     from,
@@ -220,7 +225,7 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
 
 const handleRemovePendingOwnership = async (params: Record<string, any>) => {
   const { authId } = params;
-  await AssetPendingOwnership.remove(authId).catch(() => {
+  await AssetPendingOwnershipTransfer.remove(authId).catch(() => {
     // if authorization not found, ignore it
   });
 };
@@ -238,7 +243,7 @@ const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
   const otherAgents = asset.fullAgents.filter(a => a !== authorization.from);
   asset.fullAgents = [...otherAgents, authorization.to];
   await asset.save();
-  await AssetPendingOwnership.remove(authId);
+  await AssetPendingOwnershipTransfer.remove(authId);
 };
 // #endregion
 
