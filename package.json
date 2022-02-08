@@ -1,7 +1,7 @@
 {
   "name": "polymesh-subql",
-  "version": "1.0.0",
-  "description": "",
+  "version": "5.0.0",
+  "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -b",
