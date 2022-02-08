@@ -3,7 +3,7 @@ import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
 import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { AssetIdentifier, FoundType } from '../types';
+import { SecurityIdentifier, FoundType } from '../types';
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -138,7 +138,9 @@ export const harvesterLikeParamsToObj = (
   return obj;
 };
 
-export const formatAssetIdentifiers = (identifiers: Record<string, string>[]): AssetIdentifier[] =>
+export const formatAssetIdentifiers = (
+  identifiers: Record<string, string>[]
+): SecurityIdentifier[] =>
   identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
