@@ -308,7 +308,7 @@ type AssetDocument @jsonField {
   link: String!
 }
 
-type AssetIdentifier @jsonField {
+type SecurityIdentifier @jsonField {
   type: String!
   value: String!
 }
@@ -350,7 +350,7 @@ type Asset @entity {
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
   documents: [AssetDocument]!
-  identifiers: [AssetIdentifier]!
+  identifiers: [SecurityIdentifier]!
   ownerDid: String!
   fullAgents: [String!]!
   holders: [AssetHolder]!
