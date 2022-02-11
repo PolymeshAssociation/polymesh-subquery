@@ -79,8 +79,6 @@
     "prettier": "2.3.2",
     "prettier-eslint": "13.0.0",
     "prettier-eslint-cli": "5.0.1",
-    "semantic-release": "^18.0.0",
-    "semantic-release-docker": "^2.2.0",
     "polymesh-local": "^2.1.0",
     "ts-jest": "^27.0.4",
     "ts-node": "^8.10.2",
@@ -89,24 +87,6 @@
   "config": {
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
-    }
-  },
-  "release": {
-    "branches": [
-      "master"
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
-      "semantic-release-docker"
-    ],
-    "verifyConditions": {
-      "path": "semantic-release-docker",
-      "registryUrl": "docker.io"
-    },
-    "publish": {
-      "path": "semantic-release-docker",
-      "name": "docker.io/polymathnet/polymesh-subquery"
     }
   }
 }
