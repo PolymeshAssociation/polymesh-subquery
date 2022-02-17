@@ -205,9 +205,7 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
 
 const handleRemovePendingOwnership = async (params: Record<string, any>) => {
   const { authId } = params;
-  await AssetPendingOwnershipTransfer.remove(authId).catch(() => {
-    // if authorization not found, ignore it
-  });
+  await AssetPendingOwnershipTransfer.remove(authId);
 };
 // #endregion
 
