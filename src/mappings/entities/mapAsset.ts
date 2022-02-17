@@ -25,11 +25,6 @@ const getAuthorization = async (id: string) => {
   return authorization;
 };
 
-export const getHolderAmount = (did: string, holders: AssetHolder[]): BigNumber => {
-  const holder = holders.find(h => h.did === did);
-  return holder ? new BigNumber(holder.amount) : new BigNumber(0);
-};
-
 const getComplianceConditions = (conditions: any[], extrinsic: any) =>
   conditions.map((c: any) => ({
     id: Number(extrinsic.events[0].event.data[2].id.toString()),
@@ -74,7 +69,6 @@ const handleCreateAsset = async (params: Record<string, any>, extrinsic: any) =>
     identifiers: formatAssetIdentifiers(identifiers),
     ownerDid,
     fullAgents: [ownerDid],
-    holders: [],
     totalSupply: '0',
     totalTransfers: '0',
     compliance: { isPaused: false, sender: [], receiver: [], advanced: [] },
@@ -139,34 +133,20 @@ const handleIssue = async (params: Record<string, any>) => {
   const { ticker, amount } = params;
   const asset = await getAsset(ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
-  const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
-  const otherHolders = asset.holders.filter(h => h.did !== asset.ownerDid);
-  asset.holders = [
-    ...otherHolders,
-    {
-      did: asset.ownerDid,
-      amount: ownerAmount.plus(formattedAmount).toString(),
-    },
-  ];
+  const assetOwner = await AssetHolder.get(`${asset.ownerDid}:${ticker}`);
+  assetOwner.amount = new BigNumber(assetOwner.amount).plus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).plus(formattedAmount).toString();
-  await asset.save();
+  await Promise.all([asset.save(), assetOwner.save()]);
 };
 
 const handleRedeem = async (params: Record<string, any>) => {
   const { ticker, value: amount } = params;
   const asset = await getAsset(ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
-  const ownerAmount = getHolderAmount(asset.ownerDid, asset.holders);
-  const otherHolders = asset.holders.filter(h => h.did !== asset.ownerDid);
-  asset.holders = [
-    ...otherHolders,
-    {
-      did: asset.ownerDid,
-      amount: ownerAmount.minus(formattedAmount).toString(),
-    },
-  ];
+  const assetOwner = await AssetHolder.get(`${asset.ownerDid}:${ticker}`);
+  assetOwner.amount = new BigNumber(assetOwner.amount).minus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).minus(formattedAmount).toString();
-  await asset.save();
+  await Promise.all([asset.save(), assetOwner.save()]);
 };
 
 const handleFreeze = async (params: Record<string, any>) => {

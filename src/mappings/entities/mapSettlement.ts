@@ -1,10 +1,10 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
-import { Settlement, Instruction } from '../../types';
+import { Settlement, Instruction, AssetHolder } from '../../types';
 import { getSigner, getTextValue, hexToString, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
-import { getAsset, getHolderAmount } from './mapAsset';
+import { getAsset } from './mapAsset';
 
 enum SettlementResultEnum {
   None = 'None',
@@ -191,24 +191,14 @@ async function handleInstructionFinalizedEvent(
       instruction.legs.map(async ({ ticker, amount, from, to }) => {
         const asset = await getAsset(ticker);
         const settlementAmount = new BigNumber(amount);
-        const currentFromAmount = getHolderAmount(from.did, asset.holders);
-        const currentToAmount = getHolderAmount(to.did, asset.holders);
-        const otherHolders = asset.holders.filter(h => ![from.did, to.did].includes(h.did));
-        asset.holders = [
-          ...otherHolders,
-          {
-            did: from.did,
-            amount: currentFromAmount.minus(settlementAmount).toString(),
-          },
-          {
-            did: to.did,
-            amount: currentToAmount.plus(settlementAmount).toString(),
-          },
-        ];
+        const fromHolder = await AssetHolder.get(`${from.did}:${ticker}`);
+        const toHolder = await AssetHolder.get(`${to.did}:${ticker}`);
+        fromHolder.amount = new BigNumber(fromHolder.amount).minus(settlementAmount).toString();
+        toHolder.amount = new BigNumber(toHolder.amount).plus(settlementAmount).toString();
         asset.totalTransfers = new BigNumber(asset.totalTransfers)
           .plus(new BigNumber(1))
           .toString();
-        await asset.save();
+        await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
       })
     );
   }

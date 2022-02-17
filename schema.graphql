@@ -297,11 +297,6 @@ type IssuerIdentityWithClaims @entity {
   claims: [ClaimJson!]!
 }
 
-type AssetHolder @jsonField {
-  did: String!
-  amount: String!
-}
-
 type AssetDocument @jsonField {
   id: Int! # document id
   name: String!
@@ -340,6 +335,14 @@ type AssetCompliance @jsonField {
   advanced: [AssetAdvancedCompliance]!
 }
 
+type AssetHolder @entity {
+  id: ID! # did:ticker
+  did: String! @index(unique: false)
+  ticker: String! @index(unique: false)
+  amount: String!
+  asset: Asset!
+}
+
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
@@ -353,7 +356,7 @@ type Asset @entity {
   identifiers: [SecurityIdentifier]!
   ownerDid: String!
   fullAgents: [String!]!
-  holders: [AssetHolder]!
+  holders: [AssetHolder]! @derivedFrom(field: "asset")
   totalSupply: String!
   totalTransfers: String!
   compliance: AssetCompliance!
