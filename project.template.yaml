@@ -3,7 +3,7 @@ description: ''
 repository: ''
 schema: ./schema.graphql
 network:
-  endpoint: wss://itn-rpc.polymesh.live
+  endpoint: wss://testnet-rpc.polymesh.live
   types: {
       # <Harvester compatibility special cases>
       'HexBytes': 'Bytes',

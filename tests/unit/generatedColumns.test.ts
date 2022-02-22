@@ -6,7 +6,7 @@ import {
   extractOfferingAsset,
   extractTransferTo,
   JSONStringifyExceptStringAndNull,
-} from "../src/mappings/generatedColumns";
+} from "../../src/mappings/generatedColumns";
 
 test("JSONStringifyExceptStringAndNull", () => {
   expect(JSONStringifyExceptStringAndNull("hello")).toBe("hello");
@@ -27,19 +27,23 @@ test("extractEventArgs", () => {
       { value: { foo: 5 } },
     ])
   ).toStrictEqual({
-    event_arg_0: "null",
-    event_arg_1: "hello",
-    event_arg_2: '{"foo":5}',
-    event_arg_3: null,
+    eventArg_0: "null",
+    eventArg_1: "hello",
+    eventArg_2: '{"foo":5}',
+    eventArg_3: null,
   });
 });
 
 test("extractClaimInfo", () => {
   expect(extractClaimInfo([{ value: "hello" }])).toStrictEqual({
-    claim_expiry: undefined,
-    claim_issuer: undefined,
-    claim_scope: '{"type":null,"value":null}',
-    claim_type: undefined,
+    claimExpiry: undefined,
+    claimIssuer: undefined,
+    claimScope: '{"type":null,"value":null}',
+    claimType: undefined,
+    lastUpdateDate: undefined,
+    issuanceDate: undefined,
+    cddId: undefined,
+    jurisdiction: undefined,
   });
 
   expect(
@@ -47,17 +51,23 @@ test("extractClaimInfo", () => {
       { value: "hello" },
       {
         value: {
-          claim: { CustomerDueDiligence: {} },
+          claim: { CustomerDueDiligence: "0x000001" },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
   ).toStrictEqual({
-    claim_expiry: "400",
-    claim_issuer: "me",
-    claim_scope: null,
-    claim_type: "CustomerDueDiligence",
+    claimExpiry: "400",
+    claimIssuer: "me",
+    claimScope: null,
+    claimType: "CustomerDueDiligence",
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
+    cddId: "0x000001",
+    jurisdiction: undefined,
   });
 
   expect(
@@ -70,14 +80,20 @@ test("extractClaimInfo", () => {
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
   ).toStrictEqual({
-    claim_expiry: "400",
-    claim_issuer: "me",
-    claim_scope: '{"type":"type","value":"Ticker"}',
-    claim_type: "InvestorUniqueness",
+    claimExpiry: "400",
+    claimIssuer: "me",
+    claimScope: '{"type":"type","value":"Ticker"}',
+    claimType: "InvestorUniqueness",
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
+    cddId: undefined,
+    jurisdiction: undefined,
   });
 
   expect(
@@ -86,18 +102,27 @@ test("extractClaimInfo", () => {
       {
         value: {
           claim: {
-            Jurisdiction: { col2: { type: "Ticker", value: "STONK" } },
+            Jurisdiction: {
+              col1: "IN",
+              col2: { type: "Ticker", value: "STONK" },
+            },
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
   ).toStrictEqual({
-    claim_expiry: "400",
-    claim_issuer: "me",
-    claim_scope: '{"type":"type","value":"Ticker"}',
-    claim_type: "Jurisdiction",
+    claimExpiry: "400",
+    claimIssuer: "me",
+    claimScope: '{"type":"type","value":"Ticker"}',
+    claimType: "Jurisdiction",
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
+    cddId: undefined,
+    jurisdiction: "IN",
   });
 
   expect(
@@ -110,14 +135,20 @@ test("extractClaimInfo", () => {
           },
           claim_issuer: "me",
           expiry: 400,
+          last_update_date: 12345,
+          issuance_date: 12345,
         },
       },
     ])
   ).toStrictEqual({
-    claim_expiry: "400",
-    claim_issuer: "me",
-    claim_scope: '{"type":"type","value":"Ticker"}',
-    claim_type: "Affiliate",
+    claimExpiry: "400",
+    claimIssuer: "me",
+    claimScope: '{"type":"type","value":"Ticker"}',
+    claimType: "Affiliate",
+    lastUpdateDate: "12345",
+    issuanceDate: "12345",
+    cddId: undefined,
+    jurisdiction: undefined,
   });
 });
 

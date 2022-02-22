@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "incremental": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
