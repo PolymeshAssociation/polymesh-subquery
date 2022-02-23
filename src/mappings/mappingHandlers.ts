@@ -142,7 +142,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     id: `${blockId}/${eventIdx}`,
     blockId,
     eventIdx,
-    extrinsicIdx: event.extrinsic?.idx,
+    extrinsicIdx: event?.extrinsic?.idx,
     specVersionId: block.specVersion,
     eventId,
     moduleId,
