@@ -400,3 +400,12 @@ export enum ClaimTypeEnum {
   NoData = 'NoData',
   InvestorUniquenessV2 = 'InvestorUniquenessV2',
 }
+
+export enum AuthorizationTypeEnum {
+  TransferAssetOwnership = 'TransferAssetOwnership',
+  BecomeAgent = 'BecomeAgent',
+}
+
+export enum AgentTypeEnum {
+  Full = 'Full',
+}

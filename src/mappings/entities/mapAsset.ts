@@ -1,6 +1,6 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
-import { ModuleIdEnum, CallIdEnum } from './common';
+import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum, AgentTypeEnum } from './common';
 import {
   Asset,
   AssetHolder,
@@ -50,6 +50,20 @@ const excludeTransferManager = (
       e.CountTransferManager !== manager.CountTransferManager ||
       e.PercentageTransferManager !== manager.PercentageTransferManager
   );
+
+export const getAssetOwner = async (did: string, ticker: string): Promise<AssetHolder> => {
+  const id = `${did}:${ticker}`;
+  let assetOwner = await AssetHolder.get(id);
+  if (!assetOwner) {
+    assetOwner = AssetHolder.create({
+      id,
+      did,
+      ticker,
+      amount: '0',
+    });
+  }
+  return assetOwner;
+};
 // #endregion
 
 // #region ModuleIdEnum.Asset
@@ -132,8 +146,8 @@ const handleMakeDivisible = async (params: Record<string, any>) => {
 const handleIssue = async (params: Record<string, any>) => {
   const { ticker, amount } = params;
   const asset = await getAsset(ticker);
+  const assetOwner = await getAssetOwner(asset.ownerDid, ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
-  const assetOwner = await AssetHolder.get(`${asset.ownerDid}:${ticker}`);
   assetOwner.amount = new BigNumber(assetOwner.amount).plus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).plus(formattedAmount).toString();
   await Promise.all([asset.save(), assetOwner.save()]);
@@ -142,8 +156,8 @@ const handleIssue = async (params: Record<string, any>) => {
 const handleRedeem = async (params: Record<string, any>) => {
   const { ticker, value: amount } = params;
   const asset = await getAsset(ticker);
+  const assetOwner = await getAssetOwner(asset.ownerDid, ticker);
   const formattedAmount = chainAmountToBigNumber(amount);
-  const assetOwner = await AssetHolder.get(`${asset.ownerDid}:${ticker}`);
   assetOwner.amount = new BigNumber(assetOwner.amount).minus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).minus(formattedAmount).toString();
   await Promise.all([asset.save(), assetOwner.save()]);
@@ -177,30 +191,34 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
 // #region ModuleIdEnum.Identity
 const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
   const { target: targetData, authorizationData } = params;
-  const id = extrinsic.events[0].event.data[3].toString();
-  let ticker: string;
-  const from = extrinsic.events[0].event.data[0].toString();
-  const to = targetData.Identity.toString();
-  const type = Object.keys(authorizationData)[0];
-  let data: any;
-  if (type === 'TransferAssetOwnership') {
-    ticker = authorizationData[type].toString();
-  }
-  if (type === 'BecomeAgent') {
-    ticker = authorizationData[type].col1.toString();
-    const group = Object.keys(authorizationData[type].col2)[0];
-    if (group === 'Full') {
-      data = JSON.stringify({ group });
+  const type = Object.keys(authorizationData)[0] as AuthorizationTypeEnum;
+  if (
+    [AuthorizationTypeEnum.TransferAssetOwnership, AuthorizationTypeEnum.BecomeAgent].includes(type)
+  ) {
+    const id = extrinsic.events[0].event.data[3].toString();
+    let ticker: string;
+    const from = extrinsic.events[0].event.data[0].toString();
+    const to = targetData.Identity.toString();
+    let data: any;
+    if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
+      ticker = authorizationData[type].toString();
     }
+    if (type === AuthorizationTypeEnum.BecomeAgent) {
+      ticker = authorizationData[type].col1.toString();
+      const group = Object.keys(authorizationData[type].col2)[0];
+      if (group === AgentTypeEnum.Full) {
+        data = JSON.stringify({ group });
+      }
+    }
+    await AssetPendingOwnershipTransfer.create({
+      id,
+      ticker,
+      from,
+      to,
+      type,
+      data,
+    }).save();
   }
-  await AssetPendingOwnershipTransfer.create({
-    id,
-    ticker,
-    from,
-    to,
-    type,
-    data,
-  }).save();
 };
 
 const handleRemovePendingOwnership = async (params: Record<string, any>) => {
