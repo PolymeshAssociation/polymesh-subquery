@@ -51,18 +51,21 @@ const excludeTransferManager = (
       e.PercentageTransferManager !== manager.PercentageTransferManager
   );
 
-export const getAssetOwner = async (did: string, ticker: string): Promise<AssetHolder> => {
+export const getAssetHolder = async (did: string, asset: Asset): Promise<AssetHolder> => {
+  const { ticker } = asset;
   const id = `${did}:${ticker}`;
-  let assetOwner = await AssetHolder.get(id);
-  if (!assetOwner) {
-    assetOwner = AssetHolder.create({
+  let assetHolder = await AssetHolder.get(id);
+  if (!assetHolder) {
+    assetHolder = AssetHolder.create({
       id,
       did,
       ticker,
       amount: '0',
+      assetId: asset.id,
     });
+    await assetHolder.save();
   }
-  return assetOwner;
+  return assetHolder;
 };
 // #endregion
 
@@ -146,7 +149,7 @@ const handleMakeDivisible = async (params: Record<string, any>) => {
 const handleIssue = async (params: Record<string, any>) => {
   const { ticker, amount } = params;
   const asset = await getAsset(ticker);
-  const assetOwner = await getAssetOwner(asset.ownerDid, ticker);
+  const assetOwner = await getAssetHolder(asset.ownerDid, asset);
   const formattedAmount = chainAmountToBigNumber(amount);
   assetOwner.amount = new BigNumber(assetOwner.amount).plus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).plus(formattedAmount).toString();
@@ -156,7 +159,7 @@ const handleIssue = async (params: Record<string, any>) => {
 const handleRedeem = async (params: Record<string, any>) => {
   const { ticker, value: amount } = params;
   const asset = await getAsset(ticker);
-  const assetOwner = await getAssetOwner(asset.ownerDid, ticker);
+  const assetOwner = await getAssetHolder(asset.ownerDid, asset);
   const formattedAmount = chainAmountToBigNumber(amount);
   assetOwner.amount = new BigNumber(assetOwner.amount).minus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).minus(formattedAmount).toString();

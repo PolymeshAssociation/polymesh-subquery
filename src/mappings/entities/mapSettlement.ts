@@ -4,7 +4,7 @@ import BigNumber from 'bignumber.js';
 import { Settlement, Instruction } from '../../types';
 import { getSigner, getTextValue, hexToString, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
-import { getAsset, getAssetOwner } from './mapAsset';
+import { getAsset, getAssetHolder } from './mapAsset';
 
 enum SettlementResultEnum {
   None = 'None',
@@ -191,8 +191,10 @@ async function handleInstructionFinalizedEvent(
       instruction.legs.map(async ({ ticker, amount, from, to }) => {
         const asset = await getAsset(ticker);
         const settlementAmount = new BigNumber(amount);
-        const fromHolder = await getAssetOwner(from.did, ticker);
-        const toHolder = await getAssetOwner(to.did, ticker);
+        const [fromHolder, toHolder] = await Promise.all([
+          getAssetHolder(from.did, asset),
+          getAssetHolder(to.did, asset),
+        ]);
         fromHolder.amount = new BigNumber(fromHolder.amount).minus(settlementAmount).toString();
         toHolder.amount = new BigNumber(toHolder.amount).plus(settlementAmount).toString();
         asset.totalTransfers = new BigNumber(asset.totalTransfers)
