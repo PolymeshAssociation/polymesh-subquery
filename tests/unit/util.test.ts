@@ -1,3 +1,4 @@
+import '@subql/types/dist/global';
 import {
   camelToSnakeCase,
   capitalizeFirstLetter,
