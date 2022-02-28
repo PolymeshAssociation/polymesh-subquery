@@ -17,7 +17,7 @@ import {
   isVec,
   parseType,
   serializeLikeHarvester,
-} from '../../src/mappings/serializeLikeHarvester';
+} from '../../dist/mappings/serializeLikeHarvester';
 import { Bytes, GenericCall, createClass, TypeRegistry } from '@polkadot/types';
 import { Metadata } from '@polkadot/types/metadata';
 import '@subql/types/dist/global';

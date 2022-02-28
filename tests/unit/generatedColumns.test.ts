@@ -6,7 +6,7 @@ import {
   extractOfferingAsset,
   extractTransferTo,
   JSONStringifyExceptStringAndNull,
-} from '../../src/mappings/generatedColumns';
+} from '../../dist/mappings/generatedColumns';
 
 test('JSONStringifyExceptStringAndNull', () => {
   expect(JSONStringifyExceptStringAndNull('hello')).toBe('hello');
