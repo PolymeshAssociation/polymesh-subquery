@@ -18,6 +18,8 @@ jobs:
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile
+      - name: make project.yaml
+        run: envsubst < project.template.yaml > project.yaml
       - name: gen types
         run: yarn codegen
       - name: build src
