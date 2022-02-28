@@ -18,6 +18,8 @@ jobs:
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile
+      - name: gen types
+        run: yarn codegen
       - name: build src
         run: yarn build
       - name: lint
