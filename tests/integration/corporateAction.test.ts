@@ -1,16 +1,14 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("withholdingTaxesOfCas", () => {
-  test("should return the witholding taxes", async () => {
+describe('withholdingTaxesOfCas', () => {
+  test('should return the witholding taxes', async () => {
     const q = {
-      variables: { ticker: "13TICKER" },
+      variables: { ticker: '13TICKER' },
       query: gql`
         query q($ticker: String!) {
-          withholdingTaxesOfCas(
-            filter: { ticker: { equalTo: $ticker }, localId: { equalTo: 0 } }
-          ) {
+          withholdingTaxesOfCas(filter: { ticker: { equalTo: $ticker }, localId: { equalTo: 0 } }) {
             nodes {
               taxes
             }
@@ -26,10 +24,10 @@ describe("withholdingTaxesOfCas", () => {
   });
 });
 
-describe("historyofPaymentEventsForCas", () => {
-  test("should get payment history", async () => {
+describe('historyofPaymentEventsForCas', () => {
+  test('should get payment history', async () => {
     const q = {
-      variables: { ticker: "13TICKER" },
+      variables: { ticker: '13TICKER' },
       query: gql`
         query q($ticker: String!) {
           historyOfPaymentEventsForCas(

@@ -356,6 +356,36 @@ export enum EventIdEnum {
   Invested = 'Invested',
 }
 
+export enum CallIdEnum {
+  CreateAsset = 'createAsset',
+  AddDocuments = 'addDocuments',
+  RemoveDocuments = 'removeDocuments',
+  SetFundingRound = 'setFundingRound',
+  RenameAsset = 'renameAsset',
+  UpdateIdentifiers = 'updateIdentifiers',
+  MakeDivisible = 'makeDivisible',
+  Issue = 'issue',
+  Redeem = 'redeem',
+  Freeze = 'freeze',
+  Unfreeze = 'unfreeze',
+  AddAndAffirmInstruction = 'addAndAffirmInstruction',
+  AffirmInstruction = 'affirmInstruction',
+  RejectInstruction = 'rejectInstruction',
+  AddAuthorization = 'addAuthorization',
+  RemoveAuthorization = 'removeAuthorization',
+  AcceptAssetOwnershipTransfer = 'acceptAssetOwnershipTransfer',
+  AcceptBecomeAgent = 'acceptBecomeAgent',
+  PauseAssetCompliance = 'pauseAssetCompliance',
+  ResumeAssetCompliance = 'resumeAssetCompliance',
+  ResetAssetCompliance = 'resetAssetCompliance',
+  AddComplianceRequirement = 'addComplianceRequirement',
+  RemoveComplianceRequirement = 'removeComplianceRequirement',
+  AddTransferManager = 'addTransferManager',
+  RemoveTransferManager = 'removeTransferManager',
+  AddExemptedEntities = 'addExemptedEntities',
+  RemoveExemptedEntities = 'removeExemptedEntities',
+}
+
 export enum ClaimTypeEnum {
   Accredited = 'Accredited',
   Affiliate = 'Affiliate',
@@ -369,4 +399,13 @@ export enum ClaimTypeEnum {
   InvestorUniqueness = 'InvestorUniqueness',
   NoData = 'NoData',
   InvestorUniquenessV2 = 'InvestorUniquenessV2',
+}
+
+export enum AuthorizationTypeEnum {
+  TransferAssetOwnership = 'TransferAssetOwnership',
+  BecomeAgent = 'BecomeAgent',
+}
+
+export enum AgentTypeEnum {
+  Full = 'Full',
 }

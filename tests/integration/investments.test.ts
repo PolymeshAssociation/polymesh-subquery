@@ -1,18 +1,13 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("investments", () => {
-  test("should return investments for sto", async () => {
+describe('investments', () => {
+  test('should return investments for sto', async () => {
     const q = {
       query: gql`
         query {
-          investments(
-            filter: {
-              offeringToken: { equalTo: "14TICKER" }
-              stoId: { equalTo: 0 }
-            }
-          ) {
+          investments(filter: { offeringToken: { equalTo: "14TICKER" }, stoId: { equalTo: 0 } }) {
             totalCount
             nodes {
               blockId

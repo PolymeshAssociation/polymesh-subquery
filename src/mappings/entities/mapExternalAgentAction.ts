@@ -54,6 +54,7 @@ const tickerFromCorporateAction: TickerFromParams = async params => {
   }
   throw new Error("Event didn't have a CaID parameter");
 };
+
 /**
  * Class designed to manage the list of events produced by external agent authorized extrinsics
  * in a single source of truth.
@@ -64,11 +65,11 @@ const tickerFromCorporateAction: TickerFromParams = async params => {
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
 
-  // explicit private empty constructor
   // eslint-disable-next-line no-useless-constructor, @typescript-eslint/no-empty-function
   private constructor() {
-    // This is intentional
+    // Explicit private empty constructor
   }
+
   public async getTicker(
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,

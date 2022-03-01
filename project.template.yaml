@@ -85,8 +85,17 @@ network:
   typesBundle:
     spec:
       polymesh_dev: &types
-        types:
-          [
+        types: [
+            {
+              minmax: [2021, 2023],
+              types:
+                {
+                  'AccountInfo': 'AccountInfoWithRefCount',
+                  'Address': 'IndicesLookupSource',
+                  'LookupSource': 'IndicesLookupSource',
+                },
+            },
+            ### </Harvester compatibility special cases>
             {
               minmax: [3010, 3010],
               types:

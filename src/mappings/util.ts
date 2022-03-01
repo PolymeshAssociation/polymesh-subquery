@@ -2,6 +2,8 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
+import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
+import { SecurityIdentifier, FoundType } from '../types';
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -22,6 +24,11 @@ export const fromEntries = <K extends string | number, V, V2>(
 
 export const camelToSnakeCase = (str: string): string =>
   str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+
+export const snakeToCamelCase = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/([-_][a-z])/g, group => group.toUpperCase().replace('-', '').replace('_', ''));
 
 export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
@@ -117,4 +124,31 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   return u8aToHex(
     decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
   );
+};
+
+export const harvesterLikeParamsToObj = (
+  params: HarvesterLikeCallArgs,
+  formatKey = true
+): Record<string, any> => {
+  const obj: Record<string, any> = {};
+  params.forEach(p => {
+    obj[formatKey ? snakeToCamelCase(p.name) : p.name] =
+      p.name === 'asset_type' ? Object.keys(p.value)[0] : p.value;
+  });
+  return obj;
+};
+
+export const formatAssetIdentifiers = (
+  identifiers: Record<string, string>[]
+): SecurityIdentifier[] =>
+  identifiers.map(i => {
+    const type = Object.keys(i)[0];
+    return {
+      type,
+      value: i[type],
+    };
+  });
+
+export const logFoundType = (type: string, rawType: string): void => {
+  FoundType.create({ id: type, rawType }).save();
 };

@@ -1,11 +1,11 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("tickerExternalAgentAdded", () => {
-  test("should return the time block and event index when an agent was added to a ticker", async () => {
+describe('tickerExternalAgentAdded', () => {
+  test('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentAddeds(
@@ -32,9 +32,9 @@ describe("tickerExternalAgentAdded", () => {
     expect(subquery?.errors).toBeFalsy();
     expect(subquery?.data).toMatchSnapshot();
   });
-  test("should return empty when an agent has been removed", async () => {
+  test('should return empty when an agent has been removed', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentAddeds(
@@ -60,16 +60,13 @@ describe("tickerExternalAgentAdded", () => {
     expect(subquery?.errors).toBeFalsy();
     expect(subquery?.data?.tickerExternalAgentAddeds.nodes).toEqual([]);
   });
-  test("should return empty when the agent is not found", async () => {
+  test('should return empty when the agent is not found', async () => {
     const res = await query({
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentAddeds(
-            filter: {
-              ticker: { equalTo: $ticker }
-              callerDid: { equalTo: "bogus" }
-            }
+            filter: { ticker: { equalTo: $ticker }, callerDid: { equalTo: "bogus" } }
           ) {
             nodes {
               datetime

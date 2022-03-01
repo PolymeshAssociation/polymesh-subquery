@@ -27,7 +27,7 @@ type Debug @entity {
 }
 
 type FoundType @entity {
-  id: ID! # This is type
+  id: ID!
   rawType: String!
 }
 
@@ -295,4 +295,69 @@ type IssuerIdentityWithClaims @entity {
   id: ID!
   did: String! @index
   claims: [ClaimJson!]!
+}
+
+type AssetDocument @jsonField {
+  id: Int! # document id
+  name: String!
+  link: String!
+}
+
+type SecurityIdentifier @jsonField {
+  type: String!
+  value: String!
+}
+
+type AssetPendingOwnershipTransfer @entity {
+  id: ID! # authorization id
+  ticker: String! @index(unique: false)
+  from: String! @index(unique: false)
+  to: String! @index(unique: false)
+  type: String! @index(unique: false)
+  data: String
+}
+
+type AssetComplianceRequirement @jsonField {
+  id: Int! # requirement id
+  data: String!
+}
+
+type AssetAdvancedCompliance @jsonField {
+  CountTransferManager: String
+  PercentageTransferManager: String
+  ExemptedEntities: [String]!
+}
+
+type AssetCompliance @jsonField {
+  isPaused: Boolean!
+  sender: [AssetComplianceRequirement]!
+  receiver: [AssetComplianceRequirement]!
+  advanced: [AssetAdvancedCompliance]!
+}
+
+type AssetHolder @entity {
+  id: ID! # did:ticker
+  did: String! @index(unique: false)
+  ticker: String! @index(unique: false)
+  amount: String!
+  asset: Asset!
+}
+
+type Asset @entity {
+  id: ID! # ticker
+  ticker: String! @index(unique: true)
+  name: String @index(unique: false)
+  type: String @index(unique: false)
+  fundingRound: String @index(unique: false)
+  isDivisible: Boolean!
+  isFrozen: Boolean!
+  isUniquenessRequired: Boolean!
+  documents: [AssetDocument]!
+  identifiers: [SecurityIdentifier]!
+  ownerDid: String!
+  fullAgents: [String!]!
+  holders: [AssetHolder]! @derivedFrom(field: "asset")
+  totalSupply: String!
+  totalTransfers: String!
+  compliance: AssetCompliance!
 }

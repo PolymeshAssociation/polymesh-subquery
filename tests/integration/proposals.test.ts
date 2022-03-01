@@ -1,9 +1,9 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("proposals", () => {
-  test("without filters", async () => {
+describe('proposals', () => {
+  test('without filters', async () => {
     const q = {
       query: gql`
         query {
@@ -39,7 +39,7 @@ describe("proposals", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("get by id", async () => {
+  test('get by id', async () => {
     const q = {
       query: gql`
         query {
@@ -72,15 +72,12 @@ describe("proposals", () => {
   });
 });
 
-describe("proposalVotes", () => {
-  test("votes for a proposal ID", async () => {
+describe('proposalVotes', () => {
+  test('votes for a proposal ID', async () => {
     const q = {
       query: gql`
         query {
-          proposalVotes(
-            filter: { proposalId: { equalTo: "1" } }
-            orderBy: WEIGHT_DESC
-          ) {
+          proposalVotes(filter: { proposalId: { equalTo: "1" } }, orderBy: WEIGHT_DESC) {
             totalCount
             nodes {
               id

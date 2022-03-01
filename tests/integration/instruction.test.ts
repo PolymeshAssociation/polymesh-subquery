@@ -1,9 +1,9 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("instructions", () => {
-  test("getting instructions", async () => {
+describe('instructions', () => {
+  test('getting instructions', async () => {
     const q = {
       query: gql`
         query {

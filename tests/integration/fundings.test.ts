@@ -1,9 +1,9 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("getFundings", () => {
-  test("test getting fundings with ticker filter only 1", async () => {
+describe('getFundings', () => {
+  test('test getting fundings with ticker filter only 1', async () => {
     const q = {
       query: gql`
         query {
@@ -27,15 +27,12 @@ describe("getFundings", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("test getting fundings with ticker and fundingName filters 1", async () => {
+  test('test getting fundings with ticker and fundingName filters 1', async () => {
     const q = {
       query: gql`
         query {
           fundings(
-            filter: {
-              fundingName: { equalTo: "first" }
-              ticker: { equalTo: "8TICKER" }
-            }
+            filter: { fundingName: { equalTo: "first" }, ticker: { equalTo: "8TICKER" } }
             first: 10
           ) {
             totalCount
@@ -57,15 +54,12 @@ describe("getFundings", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("test getting fundings with ticker and fundingName filters 2", async () => {
+  test('test getting fundings with ticker and fundingName filters 2', async () => {
     const q = {
       query: gql`
         query {
           fundings(
-            filter: {
-              fundingName: { equalTo: "" }
-              ticker: { equalTo: "8TICKER" }
-            }
+            filter: { fundingName: { equalTo: "" }, ticker: { equalTo: "8TICKER" } }
             first: 10
           ) {
             totalCount

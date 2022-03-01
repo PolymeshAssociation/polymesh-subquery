@@ -1,11 +1,14 @@
-import { Vec } from '@polkadot/types/codec';
+import { mapAsset } from './entities/mapAsset';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
+import { Vec } from '@polkadot/types/codec';
 import { AnyTuple, Codec } from '@polkadot/types/types';
+import { logFoundType, harvesterLikeParamsToObj } from './util';
+import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
 import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { Block, Event, Extrinsic, FoundType } from '../types';
-import { EventIdEnum, ModuleIdEnum } from './entities/common';
+import { Block, Event, Extrinsic } from '../types';
+import { EventIdEnum, ModuleIdEnum, CallIdEnum } from './entities/common';
 import { mapAuthorization } from './entities/mapAuthorization';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
@@ -21,8 +24,6 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
-import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase } from './util';
 import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapSettlement } from './entities/mapSettlement';
@@ -32,7 +33,6 @@ import { mapHeldTokens } from './entities/mapHeldTokens';
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
   const blockId = header.number.toNumber();
-
   let countExtrinsicsSuccess = 0;
 
   for (const e of block.events) {
@@ -65,10 +65,6 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
   }).save();
 }
 
-const logFoundType = (type: string, rawType: string) => {
-  FoundType.create({ id: type, rawType }).save();
-};
-
 const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => {
   const ret = {
     countExtrinsicsUnsigned: 0,
@@ -88,10 +84,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
   const blockId = block.block.header.number.toNumber();
   const eventIdx = event.idx;
-
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
-
   const args = event.event.data.toArray();
 
   const handlerArgs: [number, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
@@ -148,7 +142,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     id: `${blockId}/${eventIdx}`,
     blockId,
     eventIdx,
-    extrinsicIdx: event.extrinsic?.idx,
+    extrinsicIdx: event?.extrinsic?.idx,
     specVersionId: block.specVersion,
     eventId,
     moduleId,
@@ -171,6 +165,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const blockId = extrinsic.block.block.header.number.toNumber();
+  const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
+  const callId = extrinsic.extrinsic.method.method;
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress
@@ -184,6 +180,18 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
         )
       )
     : null;
+  const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
+  const formattedParams = harvesterLikeParamsToObj(params);
+
+  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+    blockId,
+    callId as CallIdEnum,
+    moduleId as ModuleIdEnum,
+    formattedParams,
+    extrinsic,
+  ];
+
+  const handlerPromises = [mapAsset(...handlerArgs)];
 
   await Extrinsic.create({
     id: `${blockId}/${extrinsicIdx}`,
@@ -191,9 +199,9 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    paramsTxt: JSON.stringify(serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType)),
+    moduleId,
+    callId,
+    paramsTxt: JSON.stringify(params),
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
@@ -201,4 +209,6 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
     specVersionId: extrinsic.block.specVersion,
   }).save();
+
+  await Promise.all(handlerPromises);
 }

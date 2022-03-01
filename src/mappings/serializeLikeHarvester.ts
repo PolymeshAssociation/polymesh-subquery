@@ -137,10 +137,12 @@ export const serializeLikeHarvester = (
   }
 };
 
+export type HarvesterLikeCallArgs = { name: string; value: any }[];
+
 export const serializeCallArgsLikeHarvester = (
   extrinsic: GenericCall | GenericExtrinsic,
   logFoundType: (type: string, rawType: string) => void
-): AnyJson => {
+): HarvesterLikeCallArgs => {
   const meta = extrinsic.meta.args;
   return extrinsic.args.map((arg, i) => ({
     name: meta[i].name.toString(),

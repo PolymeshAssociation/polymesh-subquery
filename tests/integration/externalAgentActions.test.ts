@@ -1,11 +1,11 @@
-import { gql } from "@apollo/client/core";
-import { getApolloClient } from "../util";
+import { gql } from '@apollo/client/core';
+import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe("tickerExternalAgentActions", () => {
-  test("should return the transactions for ticker", async () => {
+describe('tickerExternalAgentActions', () => {
+  test('should return the transactions for ticker', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(filter: { ticker: { equalTo: $ticker } }) {
@@ -25,16 +25,13 @@ describe("tickerExternalAgentActions", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("should filter by event id", async () => {
+  test('should filter by event id', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(
-            filter: {
-              ticker: { equalTo: $ticker }
-              eventId: { equalTo: "FundraiserFrozen" }
-            }
+            filter: { ticker: { equalTo: $ticker }, eventId: { equalTo: "FundraiserFrozen" } }
           ) {
             nodes {
               palletName
@@ -51,16 +48,13 @@ describe("tickerExternalAgentActions", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("should filter by pallet name", async () => {
+  test('should filter by pallet name', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(
-            filter: {
-              ticker: { equalTo: $ticker }
-              palletName: { equalTo: "compliancemanager" }
-            }
+            filter: { ticker: { equalTo: $ticker }, palletName: { equalTo: "compliancemanager" } }
           ) {
             nodes {
               palletName
@@ -78,9 +72,9 @@ describe("tickerExternalAgentActions", () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test("should filter by caller DID", async () => {
+  test('should filter by caller DID', async () => {
     const q = {
-      variables: { ticker: "12TICKER" },
+      variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(

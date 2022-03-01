@@ -24,7 +24,7 @@ services:
       NODE_ENV: local
       DB_HOST: postgres
       DB_PORT: 5432
-      # START_BLOCK: 1576010
+      # START_BLOCK: 1362830
       # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
     command:
