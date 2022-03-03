@@ -314,7 +314,7 @@ const handleAddExemptedEntities = async (params: Record<string, any>) => {
   targetTransferManager.ExemptedEntities = [
     ...new Set<string>([
       ...(targetTransferManager.ExemptedEntities || []),
-      ...transferManager.exemptedEntities,
+      ...(transferManager.exemptedEntities || []),
     ]),
   ];
   const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
