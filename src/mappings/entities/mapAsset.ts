@@ -313,7 +313,7 @@ const handleAddExemptedEntities = async (params: Record<string, any>) => {
   if (!targetTransferManager) return;
   targetTransferManager.ExemptedEntities = [
     ...new Set<string>([
-      ...targetTransferManager.ExemptedEntities,
+      ...(targetTransferManager.ExemptedEntities || []),
       ...transferManager.exemptedEntities,
     ]),
   ];
@@ -330,7 +330,7 @@ const handleRemoveExemptedEntities = async (params: Record<string, any>) => {
     asset.compliance.advanced
   );
   if (!targetTransferManager) return;
-  targetTransferManager.ExemptedEntities = targetTransferManager.ExemptedEntities.filter(
+  targetTransferManager.ExemptedEntities = (targetTransferManager.ExemptedEntities || []).filter(
     e => !transferManager.exemptedEntities.includes(e)
   );
   const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
