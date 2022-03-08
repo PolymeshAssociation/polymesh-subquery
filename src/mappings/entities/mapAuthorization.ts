@@ -1,4 +1,4 @@
-import { capitalizeFirstLetter, serializeAccount } from './../util';
+import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
 import { Codec } from '@polkadot/types/types';
 import { Authorization } from '../../types';
 import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
@@ -48,7 +48,7 @@ export async function mapAuthorization(
         toKey: serializeAccount(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
         data: getFirstValueFromJson(params[4]),
-        expiry: getTextValue(params[5]),
+        expiry: getDateValue(params[5]),
         status: AuthorizationStatus.Pending,
         updatedBlock: blockId,
       }).save();

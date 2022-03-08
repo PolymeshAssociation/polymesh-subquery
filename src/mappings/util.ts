@@ -111,6 +111,10 @@ export const getTextValue = (item: Codec): string => {
   return item.toString().trim().length === 0 ? null : item.toString().trim();
 };
 
+export const getDateValue = (item: Codec): Date => {
+  return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
+};
+
 export const hexToString = (input: string): string => {
   const hex = hexStripPrefix(input);
   let str = '';
