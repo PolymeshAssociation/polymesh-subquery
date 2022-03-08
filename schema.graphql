@@ -210,8 +210,8 @@ type HistoryOfPaymentEventsForCa @entity {
   eventDid: String!
   ticker: String! @index
   localId: Int! @index
-  balance: Int!
-  tax: Int!
+  balance: String!
+  tax: String!
   datetime: Date!
 }
 
