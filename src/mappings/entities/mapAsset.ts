@@ -194,6 +194,9 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
 // #region ModuleIdEnum.Identity
 const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
   const { target: targetData, authorizationData } = params;
+
+  if (!authorizationData) return;
+
   const type = Object.keys(authorizationData)[0] as AuthorizationTypeEnum;
   if (
     [AuthorizationTypeEnum.TransferAssetOwnership, AuthorizationTypeEnum.BecomeAgent].includes(type)
