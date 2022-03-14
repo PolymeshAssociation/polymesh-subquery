@@ -193,11 +193,9 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
 
 // #region ModuleIdEnum.Identity
 const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
-  const { target: targetData, authorizationData } = params;
+  const { target: targetData, data } = params;
 
-  if (!authorizationData) return;
-
-  const type = Object.keys(authorizationData)[0] as AuthorizationTypeEnum;
+  const type = Object.keys(data)[0] as AuthorizationTypeEnum;
   if (
     [AuthorizationTypeEnum.TransferAssetOwnership, AuthorizationTypeEnum.BecomeAgent].includes(type)
   ) {
@@ -207,11 +205,11 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
     const to = targetData.Identity.toString();
     let data: any;
     if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
-      ticker = authorizationData[type].toString();
+      ticker = data[type].toString();
     }
     if (type === AuthorizationTypeEnum.BecomeAgent) {
-      ticker = authorizationData[type].col1.toString();
-      const group = Object.keys(authorizationData[type].col2)[0];
+      ticker = data[type].col1.toString();
+      const group = Object.keys(data[type].col2)[0];
       if (group === AgentTypeEnum.Full) {
         data = JSON.stringify({ group });
       }
