@@ -403,7 +403,6 @@ export enum ClaimTypeEnum {
 
 export enum AuthorizationTypeEnum {
   TransferAssetOwnership = 'TransferAssetOwnership',
-  BecomeAgent = 'BecomeAgent',
 }
 
 export enum AgentTypeEnum {

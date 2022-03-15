@@ -355,7 +355,6 @@ type Asset @entity {
   documents: [AssetDocument]!
   identifiers: [SecurityIdentifier]!
   ownerDid: String!
-  fullAgents: [String!]!
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   totalSupply: String!
   totalTransfers: String!
