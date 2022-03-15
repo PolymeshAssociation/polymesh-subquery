@@ -193,7 +193,7 @@ const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) =
 
 // #region ModuleIdEnum.Identity
 const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
-  const { target: targetData, data: auth } = params;
+  const { target: targetData, data: auth } = params; // might need to check for authorizationData as well
 
   const type = Object.keys(auth)[0] as AuthorizationTypeEnum;
   if (
@@ -202,7 +202,7 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
     const id = extrinsic.events[0].event.data[3].toString();
     let ticker: string;
     const from = extrinsic.events[0].event.data[0].toString();
-    const to = targetData.Identity.toString();
+    const to = targetData.Identity?.toString() || targetData.Account.toString();
     let data: string;
     if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
       ticker = auth[type].toString();
