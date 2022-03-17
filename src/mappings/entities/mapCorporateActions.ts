@@ -111,7 +111,7 @@ async function handleWithholdingTaxesOfCA(
   const taxes = (Number(balance) * Number(tax)) / 1000000;
   const corporateAction = await WithholdingTaxesOfCa.get(`${ticker}/${localId}`);
   if (corporateAction !== undefined) {
-    corporateAction.taxes += taxes;
+    corporateAction.taxes += BigInt(taxes);
     await corporateAction.save();
   } else {
     await WithholdingTaxesOfCa.create({

@@ -7,14 +7,14 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "HistoryOfPaymentEventsForCa",
-        "balance": 100000000,
+        "balance": "100000000",
         "blockId": 358,
         "datetime": "2021-10-06T12:35:04",
         "eventDid": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
         "eventId": "BenefitClaimed",
         "eventIdx": 2,
         "localId": 0,
-        "tax": 15,
+        "tax": "15",
         "ticker": "13TICKER",
       },
     ],
@@ -30,7 +30,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "WithholdingTaxesOfCa",
-        "taxes": 1500,
+        "taxes": "1500",
       },
     ],
   },

@@ -24,7 +24,6 @@ const updateEvents: EventIdEnum[] = [
   EventIdEnum.InstructionAuthorized,
   EventIdEnum.InstructionUnauthorized,
   EventIdEnum.InstructionAffirmed,
-  EventIdEnum.InstructionFailed,
 ];
 
 const finalizedEvents: EventIdEnum[] = [
@@ -33,7 +32,7 @@ const finalizedEvents: EventIdEnum[] = [
   EventIdEnum.InstructionFailed,
 ];
 
-// Translates events into a settlements table. This inlcudes transfers between a users portfolio combined with completed Instructions.
+// Translates events into a settlements table. This includes transfers between a users portfolio combined with completed Instructions.
 export async function mapSettlement(
   blockId: number,
   eventId: EventIdEnum,
@@ -140,7 +139,7 @@ async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
   const instructionId = getTextValue(params[2]);
   const instruction = await Instruction.get(instructionId);
   if (instruction) {
-    instruction.addresses.push(signer);
+    if (signer) instruction.addresses.push(signer);
     instruction.addresses = instruction.addresses.filter(onlyUnique);
     await instruction.save();
   } else {

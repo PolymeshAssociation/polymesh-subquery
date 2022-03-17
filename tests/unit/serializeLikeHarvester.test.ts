@@ -1,3 +1,4 @@
+import '@subql/types/dist/global';
 import {
   extractArrayType,
   extractEnumType,
@@ -17,7 +18,7 @@ import {
   isVec,
   parseType,
   serializeLikeHarvester,
-} from '../../dist/mappings/serializeLikeHarvester';
+} from '../../src/mappings/serializeLikeHarvester';
 import { Bytes, GenericCall, createClass, TypeRegistry } from '@polkadot/types';
 import { Metadata } from '@polkadot/types/metadata';
 import '@subql/types/dist/global';

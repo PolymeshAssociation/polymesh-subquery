@@ -199,7 +199,7 @@ type WithholdingTaxesOfCa @entity {
   ticker: String! @index
   localId: Int! @index
   datetime: Date!
-  taxes: Int!
+  taxes: BigInt!
 }
 
 type HistoryOfPaymentEventsForCa @entity {
@@ -210,8 +210,8 @@ type HistoryOfPaymentEventsForCa @entity {
   eventDid: String!
   ticker: String! @index
   localId: Int! @index
-  balance: Int!
-  tax: Int!
+  balance: BigInt!
+  tax: BigInt!
   datetime: Date!
 }
 
@@ -355,7 +355,6 @@ type Asset @entity {
   documents: [AssetDocument]!
   identifiers: [SecurityIdentifier]!
   ownerDid: String!
-  fullAgents: [String!]!
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   totalSupply: String!
   totalTransfers: String!
