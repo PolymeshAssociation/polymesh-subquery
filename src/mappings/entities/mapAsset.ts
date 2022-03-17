@@ -1,6 +1,6 @@
 import BigNumber from 'bignumber.js';
 import { SubstrateExtrinsic } from '@subql/types';
-import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum, AgentTypeEnum } from './common';
+import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum } from './common';
 import {
   Asset,
   AssetHolder,
@@ -197,23 +197,14 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
 
   const authData = auth || legacyAuth;
   const type = Object.keys(authData)[0] as AuthorizationTypeEnum;
-  if (
-    [AuthorizationTypeEnum.TransferAssetOwnership, AuthorizationTypeEnum.BecomeAgent].includes(type)
-  ) {
+  if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
     const id = extrinsic.events[0].event.data[3].toString();
     let ticker: string;
     const from = extrinsic.events[0].event.data[0].toString();
-    const to = targetData.Identity?.toString() || targetData.Account.toString();
+    const to = targetData.Identity.toString();
     let data: string;
     if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
       ticker = authData[type].toString();
-    }
-    if (type === AuthorizationTypeEnum.BecomeAgent) {
-      ticker = authData[type].col1.toString();
-      const group = Object.keys(authData[type].col2)[0];
-      if (group === AgentTypeEnum.Full) {
-        data = JSON.stringify({ group });
-      }
     }
     await AssetPendingOwnershipTransfer.create({
       id,
@@ -228,22 +219,6 @@ const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic:
 
 const handleRemovePendingOwnership = async (params: Record<string, any>) => {
   const { authId } = params;
-  await AssetPendingOwnershipTransfer.remove(authId);
-};
-// #endregion
-
-// #region ModuleIdEnum.Externalagents
-const handleAcceptBecomeAgent = async (params: Record<string, any>) => {
-  const { authId } = params;
-  const authorization = await getAuthorization(authId);
-  const authorizationData = JSON.parse(authorization.data || '{}');
-  if (!authorization.ticker || authorizationData.group !== 'Full') {
-    return;
-  }
-  const asset = await getAsset(authorization.ticker);
-  const otherAgents = asset.fullAgents.filter(a => a !== authorization.from);
-  asset.fullAgents = [...otherAgents, authorization.to];
-  await asset.save();
   await AssetPendingOwnershipTransfer.remove(authId);
 };
 // #endregion
@@ -389,12 +364,6 @@ const handleIdentity = async (callId: CallIdEnum, params: Record<string, any>, e
   }
 };
 
-const handleExternalAgents = async (callId: CallIdEnum, params: Record<string, any>) => {
-  if (callId === CallIdEnum.AcceptBecomeAgent) {
-    await handleAcceptBecomeAgent(params);
-  }
-};
-
 const handleComplianceManager = async (
   callId: CallIdEnum,
   params: Record<string, any>,
@@ -446,9 +415,6 @@ export async function mapAsset(
   }
   if (moduleId === ModuleIdEnum.Identity) {
     await handleIdentity(callId, params, extrinsic);
-  }
-  if (moduleId === ModuleIdEnum.Externalagents) {
-    await handleExternalAgents(callId, params);
   }
   if (moduleId === ModuleIdEnum.Compliancemanager) {
     await handleComplianceManager(callId, params, extrinsic);
