@@ -9,6 +9,7 @@ export async function mapTrustedClaimIssuerTicker(
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   __: SubstrateEvent
 ): Promise<void> {
   if (moduleId !== ModuleIdEnum.Compliancemanager) {
