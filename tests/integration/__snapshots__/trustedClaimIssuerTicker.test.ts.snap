@@ -1,0 +1,16 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`trustedClaimIssuerTicker should return the trusted claim issuers for every ticker 1`] = `
+Object {
+  "trustedClaimIssuerTickers": Object {
+    "__typename": "TrustedClaimIssuerTickersConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "TrustedClaimIssuerTicker",
+        "issuer": "0x0400000000000000000000000000000000000000000000000000000000000000",
+        "ticker": "15TICKER",
+      },
+    ],
+  },
+}
+`;

@@ -9,7 +9,7 @@ describe('identityWithClaims', () => {
       query: gql`
         query{
           identityWithClaims(filter: {
-              did: {
+              id: {
                 in: ["${identityId}"]
               }}) {
             totalCount
@@ -42,8 +42,25 @@ describe('identityWithClaims', () => {
           identityWithClaims(first: 10) {
             totalCount
             nodes {
-              did
-              claims
+              id
+              scopeIndex
+              typeIndex
+              maxExpiry
+              issuerIndex
+              claims {
+                nodes {
+                  targetDidId
+                  issuerId
+                  issuanceDate
+                  lastUpdateDate
+                  expiry
+                  filterExpiry
+                  type
+                  jurisdiction
+                  scope
+                  cddId
+                }
+              }
             }
           }
         }
@@ -66,17 +83,30 @@ describe('identityWithClaims', () => {
       query: gql`
         query q($scopeValue: String!){
           identityWithClaims(filter: {
-            claims: {
-              contains: [{
-                scope: {type: ${scopeType}, value: $scopeValue},
-                issuer: "${trustedClaimIssuer}"
-              }]
-            }
+            scopeIndex:{contains:[{type:"${scopeType}",value:"${scopeValue}"}]}
+            issuerIndex:{contains: "${trustedClaimIssuer}"}
           }) {
             totalCount
             nodes {
-              did
-              claims
+              id
+              scopeIndex
+              typeIndex
+              maxExpiry
+              issuerIndex
+              claims {
+                nodes {
+                  targetDidId
+                  issuerId
+                  issuanceDate
+                  lastUpdateDate
+                  expiry
+                  filterExpiry
+                  type
+                  jurisdiction
+                  scope
+                  cddId
+                }
+              }
             }
           }
         }
@@ -97,12 +127,12 @@ describe('issuerIdentityWithClaims', () => {
       query: gql`
         query {
           issuerIdentityWithClaims(filter: {
-            did: {
+            id: {
               equalTo: "${target}"
             }
           }) {
             nodes {
-              did
+              id
             }
           }
         }
@@ -118,7 +148,7 @@ describe('issuerIdentityWithClaims', () => {
       query: gql`
       query {
         issuerIdentityWithClaims(filter: {
-          did: {
+          id: {
             equalTo: "${target}"
           }
         }) {
@@ -137,14 +167,31 @@ describe('issuerIdentityWithClaims', () => {
       query: gql`
         query {
           issuerIdentityWithClaims(filter: {
-            did: {
+            id: {
               equalTo: "${target}"
             }
           }) {
             totalCount
             nodes {
-              did
-              claims
+              id
+              scopeIndex
+              typeIndex
+              maxExpiry
+              targetIndex
+              claims {
+                nodes {
+                  targetDidId
+                  issuerId
+                  issuanceDate
+                  lastUpdateDate
+                  expiry
+                  filterExpiry
+                  type
+                  jurisdiction
+                  scope
+                  cddId
+                }
+              }
             }
           }
         }
@@ -167,23 +214,33 @@ describe('issuerIdentityWithClaims', () => {
       query: gql`
         query {
           issuerIdentityWithClaims(filter: {
-            did: {
+            id: {
               in: ["${trustedClaimIssuer}"]
             },
-            claims: {
-              contains: [{
-                scope: {
-                  type: ${scopeType}, 
-                  value: "${scopeValue}"
-                },
-                targetDid: "${target}"
-              }]
-            }
+            scopeIndex:{contains:[{type:"${scopeType}",value:"${scopeValue}"}]}
+            targetIndex:{contains: "${target}"}
           }) {
             totalCount
             nodes {
-              did
-              claims 
+              id
+              scopeIndex
+              typeIndex
+              maxExpiry
+              targetIndex
+              claims {
+                nodes {
+                  targetDidId
+                  issuerId
+                  issuanceDate
+                  lastUpdateDate
+                  expiry
+                  filterExpiry
+                  type
+                  jurisdiction
+                  scope
+                  cddId
+                }
+              }
             }
           }
         }
@@ -293,8 +350,8 @@ describe('claims', () => {
           claims(first: 10) {
             totalCount
             nodes {
-              targetDid
-              issuer
+              targetDidId
+              issuerId
               issuanceDate
               lastUpdateDate
               expiry
@@ -331,14 +388,14 @@ describe('claims', () => {
                 value: $scopeValue
               }
             },
-            issuer: {
+            issuerId: {
               equalTo: "${trustedClaimIssuer}"
             }
           }) {
             totalCount
             nodes {
-              targetDid
-              issuer
+              targetDidId
+              issuerId
               issuanceDate
               lastUpdateDate
               expiry
