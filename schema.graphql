@@ -1,7 +1,6 @@
 type Event @entity {
   id: ID!
   block: Block!
-  parentBlock: Block!
   eventIdx: Int!
   extrinsicIdx: Int
   specVersionId: Int!
@@ -34,7 +33,7 @@ type FoundType @entity {
 
 type Block @entity {
   id: ID!
-  block: Int!
+  blockId: Int!
   parentId: Int!
   hash: String!
   parentHash: String!
@@ -67,6 +66,17 @@ type Extrinsic @entity {
   specVersionId: Int!
 }
 
+type BridgeEvent @entity {
+  id: ID!
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  identityId: String!
+  recipient: String!
+  amount: BigInt!
+  txHash: String! @index(unique: false)
+  datetime: Date!
+}
+
 type StakingEvent @entity {
   id: ID!
   block: Block! @index(unique: false)
@@ -77,6 +87,7 @@ type StakingEvent @entity {
   stashAccount: String
   amount: BigInt
   nominatedValidators: [String!]
+  transactionId: String
 }
 
 type TickerExternalAgentAction @entity {
@@ -255,7 +266,7 @@ type Scope @jsonField {
 
 type ClaimScope @entity {
   id: ID!
-  targetDid: String! @index(unique: false)
+  target: String! @index(unique: false)
   ticker: String
   scope: Scope
 }
@@ -264,7 +275,7 @@ type Claim @entity {
   id: ID!
   block: Block! @index(unique: false)
   eventIdx: Int! @index(unique: false)
-  targetDid: IdentityWithClaims! @index(unique: false)
+  target: IdentityWithClaims! @index(unique: false)
   issuer: IssuerIdentityWithClaims! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
@@ -284,7 +295,7 @@ type IdentityWithClaims @entity {
   issuerIndex: [String!]! @index(unique: false)
   typeIndex: [String!]! @index(unique: false)
   maxExpiry: BigInt! @index(unique: false)
-  claims: [Claim]! @derivedFrom(field: "targetDid")
+  claims: [Claim]! @derivedFrom(field: "target")
 }
 
 type IssuerIdentityWithClaims @entity {

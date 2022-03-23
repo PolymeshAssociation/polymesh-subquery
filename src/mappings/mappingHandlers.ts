@@ -30,6 +30,7 @@ import { mapSettlement } from './entities/mapSettlement';
 import { mapClaim } from './entities/mapClaim';
 import { mapHeldTokens } from './entities/mapHeldTokens';
 import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
+import { mapBridgeEvent } from './entities/mapBridgeEvent';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -98,6 +99,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   ];
   const handlerPromises = [
     mapStakingEvent(...handlerArgs),
+    mapBridgeEvent(...handlerArgs),
     mapSto(eventId, moduleId, args),
     mapExternalAgentAction(...handlerArgs),
     mapTickerExternalAgentAdded(...handlerArgs),
@@ -143,7 +145,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   await Event.create({
     id: `${blockId}/${eventIdx}`,
     blockId,
-    parentBlockId: `${blockId}`,
     eventIdx,
     extrinsicIdx: event?.extrinsic?.idx,
     specVersionId: block.specVersion,

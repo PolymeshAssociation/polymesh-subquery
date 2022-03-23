@@ -1,12 +1,12 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { getTextValue, serializeTicker } from '../util';
+import { Scope } from 'polymesh-subql/types';
 import { Claim } from '../../types/models/Claim';
 import { ClaimScope } from '../../types/models/ClaimScope';
 import { IdentityWithClaims } from '../../types/models/IdentityWithClaims';
 import { IssuerIdentityWithClaims } from '../../types/models/IssuerIdentityWithClaims';
+import { addIfNotIncludes, END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
-import { Scope } from 'polymesh-subql/types';
 
 enum ClaimScopeTypeEnum {
   Identity = 'Identity',
@@ -24,16 +24,6 @@ type ClaimParams = {
   cddId: string;
   jurisdiction: string;
 };
-
-const END_OF_TIME = BigInt('253402194600000');
-
-function addIfNotIncludes<T>(arr: T[], item: T) {
-  if (arr.includes(item)) {
-    return;
-  } else {
-    arr.push(item);
-  }
-}
 
 /**
  * Subscribes to the Claim events
@@ -59,7 +49,7 @@ export async function mapClaim(
     return;
   }
   if (eventId === EventIdEnum.ClaimAdded) {
-    const targetDid = getTextValue(params[0]);
+    const target = getTextValue(params[0]);
 
     const scope = JSON.parse(claimScope);
     const filterExpiry = claimExpiry || END_OF_TIME;
@@ -69,7 +59,7 @@ export async function mapClaim(
       filterExpiry,
       claimType,
       claimIssuer,
-      targetDid,
+      target,
     };
 
     await Promise.all([handleIdentityWithClaims(args), handleIssuerIdentityWithClaims(args)]);
@@ -78,7 +68,7 @@ export async function mapClaim(
       id: `${blockId}/${event.idx}`,
       blockId,
       eventIdx: event.idx,
-      targetDidId: targetDid,
+      targetId: target,
       issuerId: claimIssuer,
       issuanceDate,
       lastUpdateDate,
@@ -92,7 +82,7 @@ export async function mapClaim(
 
     if (scope) {
       await handleScopes(
-        targetDid,
+        target,
         scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
         scope
       );
@@ -100,14 +90,14 @@ export async function mapClaim(
   }
 
   if (eventId === EventIdEnum.AssetDidRegistered) {
-    const targetDid = getTextValue(params[0]);
+    const target = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
-    await handleScopes(targetDid, ticker);
+    await handleScopes(target, ticker);
   }
 }
 
 type IdentityWithClaimsArgs = {
-  targetDid: string;
+  target: string;
   claimType: string;
   scope: Scope;
   claimIssuer: string;
@@ -115,13 +105,13 @@ type IdentityWithClaimsArgs = {
 };
 
 async function handleIdentityWithClaims({
-  targetDid,
+  target,
   claimIssuer,
   claimType,
   filterExpiry,
   scope,
 }: IdentityWithClaimsArgs) {
-  const identityWithClaims = await IdentityWithClaims.get(targetDid);
+  const identityWithClaims = await IdentityWithClaims.get(target);
   if (identityWithClaims) {
     addIfNotIncludes(identityWithClaims.typeIndex, claimType);
     addIfNotIncludes(identityWithClaims.scopeIndex, scope);
@@ -131,7 +121,7 @@ async function handleIdentityWithClaims({
     await identityWithClaims.save();
   } else {
     await IdentityWithClaims.create({
-      id: targetDid,
+      id: target,
       typeIndex: [claimType],
       scopeIndex: [scope],
       issuerIndex: [claimIssuer],
@@ -141,7 +131,7 @@ async function handleIdentityWithClaims({
 }
 
 async function handleIssuerIdentityWithClaims({
-  targetDid,
+  target,
   claimIssuer,
   claimType,
   filterExpiry,
@@ -151,7 +141,7 @@ async function handleIssuerIdentityWithClaims({
   if (issuerIdentityWithClaims) {
     addIfNotIncludes(issuerIdentityWithClaims.typeIndex, claimType);
     addIfNotIncludes(issuerIdentityWithClaims.scopeIndex, scope);
-    addIfNotIncludes(issuerIdentityWithClaims.targetIndex, targetDid);
+    addIfNotIncludes(issuerIdentityWithClaims.targetIndex, target);
     issuerIdentityWithClaims.maxExpiry =
       filterExpiry > issuerIdentityWithClaims.maxExpiry
         ? filterExpiry
@@ -162,21 +152,21 @@ async function handleIssuerIdentityWithClaims({
       id: claimIssuer,
       typeIndex: [claimType],
       scopeIndex: [scope],
-      targetIndex: [targetDid],
+      targetIndex: [target],
       maxExpiry: filterExpiry,
     }).save();
   }
 }
 
 async function handleScopes(
-  targetDid: string,
+  target: string,
   ticker?: string,
   scope?: { type: string; value: string }
 ) {
-  const id = `${targetDid}/${scope?.value || ticker}`;
+  const id = `${target}/${scope?.value || ticker}`;
   await ClaimScope.create({
     id,
-    targetDid,
+    target,
     ticker,
     scope,
   }).save();

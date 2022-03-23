@@ -156,3 +156,11 @@ export const formatAssetIdentifiers = (
 export const logFoundType = (type: string, rawType: string): void => {
   FoundType.create({ id: type, rawType }).save();
 };
+
+export const END_OF_TIME = BigInt('253402194600000');
+
+export function addIfNotIncludes<T>(arr: T[], item: T): void {
+  if (!arr.includes(item)) {
+    arr.push(item);
+  }
+}

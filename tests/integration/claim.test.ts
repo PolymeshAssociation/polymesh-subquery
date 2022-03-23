@@ -49,7 +49,7 @@ describe('identityWithClaims', () => {
               issuerIndex
               claims {
                 nodes {
-                  targetDidId
+                  targetId
                   issuerId
                   issuanceDate
                   lastUpdateDate
@@ -95,7 +95,7 @@ describe('identityWithClaims', () => {
               issuerIndex
               claims {
                 nodes {
-                  targetDidId
+                  targetId
                   issuerId
                   issuanceDate
                   lastUpdateDate
@@ -180,7 +180,7 @@ describe('issuerIdentityWithClaims', () => {
               targetIndex
               claims {
                 nodes {
-                  targetDidId
+                  targetId
                   issuerId
                   issuanceDate
                   lastUpdateDate
@@ -229,7 +229,7 @@ describe('issuerIdentityWithClaims', () => {
               targetIndex
               claims {
                 nodes {
-                  targetDidId
+                  targetId
                   issuerId
                   issuanceDate
                   lastUpdateDate
@@ -263,7 +263,7 @@ describe('claimScopes', () => {
         query {
           claimScopes(
             filter: {
-              targetDid: {
+              target: {
                 equalTo: "${identityId}"
               }
             }
@@ -287,7 +287,7 @@ describe('claimScopes', () => {
       query {
         claimScopes(
           filter: {
-            targetDid: {
+            target: {
               equalTo: "${identityId}"
             }
           }
@@ -316,7 +316,7 @@ describe('claims', () => {
       query: gql`
         query{
           claims(filter: {
-              targetDid: {
+              target: {
                 in: ["${identityId}"]
               }
             }) {
@@ -350,7 +350,7 @@ describe('claims', () => {
           claims(first: 10) {
             totalCount
             nodes {
-              targetDidId
+              targetId
               issuerId
               issuanceDate
               lastUpdateDate
@@ -394,7 +394,7 @@ describe('claims', () => {
           }) {
             totalCount
             nodes {
-              targetDidId
+              targetId
               issuerId
               issuanceDate
               lastUpdateDate
