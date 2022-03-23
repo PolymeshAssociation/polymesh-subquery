@@ -1,0 +1,10 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`bridgeEvents should return bridge events 1`] = `
+Object {
+  "bridgeEvents": Object {
+    "__typename": "BridgeEventsConnection",
+    "nodes": Array [],
+  },
+}
+`;

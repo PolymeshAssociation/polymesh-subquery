@@ -79,9 +79,8 @@ describe('identityWithClaims', () => {
     const scopeValue = '5TICKER';
     const trustedClaimIssuer = '0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c';
     const q = {
-      variables: { scopeValue },
       query: gql`
-        query q($scopeValue: String!){
+        query {
           identityWithClaims(filter: {
             scopeIndex:{contains:[{type:"${scopeType}",value:"${scopeValue}"}]}
             issuerIndex:{contains: "${trustedClaimIssuer}"}
@@ -316,7 +315,7 @@ describe('claims', () => {
       query: gql`
         query{
           claims(filter: {
-              target: {
+              targetId: {
                 in: ["${identityId}"]
               }
             }) {

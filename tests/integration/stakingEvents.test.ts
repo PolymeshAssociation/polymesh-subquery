@@ -8,7 +8,7 @@ describe('stakingEvents', () => {
     const q = {
       query: gql`
         query {
-          stakingEvents(filter: { blockId: { lessThan: 1000 } }) {
+          stakingEvents(first: 10) {
             nodes {
               stakingEventId
               date
@@ -32,9 +32,7 @@ describe('stakingEvents', () => {
     const q = {
       query: gql`
         query {
-          stakingEvents(
-            filter: { stakingEventId: { equalTo: "Nominated" }, blockId: { lessThan: 1000 } }
-          ) {
+          stakingEvents(filter: { stakingEventId: { equalTo: "Nominated" } }, first: 10) {
             nodes {
               stakingEventId
               date
@@ -63,8 +61,8 @@ describe('stakingEvents', () => {
               stashAccount: {
                 equalTo: "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121"
               }
-              blockId: { lessThan: 1000 }
             }
+            first: 10
           ) {
             nodes {
               stakingEventId

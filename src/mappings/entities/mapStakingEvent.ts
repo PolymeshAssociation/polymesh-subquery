@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { hexAddPrefix, hexStripPrefix } from '@polkadot/util';
+import { hexAddPrefix } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { StakingEvent } from '../../types';
 import { serializeAccount } from '../util';
