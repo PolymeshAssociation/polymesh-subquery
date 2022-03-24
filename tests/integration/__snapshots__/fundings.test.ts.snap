@@ -4,8 +4,25 @@ exports[`getFundings test getting fundings with ticker and fundingName filters 1
 Object {
   "fundings": Object {
     "__typename": "FundingsConnection",
-    "nodes": Array [],
-    "totalCount": 0,
+    "nodes": Array [
+      Object {
+        "__typename": "Funding",
+        "blockId": "201",
+        "fundingName": "first",
+        "ticker": "8TICKER",
+        "totalIssuedInFundingRound": "1000000",
+        "value": "1000000",
+      },
+      Object {
+        "__typename": "Funding",
+        "blockId": "204",
+        "fundingName": "first",
+        "ticker": "8TICKER",
+        "totalIssuedInFundingRound": "1000100",
+        "value": "100",
+      },
+    ],
+    "totalCount": 2,
   },
 }
 `;
@@ -24,8 +41,25 @@ exports[`getFundings test getting fundings with ticker filter only 1 1`] = `
 Object {
   "fundings": Object {
     "__typename": "FundingsConnection",
-    "nodes": Array [],
-    "totalCount": 0,
+    "nodes": Array [
+      Object {
+        "__typename": "Funding",
+        "blockId": "201",
+        "fundingName": "first",
+        "ticker": "8TICKER",
+        "totalIssuedInFundingRound": "1000000",
+        "value": "1000000",
+      },
+      Object {
+        "__typename": "Funding",
+        "blockId": "204",
+        "fundingName": "first",
+        "ticker": "8TICKER",
+        "totalIssuedInFundingRound": "1000100",
+        "value": "100",
+      },
+    ],
+    "totalCount": 2,
   },
 }
 `;

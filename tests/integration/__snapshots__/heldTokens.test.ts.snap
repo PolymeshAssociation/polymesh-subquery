@@ -4,8 +4,41 @@ exports[`heldTokens test getting tokens held by DID 1`] = `
 Object {
   "heldTokens": Object {
     "__typename": "HeldTokensConnection",
-    "nodes": Array [],
-    "totalCount": 0,
+    "nodes": Array [
+      Object {
+        "__typename": "HeldToken",
+        "token": "11ATICKER",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "11BTICKER1",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "11BTICKER2",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "12TICKER",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "13EARNED",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "13TICKER",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "14TICKER",
+      },
+      Object {
+        "__typename": "HeldToken",
+        "token": "14TICKERRAIS",
+      },
+    ],
+    "totalCount": 8,
   },
 }
 `;

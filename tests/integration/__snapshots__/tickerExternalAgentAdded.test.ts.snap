@@ -4,7 +4,15 @@ exports[`tickerExternalAgentAdded should return the time block and event index w
 Object {
   "tickerExternalAgentAddeds": Object {
     "__typename": "TickerExternalAgentAddedsConnection",
-    "nodes": Array [],
+    "nodes": Array [
+      Object {
+        "__typename": "TickerExternalAgentAdded",
+        "blockId": "314",
+        "callerDid": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "datetime": "2021-10-06T12:34:42",
+        "eventIdx": 1,
+      },
+    ],
   },
 }
 `;
