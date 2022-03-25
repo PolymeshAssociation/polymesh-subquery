@@ -2,7 +2,7 @@ import { mapAsset } from './entities/mapAsset';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
 import { AnyTuple, Codec } from '@polkadot/types/types';
-import { logFoundType, harvesterLikeParamsToObj } from './util';
+import { logFoundType, harvesterLikeParamsToObj, camelToSnakeCase } from './util';
 import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
 import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
@@ -199,8 +199,8 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId,
-    callId,
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
     paramsTxt: JSON.stringify(params),
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
