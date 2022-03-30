@@ -1,6 +1,6 @@
 import BigNumber from 'bignumber.js';
-import { SubstrateExtrinsic } from '@subql/types';
-import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum } from './common';
+import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum, EventIdEnum } from './common';
 import {
   Asset,
   AssetHolder,
@@ -316,110 +316,112 @@ const handleRemoveExemptedEntities = async (params: Record<string, any>) => {
 };
 // #endregion
 
-const handleAsset = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
-  if (callId === CallIdEnum.CreateAsset) {
+const handleAsset = async (eventId: EventIdEnum, params: Record<string, any>, extrinsic: any) => {
+  if (eventId === EventIdEnum.AssetCreated) {
     await handleCreateAsset(params, extrinsic);
   }
-  if (callId === CallIdEnum.RenameAsset) {
+  if (eventId === EventIdEnum.AssetCreated) {
     await handleRenameAsset(params);
   }
-  if (callId === CallIdEnum.SetFundingRound) {
+  if (eventId === EventIdEnum.FundingRoundSet) {
     await handleSetFundingRound(params);
   }
-  if (callId === CallIdEnum.AddDocuments) {
+  if (eventId === EventIdEnum.DocumentAdded) {
     await handleAddDocuments(params, extrinsic);
   }
-  if (callId === CallIdEnum.RemoveDocuments) {
+  if (eventId === EventIdEnum.DocumentRemoved) {
     await handleRemoveDocuments(params);
   }
-  if (callId === CallIdEnum.UpdateIdentifiers) {
+  if (eventId === EventIdEnum.IdentifiersUpdated) {
     await handleUpdateIdentifiers(params);
   }
-  if (callId === CallIdEnum.MakeDivisible) {
+  if (eventId === EventIdEnum.DivisibilityChanged) {
     await handleMakeDivisible(params);
   }
-  if (callId === CallIdEnum.Issue) {
+  if (eventId === EventIdEnum.Issued) {
     await handleIssue(params);
   }
-  if (callId === CallIdEnum.Redeem) {
+  if (eventId === EventIdEnum.Redeemed) {
     await handleRedeem(params);
   }
-  if (callId === CallIdEnum.Freeze) {
+  if (eventId === EventIdEnum.Frozen) {
     await handleFreeze(params);
   }
-  if (callId === CallIdEnum.Unfreeze) {
+  if (eventId === EventIdEnum.Unfrozen) {
     await handleUnfreeze(params);
   }
-  if (callId === CallIdEnum.AcceptAssetOwnershipTransfer) {
+  if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAcceptAssetOwnershipTransfer(params);
   }
 };
 
-const handleIdentity = async (callId: CallIdEnum, params: Record<string, any>, extrinsic: any) => {
-  if (callId === CallIdEnum.AddAuthorization) {
+const handleIdentity = async (
+  eventId: EventIdEnum,
+  params: Record<string, any>,
+  extrinsic: any
+) => {
+  if (eventId === EventIdEnum.AuthorizationAdded) {
     await handleAddPendingOwnership(params, extrinsic);
   }
-  if (callId === CallIdEnum.RemoveAuthorization) {
+  if (eventId === EventIdEnum.AuthorizationRejected) {
     await handleRemovePendingOwnership(params);
   }
 };
 
 const handleComplianceManager = async (
-  callId: CallIdEnum,
+  eventId: EventIdEnum,
   params: Record<string, any>,
   extrinsic: any
 ) => {
-  if (callId === CallIdEnum.PauseAssetCompliance) {
+  if (eventId === EventIdEnum.AssetCompliancePaused) {
     await handlePauseAssetCompliance(params);
   }
-  if (callId === CallIdEnum.ResumeAssetCompliance) {
+  if (eventId === EventIdEnum.AssetComplianceResumed) {
     await handleResumeAssetCompliance(params);
   }
-  if (callId === CallIdEnum.ResetAssetCompliance) {
+  if (eventId === EventIdEnum.AssetComplianceReset) {
     await handleResetAssetCompliance(params);
   }
-  if (callId === CallIdEnum.AddComplianceRequirement) {
+  if (eventId === EventIdEnum.ComplianceRequirementCreated) {
     await handleAddComplianceRequirement(params, extrinsic);
   }
-  if (callId === CallIdEnum.RemoveComplianceRequirement) {
+  if (eventId === EventIdEnum.ComplianceRequirementRemoved) {
     await handleRemoveComplianceRequirement(params);
   }
 };
 
-const handleStatistics = async (callId: CallIdEnum, params: Record<string, any>) => {
-  if (callId === CallIdEnum.AddTransferManager) {
+const handleStatistics = async (eventId: EventIdEnum, params: Record<string, any>) => {
+  if (eventId === EventIdEnum.TransferManagerAdded) {
     await handleAddTransferManager(params);
   }
-  if (callId === CallIdEnum.RemoveTransferManager) {
+  if (eventId === EventIdEnum.TransferManagerRemoved) {
     await handleRemoveTransferManager(params);
   }
-  if (callId === CallIdEnum.AddExemptedEntities) {
+  if (eventId === EventIdEnum.ExemptionsAdded) {
     await handleAddExemptedEntities(params);
   }
-  if (callId === CallIdEnum.RemoveExemptedEntities) {
+  if (eventId === EventIdEnum.ExemptionsRemoved) {
     await handleRemoveExemptedEntities(params);
   }
 };
 
 export async function mapAsset(
   blockId: number,
-  callId: CallIdEnum,
+  eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Record<string, any>,
-  extrinsic: SubstrateExtrinsic
+  event: SubstrateEvent
 ): Promise<void> {
-  if (!extrinsic.success) return;
-
   if (moduleId === ModuleIdEnum.Asset) {
-    await handleAsset(callId, params, extrinsic);
+    await handleAsset(eventId, params, event);
   }
   if (moduleId === ModuleIdEnum.Identity) {
-    await handleIdentity(callId, params, extrinsic);
+    await handleIdentity(eventId, params, event);
   }
   if (moduleId === ModuleIdEnum.Compliancemanager) {
-    await handleComplianceManager(callId, params, extrinsic);
+    await handleComplianceManager(eventId, params, event);
   }
   if (moduleId === ModuleIdEnum.Statistics) {
-    await handleStatistics(callId, params);
+    await handleStatistics(eventId, params);
   }
 }

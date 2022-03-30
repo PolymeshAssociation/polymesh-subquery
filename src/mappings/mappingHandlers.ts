@@ -8,7 +8,7 @@ import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
-import { EventIdEnum, ModuleIdEnum, CallIdEnum } from './entities/common';
+import { EventIdEnum, ModuleIdEnum } from './entities/common';
 import { mapAuthorization } from './entities/mapAuthorization';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
@@ -108,6 +108,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
     mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapAsset(...handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -183,15 +184,15 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
   const formattedParams = harvesterLikeParamsToObj(params);
 
-  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
-    blockId,
-    callId as CallIdEnum,
-    moduleId as ModuleIdEnum,
-    formattedParams,
-    extrinsic,
-  ];
+  // const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+  //   blockId,
+  //   callId as CallIdEnum,
+  //   moduleId as ModuleIdEnum,
+  //   formattedParams,
+  //   extrinsic,
+  // ];
 
-  const handlerPromises = [mapAsset(...handlerArgs)];
+  // const handlerPromises = [mapAsset(...handlerArgs)];
 
   await Extrinsic.create({
     id: `${blockId}/${extrinsicIdx}`,
@@ -210,5 +211,5 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     specVersionId: extrinsic.block.specVersion,
   }).save();
 
-  await Promise.all(handlerPromises);
+  // await Promise.all(handlerPromises);
 }
