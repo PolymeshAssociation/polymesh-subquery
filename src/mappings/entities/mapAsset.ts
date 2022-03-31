@@ -386,7 +386,7 @@ const handleStatistics = async (eventId: EventIdEnum, params: Codec[]) => {
 };
 
 export async function mapAsset(
-  blockId: number,
+  _blockId: number,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],

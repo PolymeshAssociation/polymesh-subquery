@@ -180,8 +180,7 @@ export const formatAssetIdentifiers = (
  * Parses a Vec<AssetCompliance>
  */
 export const getComplianceRulesValue = (requirements: Codec): AssetCompliance[] => {
-  const parsedRequirements = JSON.parse(JSON.stringify(requirements));
-  return parsedRequirements;
+  return JSON.parse(JSON.stringify(requirements));
 };
 
 /**
