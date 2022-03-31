@@ -1,13 +1,18 @@
+import { Codec } from '@polkadot/types/types';
 import BigNumber from 'bignumber.js';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { ModuleIdEnum, CallIdEnum, AuthorizationTypeEnum, EventIdEnum } from './common';
+import { ModuleIdEnum, EventIdEnum } from './common';
+import { Asset, AssetHolder, AssetTransferManager } from '../../types';
 import {
-  Asset,
-  AssetHolder,
-  AssetPendingOwnershipTransfer,
-  AssetAdvancedCompliance,
-} from '../../types';
-import { formatAssetIdentifiers } from '../util';
+  formatAssetIdentifiers,
+  getDocValue,
+  getNumberValue,
+  getComplianceRulesValue,
+  getTextValue,
+  getComplianceValue,
+  getTransferManagerValue,
+  getExemptionsValue,
+} from '../util';
+import { SubstrateEvent } from '@subql/types';
 
 // #region Utils
 const chainAmountToBigNumber = (amount: number): BigNumber =>
@@ -18,38 +23,6 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
   if (!asset) throw new Error(`Asset with ticker ${ticker} was not found.`);
   return asset;
 };
-
-const getAuthorization = async (id: string) => {
-  const authorization = await AssetPendingOwnershipTransfer.get(id);
-  if (!authorization) throw new Error(`Authorization with id ${id} was not found.`);
-  return authorization;
-};
-
-const getComplianceConditions = (conditions: any[], extrinsic: any) =>
-  conditions.map((c: any) => ({
-    id: Number(extrinsic.events[0].event.data[2].id.toString()),
-    data: JSON.stringify(c),
-  }));
-
-const getTargetTransferManager = (
-  manager: AssetAdvancedCompliance,
-  managers: AssetAdvancedCompliance[]
-) =>
-  managers.find(
-    e =>
-      e.CountTransferManager === manager.CountTransferManager &&
-      e.PercentageTransferManager === manager.PercentageTransferManager
-  );
-
-const excludeTransferManager = (
-  manager: AssetAdvancedCompliance,
-  managers: AssetAdvancedCompliance[]
-) =>
-  managers.filter(
-    e =>
-      e.CountTransferManager !== manager.CountTransferManager ||
-      e.PercentageTransferManager !== manager.PercentageTransferManager
-  );
 
 export const getAssetHolder = async (did: string, asset: Asset): Promise<AssetHolder> => {
   const { ticker } = asset;
@@ -67,341 +40,348 @@ export const getAssetHolder = async (did: string, asset: Asset): Promise<AssetHo
   }
   return assetHolder;
 };
+
+const getTargetTransferManager = (
+  manager: AssetTransferManager,
+  managers: AssetTransferManager[]
+) =>
+  managers.find(
+    e =>
+      e.countTransferManager === manager.countTransferManager &&
+      e.percentageTransferManager === manager.percentageTransferManager
+  );
+
+const excludeTransferManager = (manager: AssetTransferManager, managers: AssetTransferManager[]) =>
+  managers.filter(
+    e =>
+      e.countTransferManager !== manager.countTransferManager ||
+      e.percentageTransferManager !== manager.percentageTransferManager
+  );
 // #endregion
 
 // #region ModuleIdEnum.Asset
-const handleCreateAsset = async (params: Record<string, any>, extrinsic: any) => {
-  const { name, ticker, assetType: type, fundingRound, divisible, disableIu, identifiers } = params;
-  const ownerDid = extrinsic.events[1].event.data[0].toString();
+const handleAssetCreated = async (params: Codec[]) => {
+  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
+  const ownerDid = getTextValue(rawOwnerDid);
+  const ticker = getTextValue(rawTicker);
+  const type = getTextValue(rawType);
+  // Name isn't present on the event so we need to query storage
+  // See MESH-1808 on Jira for the status on including name in the event
+  const rawName = await api.query.asset.assetNames(rawTicker);
+  const name = getTextValue(rawName);
+
   await Asset.create({
     id: ticker,
     ticker,
     name,
     type,
-    fundingRound,
+    fundingRound: '',
     isDivisible: divisible,
     isFrozen: false,
     isUniquenessRequired: !disableIu,
     documents: [],
-    identifiers: formatAssetIdentifiers(identifiers),
+    identifiers: [],
     ownerDid,
     fullAgents: [ownerDid],
     totalSupply: '0',
     totalTransfers: '0',
-    compliance: { isPaused: false, sender: [], receiver: [], advanced: [] },
+    isCompliancePaused: false,
+    compliance: [],
+    transferManagers: [],
   }).save();
 };
 
-const handleRenameAsset = async (params: Record<string, any>) => {
-  const { ticker, name: newName } = params;
+const handleAssetRenamed = async (params: Codec[]) => {
+  const [, rawTicker, rawName] = params;
+  const ticker = getTextValue(rawTicker);
+  const newName = getTextValue(rawName);
   const asset = await getAsset(ticker);
   asset.name = newName;
   await asset.save();
 };
 
-const handleSetFundingRound = async (params: Record<string, any>) => {
-  const { ticker, name: newFundingRound } = params;
+const handleFundingRoundSet = async (params: Codec[]) => {
+  const [, rawTicker, newFundingRound] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.fundingRound = newFundingRound;
+  asset.fundingRound = getTextValue(newFundingRound);
   await asset.save();
 };
 
-type AssetNewDocument = {
-  name: string;
-  uri: string;
-  content_hash?: any;
-  doc_type?: string;
-  filing_date?: Date;
-};
-
-const handleAddDocuments = async (params: Record<string, any>, extrinsic: any) => {
-  const { ticker, docs } = params;
+const handleDocumentAdded = async (params: Codec[]) => {
+  const [, rawTicker, rawDocId, rawDoc] = params;
+  const ticker = getTextValue(rawTicker);
+  const id = getNumberValue(rawDocId);
+  const { name, link } = getDocValue(rawDoc);
   const asset = await getAsset(ticker);
-  asset.documents = docs.map((doc: AssetNewDocument, i: number) => ({
-    id: Number(extrinsic.events[i].event.data[2].toString()),
-    name: doc.name,
-    link: doc.uri,
-  }));
+  asset.documents.push({
+    id,
+    name,
+    link,
+  });
   await asset.save();
 };
 
-const handleRemoveDocuments = async (params: Record<string, any>) => {
-  const { ticker, ids } = params;
+const handleDocumentRemoved = async (params: Codec[]) => {
+  const [, rawTicker, rawDocId] = params;
+  const ticker = getTextValue(rawTicker);
+  const docId = getNumberValue(rawDocId);
   const asset = await getAsset(ticker);
-  asset.documents = asset.documents.filter(doc => !ids.includes(doc.id));
+  asset.documents = asset.documents.filter(doc => docId !== doc.id);
   await asset.save();
 };
 
-const handleUpdateIdentifiers = async (params: Record<string, any>) => {
-  const { ticker, identifiers: newIdentifiers } = params;
+const handleIdentifiersUpdated = async (params: Codec[]) => {
+  const [, rawTicker, rawIdentifiers] = params;
+  const stringIds = rawIdentifiers.toString();
+  const newIdentifiers = JSON.parse(stringIds);
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   asset.identifiers = formatAssetIdentifiers(newIdentifiers);
   await asset.save();
 };
 
-const handleMakeDivisible = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleDivisibilityChanged = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   asset.isDivisible = true;
   await asset.save();
 };
 
-const handleIssue = async (params: Record<string, any>) => {
-  const { ticker, amount } = params;
+const handleIssued = async (params: Codec[]) => {
+  const [, rawTicker, , amount] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   const assetOwner = await getAssetHolder(asset.ownerDid, asset);
-  const formattedAmount = chainAmountToBigNumber(amount);
+  const formattedAmount = chainAmountToBigNumber(getNumberValue(amount));
   assetOwner.amount = new BigNumber(assetOwner.amount).plus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).plus(formattedAmount).toString();
   await Promise.all([asset.save(), assetOwner.save()]);
 };
 
-const handleRedeem = async (params: Record<string, any>) => {
-  const { ticker, value: amount } = params;
+const handleRedeemed = async (params: Codec[]) => {
+  const [, rawTicker, , amount] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   const assetOwner = await getAssetHolder(asset.ownerDid, asset);
-  const formattedAmount = chainAmountToBigNumber(amount);
+  const formattedAmount = chainAmountToBigNumber(getNumberValue(amount));
   assetOwner.amount = new BigNumber(assetOwner.amount).minus(formattedAmount).toString();
   asset.totalSupply = new BigNumber(asset.totalSupply).minus(formattedAmount).toString();
   await Promise.all([asset.save(), assetOwner.save()]);
 };
 
-const handleFreeze = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleFrozen = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   asset.isFrozen = true;
   await asset.save();
 };
 
-const handleUnfreeze = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleUnfrozen = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
   asset.isFrozen = false;
   await asset.save();
 };
 
-const handleAcceptAssetOwnershipTransfer = async (params: Record<string, any>) => {
-  const { authId } = params;
-  const authorization = await getAuthorization(authId);
-  if (!authorization.ticker) return;
-  const asset = await getAsset(authorization.ticker);
-  asset.ownerDid = authorization.to;
+const handleAssetOwnershipTransferred = async (params: Codec[]) => {
+  const [to, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
+  const asset = await getAsset(ticker);
+  asset.ownerDid = getTextValue(to);
   await asset.save();
-  await AssetPendingOwnershipTransfer.remove(authId);
 };
-// #endregion
-
-// #region ModuleIdEnum.Identity
-const handleAddPendingOwnership = async (params: Record<string, any>, extrinsic: any) => {
-  const { target: targetData, data: auth, authorizationData: legacyAuth } = params;
-
-  const authData = auth || legacyAuth;
-  const type = Object.keys(authData)[0] as AuthorizationTypeEnum;
-  if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
-    const id = extrinsic.events[0].event.data[3].toString();
-    let ticker: string;
-    const from = extrinsic.events[0].event.data[0].toString();
-    const to = targetData.Identity.toString();
-    let data: string;
-    if (type === AuthorizationTypeEnum.TransferAssetOwnership) {
-      ticker = authData[type].toString();
-    }
-    await AssetPendingOwnershipTransfer.create({
-      id,
-      ticker,
-      from,
-      to,
-      type,
-      data,
-    }).save();
-  }
-};
-
-const handleRemovePendingOwnership = async (params: Record<string, any>) => {
-  const { authId } = params;
-  await AssetPendingOwnershipTransfer.remove(authId);
-};
-// #endregion
 
 // #region ModuleIdEnum.Compliancemanager
-const handlePauseAssetCompliance = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleAssetCompliancePaused = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.compliance.isPaused = true;
+  asset.isCompliancePaused = true;
   await asset.save();
 };
 
-const handleResumeAssetCompliance = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleAssetComplianceResumed = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.compliance.isPaused = false;
+  asset.isCompliancePaused = false;
   await asset.save();
 };
 
-const handleResetAssetCompliance = async (params: Record<string, any>) => {
-  const { ticker } = params;
+const handleAssetComplianceReset = async (params: Codec[]) => {
+  const [, rawTicker] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.compliance.sender = [];
-  asset.compliance.receiver = [];
+  asset.compliance = [];
   await asset.save();
 };
 
-const handleAddComplianceRequirement = async (params: Record<string, any>, extrinsic: any) => {
-  const { ticker, senderConditions, receiverConditions } = params;
-  const newSenderConditions = getComplianceConditions(senderConditions, extrinsic);
-  const newReceiverConditions = getComplianceConditions(receiverConditions, extrinsic);
+const handleComplianceRequirementCreated = async (params: Codec[]) => {
+  const [, rawTicker, rawCompliance] = params;
+  const ticker = getTextValue(rawTicker);
+  const compliance = getComplianceValue(rawCompliance);
   const asset = await getAsset(ticker);
-  asset.compliance.sender = [...asset.compliance.sender, ...newSenderConditions];
-  asset.compliance.receiver = [...asset.compliance.receiver, ...newReceiverConditions];
+  asset.compliance.push(compliance);
   await asset.save();
 };
 
-const handleRemoveComplianceRequirement = async (params: Record<string, any>) => {
-  const { ticker, id } = params;
+const handleComplianceRequirementReplaced = async (params: Codec[]) => {
+  const [, rawTicker, rawCompliance] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.compliance.sender = asset.compliance.sender.filter(s => s.id !== id);
-  asset.compliance.receiver = asset.compliance.receiver.filter(s => s.id !== id);
+  asset.compliance = getComplianceRulesValue(rawCompliance); // looks like this should be complete set
+  await asset.save();
+};
+
+const handleComplianceRequirementRemoved = async (params: Codec[]) => {
+  const [, rawTicker, rawId] = params;
+  const ticker = getTextValue(rawTicker);
+  const asset = await getAsset(ticker);
+  const id = getNumberValue(rawId);
+  asset.compliance = asset.compliance.filter(c => c.id !== id);
   await asset.save();
 };
 // #endregion
 
 // #region ModuleIdEnum.Externalagents
-const handleAddTransferManager = async (params: Record<string, any>) => {
-  const { ticker, newTransferManager } = params;
+const handleTransferManagerAdded = async (params: Codec[]) => {
+  const [, rawTicker, rawManager] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  asset.compliance.advanced = [...asset.compliance.advanced, newTransferManager];
+  const transferManager = getTransferManagerValue(rawManager);
+  asset.transferManagers.push(transferManager);
   await asset.save();
 };
 
-const handleRemoveTransferManager = async (params: Record<string, any>) => {
-  const { ticker, transferManager } = params;
+const handleTransferManagerRemoved = async (params: Codec[]) => {
+  const [, rawTicker, rawManager] = params;
+
+  const ticker = getTextValue(rawTicker);
+  const removedManager = getTransferManagerValue(rawManager);
   const asset = await getAsset(ticker);
-  asset.compliance.advanced = excludeTransferManager(transferManager, asset.compliance.advanced);
+  asset.transferManagers = excludeTransferManager(removedManager, asset.transferManagers);
   await asset.save();
 };
 
-const handleAddExemptedEntities = async (params: Record<string, any>) => {
-  const { ticker, transferManager } = params;
+const handleExemptionsAdded = async (params: Codec[]) => {
+  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
-  const targetTransferManager = getTargetTransferManager(
-    transferManager,
-    asset.compliance.advanced
-  );
-  if (!targetTransferManager) return;
-  targetTransferManager.ExemptedEntities = [
-    ...new Set<string>([
-      ...(targetTransferManager.ExemptedEntities || []),
-      ...(transferManager.exemptedEntities || []),
-    ]),
+  const parsedManager = getTransferManagerValue(rawAgentGroup);
+  const parsedExemptions = getExemptionsValue(rawExemptions);
+
+  const targetManager = getTargetTransferManager(parsedManager, asset.transferManagers);
+  if (!targetManager) return;
+
+  targetManager.exemptedEntities = [
+    ...new Set<string>([...(parsedExemptions || []), ...(targetManager.exemptedEntities || [])]),
   ];
-  const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
-  asset.compliance.advanced = [...otherTransferManagers, targetTransferManager];
+  const otherTransferManagers = excludeTransferManager(parsedManager, asset.transferManagers);
+  asset.transferManagers = [...otherTransferManagers, targetManager];
   await asset.save();
 };
 
-const handleRemoveExemptedEntities = async (params: Record<string, any>) => {
-  const { ticker, transferManager } = params;
+const handleExemptionsRemoved = async (params: Codec[]) => {
+  const [, rawTicker, rawTransferManager, rawExemptions] = params;
+  const ticker = getTextValue(rawTicker);
   const asset = await getAsset(ticker);
+  const parsedTransferManager = getTransferManagerValue(rawTransferManager);
+  const parsedExemptions = getExemptionsValue(rawExemptions);
+
   const targetTransferManager = getTargetTransferManager(
-    transferManager,
-    asset.compliance.advanced
+    parsedTransferManager,
+    asset.transferManagers
   );
   if (!targetTransferManager) return;
-  targetTransferManager.ExemptedEntities = (targetTransferManager.ExemptedEntities || []).filter(
-    e => !transferManager.exemptedEntities.includes(e)
+
+  targetTransferManager.exemptedEntities = (targetTransferManager.exemptedEntities || []).filter(
+    e => !parsedExemptions.includes(e)
   );
-  const otherTransferManagers = excludeTransferManager(transferManager, asset.compliance.advanced);
-  asset.compliance.advanced = [...otherTransferManagers, targetTransferManager];
+  const otherTransferManagers = excludeTransferManager(
+    parsedTransferManager,
+    asset.transferManagers
+  );
+  asset.transferManagers = [...otherTransferManagers, targetTransferManager];
   await asset.save();
 };
 // #endregion
 
-const handleAsset = async (eventId: EventIdEnum, params: Record<string, any>, extrinsic: any) => {
+const handleAsset = async (eventId: EventIdEnum, params: Codec[]) => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleCreateAsset(params, extrinsic);
+    await handleAssetCreated(params);
   }
-  if (eventId === EventIdEnum.AssetCreated) {
-    await handleRenameAsset(params);
+  if (eventId === EventIdEnum.AssetRenamed) {
+    await handleAssetRenamed(params);
   }
   if (eventId === EventIdEnum.FundingRoundSet) {
-    await handleSetFundingRound(params);
+    await handleFundingRoundSet(params);
   }
   if (eventId === EventIdEnum.DocumentAdded) {
-    await handleAddDocuments(params, extrinsic);
+    await handleDocumentAdded(params);
   }
   if (eventId === EventIdEnum.DocumentRemoved) {
-    await handleRemoveDocuments(params);
+    await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.IdentifiersUpdated) {
-    await handleUpdateIdentifiers(params);
+    await handleIdentifiersUpdated(params);
   }
   if (eventId === EventIdEnum.DivisibilityChanged) {
-    await handleMakeDivisible(params);
+    await handleDivisibilityChanged(params);
   }
   if (eventId === EventIdEnum.Issued) {
-    await handleIssue(params);
+    await handleIssued(params);
   }
   if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeem(params);
+    await handleRedeemed(params);
   }
   if (eventId === EventIdEnum.Frozen) {
-    await handleFreeze(params);
+    await handleFrozen(params);
   }
   if (eventId === EventIdEnum.Unfrozen) {
-    await handleUnfreeze(params);
+    await handleUnfrozen(params);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
-    await handleAcceptAssetOwnershipTransfer(params);
+    await handleAssetOwnershipTransferred(params);
   }
 };
 
-const handleIdentity = async (
-  eventId: EventIdEnum,
-  params: Record<string, any>,
-  extrinsic: any
-) => {
-  if (eventId === EventIdEnum.AuthorizationAdded) {
-    await handleAddPendingOwnership(params, extrinsic);
-  }
-  if (eventId === EventIdEnum.AuthorizationRejected) {
-    await handleRemovePendingOwnership(params);
-  }
-};
-
-const handleComplianceManager = async (
-  eventId: EventIdEnum,
-  params: Record<string, any>,
-  extrinsic: any
-) => {
+const handleComplianceManager = async (eventId: EventIdEnum, params: Codec[]) => {
   if (eventId === EventIdEnum.AssetCompliancePaused) {
-    await handlePauseAssetCompliance(params);
+    await handleAssetCompliancePaused(params);
   }
   if (eventId === EventIdEnum.AssetComplianceResumed) {
-    await handleResumeAssetCompliance(params);
+    await handleAssetComplianceResumed(params);
   }
   if (eventId === EventIdEnum.AssetComplianceReset) {
-    await handleResetAssetCompliance(params);
+    await handleAssetComplianceReset(params);
+  }
+  if (eventId === EventIdEnum.AssetComplianceReplaced) {
+    await handleComplianceRequirementReplaced(params);
   }
   if (eventId === EventIdEnum.ComplianceRequirementCreated) {
-    await handleAddComplianceRequirement(params, extrinsic);
+    await handleComplianceRequirementCreated(params);
   }
   if (eventId === EventIdEnum.ComplianceRequirementRemoved) {
-    await handleRemoveComplianceRequirement(params);
+    await handleComplianceRequirementRemoved(params);
   }
 };
 
-const handleStatistics = async (eventId: EventIdEnum, params: Record<string, any>) => {
+const handleStatistics = async (eventId: EventIdEnum, params: Codec[]) => {
   if (eventId === EventIdEnum.TransferManagerAdded) {
-    await handleAddTransferManager(params);
+    await handleTransferManagerAdded(params);
   }
   if (eventId === EventIdEnum.TransferManagerRemoved) {
-    await handleRemoveTransferManager(params);
+    await handleTransferManagerRemoved(params);
   }
   if (eventId === EventIdEnum.ExemptionsAdded) {
-    await handleAddExemptedEntities(params);
+    await handleExemptionsAdded(params);
   }
   if (eventId === EventIdEnum.ExemptionsRemoved) {
-    await handleRemoveExemptedEntities(params);
+    await handleExemptionsRemoved(params);
   }
 };
 
@@ -409,17 +389,14 @@ export async function mapAsset(
   blockId: number,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
-  params: Record<string, any>,
-  event: SubstrateEvent
+  params: Codec[],
+  _event: SubstrateEvent
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.Asset) {
-    await handleAsset(eventId, params, event);
-  }
-  if (moduleId === ModuleIdEnum.Identity) {
-    await handleIdentity(eventId, params, event);
+    await handleAsset(eventId, params);
   }
   if (moduleId === ModuleIdEnum.Compliancemanager) {
-    await handleComplianceManager(eventId, params, event);
+    await handleComplianceManager(eventId, params);
   }
   if (moduleId === ModuleIdEnum.Statistics) {
     await handleStatistics(eventId, params);

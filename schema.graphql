@@ -317,22 +317,15 @@ type AssetPendingOwnershipTransfer @entity {
   data: String
 }
 
-type AssetComplianceRequirement @jsonField {
-  id: Int! # requirement id
-  data: String!
-}
-
-type AssetAdvancedCompliance @jsonField {
-  CountTransferManager: String
-  PercentageTransferManager: String
-  ExemptedEntities: [String]!
+type AssetTransferManager @jsonField {
+  countTransferManager: String
+  percentageTransferManager: String
+  exemptedEntities: [String]!
 }
 
 type AssetCompliance @jsonField {
-  isPaused: Boolean!
-  sender: [AssetComplianceRequirement]!
-  receiver: [AssetComplianceRequirement]!
-  advanced: [AssetAdvancedCompliance]!
+  id: Int!
+  data: String! # This could be expanded into structured data
 }
 
 type AssetHolder @entity {
@@ -358,5 +351,7 @@ type Asset @entity {
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   totalSupply: String!
   totalTransfers: String!
-  compliance: AssetCompliance!
+  isCompliancePaused: Boolean!
+  compliance: [AssetCompliance]!
+  transferManagers: [AssetTransferManager]!
 }

@@ -3,7 +3,13 @@ import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
 import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { SecurityIdentifier, FoundType } from '../types';
+import { FoundType } from '../types';
+import {
+  AssetCompliance,
+  AssetDocument,
+  AssetTransferManager,
+  SecurityIdentifier,
+} from 'polymesh-subql/types/interfaces';
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -111,6 +117,10 @@ export const getTextValue = (item: Codec): string => {
   return item.toString().trim().length === 0 ? null : item.toString().trim();
 };
 
+export const getNumberValue = (item: Codec): number => {
+  return Number(getTextValue(item));
+};
+
 export const getDateValue = (item: Codec): Date => {
   return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
 };
@@ -142,16 +152,64 @@ export const harvesterLikeParamsToObj = (
   return obj;
 };
 
+/**
+ * Parses a raw Asset Document
+ */
+export const getDocValue = (doc: Codec): AssetDocument => {
+  const parsedDoc = JSON.parse(doc.toString());
+  return {
+    id: parsedDoc.id,
+    name: parsedDoc.name,
+    link: parsedDoc.uri,
+  };
+};
+
 export const formatAssetIdentifiers = (
   identifiers: Record<string, string>[]
-): SecurityIdentifier[] =>
-  identifiers.map(i => {
+): SecurityIdentifier[] => {
+  return identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
       type,
       value: i[type],
     };
   });
+};
+
+/**
+ * Parses a Vec<AssetCompliance>
+ */
+export const getComplianceRulesValue = (requirements: Codec): AssetCompliance[] => {
+  const parsedRequirements = JSON.parse(JSON.stringify(requirements));
+  return parsedRequirements;
+};
+
+/**
+ * Parses AssetCompliance
+ */
+export const getComplianceValue = (compliance: Codec): AssetCompliance => {
+  const { id, ...data } = JSON.parse(compliance.toString());
+  return {
+    id: Number(id),
+    data,
+  };
+};
+
+/**
+ * Parses AssetTransferManager
+ */
+export const getTransferManagerValue = (manager: Codec): AssetTransferManager => {
+  const parsed = JSON.parse(JSON.stringify(manager));
+  return {
+    countTransferManager: parsed.countTransferManager,
+    percentageTransferManager: parsed.percentageTransferManager,
+    exemptedEntities: [],
+  };
+};
+
+export const getExemptionsValue = (exemptions: Codec): string[] => {
+  return JSON.parse(exemptions.toString());
+};
 
 export const logFoundType = (type: string, rawType: string): void => {
   FoundType.create({ id: type, rawType }).save();

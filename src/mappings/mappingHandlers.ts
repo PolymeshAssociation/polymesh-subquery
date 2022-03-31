@@ -2,7 +2,7 @@ import { mapAsset } from './entities/mapAsset';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
 import { AnyTuple, Codec } from '@polkadot/types/types';
-import { logFoundType, harvesterLikeParamsToObj, camelToSnakeCase } from './util';
+import { logFoundType, camelToSnakeCase } from './util';
 import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
 import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
@@ -95,6 +95,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     args,
     event,
   ];
+
   const handlerPromises = [
     mapStakingEvent(...handlerArgs),
     mapSto(eventId, moduleId, args),
@@ -166,8 +167,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const blockId = extrinsic.block.block.header.number.toNumber();
-  const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
-  const callId = extrinsic.extrinsic.method.method;
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress
@@ -182,17 +181,6 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
       )
     : null;
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
-  const formattedParams = harvesterLikeParamsToObj(params);
-
-  // const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
-  //   blockId,
-  //   callId as CallIdEnum,
-  //   moduleId as ModuleIdEnum,
-  //   formattedParams,
-  //   extrinsic,
-  // ];
-
-  // const handlerPromises = [mapAsset(...handlerArgs)];
 
   await Extrinsic.create({
     id: `${blockId}/${extrinsicIdx}`,
@@ -210,6 +198,4 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
     specVersionId: extrinsic.block.specVersion,
   }).save();
-
-  // await Promise.all(handlerPromises);
 }
