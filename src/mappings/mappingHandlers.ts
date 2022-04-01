@@ -80,10 +80,71 @@ const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => 
   return ret;
 };
 
-export async function handleEvent(event: SubstrateEvent): Promise<void> {
+export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
   const blockId = block.block.header.number.toNumber();
   const eventIdx = event.idx;
+  const moduleId = event.event.section.toLowerCase();
+  const eventId = event.event.method;
+  const args = event.event.data.toArray();
+
+  const harvesterLikeArgs = args.map((arg, i) => ({
+    value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
+  }));
+  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
+
+  const { claimExpiry, claimIssuer, claimScope, claimType } = extractClaimInfo(harvesterLikeArgs);
+
+  await Event.create({
+    id: `${blockId}/${eventIdx}`,
+    blockId,
+    eventIdx,
+    extrinsicIdx: event?.extrinsic?.idx,
+    specVersionId: block.specVersion,
+    eventId,
+    moduleId,
+    attributesTxt: JSON.stringify(harvesterLikeArgs),
+    eventArg_0,
+    eventArg_1,
+    eventArg_2,
+    eventArg_3,
+    claimType,
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
+    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
+    transferTo: extractTransferTo(harvesterLikeArgs),
+  }).save();
+}
+
+export async function handleToolingCall(extrinsic: SubstrateExtrinsic): Promise<void> {
+  const { blockId, extrinsicIdx, signedbyAddress, address, params } = getCallArgs(extrinsic);
+
+  await Extrinsic.create({
+    id: `${blockId}/${extrinsicIdx}`,
+    blockId,
+    extrinsicIdx,
+    extrinsicLength: extrinsic.extrinsic.length,
+    signed: extrinsic.extrinsic.isSigned ? 1 : 0,
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
+    paramsTxt: JSON.stringify(params),
+    success: extrinsic.success ? 1 : 0,
+    signedbyAddress: signedbyAddress ? 1 : 0,
+    address,
+    nonce: extrinsic.extrinsic.nonce.toJSON(),
+    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+    specVersionId: extrinsic.block.specVersion,
+  }).save();
+}
+
+// handles an event to populate native GraphQL tables as well as what is needed for tooling
+export async function handleEvent(event: SubstrateEvent): Promise<void> {
+  await handleToolingEvent(event);
+
+  const block = event.block;
+  const blockId = block.block.header.number.toNumber();
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
   const args = event.event.data.toArray();
@@ -113,7 +174,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const harvesterLikeArgs = args.map((arg, i) => ({
     value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
   }));
-  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
+
   const {
     claimExpiry,
     claimIssuer,
@@ -138,32 +199,28 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     })
   );
 
-  await Event.create({
-    id: `${blockId}/${eventIdx}`,
-    blockId,
-    eventIdx,
-    extrinsicIdx: event?.extrinsic?.idx,
-    specVersionId: block.specVersion,
-    eventId,
-    moduleId,
-    attributesTxt: JSON.stringify(harvesterLikeArgs),
-    eventArg_0,
-    eventArg_1,
-    eventArg_2,
-    eventArg_3,
-    claimType,
-    claimExpiry,
-    claimIssuer,
-    claimScope,
-    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
-    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
-    transferTo: extractTransferTo(harvesterLikeArgs),
-  }).save();
-
   await Promise.all(handlerPromises);
 }
 
+// handles calls to populate native GraphQL tables as well as what is needed for tooling
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
+  await handleToolingCall(extrinsic);
+
+  const { blockId, moduleId, callId, formattedParams } = getCallArgs(extrinsic);
+
+  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+    blockId,
+    callId as CallIdEnum,
+    moduleId as ModuleIdEnum,
+    formattedParams,
+    extrinsic,
+  ];
+
+  const handlerPromises = [mapAsset(...handlerArgs)];
+  await Promise.all(handlerPromises);
+}
+
+function getCallArgs(extrinsic: SubstrateExtrinsic) {
   const blockId = extrinsic.block.block.header.number.toNumber();
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = extrinsic.extrinsic.method.method;
@@ -183,32 +240,14 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
   const formattedParams = harvesterLikeParamsToObj(params);
 
-  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+  return {
     blockId,
-    callId as CallIdEnum,
-    moduleId as ModuleIdEnum,
-    formattedParams,
-    extrinsic,
-  ];
-
-  const handlerPromises = [mapAsset(...handlerArgs)];
-
-  await Extrinsic.create({
-    id: `${blockId}/${extrinsicIdx}`,
-    blockId,
+    moduleId,
+    callId,
     extrinsicIdx,
-    extrinsicLength: extrinsic.extrinsic.length,
-    signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    paramsTxt: JSON.stringify(params),
-    success: extrinsic.success ? 1 : 0,
-    signedbyAddress: signedbyAddress ? 1 : 0,
+    signedbyAddress,
     address,
-    nonce: extrinsic.extrinsic.nonce.toJSON(),
-    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
-    specVersionId: extrinsic.block.specVersion,
-  }).save();
-
-  await Promise.all(handlerPromises);
+    params,
+    formattedParams,
+  };
 }
