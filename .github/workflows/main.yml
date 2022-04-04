@@ -10,10 +10,10 @@ jobs:
   lint_test:
     name: Linting and Testing
     runs-on: ubuntu-latest
+    env: # needed for project.yaml generation
+      - CALL_HANDLER: 'handleCall'
+      - EVENT_HANDLER: 'handleEvent'
     steps:
-      - env: # needed for project.yaml generation
-          - CALL_HANDLER: 'handleCall'
-          - EVENT_HANDLER: 'handleEvent'
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
