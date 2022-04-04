@@ -20,6 +20,9 @@ jobs:
         run: yarn --frozen-lockfile
       - name: make project.yaml
         run: envsubst < project.template.yaml > project.yaml
+        env:
+          CALL_HANDLER: 'handleCall'
+          EVENT_HANDLER: 'handleEvent'
       - name: gen types
         run: yarn codegen
       - name: build src
