@@ -7,10 +7,10 @@ type Event @entity {
   moduleId: String! @index(unique: false)
   eventId: String! @index(unique: false)
   attributesTxt: String!
-  eventArg_0: String @index(unique: false)
-  eventArg_1: String @index(unique: false)
-  eventArg_2: String @index(unique: false)
-  eventArg_3: String @index(unique: false)
+  eventArg_0: String
+  eventArg_1: String
+  eventArg_2: String
+  eventArg_3: String
   claimType: String
   claimScope: String
   claimIssuer: String
