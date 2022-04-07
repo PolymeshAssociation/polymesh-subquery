@@ -2029,7 +2029,7 @@ dataSources:
       handlers:
         - handler: handleBlock
           kind: substrate/BlockHandler
-        - handler: handleCall
+        - handler: ${CALL_HANDLER}
           kind: substrate/CallHandler
-        - handler: handleEvent
+        - handler: ${EVENT_HANDLER}
           kind: substrate/EventHandler

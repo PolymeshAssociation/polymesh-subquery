@@ -1,6 +1,6 @@
 type Event @entity {
   id: ID!
-  blockId: Int!
+  blockId: Int! @index(unique: false)
   eventIdx: Int!
   extrinsicIdx: Int
   specVersionId: Int!
@@ -33,7 +33,7 @@ type FoundType @entity {
 
 type Block @entity {
   id: ID!
-  blockId: Int!
+  blockId: Int! @index(unique: false)
   parentId: Int!
   hash: String!
   parentHash: String!
@@ -51,18 +51,18 @@ type Block @entity {
 
 type Extrinsic @entity {
   id: ID!
-  blockId: Int!
+  blockId: Int! @index(unique: false)
   extrinsicIdx: Int!
   extrinsicLength: String!
   signed: Int!
   signedbyAddress: Int!
   address: String
-  moduleId: String!
-  callId: String!
+  moduleId: String! @index(unique: false)
+  callId: String! @index(unique: false)
   paramsTxt: String!
   success: Int!
   nonce: Int
-  extrinsicHash: String
+  extrinsicHash: String @index(unique: false)
   specVersionId: Int!
 }
 
