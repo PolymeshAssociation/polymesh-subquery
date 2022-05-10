@@ -33,7 +33,7 @@ type FoundType @entity {
 
 type Block @entity {
   id: ID!
-  blockId: Int!
+  blockId: Int! @index(unique: false)
   parentId: Int!
   hash: String!
   parentHash: String!

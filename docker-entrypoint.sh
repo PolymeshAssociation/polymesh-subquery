@@ -7,6 +7,20 @@ _term() {
 }
 trap _term SIGTERM
 
+if [[ -n "$NO_NATIVE_GRAPHQL_DATA" ]]
+then
+  export CALL_HANDLER='handleToolingCall'
+else
+  export CALL_HANDLER='handleCall'
+fi
+
+if [[ -n "$NO_NATIVE_GRAPHQL_DATA" ]]
+then
+  export EVENT_HANDLER='handleToolingEvent'
+else
+  export EVENT_HANDLER='handleEvent'
+fi
+
 envsubst <project.template.yaml >project.yaml
 
 (npm run sql || (sleep 3 && kill "$$")) &
