@@ -66,6 +66,42 @@ type Extrinsic @entity {
   specVersionId: Int!
 }
 
+type PermissionJson @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type Permissions @entity {
+  id: ID!
+  assets: PermissionJson
+  portfolios: PermissionJson
+  transactions: PermissionJson
+  transactionGroups: [String]!
+  createdBlock: Block!
+  updatedBlock: Block
+  datetime: Date!
+}
+
+type Account @entity {
+  id: ID!
+  address: String! @index(unique: true)
+  identity: Identity!
+  eventId: String! @index(unique: false)
+  permissions: Permissions!
+  block: Block!
+  datetime: Date!
+}
+
+type Identity @entity {
+  id: ID!
+  did: String! @index(unique: false)
+  primaryAccount: String! @index(unique: false)
+  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
+  secondaryKeysFrozen: Boolean!
+  block: Block!
+  datetime: Date!
+}
+
 type BridgeEvent @entity {
   id: ID!
   block: Block! @index(unique: false)

@@ -31,6 +31,7 @@ import { mapClaim } from './entities/mapClaim';
 import { mapHeldTokens } from './entities/mapHeldTokens';
 import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
 import { mapBridgeEvent } from './entities/mapBridgeEvent';
+import { mapIdentities } from './entities/mapIdentities';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -168,6 +169,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapFunding(...handlerArgs),
     mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     mapInvestment(...handlerArgs),
+    mapIdentities(...handlerArgs),
     mapSettlement(...handlerArgs),
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
