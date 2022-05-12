@@ -7,9 +7,9 @@ type Event @entity {
   moduleId: String! @index(unique: false)
   eventId: String! @index(unique: false)
   attributesTxt: String!
-  eventArg_0: String @index(unique: false)
-  eventArg_1: String @index(unique: false)
-  eventArg_2: String @index(unique: false)
+  eventArg_0: String
+  eventArg_1: String
+  eventArg_2: String
   eventArg_3: String
   claimType: String
   claimScope: String
@@ -66,19 +66,29 @@ type Extrinsic @entity {
   specVersionId: Int!
 }
 
-type PermissionJson @jsonField {
+type AssetPermissions @jsonField {
   type: String!
   values: [String]!
 }
 
+type TransactionPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type PortfolioPermissions @jsonField {
+  type: String!
+  values: [PortfolioJson]!
+}
+
 type Permissions @entity {
   id: ID!
-  assets: PermissionJson
-  portfolios: PermissionJson
-  transactions: PermissionJson
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
   transactionGroups: [String]!
   createdBlock: Block!
-  updatedBlock: Block
+  updatedBlock: Block!
   datetime: Date!
 }
 
@@ -94,11 +104,13 @@ type Account @entity {
 
 type Identity @entity {
   id: ID!
-  did: String! @index(unique: false)
+  did: String! @index(unique: true)
   primaryAccount: String! @index(unique: false)
   secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
-  block: Block!
+  eventId: String!
+  createdBlock: Block!
+  updatedBlock: Block!
   datetime: Date!
 }
 

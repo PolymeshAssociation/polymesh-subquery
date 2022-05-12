@@ -1,10 +1,11 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { EventIdEnum, ModuleIdEnum } from './common';
-import { Permissions } from '../../types/models/Permissions';
+import { AssetPermissions, PortfolioPermissions, TransactionPermissions } from '../../types';
 import { Account } from '../../types/models/Account';
 import { Identity } from '../../types/models/Identity';
+import { Permissions } from '../../types/models/Permissions';
 import { getFirstValueFromJson, getTextValue } from '../util';
+import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
  * Subscribes to the Identities related events
@@ -17,129 +18,101 @@ export async function mapIdentities(
   event: SubstrateEvent
 ): Promise<void> {
   const datetime = event.block.timestamp;
+
   if (moduleId === ModuleIdEnum.Identity) {
     if (eventId === EventIdEnum.DidCreated) {
-      const did = getTextValue(params[0]);
-      const address = getTextValue(params[1]);
-      await Identity.create({
-        id: did,
-        did,
-        primaryAccount: getTextValue(params[1]),
-        secondaryKeysFrozen: false,
-        blockId,
-        datetime,
-      }).save();
-
-      await Permissions.create({
-        id: address,
-        assets: null,
-        portfolios: null,
-        transactions: null,
-        transactionGroups: [],
-        createdBlockId: blockId,
-        datetime,
-      }).save();
-      await Account.create({
-        id: address,
-        identityId: did,
-        permissionsId: address,
-        eventId,
-        address,
-        blockId,
-        datetime,
-      }).save();
+      await handleDidCreated(blockId, eventId, params, datetime);
     }
 
     if (eventId === EventIdEnum.SecondaryKeysAdded) {
-      const { id: identityId } = await fetchIdentity(params[0]);
-
-      const accountsList = params[1].toJSON() as any[];
-
-      const promises = [];
-
-      for (const account of accountsList) {
-        const address = account.signer.account;
-
-        const { assets, portfolios, transactions, transactionGroups } = getPermissions(
-          account.permissions
-        );
-
-        promises.push(
-          Permissions.create({
-            id: address,
-            assets,
-            portfolios,
-            transactions,
-            transactionGroups,
-            createdBlockId: blockId,
-            datetime,
-          }).save()
-        );
-
-        promises.push(
-          Account.create({
-            id: address,
-            address,
-            identityId,
-            permissionsId: address,
-            eventId,
-            blockId,
-            datetime,
-          }).save()
-        );
-      }
-
-      await Promise.all(promises);
+      await handleSecondaryKeysAdded(blockId, eventId, params, datetime);
     }
 
     if (eventId === EventIdEnum.SecondaryKeysFrozen) {
-      const identity = await fetchIdentity(params[0]);
-      identity.secondaryKeysFrozen = true;
-      await identity.save();
+      await handleSecondaryKeysFrozen(blockId, eventId, params, true);
     }
 
     if (eventId === EventIdEnum.SecondaryKeysUnfrozen) {
-      const identity = await fetchIdentity(params[0]);
-      identity.secondaryKeysFrozen = false;
-      await identity.save();
+      await handleSecondaryKeysFrozen(blockId, eventId, params, false);
     }
 
     if (eventId === EventIdEnum.SecondaryKeysRemoved) {
-      await fetchIdentity(params[0]);
-      const accountsRemoved = params[1].toJSON() as any[];
-      const accounts = accountsRemoved.map(account => Account.remove(account.account));
-
-      await Promise.all(accounts);
+      await handleSecondaryKeysRemoved(params);
     }
 
     if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
-      await fetchIdentity(params[0]);
-      const address = getFirstValueFromJson(params[1])['account'];
-      const permissions = await Permissions.get(address);
-      const { assets, portfolios, transactions, transactionGroups } = getPermissions(
-        params[3].toJSON() as any
-      );
-
-      permissions.assets = assets;
-      permissions.portfolios = portfolios;
-      permissions.transactions = transactions;
-      permissions.transactionGroups = transactionGroups;
-      permissions.updatedBlockId = `${blockId}`;
-      await permissions.save();
+      await handleSecondaryKeysPermissionsUpdated(blockId, params);
     }
   }
 }
 
-function getPermissions(accountPermissions: Record<string, unknown>) {
-  logger.info(JSON.stringify(accountPermissions));
-  let assets,
-    portfolios,
-    transactions,
-    transactionGroups = [];
+const fetchIdentity = async (param: Codec): Promise<Identity> => {
+  const did = getTextValue(param);
 
-  let type;
+  const identity = await Identity.get(did);
+  if (!identity) {
+    throw new Error(`Identity with DID ${did} was not found`);
+  }
+
+  return identity;
+};
+
+const handleDidCreated = async (
+  blockId: number,
+  eventId: EventIdEnum,
+  params: Codec[],
+  datetime: Date
+): Promise<void> => {
+  const did = getTextValue(params[0]);
+  const address = getTextValue(params[1]);
+  await Identity.create({
+    id: did,
+    did,
+    primaryAccount: address,
+    secondaryKeysFrozen: false,
+    eventId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+    datetime,
+  }).save();
+
+  await Permissions.create({
+    id: address,
+    assets: null,
+    portfolios: null,
+    transactions: null,
+    transactionGroups: [],
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+    datetime,
+  }).save();
+
+  await Account.create({
+    id: address,
+    identityId: did,
+    permissionsId: address,
+    eventId,
+    address,
+    blockId,
+    datetime,
+  }).save();
+};
+
+const getPermissions = (
+  accountPermissions: Record<string, unknown>
+): {
+  assets: AssetPermissions | null;
+  portfolios: PortfolioPermissions | null;
+  transactions: TransactionPermissions | null;
+  transactionGroups: string[];
+} => {
+  let assets: AssetPermissions,
+    portfolios: PortfolioPermissions,
+    transactions: TransactionPermissions,
+    transactionGroups: string[] = [];
+
+  let type: string;
   Object.keys(accountPermissions).forEach(key => {
-    logger.info(key);
     switch (key) {
       case 'asset': {
         const assetPermissions = accountPermissions.asset;
@@ -179,14 +152,99 @@ function getPermissions(accountPermissions: Record<string, unknown>) {
     transactions,
     transactionGroups,
   };
-}
+};
 
-async function fetchIdentity(param: Codec) {
-  const did = getTextValue(param);
+const handleSecondaryKeysPermissionsUpdated = async (
+  blockId: number,
+  params: Codec[]
+): Promise<void> => {
+  await fetchIdentity(params[0]);
 
-  const identity = await Identity.get(did);
-  if (!identity) {
-    throw new Error(`Identity with DID ${did} was not found`);
+  const signer = getFirstValueFromJson(params[1]);
+  const address = JSON.parse(signer).account;
+  const permissions = await Permissions.get(address);
+
+  const updatedPermissions = getPermissions(JSON.parse(params[3].toString()));
+
+  Object.assign(permissions, {
+    ...updatedPermissions,
+    updatedBlockId: blockId,
+  });
+
+  await permissions.save();
+};
+
+const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
+  await fetchIdentity(params[0]);
+
+  const accounts = JSON.parse(params[1].toString());
+
+  const removePromises = accounts.map(account => Account.remove(account.account));
+
+  await Promise.all(removePromises);
+};
+
+const handleSecondaryKeysFrozen = async (
+  blockId: number,
+  eventId: EventIdEnum,
+  params: Codec[],
+  frozen: boolean
+): Promise<void> => {
+  const identity = await fetchIdentity(params[0]);
+
+  Object.assign(identity, {
+    secondaryKeysFrozen: frozen,
+    updatedBlockId: blockId,
+    eventId,
+  });
+
+  await identity.save();
+};
+
+const handleSecondaryKeysAdded = async (
+  blockId: number,
+  eventId: EventIdEnum,
+  params: Codec[],
+  datetime: Date
+): Promise<void> => {
+  const { id: identityId } = await fetchIdentity(params[0]);
+
+  const accountsList = JSON.parse(params[1].toString());
+
+  const promises = [];
+
+  for (const account of accountsList) {
+    const address = account.signer.account;
+
+    const { assets, portfolios, transactions, transactionGroups } = getPermissions(
+      account.permissions
+    );
+
+    promises.push(
+      Permissions.create({
+        id: address,
+        assets,
+        portfolios,
+        transactions,
+        transactionGroups,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+        datetime,
+      }).save()
+    );
+
+    promises.push(
+      Account.create({
+        id: address,
+        address,
+        identityId,
+        permissionsId: address,
+        eventId,
+        blockId,
+        datetime,
+      }).save()
+    );
   }
-  return identity;
-}
+
+  await Promise.all(promises);
+};
