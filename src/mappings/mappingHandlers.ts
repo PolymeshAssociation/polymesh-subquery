@@ -1,22 +1,13 @@
-import { mapAsset } from './entities/mapAsset';
-import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
+import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { AnyTuple, Codec } from '@polkadot/types/types';
-import { logFoundType, harvesterLikeParamsToObj, camelToSnakeCase } from './util';
-import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
 import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
-import { EventIdEnum, ModuleIdEnum, CallIdEnum } from './entities/common';
-import { mapAuthorization } from './entities/mapAuthorization';
-import { mapCorporateActions } from './entities/mapCorporateActions';
-import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
-import { mapFunding } from './entities/mapFunding';
-import { mapInvestment } from './entities/mapInvestment';
-import { mapProposal } from './entities/mapProposal';
-import { mapStakingEvent } from './entities/mapStakingEvent';
-import { mapSto } from './entities/mapSto';
+import { EventIdEnum, ModuleIdEnum } from './entities/common';
+import { mapClaim } from './entities/mapClaim';
+import { mapIdentities } from './entities/mapIdentities';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -24,14 +15,8 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
-import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
-import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
-import { mapSettlement } from './entities/mapSettlement';
-import { mapClaim } from './entities/mapClaim';
-import { mapHeldTokens } from './entities/mapHeldTokens';
-import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
-import { mapBridgeEvent } from './entities/mapBridgeEvent';
-import { mapIdentities } from './entities/mapIdentities';
+import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
+import { camelToSnakeCase, harvesterLikeParamsToObj, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -160,21 +145,23 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     event,
   ];
   const handlerPromises = [
-    mapStakingEvent(...handlerArgs),
-    mapBridgeEvent(...handlerArgs),
-    mapSto(eventId, moduleId, args),
-    mapExternalAgentAction(...handlerArgs),
-    mapTickerExternalAgentAdded(...handlerArgs),
-    mapTickerExternalAgentHistory(...handlerArgs),
-    mapFunding(...handlerArgs),
-    mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapInvestment(...handlerArgs),
     mapIdentities(...handlerArgs),
-    mapSettlement(...handlerArgs),
-    mapCorporateActions(...handlerArgs),
-    mapProposal(...handlerArgs),
-    mapTrustedClaimIssuerTicker(...handlerArgs),
-    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    // TODO @prashantasdeveloper remove the commented out code
+
+    // mapStakingEvent(...handlerArgs),
+    // mapBridgeEvent(...handlerArgs),
+    // mapSto(eventId, moduleId, args),
+    // mapExternalAgentAction(...handlerArgs),
+    // mapTickerExternalAgentAdded(...handlerArgs),
+    // mapTickerExternalAgentHistory(...handlerArgs),
+    // mapFunding(...handlerArgs),
+    // mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    // mapInvestment(...handlerArgs),
+    // mapSettlement(...handlerArgs),
+    // mapCorporateActions(...handlerArgs),
+    // mapProposal(...handlerArgs),
+    // mapTrustedClaimIssuerTicker(...handlerArgs),
+    // mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -212,18 +199,20 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   await handleToolingCall(extrinsic);
 
-  const { blockId, moduleId, callId, formattedParams } = getCallArgs(extrinsic);
+  // TODO @prashantasdeveloper below code needs to be removed and moved to event handler
 
-  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
-    blockId,
-    callId as CallIdEnum,
-    moduleId as ModuleIdEnum,
-    formattedParams,
-    extrinsic,
-  ];
+  // const { blockId, moduleId, callId, formattedParams } = getCallArgs(extrinsic);
 
-  const handlerPromises = [mapAsset(...handlerArgs)];
-  await Promise.all(handlerPromises);
+  // const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
+  //   blockId,
+  //   callId as CallIdEnum,
+  //   moduleId as ModuleIdEnum,
+  //   formattedParams,
+  //   extrinsic,
+  // ];
+
+  // const handlerPromises = [mapAsset(...handlerArgs)];
+  // await Promise.all(handlerPromises);
 }
 
 function getCallArgs(extrinsic: SubstrateExtrinsic) {

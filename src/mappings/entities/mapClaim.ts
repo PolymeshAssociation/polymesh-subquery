@@ -1,11 +1,8 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Scope } from 'polymesh-subql/types';
 import { Claim } from '../../types/models/Claim';
 import { ClaimScope } from '../../types/models/ClaimScope';
-import { IdentityWithClaims } from '../../types/models/IdentityWithClaims';
-import { IssuerIdentityWithClaims } from '../../types/models/IssuerIdentityWithClaims';
-import { addIfNotIncludes, END_OF_TIME, getTextValue, serializeTicker } from '../util';
+import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum ClaimScopeTypeEnum {
@@ -54,16 +51,6 @@ export async function mapClaim(
     const scope = JSON.parse(claimScope);
     const filterExpiry = claimExpiry || END_OF_TIME;
 
-    const args: IdentityWithClaimsArgs = {
-      scope,
-      filterExpiry,
-      claimType,
-      claimIssuer,
-      target,
-    };
-
-    await Promise.all([handleIdentityWithClaims(args), handleIssuerIdentityWithClaims(args)]);
-
     await Claim.create({
       id: `${blockId}/${event.idx}`,
       blockId,
@@ -93,68 +80,6 @@ export async function mapClaim(
     const target = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
     await handleScopes(target, ticker);
-  }
-}
-
-type IdentityWithClaimsArgs = {
-  target: string;
-  claimType: string;
-  scope: Scope;
-  claimIssuer: string;
-  filterExpiry: bigint;
-};
-
-async function handleIdentityWithClaims({
-  target,
-  claimIssuer,
-  claimType,
-  filterExpiry,
-  scope,
-}: IdentityWithClaimsArgs) {
-  const identityWithClaims = await IdentityWithClaims.get(target);
-  if (identityWithClaims) {
-    addIfNotIncludes(identityWithClaims.typeIndex, claimType);
-    addIfNotIncludes(identityWithClaims.scopeIndex, scope);
-    addIfNotIncludes(identityWithClaims.issuerIndex, claimIssuer);
-    identityWithClaims.maxExpiry =
-      filterExpiry > identityWithClaims.maxExpiry ? filterExpiry : identityWithClaims.maxExpiry;
-    await identityWithClaims.save();
-  } else {
-    await IdentityWithClaims.create({
-      id: target,
-      typeIndex: [claimType],
-      scopeIndex: [scope],
-      issuerIndex: [claimIssuer],
-      maxExpiry: filterExpiry,
-    }).save();
-  }
-}
-
-async function handleIssuerIdentityWithClaims({
-  target,
-  claimIssuer,
-  claimType,
-  filterExpiry,
-  scope,
-}: IdentityWithClaimsArgs) {
-  const issuerIdentityWithClaims = await IssuerIdentityWithClaims.get(claimIssuer);
-  if (issuerIdentityWithClaims) {
-    addIfNotIncludes(issuerIdentityWithClaims.typeIndex, claimType);
-    addIfNotIncludes(issuerIdentityWithClaims.scopeIndex, scope);
-    addIfNotIncludes(issuerIdentityWithClaims.targetIndex, target);
-    issuerIdentityWithClaims.maxExpiry =
-      filterExpiry > issuerIdentityWithClaims.maxExpiry
-        ? filterExpiry
-        : issuerIdentityWithClaims.maxExpiry;
-    await issuerIdentityWithClaims.save();
-  } else {
-    await IssuerIdentityWithClaims.create({
-      id: claimIssuer,
-      typeIndex: [claimType],
-      scopeIndex: [scope],
-      targetIndex: [target],
-      maxExpiry: filterExpiry,
-    }).save();
   }
 }
 

@@ -42,3 +42,13 @@ CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from at
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;
 DROP VIEW IF EXISTS data_extrinsic;
+
+-- Queries to add identities for ALICE
+
+-- Insert a default block
+-- INSERT INTO "public"."blocks" ("id", "block_id", "parent_id", "hash", "parent_hash", "state_root", "extrinsics_root", "count_extrinsics", "count_extrinsics_unsigned", "count_extrinsics_signed", "count_extrinsics_error", "count_extrinsics_success", "count_events", "datetime", "spec_version_id", "created_at", "updated_at") VALUES
+-- ('-1', -1, -1, '0x2', '0x6', '0xc', '0xb0', 1, 1, 0, 0, 1, 1, now(), '3000', now(), now()) ON CONFLICT(id) DO NOTHING;
+
+-- Add entry for 0x0100
+-- INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
+-- ('0x0100000000000000000000000000000000000000000000000000000000000000', '0x0100000000000000000000000000000000000000000000000000000000000000', 'primaryAccount', 'f', 'DidCreated', -1, -1, '2022-05-16 05:33:28.059957', '2022-05-16 05:33:28.059957+00', '2022-05-16 05:33:28.059957+00') ON CONFLICT(id) DO NOTHING;

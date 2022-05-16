@@ -323,8 +323,8 @@ type Claim @entity {
   id: ID!
   block: Block! @index(unique: false)
   eventIdx: Int! @index(unique: false)
-  target: IdentityWithClaims! @index(unique: false)
-  issuer: IssuerIdentityWithClaims! @index(unique: false)
+  target: Identity! @index(unique: false)
+  issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
@@ -333,28 +333,6 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
-}
-
-type IdentityWithClaims @entity {
-  id: ID!
-  # In order to search and provide pagination per identity,
-  # We need to keep track of the fields of the inner claims.
-  scopeIndex: [Scope!]!
-  issuerIndex: [String!]! @index(unique: false)
-  typeIndex: [String!]! @index(unique: false)
-  maxExpiry: BigInt! @index(unique: false)
-  claims: [Claim]! @derivedFrom(field: "target")
-}
-
-type IssuerIdentityWithClaims @entity {
-  id: ID!
-  # In order to search and provide pagination per identity,
-  # We need to keep track of the fields of the inner claims.
-  scopeIndex: [Scope!]!
-  targetIndex: [String!]! @index(unique: false)
-  typeIndex: [String!]! @index(unique: false)
-  maxExpiry: BigInt! @index(unique: false)
-  claims: [Claim]! @derivedFrom(field: "issuer")
 }
 
 type TrustedClaimIssuerTicker @entity {
