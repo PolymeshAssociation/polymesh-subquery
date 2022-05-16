@@ -46,7 +46,7 @@ export async function mapIdentities(
   }
 }
 
-const fetchIdentity = async (param: Codec): Promise<Identity> => {
+const getIdentity = async (param: Codec): Promise<Identity> => {
   const did = getTextValue(param);
 
   const identity = await Identity.get(did);
@@ -158,7 +158,7 @@ const handleSecondaryKeysPermissionsUpdated = async (
   blockId: number,
   params: Codec[]
 ): Promise<void> => {
-  await fetchIdentity(params[0]);
+  await getIdentity(params[0]);
 
   const signer = getFirstValueFromJson(params[1]);
   const address = JSON.parse(signer).account;
@@ -175,7 +175,7 @@ const handleSecondaryKeysPermissionsUpdated = async (
 };
 
 const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
-  await fetchIdentity(params[0]);
+  await getIdentity(params[0]);
 
   const accounts = JSON.parse(params[1].toString());
 
@@ -190,7 +190,7 @@ const handleSecondaryKeysFrozen = async (
   params: Codec[],
   frozen: boolean
 ): Promise<void> => {
-  const identity = await fetchIdentity(params[0]);
+  const identity = await getIdentity(params[0]);
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -207,7 +207,7 @@ const handleSecondaryKeysAdded = async (
   params: Codec[],
   datetime: Date
 ): Promise<void> => {
-  const { id: identityId } = await fetchIdentity(params[0]);
+  const { id: identityId } = await getIdentity(params[0]);
 
   const accountsList = JSON.parse(params[1].toString());
 
