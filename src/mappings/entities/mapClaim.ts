@@ -22,6 +22,35 @@ type ClaimParams = {
   jurisdiction: string;
 };
 
+type Scope = {
+  type: ClaimScopeTypeEnum;
+  value: string;
+};
+
+const getId = (
+  target: string,
+  claimType: string,
+  scope: Scope,
+  jurisdiction: string,
+  cddId: string
+): string => {
+  const idAttributes = [target, claimType];
+  if (scope) {
+    // Not applicable in case of CustomerDueDiligence
+    idAttributes.push(scope.type);
+    idAttributes.push(scope.value);
+  }
+  if (jurisdiction) {
+    // Only applicable in case of claim type Jurisdiction
+    idAttributes.push(jurisdiction);
+  }
+  if (cddId) {
+    // Only applicable in case of CustomerDueDiligence
+    idAttributes.push(cddId);
+  }
+  return idAttributes.join('/');
+};
+
 /**
  * Subscribes to the Claim events
  */
@@ -45,14 +74,15 @@ export async function mapClaim(
   if (moduleId !== ModuleIdEnum.Identity) {
     return;
   }
-  if (eventId === EventIdEnum.ClaimAdded) {
-    const target = getTextValue(params[0]);
+  const target = getTextValue(params[0]);
 
-    const scope = JSON.parse(claimScope);
+  const scope = JSON.parse(claimScope) as Scope;
+
+  if (eventId === EventIdEnum.ClaimAdded) {
     const filterExpiry = claimExpiry || END_OF_TIME;
 
     await Claim.create({
-      id: `${blockId}/${event.idx}`,
+      id: getId(target, claimType, scope, jurisdiction, cddId),
       blockId,
       eventIdx: event.idx,
       targetId: target,
@@ -63,7 +93,7 @@ export async function mapClaim(
       type: claimType,
       scope,
       jurisdiction,
-      cddId: cddId,
+      cddId,
       filterExpiry,
     }).save();
 
@@ -76,8 +106,17 @@ export async function mapClaim(
     }
   }
 
+  if (eventId === EventIdEnum.ClaimRevoked) {
+    const id = getId(target, claimType, scope, jurisdiction, cddId);
+    const claim = await Claim.get(id);
+    if (!claim) {
+      throw new Error(`Claim with id ${id} was not found`);
+    }
+    claim.revokeDate = issuanceDate;
+    await claim.save();
+  }
+
   if (eventId === EventIdEnum.AssetDidRegistered) {
-    const target = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
     await handleScopes(target, ticker);
   }

@@ -333,6 +333,7 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
+  revokeDate: BigInt
 }
 
 type TrustedClaimIssuerTicker @entity {
