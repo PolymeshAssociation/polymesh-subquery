@@ -27,6 +27,35 @@ type Scope = {
   value: string;
 };
 
+/**
+ * Subscribes to the Claim events
+ */
+export async function mapClaim(
+  blockId: number,
+  eventId: EventIdEnum,
+  moduleId: ModuleIdEnum,
+  params: Codec[],
+  event: SubstrateEvent,
+  claimParams: ClaimParams
+): Promise<void> {
+  if (moduleId === ModuleIdEnum.Identity) {
+    const target = getTextValue(params[0]);
+
+    if (eventId === EventIdEnum.ClaimAdded) {
+      await handleClaimAdded(blockId, event, claimParams, target);
+    }
+
+    if (eventId === EventIdEnum.ClaimRevoked) {
+      await handleClaimRevoked(target, claimParams);
+    }
+
+    if (eventId === EventIdEnum.AssetDidRegistered) {
+      const ticker = serializeTicker(params[1]);
+      await handleScopes(target, ticker);
+    }
+  }
+}
+
 const getId = (
   target: string,
   claimType: string,
@@ -51,14 +80,8 @@ const getId = (
   return idAttributes.join('/');
 };
 
-/**
- * Subscribes to the Claim events
- */
-export async function mapClaim(
+const handleClaimAdded = async (
   blockId: number,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
   event: SubstrateEvent,
   {
     claimScope,
@@ -69,64 +92,57 @@ export async function mapClaim(
     cddId,
     lastUpdateDate,
     jurisdiction,
-  }: ClaimParams
-): Promise<void> {
-  if (moduleId !== ModuleIdEnum.Identity) {
-    return;
-  }
-  const target = getTextValue(params[0]);
-
+  }: ClaimParams,
+  target: string
+): Promise<void> => {
   const scope = JSON.parse(claimScope) as Scope;
 
-  if (eventId === EventIdEnum.ClaimAdded) {
-    const filterExpiry = claimExpiry || END_OF_TIME;
+  const filterExpiry = claimExpiry || END_OF_TIME;
 
-    await Claim.create({
-      id: getId(target, claimType, scope, jurisdiction, cddId),
-      blockId,
-      eventIdx: event.idx,
-      targetId: target,
-      issuerId: claimIssuer,
-      issuanceDate,
-      lastUpdateDate,
-      expiry: claimExpiry,
-      type: claimType,
-      scope,
-      jurisdiction,
-      cddId,
-      filterExpiry,
-    }).save();
+  await Claim.create({
+    id: getId(target, claimType, scope, jurisdiction, cddId),
+    blockId,
+    eventIdx: event.idx,
+    targetId: target,
+    issuerId: claimIssuer,
+    issuanceDate,
+    lastUpdateDate,
+    expiry: claimExpiry,
+    type: claimType,
+    scope,
+    jurisdiction,
+    cddId,
+    filterExpiry,
+  }).save();
 
-    if (scope) {
-      await handleScopes(
-        target,
-        scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
-        scope
-      );
-    }
+  if (scope) {
+    await handleScopes(
+      target,
+      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
+      scope
+    );
   }
+};
 
-  if (eventId === EventIdEnum.ClaimRevoked) {
-    const id = getId(target, claimType, scope, jurisdiction, cddId);
-    const claim = await Claim.get(id);
-    if (!claim) {
-      throw new Error(`Claim with id ${id} was not found`);
-    }
-    claim.revokeDate = issuanceDate;
-    await claim.save();
-  }
-
-  if (eventId === EventIdEnum.AssetDidRegistered) {
-    const ticker = serializeTicker(params[1]);
-    await handleScopes(target, ticker);
-  }
-}
-
-async function handleScopes(
+const handleClaimRevoked = async (
   target: string,
-  ticker?: string,
-  scope?: { type: string; value: string }
-) {
+  { claimScope, claimType, issuanceDate, cddId, jurisdiction }: ClaimParams
+) => {
+  const scope = JSON.parse(claimScope) as Scope;
+
+  const id = getId(target, claimType, scope, jurisdiction, cddId);
+
+  const claim = await Claim.get(id);
+  if (!claim) {
+    throw new Error(`Claim with id ${id} was not found`);
+  }
+
+  claim.revokeDate = issuanceDate;
+
+  await claim.save();
+};
+
+const handleScopes = async (target: string, ticker?: string, scope?: Scope): Promise<void> => {
   const id = `${target}/${scope?.value || ticker}`;
   await ClaimScope.create({
     id,
@@ -134,4 +150,4 @@ async function handleScopes(
     ticker,
     scope,
   }).save();
-}
+};
