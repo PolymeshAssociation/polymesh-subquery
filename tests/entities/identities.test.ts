@@ -7,7 +7,7 @@ describe('accounts', () => {
     const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
-        query{
+        query {
           accounts(filter: {
               identityId: {
                 equalTo: "${identityId}"
@@ -64,7 +64,7 @@ describe('accounts', () => {
     const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const result = await query({
       query: gql`
-        query Accounts {
+        query {
           accounts(
             filter: {
               identityId: {
@@ -108,7 +108,7 @@ describe('permissions', () => {
     const address = '5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv';
     const res = await query({
       query: gql`
-      query Permissions {
+      query {
         permissions(filter: { id: { equalTo: "${address}"}}) {
           nodes {
             nodeId
@@ -126,16 +126,18 @@ describe('permissions', () => {
       `,
     });
 
+    expect(res?.errors).toBeFalsy();
+
     expect(res?.data).toMatchSnapshot();
   });
 });
 
 describe('identities', () => {
   test('should return identity details along with accounts and their permissions', async () => {
-    const identityId = '0x0200000000000000000000000000000000000000000000000000000000000001';
+    const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
-      query IdentityDetails {
+      query {
         identities(
           filter: {
             did: {

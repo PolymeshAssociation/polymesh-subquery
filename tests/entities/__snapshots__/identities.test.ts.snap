@@ -179,7 +179,64 @@ exports[`identities should return identity details along with accounts and their
 Object {
   "identities": Object {
     "__typename": "IdentitiesConnection",
-    "nodes": Array [],
+    "nodes": Array [
+      Object {
+        "__typename": "Identity",
+        "createdBlockId": "341",
+        "datetime": "2021-10-06T12:34:55.5",
+        "did": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+        "eventId": "DidCreated",
+        "primaryAccount": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+        "secondaryAccounts": Object {
+          "__typename": "AccountsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Account",
+              "address": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+              "blockId": "345",
+              "eventId": "SecondaryKeysAdded",
+              "permissions": Object {
+                "__typename": "Permission",
+                "assets": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "createdBlockId": "345",
+                "datetime": "2021-10-06T12:34:57.5",
+                "portfolios": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "transactionGroups": Array [],
+                "transactions": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "updatedBlockId": "345",
+              },
+            },
+            Object {
+              "__typename": "Account",
+              "address": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+              "blockId": "341",
+              "eventId": "DidCreated",
+              "permissions": Object {
+                "__typename": "Permission",
+                "assets": null,
+                "createdBlockId": "341",
+                "datetime": "2021-10-06T12:34:55.5",
+                "portfolios": null,
+                "transactionGroups": Array [],
+                "transactions": null,
+                "updatedBlockId": "341",
+              },
+            },
+          ],
+        },
+        "secondaryKeysFrozen": false,
+        "updatedBlockId": "341",
+      },
+    ],
   },
 }
 `;
