@@ -12,3 +12,11 @@ INSERT INTO "public"."blocks" ("id", "block_id", "parent_id", "hash", "parent_ha
 --Add entry for 0x0100
 INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
 ('0x0100000000000000000000000000000000000000000000000000000000000000', '0x0100000000000000000000000000000000000000000000000000000000000000', 'primaryAccount', 'f', 'DidCreated', -1, -1, now(), now(), now()) ON CONFLICT(id) DO NOTHING;
+
+--Add entry for 0x0400
+INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
+('0x0400000000000000000000000000000000000000000000000000000000000000', '0x0400000000000000000000000000000000000000000000000000000000000000', 'primaryAccount', 'f', 'DidCreated', -1, -1, now(), now(), now()) ON CONFLICT(id) DO NOTHING;
+
+--Add entry for 0x0500
+INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
+('0x0500000000000000000000000000000000000000000000000000000000000000', '0x0500000000000000000000000000000000000000000000000000000000000000', 'primaryAccount', 'f', 'DidCreated', -1, -1, now(), now(), now()) ON CONFLICT(id) DO NOTHING;
