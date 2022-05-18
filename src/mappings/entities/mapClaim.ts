@@ -11,7 +11,7 @@ enum ClaimScopeTypeEnum {
   Custom = 'Custom',
 }
 
-type ClaimParams = {
+interface ClaimParams {
   claimExpiry: bigint | undefined;
   claimIssuer: string;
   claimScope: string;
@@ -20,12 +20,12 @@ type ClaimParams = {
   lastUpdateDate: bigint;
   cddId: string;
   jurisdiction: string;
-};
+}
 
-type Scope = {
+interface Scope {
   type: ClaimScopeTypeEnum;
   value: string;
-};
+}
 
 /**
  * Subscribes to the Claim events
@@ -65,16 +65,16 @@ const getId = (
 ): string => {
   const idAttributes = [target, claimType];
   if (scope) {
-    // Not applicable in case of CustomerDueDiligence
+    // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
     idAttributes.push(scope.type);
     idAttributes.push(scope.value);
   }
   if (jurisdiction) {
-    // Only applicable in case of claim type Jurisdiction
+    // Only applicable in case of Jurisdiction claim type
     idAttributes.push(jurisdiction);
   }
   if (cddId) {
-    // Only applicable in case of CustomerDueDiligence
+    // Only applicable in case of CustomerDueDiligence claim type
     idAttributes.push(cddId);
   }
   return idAttributes.join('/');
