@@ -7,9 +7,9 @@ type Event @entity {
   moduleId: String! @index(unique: false)
   eventId: String! @index(unique: false)
   attributesTxt: String!
-  eventArg_0: String @index(unique: false)
-  eventArg_1: String @index(unique: false)
-  eventArg_2: String @index(unique: false)
+  eventArg_0: String
+  eventArg_1: String
+  eventArg_2: String
   eventArg_3: String
   claimType: String
   claimScope: String
@@ -64,6 +64,54 @@ type Extrinsic @entity {
   nonce: Int
   extrinsicHash: String @index(unique: false)
   specVersionId: Int!
+}
+
+type AssetPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type TransactionPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type PortfolioPermissions @jsonField {
+  type: String!
+  values: [PortfolioJson]!
+}
+
+type Permissions @entity {
+  id: ID!
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
+  datetime: Date!
+}
+
+type Account @entity {
+  id: ID!
+  address: String! @index(unique: true)
+  identity: Identity!
+  eventId: String! @index(unique: false)
+  permissions: Permissions!
+  block: Block!
+  datetime: Date!
+}
+
+type Identity @entity {
+  id: ID!
+  did: String! @index(unique: true)
+  primaryAccount: String! @index(unique: false)
+  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
+  secondaryKeysFrozen: Boolean!
+  eventId: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+  datetime: Date!
 }
 
 type BridgeEvent @entity {
@@ -275,8 +323,8 @@ type Claim @entity {
   id: ID!
   block: Block! @index(unique: false)
   eventIdx: Int! @index(unique: false)
-  target: IdentityWithClaims! @index(unique: false)
-  issuer: IssuerIdentityWithClaims! @index(unique: false)
+  target: Identity! @index(unique: false)
+  issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
@@ -285,28 +333,7 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
-}
-
-type IdentityWithClaims @entity {
-  id: ID!
-  # In order to search and provide pagination per identity,
-  # We need to keep track of the fields of the inner claims.
-  scopeIndex: [Scope!]!
-  issuerIndex: [String!]! @index(unique: false)
-  typeIndex: [String!]! @index(unique: false)
-  maxExpiry: BigInt! @index(unique: false)
-  claims: [Claim]! @derivedFrom(field: "target")
-}
-
-type IssuerIdentityWithClaims @entity {
-  id: ID!
-  # In order to search and provide pagination per identity,
-  # We need to keep track of the fields of the inner claims.
-  scopeIndex: [Scope!]!
-  targetIndex: [String!]! @index(unique: false)
-  typeIndex: [String!]! @index(unique: false)
-  maxExpiry: BigInt! @index(unique: false)
-  claims: [Claim]! @derivedFrom(field: "issuer")
+  revokeDate: BigInt
 }
 
 type TrustedClaimIssuerTicker @entity {
