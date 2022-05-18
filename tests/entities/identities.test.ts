@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('accounts', () => {
-  test('should return number of accounts associated with a given identity', async () => {
+  it('should return number of accounts associated with a given identity', async () => {
     const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
@@ -22,7 +22,7 @@ describe('accounts', () => {
     return expect(res?.data?.accounts?.totalCount).toEqual(2);
   });
 
-  test('should return just total count', async () => {
+  it('should return just total count', async () => {
     const res = await query({
       query: gql`
         query {
@@ -36,7 +36,7 @@ describe('accounts', () => {
     expect(res?.data).toMatchSnapshot();
   });
 
-  test('should return first 10 accounts as there are no filters', async () => {
+  it('should return first 10 accounts as there are no filters', async () => {
     const result = await query({
       query: gql`
         query {
@@ -60,7 +60,7 @@ describe('accounts', () => {
     expect(result?.data).toMatchSnapshot();
   });
 
-  test('should return filtered accounts along with their permissions', async () => {
+  it('should return filtered accounts along with their permissions', async () => {
     const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const result = await query({
       query: gql`
@@ -104,7 +104,7 @@ describe('accounts', () => {
 });
 
 describe('permissions', () => {
-  test('should return permissions for a given account address', async () => {
+  it('should return permissions for a given account address', async () => {
     const address = '5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv';
     const res = await query({
       query: gql`
@@ -133,7 +133,7 @@ describe('permissions', () => {
 });
 
 describe('identities', () => {
-  test('should return identity details along with accounts and their permissions', async () => {
+  it('should return identity details along with accounts and their permissions', async () => {
     const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
@@ -182,7 +182,7 @@ describe('identities', () => {
     expect(res?.data).toMatchSnapshot();
   });
 
-  test('should return a list of identities whose secondary keys are frozen', async () => {
+  it('should return a list of identities whose secondary keys are frozen', async () => {
     const result = await query({
       query: gql`
         query {

@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('claimScopes', () => {
-  test('should return an empty list as given identity has no claims', async () => {
+  it('should return an empty list as given identity has no claims', async () => {
     const identityId = '0x0200000000000000000000000000000000000000000000000000000000000001';
     const res = await query({
       query: gql`
@@ -27,7 +27,7 @@ describe('claimScopes', () => {
     return expect(res?.data?.claimScopes?.nodes?.length).toEqual(0);
   });
 
-  test('should return a list of scopes for given identity', async () => {
+  it('should return a list of scopes for given identity', async () => {
     const identityId = '0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3';
     const q = {
       query: gql`
@@ -57,7 +57,7 @@ describe('claimScopes', () => {
 });
 
 describe('claims', () => {
-  test('should return no registries as given identity has no claims', async () => {
+  it('should return no registries as given identity has no claims', async () => {
     const identityId = '0x9900000000000000000000000000000000000000000000000000000000000000';
     const res = await query({
       query: gql`
@@ -76,7 +76,7 @@ describe('claims', () => {
     return expect(res?.data?.claims?.totalCount).toEqual(0);
   });
 
-  test('should return just total count', async () => {
+  it('should return just total count', async () => {
     const res = await query({
       query: gql`
         query {
@@ -90,7 +90,7 @@ describe('claims', () => {
     expect(res?.data).toMatchSnapshot();
   });
 
-  test('should return all claims as there are no filters', async () => {
+  it('should return all claims as there are no filters', async () => {
     const q = {
       query: gql`
         query {
@@ -120,7 +120,7 @@ describe('claims', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('should return filtered claims', async () => {
+  it('should return filtered claims', async () => {
     const scopeType = 'Identity';
     const scopeValue = '5TICKER';
     const trustedClaimIssuer = '0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01';
