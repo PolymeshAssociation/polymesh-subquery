@@ -4,7 +4,7 @@ import { AssetPermissions, PortfolioPermissions, TransactionPermissions } from '
 import { Account } from '../../types/models/Account';
 import { Identity } from '../../types/models/Identity';
 import { Permissions } from '../../types/models/Permissions';
-import { getFirstValueFromJson, getTextValue } from '../util';
+import { getTextValue } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
 /**
@@ -128,7 +128,10 @@ const getPermissions = (
         type = Object.keys(portfolioPermissions)[0];
         portfolios = {
           type,
-          values: portfolioPermissions[type],
+          values: portfolioPermissions[type]?.map(({ did, kind: { user: number } }) => ({
+            did,
+            number: number || null,
+          })),
         };
         break;
       }
@@ -160,9 +163,14 @@ const handleSecondaryKeysPermissionsUpdated = async (
 ): Promise<void> => {
   await getIdentity(params[0]);
 
-  const signer = getFirstValueFromJson(params[1]);
-  const address = JSON.parse(signer).account;
+  const {
+    signer: { account: address },
+  } = JSON.parse(params[1].toString());
+
   const permissions = await Permissions.get(address);
+  if (!permissions) {
+    throw new Error(`Permissions for account ${address} were not found`);
+  }
 
   const updatedPermissions = getPermissions(JSON.parse(params[3].toString()));
 
@@ -179,7 +187,7 @@ const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
 
   const accounts = JSON.parse(params[1].toString());
 
-  const removePromises = accounts.map(account => Account.remove(account.account));
+  const removePromises = accounts.map(({ account }) => Account.remove(account));
 
   await Promise.all(removePromises);
 };
@@ -209,16 +217,12 @@ const handleSecondaryKeysAdded = async (
 ): Promise<void> => {
   const { id: identityId } = await getIdentity(params[0]);
 
-  const accountsList = JSON.parse(params[1].toString());
+  const accounts = JSON.parse(params[1].toString());
 
   const promises = [];
 
-  for (const account of accountsList) {
-    const address = account.signer.account;
-
-    const { assets, portfolios, transactions, transactionGroups } = getPermissions(
-      account.permissions
-    );
+  accounts.forEach(({ signer: { account: address }, permissions }) => {
+    const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(
       Permissions.create({
@@ -244,7 +248,7 @@ const handleSecondaryKeysAdded = async (
         datetime,
       }).save()
     );
-  }
+  });
 
   await Promise.all(promises);
 };
