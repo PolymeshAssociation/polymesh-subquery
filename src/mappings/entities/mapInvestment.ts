@@ -20,11 +20,11 @@ export async function mapInvestment(
       id: `${blockId}/${event.idx}`,
       blockId,
       investor: getTextValue(params[0]),
-      stoId: params[1],
+      stoId: Number(params[1].toString()),
       offeringToken: serializeTicker(params[2]),
       raiseToken: serializeTicker(params[3]),
-      offeringTokenAmount: getTextValue(params[4]),
-      raiseTokenAmount: getTextValue(params[5]),
+      offeringTokenAmount: BigInt(getTextValue(params[4])),
+      raiseTokenAmount: BigInt(getTextValue(params[5])),
       datetime: event.block.timestamp,
     }).save();
   }

@@ -40,9 +40,9 @@ export async function mapAuthorization(
       await auth.save();
     } else {
       await Authorization.create({
-        id: params[3],
+        id: params[3].toString(),
         createdBlock: blockId,
-        authId: params[3],
+        authId: Number(params[3].toString()),
         fromDid: getTextValue(params[0]),
         toDid: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),

@@ -86,9 +86,9 @@ async function handleHistoryOfPaymentEventsForCA(
     eventDid,
     eventIdx: event.idx,
     ticker,
-    localId,
-    balance,
-    tax,
+    localId: Number(localId),
+    balance: BigInt(balance),
+    tax: BigInt(tax),
     datetime: event.block.timestamp,
   }).save();
 }
@@ -117,8 +117,8 @@ async function handleWithholdingTaxesOfCA(
     await WithholdingTaxesOfCa.create({
       id: `${ticker}/${localId}`,
       ticker,
-      localId,
-      taxes,
+      localId: Number(localId),
+      taxes: BigInt(taxes),
       datetime: event.block.timestamp,
     }).save();
   }

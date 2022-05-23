@@ -27,7 +27,6 @@ export async function mapTickerExternalAgentHistory(
     await AgentGroupEntity.create({
       id: `${ticker}/${group}`,
       permissions,
-      members: [],
     }).save();
     return;
   }
@@ -91,7 +90,7 @@ export async function mapTickerExternalAgentHistory(
         AgentGroupMembership.create({
           id: `${ticker}/${group.custom}/${did}`,
           member: did,
-          group: `${ticker}/${group.custom}`,
+          groupId: `${ticker}/${group.custom}`,
         }).save()
       );
     }
@@ -130,7 +129,7 @@ export async function mapTickerExternalAgentHistory(
         AgentGroupMembership.create({
           id: `${ticker}/${group.custom}/${did}`,
           member: did,
-          group: `${ticker}/${group.custom}`,
+          groupId: `${ticker}/${group.custom}`,
         }).save()
       );
     }

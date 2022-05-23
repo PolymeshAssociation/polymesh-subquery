@@ -32,12 +32,12 @@ export async function mapProposal(
       blockId,
       identityId: getTextValue(params[0]),
       state: ProposalState.Pending,
-      balance: getTextValue(params[3]),
+      balance: BigInt(getTextValue(params[3])),
       url: getTextValue(params[4]),
       description: getTextValue(params[5]),
       snapshotted: false,
-      totalAyeWeight: 0,
-      totalNayWeight: 0,
+      totalAyeWeight: BigInt(0),
+      totalNayWeight: BigInt(0),
       lastStateUpdatedAt: blockId,
     }).save();
   }
@@ -53,8 +53,8 @@ export async function mapProposal(
   if (eventId === EventIdEnum.Voted) {
     const account = getTextValue(params[1]);
     const pipId = getTextValue(params[2]);
-    const vote = getTextValue(params[3]);
-    const weight = getTextValue(params[4]);
+    const vote = JSON.parse(getTextValue(params[3])) as boolean;
+    const weight = BigInt(getTextValue(params[4]));
 
     const promises = [
       (async () => {

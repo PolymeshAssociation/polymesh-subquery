@@ -9,39 +9,52 @@ services:
       - db-data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   subquery-node:
-    build: ./
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    image: onfinality/subql-node:latest
+    # build: ./
     depends_on:
-      - 'postgres'
+      'postgres':
+        condition: service_healthy
     restart: always
     environment:
       DB_USER: postgres
       DB_PASS: postgres
       DB_DATABASE: postgres
-      NODE_ENV: local
       DB_HOST: postgres
       DB_PORT: 5432
+      NODE_ENV: local
       # START_BLOCK: 30596
-      # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
-      # NO_NATIVE_GRAPHQL_DATA: 'TRUE'
+      NETWORK_ENDPOINT: wss://staging-rpc.polymesh.live
+      NO_NATIVE_GRAPHQL_DATA: 'TRUE'
       CALL_HANDLER: 'handleCall' # needed to generate project.yaml
       EVENT_HANDLER: 'handleEvent' # needed to generate project.yaml
-      NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      # NETWORK_ENDPOINT: ws://host.docker.internal:9944
+    volumes:
+      - ./:/app
     command:
-      - --batch-size=500
       - -f=/app
-      - --local
+      - --db-schema=app
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
+      interval: 3s
+      timeout: 5s
+      retries: 10
 
   graphql-engine:
     image: onfinality/subql-query:latest
     ports:
-      - 3001:3000
+      - 3000:3000
     depends_on:
-      - 'postgres'
-      - 'subquery-node'
+      'postgres':
+        condition: service_healthy
+      'subquery-node':
+        condition: service_healthy
     restart: always
     environment:
       DB_USER: postgres
@@ -52,6 +65,7 @@ services:
     command:
       - --name=app
       - --playground
+      - --indexer=http://subquery-node:3000
 
 volumes:
   db-data:

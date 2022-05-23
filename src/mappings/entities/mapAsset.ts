@@ -85,7 +85,6 @@ const handleCreateAsset = async (params: Record<string, any>, extrinsic: any) =>
     documents: [],
     identifiers: formatAssetIdentifiers(identifiers),
     ownerDid,
-    fullAgents: [ownerDid],
     totalSupply: '0',
     totalTransfers: '0',
     compliance: { isPaused: false, sender: [], receiver: [], advanced: [] },

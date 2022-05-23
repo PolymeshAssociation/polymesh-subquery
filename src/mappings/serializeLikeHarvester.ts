@@ -7,8 +7,17 @@ import {
   removeNullChars,
   serializeTicker,
 } from './util';
-import { Enum, Option, Vec, Compact, Struct, Tuple, Result, VecFixed } from '@polkadot/types/codec';
-import { CodecMap } from '@polkadot/types/codec/Map';
+import {
+  Enum,
+  Option,
+  Vec,
+  Compact,
+  Struct,
+  Tuple,
+  Result,
+  VecFixed,
+  CodecMap,
+} from '@polkadot/types/codec';
 import { TextDecoder } from 'util';
 import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
 import BN from 'bn.js';
