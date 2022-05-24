@@ -21,12 +21,12 @@ else
   export EVENT_HANDLER='handleEvent'
 fi
 
-envsubst <project.template.yaml >project.yaml
+envsubst <project.template.yaml> project.yaml
 
 (npm run sql || (sleep 3 && kill "$$")) &
 
 node --max-old-space-size=1536 \
-	/usr/local/bin/subql-node \
+	/usr/local/lib/node_modules/@subql/node/bin/run \
 	--network-endpoint="$NETWORK_ENDPOINT" $@
 child=$!
 wait "$child"

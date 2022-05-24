@@ -45,7 +45,7 @@ export async function mapStakingEvent(
       identityId: eventId === StakingEventType.Slash ? null : params[0].toString(),
       stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
       amount,
-      nominatedValidators: eventId === 'Nominated' ? JSON.parse(params[2].toString()) : null,
+      nominatedValidators: eventId === 'Nominated' ? (params[2].toJSON() as string[]) : null,
     }).save();
   }
 }

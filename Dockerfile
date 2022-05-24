@@ -8,10 +8,14 @@ COPY package.json /app
 COPY yarn.lock /app
 RUN yarn --frozen-lockfile && chown -R subquery /app
 
+########################################################################################
+# Following parameters are needed to generate a project.yaml from project.template.yaml
 ENV START_BLOCK=1
-# CALL_HANDLER and EVENT_HANDLER are needed to generate a project.yaml from project.template.yaml
 ENV CALL_HANDLER='callHandler'
 ENV EVENT_HANDLER='handleEvent'
+# ENV NETWORK_ENDPOINT='ws://host.docker.internal:9944'
+# ENV NETWORK_CHAIN_ID='0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
+########################################################################################
 
 ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker-entrypoint.sh" ]
 

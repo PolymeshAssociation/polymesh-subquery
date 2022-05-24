@@ -26,12 +26,10 @@
     "schema.graphql",
     "project.yaml"
   ],
-  "resolutions": {
-    "ipfs-unixfs": "6.0.6"
-  },
   "dependencies": {
     "@polkadot/api": "^8",
-    "bignumber.js": "^9.0.2"
+    "bignumber.js": "^9.0.2",
+    "typeorm": "^0.2.34"
   },
   "author": "Prashant",
   "license": "Apache-2.0",

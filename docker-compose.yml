@@ -16,8 +16,9 @@ services:
       retries: 5
 
   subquery-node:
-    image: onfinality/subql-node:latest
-    # build: ./
+    build: ./
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       'postgres':
         condition: service_healthy
@@ -29,17 +30,25 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       NODE_ENV: local
-      # START_BLOCK: 30596
-      NETWORK_ENDPOINT: wss://staging-rpc.polymesh.live
-      NO_NATIVE_GRAPHQL_DATA: 'TRUE'
+      # NO_NATIVE_GRAPHQL_DATA: 'TRUE'
       CALL_HANDLER: 'handleCall' # needed to generate project.yaml
       EVENT_HANDLER: 'handleEvent' # needed to generate project.yaml
-      # NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.live
+      # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
+      NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
+      # START_BLOCK: 30596
     volumes:
       - ./:/app
     command:
-      - -f=/app
-      - --db-schema=app
+      - -f=/app # Path of the project
+      - --batch-size=100 # Batch size of blocks to fetch in one round
+      # - --scale-batch-size # scale batch size based on memory usage. To know more about the process - https://github.com/subquery/subql/blob/c9bc9733deef726f78fa48387e74e52f8d6ca8d2/packages/node/src/indexer/fetch.service.ts#L88
+      # - --timeout=3600 # Timeout for indexer sandbox to execute the mapping functions (in seconds)
+      # - --local # This is now deprecated
+      # Once tooling-gql is deprecated, we can remove the local and start specifying schema name as below:
+      - --db-schema=public
+      # - --force-clean # To remove all tables and schema before starting the app
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
       interval: 3s
@@ -63,9 +72,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
     command:
-      - --name=app
+      - --name=public
       - --playground
-      - --indexer=http://subquery-node:3000
 
 volumes:
   db-data:

@@ -41,7 +41,6 @@ export const serializeLikeHarvester = (
   }
 
   const rawType = item.toRawType();
-  console.log(rawType, item);
 
   logFoundType(type, rawType);
 
@@ -81,7 +80,6 @@ export const serializeLikeHarvester = (
     const e = item as unknown as GenericCall;
     let hexCallIndex;
     if (e.callIndex instanceof Uint8Array) {
-      console.log('herer');
       hexCallIndex = u8aToHex(e.callIndex);
     } else {
       hexCallIndex = e.getT('callIndex').toString();
