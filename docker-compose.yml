@@ -46,8 +46,7 @@ services:
       # - --scale-batch-size # scale batch size based on memory usage. To know more about the process - https://github.com/subquery/subql/blob/c9bc9733deef726f78fa48387e74e52f8d6ca8d2/packages/node/src/indexer/fetch.service.ts#L88
       # - --timeout=3600 # Timeout for indexer sandbox to execute the mapping functions (in seconds)
       # - --local # This is now deprecated
-      # Once tooling-gql is deprecated, we can remove the local and start specifying schema name as below:
-      - --db-schema=public
+      - --db-schema=public # Once tooling-gql is deprecated, we can remove change the schema name if required
       # - --force-clean # To remove all tables and schema before starting the app
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
@@ -58,7 +57,7 @@ services:
   graphql-engine:
     image: onfinality/subql-query:latest
     ports:
-      - 3000:3000
+      - 3001:3000
     depends_on:
       'postgres':
         condition: service_healthy
