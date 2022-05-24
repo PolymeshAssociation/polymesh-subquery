@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalVote } from '../../types';
-import { getFirstValueFromJson, getTextValue } from '../util';
+import { getBigIntValue, getBooleanValue, getFirstValueFromJson, getTextValue } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
 enum ProposalState {
@@ -32,7 +32,7 @@ export async function mapProposal(
       blockId,
       identityId: getTextValue(params[0]),
       state: ProposalState.Pending,
-      balance: BigInt(getTextValue(params[3])),
+      balance: getBigIntValue(params[3]),
       url: getTextValue(params[4]),
       description: getTextValue(params[5]),
       snapshotted: false,
@@ -53,16 +53,16 @@ export async function mapProposal(
   if (eventId === EventIdEnum.Voted) {
     const account = getTextValue(params[1]);
     const pipId = getTextValue(params[2]);
-    const vote = JSON.parse(getTextValue(params[3])) as boolean;
-    const weight = BigInt(getTextValue(params[4]));
+    const vote = getBooleanValue(params[3]);
+    const weight = getBigIntValue(params[4]);
 
     const promises = [
       (async () => {
         const proposal = await Proposal.get(pipId);
         if (vote) {
-          proposal.totalAyeWeight += BigInt(weight);
+          proposal.totalAyeWeight += weight;
         } else {
-          proposal.totalNayWeight += BigInt(weight);
+          proposal.totalNayWeight += weight;
         }
         await proposal.save();
       })(),

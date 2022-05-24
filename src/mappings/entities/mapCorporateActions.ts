@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { getTextValue } from '../util';
+import { getBigIntValue, getTextValue } from '../util';
 import { HistoryOfPaymentEventsForCa } from './../../types/models/HistoryOfPaymentEventsForCa';
 import { WithholdingTaxesOfCa } from './../../types/models/WithholdingTaxesOfCa';
 import { serializeTicker } from './../util';
@@ -8,12 +8,12 @@ import { EventIdEnum, ModuleIdEnum } from './common';
 
 type CapitalDistributionParams = (params: Codec[], eventId: EventIdEnum) => Promise<string>;
 
-const getBalanceForCa: CapitalDistributionParams = async (params, eventId) => {
+const getBalanceForCa = async (params: Codec[], eventId: EventIdEnum): Promise<bigint> => {
   if (eventId === EventIdEnum.BenefitClaimed) {
-    return getTextValue(params[4]);
+    return getBigIntValue(params[4]);
   }
   if (eventId === EventIdEnum.Reclaimed) {
-    return getTextValue(params[2]);
+    return getBigIntValue(params[2]);
   }
   throw new Error("Event didn't have a balance parameter");
 };
@@ -78,7 +78,7 @@ async function handleHistoryOfPaymentEventsForCA(
   const ticker = await getTickerFromCaId(params, eventId);
   const localId = await getLocalIdFromCaId(params, eventId);
   const balance = await getBalanceForCa(params, eventId);
-  const tax = getTextValue(params[5]) || 0;
+  const tax = getBigIntValue(params[5]);
   await HistoryOfPaymentEventsForCa.create({
     id: `${blockId}/${event.idx}`,
     blockId,
@@ -87,8 +87,8 @@ async function handleHistoryOfPaymentEventsForCA(
     eventIdx: event.idx,
     ticker,
     localId: Number(localId),
-    balance: BigInt(balance),
-    tax: BigInt(tax),
+    balance,
+    tax,
     datetime: event.block.timestamp,
   }).save();
 }
@@ -107,8 +107,8 @@ async function handleWithholdingTaxesOfCA(
   const ticker = await getTickerFromCaId(params, eventId);
   const localId = await getLocalIdFromCaId(params, eventId);
   const balance = await getBalanceForCa(params, eventId);
-  const tax = getTextValue(params[5]) || 0;
-  const taxes = (Number(balance) * Number(tax)) / 1000000;
+  const tax = getBigIntValue(params[5]);
+  const taxes = (balance * tax) / BigInt(1000000);
   const corporateAction = await WithholdingTaxesOfCa.get(`${ticker}/${localId}`);
   if (corporateAction !== undefined) {
     corporateAction.taxes += BigInt(taxes);
@@ -118,7 +118,7 @@ async function handleWithholdingTaxesOfCA(
       id: `${ticker}/${localId}`,
       ticker,
       localId: Number(localId),
-      taxes: BigInt(taxes),
+      taxes: taxes,
       datetime: event.block.timestamp,
     }).save();
   }
