@@ -290,8 +290,12 @@ describe('serializeLikeHarvester', () => {
       serializeLikeHarvester(new MyVec(registry, [{ foo: true, bar: 3 }]), 'MyVec', logFoundType)
     ).toStrictEqual([{ foo: true, bar: 3 }]);
 
-    expect(logFoundType).toHaveBeenNthCalledWith(1, 'MyVec', 'Vec<MyStruct>');
-    expect(logFoundType).toHaveBeenNthCalledWith(2, 'MyStruct', '{"foo":"bool","bar":"u32"}');
+    expect(logFoundType).toHaveBeenNthCalledWith(1, 'MyVec', 'Vec<{"foo":"bool","bar":"u32"}>');
+    expect(logFoundType).toHaveBeenNthCalledWith(
+      2,
+      '{"foo":"bool","bar":"u32"}',
+      '{"foo":"bool","bar":"u32"}'
+    );
   });
 
   it('should serialize dates like the harvester', () => {
