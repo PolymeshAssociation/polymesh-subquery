@@ -17,7 +17,7 @@ network:
   endpoint: ws://host.docker.internal:9944
   # dictionary: 'https://api.subquery.network/sq/subquery/polkadot-dictionary'
   chaintypes:
-    file: ./types.json
+    file: ./dist/chainTypes/index.js
 dataSources:
   - kind: substrate/Runtime
     startBlock: ${START_BLOCK}
