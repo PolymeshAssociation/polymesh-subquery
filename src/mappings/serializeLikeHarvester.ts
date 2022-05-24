@@ -41,6 +41,7 @@ export const serializeLikeHarvester = (
   }
 
   const rawType = item.toRawType();
+  console.log(rawType, item);
 
   logFoundType(type, rawType);
 
@@ -78,8 +79,15 @@ export const serializeLikeHarvester = (
     return serializeTicker(item);
   } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
+    let hexCallIndex;
+    if (e.callIndex instanceof Uint8Array) {
+      console.log('herer');
+      hexCallIndex = u8aToHex(e.callIndex);
+    } else {
+      hexCallIndex = e.getT('callIndex').toString();
+    }
     return {
-      call_index: hexStripPrefix(u8aToHex(e.callIndex)),
+      call_index: hexStripPrefix(hexCallIndex),
       call_function: camelToSnakeCase(e.method),
       call_module: capitalizeFirstLetter(e.section),
       call_args: serializeCallArgsLikeHarvester(e, logFoundType),
@@ -154,7 +162,7 @@ export const serializeCallArgsLikeHarvester = (
 ): HarvesterLikeCallArgs => {
   const meta = extrinsic.meta.args;
   return extrinsic.args.map((arg, i) => ({
-    name: meta[i].name.toString(),
+    name: camelToSnakeCase(meta[i].name.toString()),
     value: serializeLikeHarvester(arg, meta[i].type.toString(), logFoundType, true),
   }));
 };

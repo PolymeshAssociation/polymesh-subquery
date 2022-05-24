@@ -246,9 +246,9 @@ const handleResetAssetCompliance = async (params: Record<string, any>) => {
 };
 
 const handleAddComplianceRequirement = async (params: Record<string, any>, extrinsic: any) => {
-  const { ticker, senderConditions, receiverConditions } = params;
-  const newSenderConditions = getComplianceConditions(senderConditions, extrinsic);
-  const newReceiverConditions = getComplianceConditions(receiverConditions, extrinsic);
+  const { ticker, senderconditions, receiverconditions } = params;
+  const newSenderConditions = getComplianceConditions(senderconditions, extrinsic);
+  const newReceiverConditions = getComplianceConditions(receiverconditions, extrinsic);
   const asset = await getAsset(ticker);
   asset.compliance.sender = [...asset.compliance.sender, ...newSenderConditions];
   asset.compliance.receiver = [...asset.compliance.receiver, ...newReceiverConditions];
