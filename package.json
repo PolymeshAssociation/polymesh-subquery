@@ -31,7 +31,7 @@
     "bignumber.js": "^9.0.2",
     "typeorm": "^0.2.34"
   },
-  "author": "Prashant",
+  "author": "Polymath",
   "license": "Apache-2.0",
   "devDependencies": {
     "@apollo/client": "^3.4.16",
