@@ -13,9 +13,8 @@ repository: 'https://github.com/PolymathNetwork/polymesh-subquery'
 schema:
   file: ./schema.graphql
 network:
-  chainId: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
-  endpoint: ws://host.docker.internal:9944
-  # dictionary: 'https://api.subquery.network/sq/subquery/polkadot-dictionary'
+  chainId: '${NETWORK_CHAIN_ID}'
+  endpoint: '${NETWORK_ENDPOINT}'
   chaintypes:
     file: ./dist/chainTypes/index.js
 dataSources:

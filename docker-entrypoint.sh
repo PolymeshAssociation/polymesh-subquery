@@ -26,7 +26,6 @@ envsubst <project.template.yaml> project.yaml
 (npm run sql || (sleep 3 && kill "$$")) &
 
 node --max-old-space-size=1536 \
-	/usr/local/lib/node_modules/@subql/node/bin/run \
-	--network-endpoint="$NETWORK_ENDPOINT" $@
+	/usr/local/lib/node_modules/@subql/node/bin/run $@
 child=$!
 wait "$child"

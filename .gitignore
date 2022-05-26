@@ -49,7 +49,6 @@ Thumbs.db
 *.mov
 *.wmv
 
-.vscode
 scripts/errors_*
 scripts/archive
 coverage

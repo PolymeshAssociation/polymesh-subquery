@@ -13,6 +13,7 @@
     "test": "jest",
     "diff_versions": "ts-node scripts/diff_versions",
     "codegen": "./node_modules/.bin/subql codegen",
+    "validate": "./node_modules/.bin/subql validate",
     "commit": "npx git-cz",
     "start:docker": "docker-compose pull && docker-compose up --remove-orphans",
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
