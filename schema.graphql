@@ -46,14 +46,14 @@ type Block @entity {
   countExtrinsicsSuccess: Int!
   countEvents: Int!
   datetime: Date!
-  specVersionId: String!
+  specVersionId: Int!
 }
 
 type Extrinsic @entity {
   id: ID!
   blockId: Int! @index(unique: false)
   extrinsicIdx: Int!
-  extrinsicLength: String!
+  extrinsicLength: Int!
   signed: Int!
   signedbyAddress: Int!
   address: String
@@ -178,6 +178,7 @@ type Leg @jsonField {
 type Settlement @entity {
   id: ID!
   blockId: Int!
+  eventId: String!
   addresses: [String!]! @index
   result: String!
   legs: [Leg!]!
