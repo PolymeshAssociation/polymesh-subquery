@@ -2,14 +2,13 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { FoundType } from '../types';
 import {
   AssetCompliance,
   AssetDocument,
   AssetTransferManager,
   SecurityIdentifier,
 } from 'polymesh-subql/types/interfaces';
+import { FoundType } from '../types';
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -125,6 +124,14 @@ export const getDateValue = (item: Codec): Date => {
   return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
 };
 
+export const getBigIntValue = (item: Codec): bigint => {
+  return BigInt(getTextValue(item) || 0);
+};
+
+export const getBooleanValue = (item: Codec): boolean => {
+  return JSON.parse(getTextValue(item));
+};
+
 export const hexToString = (input: string): string => {
   const hex = hexStripPrefix(input);
   let str = '';
@@ -138,18 +145,6 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   return u8aToHex(
     decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
   );
-};
-
-export const harvesterLikeParamsToObj = (
-  params: HarvesterLikeCallArgs,
-  formatKey = true
-): Record<string, any> => {
-  const obj: Record<string, any> = {};
-  params.forEach(p => {
-    obj[formatKey ? snakeToCamelCase(p.name) : p.name] =
-      p.name === 'asset_type' ? Object.keys(p.value)[0] : p.value;
-  });
-  return obj;
 };
 
 /**

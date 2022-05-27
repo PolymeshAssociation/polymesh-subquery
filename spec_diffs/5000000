@@ -1,0 +1,196 @@
+- Expected
++ Received
+
+@@ -41,6 +41,33 @@
+        "LEI": "[u8; 20]",
+      },
+    },
++   "AssetMetadataDescription": "Text",
++   "AssetMetadataGlobalKey": "u64",
++   "AssetMetadataKey": Object {
++     "_enum": Object {
++       "Global": "u64",
++       "Local": "u64",
++     },
++   },
++   "AssetMetadataLocalKey": "u64",
++   "AssetMetadataLockStatus<Moment>": Object {
++     "_enum": Object {
++       "Locked": "",
++       "LockedUntil": "Moment",
++       "Unlocked": "",
++     },
++   },
++   "AssetMetadataName": "Text",
++   "AssetMetadataSpec": Object {
++     "description": "Option<AssetMetadataDescription>",
++     "type_def": "Option<Vec<u8>>",
++     "url": "Option<Url>",
++   },
++   "AssetMetadataValue": "Vec<u8>",
++   "AssetMetadataValueDetail<Moment>": Object {
++     "expire": "Option<Moment>",
++     "lock_status": "AssetMetadataLockStatus<Moment>",
++   },
+    "AssetName": "Text",
+    "AssetOwnershipRelation": Object {
+      "_enum": Object {
+@@ -54,8 +81,17 @@
+        "Except": "Vec<Ticker>",
+        "These": "Vec<Ticker>",
+        "Whole": "",
++     },
+    },
++   "AssetScope": Object {
++     "_enum": Object {
++       "Ticker": "Ticker",
++     },
+    },
++   "AssetTransferCompliance": Object {
++     "paused": "bool",
++     "requirements": "Vec<TransferCondition>",
++   },
+    "AssetType": Object {
+      "_enum": Object {
+        "Commodity": "",
+@@ -266,6 +302,7 @@
+      "result": "bool",
+      "sender_conditions": "Vec<ConditionResult>",
+    },
++   "CompressedRistretto": "[u8; 32]",
+    "Condition": Object {
+      "condition_type": "ConditionType",
+      "issuers": "Vec<TrustedIssuer>",
+@@ -291,7 +328,6 @@
+      "targets": "TargetIdentities",
+      "withholding_tax": "Vec<(IdentityId, Tax)>",
+    },
+-   "Counter": "u64",
+    "CountryCode": Object {
+      "_enum": Array [
+        "AF",
+@@ -673,7 +709,7 @@
+      "self_transfer": "bool",
+      "sender_custodian_error": "bool",
+      "sender_insufficient_balance": "bool",
+-     "statistics_result": "Vec<TransferManagerResult>",
++     "transfer_condition_result": "Vec<TransferConditionResult>",
+    },
+    "HandledTxStatus": Object {
+      "_enum": Object {
+@@ -726,7 +762,10 @@
+      },
+    },
+    "InvestorUid": "[u8; 16]",
+-   "InvestorZKProofData": "Signature",
++   "InvestorZKProofData": Object {
++     "r": "CompressedRistretto",
++     "s": "Scalar",
++   },
+    "ItnRewardStatus": Object {
+      "_enum": Object {
+        "Claimed": "",
+@@ -769,7 +808,7 @@
+        "Some": "BlockNumber",
+      },
+    },
+-   "Memo": "[u8;32]",
++   "Memo": "[u8; 32]",
+    "MetaDescription": "Text",
+    "MetaUrl": "Text",
+    "MetaVersion": "u32",
+@@ -785,14 +824,8 @@
+      "amount": "Balance",
+      "memo": "Option<Memo>",
+      "ticker": "Ticker",
+-   },
+-   "OffChainSignature": Object {
+-     "_enum": Object {
+-       "Ecdsa": "H512",
+-       "Ed25519": "H512",
+-       "Sr25519": "H512",
+-     },
+    },
++   "OffChainSignature": "MultiSignature",
+    "PalletName": "Text",
+    "PalletPermissions": Object {
+      "dispatchable_names": "DispatchableNames",
+@@ -1040,6 +1073,37 @@
+      "id": "PipId",
+      "weight": "(bool, Balance)",
+    },
++   "Stat1stKey": Object {
++     "asset": "AssetScope",
++     "stat_type": "StatType",
++   },
++   "Stat2ndKey": Object {
++     "_enum": Object {
++       "Claim": "StatClaim",
++       "NoClaimStat": "",
++     },
++   },
++   "StatClaim": Object {
++     "_enum": Object {
++       "Accredited": "bool",
++       "Affiliate": "bool",
++       "Jurisdiction": "Option<CountryCode>",
++     },
++   },
++   "StatOpType": Object {
++     "_enum": Array [
++       "Count",
++       "Balance",
++     ],
++   },
++   "StatType": Object {
++     "claim_issuer": "Option<(ClaimType, IdentityId)>",
++     "op": "StatOpType",
++   },
++   "StatUpdate": Object {
++     "key2": "Stat2ndKey",
++     "value": "Option<u128>",
++   },
+    "StoredSchedule": Object {
+      "at": "Moment",
+      "id": "ScheduleId",
+@@ -1093,15 +1157,22 @@
+      "max_ticker_length": "u8",
+      "registration_length": "Option<Moment>",
+    },
+-   "TransferManager": Object {
++   "TransferCondition": Object {
+      "_enum": Object {
+-       "CountTransferManager": "Counter",
+-       "PercentageTransferManager": "Percentage",
++       "ClaimCount": "(StatClaim, IdentityId, u64, Option<u64>)",
++       "ClaimOwnership": "(StatClaim, IdentityId, Percentage, Percentage)",
++       "MaxInvestorCount": "u64",
++       "MaxInvestorOwnership": "Percentage",
+      },
+    },
+-   "TransferManagerResult": Object {
++   "TransferConditionExemptKey": Object {
++     "asset": "AssetScope",
++     "claim_type": "Option<ClaimType>",
++     "op": "StatOpType",
++   },
++   "TransferConditionResult": Object {
++     "condition": "TransferCondition",
+      "result": "bool",
+-     "tm": "TransferManager",
+    },
+    "TrustedFor": Object {
+      "_enum": Object {
+@@ -1153,6 +1224,12 @@
+      "ayes_stake": "Balance",
+      "nays_count": "u32",
+      "nays_stake": "Balance",
++   },
++   "WeightPerClass": Object {
++     "baseExtrinsic": "Weight",
++     "maxExtrinsic": "Option<Weight>",
++     "maxTotal": "Option<Weight>",
++     "reserved": "Option<Weight>",
+    },
+    "WeightToFeeCoefficient": Object {
+      "coeffFrac": "Perbill",

@@ -57,6 +57,9 @@ export const extractClaimScope = (
     default: {
       const scope = args[1]?.value?.claim?.[claimType];
       const type = Object.keys(scope || {})?.[0] || null;
+      if (!type) {
+        return null;
+      }
       const value = scope?.[type] || null;
       return { type, value };
     }

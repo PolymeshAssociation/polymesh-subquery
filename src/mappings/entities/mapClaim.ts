@@ -62,7 +62,7 @@ export async function mapClaim(
     await Claim.create({
       id: `${blockId}/${event.idx}`,
       ...claim,
-      filterExpiry: claimData.claimExpiry || '253402194600000',
+      filterExpiry: claimData.claimExpiry || BigInt(253402194600000),
     }).save();
 
     const identityWithClaims = await IdentityWithClaims.get(targetDid);

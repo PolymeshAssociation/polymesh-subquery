@@ -82,7 +82,6 @@ const handleAssetCreated = async (params: Codec[]) => {
     documents: [],
     identifiers: [],
     ownerDid,
-    fullAgents: [ownerDid],
     totalSupply: '0',
     totalTransfers: '0',
     isCompliancePaused: false,

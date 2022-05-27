@@ -32,7 +32,7 @@ test('extractClaimInfo', () => {
   expect(extractClaimInfo([{ value: 'hello' }])).toStrictEqual({
     claimExpiry: undefined,
     claimIssuer: undefined,
-    claimScope: '{"type":null,"value":null}',
+    claimScope: null,
     claimType: undefined,
     lastUpdateDate: undefined,
     issuanceDate: undefined,
