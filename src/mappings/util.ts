@@ -2,13 +2,13 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import {
-  AssetCompliance,
-  AssetDocument,
-  AssetTransferManager,
-  SecurityIdentifier,
-} from 'polymesh-subql/types/interfaces';
+import { AssetDocument } from 'polymesh-subql/types/models/AssetDocument';
+import { Compliance } from 'polymesh-subql/types/models/Compliance';
+import { TransferManager } from 'polymesh-subql/types/models/TransferManager';
 import { FoundType } from '../types';
+import { SecurityIdentifier } from '../types/interfaces';
+import { TransferRestrictionType } from './entities/common';
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -150,18 +150,27 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
 /**
  * Parses a raw Asset Document
  */
-export const getDocValue = (doc: Codec): AssetDocument => {
-  const parsedDoc = JSON.parse(doc.toString());
+export const getDocValue = (
+  doc: Codec
+): Pick<AssetDocument, 'name' | 'link' | 'contentHash' | 'type' | 'filedAt'> => {
+  const {
+    uri: link,
+    content_hash: documentHash,
+    name,
+    doc_type: type,
+    filing_date: filedAt,
+  } = JSON.parse(doc.toString());
   return {
-    id: parsedDoc.id,
-    name: parsedDoc.name,
-    link: parsedDoc.uri,
+    name,
+    link,
+    contentHash: Object.keys(JSON.parse(documentHash))[0],
+    type,
+    filedAt,
   };
 };
 
-export const formatAssetIdentifiers = (
-  identifiers: Record<string, string>[]
-): SecurityIdentifier[] => {
+export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
+  const identifiers = JSON.parse(item.toString());
   return identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
@@ -174,17 +183,21 @@ export const formatAssetIdentifiers = (
 /**
  * Parses a Vec<AssetCompliance>
  */
-export const getComplianceRulesValue = (requirements: Codec): AssetCompliance[] => {
+export const getComplianceRulesValue = (
+  requirements: Codec
+): Pick<Compliance, 'complianceId' | 'data'>[] => {
   return JSON.parse(JSON.stringify(requirements));
 };
 
 /**
  * Parses AssetCompliance
  */
-export const getComplianceValue = (compliance: Codec): AssetCompliance => {
+export const getComplianceValue = (
+  compliance: Codec
+): Pick<Compliance, 'complianceId' | 'data'> => {
   const { id, ...data } = JSON.parse(compliance.toString());
   return {
-    id: Number(id),
+    complianceId: Number(id),
     data,
   };
 };
@@ -192,17 +205,30 @@ export const getComplianceValue = (compliance: Codec): AssetCompliance => {
 /**
  * Parses AssetTransferManager
  */
-export const getTransferManagerValue = (manager: Codec): AssetTransferManager => {
-  const parsed = JSON.parse(JSON.stringify(manager));
-  return {
-    countTransferManager: parsed.countTransferManager,
-    percentageTransferManager: parsed.percentageTransferManager,
-    exemptedEntities: [],
-  };
+export const getTransferManagerValue = (
+  manager: Codec
+): Pick<TransferManager, 'type' | 'value'> => {
+  const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
+
+  if (countTransferManager) {
+    return {
+      type: TransferRestrictionType.Count,
+      value: Number(countTransferManager),
+    };
+  }
+
+  if (percentageTransferManager) {
+    return {
+      type: TransferRestrictionType.Percentage,
+      value: Number(countTransferManager),
+    };
+  }
+
+  throw new Error('Unknown transfer restriction type found');
 };
 
 export const getExemptionsValue = (exemptions: Codec): string[] => {
-  return JSON.parse(exemptions.toString());
+  return JSON.parse(exemptions.toString()) || [];
 };
 
 export const logFoundType = (type: string, rawType: string): void => {

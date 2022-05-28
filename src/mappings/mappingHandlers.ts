@@ -9,6 +9,7 @@ import { EventIdEnum, ModuleIdEnum } from './entities/common';
 import { mapAsset } from './entities/mapAsset';
 import { mapAuthorization } from './entities/mapAuthorization';
 import { mapClaim } from './entities/mapClaim';
+import { mapCompliance } from './entities/mapCompliance';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
 import { mapFunding } from './entities/mapFunding';
@@ -20,6 +21,7 @@ import { mapStakingEvent } from './entities/mapStakingEvent';
 import { mapSto } from './entities/mapSto';
 import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
+import { mapTransferManager } from './entities/mapTransferManager';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -149,7 +151,9 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapCorporateActions(...handlerArgs),
     mapProposal(...handlerArgs),
     mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapAsset(...handlerArgs),
+    mapAsset(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapCompliance(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapTransferManager(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

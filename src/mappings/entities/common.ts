@@ -416,3 +416,8 @@ export enum AuthorizationTypeEnum {
 export enum AgentTypeEnum {
   Full = 'Full',
 }
+
+export enum TransferRestrictionType {
+  Count = 'Count',
+  Percentage = 'Percentage',
+}

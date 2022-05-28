@@ -298,12 +298,6 @@ type IssuerIdentityWithClaims @entity {
   claims: [ClaimJson!]!
 }
 
-type AssetDocument @jsonField {
-  id: Int! # document id
-  name: String!
-  link: String!
-}
-
 type SecurityIdentifier @jsonField {
   type: String!
   value: String!
@@ -318,23 +312,37 @@ type AssetPendingOwnershipTransfer @entity {
   data: String
 }
 
-type AssetTransferManager @jsonField {
-  countTransferManager: String
-  percentageTransferManager: String
+type TransferManager @entity {
+  id: ID! # ticker/transferManagerType/value
+  asset: Asset! @index(unique: false)
+  type: String!
+  value: Int!
   exemptedEntities: [String]!
 }
 
-type AssetCompliance @jsonField {
-  id: Int!
+type Compliance @entity {
+  id: ID! # ticker/complianceId
+  complianceId: Int!
   data: String! # This could be expanded into structured data
+  asset: Asset! @index(unique: false)
 }
 
 type AssetHolder @entity {
-  id: ID! # did:ticker
+  id: ID! # ticker/did
   did: String! @index(unique: false)
-  ticker: String! @index(unique: false)
-  amount: String!
-  asset: Asset!
+  asset: Asset! @index(unique: false)
+  amount: BigInt!
+}
+
+type AssetDocument @entity {
+  id: ID! # ticker/documentId
+  documentId: Int!
+  name: String!
+  link: String!
+  contentHash: String
+  type: String
+  filedAt: Date
+  asset: Asset! @index(unique: false)
 }
 
 type Asset @entity {
@@ -346,13 +354,13 @@ type Asset @entity {
   isDivisible: Boolean!
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
-  documents: [AssetDocument]!
   identifiers: [SecurityIdentifier]!
   ownerDid: String!
+  documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
-  totalSupply: String!
-  totalTransfers: String!
+  totalSupply: BigInt!
+  totalTransfers: BigInt!
   isCompliancePaused: Boolean!
-  compliance: [AssetCompliance]!
-  transferManagers: [AssetTransferManager]!
+  compliance: [Compliance]! @derivedFrom(field: "asset")
+  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
 }
