@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { Compliance } from 'polymesh-subql/types/models/Compliance';
+import { Compliance } from '../../types';
 import { getComplianceValue, getNumberValue, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 import { getAsset } from './mapAsset';

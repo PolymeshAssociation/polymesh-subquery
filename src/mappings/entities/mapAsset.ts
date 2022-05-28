@@ -1,6 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { AssetDocument } from 'polymesh-subql/types/models/AssetDocument';
-import { Asset, AssetHolder } from '../../types';
+import { Asset, AssetDocument, AssetHolder } from '../../types';
 import {
   getBigIntValue,
   getBooleanValue,

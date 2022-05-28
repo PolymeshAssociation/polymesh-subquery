@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { TransferManager } from 'polymesh-subql/types/models/TransferManager';
+import { TransferManager } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 

@@ -2,11 +2,13 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import { AssetDocument } from 'polymesh-subql/types/models/AssetDocument';
-import { Compliance } from 'polymesh-subql/types/models/Compliance';
-import { TransferManager } from 'polymesh-subql/types/models/TransferManager';
-import { FoundType } from '../types';
-import { SecurityIdentifier } from '../types/interfaces';
+import {
+  AssetDocument,
+  Compliance,
+  FoundType,
+  SecurityIdentifier,
+  TransferManager,
+} from '../types';
 import { TransferRestrictionType } from './entities/common';
 
 /**
