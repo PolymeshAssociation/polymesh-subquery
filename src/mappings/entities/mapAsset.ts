@@ -12,7 +12,6 @@ import {
 } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
-// #region Utils
 const chainAmountToBigInt = (amount: bigint): bigint => amount / BigInt(1000000);
 
 export const getAsset = async (ticker: string): Promise<Asset> => {
@@ -34,9 +33,8 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
     assetHolder = AssetHolder.create({
       id,
       did,
-      ticker,
-      amount: BigInt(0),
       assetId: ticker,
+      amount: BigInt(0),
     });
     await assetHolder.save();
   }
@@ -68,8 +66,6 @@ const handleAssetCreated = async (params: Codec[]): Promise<void> => {
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
-    compliance: [],
-    transferManagers: [],
   }).save();
 };
 
@@ -201,42 +197,43 @@ export async function mapAsset(
   moduleId: ModuleIdEnum,
   params: Codec[]
 ): Promise<void> {
-  if (moduleId === ModuleIdEnum.Asset) {
-    if (eventId === EventIdEnum.AssetCreated) {
-      await handleAssetCreated(params);
-    }
-    if (eventId === EventIdEnum.AssetRenamed) {
-      await handleAssetRenamed(params);
-    }
-    if (eventId === EventIdEnum.FundingRoundSet) {
-      await handleFundingRoundSet(params);
-    }
-    if (eventId === EventIdEnum.DocumentAdded) {
-      await handleDocumentAdded(params);
-    }
-    if (eventId === EventIdEnum.DocumentRemoved) {
-      await handleDocumentRemoved(params);
-    }
-    if (eventId === EventIdEnum.IdentifiersUpdated) {
-      await handleIdentifiersUpdated(params);
-    }
-    if (eventId === EventIdEnum.DivisibilityChanged) {
-      await handleDivisibilityChanged(params);
-    }
-    if (eventId === EventIdEnum.Issued) {
-      await handleIssued(params);
-    }
-    if (eventId === EventIdEnum.Redeemed) {
-      await handleRedeemed(params);
-    }
-    if (eventId === EventIdEnum.Frozen) {
-      await handleFrozen(params, true);
-    }
-    if (eventId === EventIdEnum.Unfrozen) {
-      await handleFrozen(params, false);
-    }
-    if (eventId === EventIdEnum.AssetOwnershipTransferred) {
-      await handleAssetOwnershipTransferred(params);
-    }
+  if (moduleId !== ModuleIdEnum.Asset) {
+    return;
+  }
+  if (eventId === EventIdEnum.AssetCreated) {
+    await handleAssetCreated(params);
+  }
+  if (eventId === EventIdEnum.AssetRenamed) {
+    await handleAssetRenamed(params);
+  }
+  if (eventId === EventIdEnum.FundingRoundSet) {
+    await handleFundingRoundSet(params);
+  }
+  if (eventId === EventIdEnum.DocumentAdded) {
+    await handleDocumentAdded(params);
+  }
+  if (eventId === EventIdEnum.DocumentRemoved) {
+    await handleDocumentRemoved(params);
+  }
+  if (eventId === EventIdEnum.IdentifiersUpdated) {
+    await handleIdentifiersUpdated(params);
+  }
+  if (eventId === EventIdEnum.DivisibilityChanged) {
+    await handleDivisibilityChanged(params);
+  }
+  if (eventId === EventIdEnum.Issued) {
+    await handleIssued(params);
+  }
+  if (eventId === EventIdEnum.Redeemed) {
+    await handleRedeemed(params);
+  }
+  if (eventId === EventIdEnum.Frozen) {
+    await handleFrozen(params, true);
+  }
+  if (eventId === EventIdEnum.Unfrozen) {
+    await handleFrozen(params, false);
+  }
+  if (eventId === EventIdEnum.AssetOwnershipTransferred) {
+    await handleAssetOwnershipTransferred(params);
   }
 }
