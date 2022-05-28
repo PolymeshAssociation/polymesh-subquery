@@ -147,7 +147,7 @@ const handleIssued = async (params: Codec[]): Promise<void> => {
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
 
-  const assetOwner = await getAssetHolder(asset.ownerDid, ticker);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerDid);
   assetOwner.amount += issuedAmount;
 
   await Promise.all([asset.save(), assetOwner.save()]);
@@ -162,7 +162,7 @@ const handleRedeemed = async (params: Codec[]): Promise<void> => {
   const asset = await getAsset(ticker);
   asset.totalSupply -= issuedAmount;
 
-  const assetOwner = await getAssetHolder(asset.ownerDid, ticker);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerDid);
   assetOwner.amount -= issuedAmount;
 
   await Promise.all([asset.save(), assetOwner.save()]);

@@ -162,10 +162,13 @@ export const getDocValue = (
     doc_type: type,
     filing_date: filedAt,
   } = JSON.parse(doc.toString());
+
+  const hashType = Object.keys(documentHash)[0];
+
   return {
     name,
     link,
-    contentHash: Object.keys(JSON.parse(documentHash))[0],
+    contentHash: documentHash[hashType],
     type,
     filedAt,
   };
