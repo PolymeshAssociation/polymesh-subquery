@@ -7,12 +7,10 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "TransferManager",
-        "createdAt": "2022-05-28T19:22:23.205+00:00",
         "exemptedEntities": Array [],
         "id": "15TICKER/Count/10",
         "ticker": "15TICKER",
         "type": "Count",
-        "updatedAt": "2022-05-28T19:22:23.205+00:00",
         "value": 10,
       },
     ],

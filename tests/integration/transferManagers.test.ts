@@ -14,8 +14,6 @@ describe('transferManagers', () => {
               type
               value
               exemptedEntities
-              createdAt
-              updatedAt
             }
           }
         }

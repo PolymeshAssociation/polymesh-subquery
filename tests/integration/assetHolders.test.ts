@@ -13,8 +13,6 @@ describe('assetHolders', () => {
               did
               ticker: assetId
               amount
-              createdAt
-              updatedAt
             }
           }
         }
