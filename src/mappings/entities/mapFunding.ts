@@ -8,7 +8,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to events related to funding events
  */
 export async function mapFunding(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],

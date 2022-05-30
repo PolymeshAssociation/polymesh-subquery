@@ -27,7 +27,7 @@ const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus
 ]);
 
 export async function mapAuthorization(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[]
@@ -36,12 +36,11 @@ export async function mapAuthorization(
     if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
       auth.status = authorizationEventStatusMapping.get(eventId);
-      auth.updatedBlock = blockId;
+      auth.updatedBlockId = blockId;
       await auth.save();
     } else {
       await Authorization.create({
         id: params[3].toString(),
-        createdBlock: blockId,
         authId: Number(params[3].toString()),
         fromDid: getTextValue(params[0]),
         toDid: getTextValue(params[1]),
@@ -50,7 +49,8 @@ export async function mapAuthorization(
         data: getFirstValueFromJson(params[4]),
         expiry: getDateValue(params[5]),
         status: AuthorizationStatus.Pending,
-        updatedBlock: blockId,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
       }).save();
     }
   }

@@ -8,7 +8,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to event
  */
 export async function mapBridgeEvent(
-  blockId: number,
+  blockId: string,
   eventId: string,
   moduleId: string,
   params: Codec[],

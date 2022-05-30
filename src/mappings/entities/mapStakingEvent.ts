@@ -24,7 +24,7 @@ const bondedUnbondedOrReward = new Set([
  * Subscribes to events related to staking events
  */
 export async function mapStakingEvent(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: string,
   params: Codec[],
@@ -46,7 +46,7 @@ export async function mapStakingEvent(
       identityId: eventId === StakingEventType.Slash ? null : params[0].toString(),
       stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
       amount,
-      nominatedValidators: eventId === 'Nominated' ? params[2].toJSON() : null,
+      nominatedValidators: eventId === 'Nominated' ? (params[2].toJSON() as string[]) : null,
       transactionId: hexAddPrefix(event.extrinsic?.extrinsic.hash.toJSON()),
     }).save();
   }

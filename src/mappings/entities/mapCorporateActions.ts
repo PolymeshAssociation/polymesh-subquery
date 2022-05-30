@@ -47,7 +47,7 @@ const getLocalIdFromCaId: CapitalDistributionParams = async (params, eventId) =>
  * Subscribes to the CapitalDistribution (BenefitedClaimed and Reclaimed Event)
  */
 export async function mapCorporateActions(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -68,7 +68,7 @@ export async function mapCorporateActions(
  * Handles HistoryOfPaymentEventsForCA entity
  */
 async function handleHistoryOfPaymentEventsForCA(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent

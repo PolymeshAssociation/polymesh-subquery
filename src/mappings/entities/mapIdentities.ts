@@ -15,7 +15,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to the Identities related events
  */
 export async function mapIdentities(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -62,7 +62,7 @@ const getIdentity = async (param: Codec): Promise<Identity> => {
 };
 
 const handleDidCreated = async (
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   datetime: Date
@@ -162,7 +162,7 @@ const getPermissions = (
 };
 
 const handleSecondaryKeysPermissionsUpdated = async (
-  blockId: number,
+  blockId: string,
   params: Codec[]
 ): Promise<void> => {
   await getIdentity(params[0]);
@@ -197,7 +197,7 @@ const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
 };
 
 const handleSecondaryKeysFrozen = async (
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   frozen: boolean
@@ -214,7 +214,7 @@ const handleSecondaryKeysFrozen = async (
 };
 
 const handleSecondaryKeysAdded = async (
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   datetime: Date

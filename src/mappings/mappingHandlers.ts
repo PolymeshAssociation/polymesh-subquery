@@ -70,7 +70,7 @@ const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => 
 
 export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
-  const blockId = block.block.header.number.toNumber();
+  const blockId = block.block.header.number.toString();
   const eventIdx = event.idx;
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
@@ -132,12 +132,12 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   await handleToolingEvent(event);
 
   const block = event.block;
-  const blockId = block.block.header.number.toNumber();
+  const blockId = block.block.header.number.toString();
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
   const args = event.event.data.toArray();
 
-  const handlerArgs: [number, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
+  const handlerArgs: [string, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
     blockId,
     eventId as EventIdEnum,
     moduleId as ModuleIdEnum,
@@ -216,7 +216,7 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
 }
 
 function getCallArgs(extrinsic: SubstrateExtrinsic) {
-  const blockId = extrinsic.block.block.header.number.toNumber();
+  const blockId = extrinsic.block.block.header.number.toString();
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = extrinsic.extrinsic.method.method;
   const extrinsicIdx = extrinsic.idx;

@@ -17,7 +17,7 @@ enum ProposalState {
  * Subscribes to events related to proposals
  */
 export async function mapProposal(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -38,7 +38,7 @@ export async function mapProposal(
       snapshotted: false,
       totalAyeWeight: BigInt(0),
       totalNayWeight: BigInt(0),
-      lastStateUpdatedAt: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
 
@@ -46,7 +46,7 @@ export async function mapProposal(
     const pipId = getTextValue(params[1]);
     const proposal = await Proposal.get(pipId);
     proposal.state = getTextValue(params[2]);
-    proposal.lastStateUpdatedAt = blockId;
+    proposal.updatedBlockId = blockId;
     await proposal.save();
   }
 

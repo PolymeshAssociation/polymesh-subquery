@@ -165,7 +165,6 @@ type Sto @entity {
 
 type Authorization @entity {
   id: ID!
-  createdBlock: Int!
   authId: Int! @index(unique: false)
   type: String! @index(unique: false)
   fromDid: String! @index(unique: false)
@@ -174,7 +173,8 @@ type Authorization @entity {
   data: String
   expiry: Date @index(unique: false)
   status: String!
-  updatedBlock: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Investment @entity {
@@ -296,10 +296,10 @@ type Proposal @entity {
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
-  lastStateUpdatedAt: Int!
   snapshotted: Boolean!
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
+  updatedBlock: Block!
 }
 
 type HeldToken @entity {

@@ -9,7 +9,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to the STO Invested event
  */
 export async function mapInvestment(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],

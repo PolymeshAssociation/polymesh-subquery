@@ -30,7 +30,7 @@ interface Scope {
  * Subscribes to the Claim events
  */
 export async function mapClaim(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -80,7 +80,7 @@ const getId = (
 };
 
 const handleClaimAdded = async (
-  blockId: number,
+  blockId: string,
   event: SubstrateEvent,
   {
     claimScope,

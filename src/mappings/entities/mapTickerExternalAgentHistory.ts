@@ -9,7 +9,7 @@ import { serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
 export async function mapTickerExternalAgentHistory(
-  blockId: number,
+  blockId: string,
   eventId: string,
   moduleId: string,
   params: Codec[],
@@ -127,7 +127,7 @@ export async function mapTickerExternalAgentHistory(
 const addTickerExternalAgentHistory = async (
   ticker: string,
   group: AgentGroup,
-  blockId: number,
+  blockId: string,
   eventIdx: number,
   did: string,
   event: SubstrateEvent,
