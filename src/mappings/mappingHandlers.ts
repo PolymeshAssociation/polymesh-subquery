@@ -121,7 +121,7 @@ export async function handleToolingCall(extrinsic: SubstrateExtrinsic): Promise<
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
-    nonce: extrinsic.extrinsic.nonce.toJSON(),
+    nonce: extrinsic.extrinsic.nonce.toNumber(),
     extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
     specVersionId: extrinsic.block.specVersion,
   }).save();

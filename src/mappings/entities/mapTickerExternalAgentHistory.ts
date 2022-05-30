@@ -27,7 +27,6 @@ export async function mapTickerExternalAgentHistory(
     await AgentGroupEntity.create({
       id: `${ticker}/${group}`,
       permissions,
-      members: [],
     }).save();
     return;
   }
@@ -67,33 +66,12 @@ export async function mapTickerExternalAgentHistory(
     const ticker = serializeTicker(params[1]);
 
     const promises = [
-      (async () => {
-        const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
-          const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
-          return ag.permissions;
-        });
-        await TickerExternalAgentHistory.create({
-          id: `${blockId}/${eventIdx}/${did}`,
-          ticker,
-          did,
-          blockId,
-          eventIdx,
-          datetime: event.block.timestamp,
-          type: 'AgentAdded',
-          permissions,
-        }).save();
-      })(),
+      addTickerExternalAgentHistory(ticker, group, blockId, eventIdx, did, event, 'AgentAdded'),
     ];
 
     // Only keep track of membership for custom agent groups.
     if (isCustom(group)) {
-      promises.push(
-        AgentGroupMembership.create({
-          id: `${ticker}/${group.custom}/${did}`,
-          member: did,
-          group: `${ticker}/${group.custom}`,
-        }).save()
-      );
+      promises.push(addAgentGroupMembership(ticker, group, did));
     }
     await Promise.all(promises);
     return;
@@ -106,33 +84,20 @@ export async function mapTickerExternalAgentHistory(
 
     const promises = [
       removeMember(did, ticker),
-      (async () => {
-        const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
-          const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
-          return ag.permissions;
-        });
-        await TickerExternalAgentHistory.create({
-          id: `${blockId}/${eventIdx}/${did}`,
-          ticker,
-          did,
-          blockId,
-          eventIdx,
-          datetime: event.block.timestamp,
-          type: 'AgentPermissionsChanged',
-          permissions,
-        }).save();
-      })(),
+      addTickerExternalAgentHistory(
+        ticker,
+        group,
+        blockId,
+        eventIdx,
+        did,
+        event,
+        'AgentPermissionsChanged'
+      ),
     ];
 
     // Only keep track of membership for custom agent groups.
     if (isCustom(group)) {
-      promises.push(
-        AgentGroupMembership.create({
-          id: `${ticker}/${group.custom}/${did}`,
-          member: did,
-          group: `${ticker}/${group.custom}`,
-        }).save()
-      );
+      promises.push(addAgentGroupMembership(ticker, group, did));
     }
     await Promise.all(promises);
     return;
@@ -158,6 +123,39 @@ export async function mapTickerExternalAgentHistory(
     await Promise.all(promises);
   }
 }
+
+const addTickerExternalAgentHistory = async (
+  ticker: string,
+  group: AgentGroup,
+  blockId: number,
+  eventIdx: number,
+  did: string,
+  event: SubstrateEvent,
+  type: 'AgentAdded' | 'AgentPermissionsChanged'
+): Promise<void> => {
+  const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
+    const ag = await AgentGroupEntity.get(`${ticker}/${n}`);
+    return ag.permissions;
+  });
+  await TickerExternalAgentHistory.create({
+    id: `${blockId}/${eventIdx}/${did}`,
+    ticker,
+    did,
+    blockId,
+    eventIdx,
+    datetime: event.block.timestamp,
+    type,
+    permissions,
+  }).save();
+};
+
+const addAgentGroupMembership = (ticker: string, group: CustomAG, did: string): Promise<void> => {
+  return AgentGroupMembership.create({
+    id: `${ticker}/${group.custom}/${did}`,
+    member: did,
+    groupId: `${ticker}/${group.custom}`,
+  }).save();
+};
 
 const removeMember = async (did: string, ticker: string) => {
   const memberships = await AgentGroupMembership.getByMember(did);

@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Claim } from '../../types/models/Claim';
-import { ClaimScope } from '../../types/models/ClaimScope';
+import { Claim, ClaimScope } from '../../types';
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 

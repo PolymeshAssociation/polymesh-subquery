@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { TrustedClaimIssuerTicker } from '../../types/models/TrustedClaimIssuerTicker';
+import { TrustedClaimIssuerTicker } from '../../types';
 import { serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 

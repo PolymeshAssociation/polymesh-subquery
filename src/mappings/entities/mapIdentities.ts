@@ -1,9 +1,13 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { AssetPermissions, PortfolioPermissions, TransactionPermissions } from '../../types';
-import { Account } from '../../types/models/Account';
-import { Identity } from '../../types/models/Identity';
-import { Permissions } from '../../types/models/Permissions';
+import {
+  Account,
+  AssetPermissions,
+  Identity,
+  Permissions,
+  PortfolioPermissions,
+  TransactionPermissions,
+} from '../../types';
 import { getTextValue } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 

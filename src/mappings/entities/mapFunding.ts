@@ -17,13 +17,12 @@ export async function mapFunding(
   if (moduleId === 'asset' && eventId === 'Issued') {
     const rawTicker = params[1];
     const ticker = serializeTicker(rawTicker);
-    const value = params[3];
+    const value = params[3].toString();
     const fundingName = params[4].toString();
-    const totalIssuedInFundingRound = params[5];
+    const totalIssuedInFundingRound = params[5].toString();
     await Funding.create({
       id: `${blockId}/${event.idx}`,
       ticker,
-      eventIdx: event.idx,
       blockId,
       fundingName,
       value,

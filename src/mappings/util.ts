@@ -115,6 +115,14 @@ export const getDateValue = (item: Codec): Date => {
   return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
 };
 
+export const getBigIntValue = (item: Codec): bigint => {
+  return BigInt(getTextValue(item) || 0);
+};
+
+export const getBooleanValue = (item: Codec): boolean => {
+  return JSON.parse(getTextValue(item));
+};
+
 export const hexToString = (input: string): string => {
   const hex = hexStripPrefix(input);
   let str = '';

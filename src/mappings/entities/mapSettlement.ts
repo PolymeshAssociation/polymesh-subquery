@@ -66,7 +66,6 @@ async function handlePortfolioMovement(
   event: SubstrateEvent
 ) {
   const signer = getSigner(event.extrinsic);
-  const identityId = getTextValue(params[0]);
   const from = JSON.parse(params[1].toString());
   const to = JSON.parse(params[2].toString());
   const ticker = serializeTicker(params[3]);
@@ -90,10 +89,6 @@ async function handlePortfolioMovement(
     id: `${blockId}/${event.idx}`,
     blockId,
     eventId,
-    senderId: identityId,
-    receiverId: identityId,
-    ticker,
-    amount,
     result: SettlementResultEnum.Executed,
     addresses: [signer],
     legs,

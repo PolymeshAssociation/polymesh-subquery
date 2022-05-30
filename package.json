@@ -1,5 +1,5 @@
 {
-  "name": "polymesh-subql",
+  "name": "polymesh-subquery",
   "version": "5.0.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
   "main": "dist/index.js",
@@ -13,6 +13,7 @@
     "test": "jest",
     "diff_versions": "ts-node scripts/diff_versions",
     "codegen": "./node_modules/.bin/subql codegen",
+    "validate": "./node_modules/.bin/subql validate",
     "commit": "npx git-cz",
     "start:docker": "docker-compose pull && docker-compose up --remove-orphans",
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
@@ -27,15 +28,11 @@
     "project.yaml"
   ],
   "dependencies": {
-    "@babel/preset-typescript": "^7.15.0",
-    "@polkadot/api": "5.1.1",
-    "@polkadot/util": "7.2.1",
-    "@polkadot/util-crypto": "7.2.1",
+    "@polkadot/api": "^8",
     "bignumber.js": "^9.0.2",
-    "bn.js": "^4.11.9",
     "typeorm": "^0.2.34"
   },
-  "author": "raycar5",
+  "author": "Polymath",
   "license": "Apache-2.0",
   "devDependencies": {
     "@apollo/client": "^3.4.16",
@@ -43,8 +40,6 @@
     "@babel/preset-env": "^7.15.0",
     "@commitlint/cli": "13.1.0",
     "@commitlint/config-conventional": "13.1.0",
-    "@polkadot/typegen": "5.1.1",
-    "@polkadot/types-support": "5.5.1",
     "@subql/cli": "latest",
     "@subql/types": "latest",
     "@types/bn.js": "^4.11.6",
@@ -89,5 +84,8 @@
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
     }
+  },
+  "exports": {
+    "chainTypes": "./src/chainTypes/index.ts"
   }
 }

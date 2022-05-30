@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { BridgeEvent } from '../../types/models/BridgeEvent';
+import { BridgeEvent } from '../../types';
 import { getTextValue } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 

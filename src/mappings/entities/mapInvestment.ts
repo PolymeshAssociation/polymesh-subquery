@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { getTextValue } from '../util';
-import { Investment } from './../../types/models/Investment';
+import { getBigIntValue, getTextValue } from '../util';
+import { Investment } from './../../types';
 import { serializeTicker } from './../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
@@ -20,11 +20,11 @@ export async function mapInvestment(
       id: `${blockId}/${event.idx}`,
       blockId,
       investor: getTextValue(params[0]),
-      stoId: params[1],
+      stoId: Number(params[1].toString()),
       offeringToken: serializeTicker(params[2]),
       raiseToken: serializeTicker(params[3]),
-      offeringTokenAmount: getTextValue(params[4]),
-      raiseTokenAmount: getTextValue(params[5]),
+      offeringTokenAmount: getBigIntValue(params[4]),
+      raiseTokenAmount: getBigIntValue(params[5]),
       datetime: event.block.timestamp,
     }).save();
   }

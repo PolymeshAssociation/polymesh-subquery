@@ -1,4 +1,4 @@
-FROM onfinality/subql-node:v0.19.2
+FROM onfinality/subql-node:v1.0.0
 RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false subquery
 RUN apk add --no-cache bash gettext
 
@@ -7,11 +7,6 @@ WORKDIR /app
 COPY package.json /app
 COPY yarn.lock /app
 RUN yarn --frozen-lockfile && chown -R subquery /app
-
-ENV START_BLOCK=1
-# CALL_HANDLER and EVENT_HANDLER are needed to generate a project.yaml from project.template.yaml
-ENV CALL_HANDLER='callHandler'
-ENV EVENT_HANDLER='handleEvent'
 
 ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker-entrypoint.sh" ]
 
