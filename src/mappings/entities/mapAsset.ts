@@ -42,8 +42,8 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
 };
 
 const handleAssetCreated = async (params: Codec[]): Promise<void> => {
-  const [rawownerId, rawTicker, divisible, rawType, , disableIu] = params;
-  const ownerId = getTextValue(rawownerId);
+  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
+  const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
   // Name isn't present on the event so we need to query storage
@@ -61,7 +61,7 @@ const handleAssetCreated = async (params: Codec[]): Promise<void> => {
     isFrozen: false,
     isUniquenessRequired: !getBooleanValue(disableIu),
     identifiers: [],
-    ownerId: ownerId,
+    ownerId,
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
