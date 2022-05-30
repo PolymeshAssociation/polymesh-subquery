@@ -8,7 +8,7 @@ Object {
       Object {
         "__typename": "ProposalVote",
         "account": "5E54UrHjHR2rS79cX8CbmuJWERuSr4vYPCr6Dh6LmvGtGUGs",
-        "blockId": 238,
+        "blockId": "238",
         "eventIdx": 1,
         "id": "238/1",
         "weight": "10",

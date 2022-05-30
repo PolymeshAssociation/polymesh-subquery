@@ -1,8 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
+import { HistoryOfPaymentEventsForCa, WithholdingTaxesOfCa } from '../../types';
 import { getBigIntValue, getTextValue } from '../util';
-import { HistoryOfPaymentEventsForCa } from './../../types/models/HistoryOfPaymentEventsForCa';
-import { WithholdingTaxesOfCa } from './../../types/models/WithholdingTaxesOfCa';
 import { serializeTicker } from './../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
@@ -48,7 +47,7 @@ const getLocalIdFromCaId: CapitalDistributionParams = async (params, eventId) =>
  * Subscribes to the CapitalDistribution (BenefitedClaimed and Reclaimed Event)
  */
 export async function mapCorporateActions(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -69,7 +68,7 @@ export async function mapCorporateActions(
  * Handles HistoryOfPaymentEventsForCA entity
  */
 async function handleHistoryOfPaymentEventsForCA(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent

@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { hexAddPrefix } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { StakingEvent } from '../../types';
 import { serializeAccount } from '../util';
@@ -23,7 +24,7 @@ const bondedUnbondedOrReward = new Set([
  * Subscribes to events related to staking events
  */
 export async function mapStakingEvent(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: string,
   params: Codec[],
@@ -46,6 +47,7 @@ export async function mapStakingEvent(
       stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
       amount,
       nominatedValidators: eventId === 'Nominated' ? (params[2].toJSON() as string[]) : null,
+      transactionId: hexAddPrefix(event.extrinsic?.extrinsic.hash.toJSON()),
     }).save();
   }
 }

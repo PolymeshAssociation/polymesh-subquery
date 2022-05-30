@@ -401,7 +401,7 @@ const handleStatistics = async (callId: CallIdEnum, params: Record<string, any>)
 };
 
 export async function mapAsset(
-  blockId: number,
+  blockId: string,
   callId: CallIdEnum,
   moduleId: ModuleIdEnum,
   params: Record<string, any>,

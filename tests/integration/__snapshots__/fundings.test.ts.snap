@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Funding",
-        "blockId": 201,
+        "blockId": "201",
         "fundingName": "first",
         "ticker": "8TICKER",
         "totalIssuedInFundingRound": "1000000",
@@ -15,7 +15,7 @@ Object {
       },
       Object {
         "__typename": "Funding",
-        "blockId": 204,
+        "blockId": "204",
         "fundingName": "first",
         "ticker": "8TICKER",
         "totalIssuedInFundingRound": "1000100",
@@ -44,7 +44,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Funding",
-        "blockId": 201,
+        "blockId": "201",
         "fundingName": "first",
         "ticker": "8TICKER",
         "totalIssuedInFundingRound": "1000000",
@@ -52,7 +52,7 @@ Object {
       },
       Object {
         "__typename": "Funding",
-        "blockId": 204,
+        "blockId": "204",
         "fundingName": "first",
         "ticker": "8TICKER",
         "totalIssuedInFundingRound": "1000100",

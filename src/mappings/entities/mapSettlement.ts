@@ -34,7 +34,7 @@ const finalizedEvents: EventIdEnum[] = [
 
 // Translates events into a settlements table. This includes transfers between a users portfolio combined with completed Instructions.
 export async function mapSettlement(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -60,7 +60,7 @@ export async function mapSettlement(
 }
 
 async function handlePortfolioMovement(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
@@ -97,7 +97,7 @@ async function handlePortfolioMovement(
 }
 
 async function handleInstructionCreated(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
@@ -143,7 +143,7 @@ async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
 }
 
 async function handleInstructionFinalizedEvent(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent

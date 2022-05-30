@@ -8,7 +8,7 @@ Object {
       Object {
         "__typename": "HistoryOfPaymentEventsForCa",
         "balance": "100000000",
-        "blockId": 358,
+        "blockId": "358",
         "datetime": "2021-10-06T12:35:04",
         "eventDid": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
         "eventId": "BenefitClaimed",
