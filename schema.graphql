@@ -1,6 +1,6 @@
 type Event @entity {
   id: ID!
-  blockId: Int! @index(unique: false)
+  block: Block!
   eventIdx: Int!
   extrinsicIdx: Int
   specVersionId: Int!
@@ -51,7 +51,7 @@ type Block @entity {
 
 type Extrinsic @entity {
   id: ID!
-  blockId: Int! @index(unique: false)
+  block: Block! @index(unique: false)
   extrinsicIdx: Int!
   extrinsicLength: Int!
   signed: Int!
@@ -60,38 +60,98 @@ type Extrinsic @entity {
   moduleId: String! @index(unique: false)
   callId: String! @index(unique: false)
   paramsTxt: String!
-  success: Int!
+  success: Int! @index(unique: false)
   nonce: Int
   extrinsicHash: String @index(unique: false)
   specVersionId: Int!
 }
 
+type AssetPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type TransactionPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type PortfolioPermissions @jsonField {
+  type: String!
+  values: [PortfolioJson]!
+}
+
+type Permissions @entity {
+  id: ID!
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
+  datetime: Date!
+}
+
+type Account @entity {
+  id: ID!
+  address: String! @index(unique: true)
+  identity: Identity!
+  eventId: String! @index(unique: false)
+  permissions: Permissions!
+  block: Block!
+  datetime: Date!
+}
+
+type Identity @entity {
+  id: ID!
+  did: String! @index(unique: true)
+  primaryAccount: String! @index(unique: false)
+  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
+  secondaryKeysFrozen: Boolean!
+  eventId: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+  datetime: Date!
+}
+
+type BridgeEvent @entity {
+  id: ID!
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  identityId: String!
+  recipient: String!
+  amount: BigInt!
+  txHash: String! @index(unique: false)
+  datetime: Date!
+}
+
 type StakingEvent @entity {
   id: ID!
-  blockId: Int! @index
-  eventIdx: Int! @index
-  stakingEventId: String! @index
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  stakingEventId: String! @index(unique: false)
   date: Date! @index
   identityId: String
   stashAccount: String
   amount: BigInt
   nominatedValidators: [String!]
+  transactionId: String
 }
 
 type TickerExternalAgentAction @entity {
   id: ID!
-  blockId: Int! @index
-  eventIdx: Int! @index
-  ticker: String! @index
-  palletName: String! @index
-  eventId: String! @index
-  callerDid: String! @index
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  ticker: String! @index(unique: false)
+  palletName: String! @index(unique: false)
+  eventId: String! @index(unique: false)
+  callerDid: String! @index(unique: false)
   datetime: Date!
 }
 
 type Funding @entity {
   id: ID!
-  blockId: Int!
+  block: Block!
   ticker: String! @index(unique: false)
   fundingName: String! @index(unique: false)
   value: String!
@@ -105,24 +165,24 @@ type Sto @entity {
 
 type Authorization @entity {
   id: ID!
-  createdBlock: Int!
-  authId: Int! @index
-  type: String! @index
-  fromDid: String! @index
-  toDid: String @index
-  toKey: String @index
+  authId: Int! @index(unique: false)
+  type: String! @index(unique: false)
+  fromDid: String! @index(unique: false)
+  toDid: String @index(unique: false)
+  toKey: String @index(unique: false)
   data: String
-  expiry: Date @index
+  expiry: Date @index(unique: false)
   status: String!
-  updatedBlock: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Investment @entity {
   id: ID!
-  blockId: Int!
+  block: Block!
   investor: String!
-  stoId: Int! @index
-  offeringToken: String! @index
+  stoId: Int! @index(unique: false)
+  offeringToken: String! @index(unique: false)
   raiseToken: String!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
@@ -131,9 +191,9 @@ type Investment @entity {
 
 type TickerExternalAgentAdded @entity {
   id: ID! #ticker/caller_did
-  ticker: String! @index
-  callerDid: String! @index
-  blockId: Int!
+  ticker: String! @index(unique: false)
+  callerDid: String! @index(unique: false)
+  block: Block!
   eventIdx: Int!
   datetime: Date!
 }
@@ -142,9 +202,9 @@ type TickerExternalAgentAdded @entity {
 # permissions is only present in "AgentAdded" and "AgentPermissionsChanged".
 type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
-  ticker: String! @index
-  did: String! @index
-  blockId: Int!
+  ticker: String! @index(unique: false)
+  did: String! @index(unique: false)
+  block: Block!
   eventIdx: Int!
   datetime: Date!
   type: String!
@@ -159,8 +219,8 @@ type AgentGroup @entity {
 
 type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
-  member: String! @index
-  group: AgentGroup! @index
+  member: String! @index(unique: false)
+  group: AgentGroup! @index(unique: false)
 }
 
 type PortfolioJson @jsonField {
@@ -177,19 +237,19 @@ type Leg @jsonField {
 
 type Settlement @entity {
   id: ID!
-  blockId: Int!
+  block: Block!
   eventId: String!
-  addresses: [String!]! @index
+  addresses: [String!]! @index(unique: false)
   result: String!
   legs: [Leg!]!
 }
 
 type Instruction @entity {
   id: ID!
-  blockId: Int!
+  block: Block!
   eventId: String!
   status: String!
-  venueId: String! @index
+  venueId: String! @index(unique: false)
   settlementType: String!
   legs: [Leg!]!
   addresses: [String!]!
@@ -197,20 +257,20 @@ type Instruction @entity {
 
 type WithholdingTaxesOfCa @entity {
   id: ID!
-  ticker: String! @index
-  localId: Int! @index
+  ticker: String! @index(unique: false)
+  localId: Int! @index(unique: false)
   datetime: Date!
   taxes: BigInt!
 }
 
 type HistoryOfPaymentEventsForCa @entity {
   id: ID!
-  blockId: Int!
+  block: Block!
   eventId: String!
   eventIdx: Int!
   eventDid: String!
-  ticker: String! @index
-  localId: Int! @index
+  ticker: String! @index(unique: false)
+  localId: Int! @index(unique: false)
   balance: BigInt!
   tax: BigInt!
   datetime: Date!
@@ -219,7 +279,7 @@ type HistoryOfPaymentEventsForCa @entity {
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  blockId: Int!
+  block: Block!
   eventIdx: Int!
   account: String!
   vote: Boolean!
@@ -228,23 +288,23 @@ type ProposalVote @entity {
 
 type Proposal @entity {
   id: ID!
-  blockId: Int!
-  proposer: String! @index
-  state: String! @index
+  block: Block!
+  proposer: String! @index(unique: false)
+  state: String! @index(unique: false)
   identityId: String!
   balance: BigInt!
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
-  lastStateUpdatedAt: Int!
   snapshotted: Boolean!
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
+  updatedBlock: Block!
 }
 
 type HeldToken @entity {
   id: ID! # did/ticker
-  did: String! @index
+  did: String! @index(unique: false)
   token: String!
 }
 
@@ -255,47 +315,32 @@ type Scope @jsonField {
 
 type ClaimScope @entity {
   id: ID!
-  targetDid: String! @index
+  target: String! @index(unique: false)
   ticker: String
   scope: Scope
 }
 
 type Claim @entity {
   id: ID!
-  targetDid: String! @index
-  issuer: String! @index
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  target: Identity! @index(unique: false)
+  issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
-  filterExpiry: BigInt! @index
-  type: String! @index
+  filterExpiry: BigInt! @index(unique: false)
+  type: String! @index(unique: false)
   jurisdiction: String
   scope: Scope
   cddId: String
+  revokeDate: BigInt
 }
 
-type ClaimJson @jsonField {
-  targetDid: String!
-  issuer: String!
-  issuanceDate: BigInt!
-  lastUpdateDate: BigInt!
-  expiry: BigInt
-  type: String!
-  jurisdiction: String
-  scope: Scope
-  cddId: String
-}
-
-type IdentityWithClaims @entity {
+type TrustedClaimIssuerTicker @entity {
   id: ID!
-  did: String! @index
-  claims: [ClaimJson!]!
-}
-
-type IssuerIdentityWithClaims @entity {
-  id: ID!
-  did: String! @index
-  claims: [ClaimJson!]!
+  ticker: String!
+  issuer: String! @index(unique: false)
 }
 
 type SecurityIdentifier @jsonField {

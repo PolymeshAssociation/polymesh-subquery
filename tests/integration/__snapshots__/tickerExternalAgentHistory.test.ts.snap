@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 312,
+        "blockId": "312",
         "datetime": "2021-10-06T12:34:41",
         "did": "0xeb686d5391c1123fcd252419bc1e77b525f46bddc8964d34e74be0988c419fea",
         "eventIdx": 1,
@@ -17,7 +17,7 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 314,
+        "blockId": "314",
         "datetime": "2021-10-06T12:34:42",
         "did": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
         "eventIdx": 1,
@@ -27,7 +27,7 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 316,
+        "blockId": "316",
         "datetime": "2021-10-06T12:34:43",
         "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventIdx": 1,
@@ -37,7 +37,7 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 318,
+        "blockId": "318",
         "datetime": "2021-10-06T12:34:44",
         "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventIdx": 1,
@@ -47,7 +47,7 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 319,
+        "blockId": "319",
         "datetime": "2021-10-06T12:34:44.5",
         "did": "0xeb686d5391c1123fcd252419bc1e77b525f46bddc8964d34e74be0988c419fea",
         "eventIdx": 1,
@@ -57,7 +57,7 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentHistory",
-        "blockId": 322,
+        "blockId": "322",
         "datetime": "2021-10-06T12:34:46",
         "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventIdx": 1,

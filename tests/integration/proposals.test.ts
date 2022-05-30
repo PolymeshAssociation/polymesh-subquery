@@ -17,7 +17,7 @@ describe('proposals', () => {
               url
               description
               balance
-              lastStateUpdatedAt
+              lastStateUpdatedAt: updatedBlockId
               yay: votes(filter: { vote: { equalTo: true } }) {
                 totalCount
               }

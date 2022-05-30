@@ -5,7 +5,7 @@ import { serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
 export async function mapTickerExternalAgentAdded(
-  blockId: number,
+  blockId: string,
   eventId: string,
   moduleId: string,
   params: Codec[],

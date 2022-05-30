@@ -8,7 +8,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to the events related to external agents
  */
 export async function mapExternalAgentAction(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
@@ -73,7 +73,7 @@ class ExternalAgentEventsManager {
   public async getTicker(
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,
-    blockId: number,
+    blockId: string,
     params: Codec[]
   ): Promise<string | undefined> {
     const entries = this.entries.get(moduleId)?.get(eventId);
@@ -83,10 +83,10 @@ class ExternalAgentEventsManager {
     }
 
     for (const entry of entries) {
-      if (entry.options.maxBlock && blockId > entry.options.maxBlock) {
+      if (entry.options.maxBlock && Number(blockId) > entry.options.maxBlock) {
         continue;
       }
-      if (entry.options.minBlock && blockId < entry.options.minBlock) {
+      if (entry.options.minBlock && Number(blockId) < entry.options.minBlock) {
         continue;
       }
       if (entry.type === 'standard') {

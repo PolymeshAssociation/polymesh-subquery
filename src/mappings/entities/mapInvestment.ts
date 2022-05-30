@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { getBigIntValue, getTextValue } from '../util';
-import { Investment } from './../../types/models/Investment';
+import { Investment } from './../../types';
 import { serializeTicker } from './../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 
@@ -9,7 +9,7 @@ import { EventIdEnum, ModuleIdEnum } from './common';
  * Subscribes to the STO Invested event
  */
 export async function mapInvestment(
-  blockId: number,
+  blockId: string,
   eventId: EventIdEnum,
   moduleId: ModuleIdEnum,
   params: Codec[],
