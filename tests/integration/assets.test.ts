@@ -19,7 +19,7 @@ describe('assets', () => {
               isFrozen
               isUniquenessRequired
               identifiers
-              ownerDid
+              ownerDid: ownerId
               totalSupply
               totalTransfers
               isCompliancePaused

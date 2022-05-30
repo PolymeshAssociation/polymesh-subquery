@@ -6,8 +6,11 @@ import { decodeAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
 import { EventIdEnum, ModuleIdEnum } from './entities/common';
+import { mapAsset } from './entities/mapAsset';
 import { mapClaim } from './entities/mapClaim';
+import { mapCompliance } from './entities/mapCompliance';
 import { mapIdentities } from './entities/mapIdentities';
+import { mapTransferManager } from './entities/mapTransferManager';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -127,7 +130,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const handlerPromises = [
     mapIdentities(...handlerArgs),
     mapAsset(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     mapCompliance(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     mapTransferManager(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     // TODO @prashantasdeveloper remove the commented out code

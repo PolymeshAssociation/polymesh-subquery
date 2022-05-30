@@ -10,7 +10,7 @@ describe('assetHolders', () => {
           assetHolders(filter: { assetId: { equalTo: "11BTICKER1" } }) {
             nodes {
               id
-              did
+              did: identityId
               ticker: assetId
               amount
             }

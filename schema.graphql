@@ -112,6 +112,7 @@ type Identity @entity {
   createdBlock: Block!
   updatedBlock: Block!
   datetime: Date!
+  heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
 }
 
 type BridgeEvent @entity {
@@ -302,12 +303,6 @@ type Proposal @entity {
   updatedBlock: Block!
 }
 
-type HeldToken @entity {
-  id: ID! # did/ticker
-  did: String! @index(unique: false)
-  token: String!
-}
-
 type Scope @jsonField {
   type: String!
   value: String!
@@ -374,7 +369,7 @@ type Compliance @entity {
 
 type AssetHolder @entity {
   id: ID! # ticker/did
-  did: String! @index(unique: false)
+  identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
 }
@@ -400,7 +395,7 @@ type Asset @entity {
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
   identifiers: [SecurityIdentifier]!
-  ownerDid: String!
+  owner: Identity!
   documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   totalSupply: BigInt!

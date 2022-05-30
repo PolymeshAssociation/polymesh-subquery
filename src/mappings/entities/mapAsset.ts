@@ -31,7 +31,7 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
   if (!assetHolder) {
     assetHolder = AssetHolder.create({
       id,
-      did,
+      identityId: did,
       assetId: ticker,
       amount: BigInt(0),
     });
@@ -42,8 +42,8 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
 };
 
 const handleAssetCreated = async (params: Codec[]): Promise<void> => {
-  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
-  const ownerDid = getTextValue(rawOwnerDid);
+  const [rawownerId, rawTicker, divisible, rawType, , disableIu] = params;
+  const ownerId = getTextValue(rawownerId);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
   // Name isn't present on the event so we need to query storage
@@ -61,7 +61,7 @@ const handleAssetCreated = async (params: Codec[]): Promise<void> => {
     isFrozen: false,
     isUniquenessRequired: !getBooleanValue(disableIu),
     identifiers: [],
-    ownerDid,
+    ownerId: ownerId,
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
@@ -147,7 +147,7 @@ const handleIssued = async (params: Codec[]): Promise<void> => {
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerDid);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerId);
   assetOwner.amount += issuedAmount;
 
   await Promise.all([asset.save(), assetOwner.save()]);
@@ -162,7 +162,7 @@ const handleRedeemed = async (params: Codec[]): Promise<void> => {
   const asset = await getAsset(ticker);
   asset.totalSupply -= issuedAmount;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerDid);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerId);
   assetOwner.amount -= issuedAmount;
 
   await Promise.all([asset.save(), assetOwner.save()]);
@@ -186,7 +186,7 @@ const handleAssetOwnershipTransferred = async (params: Codec[]) => {
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
-  asset.ownerDid = getTextValue(to);
+  asset.ownerId = getTextValue(to);
 
   await asset.save();
 };
@@ -226,13 +226,15 @@ export async function mapAsset(
   if (eventId === EventIdEnum.Redeemed) {
     await handleRedeemed(params);
   }
-  if (eventId === EventIdEnum.Frozen) {
+  if (eventId === EventIdEnum.AssetFrozen) {
     await handleFrozen(params, true);
   }
-  if (eventId === EventIdEnum.Unfrozen) {
+  if (eventId === EventIdEnum.AssetUnfrozen) {
     await handleFrozen(params, false);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAssetOwnershipTransferred(params);
   }
+
+  // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }
