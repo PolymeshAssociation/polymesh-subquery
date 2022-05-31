@@ -7,7 +7,14 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "AssetHolder",
-        "amount": "101",
+        "amount": "-1000000",
+        "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "id": "11BTICKER1/0x0000000000000000000000000000000000000000000000000000000000000000",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "999601",
         "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "id": "11BTICKER1/0x0500000000000000000000000000000000000000000000000000000000000000",
         "ticker": "11BTICKER1",
@@ -52,12 +59,12 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "AssetHolder",
-        "amount": "101",
+        "amount": "999901",
         "ticker": "11ATICKER",
       },
       Object {
         "__typename": "AssetHolder",
-        "amount": "101",
+        "amount": "999601",
         "ticker": "11BTICKER1",
       },
       Object {
@@ -67,22 +74,22 @@ Object {
       },
       Object {
         "__typename": "AssetHolder",
-        "amount": "1001",
+        "amount": "999001",
         "ticker": "12TICKER",
       },
       Object {
         "__typename": "AssetHolder",
-        "amount": "20000",
+        "amount": "19900021500",
         "ticker": "13EARNED",
       },
       Object {
         "__typename": "AssetHolder",
-        "amount": "100001000",
+        "amount": "900001000",
         "ticker": "13TICKER",
       },
       Object {
         "__typename": "AssetHolder",
-        "amount": "51",
+        "amount": "999951",
         "ticker": "14TICKER",
       },
       Object {
@@ -102,7 +109,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "AssetHolder",
-        "amount": "101",
+        "amount": "999601",
       },
     ],
   },

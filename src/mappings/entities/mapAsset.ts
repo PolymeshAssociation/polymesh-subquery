@@ -5,6 +5,7 @@ import {
   getBooleanValue,
   getDocValue,
   getNumberValue,
+  getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
   serializeTicker,
@@ -191,14 +192,28 @@ const handleAssetOwnershipTransferred = async (params: Codec[]) => {
   await asset.save();
 };
 
-export async function mapAsset(
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
-  if (moduleId !== ModuleIdEnum.Asset) {
-    return;
-  }
+const handleAssetTransfer = async (params: Codec[]) => {
+  const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
+  const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
+  const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
+  const transferAmount = getBigIntValue(rawAmount);
+  const ticker = serializeTicker(rawTicker);
+
+  const asset = await getAsset(ticker);
+  asset.totalTransfers += BigInt(1);
+
+  const [fromHolder, toHolder] = await Promise.all([
+    getAssetHolder(ticker, fromDid),
+    getAssetHolder(ticker, toDid),
+  ]);
+
+  fromHolder.amount = fromHolder.amount - transferAmount;
+  toHolder.amount = toHolder.amount + transferAmount;
+
+  await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
+};
+
+const handleAssetUpdateEvents = async (eventId: EventIdEnum, params: Codec[]): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
     await handleAssetCreated(params);
   }
@@ -208,23 +223,11 @@ export async function mapAsset(
   if (eventId === EventIdEnum.FundingRoundSet) {
     await handleFundingRoundSet(params);
   }
-  if (eventId === EventIdEnum.DocumentAdded) {
-    await handleDocumentAdded(params);
-  }
-  if (eventId === EventIdEnum.DocumentRemoved) {
-    await handleDocumentRemoved(params);
-  }
   if (eventId === EventIdEnum.IdentifiersUpdated) {
     await handleIdentifiersUpdated(params);
   }
   if (eventId === EventIdEnum.DivisibilityChanged) {
     await handleDivisibilityChanged(params);
-  }
-  if (eventId === EventIdEnum.Issued) {
-    await handleIssued(params);
-  }
-  if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeemed(params);
   }
   if (eventId === EventIdEnum.AssetFrozen) {
     await handleFrozen(params, true);
@@ -232,9 +235,35 @@ export async function mapAsset(
   if (eventId === EventIdEnum.AssetUnfrozen) {
     await handleFrozen(params, false);
   }
+};
+
+export async function mapAsset(
+  eventId: EventIdEnum,
+  moduleId: ModuleIdEnum,
+  params: Codec[]
+): Promise<void> {
+  if (moduleId !== ModuleIdEnum.Asset) {
+    return;
+  }
+  if (eventId === EventIdEnum.DocumentAdded) {
+    await handleDocumentAdded(params);
+  }
+  if (eventId === EventIdEnum.DocumentRemoved) {
+    await handleDocumentRemoved(params);
+  }
+  if (eventId === EventIdEnum.Issued) {
+    await handleIssued(params);
+  }
+  if (eventId === EventIdEnum.Redeemed) {
+    await handleRedeemed(params);
+  }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAssetOwnershipTransferred(params);
   }
+  if (eventId === EventIdEnum.Transfer) {
+    await handleAssetTransfer(params);
+  }
+  await handleAssetUpdateEvents(eventId, params);
 
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }

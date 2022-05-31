@@ -1,0 +1,320 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`instructions should return first 10 instructions 1`] = `
+Object {
+  "instructions": Object {
+    "__typename": "InstructionsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          "0x445bc6587e10fdb738384afe436aeac71f8b3b43ffa35ad732df57a75af9c631",
+        ],
+        "blockId": "259",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x3131415449434b4552000000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x6507cde10425d03a8964c5937ccb5760a95d4fd1cda5fc8cdadad8b51e13a38f",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "1",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+          "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+          "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+          "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
+        ],
+        "blockId": "288",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                "number": 0,
+              },
+              "ticker": "0x3131425449434b4552320000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x3131425449434b4552310000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x3131425449434b4552310000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x3131425449434b4552310000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x3131425449434b4552310000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "2",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          "0x9cf9275b33172c4314f15a677f5382346ba4bf984fb86adaadf45eb3f1008442",
+        ],
+        "blockId": "324",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "1000",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x31325449434b455200000000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "3",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          "0x7e2b6c2251327adee2637729546e952c183f381712a805db885ebfdd4117b022",
+        ],
+        "blockId": "352",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "100000000",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x31335449434b455200000000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "5",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0x16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
+          "0xd2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
+        ],
+        "blockId": "377",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "1000",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "number": 0,
+              },
+              "ticker": "0x31345449434b455252414953",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "6",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0x16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
+        ],
+        "blockId": "383",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "40",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x31345449434b455200000000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "0",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "number": 0,
+              },
+              "ticker": "0x31345449434b455252414953",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "7",
+      },
+      Object {
+        "__typename": "Instruction",
+        "addresses": Array [
+          "0xd2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
+        ],
+        "blockId": "384",
+        "legs": Object {
+          "__typename": "LegsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Leg",
+              "amount": "10",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "0x31345449434b455200000000",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "0",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "number": 0,
+              },
+              "ticker": "0x31345449434b455252414953",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+            },
+          ],
+        },
+        "settlementType": "settleOnAffirmation",
+        "status": "Executed",
+        "venueId": "7",
+      },
+    ],
+    "totalCount": 7,
+  },
+}
+`;

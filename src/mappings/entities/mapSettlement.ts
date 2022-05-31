@@ -1,11 +1,18 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Instruction, Settlement } from '../../types';
-import { getSigner, getTextValue, hexToString, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
-import { getAsset, getAssetHolder } from './mapAsset';
+import { Instruction, Leg, Portfolio, Settlement, Venue } from '../../types';
+import {
+  getDateValue,
+  getFirstKeyFromJson,
+  getFirstValueFromJson,
+  getLegsValue,
+  getSignerAddress,
+  getTextValue,
+} from '../util';
+import { EventIdEnum, ModuleIdEnum, Props } from './common';
+import { getPortfolio } from './mapPortfolio';
 
-enum SettlementResultEnum {
+export enum SettlementResultEnum {
   None = 'None',
   Executed = 'Executed',
   Failed = 'Failed',
@@ -31,7 +38,182 @@ const finalizedEvents: EventIdEnum[] = [
   EventIdEnum.InstructionFailed,
 ];
 
-// Translates events into a settlements table. This includes transfers between a users portfolio combined with completed Instructions.
+const eventResultMap = {
+  [EventIdEnum.InstructionExecuted]: SettlementResultEnum.Executed,
+  [EventIdEnum.InstructionRejected]: SettlementResultEnum.Rejected,
+  [EventIdEnum.InstructionFailed]: SettlementResultEnum.Failed,
+  default: SettlementResultEnum.None,
+};
+
+export const createLeg = async (
+  blockId: string,
+  instructionId: string,
+  settlementId: string,
+  legIndex: number,
+  ticker: string,
+  amount: bigint,
+  from: Pick<Portfolio, 'identityId' | 'number'>,
+  to: Pick<Portfolio, 'identityId' | 'number'>
+): Promise<void> => {
+  await Promise.all([getPortfolio(from), getPortfolio(to)]);
+
+  return Leg.create({
+    id: `${blockId}/${instructionId ?? 'movePortfolio'}/${legIndex}`,
+    ticker,
+    amount,
+    fromId: `${from.identityId}/${from.number}`,
+    toId: `${to.identityId}/${to.number}`,
+    instructionId,
+    settlementId,
+  }).save();
+};
+
+const updateLegs = async (instructionId: string, settlementId: string): Promise<void> => {
+  const legs = await Leg.getByInstructionId(instructionId);
+
+  await Promise.all(
+    legs.map(leg => {
+      leg.settlementId = settlementId;
+      leg.save();
+    })
+  );
+};
+
+const getVenue = async (venueId: string): Promise<Venue> => {
+  const venue = await Venue.get(venueId);
+
+  if (!venue) {
+    throw new Error(`Venue with id ${venueId} was not found`);
+  }
+
+  return venue;
+};
+
+const handleVenueCreated = async (params: Codec[]): Promise<void> => {
+  const [rawIdentity, rawVenueId, rawDetails, rawType] = params;
+
+  await Venue.create({
+    id: getTextValue(rawVenueId),
+    identityId: getTextValue(rawIdentity),
+    details: getTextValue(rawDetails),
+    type: getTextValue(rawType),
+  }).save();
+};
+
+const handleVenueDetailsUpdated = async (params: Codec[]): Promise<void> => {
+  const [, rawVenueId, rawDetails] = params;
+
+  const venue = await getVenue(getTextValue(rawVenueId));
+  venue.details = getTextValue(rawDetails);
+
+  await venue.save();
+};
+
+const handleVenueTypeUpdated = async (params: Codec[]): Promise<void> => {
+  const [, rawVenueId, rawType] = params;
+
+  const venue = await getVenue(getTextValue(rawVenueId));
+  venue.type = getTextValue(rawType);
+
+  await venue.save();
+};
+
+const handleInstructionCreated = async (
+  blockId: string,
+  eventId: EventIdEnum,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
+  const address = getSignerAddress(event);
+
+  const [, rawVenueId, rawInstructionId, rawSettlementType, rawTradeDate, rawValueDate, rawLegs] =
+    params;
+
+  const legs = getLegsValue(rawLegs);
+  const instructionId = getTextValue(rawInstructionId);
+
+  const instruction = Instruction.create({
+    id: instructionId,
+    eventId,
+    blockId,
+    status: InstructionStatusEnum.Created,
+    venueId: getTextValue(rawVenueId),
+    settlementType: getFirstKeyFromJson(rawSettlementType),
+    endBlock: Number(getFirstValueFromJson(rawSettlementType)),
+    tradeDate: getDateValue(rawTradeDate),
+    valueDate: getDateValue(rawValueDate),
+    addresses: [address],
+  });
+  await instruction.save();
+
+  await Promise.all(
+    legs.map(({ ticker, amount, from, to }, index) =>
+      createLeg(blockId, instructionId, null, index, ticker, amount, from, to)
+    )
+  );
+};
+
+const getInstruction = async (instructionId: string): Promise<Instruction> => {
+  const instruction = await Instruction.get(instructionId);
+
+  if (!instruction) {
+    throw new Error(`could not find instruction by id: ${instructionId}`);
+  }
+
+  return instruction;
+};
+
+const handleInstructionUpdate = async (params: Codec[], event: SubstrateEvent): Promise<void> => {
+  const address = getSignerAddress(event);
+
+  const [, , rawInstructionId] = params;
+
+  const instructionId = getTextValue(rawInstructionId);
+  const instruction = await getInstruction(instructionId);
+
+  if (address && !instruction.addresses.includes(address)) {
+    instruction.addresses.push(address);
+    await instruction.save();
+  }
+};
+
+export const createSettlement = (props: Props<Settlement>): Promise<void> =>
+  Settlement.create(props).save();
+
+const handleInstructionFinalizedEvent = async (
+  blockId: string,
+  eventId: EventIdEnum,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
+  const [, rawInstructionId] = params;
+  const instructionId = getTextValue(rawInstructionId);
+  const instruction = await getInstruction(instructionId);
+
+  instruction.status = eventResultMap[eventId] || eventResultMap['default'];
+
+  const address = getSignerAddress(event);
+
+  if (address && !instruction.addresses.includes(address)) {
+    instruction.addresses.push(address);
+  }
+
+  const settlementId = `${blockId}/${event.idx}`;
+  const settlement = createSettlement({
+    id: settlementId,
+    eventId,
+    blockId,
+    result: instruction.status,
+    addresses: instruction.addresses,
+  });
+
+  await Promise.all([settlement, instruction.save()]);
+
+  if (eventId === EventIdEnum.InstructionExecuted) {
+    await updateLegs(instructionId, settlementId);
+  }
+};
+
 export async function mapSettlement(
   blockId: string,
   eventId: EventIdEnum,
@@ -39,11 +221,19 @@ export async function mapSettlement(
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> {
-  if (moduleId === ModuleIdEnum.Portfolio && eventId === EventIdEnum.MovedBetweenPortfolios) {
-    await handlePortfolioMovement(blockId, eventId, params, event);
-  }
-
   if (moduleId === ModuleIdEnum.Settlement) {
+    if (eventId === EventIdEnum.VenueCreated) {
+      await handleVenueCreated(params);
+    }
+
+    if (eventId === EventIdEnum.VenueDetailsUpdated) {
+      await handleVenueDetailsUpdated(params);
+    }
+
+    if (eventId === EventIdEnum.VenueTypeUpdated) {
+      await handleVenueTypeUpdated(params);
+    }
+
     if (eventId === EventIdEnum.InstructionCreated) {
       await handleInstructionCreated(blockId, eventId, params, event);
     }
@@ -56,150 +246,4 @@ export async function mapSettlement(
       await handleInstructionFinalizedEvent(blockId, eventId, params, event);
     }
   }
-}
-
-async function handlePortfolioMovement(
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-) {
-  const signer = getSigner(event.extrinsic);
-  const from = JSON.parse(params[1].toString());
-  const to = JSON.parse(params[2].toString());
-  const ticker = serializeTicker(params[3]);
-  const amount = getTextValue(params[4]);
-
-  const legs = [
-    {
-      ticker,
-      amount,
-      from: {
-        did: from.did,
-        number: from.kind.user || 0,
-      },
-      to: {
-        did: to.did,
-        number: to.kind.user || 0,
-      },
-    },
-  ];
-  const settlement = Settlement.create({
-    id: `${blockId}/${event.idx}`,
-    blockId,
-    eventId,
-    result: SettlementResultEnum.Executed,
-    addresses: [signer],
-    legs,
-  });
-  await settlement.save();
-}
-
-async function handleInstructionCreated(
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-) {
-  const signer = getSigner(event.extrinsic);
-  const rawLegs = params[6].toJSON() as any[];
-  const legs = rawLegs.map(({ asset, amount, from, to }) => ({
-    ticker: hexToString(asset),
-    amount,
-    from: {
-      did: from.did,
-      number: from.kind.user || 0,
-    },
-    to: {
-      did: to.did,
-      number: to.kind.user || 0,
-    },
-  }));
-  const instruction = Instruction.create({
-    id: getTextValue(params[2]),
-    eventId,
-    blockId,
-    status: InstructionStatusEnum.Created,
-    venueId: getTextValue(params[1]),
-    settlementType: getTextValue(params[3]),
-    addresses: [signer],
-    legs,
-  });
-  await instruction.save();
-}
-
-async function handleInstructionUpdate(params: Codec[], event: SubstrateEvent) {
-  const signer = getSigner(event.extrinsic);
-  const instructionId = getTextValue(params[2]);
-  const instruction = await Instruction.get(instructionId);
-  if (instruction) {
-    if (signer) instruction.addresses.push(signer);
-    instruction.addresses = instruction.addresses.filter(onlyUnique);
-    await instruction.save();
-  } else {
-    throw new Error(`could not find instruction by id: ${instructionId}`);
-  }
-}
-
-async function handleInstructionFinalizedEvent(
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-) {
-  let signer: string;
-  if (event.extrinsic) {
-    signer = getSigner(event.extrinsic);
-  }
-
-  let result: SettlementResultEnum = SettlementResultEnum.None;
-
-  if (eventId === EventIdEnum.InstructionExecuted) result = SettlementResultEnum.Executed;
-  else if (eventId === EventIdEnum.InstructionRejected) result = SettlementResultEnum.Rejected;
-  else if (eventId === EventIdEnum.InstructionFailed) result = SettlementResultEnum.Failed;
-
-  const instructionId = getTextValue(params[1]);
-
-  const instruction = await Instruction.get(instructionId);
-  if (instruction) {
-    instruction.status = result;
-    if (signer) instruction.addresses.push(signer);
-    instruction.addresses = instruction.addresses.filter(onlyUnique);
-  } else {
-    throw new Error(`could not find instruction by id: ${instructionId}`);
-  }
-
-  const settlement = Settlement.create({
-    id: `${blockId}/${event.idx}`,
-    eventId,
-    blockId,
-    result,
-    addresses: instruction.addresses,
-    legs: instruction.legs,
-  });
-  await Promise.all([settlement.save(), instruction.save()]);
-
-  if (eventId === EventIdEnum.InstructionExecuted) {
-    await Promise.all(
-      instruction.legs.map(async ({ ticker, amount, from, to }) => {
-        const asset = await getAsset(ticker);
-        asset.totalTransfers += BigInt(1);
-
-        const [fromHolder, toHolder] = await Promise.all([
-          getAssetHolder(ticker, from.did),
-          getAssetHolder(ticker, to.did),
-        ]);
-
-        const settlementAmount = BigInt(amount);
-        fromHolder.amount = fromHolder.amount + settlementAmount;
-        toHolder.amount = toHolder.amount + settlementAmount;
-
-        await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
-      })
-    );
-  }
-}
-
-function onlyUnique(value: string, index: number, self: string[]) {
-  return self.indexOf(value) === index;
 }
