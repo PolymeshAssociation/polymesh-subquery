@@ -2,8 +2,15 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { SecurityIdentifier, FoundType } from '../types';
+import {
+  AssetDocument,
+  Compliance,
+  FoundType,
+  SecurityIdentifier,
+  TransferManager,
+} from '../types';
+import { TransferRestrictionType } from './entities/common';
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -111,6 +118,10 @@ export const getTextValue = (item: Codec): string => {
   return item.toString().trim().length === 0 ? null : item.toString().trim();
 };
 
+export const getNumberValue = (item: Codec): number => {
+  return Number(getTextValue(item));
+};
+
 export const getDateValue = (item: Codec): Date => {
   return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
 };
@@ -138,28 +149,92 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   );
 };
 
-export const harvesterLikeParamsToObj = (
-  params: HarvesterLikeCallArgs,
-  formatKey = true
-): Record<string, any> => {
-  const obj: Record<string, any> = {};
-  params.forEach(p => {
-    obj[formatKey ? snakeToCamelCase(p.name) : p.name] =
-      p.name === 'asset_type' ? Object.keys(p.value)[0] : p.value;
-  });
-  return obj;
+/**
+ * Parses a raw Asset Document
+ */
+export const getDocValue = (
+  doc: Codec
+): Pick<AssetDocument, 'name' | 'link' | 'contentHash' | 'type' | 'filedAt'> => {
+  const {
+    uri: link,
+    content_hash: documentHash,
+    name,
+    doc_type: type,
+    filing_date: filedAt,
+  } = JSON.parse(doc.toString());
+
+  const hashType = Object.keys(documentHash)[0];
+
+  return {
+    name,
+    link,
+    contentHash: documentHash[hashType],
+    type,
+    filedAt,
+  };
 };
 
-export const formatAssetIdentifiers = (
-  identifiers: Record<string, string>[]
-): SecurityIdentifier[] =>
-  identifiers.map(i => {
+export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
+  const identifiers = JSON.parse(item.toString());
+  return identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
       type,
       value: i[type],
     };
   });
+};
+
+/**
+ * Parses a Vec<AssetCompliance>
+ */
+export const getComplianceRulesValue = (
+  requirements: Codec
+): Pick<Compliance, 'complianceId' | 'data'>[] => {
+  return JSON.parse(JSON.stringify(requirements));
+};
+
+/**
+ * Parses AssetCompliance
+ */
+export const getComplianceValue = (
+  compliance: Codec
+): Pick<Compliance, 'complianceId' | 'data'> => {
+  const { id, ...data } = JSON.parse(compliance.toString());
+  return {
+    complianceId: Number(id),
+    data,
+  };
+};
+
+/**
+ * Parses AssetTransferManager
+ */
+export const getTransferManagerValue = (
+  manager: Codec
+): Pick<TransferManager, 'type' | 'value'> => {
+  const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
+
+  if (countTransferManager) {
+    return {
+      type: TransferRestrictionType.Count,
+      value: Number(countTransferManager),
+    };
+  }
+
+  if (percentageTransferManager) {
+    return {
+      type: TransferRestrictionType.Percentage,
+      value: Number(percentageTransferManager),
+    };
+  }
+
+  throw new Error('Unknown transfer restriction type found');
+};
+
+export const getExemptionsValue = (exemptions: Codec): string[] => {
+  return JSON.parse(exemptions.toString()) || [];
+};
 
 export const logFoundType = (type: string, rawType: string): void => {
   FoundType.create({ id: type, rawType }).save();

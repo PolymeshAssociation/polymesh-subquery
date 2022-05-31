@@ -112,6 +112,7 @@ type Identity @entity {
   createdBlock: Block!
   updatedBlock: Block!
   datetime: Date!
+  heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
 }
 
 type BridgeEvent @entity {
@@ -302,12 +303,6 @@ type Proposal @entity {
   updatedBlock: Block!
 }
 
-type HeldToken @entity {
-  id: ID! # did/ticker
-  did: String! @index(unique: false)
-  token: String!
-}
-
 type Scope @jsonField {
   type: String!
   value: String!
@@ -343,12 +338,6 @@ type TrustedClaimIssuerTicker @entity {
   issuer: String! @index(unique: false)
 }
 
-type AssetDocument @jsonField {
-  id: Int! # document id
-  name: String!
-  link: String!
-}
-
 type SecurityIdentifier @jsonField {
   type: String!
   value: String!
@@ -363,30 +352,37 @@ type AssetPendingOwnershipTransfer @entity {
   data: String
 }
 
-type AssetComplianceRequirement @jsonField {
-  id: Int! # requirement id
-  data: String!
+type TransferManager @entity {
+  id: ID! # ticker/transferManagerType/value
+  asset: Asset! @index(unique: false)
+  type: String!
+  value: Int!
+  exemptedEntities: [String]!
 }
 
-type AssetAdvancedCompliance @jsonField {
-  CountTransferManager: String
-  PercentageTransferManager: String
-  ExemptedEntities: [String]!
-}
-
-type AssetCompliance @jsonField {
-  isPaused: Boolean!
-  sender: [AssetComplianceRequirement]!
-  receiver: [AssetComplianceRequirement]!
-  advanced: [AssetAdvancedCompliance]!
+type Compliance @entity {
+  id: ID! # ticker/complianceId
+  complianceId: Int!
+  data: String! # This could be expanded into structured data
+  asset: Asset! @index(unique: false)
 }
 
 type AssetHolder @entity {
-  id: ID! # did:ticker
-  did: String! @index(unique: false)
-  ticker: String! @index(unique: false)
-  amount: String!
-  asset: Asset!
+  id: ID! # ticker/did
+  identity: Identity! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  amount: BigInt!
+}
+
+type AssetDocument @entity {
+  id: ID! # ticker/documentId
+  documentId: Int!
+  name: String!
+  link: String!
+  contentHash: String
+  type: String
+  filedAt: Date
+  asset: Asset! @index(unique: false)
 }
 
 type Asset @entity {
@@ -398,11 +394,13 @@ type Asset @entity {
   isDivisible: Boolean!
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
-  documents: [AssetDocument]!
   identifiers: [SecurityIdentifier]!
-  ownerDid: String!
+  owner: Identity!
+  documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
-  totalSupply: String!
-  totalTransfers: String!
-  compliance: AssetCompliance!
+  totalSupply: BigInt!
+  totalTransfers: BigInt!
+  isCompliancePaused: Boolean!
+  compliance: [Compliance]! @derivedFrom(field: "asset")
+  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
 }

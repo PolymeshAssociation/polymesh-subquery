@@ -25,7 +25,7 @@ dataSources:
       handlers:
         - handler: handleBlock
           kind: substrate/BlockHandler
-        - handler: ${CALL_HANDLER}
+        - handler: handleCall
           kind: substrate/CallHandler
         - handler: ${EVENT_HANDLER}
           kind: substrate/EventHandler

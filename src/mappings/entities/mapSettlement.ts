@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import BigNumber from 'bignumber.js';
-import { Settlement, Instruction } from '../../types';
+import { Instruction, Settlement } from '../../types';
 import { getSigner, getTextValue, hexToString, serializeTicker } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
 import { getAsset, getAssetHolder } from './mapAsset';
@@ -184,16 +183,17 @@ async function handleInstructionFinalizedEvent(
     await Promise.all(
       instruction.legs.map(async ({ ticker, amount, from, to }) => {
         const asset = await getAsset(ticker);
-        const settlementAmount = new BigNumber(amount);
+        asset.totalTransfers += BigInt(1);
+
         const [fromHolder, toHolder] = await Promise.all([
-          getAssetHolder(from.did, asset),
-          getAssetHolder(to.did, asset),
+          getAssetHolder(ticker, from.did),
+          getAssetHolder(ticker, to.did),
         ]);
-        fromHolder.amount = new BigNumber(fromHolder.amount).minus(settlementAmount).toString();
-        toHolder.amount = new BigNumber(toHolder.amount).plus(settlementAmount).toString();
-        asset.totalTransfers = new BigNumber(asset.totalTransfers)
-          .plus(new BigNumber(1))
-          .toString();
+
+        const settlementAmount = BigInt(amount);
+        fromHolder.amount = fromHolder.amount + settlementAmount;
+        toHolder.amount = toHolder.amount + settlementAmount;
+
         await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
       })
     );

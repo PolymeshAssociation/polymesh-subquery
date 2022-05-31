@@ -2,19 +2,18 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe('heldTokens', () => {
-  test('test getting tokens held by DID', async () => {
+describe('transferManagers', () => {
+  it('should return all transfer managers for a particular asset', async () => {
     const q = {
       query: gql`
         query {
-          heldTokens(
-            filter: {
-              did: { equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000" }
-            }
-          ) {
-            totalCount
+          transferManagers(first: 10, filter: { assetId: { equalTo: "15TICKER" } }) {
             nodes {
-              token
+              id
+              ticker: assetId
+              type
+              value
+              exemptedEntities
             }
           }
         }
