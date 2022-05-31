@@ -225,7 +225,7 @@ export const getTransferManagerValue = (
   if (percentageTransferManager) {
     return {
       type: TransferRestrictionType.Percentage,
-      value: Number(countTransferManager),
+      value: Number(percentageTransferManager),
     };
   }
 
