@@ -112,7 +112,7 @@ const handlePortfolioMovement = async (
     settlement,
     getPortfolio(from),
     getPortfolio(to),
-    createLeg(blockId, null, settlementId, 0, ticker, amount, from, to),
+    createLeg(blockId, event, null, settlementId, 0, { ticker, amount, from, to }),
   ]);
 };
 

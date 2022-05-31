@@ -226,7 +226,7 @@ export const getTransferManagerValue = (
   if (percentageTransferManager) {
     return {
       type: TransferRestrictionType.Percentage,
-      value: Number(countTransferManager),
+      value: Number(percentageTransferManager),
     };
   }
 
@@ -269,14 +269,14 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
   return meshPortfolioToPortfolio(meshPortfolio);
 };
 
-export const getLegsValue = (
-  item: Codec
-): {
+export type LegDetails = {
   from: Pick<Portfolio, 'identityId' | 'number'>;
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
-}[] => {
+};
+
+export const getLegsValue = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
   return legs.map(({ from: fromPortfolio, to: toPortfolio, asset: ticker, amount }) => ({
     from: meshPortfolioToPortfolio(fromPortfolio),

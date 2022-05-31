@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Instruction, Leg, Portfolio, Settlement, Venue } from '../../types';
+import { Instruction, Leg, Settlement, Venue } from '../../types';
 import {
   getDateValue,
   getFirstKeyFromJson,
@@ -8,6 +8,7 @@ import {
   getLegsValue,
   getSignerAddress,
   getTextValue,
+  LegDetails,
 } from '../util';
 import { EventIdEnum, ModuleIdEnum, Props } from './common';
 import { getPortfolio } from './mapPortfolio';
@@ -47,18 +48,16 @@ const instructionResultMap = {
 
 export const createLeg = async (
   blockId: string,
+  event: SubstrateEvent,
   instructionId: string,
   settlementId: string,
   legIndex: number,
-  ticker: string,
-  amount: bigint,
-  from: Pick<Portfolio, 'identityId' | 'number'>,
-  to: Pick<Portfolio, 'identityId' | 'number'>
+  { ticker, amount, from, to }: LegDetails
 ): Promise<void> => {
   await Promise.all([getPortfolio(from), getPortfolio(to)]);
 
   return Leg.create({
-    id: `${blockId}/${instructionId ?? 'movePortfolio'}/${legIndex}`,
+    id: `${blockId}/${event.idx}/${instructionId ? `${instructionId}/` : ''}${legIndex}`,
     ticker,
     amount,
     fromId: `${from.identityId}/${from.number}`,
@@ -147,8 +146,8 @@ const handleInstructionCreated = async (
   await instruction.save();
 
   await Promise.all(
-    legs.map(({ ticker, amount, from, to }, index) =>
-      createLeg(blockId, instructionId, null, index, ticker, amount, from, to)
+    legs.map((legDetails, index) =>
+      createLeg(blockId, event, instructionId, null, index, legDetails)
     )
   );
 };
