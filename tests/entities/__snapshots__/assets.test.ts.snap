@@ -27,28 +27,8 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "AssetHolder",
-              "amount": "101",
+              "amount": "1",
               "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
             },
           ],
         },
@@ -63,7 +43,7 @@ Object {
         "ownerDid": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "ticker": "11BTICKER1",
         "totalSupply": "1",
-        "totalTransfers": "1",
+        "totalTransfers": "0",
         "transferManagers": Object {
           "__typename": "TransferManagersConnection",
           "nodes": Array [],

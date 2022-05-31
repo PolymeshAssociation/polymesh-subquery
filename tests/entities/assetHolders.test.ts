@@ -31,7 +31,9 @@ describe('assetHolders', () => {
         query {
           assetHolders(
             filter: {
-              did: { equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000" }
+              identityId: {
+                equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000"
+              }
             }
           ) {
             nodes {
@@ -55,7 +57,9 @@ describe('assetHolders', () => {
         query {
           assetHolders(
             filter: {
-              did: { equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000" }
+              identityId: {
+                equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000"
+              }
               assetId: { equalTo: "11BTICKER1" }
             }
           ) {

@@ -38,7 +38,7 @@ describe('assets', () => {
               }
               holders {
                 nodes {
-                  did
+                  did: identityId
                   amount
                 }
               }
