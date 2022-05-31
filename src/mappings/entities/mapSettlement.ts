@@ -56,8 +56,10 @@ export const createLeg = async (
 ): Promise<void> => {
   await Promise.all([getPortfolio(from), getPortfolio(to)]);
 
+  const idSuffix = instructionId ? `${instructionId}/${legIndex}` : legIndex;
+
   return Leg.create({
-    id: `${blockId}/${event.idx}/${instructionId ? `${instructionId}/` : ''}${legIndex}`,
+    id: `${blockId}/${event.idx}/${idSuffix}`,
     ticker,
     amount,
     fromId: `${from.identityId}/${from.number}`,
