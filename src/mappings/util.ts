@@ -293,3 +293,5 @@ export const getSignerAddress = (event: SubstrateEvent): string => {
   }
   return signer;
 };
+
+export const getAmountValue = (item: Codec): bigint => getBigIntValue(item) / BigInt(1000000);

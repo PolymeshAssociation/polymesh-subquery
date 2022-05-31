@@ -425,3 +425,5 @@ export enum TransferRestrictionType {
 }
 
 export type Props<T> = Omit<T, NonNullable<FunctionPropertyNames<T>>>;
+
+export type Attributes<T> = Omit<T, NonNullable<FunctionPropertyNames<T>> | 'id'>;

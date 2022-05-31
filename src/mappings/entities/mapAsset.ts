@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { Asset, AssetDocument, AssetHolder } from '../../types';
 import {
-  getBigIntValue,
+  getAmountValue,
   getBooleanValue,
   getDocValue,
   getNumberValue,
@@ -11,8 +11,6 @@ import {
   serializeTicker,
 } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
-
-const chainAmountToBigInt = (amount: bigint): bigint => amount / BigInt(1000000);
 
 export const getAsset = async (ticker: string): Promise<Asset> => {
   const asset = await Asset.getByTicker(ticker);
@@ -143,7 +141,7 @@ const handleIssued = async (params: Codec[]): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = chainAmountToBigInt(getBigIntValue(rawAmount));
+  const issuedAmount = getAmountValue(rawAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
@@ -158,7 +156,7 @@ const handleRedeemed = async (params: Codec[]): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = chainAmountToBigInt(getBigIntValue(rawAmount));
+  const issuedAmount = getAmountValue(rawAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply -= issuedAmount;
@@ -196,7 +194,7 @@ const handleAssetTransfer = async (params: Codec[]) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
-  const transferAmount = getBigIntValue(rawAmount);
+  const transferAmount = getAmountValue(rawAmount);
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);

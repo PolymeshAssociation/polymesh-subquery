@@ -38,7 +38,7 @@ const finalizedEvents: EventIdEnum[] = [
   EventIdEnum.InstructionFailed,
 ];
 
-const eventResultMap = {
+const instructionResultMap = {
   [EventIdEnum.InstructionExecuted]: SettlementResultEnum.Executed,
   [EventIdEnum.InstructionRejected]: SettlementResultEnum.Rejected,
   [EventIdEnum.InstructionFailed]: SettlementResultEnum.Failed,
@@ -94,7 +94,7 @@ const handleVenueCreated = async (params: Codec[]): Promise<void> => {
 
   await Venue.create({
     id: getTextValue(rawVenueId),
-    identityId: getTextValue(rawIdentity),
+    ownerId: getTextValue(rawIdentity),
     details: getTextValue(rawDetails),
     type: getTextValue(rawType),
   }).save();
@@ -190,7 +190,7 @@ const handleInstructionFinalizedEvent = async (
   const instructionId = getTextValue(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
-  instruction.status = eventResultMap[eventId] || eventResultMap['default'];
+  instruction.status = instructionResultMap[eventId] || instructionResultMap['default'];
 
   const address = getSignerAddress(event);
 

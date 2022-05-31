@@ -9,7 +9,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { Attributes, EventIdEnum, ModuleIdEnum } from './common';
 import { createLeg, SettlementResultEnum } from './mapSettlement';
 
 export const getPortfolio = async ({
@@ -18,23 +18,21 @@ export const getPortfolio = async ({
 }: Pick<Portfolio, 'identityId' | 'number'>): Promise<Portfolio> => {
   const portfolioId = `${identityId}/${number}`;
 
-  let portfolio = await Portfolio.get(portfolioId);
+  const portfolio = await Portfolio.get(portfolioId);
 
   if (!portfolio) {
-    if (number === 0) {
-      portfolio = Portfolio.create({
-        id: portfolioId,
-        identityId,
-        number,
-        name: 'Default Portfolio',
-      });
-      await portfolio.save();
-    } else {
-      throw new Error(`Portfolio number ${number} not found for DID ${identityId}`);
-    }
+    throw new Error(`Portfolio number ${number} not found for DID ${identityId}`);
   }
 
   return portfolio;
+};
+
+export const createPortfolio = (attributes: Attributes<Portfolio>): Promise<void> => {
+  const { identityId, number } = attributes;
+  return Portfolio.create({
+    id: `${identityId}/${number}`,
+    ...attributes,
+  }).save();
 };
 
 const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise<void> => {
@@ -44,13 +42,12 @@ const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise
   const number = getNumberValue(rawPortfolioNumber);
   const name = getTextValue(rawName);
 
-  await Portfolio.create({
-    id: `${ownerId}/${number}`,
+  await createPortfolio({
     identityId: ownerId,
     number,
     name,
     createdBlockId: blockId,
-  }).save();
+  });
 };
 
 const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise<void> => {

@@ -10,6 +10,7 @@ import {
 } from '../../types';
 import { getTextValue } from '../util';
 import { EventIdEnum, ModuleIdEnum } from './common';
+import { createPortfolio } from './mapPortfolio';
 
 /**
  * Subscribes to the Identities related events
@@ -69,7 +70,7 @@ const handleDidCreated = async (
 ): Promise<void> => {
   const did = getTextValue(params[0]);
   const address = getTextValue(params[1]);
-  await Identity.create({
+  const identity = Identity.create({
     id: did,
     did,
     primaryAccount: address,
@@ -80,7 +81,7 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  await Permissions.create({
+  const permissions = Permissions.create({
     id: address,
     assets: null,
     portfolios: null,
@@ -91,7 +92,7 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  await Account.create({
+  const account = Account.create({
     id: address,
     identityId: did,
     permissionsId: address,
@@ -100,6 +101,10 @@ const handleDidCreated = async (
     blockId,
     datetime,
   }).save();
+
+  const defaultPortfolio = createPortfolio({ identityId: did, number: 0, createdBlockId: blockId });
+
+  await Promise.all([identity, permissions, account, defaultPortfolio]);
 };
 
 const getPermissions = (

@@ -233,7 +233,7 @@ type Portfolio @entity {
   id: ID! # did/number
   identity: Identity! @index(unique: false)
   number: Int! @index(unique: false)
-  name: String!
+  name: String
   custodian: Identity
   createdBlock: Block
   updatedBlock: Block
@@ -260,7 +260,7 @@ type Settlement @entity {
 
 type Venue @entity {
   id: ID! # venueId
-  identity: Identity!
+  owner: Identity!
   type: String!
   details: String
 }
