@@ -250,12 +250,12 @@ export function addIfNotIncludes<T>(arr: T[], item: T): void {
   }
 }
 
-type MeshPortfolio = {
+interface MeshPortfolio {
   did: string;
   kind: {
     user: number;
   };
-};
+}
 
 const meshPortfolioToPortfolio = ({
   did,
@@ -270,12 +270,12 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
   return meshPortfolioToPortfolio(meshPortfolio);
 };
 
-export type LegDetails = {
+export interface LegDetails {
   from: Pick<Portfolio, 'identityId' | 'number'>;
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
-};
+}
 
 export const getLegsValue = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
