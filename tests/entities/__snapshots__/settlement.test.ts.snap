@@ -8,34 +8,6 @@ Object {
       Object {
         "__typename": "Settlement",
         "addresses": Array [
-          "0xbc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
-        ],
-        "blockId": "139",
-        "legs": Object {
-          "__typename": "LegsConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "Leg",
-              "amount": "100",
-              "from": Object {
-                "__typename": "Portfolio",
-                "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-                "number": 0,
-              },
-              "ticker": "4TICKER",
-              "to": Object {
-                "__typename": "Portfolio",
-                "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-                "number": 1,
-              },
-            },
-          ],
-        },
-        "result": "Executed",
-      },
-      Object {
-        "__typename": "Settlement",
-        "addresses": Array [
           "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
           "0x445bc6587e10fdb738384afe436aeac71f8b3b43ffa35ad732df57a75af9c631",
         ],
@@ -327,36 +299,8 @@ Object {
         },
         "result": "Executed",
       },
-      Object {
-        "__typename": "Settlement",
-        "addresses": Array [
-          "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
-        ],
-        "blockId": "729",
-        "legs": Object {
-          "__typename": "LegsConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "Leg",
-              "amount": "10",
-              "from": Object {
-                "__typename": "Portfolio",
-                "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
-                "number": 0,
-              },
-              "ticker": "15TICKER",
-              "to": Object {
-                "__typename": "Portfolio",
-                "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
-                "number": 1,
-              },
-            },
-          ],
-        },
-        "result": "Executed",
-      },
     ],
-    "totalCount": 9,
+    "totalCount": 7,
   },
 }
 `;
@@ -371,10 +315,14 @@ Object {
         "settlement": Object {
           "__typename": "Settlement",
           "addresses": Array [
-            "0xbc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
+            "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+            "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+            "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+            "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+            "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
           ],
-          "blockId": "139",
-          "id": "139/1",
+          "blockId": "294",
+          "id": "294/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -383,14 +331,362 @@ Object {
                 "amount": "100",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
                   "number": 0,
                 },
-                "ticker": "4TICKER",
+                "ticker": "11BTICKER2",
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-                  "number": 1,
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "number": 0,
+                },
+              },
+            ],
+          },
+          "result": "Executed",
+        },
+      },
+      Object {
+        "__typename": "Leg",
+        "settlement": Object {
+          "__typename": "Settlement",
+          "addresses": Array [
+            "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+            "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+            "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+            "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+            "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
+          ],
+          "blockId": "294",
+          "id": "294/5",
+          "legs": Object {
+            "__typename": "LegsConnection",
+            "nodes": Array [
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER2",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "number": 0,
+                },
+              },
+            ],
+          },
+          "result": "Executed",
+        },
+      },
+      Object {
+        "__typename": "Leg",
+        "settlement": Object {
+          "__typename": "Settlement",
+          "addresses": Array [
+            "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+            "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+            "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+            "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+            "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
+          ],
+          "blockId": "294",
+          "id": "294/5",
+          "legs": Object {
+            "__typename": "LegsConnection",
+            "nodes": Array [
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER2",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "number": 0,
+                },
+              },
+            ],
+          },
+          "result": "Executed",
+        },
+      },
+      Object {
+        "__typename": "Leg",
+        "settlement": Object {
+          "__typename": "Settlement",
+          "addresses": Array [
+            "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+            "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+            "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+            "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+            "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
+          ],
+          "blockId": "294",
+          "id": "294/5",
+          "legs": Object {
+            "__typename": "LegsConnection",
+            "nodes": Array [
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER2",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "number": 0,
+                },
+              },
+              Object {
+                "__typename": "Leg",
+                "amount": "100",
+                "from": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                  "number": 0,
+                },
+                "ticker": "11BTICKER1",
+                "to": Object {
+                  "__typename": "Portfolio",
+                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "number": 0,
                 },
               },
             ],
@@ -998,10 +1294,14 @@ Object {
       Object {
         "__typename": "Settlement",
         "addresses": Array [
-          "0xbc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
+          "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+          "0x88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+          "0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+          "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+          "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
         ],
-        "blockId": "139",
-        "id": "139/1",
+        "blockId": "294",
+        "id": "294/5",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -1010,14 +1310,74 @@ Object {
               "amount": "100",
               "from": Object {
                 "__typename": "Portfolio",
-                "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
                 "number": 0,
               },
-              "ticker": "4TICKER",
+              "ticker": "11BTICKER2",
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-                "number": 1,
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "11BTICKER1",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "11BTICKER1",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "11BTICKER1",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "amount": "100",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "ticker": "11BTICKER1",
+              "to": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                "number": 0,
               },
             },
           ],

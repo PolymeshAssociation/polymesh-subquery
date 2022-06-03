@@ -113,6 +113,7 @@ type Identity @entity {
   updatedBlock: Block!
   datetime: Date!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
+  portfolios: [Portfolio!]! @derivedFrom(field: "identity")
 }
 
 type BridgeEvent @entity {
@@ -239,8 +240,18 @@ type Portfolio @entity {
   updatedBlock: Block
 }
 
-type Leg @entity {
+type PortfolioMovement @entity {
   id: ID!
+  from: Portfolio! @index(unique: false)
+  to: Portfolio! @index(unique: false)
+  asset: Asset!
+  amount: BigInt!
+  address: String!
+  createdBlock: Block!
+}
+
+type Leg @entity {
+  id: ID! # instructionId/legIndex
   ticker: String!
   amount: BigInt!
   from: Portfolio! @index(unique: false)
@@ -266,7 +277,7 @@ type Venue @entity {
 }
 
 type Instruction @entity {
-  id: ID!
+  id: ID! #instructionId
   block: Block!
   eventId: String!
   status: String!

@@ -87,7 +87,7 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          legs(filter: { ticker: { equalTo: "4TICKER" } }) {
+          legs(filter: { ticker: { equalTo: "11BTICKER1" } }) {
             nodes {
               settlement {
                 id
@@ -128,7 +128,7 @@ describe('settlements', () => {
           settlements(
             filter: {
               addresses: {
-                contains: ["0xbc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915"]
+                contains: ["0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e"]
               }
             }
           ) {

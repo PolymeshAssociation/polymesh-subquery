@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Portfolio, Settlement } from '../../types';
+import { Portfolio, PortfolioMovement } from '../../types';
 import {
   getBigIntValue,
   getNumberValue,
@@ -10,7 +10,6 @@ import {
   serializeTicker,
 } from '../util';
 import { Attributes, EventIdEnum, ModuleIdEnum } from './common';
-import { createLeg, SettlementResultEnum } from './mapSettlement';
 
 export const getPortfolio = async ({
   identityId,
@@ -88,7 +87,6 @@ const handlePortfolioCustodianChanged = async (blockId: string, params: Codec[])
 
 const handlePortfolioMovement = async (
   blockId: string,
-  eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
@@ -99,21 +97,15 @@ const handlePortfolioMovement = async (
   const ticker = serializeTicker(rawTicker);
   const amount = getBigIntValue(rawAmount);
 
-  const settlementId = `${blockId}/${event.idx}`;
-  const settlement = Settlement.create({
-    id: settlementId,
-    blockId,
-    eventId,
-    result: SettlementResultEnum.Executed,
-    addresses: [address],
+  await PortfolioMovement.create({
+    id: `${blockId}/${event.idx}`,
+    fromId: `${from.identityId}/${from.number}`,
+    toId: `${to.identityId}/${to.number}`,
+    assetId: ticker,
+    amount,
+    address,
+    createdBlockId: blockId,
   }).save();
-
-  await Promise.all([
-    settlement,
-    getPortfolio(from),
-    getPortfolio(to),
-    createLeg(blockId, event, null, settlementId, 0, { ticker, amount, from, to }),
-  ]);
 };
 
 export async function mapPortfolio(
@@ -137,7 +129,7 @@ export async function mapPortfolio(
       await handlePortfolioDeleted(params);
     }
     if (eventId === EventIdEnum.MovedBetweenPortfolios) {
-      await handlePortfolioMovement(blockId, eventId, params, event);
+      await handlePortfolioMovement(blockId, params, event);
     }
   }
 }

@@ -98,6 +98,7 @@ export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V):
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
+
 export const serializeAccount = (item: Codec): string | null => {
   const s = item.toString();
 

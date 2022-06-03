@@ -11,7 +11,6 @@ import {
   LegDetails,
 } from '../util';
 import { EventIdEnum, ModuleIdEnum, Props } from './common';
-import { getPortfolio } from './mapPortfolio';
 
 export enum SettlementResultEnum {
   None = 'None',
@@ -47,27 +46,18 @@ const instructionResultMap = {
 };
 
 export const createLeg = async (
-  blockId: string,
-  event: SubstrateEvent,
   instructionId: string,
-  settlementId: string,
   legIndex: number,
   { ticker, amount, from, to }: LegDetails
-): Promise<void> => {
-  await Promise.all([getPortfolio(from), getPortfolio(to)]);
-
-  const idSuffix = instructionId ? `${instructionId}/${legIndex}` : legIndex;
-
-  return Leg.create({
-    id: `${blockId}/${event.idx}/${idSuffix}`,
+): Promise<void> =>
+  Leg.create({
+    id: `${instructionId}/${legIndex}`,
     ticker,
     amount,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     instructionId,
-    settlementId,
   }).save();
-};
 
 const updateLegs = async (instructionId: string, settlementId: string): Promise<void> => {
   const legs = await Leg.getByInstructionId(instructionId);
@@ -147,11 +137,7 @@ const handleInstructionCreated = async (
   });
   await instruction.save();
 
-  await Promise.all(
-    legs.map((legDetails, index) =>
-      createLeg(blockId, event, instructionId, null, index, legDetails)
-    )
-  );
+  await Promise.all(legs.map((legDetails, index) => createLeg(instructionId, index, legDetails)));
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
