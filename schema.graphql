@@ -113,6 +113,7 @@ type Identity @entity {
   updatedBlock: Block!
   datetime: Date!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
+  portfolios: [Portfolio!]! @derivedFrom(field: "identity")
 }
 
 type BridgeEvent @entity {
@@ -229,11 +230,34 @@ type PortfolioJson @jsonField {
   number: Int!
 }
 
-type Leg @jsonField {
+type Portfolio @entity {
+  id: ID! # did/number
+  identity: Identity! @index(unique: false)
+  number: Int! @index(unique: false)
+  name: String
+  custodian: Identity
+  createdBlock: Block
+  updatedBlock: Block
+}
+
+type PortfolioMovement @entity {
+  id: ID!
+  from: Portfolio! @index(unique: false)
+  to: Portfolio! @index(unique: false)
+  asset: Asset!
+  amount: BigInt!
+  address: String!
+  createdBlock: Block!
+}
+
+type Leg @entity {
+  id: ID! # instructionId/legIndex
   ticker: String!
-  amount: String!
-  from: PortfolioJson!
-  to: PortfolioJson!
+  amount: BigInt!
+  from: Portfolio! @index(unique: false)
+  to: Portfolio! @index(unique: false)
+  instruction: Instruction
+  settlement: Settlement
 }
 
 type Settlement @entity {
@@ -242,18 +266,28 @@ type Settlement @entity {
   eventId: String!
   addresses: [String!]! @index(unique: false)
   result: String!
-  legs: [Leg!]!
+  legs: [Leg!]! @derivedFrom(field: "settlement")
+}
+
+type Venue @entity {
+  id: ID! # venueId
+  owner: Identity!
+  type: String!
+  details: String
 }
 
 type Instruction @entity {
-  id: ID!
+  id: ID! #instructionId
   block: Block!
   eventId: String!
   status: String!
-  venueId: String! @index(unique: false)
+  venue: Venue! @index(unique: false)
   settlementType: String!
-  legs: [Leg!]!
-  addresses: [String!]!
+  endBlock: Int
+  tradeDate: Date
+  valueDate: Date
+  addresses: [String!]! @index(unique: false)
+  legs: [Leg!]! @derivedFrom(field: "instruction")
 }
 
 type WithholdingTaxesOfCa @entity {

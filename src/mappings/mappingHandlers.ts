@@ -10,6 +10,8 @@ import { mapAsset } from './entities/mapAsset';
 import { mapClaim } from './entities/mapClaim';
 import { mapCompliance } from './entities/mapCompliance';
 import { mapIdentities } from './entities/mapIdentities';
+import { mapSettlement } from './entities/mapSettlement';
+import { mapPortfolio } from './entities/mapPortfolio';
 import { mapTransferManager } from './entities/mapTransferManager';
 import {
   extractClaimInfo,
@@ -132,6 +134,8 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapAsset(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     mapCompliance(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     mapTransferManager(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapPortfolio(...handlerArgs),
+    mapSettlement(...handlerArgs),
     // TODO @prashantasdeveloper remove the commented out code
 
     // mapStakingEvent(...handlerArgs),
@@ -143,7 +147,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     // mapFunding(...handlerArgs),
     // mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
     // mapInvestment(...handlerArgs),
-    // mapSettlement(...handlerArgs),
     // mapCorporateActions(...handlerArgs),
     // mapProposal(...handlerArgs),
     // mapTrustedClaimIssuerTicker(...handlerArgs),

@@ -1,3 +1,5 @@
+import { FunctionPropertyNames } from '@subql/types';
+
 export enum ModuleIdEnum {
   System = 'system',
   Babe = 'babe',
@@ -421,3 +423,7 @@ export enum TransferRestrictionType {
   Count = 'Count',
   Percentage = 'Percentage',
 }
+
+export type Props<T> = Omit<T, NonNullable<FunctionPropertyNames<T>>>;
+
+export type Attributes<T> = Omit<T, NonNullable<FunctionPropertyNames<T>> | 'id'>;

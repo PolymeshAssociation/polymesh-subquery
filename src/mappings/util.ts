@@ -1,7 +1,8 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateExtrinsic } from '@subql/types';
+import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
   Compliance,
@@ -97,6 +98,7 @@ export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V):
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
+
 export const serializeAccount = (item: Codec): string | null => {
   const s = item.toString();
 
@@ -247,3 +249,50 @@ export function addIfNotIncludes<T>(arr: T[], item: T): void {
     arr.push(item);
   }
 }
+
+interface MeshPortfolio {
+  did: string;
+  kind: {
+    user: number;
+  };
+}
+
+const meshPortfolioToPortfolio = ({
+  did,
+  kind: { user: number },
+}: MeshPortfolio): Pick<Portfolio, 'identityId' | 'number'> => ({
+  identityId: did,
+  number: number || 0,
+});
+
+export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
+  const meshPortfolio = JSON.parse(item.toString());
+  return meshPortfolioToPortfolio(meshPortfolio);
+};
+
+export interface LegDetails {
+  from: Pick<Portfolio, 'identityId' | 'number'>;
+  to: Pick<Portfolio, 'identityId' | 'number'>;
+  ticker: string;
+  amount: bigint;
+}
+
+export const getLegsValue = (item: Codec): LegDetails[] => {
+  const legs = JSON.parse(item.toString());
+  return legs.map(({ from: fromPortfolio, to: toPortfolio, asset: ticker, amount }) => ({
+    from: meshPortfolioToPortfolio(fromPortfolio),
+    to: meshPortfolioToPortfolio(toPortfolio),
+    ticker: hexToString(ticker),
+    amount: BigInt(amount),
+  }));
+};
+
+export const getSignerAddress = (event: SubstrateEvent): string => {
+  let signer: string;
+  if (event.extrinsic) {
+    signer = getSigner(event.extrinsic);
+  }
+  return signer;
+};
+
+export const getAmountValue = (item: Codec): bigint => getBigIntValue(item) / BigInt(1000000);

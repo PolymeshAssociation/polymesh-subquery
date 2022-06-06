@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('instructions', () => {
-  test('getting instructions', async () => {
+  it('should return first 10 instructions', async () => {
     const q = {
       query: gql`
         query {
@@ -15,6 +15,20 @@ describe('instructions', () => {
               venueId
               settlementType
               addresses
+              legs {
+                nodes {
+                  from {
+                    identityId
+                    number
+                  }
+                  to {
+                    identityId
+                    number
+                  }
+                  ticker
+                  amount
+                }
+              }
             }
           }
         }
