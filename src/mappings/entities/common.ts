@@ -1,4 +1,5 @@
-import { FunctionPropertyNames } from '@subql/types';
+import { Codec } from '@polkadot/types/types';
+import { FunctionPropertyNames, SubstrateEvent } from '@subql/types';
 
 export enum ModuleIdEnum {
   System = 'system',
@@ -424,6 +425,12 @@ export enum TransferRestrictionType {
   Percentage = 'Percentage',
 }
 
-export type Props<T> = Omit<T, NonNullable<FunctionPropertyNames<T>>>;
-
 export type Attributes<T> = Omit<T, NonNullable<FunctionPropertyNames<T>> | 'id'>;
+
+export interface HandlerArgs {
+  blockId: string;
+  eventId: EventIdEnum;
+  moduleId: ModuleIdEnum;
+  params: Codec[];
+  event: SubstrateEvent;
+}

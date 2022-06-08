@@ -1,8 +1,7 @@
-import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
-import { Codec } from '@polkadot/types/types';
 import { Authorization } from '../../types';
 import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 enum AuthorizationStatus {
   Pending = 'Pending',
@@ -26,12 +25,12 @@ const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus
   [EventIdEnum.AuthorizationRejected, AuthorizationStatus.Rejected],
 ]);
 
-export async function mapAuthorization(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
+export async function mapAuthorization({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Identity && isAuthorizationEvent(eventId)) {
     if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
@@ -40,10 +39,9 @@ export async function mapAuthorization(
       await auth.save();
     } else {
       await Authorization.create({
-        id: params[3].toString(),
-        authId: Number(params[3].toString()),
-        fromDid: getTextValue(params[0]),
-        toDid: getTextValue(params[1]),
+        id: getTextValue(params[3]),
+        fromId: getTextValue(params[0]),
+        toId: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
         data: getFirstValueFromJson(params[4]),

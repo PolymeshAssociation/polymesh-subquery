@@ -6,6 +6,7 @@ import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
   Compliance,
+  Distribution,
   FoundType,
   SecurityIdentifier,
   TransferManager,
@@ -268,6 +269,11 @@ const meshPortfolioToPortfolio = ({
 export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
   const meshPortfolio = JSON.parse(item.toString());
   return meshPortfolioToPortfolio(meshPortfolio);
+};
+
+export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'ticker'> => {
+  const { local_id: localId, ticker } = JSON.parse(item.toString());
+  return { localId, ticker };
 };
 
 export interface LegDetails {

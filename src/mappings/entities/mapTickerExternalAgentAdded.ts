@@ -1,28 +1,29 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
 import { TickerExternalAgentAdded } from '../../types';
-import { serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { getTextValue, serializeTicker } from '../util';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
-export async function mapTickerExternalAgentAdded(
-  blockId: string,
-  eventId: string,
-  moduleId: string,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapTickerExternalAgentAdded({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentAdded) {
-    const callerDid = params[0].toString();
+    const callerId = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
+
     await TickerExternalAgentAdded.create({
-      id: `${ticker}/${callerDid}`,
+      id: `${ticker}/${callerId}`,
       ticker,
-      callerDid,
-      blockId,
+      callerId,
       eventIdx: event.idx,
       datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
+
   if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentRemoved) {
     const agent = params[2].toString();
     const ticker = serializeTicker(params[1]);

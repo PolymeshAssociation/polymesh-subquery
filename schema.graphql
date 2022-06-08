@@ -87,9 +87,9 @@ type Permissions @entity {
   portfolios: PortfolioPermissions
   transactions: TransactionPermissions
   transactionGroups: [String]!
+  datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
-  datetime: Date!
 }
 
 type Account @entity {
@@ -98,8 +98,9 @@ type Account @entity {
   identity: Identity!
   eventId: String! @index(unique: false)
   permissions: Permissions!
-  block: Block!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Identity @entity {
@@ -109,68 +110,61 @@ type Identity @entity {
   secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
   eventId: String!
+  datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
-  datetime: Date!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
 }
 
 type BridgeEvent @entity {
   id: ID!
-  block: Block! @index(unique: false)
-  eventIdx: Int! @index(unique: false)
-  identityId: String!
+  identity: Identity!
   recipient: String!
   amount: BigInt!
   txHash: String! @index(unique: false)
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type StakingEvent @entity {
   id: ID!
-  block: Block! @index(unique: false)
-  eventIdx: Int! @index(unique: false)
-  stakingEventId: String! @index(unique: false)
-  date: Date! @index
-  identityId: String
-  stashAccount: String
+  stashAccount: String @index(unique: false)
+  identity: Identity
+  eventId: String! @index(unique: false)
   amount: BigInt
   nominatedValidators: [String!]
   transactionId: String
+  datetime: Date! @index
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type TickerExternalAgentAction @entity {
   id: ID!
-  block: Block! @index(unique: false)
-  eventIdx: Int! @index(unique: false)
-  ticker: String! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  caller: Identity! @index(unique: false)
   palletName: String! @index(unique: false)
   eventId: String! @index(unique: false)
-  callerDid: String! @index(unique: false)
+  eventIdx: Int!
   datetime: Date!
-}
-
-type Funding @entity {
-  id: ID!
-  block: Block!
-  ticker: String! @index(unique: false)
-  fundingName: String! @index(unique: false)
-  value: String!
-  totalIssuedInFundingRound: String!
+  createdBlock: Block! @index(unique: false)
+  updatedBlock: Block!
 }
 
 type Sto @entity {
   id: ID!
-  offeringAsset: String!
+  offeringAsset: Asset!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Authorization @entity {
   id: ID!
-  authId: Int! @index(unique: false)
   type: String! @index(unique: false)
-  fromDid: String! @index(unique: false)
-  toDid: String @index(unique: false)
+  from: Identity! @index(unique: false)
+  to: Identity @index(unique: false)
   toKey: String @index(unique: false)
   data: String
   expiry: Date @index(unique: false)
@@ -181,7 +175,6 @@ type Authorization @entity {
 
 type Investment @entity {
   id: ID!
-  block: Block!
   investor: String!
   stoId: Int! @index(unique: false)
   offeringToken: String! @index(unique: false)
@@ -189,15 +182,18 @@ type Investment @entity {
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type TickerExternalAgentAdded @entity {
-  id: ID! #ticker/caller_did
+  id: ID! # ticker/callerId
   ticker: String! @index(unique: false)
-  callerDid: String! @index(unique: false)
-  block: Block!
+  caller: Identity! @index(unique: false)
   eventIdx: Int!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 # Type can be "AgentAdded", "AgentPermissionsChanged" or "AgentRemoved".
@@ -206,23 +202,28 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
   ticker: String! @index(unique: false)
   did: String! @index(unique: false)
-  block: Block!
   eventIdx: Int!
   datetime: Date!
   type: String!
   permissions: String
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AgentGroup @entity {
   id: ID! #ticker/group_id
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
   member: String! @index(unique: false)
   group: AgentGroup! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type PortfolioJson @jsonField {
@@ -236,8 +237,8 @@ type Portfolio @entity {
   number: Int! @index(unique: false)
   name: String
   custodian: Identity
-  createdBlock: Block
-  updatedBlock: Block
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type PortfolioMovement @entity {
@@ -248,6 +249,7 @@ type PortfolioMovement @entity {
   amount: BigInt!
   address: String!
   createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Leg @entity {
@@ -258,15 +260,17 @@ type Leg @entity {
   to: Portfolio! @index(unique: false)
   instruction: Instruction
   settlement: Settlement
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Settlement @entity {
   id: ID!
-  block: Block!
-  eventId: String!
   addresses: [String!]! @index(unique: false)
   result: String!
   legs: [Leg!]! @derivedFrom(field: "settlement")
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Venue @entity {
@@ -274,11 +278,12 @@ type Venue @entity {
   owner: Identity!
   type: String!
   details: String
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Instruction @entity {
   id: ID! #instructionId
-  block: Block!
   eventId: String!
   status: String!
   venue: Venue! @index(unique: false)
@@ -288,45 +293,55 @@ type Instruction @entity {
   valueDate: Date
   addresses: [String!]! @index(unique: false)
   legs: [Leg!]! @derivedFrom(field: "instruction")
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type WithholdingTaxesOfCa @entity {
+type Distribution @entity {
   id: ID!
-  ticker: String! @index(unique: false)
+  identity: Identity!
   localId: Int! @index(unique: false)
-  datetime: Date!
-  taxes: BigInt!
+  ticker: String! @index(unique: false)
+  portfolio: Portfolio!
+  currency: String!
+  perShare: BigInt!
+  amount: BigInt!
+  remaining: BigInt!
+  paymentAt: BigInt!
+  expiresAt: BigInt
+  taxes: BigInt! # withheld tax for CA
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type HistoryOfPaymentEventsForCa @entity {
+type DistributionPayment @entity {
   id: ID!
-  block: Block!
+  distribution: Distribution!
+  target: Identity!
   eventId: String!
-  eventIdx: Int!
-  eventDid: String!
-  ticker: String! @index(unique: false)
-  localId: Int! @index(unique: false)
-  balance: BigInt!
+  amount: BigInt!
   tax: BigInt!
+  reclaimed: Boolean!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  block: Block!
-  eventIdx: Int!
   account: String!
   vote: Boolean!
   weight: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Proposal @entity {
   id: ID!
-  block: Block!
   proposer: String! @index(unique: false)
   state: String! @index(unique: false)
-  identityId: String!
+  owner: Identity!
   balance: BigInt!
   url: String
   description: String
@@ -334,6 +349,7 @@ type Proposal @entity {
   snapshotted: Boolean!
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
+  createdBlock: Block!
   updatedBlock: Block!
 }
 
@@ -347,11 +363,12 @@ type ClaimScope @entity {
   target: String! @index(unique: false)
   ticker: String
   scope: Scope
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Claim @entity {
   id: ID!
-  block: Block! @index(unique: false)
   eventIdx: Int! @index(unique: false)
   target: Identity! @index(unique: false)
   issuer: Identity! @index(unique: false)
@@ -364,12 +381,16 @@ type Claim @entity {
   scope: Scope
   cddId: String
   revokeDate: BigInt
+  createdBlock: Block! @index(unique: false)
+  updatedBlock: Block!
 }
 
 type TrustedClaimIssuerTicker @entity {
   id: ID!
   ticker: String!
   issuer: String! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type SecurityIdentifier @jsonField {
@@ -384,6 +405,8 @@ type AssetPendingOwnershipTransfer @entity {
   to: String! @index(unique: false)
   type: String! @index(unique: false)
   data: String
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type TransferManager @entity {
@@ -392,6 +415,8 @@ type TransferManager @entity {
   type: String!
   value: Int!
   exemptedEntities: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Compliance @entity {
@@ -399,6 +424,8 @@ type Compliance @entity {
   complianceId: Int!
   data: String! # This could be expanded into structured data
   asset: Asset! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AssetHolder @entity {
@@ -406,6 +433,8 @@ type AssetHolder @entity {
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AssetDocument @entity {
@@ -417,6 +446,8 @@ type AssetDocument @entity {
   type: String
   filedAt: Date
   asset: Asset! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Asset @entity {
@@ -437,4 +468,17 @@ type Asset @entity {
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
   transferManagers: [TransferManager]! @derivedFrom(field: "asset")
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Funding @entity {
+  id: ID!
+  asset: Asset! @index(unique: false)
+  fundingRound: String! @index(unique: false)
+  amount: BigInt!
+  totalFundingAmount: BigInt!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }

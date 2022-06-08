@@ -1,21 +1,22 @@
 import { Codec } from '@polkadot/types/types';
 import { Compliance } from '../../types';
 import { getComplianceValue, getNumberValue, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 import { getAsset } from './mapAsset';
 
-const handleAssetComplianceState = async (params: Codec[], isPaused: boolean) => {
+const handleAssetComplianceState = async (blockId: string, params: Codec[], isPaused: boolean) => {
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.isCompliancePaused = isPaused;
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleComplianceReset = async (params: Codec[]) => {
+const handleComplianceReset = async (blockId: string, params: Codec[]) => {
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -25,7 +26,7 @@ const handleComplianceReset = async (params: Codec[]) => {
   await Promise.all(complianceRequirements.map(({ id }) => Compliance.remove(id)));
 };
 
-const handleComplianceCreated = async (params: Codec[]) => {
+const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawCompliance] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -36,6 +37,8 @@ const handleComplianceCreated = async (params: Codec[]) => {
     complianceId,
     data,
     assetId: ticker,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
@@ -48,26 +51,30 @@ const handleComplianceRemoved = async (params: Codec[]) => {
   await Compliance.remove(`${ticker}/${complianceId}`);
 };
 
-export async function mapCompliance(
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
+export async function mapCompliance({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Compliancemanager) {
     if (eventId === EventIdEnum.AssetCompliancePaused) {
-      await handleAssetComplianceState(params, true);
+      await handleAssetComplianceState(blockId, params, true);
     }
     if (eventId === EventIdEnum.AssetComplianceResumed) {
-      await handleAssetComplianceState(params, false);
+      await handleAssetComplianceState(blockId, params, false);
     }
     if (eventId === EventIdEnum.AssetComplianceReset) {
-      await handleComplianceReset(params);
+      await handleComplianceReset(blockId, params);
     }
     if (eventId === EventIdEnum.AssetComplianceReplaced) {
-      await Promise.all([handleComplianceReset(params), handleComplianceCreated(params)]);
+      await Promise.all([
+        handleComplianceReset(blockId, params),
+        handleComplianceCreated(blockId, params),
+      ]);
     }
     if (eventId === EventIdEnum.ComplianceRequirementCreated) {
-      await handleComplianceCreated(params);
+      await handleComplianceCreated(blockId, params);
     }
     if (eventId === EventIdEnum.ComplianceRequirementRemoved) {
       await handleComplianceRemoved(params);

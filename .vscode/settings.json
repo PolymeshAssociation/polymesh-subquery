@@ -18,14 +18,22 @@
     "/0x.+/" // ignore hex values
   ],
   "cSpell.words": [
+    "Capitaldistribution",
     "chaintypes",
-    "Compliancemanager",
     "codegen",
+    "Compliancemanager",
+    "Corporateaction",
+    "Corporateballot",
+    "datetime",
     "envsubst",
+    "Externalagents",
+    "extrinsics",
     "Polkadot",
     "Polymesh",
+    "signedbyAddress",
     "snapshotted",
     "subql",
     "Subquery",
+    "Unbonded"
   ]
 }

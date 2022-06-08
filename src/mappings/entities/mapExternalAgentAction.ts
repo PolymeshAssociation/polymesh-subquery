@@ -1,30 +1,30 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
 import { Sto, TickerExternalAgentAction } from '../../types';
-import { getOrDefault, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { getOrDefault, getTextValue, serializeTicker } from '../util';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 /**
  * Subscribes to the events related to external agents
  */
-export async function mapExternalAgentAction(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapExternalAgentAction({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   const ticker = await mgr.getTicker(moduleId, eventId, blockId, params);
   if (ticker) {
     await TickerExternalAgentAction.create({
       id: `${blockId}/${event.idx}`,
-      blockId,
       eventIdx: event.idx,
-      ticker,
+      assetId: ticker,
       palletName: moduleId,
       eventId,
-      callerDid: params[0].toString(),
+      callerId: getTextValue(params[0]),
       datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
 }
@@ -244,7 +244,7 @@ class ExternalAgentEventsManager {
         async params => {
           const stoId = params[1].toString();
           const sto = await Sto.get(stoId);
-          return sto.offeringAsset;
+          return sto.offeringAssetId;
         }
       );
     return eventsManager;

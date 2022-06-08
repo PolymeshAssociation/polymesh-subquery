@@ -1,18 +1,29 @@
 import { Vec } from '@polkadot/types/codec';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
-import { AnyTuple, Codec } from '@polkadot/types/types';
+import { AnyTuple } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
-import { EventIdEnum, ModuleIdEnum } from './entities/common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './entities/common';
 import { mapAsset } from './entities/mapAsset';
+import { mapAuthorization } from './entities/mapAuthorization';
+import { mapBridgeEvent } from './entities/mapBridgeEvent';
 import { mapClaim } from './entities/mapClaim';
 import { mapCompliance } from './entities/mapCompliance';
+import { mapCorporateActions } from './entities/mapCorporateActions';
+import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
 import { mapIdentities } from './entities/mapIdentities';
-import { mapSettlement } from './entities/mapSettlement';
+import { mapInvestment } from './entities/mapInvestment';
 import { mapPortfolio } from './entities/mapPortfolio';
+import { mapProposal } from './entities/mapProposal';
+import { mapSettlement } from './entities/mapSettlement';
+import { mapStakingEvent } from './entities/mapStakingEvent';
+import { mapSto } from './entities/mapSto';
+import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
+import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
+import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -121,35 +132,32 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   const eventId = event.event.method;
   const args = event.event.data.toArray();
 
-  const handlerArgs: [string, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
+  const handlerArgs: HandlerArgs = {
     blockId,
-    eventId as EventIdEnum,
-    moduleId as ModuleIdEnum,
-    args,
+    eventId: eventId as EventIdEnum,
+    moduleId: moduleId as ModuleIdEnum,
+    params: args,
     event,
-  ];
+  };
 
   const handlerPromises = [
-    mapIdentities(...handlerArgs),
-    mapAsset(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapCompliance(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapTransferManager(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapPortfolio(...handlerArgs),
-    mapSettlement(...handlerArgs),
-    // TODO @prashantasdeveloper remove the commented out code
-
-    // mapStakingEvent(...handlerArgs),
-    // mapBridgeEvent(...handlerArgs),
-    // mapSto(eventId, moduleId, args),
-    // mapExternalAgentAction(...handlerArgs),
-    // mapTickerExternalAgentAdded(...handlerArgs),
-    // mapTickerExternalAgentHistory(...handlerArgs),
-    // mapFunding(...handlerArgs),
-    // mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    // mapInvestment(...handlerArgs),
-    // mapCorporateActions(...handlerArgs),
-    // mapProposal(...handlerArgs),
-    // mapTrustedClaimIssuerTicker(...handlerArgs),
+    mapIdentities(handlerArgs),
+    mapAsset(handlerArgs),
+    mapCompliance(handlerArgs),
+    mapTransferManager(handlerArgs),
+    mapPortfolio(handlerArgs),
+    mapSettlement(handlerArgs),
+    mapStakingEvent(handlerArgs),
+    mapBridgeEvent(handlerArgs),
+    mapSto(handlerArgs),
+    mapExternalAgentAction(handlerArgs),
+    mapTickerExternalAgentAdded(handlerArgs),
+    mapTickerExternalAgentHistory(handlerArgs),
+    mapAuthorization(handlerArgs),
+    mapInvestment(handlerArgs),
+    mapCorporateActions(handlerArgs),
+    mapProposal(handlerArgs),
+    mapTrustedClaimIssuerTicker(handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -168,7 +176,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   } = extractClaimInfo(harvesterLikeArgs);
 
   handlerPromises.push(
-    mapClaim(...handlerArgs, {
+    mapClaim(handlerArgs, {
       claimExpiry,
       claimIssuer,
       claimScope,

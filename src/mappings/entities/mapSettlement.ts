@@ -10,7 +10,7 @@ import {
   getTextValue,
   LegDetails,
 } from '../util';
-import { EventIdEnum, ModuleIdEnum, Props } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 export enum SettlementResultEnum {
   None = 'None',
@@ -46,6 +46,7 @@ const instructionResultMap = {
 };
 
 export const createLeg = async (
+  blockId: string,
   instructionId: string,
   legIndex: number,
   { ticker, amount, from, to }: LegDetails
@@ -57,14 +58,21 @@ export const createLeg = async (
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     instructionId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 
-const updateLegs = async (instructionId: string, settlementId: string): Promise<void> => {
+const updateLegs = async (
+  blockId: string,
+  instructionId: string,
+  settlementId: string
+): Promise<void> => {
   const legs = await Leg.getByInstructionId(instructionId);
 
   await Promise.all(
     legs.map(leg => {
       leg.settlementId = settlementId;
+      leg.updatedBlockId = blockId;
       leg.save();
     })
   );
@@ -80,7 +88,7 @@ const getVenue = async (venueId: string): Promise<Venue> => {
   return venue;
 };
 
-const handleVenueCreated = async (params: Codec[]): Promise<void> => {
+const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [rawIdentity, rawVenueId, rawDetails, rawType] = params;
 
   await Venue.create({
@@ -88,23 +96,27 @@ const handleVenueCreated = async (params: Codec[]): Promise<void> => {
     ownerId: getTextValue(rawIdentity),
     details: getTextValue(rawDetails),
     type: getTextValue(rawType),
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
-const handleVenueDetailsUpdated = async (params: Codec[]): Promise<void> => {
+const handleVenueDetailsUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawVenueId, rawDetails] = params;
 
   const venue = await getVenue(getTextValue(rawVenueId));
   venue.details = getTextValue(rawDetails);
+  venue.updatedBlockId = blockId;
 
   await venue.save();
 };
 
-const handleVenueTypeUpdated = async (params: Codec[]): Promise<void> => {
+const handleVenueTypeUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawVenueId, rawType] = params;
 
   const venue = await getVenue(getTextValue(rawVenueId));
   venue.type = getTextValue(rawType);
+  venue.updatedBlockId = blockId;
 
   await venue.save();
 };
@@ -126,7 +138,6 @@ const handleInstructionCreated = async (
   const instruction = Instruction.create({
     id: instructionId,
     eventId,
-    blockId,
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(rawVenueId),
     settlementType: getFirstKeyFromJson(rawSettlementType),
@@ -134,10 +145,14 @@ const handleInstructionCreated = async (
     tradeDate: getDateValue(rawTradeDate),
     valueDate: getDateValue(rawValueDate),
     addresses: [address],
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   });
   await instruction.save();
 
-  await Promise.all(legs.map((legDetails, index) => createLeg(instructionId, index, legDetails)));
+  await Promise.all(
+    legs.map((legDetails, index) => createLeg(blockId, instructionId, index, legDetails))
+  );
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
@@ -150,7 +165,11 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const handleInstructionUpdate = async (params: Codec[], event: SubstrateEvent): Promise<void> => {
+const handleInstructionUpdate = async (
+  blockId: string,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
   const address = getSignerAddress(event);
 
   const [, , rawInstructionId] = params;
@@ -160,12 +179,10 @@ const handleInstructionUpdate = async (params: Codec[], event: SubstrateEvent): 
 
   if (address && !instruction.addresses.includes(address)) {
     instruction.addresses.push(address);
+    instruction.updatedBlockId = blockId;
     await instruction.save();
   }
 };
-
-export const createSettlement = (props: Props<Settlement>): Promise<void> =>
-  Settlement.create(props).save();
 
 const handleInstructionFinalizedEvent = async (
   blockId: string,
@@ -186,39 +203,39 @@ const handleInstructionFinalizedEvent = async (
   }
 
   const settlementId = `${blockId}/${event.idx}`;
-  const settlement = createSettlement({
+  const settlement = Settlement.create({
     id: settlementId,
-    eventId,
-    blockId,
     result: instruction.status,
     addresses: instruction.addresses,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   });
 
-  await Promise.all([settlement, instruction.save()]);
+  await Promise.all([settlement.save(), instruction.save()]);
 
   if (eventId === EventIdEnum.InstructionExecuted) {
-    await updateLegs(instructionId, settlementId);
+    await updateLegs(blockId, instructionId, settlementId);
   }
 };
 
-export async function mapSettlement(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapSettlement({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Settlement) {
     if (eventId === EventIdEnum.VenueCreated) {
-      await handleVenueCreated(params);
+      await handleVenueCreated(blockId, params);
     }
 
     if (eventId === EventIdEnum.VenueDetailsUpdated) {
-      await handleVenueDetailsUpdated(params);
+      await handleVenueDetailsUpdated(blockId, params);
     }
 
     if (eventId === EventIdEnum.VenueTypeUpdated) {
-      await handleVenueTypeUpdated(params);
+      await handleVenueTypeUpdated(blockId, params);
     }
 
     if (eventId === EventIdEnum.InstructionCreated) {
@@ -226,7 +243,7 @@ export async function mapSettlement(
     }
 
     if (updateEvents.includes(eventId)) {
-      await handleInstructionUpdate(params, event);
+      await handleInstructionUpdate(blockId, params, event);
     }
 
     if (finalizedEvents.includes(eventId)) {

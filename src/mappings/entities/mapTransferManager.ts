@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { TransferManager } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 const getTransferManageId = (
   ticker: string,
@@ -14,7 +14,7 @@ const getTransferManager = (
 ): Promise<TransferManager | undefined> =>
   TransferManager.get(getTransferManageId(ticker, restriction));
 
-const handleTransferManagerAdded = async (params: Codec[]) => {
+const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawManager] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -26,6 +26,8 @@ const handleTransferManagerAdded = async (params: Codec[]) => {
     type,
     value,
     exemptedEntities: [],
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
@@ -38,7 +40,7 @@ const handleTransferManagerRemoved = async (params: Codec[]) => {
   await TransferManager.remove(`${ticker}/${type}/${value}`);
 };
 
-const handleExemptionsAdded = async (params: Codec[]): Promise<void> => {
+const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -51,12 +53,13 @@ const handleExemptionsAdded = async (params: Codec[]): Promise<void> => {
     transferManager.exemptedEntities = [
       ...new Set<string>([...parsedExemptions, ...transferManager.exemptedEntities]),
     ];
+    transferManager.updatedBlockId = blockId;
 
     await transferManager.save();
   }
 };
 
-const handleExemptionsRemoved = async (params: Codec[]) => {
+const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -69,28 +72,30 @@ const handleExemptionsRemoved = async (params: Codec[]) => {
     transferManager.exemptedEntities = transferManager.exemptedEntities.filter(
       e => !parsedExemptions.includes(e)
     );
+    transferManager.updatedBlockId = blockId;
 
     await transferManager.save();
   }
 };
 
-export async function mapTransferManager(
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
+export async function mapTransferManager({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Statistics) {
     if (eventId === EventIdEnum.TransferManagerAdded) {
-      await handleTransferManagerAdded(params);
+      await handleTransferManagerAdded(blockId, params);
     }
     if (eventId === EventIdEnum.TransferManagerRemoved) {
       await handleTransferManagerRemoved(params);
     }
     if (eventId === EventIdEnum.ExemptionsAdded) {
-      await handleExemptionsAdded(params);
+      await handleExemptionsAdded(blockId, params);
     }
     if (eventId === EventIdEnum.ExemptionsRemoved) {
-      await handleExemptionsRemoved(params);
+      await handleExemptionsRemoved(blockId, params);
     }
   }
 }
