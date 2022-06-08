@@ -16,7 +16,7 @@ const handleAssetComplianceState = async (blockId: string, params: Codec[], isPa
   await asset.save();
 };
 
-const handleComplianceReset = async (blockId: string, params: Codec[]) => {
+const handleComplianceReset = async (params: Codec[]) => {
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -65,13 +65,10 @@ export async function mapCompliance({
       await handleAssetComplianceState(blockId, params, false);
     }
     if (eventId === EventIdEnum.AssetComplianceReset) {
-      await handleComplianceReset(blockId, params);
+      await handleComplianceReset(params);
     }
     if (eventId === EventIdEnum.AssetComplianceReplaced) {
-      await Promise.all([
-        handleComplianceReset(blockId, params),
-        handleComplianceCreated(blockId, params),
-      ]);
+      await Promise.all([handleComplianceReset(params), handleComplianceCreated(blockId, params)]);
     }
     if (eventId === EventIdEnum.ComplianceRequirementCreated) {
       await handleComplianceCreated(blockId, params);

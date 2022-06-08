@@ -119,7 +119,7 @@ const handleDocumentAdded = async (blockId: string, params: Codec[]): Promise<vo
   }).save();
 };
 
-const handleDocumentRemoved = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleDocumentRemoved = async (params: Codec[]): Promise<void> => {
   const [, rawTicker, rawDocId] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -294,7 +294,7 @@ export async function mapAsset({
     await handleDocumentAdded(blockId, params);
   }
   if (eventId === EventIdEnum.DocumentRemoved) {
-    await handleDocumentRemoved(blockId, params);
+    await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.Issued) {
     await handleIssued(blockId, params, event);
