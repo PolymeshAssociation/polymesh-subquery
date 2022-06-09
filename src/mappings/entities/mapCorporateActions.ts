@@ -59,7 +59,7 @@ const handleBenefitClaimed = async (
   const tax = getBigIntValue(rawTax);
 
   const distribution = await Distribution.get(`${assetId}/${localId}`);
-  distribution.taxes += (amount * tax) / BigInt(1000000);
+  distribution.taxes += amount * tax;
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({

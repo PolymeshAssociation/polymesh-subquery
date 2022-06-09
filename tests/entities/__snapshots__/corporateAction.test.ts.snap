@@ -27,7 +27,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Distribution",
-        "taxes": "1500",
+        "taxes": "1500000000",
       },
     ],
   },
