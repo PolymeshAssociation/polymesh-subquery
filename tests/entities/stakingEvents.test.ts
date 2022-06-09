@@ -10,8 +10,8 @@ describe('stakingEvents', () => {
         query {
           stakingEvents(first: 10) {
             nodes {
-              stakingEventId
-              date
+              eventId
+              datetime
               identityId
               stashAccount
               amount
@@ -32,10 +32,10 @@ describe('stakingEvents', () => {
     const q = {
       query: gql`
         query {
-          stakingEvents(filter: { stakingEventId: { equalTo: "Nominated" } }, first: 10) {
+          stakingEvents(filter: { eventId: { equalTo: "Nominated" } }, first: 10) {
             nodes {
-              stakingEventId
-              date
+              eventId
+              datetime
               identityId
               stashAccount
               amount
@@ -65,8 +65,8 @@ describe('stakingEvents', () => {
             first: 10
           ) {
             nodes {
-              stakingEventId
-              date
+              eventId
+              datetime
               identityId
               stashAccount
               amount

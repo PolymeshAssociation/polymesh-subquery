@@ -15,8 +15,10 @@ describe('bridgeEvents', () => {
             }
           ) {
             nodes {
-              blockId
-              eventIdx
+              createdBlockId
+              recipient
+              amount
+              identityId
             }
           }
         }

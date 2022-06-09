@@ -47,8 +47,8 @@ export async function mapTickerExternalAgentHistory({
       promises.push(
         TickerExternalAgentHistory.create({
           id: `${blockId}/${eventIdx}/${member.member}`,
-          ticker,
-          did: member.member,
+          assetId: ticker,
+          identityId: member.member,
           eventIdx,
           datetime: event.block.timestamp,
           type: 'AgentPermissionsChanged',
@@ -113,8 +113,8 @@ export async function mapTickerExternalAgentHistory({
       removeMember(did, ticker),
       TickerExternalAgentHistory.create({
         id: `${blockId}/${eventIdx}/${did}`,
-        ticker,
-        did,
+        assetId: ticker,
+        identityId: did,
         eventIdx,
         datetime: event.block.timestamp,
         type: 'AgentRemoved',
@@ -142,8 +142,8 @@ const addTickerExternalAgentHistory = async (
   });
   await TickerExternalAgentHistory.create({
     id: `${blockId}/${eventIdx}/${did}`,
-    ticker,
-    did,
+    assetId: ticker,
+    identityId: did,
     eventIdx,
     datetime: event.block.timestamp,
     type,

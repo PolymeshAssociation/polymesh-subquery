@@ -47,7 +47,7 @@ describe('accounts', () => {
               identityId
               eventId
               permissionsId
-              blockId
+              createdBlockId
               datetime
             }
           }
@@ -78,7 +78,7 @@ describe('accounts', () => {
               identityId
               eventId
               permissionsId
-              blockId
+              createdBlockId
               datetime
               identity {
                 did
@@ -159,7 +159,7 @@ describe('identities', () => {
               nodes {
                 address
                 eventId
-                blockId
+                createdBlockId
                 permissions {
                   assets
                   portfolios

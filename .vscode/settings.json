@@ -28,6 +28,7 @@
     "envsubst",
     "Externalagents",
     "extrinsics",
+    "fundings",
     "Polkadot",
     "Polymesh",
     "signedbyAddress",

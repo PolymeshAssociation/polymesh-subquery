@@ -10,7 +10,7 @@ describe('investments', () => {
           investments(filter: { offeringToken: { equalTo: "14TICKER" }, stoId: { equalTo: 0 } }) {
             totalCount
             nodes {
-              blockId
+              createdBlockId
               investor
               stoId
               offeringToken

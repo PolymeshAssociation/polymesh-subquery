@@ -188,7 +188,7 @@ type Investment @entity {
 
 type TickerExternalAgentAdded @entity {
   id: ID! # ticker/callerId
-  ticker: String! @index(unique: false)
+  asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
   eventIdx: Int!
   datetime: Date!
@@ -200,8 +200,8 @@ type TickerExternalAgentAdded @entity {
 # permissions is only present in "AgentAdded" and "AgentPermissionsChanged".
 type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
-  ticker: String! @index(unique: false)
-  did: String! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  identity: Identity! @index(unique: false)
   eventIdx: Int!
   datetime: Date!
   type: String!
@@ -301,7 +301,7 @@ type Distribution @entity {
   id: ID!
   identity: Identity!
   localId: Int! @index(unique: false)
-  ticker: String! @index(unique: false)
+  asset: Asset! @index(unique: false)
   portfolio: Portfolio!
   currency: String!
   perShare: BigInt!

@@ -1,4 +1,4 @@
-import { getAmountValue, getNumberValue, getTextValue } from '../util';
+import { getBigIntValue, getNumberValue, getTextValue } from '../util';
 import { Investment } from './../../types';
 import { serializeTicker } from './../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
@@ -20,8 +20,8 @@ export async function mapInvestment({
       stoId: getNumberValue(params[1]),
       offeringToken: serializeTicker(params[2]),
       raiseToken: serializeTicker(params[3]),
-      offeringTokenAmount: getAmountValue(params[4]),
-      raiseTokenAmount: getAmountValue(params[5]),
+      offeringTokenAmount: getBigIntValue(params[4]),
+      raiseTokenAmount: getBigIntValue(params[5]),
       datetime: event.block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,

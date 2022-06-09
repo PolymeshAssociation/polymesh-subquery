@@ -1,13 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Distribution, DistributionPayment } from '../../types';
-import {
-  getAmountValue,
-  getBigIntValue,
-  getCaIdValue,
-  getPortfolioValue,
-  getTextValue,
-} from '../util';
+import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 /**
@@ -34,33 +28,17 @@ export async function mapCorporateActions({
 }
 
 const handleDistributionCreated = async (blockId: string, params: Codec[]): Promise<void> => {
-  const [
-    rawDid,
-    rawCaId,
-    rawPortfolio,
-    rawCurrency,
-    rawPerShare,
-    rawAmount,
-    rawRemaining,
-    rawPaymentAt,
-    rawExpiresAt,
-  ] = params;
+  const [rawDid, rawCaId, rawDistribution] = params;
 
-  const { localId, ticker } = getCaIdValue(rawCaId);
-  const { identityId, number } = getPortfolioValue(rawPortfolio);
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const distributionDetails = getDistributionValue(rawDistribution);
 
   await Distribution.create({
-    id: `${ticker}/${localId}`,
+    id: `${assetId}/${localId}`,
     identityId: getTextValue(rawDid),
     localId,
-    ticker,
-    portfolioId: `${identityId}/${number}`,
-    currency: getTextValue(rawCurrency),
-    perShare: getAmountValue(rawPerShare),
-    amount: getAmountValue(rawAmount),
-    remaining: getAmountValue(rawRemaining),
-    paymentAt: getBigIntValue(rawPaymentAt),
-    expiresAt: getBigIntValue(rawExpiresAt),
+    assetId,
+    ...distributionDetails,
     taxes: BigInt(0),
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -73,20 +51,20 @@ const handleBenefitClaimed = async (
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  const [rawEventDid, , rawCaId, rawAmount, rawTax] = params;
+  const [rawEventDid, , rawCaId, , rawAmount, rawTax] = params;
 
   const targetId = getTextValue(rawEventDid);
-  const { localId, ticker } = getCaIdValue(rawCaId);
-  const amount = getAmountValue(rawAmount);
-  const tax = getBigIntValue(rawTax) / BigInt(10000);
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const amount = getBigIntValue(rawAmount);
+  const tax = getBigIntValue(rawTax);
 
-  const distribution = await Distribution.get(`${ticker}/${localId}`);
-  distribution.taxes += amount * tax;
+  const distribution = await Distribution.get(`${assetId}/${localId}`);
+  distribution.taxes += (amount * tax) / BigInt(1000000);
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({
     id: `${blockId}/${event.idx}`,
-    distributionId: `${ticker}/${localId}`,
+    distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
     amount,
@@ -109,12 +87,12 @@ const handleReclaimed = async (
   const [rawEventDid, rawCaId, rawAmount] = params;
 
   const targetId = getTextValue(rawEventDid);
-  const { localId, ticker } = getCaIdValue(rawCaId);
-  const amount = getAmountValue(rawAmount);
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const amount = getBigIntValue(rawAmount);
 
   await DistributionPayment.create({
     id: `${blockId}/${event.idx}`,
-    distributionId: `${ticker}/${localId}`,
+    distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
     amount,

@@ -2,13 +2,13 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe('withholdingTaxesOfCas', () => {
-  test('should return the witholding taxes', async () => {
+describe('distributions', () => {
+  test('should return the withholding taxes for a distribution', async () => {
     const q = {
       variables: { ticker: '13TICKER' },
       query: gql`
         query q($ticker: String!) {
-          withholdingTaxesOfCas(filter: { ticker: { equalTo: $ticker }, localId: { equalTo: 0 } }) {
+          distributions(filter: { assetId: { equalTo: $ticker }, localId: { equalTo: 0 } }) {
             nodes {
               taxes
             }
@@ -24,26 +24,21 @@ describe('withholdingTaxesOfCas', () => {
   });
 });
 
-describe('historyofPaymentEventsForCas', () => {
-  test('should get payment history', async () => {
+describe('distributionPayments', () => {
+  test('should get payment history for a distribution', async () => {
     const q = {
-      variables: { ticker: '13TICKER' },
+      variables: { caId: '13TICKER/0' },
       query: gql`
-        query q($ticker: String!) {
-          historyOfPaymentEventsForCas(
-            filter: { ticker: { equalTo: $ticker }, localId: { equalTo: 0 } }
-          ) {
+        query q($caId: String!) {
+          distributionPayments(filter: { distributionId: { equalTo: $caId } }) {
             totalCount
             nodes {
-              balance
-              blockId
+              amount
+              createdBlockId
               datetime
-              eventDid
+              eventDid: targetId
               eventId
-              eventIdx
-              localId
               tax
-              ticker
             }
           }
         }

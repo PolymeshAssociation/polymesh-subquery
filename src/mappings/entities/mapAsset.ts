@@ -2,13 +2,14 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Asset, AssetDocument, AssetHolder, Funding } from '../../types';
 import {
-  getAmountValue,
+  getBigIntValue,
   getBooleanValue,
   getDocValue,
   getNumberValue,
   getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
+  removeNullChars,
   serializeTicker,
 } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
@@ -55,7 +56,7 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
   // Name isn't present on the event so we need to query storage
   // See MESH-1808 on Jira for the status on including name in the event
   const rawName = await api.query.asset.assetNames(rawTicker);
-  const name = getTextValue(rawName);
+  const name = removeNullChars(getTextValue(rawName));
 
   await Asset.create({
     id: ticker,
@@ -160,10 +161,10 @@ const handleIssued = async (
   const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = getAmountValue(rawAmount);
+  const issuedAmount = getBigIntValue(rawAmount);
 
   const fundingRound = getTextValue(rawFundingRound);
-  const totalFundingAmount = getAmountValue(rawTotalFundingAmount);
+  const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
@@ -173,25 +174,30 @@ const handleIssued = async (
   assetOwner.amount += issuedAmount;
   assetOwner.updatedBlockId = blockId;
 
-  const funding = Funding.create({
-    id: `${blockId}/${event.idx}`,
-    assetId: ticker,
-    fundingRound,
-    amount: issuedAmount,
-    totalFundingAmount,
-    datetime: event.block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
+  const promises = [asset.save(), assetOwner.save()];
+  if (fundingRound) {
+    promises.push(
+      Funding.create({
+        id: `${blockId}/${event.idx}`,
+        assetId: ticker,
+        fundingRound,
+        amount: issuedAmount,
+        totalFundingAmount,
+        datetime: event.block.timestamp,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save()
+    );
+  }
 
-  await Promise.all([asset.save(), assetOwner.save(), funding.save()]);
+  await Promise.all(promises);
 };
 
 const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = getAmountValue(rawAmount);
+  const issuedAmount = getBigIntValue(rawAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply -= issuedAmount;
@@ -232,7 +238,7 @@ const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
-  const transferAmount = getAmountValue(rawAmount);
+  const transferAmount = getBigIntValue(rawAmount);
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);

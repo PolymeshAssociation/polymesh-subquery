@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { Proposal, ProposalVote } from '../../types';
 import {
-  getAmountValue,
   getBigIntValue,
   getBooleanValue,
   getFirstValueFromJson,
@@ -27,7 +26,7 @@ const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<
     proposer: getFirstValueFromJson(rawProposer),
     ownerId: getTextValue(rawDid),
     state: ProposalState.Pending,
-    balance: getAmountValue(rawBalance),
+    balance: getBigIntValue(rawBalance),
     url: getTextValue(rawUrl),
     description: getTextValue(rawDescription),
     snapshotted: false,

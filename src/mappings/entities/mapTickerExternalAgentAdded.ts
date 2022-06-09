@@ -15,7 +15,7 @@ export async function mapTickerExternalAgentAdded({
 
     await TickerExternalAgentAdded.create({
       id: `${ticker}/${callerId}`,
-      ticker,
+      assetId: ticker,
       callerId,
       eventIdx: event.idx,
       datetime: event.block.timestamp,
