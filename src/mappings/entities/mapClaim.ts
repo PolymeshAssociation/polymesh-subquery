@@ -1,8 +1,7 @@
-import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Claim, ClaimScope } from '../../types';
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 enum ClaimScopeTypeEnum {
   Identity = 'Identity',
@@ -30,11 +29,7 @@ interface Scope {
  * Subscribes to the Claim events
  */
 export async function mapClaim(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent,
+  { blockId, eventId, moduleId, params, event }: HandlerArgs,
   claimParams: ClaimParams
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.Identity) {
@@ -50,7 +45,7 @@ export async function mapClaim(
 
     if (eventId === EventIdEnum.AssetDidRegistered) {
       const ticker = serializeTicker(params[1]);
-      await handleScopes(target, ticker);
+      await handleScopes(blockId, target, ticker);
     }
   }
 }
@@ -100,7 +95,6 @@ const handleClaimAdded = async (
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId),
-    blockId,
     eventIdx: event.idx,
     targetId: target,
     issuerId: claimIssuer,
@@ -112,10 +106,13 @@ const handleClaimAdded = async (
     jurisdiction,
     cddId,
     filterExpiry,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 
   if (scope) {
     await handleScopes(
+      blockId,
       target,
       scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
       scope
@@ -141,12 +138,19 @@ const handleClaimRevoked = async (
   await claim.save();
 };
 
-const handleScopes = async (target: string, ticker?: string, scope?: Scope): Promise<void> => {
+const handleScopes = async (
+  blockId: string,
+  target: string,
+  ticker?: string,
+  scope?: Scope
+): Promise<void> => {
   const id = `${target}/${scope?.value || ticker}`;
   await ClaimScope.create({
     id,
     target,
     ticker,
     scope,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };

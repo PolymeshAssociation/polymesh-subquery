@@ -9,16 +9,16 @@ describe('authorizations', () => {
         query {
           authorizations(first: 100) {
             nodes {
-              createdBlock
-              authId
+              authId: id
               type
-              fromDid
-              toDid
+              fromDid: fromId
+              toDid: toId
               toKey
               data
               expiry
               status
-              updatedBlock
+              createdBlockId
+              updatedBlockId
             }
           }
         }
@@ -40,16 +40,16 @@ describe('authorizations', () => {
             filter: { type: { in: ["BecomeAgent", "AddMultiSigSigner"] } }
           ) {
             nodes {
-              createdBlock
-              authId
+              authId: id
               type
-              fromDid
-              toDid
+              fromDid: fromId
+              toDid: toId
               toKey
               data
               expiry
               status
-              updatedBlock
+              createdBlockId
+              updatedBlockId
             }
           }
         }

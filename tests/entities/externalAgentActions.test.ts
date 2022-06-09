@@ -8,12 +8,12 @@ describe('tickerExternalAgentActions', () => {
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(filter: { ticker: { equalTo: $ticker } }) {
+          tickerExternalAgentActions(filter: { assetId: { equalTo: $ticker } }) {
             totalCount
             nodes {
               palletName
               eventId
-              callerDid
+              callerId
             }
           }
         }
@@ -31,12 +31,12 @@ describe('tickerExternalAgentActions', () => {
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(
-            filter: { ticker: { equalTo: $ticker }, eventId: { equalTo: "FundraiserFrozen" } }
+            filter: { assetId: { equalTo: $ticker }, eventId: { equalTo: "FundraiserFrozen" } }
           ) {
             nodes {
               palletName
               eventId
-              callerDid
+              callerId
             }
           }
         }
@@ -54,12 +54,12 @@ describe('tickerExternalAgentActions', () => {
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(
-            filter: { ticker: { equalTo: $ticker }, palletName: { equalTo: "compliancemanager" } }
+            filter: { assetId: { equalTo: $ticker }, palletName: { equalTo: "compliancemanager" } }
           ) {
             nodes {
               palletName
               eventId
-              callerDid
+              callerId
             }
           }
         }
@@ -79,8 +79,8 @@ describe('tickerExternalAgentActions', () => {
         query q($ticker: String!) {
           tickerExternalAgentActions(
             filter: {
-              ticker: { equalTo: $ticker }
-              callerDid: {
+              assetId: { equalTo: $ticker }
+              callerId: {
                 equalTo: "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c"
               }
             }
@@ -88,7 +88,7 @@ describe('tickerExternalAgentActions', () => {
             nodes {
               palletName
               eventId
-              callerDid
+              callerId
             }
           }
         }

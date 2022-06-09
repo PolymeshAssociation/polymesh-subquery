@@ -12,7 +12,7 @@ describe('proposals', () => {
             nodes {
               id
               proposer
-              identityId
+              ownerId
               state
               url
               description
@@ -46,7 +46,7 @@ describe('proposals', () => {
           proposal(id: "1") {
             id
             proposer
-            identityId
+            ownerId
             state
             url
             description
@@ -81,9 +81,8 @@ describe('proposalVotes', () => {
             totalCount
             nodes {
               id
-              blockId
+              createdBlockId
               weight
-              eventIdx
               account
             }
           }

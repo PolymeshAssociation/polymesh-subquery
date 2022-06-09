@@ -1,5 +1,4 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
 import {
   Account,
   AssetPermissions,
@@ -9,19 +8,19 @@ import {
   TransactionPermissions,
 } from '../../types';
 import { getTextValue } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 import { createPortfolio } from './mapPortfolio';
 
 /**
  * Subscribes to the Identities related events
  */
-export async function mapIdentities(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapIdentities({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   const datetime = event.block.timestamp;
 
   if (moduleId === ModuleIdEnum.Identity) {
@@ -68,8 +67,11 @@ const handleDidCreated = async (
   params: Codec[],
   datetime: Date
 ): Promise<void> => {
-  const did = getTextValue(params[0]);
-  const address = getTextValue(params[1]);
+  const [rawDid, rawAddress] = params;
+
+  const did = getTextValue(rawDid);
+  const address = getTextValue(rawAddress);
+
   const identity = Identity.create({
     id: did,
     did,
@@ -98,11 +100,17 @@ const handleDidCreated = async (
     permissionsId: address,
     eventId,
     address,
-    blockId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
     datetime,
   }).save();
 
-  const defaultPortfolio = createPortfolio({ identityId: did, number: 0, createdBlockId: blockId });
+  const defaultPortfolio = createPortfolio({
+    identityId: did,
+    number: 0,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
 
   await Promise.all([identity, permissions, account, defaultPortfolio]);
 };
@@ -170,18 +178,18 @@ const handleSecondaryKeysPermissionsUpdated = async (
   blockId: string,
   params: Codec[]
 ): Promise<void> => {
-  await getIdentity(params[0]);
+  const [, rawSignerDetails, , rawUpdatedPermissions] = params;
 
   const {
     signer: { account: address },
-  } = JSON.parse(params[1].toString());
+  } = JSON.parse(rawSignerDetails.toString());
 
   const permissions = await Permissions.get(address);
   if (!permissions) {
     throw new Error(`Permissions for account ${address} were not found`);
   }
 
-  const updatedPermissions = getPermissions(JSON.parse(params[3].toString()));
+  const updatedPermissions = getPermissions(JSON.parse(rawUpdatedPermissions.toString()));
 
   Object.assign(permissions, {
     ...updatedPermissions,
@@ -192,9 +200,9 @@ const handleSecondaryKeysPermissionsUpdated = async (
 };
 
 const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
-  await getIdentity(params[0]);
+  const [, rawAccounts] = params;
 
-  const accounts = JSON.parse(params[1].toString());
+  const accounts = JSON.parse(rawAccounts.toString());
 
   const removePromises = accounts.map(({ account }) => Account.remove(account));
 
@@ -207,7 +215,8 @@ const handleSecondaryKeysFrozen = async (
   params: Codec[],
   frozen: boolean
 ): Promise<void> => {
-  const identity = await getIdentity(params[0]);
+  const [rawDid] = params;
+  const identity = await getIdentity(rawDid);
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -224,9 +233,11 @@ const handleSecondaryKeysAdded = async (
   params: Codec[],
   datetime: Date
 ): Promise<void> => {
-  const { id: identityId } = await getIdentity(params[0]);
+  const [rawDid, rawAccounts] = params;
 
-  const accounts = JSON.parse(params[1].toString());
+  const { id: identityId } = await getIdentity(rawDid);
+
+  const accounts = JSON.parse(rawAccounts.toString());
 
   const promises = [];
 
@@ -253,7 +264,8 @@ const handleSecondaryKeysAdded = async (
         identityId,
         permissionsId: address,
         eventId,
-        blockId,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
         datetime,
       }).save()
     );

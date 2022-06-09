@@ -11,7 +11,7 @@ Object {
           "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
           "0x445bc6587e10fdb738384afe436aeac71f8b3b43ffa35ad732df57a75af9c631",
         ],
-        "blockId": "259",
+        "createdBlockId": "259",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -45,7 +45,7 @@ Object {
           "0xfc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
           "0x3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
         ],
-        "blockId": "288",
+        "createdBlockId": "288",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -136,7 +136,7 @@ Object {
           "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
           "0x9cf9275b33172c4314f15a677f5382346ba4bf984fb86adaadf45eb3f1008442",
         ],
-        "blockId": "324",
+        "createdBlockId": "324",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -167,7 +167,7 @@ Object {
           "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
           "0x7e2b6c2251327adee2637729546e952c183f381712a805db885ebfdd4117b022",
         ],
-        "blockId": "352",
+        "createdBlockId": "352",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -198,7 +198,7 @@ Object {
           "0x16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
           "0xd2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
         ],
-        "blockId": "377",
+        "createdBlockId": "377",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -228,7 +228,7 @@ Object {
         "addresses": Array [
           "0x16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
         ],
-        "blockId": "383",
+        "createdBlockId": "383",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -273,7 +273,7 @@ Object {
         "addresses": Array [
           "0xd2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
         ],
-        "blockId": "384",
+        "createdBlockId": "384",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [

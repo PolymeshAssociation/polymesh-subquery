@@ -10,7 +10,7 @@ describe('settlements', () => {
           settlements(first: 10) {
             totalCount
             nodes {
-              blockId
+              createdBlockId
               addresses
               legs {
                 nodes {
@@ -53,7 +53,7 @@ describe('settlements', () => {
             nodes {
               settlement {
                 id
-                blockId
+                createdBlockId
                 addresses
                 result
                 legs {
@@ -91,7 +91,7 @@ describe('settlements', () => {
             nodes {
               settlement {
                 id
-                blockId
+                createdBlockId
                 addresses
                 result
                 legs {
@@ -135,7 +135,7 @@ describe('settlements', () => {
             totalCount
             nodes {
               id
-              blockId
+              createdBlockId
               addresses
               result
               legs {

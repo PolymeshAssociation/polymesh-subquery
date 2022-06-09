@@ -10,7 +10,7 @@ describe('instructions', () => {
           instructions(first: 10) {
             totalCount
             nodes {
-              blockId
+              createdBlockId
               status
               venueId
               settlementType

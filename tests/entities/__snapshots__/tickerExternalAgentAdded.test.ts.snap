@@ -7,8 +7,8 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "TickerExternalAgentAdded",
-        "blockId": "314",
         "callerDid": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "createdBlockId": "314",
         "datetime": "2021-10-06T12:34:42",
         "eventIdx": 1,
       },

@@ -6,6 +6,7 @@ import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
   Compliance,
+  Distribution,
   FoundType,
   SecurityIdentifier,
   TransferManager,
@@ -117,7 +118,7 @@ export const getFirstValueFromJson = (item: Codec): string => {
 };
 
 export const getTextValue = (item: Codec): string => {
-  return item.toString().trim().length === 0 ? null : item.toString().trim();
+  return item?.toString().trim().length === 0 ? null : item.toString().trim();
 };
 
 export const getNumberValue = (item: Codec): number => {
@@ -270,6 +271,11 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
   return meshPortfolioToPortfolio(meshPortfolio);
 };
 
+export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
+  const { local_id: localId, ticker } = JSON.parse(item.toString());
+  return { localId, assetId: hexToString(ticker) };
+};
+
 export interface LegDetails {
   from: Pick<Portfolio, 'identityId' | 'number'>;
   to: Pick<Portfolio, 'identityId' | 'number'>;
@@ -283,7 +289,7 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
     from: meshPortfolioToPortfolio(fromPortfolio),
     to: meshPortfolioToPortfolio(toPortfolio),
     ticker: hexToString(ticker),
-    amount: BigInt(amount),
+    amount: getBigIntValue(amount),
   }));
 };
 
@@ -295,4 +301,23 @@ export const getSignerAddress = (event: SubstrateEvent): string => {
   return signer;
 };
 
-export const getAmountValue = (item: Codec): bigint => getBigIntValue(item) / BigInt(1000000);
+export const getDistributionValue = (
+  item: Codec
+): Pick<
+  Distribution,
+  'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
+> => {
+  const { from, currency, per_share, amount, remaining, payment_at, expires_at } = JSON.parse(
+    item.toString()
+  );
+  const { identityId, number } = meshPortfolioToPortfolio(from);
+  return {
+    portfolioId: `${identityId}/${number}`,
+    currency: hexToString(currency),
+    perShare: getBigIntValue(per_share),
+    amount: getBigIntValue(amount),
+    remaining: getBigIntValue(remaining),
+    paymentAt: getBigIntValue(payment_at),
+    expiresAt: getBigIntValue(expires_at || END_OF_TIME),
+  };
+};

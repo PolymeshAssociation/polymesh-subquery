@@ -8,11 +8,11 @@ describe('tickerExternalAgentHistory', () => {
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentHistories(filter: { ticker: { equalTo: $ticker } }) {
+          tickerExternalAgentHistories(filter: { assetId: { equalTo: $ticker } }) {
             nodes {
-              ticker
-              did
-              blockId
+              ticker: assetId
+              did: identityId
+              createdBlockId
               eventIdx
               datetime
               type

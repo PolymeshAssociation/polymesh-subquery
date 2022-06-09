@@ -9,7 +9,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { Attributes, EventIdEnum, ModuleIdEnum } from './common';
+import { Attributes, EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 export const getPortfolio = async ({
   identityId,
@@ -46,6 +46,7 @@ const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise
     number,
     name,
     createdBlockId: blockId,
+    updatedBlockId: blockId,
   });
 };
 
@@ -105,16 +106,17 @@ const handlePortfolioMovement = async (
     amount,
     address,
     createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
-export async function mapPortfolio(
-  blockId: string,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapPortfolio({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Portfolio) {
     if (eventId === EventIdEnum.PortfolioCreated) {
       await handlePortfolioCreated(blockId, params);

@@ -20,7 +20,4 @@ module.exports = {
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: ['node_modules/(?!(@polkadot|@babel/runtime/helpers/esm|@subql)/)'],
-
-  // TODO @prashantasdeveloper remove `testPathIgnorePatterns` when all entities are migrated
-  testPathIgnorePatterns: ['tests/integration/'],
 };

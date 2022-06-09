@@ -1,16 +1,18 @@
 import { Codec } from '@polkadot/types/types';
-import { Asset, AssetDocument, AssetHolder } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { Asset, AssetDocument, AssetHolder, Funding } from '../../types';
 import {
-  getAmountValue,
+  getBigIntValue,
   getBooleanValue,
   getDocValue,
   getNumberValue,
   getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
+  removeNullChars,
   serializeTicker,
 } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
 export const getAsset = async (ticker: string): Promise<Asset> => {
   const asset = await Asset.getByTicker(ticker);
@@ -22,7 +24,11 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
   return asset;
 };
 
-export const getAssetHolder = async (ticker: string, did: string): Promise<AssetHolder> => {
+export const getAssetHolder = async (
+  ticker: string,
+  did: string,
+  blockId: string
+): Promise<AssetHolder> => {
   const id = `${ticker}/${did}`;
 
   let assetHolder = await AssetHolder.get(id);
@@ -33,6 +39,8 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
       identityId: did,
       assetId: ticker,
       amount: BigInt(0),
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     });
     await assetHolder.save();
   }
@@ -40,7 +48,7 @@ export const getAssetHolder = async (ticker: string, did: string): Promise<Asset
   return assetHolder;
 };
 
-const handleAssetCreated = async (params: Codec[]): Promise<void> => {
+const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
@@ -48,7 +56,7 @@ const handleAssetCreated = async (params: Codec[]): Promise<void> => {
   // Name isn't present on the event so we need to query storage
   // See MESH-1808 on Jira for the status on including name in the event
   const rawName = await api.query.asset.assetNames(rawTicker);
-  const name = getTextValue(rawName);
+  const name = removeNullChars(getTextValue(rawName));
 
   await Asset.create({
     id: ticker,
@@ -64,32 +72,36 @@ const handleAssetCreated = async (params: Codec[]): Promise<void> => {
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
-const handleAssetRenamed = async (params: Codec[]): Promise<void> => {
+const handleAssetRenamed = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, rawName] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.name = getTextValue(rawName);
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleFundingRoundSet = async (params: Codec[]): Promise<void> => {
+const handleFundingRoundSet = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, rawFundingRound] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.fundingRound = getTextValue(rawFundingRound);
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleDocumentAdded = async (params: Codec[]): Promise<void> => {
+const handleDocumentAdded = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, rawDocId, rawDoc] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -103,6 +115,8 @@ const handleDocumentAdded = async (params: Codec[]): Promise<void> => {
     documentId,
     ...docDetails,
     assetId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
@@ -115,153 +129,192 @@ const handleDocumentRemoved = async (params: Codec[]): Promise<void> => {
   await AssetDocument.remove(`${ticker}/${documentId}`);
 };
 
-const handleIdentifiersUpdated = async (params: Codec[]): Promise<void> => {
+const handleIdentifiersUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, rawIdentifiers] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleDivisibilityChanged = async (params: Codec[]): Promise<void> => {
+const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.isDivisible = true;
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleIssued = async (params: Codec[]): Promise<void> => {
-  const [, rawTicker, , rawAmount] = params;
+const handleIssued = async (
+  blockId: string,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
+  const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = getAmountValue(rawAmount);
+  const issuedAmount = getBigIntValue(rawAmount);
+
+  const fundingRound = getTextValue(rawFundingRound);
+  const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
+  asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
   assetOwner.amount += issuedAmount;
+  assetOwner.updatedBlockId = blockId;
 
-  await Promise.all([asset.save(), assetOwner.save()]);
+  const promises = [asset.save(), assetOwner.save()];
+  if (fundingRound) {
+    promises.push(
+      Funding.create({
+        id: `${blockId}/${event.idx}`,
+        assetId: ticker,
+        fundingRound,
+        amount: issuedAmount,
+        totalFundingAmount,
+        datetime: event.block.timestamp,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save()
+    );
+  }
+
+  await Promise.all(promises);
 };
 
-const handleRedeemed = async (params: Codec[]): Promise<void> => {
+const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
-  const issuedAmount = getAmountValue(rawAmount);
+  const issuedAmount = getBigIntValue(rawAmount);
 
   const asset = await getAsset(ticker);
   asset.totalSupply -= issuedAmount;
+  asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId);
+  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
   assetOwner.amount -= issuedAmount;
+  assetOwner.updatedBlockId = blockId;
 
-  await Promise.all([asset.save(), assetOwner.save()]);
   await Promise.all([asset.save(), assetOwner.save()]);
 };
 
-const handleFrozen = async (params: Codec[], isFrozen: boolean): Promise<void> => {
+const handleFrozen = async (blockId: string, params: Codec[], isFrozen: boolean): Promise<void> => {
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.isFrozen = isFrozen;
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleAssetOwnershipTransferred = async (params: Codec[]) => {
+const handleAssetOwnershipTransferred = async (blockId: string, params: Codec[]) => {
   const [to, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.ownerId = getTextValue(to);
+  asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleAssetTransfer = async (params: Codec[]) => {
+const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
-  const transferAmount = getAmountValue(rawAmount);
+  const transferAmount = getBigIntValue(rawAmount);
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
   asset.totalTransfers += BigInt(1);
+  asset.updatedBlockId = blockId;
 
   const [fromHolder, toHolder] = await Promise.all([
-    getAssetHolder(ticker, fromDid),
-    getAssetHolder(ticker, toDid),
+    getAssetHolder(ticker, fromDid, blockId),
+    getAssetHolder(ticker, toDid, blockId),
   ]);
 
   fromHolder.amount = fromHolder.amount - transferAmount;
+  fromHolder.updatedBlockId = blockId;
   toHolder.amount = toHolder.amount + transferAmount;
+  toHolder.updatedBlockId = blockId;
 
   await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
 };
 
-const handleAssetUpdateEvents = async (eventId: EventIdEnum, params: Codec[]): Promise<void> => {
+const handleAssetUpdateEvents = async (
+  blockId: string,
+  eventId: EventIdEnum,
+  params: Codec[]
+): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleAssetCreated(params);
+    await handleAssetCreated(blockId, params);
   }
   if (eventId === EventIdEnum.AssetRenamed) {
-    await handleAssetRenamed(params);
+    await handleAssetRenamed(blockId, params);
   }
   if (eventId === EventIdEnum.FundingRoundSet) {
-    await handleFundingRoundSet(params);
+    await handleFundingRoundSet(blockId, params);
   }
   if (eventId === EventIdEnum.IdentifiersUpdated) {
-    await handleIdentifiersUpdated(params);
+    await handleIdentifiersUpdated(blockId, params);
   }
   if (eventId === EventIdEnum.DivisibilityChanged) {
-    await handleDivisibilityChanged(params);
+    await handleDivisibilityChanged(blockId, params);
   }
   if (eventId === EventIdEnum.AssetFrozen) {
-    await handleFrozen(params, true);
+    await handleFrozen(blockId, params, true);
   }
   if (eventId === EventIdEnum.AssetUnfrozen) {
-    await handleFrozen(params, false);
+    await handleFrozen(blockId, params, false);
   }
 };
 
-export async function mapAsset(
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
+export async function mapAsset({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.Asset) {
     return;
   }
   if (eventId === EventIdEnum.DocumentAdded) {
-    await handleDocumentAdded(params);
+    await handleDocumentAdded(blockId, params);
   }
   if (eventId === EventIdEnum.DocumentRemoved) {
     await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.Issued) {
-    await handleIssued(params);
+    await handleIssued(blockId, params, event);
   }
   if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeemed(params);
+    await handleRedeemed(blockId, params);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
-    await handleAssetOwnershipTransferred(params);
+    await handleAssetOwnershipTransferred(blockId, params);
   }
   if (eventId === EventIdEnum.Transfer) {
-    await handleAssetTransfer(params);
+    await handleAssetTransfer(blockId, params);
   }
-  await handleAssetUpdateEvents(eventId, params);
+  await handleAssetUpdateEvents(blockId, eventId, params);
 
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }
