@@ -9,7 +9,7 @@ import {
   getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
-  removeNullChars,
+  hexToString,
   serializeTicker,
 } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
@@ -56,7 +56,7 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
   // Name isn't present on the event so we need to query storage
   // See MESH-1808 on Jira for the status on including name in the event
   const rawName = await api.query.asset.assetNames(rawTicker);
-  const name = removeNullChars(getTextValue(rawName));
+  const name = hexToString(getTextValue(rawName));
 
   await Asset.create({
     id: ticker,

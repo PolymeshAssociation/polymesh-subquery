@@ -9,9 +9,10 @@ import {
   Distribution,
   FoundType,
   SecurityIdentifier,
+  TransferComplianceExemption,
   TransferManager,
 } from '../types';
-import { TransferRestrictionType } from './entities/common';
+import { Attributes, TransferRestrictionType } from './entities/common';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -233,6 +234,21 @@ export const getTransferManagerValue = (
   }
 
   throw new Error('Unknown transfer restriction type found');
+};
+
+export const getExemptKeyValue = (
+  item: Codec
+): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntities'> => {
+  const {
+    asset: { ticker },
+    op: opType,
+    claimType,
+  } = JSON.parse(item.toString());
+  return {
+    assetId: hexToString(ticker),
+    opType,
+    claimType,
+  };
 };
 
 export const getExemptionsValue = (exemptions: Codec): string[] => {

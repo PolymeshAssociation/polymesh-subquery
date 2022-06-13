@@ -19,6 +19,7 @@ import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
 import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
+import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
 import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
@@ -145,6 +146,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapAsset(handlerArgs),
     mapCompliance(handlerArgs),
     mapTransferManager(handlerArgs),
+    mapStatistics(handlerArgs),
     mapPortfolio(handlerArgs),
     mapSettlement(handlerArgs),
     mapStakingEvent(handlerArgs),

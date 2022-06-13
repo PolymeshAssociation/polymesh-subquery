@@ -425,7 +425,22 @@ export enum TransferRestrictionType {
   Percentage = 'Percentage',
 }
 
-export type Attributes<T> = Omit<T, NonNullable<FunctionPropertyNames<T>> | 'id'>;
+export enum StatOpType {
+  Count = 'Count',
+  Balance = 'Balance',
+}
+
+export enum TransferComplianceType {
+  MaxInvestorCount = 'MaxInvestorCount',
+  MaxInvestorOwnership = 'MaxInvestorOwnership',
+  ClaimCount = 'ClaimCount',
+  ClaimOwnership = 'ClaimOwnership',
+}
+
+export type Attributes<T> = Omit<
+  T,
+  NonNullable<FunctionPropertyNames<T>> | 'id' | 'createdBlockId' | 'updatedBlockId'
+>;
 
 export interface HandlerArgs {
   blockId: string;

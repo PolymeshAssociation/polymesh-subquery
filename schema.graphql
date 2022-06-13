@@ -419,6 +419,43 @@ type TransferManager @entity {
   updatedBlock: Block!
 }
 
+type StatType @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset!
+  opType: String!
+  claimType: String
+  claimIssuer: Identity
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type TransferCompliance @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset! @index(unique: false)
+  type: String!
+  statType: StatType!
+  # value is present only in case of MaxInvestorCount and MaxInvestorOwnership
+  value: BigInt
+  # following values are present in case of ClaimCount and ClaimOwnership
+  claimType: String
+  claimValue: String
+  claimIssuer: Identity
+  min: BigInt
+  max: BigInt
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type TransferComplianceExemption @entity {
+  id: ID! #asset/opType/claimType
+  asset: Asset! @index(unique: false)
+  opType: String!
+  claimType: String
+  exemptedEntities: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
 type Compliance @entity {
   id: ID! # ticker/complianceId
   complianceId: Int!

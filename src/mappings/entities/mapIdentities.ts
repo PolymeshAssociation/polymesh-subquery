@@ -105,12 +105,13 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  const defaultPortfolio = createPortfolio({
-    identityId: did,
-    number: 0,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
+  const defaultPortfolio = createPortfolio(
+    {
+      identityId: did,
+      number: 0,
+    },
+    blockId
+  );
 
   await Promise.all([identity, permissions, account, defaultPortfolio]);
 };
