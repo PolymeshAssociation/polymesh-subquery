@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { isHex } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { Asset, AssetDocument, AssetHolder, Funding } from '../../types';
 import {
@@ -10,6 +11,7 @@ import {
   getSecurityIdentifiers,
   getTextValue,
   hexToString,
+  removeNullChars,
   serializeTicker,
 } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
@@ -56,7 +58,13 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
   // Name isn't present on the event so we need to query storage
   // See MESH-1808 on Jira for the status on including name in the event
   const rawName = await api.query.asset.assetNames(rawTicker);
-  const name = hexToString(getTextValue(rawName));
+  const nameString = getTextValue(rawName);
+  let name;
+  if (isHex(nameString)) {
+    name = hexToString(nameString);
+  } else {
+    name = removeNullChars(nameString);
+  }
 
   await Asset.create({
     id: ticker,
