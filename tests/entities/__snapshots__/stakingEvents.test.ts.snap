@@ -91,15 +91,6 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "StakingEvent",
-        "amount": "76179520",
-        "datetime": "2021-10-06T12:44:06",
-        "eventId": "Reward",
-        "identityId": "0x0400000000000000000000000000000000000000000000000000000000000000",
-        "nominatedValidators": null,
-        "stashAccount": "0xfe65717dad0447d715f660a0a58411de509b42e6efb8375f562f58a554d5860e",
-      },
-      Object {
-        "__typename": "StakingEvent",
         "amount": "1000000",
         "datetime": "2021-10-06T12:34:02.5",
         "eventId": "Bonded",
@@ -157,7 +148,7 @@ Object {
         "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
       },
     ],
-    "totalCount": 7,
+    "totalCount": 6,
   },
 }
 `;
