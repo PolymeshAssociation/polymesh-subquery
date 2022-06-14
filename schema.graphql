@@ -447,11 +447,11 @@ type TransferCompliance @entity {
 }
 
 type TransferComplianceExemption @entity {
-  id: ID! #asset/opType/claimType
+  id: ID! #asset/opType/claimType/exemptedEntityId
   asset: Asset! @index(unique: false)
   opType: String!
   claimType: String
-  exemptedEntities: [String]!
+  exemptedEntityId: String!
   createdBlock: Block!
   updatedBlock: Block!
 }

@@ -55,8 +55,15 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
-  // Name isn't present on the event so we need to query storage
-  // See MESH-1808 on Jira for the status on including name in the event
+  /**
+   * Name isn't present on the event so we need to query storage.
+   * See MESH-1808 on Jira for the status on including name in the event
+   *
+   * @note
+   *   - For chain >= 5.0.0, asset.assetNames provides a hex value
+   *   - For chain < 5.0.0, asset.assetNames provides name of the ticker in plain text. In case
+   *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
+   */
   const rawName = await api.query.asset.assetNames(rawTicker);
   const nameString = getTextValue(rawName);
   let name;

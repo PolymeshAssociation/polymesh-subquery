@@ -238,7 +238,7 @@ export const getTransferManagerValue = (
 
 export const getExemptKeyValue = (
   item: Codec
-): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntities'> => {
+): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'> => {
   const {
     asset: { ticker },
     op: opType,

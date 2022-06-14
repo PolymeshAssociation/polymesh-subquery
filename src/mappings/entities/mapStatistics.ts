@@ -216,22 +216,29 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]) => {
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
   const { assetId, opType, claimType } = exemptKey;
-  let exemption = await TransferComplianceExemption.get(`${assetId}/${opType}/${claimType}`);
-  if (exemption) {
-    Object.assign(exemption, {
-      exemptedEntities: [...new Set([...exemption.exemptedEntities, ...exemptedEntities])],
-      updatedBlockId: blockId,
-    });
-  } else {
-    exemption = TransferComplianceExemption.create({
-      id: `${assetId}/${opType}/${claimType}`,
-      ...exemptKey,
-      exemptedEntities,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    });
-  }
-  await exemption.save();
+
+  const promises = [];
+  exemptedEntities.forEach(entity => {
+    const upsert = async () => {
+      const exemptionId = `${assetId}/${opType}/${claimType}/${entity}`;
+      let exemption = await TransferComplianceExemption.get(exemptionId);
+      if (exemption) {
+        exemption.updatedBlockId = blockId;
+      } else {
+        exemption = TransferComplianceExemption.create({
+          id: exemptionId,
+          ...exemptKey,
+          exemptedEntityId: entity,
+          createdBlockId: blockId,
+          updatedBlockId: blockId,
+        });
+      }
+      return exemption.save();
+    };
+    promises.push(upsert());
+  });
+
+  await Promise.all(promises);
 };
 
 const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
@@ -240,21 +247,11 @@ const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
   const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey);
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
-  const exemption = await TransferComplianceExemption.get(`${assetId}/${opType}/${claimType}`);
-  if (exemption) {
-    const remainingEntities = exemption.exemptedEntities.filter(
-      entity => !exemptedEntities.includes(entity)
-    );
-    if (remainingEntities.length) {
-      Object.assign(exemption, {
-        exemptedEntities: remainingEntities,
-        updatedBlockId: blockId,
-      });
-      await exemption.save();
-    } else {
-      await TransferComplianceExemption.remove(`${assetId}/${opType}/${claimType}`);
-    }
-  }
+  await Promise.all(
+    exemptedEntities.map(entity =>
+      TransferComplianceExemption.remove(`${assetId}/${opType}/${claimType}/${entity}`)
+    )
+  );
 };
 
 export async function mapStatistics({
