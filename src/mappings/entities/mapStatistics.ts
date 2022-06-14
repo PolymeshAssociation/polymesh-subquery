@@ -241,7 +241,7 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]) => {
   await Promise.all(promises);
 };
 
-const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
+const handleExemptionsRemoved = async (params: Codec[]) => {
   const [, rawExemptKey, rawExemptions] = params;
 
   const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey);
@@ -274,7 +274,7 @@ export async function mapStatistics({
       await handleExemptionsAdded(blockId, params);
     }
     if (eventId === EventIdEnum.TransferConditionExemptionsRemoved) {
-      await handleExemptionsRemoved(blockId, params);
+      await handleExemptionsRemoved(params);
     }
   }
 }
