@@ -21,10 +21,10 @@ import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
 import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
-import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
+import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
-import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -153,13 +153,13 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapBridgeEvent(handlerArgs),
     mapSto(handlerArgs),
     mapExternalAgentAction(handlerArgs),
-    mapTickerExternalAgentAdded(handlerArgs),
+    mapTickerExternalAgent(handlerArgs),
     mapTickerExternalAgentHistory(handlerArgs),
     mapAuthorization(handlerArgs),
     mapInvestment(handlerArgs),
     mapCorporateActions(handlerArgs),
     mapProposal(handlerArgs),
-    mapTrustedClaimIssuerTicker(handlerArgs),
+    mapTrustedClaimIssuer(handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({

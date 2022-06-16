@@ -25,7 +25,7 @@ export async function mapIdentities({
 
   if (moduleId === ModuleIdEnum.Identity) {
     if (eventId === EventIdEnum.DidCreated) {
-      await handleDidCreated(blockId, eventId, params, datetime);
+      await handleDidCreated(blockId, eventId, params, datetime, event.idx);
     }
 
     if (eventId === EventIdEnum.SecondaryKeysAdded) {
@@ -65,7 +65,8 @@ const handleDidCreated = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
-  datetime: Date
+  datetime: Date,
+  eventIdx: number
 ): Promise<void> => {
   const [rawDid, rawAddress] = params;
 
@@ -109,6 +110,7 @@ const handleDidCreated = async (
     {
       identityId: did,
       number: 0,
+      eventIdx,
     },
     blockId
   );

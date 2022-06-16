@@ -2,13 +2,13 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe('tickerExternalAgentAdded', () => {
+describe('tickerExternalAgent', () => {
   test('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentAddeds(
+          tickerExternalAgents(
             filter: {
               assetId: { equalTo: $ticker }
               callerId: {
@@ -37,7 +37,7 @@ describe('tickerExternalAgentAdded', () => {
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentAddeds(
+          tickerExternalAgents(
             filter: {
               assetId: { equalTo: $ticker }
               callerId: {
@@ -58,14 +58,14 @@ describe('tickerExternalAgentAdded', () => {
     const subquery = await query(q);
 
     expect(subquery?.errors).toBeFalsy();
-    expect(subquery?.data?.tickerExternalAgentAddeds.nodes).toEqual([]);
+    expect(subquery?.data?.tickerExternalAgents.nodes).toEqual([]);
   });
   test('should return empty when the agent is not found', async () => {
     const res = await query({
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentAddeds(
+          tickerExternalAgents(
             filter: { assetId: { equalTo: $ticker }, callerId: { equalTo: "bogus" } }
           ) {
             nodes {
@@ -79,6 +79,6 @@ describe('tickerExternalAgentAdded', () => {
     });
 
     expect(res?.errors).toBeFalsy();
-    expect(res?.data?.tickerExternalAgentAddeds.nodes).toEqual([]);
+    expect(res?.data?.tickerExternalAgents.nodes).toEqual([]);
   });
 });

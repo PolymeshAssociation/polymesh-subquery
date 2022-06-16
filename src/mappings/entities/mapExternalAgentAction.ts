@@ -22,7 +22,6 @@ export async function mapExternalAgentAction({
       palletName: moduleId,
       eventId,
       callerId: getTextValue(params[0]),
-      datetime: event.block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

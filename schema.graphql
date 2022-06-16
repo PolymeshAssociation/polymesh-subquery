@@ -148,7 +148,6 @@ type TickerExternalAgentAction @entity {
   palletName: String! @index(unique: false)
   eventId: String! @index(unique: false)
   eventIdx: Int!
-  datetime: Date!
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
 }
@@ -175,7 +174,7 @@ type Authorization @entity {
 
 type Investment @entity {
   id: ID!
-  investor: String!
+  investor: Identity!
   stoId: Int! @index(unique: false)
   offeringToken: String! @index(unique: false)
   raiseToken: String!
@@ -186,7 +185,7 @@ type Investment @entity {
   updatedBlock: Block!
 }
 
-type TickerExternalAgentAdded @entity {
+type TickerExternalAgent @entity {
   id: ID! # ticker/callerId
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
@@ -202,10 +201,10 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  eventIdx: Int!
   datetime: Date!
   type: String!
   permissions: String
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -237,6 +236,7 @@ type Portfolio @entity {
   number: Int! @index(unique: false)
   name: String
   custodian: Identity
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -285,6 +285,7 @@ type Venue @entity {
 type Instruction @entity {
   id: ID! #instructionId
   eventId: String!
+  eventIdx: Int!
   status: String!
   venue: Venue! @index(unique: false)
   settlementType: String!
@@ -298,7 +299,7 @@ type Instruction @entity {
 }
 
 type Distribution @entity {
-  id: ID!
+  id: ID! # assetId/localId
   identity: Identity!
   localId: Int! @index(unique: false)
   asset: Asset! @index(unique: false)
@@ -385,10 +386,11 @@ type Claim @entity {
   updatedBlock: Block!
 }
 
-type TrustedClaimIssuerTicker @entity {
+type TrustedClaimIssuer @entity {
   id: ID!
-  ticker: String!
+  asset: Asset! @index(unique: false)
   issuer: String! @index(unique: false)
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -505,6 +507,8 @@ type Asset @entity {
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
   transferManagers: [TransferManager]! @derivedFrom(field: "asset")
+  trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }

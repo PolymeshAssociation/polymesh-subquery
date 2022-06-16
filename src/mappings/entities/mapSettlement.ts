@@ -138,6 +138,7 @@ const handleInstructionCreated = async (
   const instruction = Instruction.create({
     id: instructionId,
     eventId,
+    eventIdx: event.idx,
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(rawVenueId),
     settlementType: getFirstKeyFromJson(rawSettlementType),

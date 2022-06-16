@@ -39,7 +39,11 @@ export const createPortfolio = (
   }).save();
 };
 
-const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handlePortfolioCreated = async (
+  blockId: string,
+  params: Codec[],
+  eventIdx: number
+): Promise<void> => {
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -51,6 +55,7 @@ const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise
       identityId: ownerId,
       number,
       name,
+      eventIdx,
     },
     blockId
   );
@@ -125,7 +130,7 @@ export async function mapPortfolio({
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Portfolio) {
     if (eventId === EventIdEnum.PortfolioCreated) {
-      await handlePortfolioCreated(blockId, params);
+      await handlePortfolioCreated(blockId, params, event.idx);
     }
     if (eventId === EventIdEnum.PortfolioRenamed) {
       await handlePortfolioRenamed(blockId, params);

@@ -11,7 +11,7 @@ describe('investments', () => {
             totalCount
             nodes {
               createdBlockId
-              investor
+              investor: investorId
               stoId
               offeringToken
               raiseToken

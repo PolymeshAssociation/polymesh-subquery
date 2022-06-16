@@ -1,13 +1,14 @@
 import { Codec } from '@polkadot/types/types';
-import { TrustedClaimIssuerTicker } from '../../types';
+import { TrustedClaimIssuer } from '../../types';
 import { getTextValue, serializeTicker } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
-export async function mapTrustedClaimIssuerTicker({
+export async function mapTrustedClaimIssuer({
   blockId,
   eventId,
   moduleId,
   params,
+  event,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.Compliancemanager) {
     return;
@@ -17,9 +18,10 @@ export async function mapTrustedClaimIssuerTicker({
     const ticker = serializeTicker(params[1]);
     const issuer = (params[2] as unknown as { issuer: Codec }).issuer.toString();
 
-    await TrustedClaimIssuerTicker.create({
+    await TrustedClaimIssuer.create({
       id: `${ticker}/${issuer}`,
-      ticker,
+      eventIdx: event.idx,
+      assetId: ticker,
       issuer,
       createdBlockId: blockId,
       updatedBlockId: blockId,
@@ -29,6 +31,6 @@ export async function mapTrustedClaimIssuerTicker({
   if (eventId === EventIdEnum.TrustedDefaultClaimIssuerRemoved) {
     const ticker = serializeTicker(params[1]);
     const issuer = getTextValue(params[2]);
-    await TrustedClaimIssuerTicker.remove(`${ticker}/${issuer}`);
+    await TrustedClaimIssuer.remove(`${ticker}/${issuer}`);
   }
 }

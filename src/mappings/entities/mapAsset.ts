@@ -50,7 +50,11 @@ export const getAssetHolder = async (
   return assetHolder;
 };
 
-const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleAssetCreated = async (
+  blockId: string,
+  params: Codec[],
+  eventIdx: number
+): Promise<void> => {
   const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
@@ -87,6 +91,7 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -276,10 +281,11 @@ const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
 const handleAssetUpdateEvents = async (
   blockId: string,
   eventId: EventIdEnum,
-  params: Codec[]
+  params: Codec[],
+  event: SubstrateEvent
 ): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleAssetCreated(blockId, params);
+    await handleAssetCreated(blockId, params, event.idx);
   }
   if (eventId === EventIdEnum.AssetRenamed) {
     await handleAssetRenamed(blockId, params);
@@ -329,7 +335,7 @@ export async function mapAsset({
   if (eventId === EventIdEnum.Transfer) {
     await handleAssetTransfer(blockId, params);
   }
-  await handleAssetUpdateEvents(blockId, eventId, params);
+  await handleAssetUpdateEvents(blockId, eventId, params, event);
 
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }
