@@ -48,34 +48,40 @@ const instructionResultMap = {
 export const createLeg = async (
   blockId: string,
   instructionId: string,
+  address: string,
   legIndex: number,
   { ticker, amount, from, to }: LegDetails
 ): Promise<void> =>
   Leg.create({
     id: `${instructionId}/${legIndex}`,
-    ticker,
+    assetId: ticker,
     amount,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     instructionId,
+    addresses: [address],
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
 
 const updateLegs = async (
   blockId: string,
+  address: string,
   instructionId: string,
-  settlementId: string
-): Promise<void> => {
+  settlementId?: string
+): Promise<Promise<void>[]> => {
   const legs = await Leg.getByInstructionId(instructionId);
 
-  await Promise.all(
-    legs.map(leg => {
+  return legs.map(leg => {
+    if (address) {
+      leg.addresses = [...new Set([...leg.addresses, address])];
+    }
+    if (settlementId) {
       leg.settlementId = settlementId;
-      leg.updatedBlockId = blockId;
-      leg.save();
-    })
-  );
+    }
+    leg.updatedBlockId = blockId;
+    return leg.save();
+  });
 };
 
 const getVenue = async (venueId: string): Promise<Venue> => {
@@ -145,14 +151,13 @@ const handleInstructionCreated = async (
     endBlock: Number(getFirstValueFromJson(rawSettlementType)),
     tradeDate: getDateValue(rawTradeDate),
     valueDate: getDateValue(rawValueDate),
-    addresses: [address],
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
   await instruction.save();
 
   await Promise.all(
-    legs.map((legDetails, index) => createLeg(blockId, instructionId, index, legDetails))
+    legs.map((legDetails, index) => createLeg(blockId, instructionId, address, index, legDetails))
   );
 };
 
@@ -168,6 +173,7 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
 
 const handleInstructionUpdate = async (
   blockId: string,
+  eventId: string,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
@@ -177,12 +183,10 @@ const handleInstructionUpdate = async (
 
   const instructionId = getTextValue(rawInstructionId);
   const instruction = await getInstruction(instructionId);
+  instruction.eventId = eventId;
+  instruction.updatedBlockId = blockId;
 
-  if (address && !instruction.addresses.includes(address)) {
-    instruction.addresses.push(address);
-    instruction.updatedBlockId = blockId;
-    await instruction.save();
-  }
+  await Promise.all([instruction.save(), ...(await updateLegs(blockId, address, instructionId))]);
 };
 
 const handleInstructionFinalizedEvent = async (
@@ -192,31 +196,29 @@ const handleInstructionFinalizedEvent = async (
   event: SubstrateEvent
 ): Promise<void> => {
   const [, rawInstructionId] = params;
+
+  const address = getSignerAddress(event);
   const instructionId = getTextValue(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
   instruction.status = instructionResultMap[eventId] || instructionResultMap['default'];
-
-  const address = getSignerAddress(event);
-
-  if (address && !instruction.addresses.includes(address)) {
-    instruction.addresses.push(address);
-  }
+  instruction.eventId = eventId;
+  instruction.updatedBlockId = blockId;
 
   const settlementId = `${blockId}/${event.idx}`;
+
   const settlement = Settlement.create({
     id: settlementId,
     result: instruction.status,
-    addresses: instruction.addresses,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
 
-  await Promise.all([settlement.save(), instruction.save()]);
-
-  if (eventId === EventIdEnum.InstructionExecuted) {
-    await updateLegs(blockId, instructionId, settlementId);
-  }
+  await Promise.all([
+    settlement.save(),
+    instruction.save(),
+    ...(await updateLegs(blockId, address, instructionId, settlementId)),
+  ]);
 };
 
 export async function mapSettlement({
@@ -244,7 +246,7 @@ export async function mapSettlement({
     }
 
     if (updateEvents.includes(eventId)) {
-      await handleInstructionUpdate(blockId, params, event);
+      await handleInstructionUpdate(blockId, eventId, params, event);
     }
 
     if (finalizedEvents.includes(eventId)) {

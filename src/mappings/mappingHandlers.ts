@@ -1,8 +1,7 @@
 import { Vec } from '@polkadot/types/codec';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { AnyTuple } from '@polkadot/types/types';
-import { hexStripPrefix, u8aToHex } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
+import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './entities/common';
@@ -33,7 +32,7 @@ import {
   extractTransferTo,
 } from './generatedColumns';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase, logFoundType } from './util';
+import { camelToSnakeCase, getSigner, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -197,17 +196,7 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const blockId = extrinsic.block.block.header.number.toString();
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedbyAddress
-    ? hexStripPrefix(
-        u8aToHex(
-          decodeAddress(
-            extrinsic.extrinsic.signer.toString(),
-            false,
-            extrinsic.extrinsic.registry.chainSS58
-          )
-        )
-      )
-    : null;
+  const address = signedbyAddress ? getSigner(extrinsic) : null;
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
 
   await Extrinsic.create({

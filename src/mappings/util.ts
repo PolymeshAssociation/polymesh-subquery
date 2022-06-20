@@ -147,9 +147,14 @@ export const hexToString = (input: string): string => {
 };
 
 export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
-  const parsed = JSON.parse(extrinsic.extrinsic.toString());
-  return u8aToHex(
-    decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
+  return hexStripPrefix(
+    u8aToHex(
+      decodeAddress(
+        extrinsic.extrinsic.signer.toString(),
+        false,
+        extrinsic.extrinsic.registry.chainSS58
+      )
+    )
   );
 };
 
