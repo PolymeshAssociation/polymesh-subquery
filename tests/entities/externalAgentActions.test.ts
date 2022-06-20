@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('tickerExternalAgentActions', () => {
-  test('should return the transactions for ticker', async () => {
+  it('should return the transactions for ticker', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
@@ -25,7 +25,7 @@ describe('tickerExternalAgentActions', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('should filter by event id', async () => {
+  it('should filter by event id', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
@@ -48,7 +48,7 @@ describe('tickerExternalAgentActions', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('should filter by pallet name', async () => {
+  it('should filter by pallet name', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
@@ -72,7 +72,7 @@ describe('tickerExternalAgentActions', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('should filter by caller DID', async () => {
+  it('should filter by caller DID', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`

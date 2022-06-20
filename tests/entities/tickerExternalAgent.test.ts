@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('tickerExternalAgent', () => {
-  test('should return the time block and event index when an agent was added to a ticker', async () => {
+  it('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
@@ -32,7 +32,7 @@ describe('tickerExternalAgent', () => {
     expect(subquery?.errors).toBeFalsy();
     expect(subquery?.data).toMatchSnapshot();
   });
-  test('should return empty when an agent has been removed', async () => {
+  it('should return empty when an agent has been removed', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
@@ -60,7 +60,7 @@ describe('tickerExternalAgent', () => {
     expect(subquery?.errors).toBeFalsy();
     expect(subquery?.data?.tickerExternalAgents.nodes).toEqual([]);
   });
-  test('should return empty when the agent is not found', async () => {
+  it('should return empty when the agent is not found', async () => {
     const res = await query({
       variables: { ticker: '12TICKER' },
       query: gql`

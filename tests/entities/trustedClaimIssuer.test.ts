@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('trustedClaimIssuer', () => {
-  test('should return the trusted claim issuers for every ticker', async () => {
+  it('should return the trusted claim issuers for every ticker', async () => {
     const q = {
       query: gql`
         query {

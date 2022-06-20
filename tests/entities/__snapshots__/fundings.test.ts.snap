@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`fundings test getting fundings with ticker and fundingRound filters 1 1`] = `
+exports[`fundings should return fundings with ticker and fundingRound filters 1 1`] = `
 Object {
   "fundings": Object {
     "__typename": "FundingsConnection",
@@ -27,7 +27,7 @@ Object {
 }
 `;
 
-exports[`fundings test getting fundings with ticker and fundingRound filters 2 1`] = `
+exports[`fundings should return fundings with ticker and fundingRound filters 2 1`] = `
 Object {
   "fundings": Object {
     "__typename": "FundingsConnection",
@@ -37,7 +37,7 @@ Object {
 }
 `;
 
-exports[`fundings test getting fundings with ticker filter only 1 1`] = `
+exports[`fundings should return fundings with ticker filter only 1 1`] = `
 Object {
   "fundings": Object {
     "__typename": "FundingsConnection",

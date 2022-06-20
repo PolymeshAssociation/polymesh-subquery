@@ -254,19 +254,19 @@ type PortfolioMovement @entity {
 
 type Leg @entity {
   id: ID! # instructionId/legIndex
-  ticker: String!
+  asset: Asset!
   amount: BigInt!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
   instruction: Instruction
   settlement: Settlement
+  addresses: [String!]! @index(unique: false)
   createdBlock: Block!
   updatedBlock: Block!
 }
 
 type Settlement @entity {
   id: ID!
-  addresses: [String!]! @index(unique: false)
   result: String!
   legs: [Leg!]! @derivedFrom(field: "settlement")
   createdBlock: Block!
@@ -292,7 +292,6 @@ type Instruction @entity {
   endBlock: Int
   tradeDate: Date
   valueDate: Date
-  addresses: [String!]! @index(unique: false)
   legs: [Leg!]! @derivedFrom(field: "instruction")
   createdBlock: Block!
   updatedBlock: Block!

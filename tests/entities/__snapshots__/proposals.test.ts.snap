@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`proposalVotes votes for a proposal ID 1`] = `
+exports[`proposalVotes should return proposalVotes filtered by proposal ID 1`] = `
 Object {
   "proposalVotes": Object {
     "__typename": "ProposalVotesConnection",
@@ -18,7 +18,7 @@ Object {
 }
 `;
 
-exports[`proposals get by id 1`] = `
+exports[`proposals should get proposal by id 1`] = `
 Object {
   "proposal": Object {
     "__typename": "Proposal",
@@ -45,7 +45,7 @@ Object {
 }
 `;
 
-exports[`proposals without filters 1`] = `
+exports[`proposals should return proposals without filters 1`] = `
 Object {
   "proposals": Object {
     "__typename": "ProposalsConnection",

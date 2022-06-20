@@ -14,7 +14,6 @@ describe('instructions', () => {
               status
               venueId
               settlementType
-              addresses
               legs {
                 nodes {
                   from {
@@ -25,8 +24,9 @@ describe('instructions', () => {
                     identityId
                     number
                   }
-                  ticker
+                  assetId
                   amount
+                  addresses
                 }
               }
             }

@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('distributions', () => {
-  test('should return the withholding taxes for a distribution', async () => {
+  it('should return the withholding taxes for a distribution', async () => {
     const q = {
       variables: { ticker: '13TICKER' },
       query: gql`
@@ -25,7 +25,7 @@ describe('distributions', () => {
 });
 
 describe('distributionPayments', () => {
-  test('should get payment history for a distribution', async () => {
+  it('should get payment history for a distribution', async () => {
     const q = {
       variables: { caId: '13TICKER/0' },
       query: gql`

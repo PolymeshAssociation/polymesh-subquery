@@ -4,31 +4,7 @@ const { query } = getApolloClient();
 
 // blockId lessThan 1000 prevents staking events generated during the test form interfering with the results
 describe('stakingEvents', () => {
-  test('should return staking events', async () => {
-    const q = {
-      query: gql`
-        query {
-          stakingEvents(first: 10) {
-            nodes {
-              eventId
-              datetime
-              identityId
-              stashAccount
-              amount
-              nominatedValidators
-            }
-            totalCount
-          }
-        }
-      `,
-    };
-
-    const subquery = await query(q);
-
-    expect(subquery?.errors).toBeFalsy();
-    expect(subquery?.data).toMatchSnapshot();
-  });
-  test('should return nomination events', async () => {
+  it('should return nomination events', async () => {
     const q = {
       query: gql`
         query {
@@ -52,7 +28,7 @@ describe('stakingEvents', () => {
     expect(subquery?.errors).toBeFalsy();
     expect(subquery?.data).toMatchSnapshot();
   });
-  test('should filter by account', async () => {
+  it('should filter by account', async () => {
     const q = {
       query: gql`
         query {

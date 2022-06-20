@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('bridgeEvents', () => {
-  test('should return bridge events', async () => {
+  it('should return bridge events', async () => {
     const q = {
       query: gql`
         query {

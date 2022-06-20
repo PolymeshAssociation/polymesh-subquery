@@ -11,7 +11,6 @@ describe('settlements', () => {
             totalCount
             nodes {
               createdBlockId
-              addresses
               legs {
                 nodes {
                   from {
@@ -22,8 +21,9 @@ describe('settlements', () => {
                     identityId
                     number
                   }
-                  ticker
+                  assetId
                   amount
+                  addresses
                 }
               }
               result
@@ -54,7 +54,6 @@ describe('settlements', () => {
               settlement {
                 id
                 createdBlockId
-                addresses
                 result
                 legs {
                   nodes {
@@ -66,8 +65,9 @@ describe('settlements', () => {
                       identityId
                       number
                     }
-                    ticker
+                    assetId
                     amount
+                    addresses
                   }
                 }
               }
@@ -83,16 +83,15 @@ describe('settlements', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  it('should return settlements for a particular ticker', async () => {
+  it('should return settlements for a particular Asset', async () => {
     const q = {
       query: gql`
         query {
-          legs(filter: { ticker: { equalTo: "11BTICKER1" } }) {
+          legs(filter: { assetId: { equalTo: "11BTICKER1" } }) {
             nodes {
               settlement {
                 id
                 createdBlockId
-                addresses
                 result
                 legs {
                   nodes {
@@ -104,8 +103,9 @@ describe('settlements', () => {
                       identityId
                       number
                     }
-                    ticker
+                    assetId
                     amount
+                    addresses
                   }
                 }
               }
@@ -125,31 +125,32 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          settlements(
+          legs(
             filter: {
               addresses: {
                 contains: ["0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e"]
               }
             }
           ) {
-            totalCount
             nodes {
-              id
-              createdBlockId
-              addresses
-              result
-              legs {
-                nodes {
-                  from {
-                    identityId
-                    number
+              settlement {
+                id
+                createdBlockId
+                result
+                legs {
+                  nodes {
+                    from {
+                      identityId
+                      number
+                    }
+                    to {
+                      identityId
+                      number
+                    }
+                    assetId
+                    amount
+                    addresses
                   }
-                  to {
-                    identityId
-                    number
-                  }
-                  ticker
-                  amount
                 }
               }
             }

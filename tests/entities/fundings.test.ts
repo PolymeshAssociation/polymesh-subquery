@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('fundings', () => {
-  test('test getting fundings with ticker filter only 1', async () => {
+  it('should return fundings with ticker filter only 1', async () => {
     const q = {
       query: gql`
         query {
@@ -27,7 +27,7 @@ describe('fundings', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('test getting fundings with ticker and fundingRound filters 1', async () => {
+  it('should return fundings with ticker and fundingRound filters 1', async () => {
     const q = {
       query: gql`
         query {
@@ -54,7 +54,7 @@ describe('fundings', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('test getting fundings with ticker and fundingRound filters 2', async () => {
+  it('should return fundings with ticker and fundingRound filters 2', async () => {
     const q = {
       query: gql`
         query {

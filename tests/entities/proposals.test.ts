@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('proposals', () => {
-  test('without filters', async () => {
+  it('should return proposals without filters', async () => {
     const q = {
       query: gql`
         query {
@@ -39,7 +39,7 @@ describe('proposals', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  test('get by id', async () => {
+  it('should get proposal by id', async () => {
     const q = {
       query: gql`
         query {
@@ -73,7 +73,7 @@ describe('proposals', () => {
 });
 
 describe('proposalVotes', () => {
-  test('votes for a proposal ID', async () => {
+  it('should return proposalVotes filtered by proposal ID', async () => {
     const q = {
       query: gql`
         query {
