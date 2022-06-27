@@ -26,28 +26,39 @@ export const getPortfolio = async ({
   return portfolio;
 };
 
-export const createPortfolio = (attributes: Attributes<Portfolio>): Promise<void> => {
+export const createPortfolio = (
+  attributes: Attributes<Portfolio>,
+  blockId: string
+): Promise<void> => {
   const { identityId, number } = attributes;
   return Portfolio.create({
     id: `${identityId}/${number}`,
     ...attributes,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   }).save();
 };
 
-const handlePortfolioCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handlePortfolioCreated = async (
+  blockId: string,
+  params: Codec[],
+  eventIdx: number
+): Promise<void> => {
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
   const name = getTextValue(rawName);
 
-  await createPortfolio({
-    identityId: ownerId,
-    number,
-    name,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
+  await createPortfolio(
+    {
+      identityId: ownerId,
+      number,
+      name,
+      eventIdx,
+    },
+    blockId
+  );
 };
 
 const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise<void> => {
@@ -119,7 +130,7 @@ export async function mapPortfolio({
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.Portfolio) {
     if (eventId === EventIdEnum.PortfolioCreated) {
-      await handlePortfolioCreated(blockId, params);
+      await handlePortfolioCreated(blockId, params, event.idx);
     }
     if (eventId === EventIdEnum.PortfolioRenamed) {
       await handlePortfolioRenamed(blockId, params);

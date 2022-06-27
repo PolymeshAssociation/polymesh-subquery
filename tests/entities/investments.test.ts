@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('investments', () => {
-  test('should return investments for sto', async () => {
+  it('should return investments for sto', async () => {
     const q = {
       query: gql`
         query {
@@ -11,7 +11,7 @@ describe('investments', () => {
             totalCount
             nodes {
               createdBlockId
-              investor
+              investor: investorId
               stoId
               offeringToken
               raiseToken

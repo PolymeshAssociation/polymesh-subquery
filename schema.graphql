@@ -148,7 +148,6 @@ type TickerExternalAgentAction @entity {
   palletName: String! @index(unique: false)
   eventId: String! @index(unique: false)
   eventIdx: Int!
-  datetime: Date!
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
 }
@@ -175,7 +174,7 @@ type Authorization @entity {
 
 type Investment @entity {
   id: ID!
-  investor: String!
+  investor: Identity!
   stoId: Int! @index(unique: false)
   offeringToken: String! @index(unique: false)
   raiseToken: String!
@@ -186,7 +185,7 @@ type Investment @entity {
   updatedBlock: Block!
 }
 
-type TickerExternalAgentAdded @entity {
+type TickerExternalAgent @entity {
   id: ID! # ticker/callerId
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
@@ -202,10 +201,10 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  eventIdx: Int!
   datetime: Date!
   type: String!
   permissions: String
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -237,6 +236,7 @@ type Portfolio @entity {
   number: Int! @index(unique: false)
   name: String
   custodian: Identity
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -254,19 +254,19 @@ type PortfolioMovement @entity {
 
 type Leg @entity {
   id: ID! # instructionId/legIndex
-  ticker: String!
+  asset: Asset!
   amount: BigInt!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
   instruction: Instruction
   settlement: Settlement
+  addresses: [String!]! @index(unique: false)
   createdBlock: Block!
   updatedBlock: Block!
 }
 
 type Settlement @entity {
   id: ID!
-  addresses: [String!]! @index(unique: false)
   result: String!
   legs: [Leg!]! @derivedFrom(field: "settlement")
   createdBlock: Block!
@@ -285,20 +285,20 @@ type Venue @entity {
 type Instruction @entity {
   id: ID! #instructionId
   eventId: String!
+  eventIdx: Int!
   status: String!
   venue: Venue! @index(unique: false)
   settlementType: String!
   endBlock: Int
   tradeDate: Date
   valueDate: Date
-  addresses: [String!]! @index(unique: false)
   legs: [Leg!]! @derivedFrom(field: "instruction")
   createdBlock: Block!
   updatedBlock: Block!
 }
 
 type Distribution @entity {
-  id: ID!
+  id: ID! # assetId/localId
   identity: Identity!
   localId: Int! @index(unique: false)
   asset: Asset! @index(unique: false)
@@ -385,10 +385,11 @@ type Claim @entity {
   updatedBlock: Block!
 }
 
-type TrustedClaimIssuerTicker @entity {
+type TrustedClaimIssuer @entity {
   id: ID!
-  ticker: String!
+  asset: Asset! @index(unique: false)
   issuer: String! @index(unique: false)
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -415,6 +416,43 @@ type TransferManager @entity {
   type: String!
   value: Int!
   exemptedEntities: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type StatType @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset!
+  opType: String!
+  claimType: String
+  claimIssuer: Identity
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type TransferCompliance @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset! @index(unique: false)
+  type: String!
+  statType: StatType!
+  # value is present only in case of MaxInvestorCount and MaxInvestorOwnership
+  value: BigInt
+  # following values are present in case of ClaimCount and ClaimOwnership
+  claimType: String
+  claimValue: String
+  claimIssuer: Identity
+  min: BigInt
+  max: BigInt
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type TransferComplianceExemption @entity {
+  id: ID! #asset/opType/claimType/exemptedEntityId
+  asset: Asset! @index(unique: false)
+  opType: String!
+  claimType: String
+  exemptedEntityId: String!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -468,6 +506,8 @@ type Asset @entity {
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
   transferManagers: [TransferManager]! @derivedFrom(field: "asset")
+  trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }

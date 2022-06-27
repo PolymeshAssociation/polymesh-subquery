@@ -3,7 +3,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('tickerExternalAgentHistory', () => {
-  test('should return history of each external agent in ticker', async () => {
+  it('should return history of each external agent in ticker', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`

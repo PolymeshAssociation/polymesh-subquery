@@ -16,7 +16,7 @@ export async function mapInvestment({
   if (moduleId === ModuleIdEnum.Sto && eventId === EventIdEnum.Invested) {
     await Investment.create({
       id: `${blockId}/${event.idx}`,
-      investor: getTextValue(params[0]),
+      investorId: getTextValue(params[0]),
       stoId: getNumberValue(params[1]),
       offeringToken: serializeTicker(params[2]),
       raiseToken: serializeTicker(params[3]),

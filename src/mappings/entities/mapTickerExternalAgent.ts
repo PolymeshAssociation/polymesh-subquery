@@ -1,8 +1,8 @@
-import { TickerExternalAgentAdded } from '../../types';
+import { TickerExternalAgent } from '../../types';
 import { getTextValue, serializeTicker } from '../util';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
 
-export async function mapTickerExternalAgentAdded({
+export async function mapTickerExternalAgent({
   blockId,
   eventId,
   moduleId,
@@ -13,7 +13,7 @@ export async function mapTickerExternalAgentAdded({
     const callerId = getTextValue(params[0]);
     const ticker = serializeTicker(params[1]);
 
-    await TickerExternalAgentAdded.create({
+    await TickerExternalAgent.create({
       id: `${ticker}/${callerId}`,
       assetId: ticker,
       callerId,
@@ -27,6 +27,6 @@ export async function mapTickerExternalAgentAdded({
   if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentRemoved) {
     const agent = params[2].toString();
     const ticker = serializeTicker(params[1]);
-    await TickerExternalAgentAdded.remove(`${ticker}/${agent}`);
+    await TickerExternalAgent.remove(`${ticker}/${agent}`);
   }
 }

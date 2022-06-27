@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { isHex } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { Asset, AssetDocument, AssetHolder, Funding } from '../../types';
 import {
@@ -9,6 +10,7 @@ import {
   getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
+  hexToString,
   removeNullChars,
   serializeTicker,
 } from '../util';
@@ -48,15 +50,32 @@ export const getAssetHolder = async (
   return assetHolder;
 };
 
-const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleAssetCreated = async (
+  blockId: string,
+  params: Codec[],
+  eventIdx: number
+): Promise<void> => {
   const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
-  // Name isn't present on the event so we need to query storage
-  // See MESH-1808 on Jira for the status on including name in the event
+  /**
+   * Name isn't present on the event so we need to query storage.
+   * See MESH-1808 on Jira for the status on including name in the event
+   *
+   * @note
+   *   - For chain >= 5.0.0, asset.assetNames provides a hex value
+   *   - For chain < 5.0.0, asset.assetNames provides name of the ticker in plain text. In case
+   *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
+   */
   const rawName = await api.query.asset.assetNames(rawTicker);
-  const name = removeNullChars(getTextValue(rawName));
+  const nameString = getTextValue(rawName);
+  let name;
+  if (isHex(nameString)) {
+    name = hexToString(nameString);
+  } else {
+    name = removeNullChars(nameString);
+  }
 
   await Asset.create({
     id: ticker,
@@ -72,6 +91,7 @@ const handleAssetCreated = async (blockId: string, params: Codec[]): Promise<voi
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -261,10 +281,11 @@ const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
 const handleAssetUpdateEvents = async (
   blockId: string,
   eventId: EventIdEnum,
-  params: Codec[]
+  params: Codec[],
+  event: SubstrateEvent
 ): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleAssetCreated(blockId, params);
+    await handleAssetCreated(blockId, params, event.idx);
   }
   if (eventId === EventIdEnum.AssetRenamed) {
     await handleAssetRenamed(blockId, params);
@@ -314,7 +335,7 @@ export async function mapAsset({
   if (eventId === EventIdEnum.Transfer) {
     await handleAssetTransfer(blockId, params);
   }
-  await handleAssetUpdateEvents(blockId, eventId, params);
+  await handleAssetUpdateEvents(blockId, eventId, params, event);
 
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }

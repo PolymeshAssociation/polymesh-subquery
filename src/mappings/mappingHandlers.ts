@@ -1,8 +1,7 @@
 import { Vec } from '@polkadot/types/codec';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { AnyTuple } from '@polkadot/types/types';
-import { hexStripPrefix, u8aToHex } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
+import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Block, Event, Extrinsic } from '../types';
 import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './entities/common';
@@ -19,11 +18,12 @@ import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
 import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
+import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
-import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
+import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
-import { mapTrustedClaimIssuerTicker } from './entities/mapTrustedClaimIssuerTicker';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -32,7 +32,7 @@ import {
   extractTransferTo,
 } from './generatedColumns';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase, logFoundType } from './util';
+import { camelToSnakeCase, getSigner, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -145,19 +145,20 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     mapAsset(handlerArgs),
     mapCompliance(handlerArgs),
     mapTransferManager(handlerArgs),
+    mapStatistics(handlerArgs),
     mapPortfolio(handlerArgs),
     mapSettlement(handlerArgs),
     mapStakingEvent(handlerArgs),
     mapBridgeEvent(handlerArgs),
     mapSto(handlerArgs),
     mapExternalAgentAction(handlerArgs),
-    mapTickerExternalAgentAdded(handlerArgs),
+    mapTickerExternalAgent(handlerArgs),
     mapTickerExternalAgentHistory(handlerArgs),
     mapAuthorization(handlerArgs),
     mapInvestment(handlerArgs),
     mapCorporateActions(handlerArgs),
     mapProposal(handlerArgs),
-    mapTrustedClaimIssuerTicker(handlerArgs),
+    mapTrustedClaimIssuer(handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -195,17 +196,7 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
   const blockId = extrinsic.block.block.header.number.toString();
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedbyAddress
-    ? hexStripPrefix(
-        u8aToHex(
-          decodeAddress(
-            extrinsic.extrinsic.signer.toString(),
-            false,
-            extrinsic.extrinsic.registry.chainSS58
-          )
-        )
-      )
-    : null;
+  const address = signedbyAddress ? getSigner(extrinsic) : null;
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
 
   await Extrinsic.create({
