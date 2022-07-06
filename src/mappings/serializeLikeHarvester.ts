@@ -74,7 +74,7 @@ export const serializeLikeHarvester = (
     }
   } else if (rawType === 'Text') {
     return removeNullChars(item.toString());
-  } else if (type === 'Ticker') {
+  } else if (type === 'Ticker' || type === 'PolymeshPrimitivesTicker') {
     return serializeTicker(item);
   } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
