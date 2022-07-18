@@ -1,19 +1,20 @@
 import { SubstrateEvent } from '@subql/types';
-import { Claim, ClaimScope } from '../../types';
+import {
+  Claim,
+  ClaimScope,
+  ClaimTypeEnum,
+  ClaimScopeTypeEnum,
+  EventIdEnum,
+  ModuleIdEnum,
+} from '../../types';
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
-
-enum ClaimScopeTypeEnum {
-  Identity = 'Identity',
-  Ticker = 'Ticker',
-  Custom = 'Custom',
-}
+import { HandlerArgs } from './common';
 
 interface ClaimParams {
   claimExpiry: bigint | undefined;
   claimIssuer: string;
   claimScope: string;
-  claimType: string;
+  claimType: ClaimTypeEnum;
   issuanceDate: bigint;
   lastUpdateDate: bigint;
   cddId: string;
@@ -32,7 +33,7 @@ export async function mapClaim(
   { blockId, eventId, moduleId, params, event }: HandlerArgs,
   claimParams: ClaimParams
 ): Promise<void> {
-  if (moduleId === ModuleIdEnum.Identity) {
+  if (moduleId === ModuleIdEnum.identity) {
     const target = getTextValue(params[0]);
 
     if (eventId === EventIdEnum.ClaimAdded) {

@@ -1,14 +1,13 @@
-import { Authorization } from '../../types';
+import {
+  Authorization,
+  AuthorizationStatusEnum,
+  AuthTypeEnum,
+  EventIdEnum,
+  ModuleIdEnum,
+} from '../../types';
 import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
 import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
-
-enum AuthorizationStatus {
-  Pending = 'Pending',
-  Consumed = 'Consumed',
-  Rejected = 'Rejected',
-  Revoked = 'Revoked',
-}
+import { HandlerArgs } from './common';
 
 const authorizationEvents = new Set<string>([
   EventIdEnum.AuthorizationAdded,
@@ -19,10 +18,10 @@ const authorizationEvents = new Set<string>([
 
 const isAuthorizationEvent = (e: string): e is EventIdEnum => authorizationEvents.has(e);
 
-const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus>([
-  [EventIdEnum.AuthorizationConsumed, AuthorizationStatus.Consumed],
-  [EventIdEnum.AuthorizationRevoked, AuthorizationStatus.Revoked],
-  [EventIdEnum.AuthorizationRejected, AuthorizationStatus.Rejected],
+const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatusEnum>([
+  [EventIdEnum.AuthorizationConsumed, AuthorizationStatusEnum.Consumed],
+  [EventIdEnum.AuthorizationRevoked, AuthorizationStatusEnum.Revoked],
+  [EventIdEnum.AuthorizationRejected, AuthorizationStatusEnum.Rejected],
 ]);
 
 export async function mapAuthorization({
@@ -31,7 +30,7 @@ export async function mapAuthorization({
   moduleId,
   params,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Identity && isAuthorizationEvent(eventId)) {
+  if (moduleId === ModuleIdEnum.identity && isAuthorizationEvent(eventId)) {
     if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
       auth.status = authorizationEventStatusMapping.get(eventId);
@@ -43,10 +42,10 @@ export async function mapAuthorization({
         fromId: getTextValue(params[0]),
         toId: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),
-        type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
+        type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])) as AuthTypeEnum,
         data: getFirstValueFromJson(params[4]),
         expiry: getDateValue(params[5]),
-        status: AuthorizationStatus.Pending,
+        status: AuthorizationStatusEnum.Pending,
         createdBlockId: blockId,
         updatedBlockId: blockId,
       }).save();

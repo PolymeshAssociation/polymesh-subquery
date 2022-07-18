@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Portfolio, PortfolioMovement } from '../../types';
+import { EventIdEnum, ModuleIdEnum, Portfolio, PortfolioMovement } from '../../types';
 import {
   getBigIntValue,
   getNumberValue,
@@ -9,7 +9,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { Attributes, EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { Attributes, HandlerArgs } from './common';
 
 export const getPortfolio = async ({
   identityId,
@@ -128,7 +128,7 @@ export async function mapPortfolio({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Portfolio) {
+  if (moduleId === ModuleIdEnum.portfolio) {
     if (eventId === EventIdEnum.PortfolioCreated) {
       await handlePortfolioCreated(blockId, params, event.idx);
     }

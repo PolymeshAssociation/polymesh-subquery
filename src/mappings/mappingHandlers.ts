@@ -3,8 +3,16 @@ import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { AnyTuple } from '@polkadot/types/types';
 import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { Block, Event, Extrinsic } from '../types';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './entities/common';
+import {
+  Block,
+  CallIdEnum,
+  ClaimTypeEnum,
+  Event,
+  EventIdEnum,
+  Extrinsic,
+  ModuleIdEnum,
+} from '../types';
+import { HandlerArgs } from './entities/common';
 import { mapAsset } from './entities/mapAsset';
 import { mapAuthorization } from './entities/mapAuthorization';
 import { mapBridgeEvent } from './entities/mapBridgeEvent';
@@ -105,8 +113,8 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
     eventIdx,
     extrinsicIdx: event?.extrinsic?.idx,
     specVersionId: block.specVersion,
-    eventId,
-    moduleId,
+    eventId: eventId as EventIdEnum,
+    moduleId: moduleId as ModuleIdEnum,
     attributesTxt: JSON.stringify(harvesterLikeArgs),
     eventArg_0,
     eventArg_1,
@@ -181,7 +189,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       claimExpiry,
       claimIssuer,
       claimScope,
-      claimType,
+      claimType: claimType as ClaimTypeEnum,
       issuanceDate,
       lastUpdateDate,
       cddId,
@@ -205,8 +213,8 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
     paramsTxt: JSON.stringify(params),
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,

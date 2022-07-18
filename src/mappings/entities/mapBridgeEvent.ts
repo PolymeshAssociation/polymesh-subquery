@@ -1,6 +1,6 @@
-import { BridgeEvent } from '../../types';
+import { BridgeEvent, EventIdEnum, ModuleIdEnum } from '../../types';
 import { getTextValue } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 /**
  * Subscribes to bridge events
@@ -12,7 +12,7 @@ export async function mapBridgeEvent({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Bridge && eventId === EventIdEnum.Bridged) {
+  if (moduleId === ModuleIdEnum.bridge && eventId === EventIdEnum.Bridged) {
     const [rawDid, rawBridgeDetails] = params;
 
     const { recipient, amount, tx_hash: txHash } = JSON.parse(rawBridgeDetails.toString());

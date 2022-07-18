@@ -1,7 +1,7 @@
 import { getBigIntValue, getNumberValue, getTextValue } from '../util';
-import { Investment } from './../../types';
+import { EventIdEnum, Investment, ModuleIdEnum } from './../../types';
 import { serializeTicker } from './../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 /**
  * Subscribes to the STO Invested event
@@ -13,7 +13,7 @@ export async function mapInvestment({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Sto && eventId === EventIdEnum.Invested) {
+  if (moduleId === ModuleIdEnum.sto && eventId === EventIdEnum.Invested) {
     await Investment.create({
       id: `${blockId}/${event.idx}`,
       investorId: getTextValue(params[0]),

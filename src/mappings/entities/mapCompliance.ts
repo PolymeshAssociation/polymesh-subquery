@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
-import { Compliance } from '../../types';
+import { Compliance, EventIdEnum, ModuleIdEnum } from '../../types';
 import { getComplianceValue, getNumberValue, serializeTicker } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 import { getAsset } from './mapAsset';
 
 const handleAssetComplianceState = async (blockId: string, params: Codec[], isPaused: boolean) => {
@@ -57,7 +57,7 @@ export async function mapCompliance({
   moduleId,
   params,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Compliancemanager) {
+  if (moduleId === ModuleIdEnum.compliancemanager) {
     if (eventId === EventIdEnum.AssetCompliancePaused) {
       await handleAssetComplianceState(blockId, params, true);
     }

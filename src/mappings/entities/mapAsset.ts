@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { isHex } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
-import { Asset, AssetDocument, AssetHolder, Funding } from '../../types';
+import { Asset, AssetDocument, AssetHolder, EventIdEnum, Funding, ModuleIdEnum } from '../../types';
 import {
   getBigIntValue,
   getBooleanValue,
@@ -14,7 +14,7 @@ import {
   removeNullChars,
   serializeTicker,
 } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 export const getAsset = async (ticker: string): Promise<Asset> => {
   const asset = await Asset.getByTicker(ticker);
@@ -314,7 +314,7 @@ export async function mapAsset({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.Asset) {
+  if (moduleId !== ModuleIdEnum.asset) {
     return;
   }
   if (eventId === EventIdEnum.DocumentAdded) {

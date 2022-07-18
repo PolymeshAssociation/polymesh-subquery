@@ -2,10 +2,12 @@ import { SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
+  EventIdEnum,
+  ModuleIdEnum,
   TickerExternalAgentHistory,
 } from '../../types';
 import { serializeTicker } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 export async function mapTickerExternalAgentHistory({
   blockId,
@@ -15,7 +17,7 @@ export async function mapTickerExternalAgentHistory({
   event,
 }: HandlerArgs): Promise<void> {
   const eventIdx = event.idx;
-  if (moduleId !== ModuleIdEnum.Externalagents) {
+  if (moduleId !== ModuleIdEnum.externalagents) {
     return;
   }
   if (eventId === EventIdEnum.GroupCreated) {
@@ -105,7 +107,7 @@ export async function mapTickerExternalAgentHistory({
     return;
   }
 
-  if (moduleId === ModuleIdEnum.Externalagents && eventId === EventIdEnum.AgentRemoved) {
+  if (moduleId === ModuleIdEnum.externalagents && eventId === EventIdEnum.AgentRemoved) {
     const did = params[2].toString();
     const ticker = serializeTicker(params[1]);
 

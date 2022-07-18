@@ -8,7 +8,7 @@ describe('stakingEvents', () => {
     const q = {
       query: gql`
         query {
-          stakingEvents(filter: { eventId: { equalTo: "Nominated" } }, first: 10) {
+          stakingEvents(filter: { eventId: { equalTo: Nominated } }, first: 10) {
             nodes {
               eventId
               datetime

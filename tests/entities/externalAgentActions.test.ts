@@ -31,7 +31,7 @@ describe('tickerExternalAgentActions', () => {
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgentActions(
-            filter: { assetId: { equalTo: $ticker }, eventId: { equalTo: "FundraiserFrozen" } }
+            filter: { assetId: { equalTo: $ticker }, eventId: { equalTo: FundraiserFrozen } }
           ) {
             nodes {
               palletName

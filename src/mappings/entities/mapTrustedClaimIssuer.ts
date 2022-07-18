@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
-import { TrustedClaimIssuer } from '../../types';
+import { TrustedClaimIssuer, ModuleIdEnum, EventIdEnum } from '../../types';
 import { getTextValue, serializeTicker } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 export async function mapTrustedClaimIssuer({
   blockId,
@@ -10,7 +10,7 @@ export async function mapTrustedClaimIssuer({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.Compliancemanager) {
+  if (moduleId !== ModuleIdEnum.compliancemanager) {
     return;
   }
 
