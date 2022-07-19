@@ -23,6 +23,7 @@ export async function mapBridgeEvent({
       recipient,
       amount: BigInt(amount) / BigInt(1000000),
       txHash,
+      eventIdx: event.idx,
       datetime: event.block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,

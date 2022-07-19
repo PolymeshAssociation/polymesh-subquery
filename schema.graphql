@@ -1014,6 +1014,7 @@ type BridgeEvent @entity {
   recipient: String!
   amount: BigInt!
   txHash: String! @index(unique: false)
+  eventIdx: Int!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
