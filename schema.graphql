@@ -1312,6 +1312,7 @@ enum ClaimTypeEnum {
   InvestorUniqueness
   NoData
   InvestorUniquenessV2
+  NoType
 }
 
 enum ClaimScopeTypeEnum {

@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { Sto, TickerExternalAgentAction, EventIdEnum, ModuleIdEnum } from '../../types';
+import { EventIdEnum, ModuleIdEnum, Sto, TickerExternalAgentAction } from '../../types';
 import { getOrDefault, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 
