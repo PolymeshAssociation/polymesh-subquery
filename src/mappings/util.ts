@@ -11,8 +11,9 @@ import {
   SecurityIdentifier,
   TransferComplianceExemption,
   TransferManager,
+  TransferRestrictionTypeEnum,
 } from '../types';
-import { Attributes, TransferRestrictionType } from './entities/common';
+import { Attributes } from './entities/common';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -33,7 +34,7 @@ export const fromEntries = <K extends string | number, V, V2>(
 };
 
 export const camelToSnakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+  str[0].toLowerCase() + str.slice(1).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
 export const snakeToCamelCase = (value: string): string =>
   value
@@ -226,14 +227,14 @@ export const getTransferManagerValue = (
 
   if (countTransferManager) {
     return {
-      type: TransferRestrictionType.Count,
+      type: TransferRestrictionTypeEnum.Count,
       value: Number(countTransferManager),
     };
   }
 
   if (percentageTransferManager) {
     return {
-      type: TransferRestrictionType.Percentage,
+      type: TransferRestrictionTypeEnum.Percentage,
       value: Number(percentageTransferManager),
     };
   }

@@ -1,8 +1,8 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Distribution, DistributionPayment } from '../../types';
+import { Distribution, DistributionPayment, EventIdEnum, ModuleIdEnum } from '../../types';
 import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 /**
  * Subscribes to the CapitalDistribution events
@@ -14,7 +14,7 @@ export async function mapCorporateActions({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Capitaldistribution) {
+  if (moduleId === ModuleIdEnum.capitaldistribution) {
     if (eventId === EventIdEnum.Created) {
       await handleDistributionCreated(blockId, params);
     }

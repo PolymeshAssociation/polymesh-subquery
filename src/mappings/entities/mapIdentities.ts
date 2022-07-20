@@ -2,13 +2,15 @@ import { Codec } from '@polkadot/types/types';
 import {
   Account,
   AssetPermissions,
+  EventIdEnum,
   Identity,
+  ModuleIdEnum,
   Permissions,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../types';
 import { getTextValue } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 import { createPortfolio } from './mapPortfolio';
 
 /**
@@ -23,7 +25,7 @@ export async function mapIdentities({
 }: HandlerArgs): Promise<void> {
   const datetime = event.block.timestamp;
 
-  if (moduleId === ModuleIdEnum.Identity) {
+  if (moduleId === ModuleIdEnum.identity) {
     if (eventId === EventIdEnum.DidCreated) {
       await handleDidCreated(blockId, eventId, params, datetime, event.idx);
     }

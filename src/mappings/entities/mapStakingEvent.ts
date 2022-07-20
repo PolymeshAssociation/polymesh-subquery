@@ -1,7 +1,7 @@
 import { hexAddPrefix } from '@polkadot/util';
-import { StakingEvent } from '../../types';
+import { ModuleIdEnum, StakingEvent } from '../../types';
 import { getBigIntValue, getTextValue, serializeAccount } from '../util';
-import { HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 enum StakingEventType {
   Bonded = 'Bonded',
@@ -29,7 +29,7 @@ export async function mapStakingEvent({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Staking && isStakingEventType(eventId)) {
+  if (moduleId === ModuleIdEnum.staking && isStakingEventType(eventId)) {
     let amount: bigint;
     let stashAccount: string;
     let nominatedValidators: string[];

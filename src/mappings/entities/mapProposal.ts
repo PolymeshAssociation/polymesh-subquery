@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { Proposal, ProposalVote } from '../../types';
+import { EventIdEnum, ModuleIdEnum, Proposal, ProposalStateEnum, ProposalVote } from '../../types';
 import {
   getBigIntValue,
   getBooleanValue,
@@ -7,16 +7,7 @@ import {
   getTextValue,
   serializeAccount,
 } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
-
-enum ProposalState {
-  Pending = 'Pending',
-  Rejected = 'Rejected',
-  Scheduled = 'Scheduled',
-  Failed = 'Failed',
-  Executed = 'Executed',
-  Expired = 'Expired',
-}
+import { HandlerArgs } from './common';
 
 const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<void> => {
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
@@ -25,7 +16,7 @@ const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<
     id: getTextValue(rawPipId),
     proposer: getFirstValueFromJson(rawProposer),
     ownerId: getTextValue(rawDid),
-    state: ProposalState.Pending,
+    state: ProposalStateEnum.Pending,
     balance: getBigIntValue(rawBalance),
     url: getTextValue(rawUrl),
     description: getTextValue(rawDescription),
@@ -43,7 +34,7 @@ const handleProposalStateUpdated = async (blockId: string, params: Codec[]): Pro
   const pipId = getTextValue(rawPipId);
   const proposal = await Proposal.get(pipId);
 
-  proposal.state = getTextValue(rawState);
+  proposal.state = getTextValue(rawState) as ProposalStateEnum;
   proposal.updatedBlockId = blockId;
 
   await proposal.save();
@@ -120,7 +111,7 @@ export async function mapProposal({
   moduleId,
   params,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Pips) {
+  if (moduleId === ModuleIdEnum.pips) {
     if (eventId === EventIdEnum.ProposalCreated) {
       await handleProposalCreated(blockId, params);
     }

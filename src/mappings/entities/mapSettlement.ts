@@ -1,6 +1,15 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Instruction, Leg, Settlement, Venue } from '../../types';
+import {
+  EventIdEnum,
+  Instruction,
+  Leg,
+  ModuleIdEnum,
+  Settlement,
+  Venue,
+  SettlementResultEnum,
+  InstructionStatusEnum,
+} from '../../types';
 import {
   getDateValue,
   getFirstKeyFromJson,
@@ -10,21 +19,7 @@ import {
   getTextValue,
   LegDetails,
 } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
-
-export enum SettlementResultEnum {
-  None = 'None',
-  Executed = 'Executed',
-  Failed = 'Failed',
-  Rejected = 'Rejected',
-}
-
-enum InstructionStatusEnum {
-  Created = 'Created',
-  Executed = 'Executed',
-  Rejected = 'Rejected',
-  Failed = 'Failed',
-}
+import { HandlerArgs } from './common';
 
 const updateEvents: EventIdEnum[] = [
   EventIdEnum.InstructionAuthorized,
@@ -38,11 +33,18 @@ const finalizedEvents: EventIdEnum[] = [
   EventIdEnum.InstructionFailed,
 ];
 
-const instructionResultMap = {
+const settlementResultMap = {
   [EventIdEnum.InstructionExecuted]: SettlementResultEnum.Executed,
   [EventIdEnum.InstructionRejected]: SettlementResultEnum.Rejected,
   [EventIdEnum.InstructionFailed]: SettlementResultEnum.Failed,
   default: SettlementResultEnum.None,
+};
+
+const instructionStatusMap = {
+  [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
+  [EventIdEnum.InstructionRejected]: InstructionStatusEnum.Rejected,
+  [EventIdEnum.InstructionFailed]: InstructionStatusEnum.Failed,
+  [EventIdEnum.InstructionCreated]: InstructionStatusEnum.Created,
 };
 
 export const createLeg = async (
@@ -173,7 +175,7 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
 
 const handleInstructionUpdate = async (
   blockId: string,
-  eventId: string,
+  eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
@@ -201,7 +203,7 @@ const handleInstructionFinalizedEvent = async (
   const instructionId = getTextValue(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
-  instruction.status = instructionResultMap[eventId] || instructionResultMap['default'];
+  instruction.status = instructionStatusMap[eventId];
   instruction.eventId = eventId;
   instruction.updatedBlockId = blockId;
 
@@ -209,7 +211,7 @@ const handleInstructionFinalizedEvent = async (
 
   const settlement = Settlement.create({
     id: settlementId,
-    result: instruction.status,
+    result: settlementResultMap[eventId] || settlementResultMap['default'],
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
@@ -228,7 +230,7 @@ export async function mapSettlement({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Settlement) {
+  if (moduleId === ModuleIdEnum.settlement) {
     if (eventId === EventIdEnum.VenueCreated) {
       await handleVenueCreated(blockId, params);
     }

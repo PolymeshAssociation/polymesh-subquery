@@ -1,14 +1,16 @@
 import { Codec } from '@polkadot/types/types';
-import { StatType, TransferCompliance, TransferComplianceExemption } from '../../types';
-import { capitalizeFirstLetter, getExemptKeyValue, hexToString } from '../util';
 import {
-  Attributes,
+  ClaimTypeEnum,
   EventIdEnum,
-  HandlerArgs,
   ModuleIdEnum,
-  StatOpType,
-  TransferComplianceType,
-} from './common';
+  StatOpTypeEnum,
+  StatType,
+  TransferCompliance,
+  TransferComplianceExemption,
+  TransferComplianceTypeEnum,
+} from '../../types';
+import { capitalizeFirstLetter, getExemptKeyValue, hexToString } from '../util';
+import { Attributes, HandlerArgs } from './common';
 
 const getStatisticsScope = (item: Codec): { assetId: string } => {
   const { ticker } = JSON.parse(item.toString());
@@ -30,8 +32,8 @@ const getStatTypes = (item: Codec): Pick<StatType, 'opType' | 'claimType' | 'cla
       claimIssuerId = claimIssuer[1];
     }
     return {
-      opType,
-      claimType,
+      opType: opType as StatOpTypeEnum,
+      claimType: claimType as ClaimTypeEnum,
       claimIssuerId,
     };
   });
@@ -52,7 +54,7 @@ interface MeshTransferCondition {
 
 const getStatClaim = (statClaim: MeshStatClaim) => {
   const type = Object.keys(statClaim)[0];
-  return { type: capitalizeFirstLetter(type), value: statClaim[type] };
+  return { type: capitalizeFirstLetter(type) as ClaimTypeEnum, value: statClaim[type] };
 };
 
 const getTransferConditions = (item: Codec, assetId: string): Attributes<TransferCompliance>[] => {
@@ -62,16 +64,16 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
       if (maxInvestorCount) {
         return {
           assetId,
-          type: TransferComplianceType.MaxInvestorCount,
-          statTypeId: getStatTypeId(assetId, StatOpType.Count),
+          type: TransferComplianceTypeEnum.MaxInvestorCount,
+          statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Count),
           value: BigInt(maxInvestorCount),
         };
       }
       if (maxInvestorOwnership) {
         return {
           assetId,
-          type: TransferComplianceType.MaxInvestorOwnership,
-          statTypeId: getStatTypeId(assetId, StatOpType.Balance),
+          type: TransferComplianceTypeEnum.MaxInvestorOwnership,
+          statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Balance),
           value: BigInt(maxInvestorOwnership),
         };
       }
@@ -80,8 +82,8 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
         const claimIssuerId = claimCount[1];
         return {
           assetId,
-          type: TransferComplianceType.ClaimCount,
-          statTypeId: getStatTypeId(assetId, StatOpType.Count, claimType, claimIssuerId),
+          type: TransferComplianceTypeEnum.ClaimCount,
+          statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Count, claimType, claimIssuerId),
           claimType,
           claimValue,
           claimIssuerId,
@@ -94,8 +96,8 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
         const claimIssuerId = claimOwnership[1];
         return {
           assetId,
-          type: TransferComplianceType.ClaimOwnership,
-          statTypeId: getStatTypeId(assetId, StatOpType.Balance, claimType, claimIssuerId),
+          type: TransferComplianceTypeEnum.ClaimOwnership,
+          statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Balance, claimType, claimIssuerId),
           claimType,
           claimValue,
           claimIssuerId,
@@ -260,7 +262,7 @@ export async function mapStatistics({
   moduleId,
   params,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Statistics) {
+  if (moduleId === ModuleIdEnum.statistics) {
     if (eventId === EventIdEnum.StatTypesAdded) {
       await handleStatTypeAdded(blockId, params);
     }

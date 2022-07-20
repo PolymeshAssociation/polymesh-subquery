@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
-import { TransferManager } from '../../types';
+import { EventIdEnum, ModuleIdEnum, TransferManager } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
-import { EventIdEnum, HandlerArgs, ModuleIdEnum } from './common';
+import { HandlerArgs } from './common';
 
 const getTransferManageId = (
   ticker: string,
@@ -84,7 +84,7 @@ export async function mapTransferManager({
   moduleId,
   params,
 }: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.Statistics) {
+  if (moduleId === ModuleIdEnum.statistics) {
     if (eventId === EventIdEnum.TransferManagerAdded) {
       await handleTransferManagerAdded(blockId, params);
     }
