@@ -34,8 +34,8 @@ services:
       # NO_NATIVE_GRAPHQL_DATA: 'TRUE' # Setting this value only processes tooling specific handlers. Native subquery entities are ignored.
       # Polymesh-local
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
-      NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01' #v4.0.0
-      # NETWORK_CHAIN_ID: '0xd6e0fe8999ed722eae5490e0fb43c547f0ad16f4e795acc2669d50dde88cc00e' #v5.0.0
+      # Setting NETWORK_HTTP_ENDPOINT will allow dynamic lookup of NETWORK_CHAIN_ID
+      NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
       # Staging
       # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.live
       # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
