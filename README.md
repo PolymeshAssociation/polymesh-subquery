@@ -29,4 +29,4 @@ This SubQuery version works with chain version 5.0.0
 
 ### A note on handlers and NO_NATIVE_GRAPHQL_DATA mode
 
-By setting the env variable "NO_NATIVE_GRAPHQL_DATA" this will set the handlers to only record what is necessary for tooling gql. This allows a stable indexer to be ran as native GraphQL handlers get developed
+By setting the env variable "NO_NATIVE_GRAPHQL_DATA" this will set the event handler to only record what is necessary for tooling gql. This allows a stable indexer to be ran as native GraphQL handlers get developed

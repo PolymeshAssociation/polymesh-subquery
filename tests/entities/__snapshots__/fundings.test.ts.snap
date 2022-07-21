@@ -1,0 +1,65 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`fundings should return fundings with ticker and fundingRound filters 1 1`] = `
+Object {
+  "fundings": Object {
+    "__typename": "FundingsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Funding",
+        "amount": "1000000",
+        "createdBlockId": "201",
+        "fundingRound": "first",
+        "ticker": "8TICKER",
+        "totalFundingAmount": "1000000",
+      },
+      Object {
+        "__typename": "Funding",
+        "amount": "100",
+        "createdBlockId": "204",
+        "fundingRound": "first",
+        "ticker": "8TICKER",
+        "totalFundingAmount": "1000100",
+      },
+    ],
+    "totalCount": 2,
+  },
+}
+`;
+
+exports[`fundings should return fundings with ticker and fundingRound filters 2 1`] = `
+Object {
+  "fundings": Object {
+    "__typename": "FundingsConnection",
+    "nodes": Array [],
+    "totalCount": 0,
+  },
+}
+`;
+
+exports[`fundings should return fundings with ticker filter only 1 1`] = `
+Object {
+  "fundings": Object {
+    "__typename": "FundingsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Funding",
+        "amount": "1000000",
+        "createdBlockId": "201",
+        "fundingRound": "first",
+        "ticker": "8TICKER",
+        "totalFundingAmount": "1000000",
+      },
+      Object {
+        "__typename": "Funding",
+        "amount": "100",
+        "createdBlockId": "204",
+        "fundingRound": "first",
+        "ticker": "8TICKER",
+        "totalFundingAmount": "1000100",
+      },
+    ],
+    "totalCount": 2,
+  },
+}
+`;

@@ -55,6 +55,7 @@ services:
       # - --local # This is now deprecated
       - --db-schema=public # Once tooling-gql is deprecated, we can change the schema name if required
       # - --force-clean # To remove all tables and schema before starting the app
+      - --timestamp-field # Enables created_at and updated_at in schema
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
       interval: 3s

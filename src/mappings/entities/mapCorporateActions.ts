@@ -1,125 +1,105 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { getBigIntValue, getTextValue } from '../util';
-import { HistoryOfPaymentEventsForCa } from './../../types/models/HistoryOfPaymentEventsForCa';
-import { WithholdingTaxesOfCa } from './../../types/models/WithholdingTaxesOfCa';
-import { serializeTicker } from './../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
-
-type CapitalDistributionParams = (params: Codec[], eventId: EventIdEnum) => Promise<string>;
-
-const getBalanceForCa = async (params: Codec[], eventId: EventIdEnum): Promise<bigint> => {
-  if (eventId === EventIdEnum.BenefitClaimed) {
-    return getBigIntValue(params[4]);
-  }
-  if (eventId === EventIdEnum.Reclaimed) {
-    return getBigIntValue(params[2]);
-  }
-  throw new Error("Event didn't have a balance parameter");
-};
-
-const getTickerFromCaId: CapitalDistributionParams = async (params, eventId) => {
-  if (eventId === EventIdEnum.BenefitClaimed) {
-    if (params[2] instanceof Map && params[2].get('ticker')) {
-      return serializeTicker(params[2].get('ticker'));
-    }
-  } else if (eventId === EventIdEnum.Reclaimed) {
-    if (params[1] instanceof Map && params[1].get('ticker')) {
-      return serializeTicker(params[1].get('ticker'));
-    }
-  }
-  throw new Error("Event didn't have a ticker parameter within Ca_Id");
-};
-
-const getLocalIdFromCaId: CapitalDistributionParams = async (params, eventId) => {
-  if (eventId === EventIdEnum.BenefitClaimed) {
-    if (params[2] instanceof Map && params[2].get('local_id')) {
-      return getTextValue(params[2].get('local_id'));
-    }
-  } else if (eventId === EventIdEnum.Reclaimed) {
-    if (params[1] instanceof Map && params[1].get('local_id')) {
-      return getTextValue(params[1].get('local_id'));
-    }
-  }
-  throw new Error("Event didn't have a CaID local_id parameter within Ca_Id");
-};
+import { Distribution, DistributionPayment, EventIdEnum, ModuleIdEnum } from '../../types';
+import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
+import { HandlerArgs } from './common';
 
 /**
- * Subscribes to the CapitalDistribution (BenefitedClaimed and Reclaimed Event)
+ * Subscribes to the CapitalDistribution events
  */
-export async function mapCorporateActions(
-  blockId: number,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
-  if (moduleId === ModuleIdEnum.Capitaldistribution) {
+export async function mapCorporateActions({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
+  if (moduleId === ModuleIdEnum.capitaldistribution) {
+    if (eventId === EventIdEnum.Created) {
+      await handleDistributionCreated(blockId, params);
+    }
     if (eventId === EventIdEnum.BenefitClaimed) {
-      await handleHistoryOfPaymentEventsForCA(blockId, eventId, params, event);
-      await handleWithholdingTaxesOfCA(eventId, params, event);
+      await handleBenefitClaimed(blockId, eventId, params, event);
     }
     if (eventId === EventIdEnum.Reclaimed) {
-      await handleHistoryOfPaymentEventsForCA(blockId, eventId, params, event);
+      await handleReclaimed(blockId, eventId, params, event);
     }
   }
 }
 
-/**
- * Handles HistoryOfPaymentEventsForCA entity
- */
-async function handleHistoryOfPaymentEventsForCA(
-  blockId: number,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-) {
-  const eventDid = getTextValue(params[0]);
-  const ticker = await getTickerFromCaId(params, eventId);
-  const localId = await getLocalIdFromCaId(params, eventId);
-  const balance = await getBalanceForCa(params, eventId);
-  const tax = getBigIntValue(params[5]);
-  await HistoryOfPaymentEventsForCa.create({
-    id: `${blockId}/${event.idx}`,
-    blockId,
-    eventId,
-    eventDid,
-    eventIdx: event.idx,
-    ticker,
-    localId: Number(localId),
-    balance,
-    tax,
-    datetime: event.block.timestamp,
-  }).save();
-}
+const handleDistributionCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [rawDid, rawCaId, rawDistribution] = params;
 
-/**
- * Handles WithholdingTaxesOfCA entity
- * This method is executed for only BenefitClaimed event.
- * On receiving this event, it calculates the tax for the specific event and
- * aggregates it to the existing value against CaId(localId + Ticker)
- */
-async function handleWithholdingTaxesOfCA(
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const distributionDetails = getDistributionValue(rawDistribution);
+
+  await Distribution.create({
+    id: `${assetId}/${localId}`,
+    identityId: getTextValue(rawDid),
+    localId,
+    assetId,
+    ...distributionDetails,
+    taxes: BigInt(0),
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
+const handleBenefitClaimed = async (
+  blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
-) {
-  const ticker = await getTickerFromCaId(params, eventId);
-  const localId = await getLocalIdFromCaId(params, eventId);
-  const balance = await getBalanceForCa(params, eventId);
-  const tax = getBigIntValue(params[5]);
-  const taxes = (balance * tax) / BigInt(1000000);
-  const corporateAction = await WithholdingTaxesOfCa.get(`${ticker}/${localId}`);
-  if (corporateAction !== undefined) {
-    corporateAction.taxes += BigInt(taxes);
-    await corporateAction.save();
-  } else {
-    await WithholdingTaxesOfCa.create({
-      id: `${ticker}/${localId}`,
-      ticker,
-      localId: Number(localId),
-      taxes: taxes,
-      datetime: event.block.timestamp,
-    }).save();
-  }
-}
+): Promise<void> => {
+  const [rawEventDid, , rawCaId, , rawAmount, rawTax] = params;
+
+  const targetId = getTextValue(rawEventDid);
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const amount = getBigIntValue(rawAmount);
+  const tax = getBigIntValue(rawTax);
+
+  const distribution = await Distribution.get(`${assetId}/${localId}`);
+  distribution.taxes += amount * tax;
+  distribution.updatedBlockId = blockId;
+
+  const distributionPayment = DistributionPayment.create({
+    id: `${blockId}/${event.idx}`,
+    distributionId: `${assetId}/${localId}`,
+    targetId,
+    eventId,
+    amount,
+    tax,
+    reclaimed: false,
+    datetime: event.block.timestamp,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  await Promise.all([distributionPayment.save(), distribution.save()]);
+};
+
+const handleReclaimed = async (
+  blockId: string,
+  eventId: EventIdEnum,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
+  const [rawEventDid, rawCaId, rawAmount] = params;
+
+  const targetId = getTextValue(rawEventDid);
+  const { localId, assetId } = getCaIdValue(rawCaId);
+  const amount = getBigIntValue(rawAmount);
+
+  await DistributionPayment.create({
+    id: `${blockId}/${event.idx}`,
+    distributionId: `${assetId}/${localId}`,
+    targetId,
+    eventId,
+    amount,
+    tax: BigInt(0),
+    reclaimed: true,
+    datetime: event.block.timestamp,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};

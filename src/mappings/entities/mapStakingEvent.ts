@@ -1,8 +1,7 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
-import { StakingEvent } from '../../types';
-import { serializeAccount } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { hexAddPrefix } from '@polkadot/util';
+import { ModuleIdEnum, StakingEvent } from '../../types';
+import { getBigIntValue, getTextValue, serializeAccount } from '../util';
+import { HandlerArgs } from './common';
 
 enum StakingEventType {
   Bonded = 'Bonded',
@@ -19,33 +18,52 @@ const bondedUnbondedOrReward = new Set([
   StakingEventType.Unbonded,
   StakingEventType.Reward,
 ]);
+
 /**
- * Subscribes to events related to staking events
+ * Subscribes to staking events
  */
-export async function mapStakingEvent(
-  blockId: number,
-  eventId: EventIdEnum,
-  moduleId: string,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
-  if (moduleId === ModuleIdEnum.Staking && isStakingEventType(eventId)) {
-    let amount: any = null;
+export async function mapStakingEvent({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
+  if (moduleId === ModuleIdEnum.staking && isStakingEventType(eventId)) {
+    let amount: bigint;
+    let stashAccount: string;
+    let nominatedValidators: string[];
+    let identityId: string;
+
     if (eventId === StakingEventType.Slash) {
-      amount = params[1].toJSON();
-    } else if (bondedUnbondedOrReward.has(eventId)) {
-      amount = params[2].toJSON();
+      const [rawAccount, rawAmount] = params;
+
+      stashAccount = serializeAccount(rawAccount);
+      amount = getBigIntValue(rawAmount);
+    } else {
+      const [rawDid, rawAccount] = params;
+
+      identityId = getTextValue(rawDid);
+      stashAccount = serializeAccount(rawAccount);
+
+      if (bondedUnbondedOrReward.has(eventId)) {
+        amount = getBigIntValue(params[2]);
+      } else if (eventId === StakingEventType.Nominated) {
+        nominatedValidators = params[2].toJSON() as string[];
+      }
     }
+
     await StakingEvent.create({
       id: `${blockId}/${event.idx}`,
-      blockId,
-      eventIdx: event.idx,
-      stakingEventId: event.event.method,
-      date: event.block.timestamp,
-      identityId: eventId === StakingEventType.Slash ? null : params[0].toString(),
-      stashAccount: serializeAccount(eventId === StakingEventType.Slash ? params[0] : params[1]),
+      eventId,
+      identityId,
+      stashAccount,
       amount,
-      nominatedValidators: eventId === 'Nominated' ? (params[2].toJSON() as string[]) : null,
+      nominatedValidators,
+      transactionId: hexAddPrefix(event.extrinsic?.extrinsic.hash.toJSON()),
+      datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
 }

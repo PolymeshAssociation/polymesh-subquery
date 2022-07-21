@@ -1,0 +1,21 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`assetDocuments should return all Asset Documents for a particular asset 1`] = `
+Object {
+  "assetDocuments": Object {
+    "__typename": "AssetDocumentsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "AssetDocument",
+        "contentHash": null,
+        "filedAt": null,
+        "id": 0,
+        "link": "www.google.com",
+        "name": "google",
+        "ticker": "4TICKER",
+        "type": null,
+      },
+    ],
+  },
+}
+`;

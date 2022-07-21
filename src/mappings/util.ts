@@ -1,9 +1,20 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateExtrinsic } from '@subql/types';
-import { HarvesterLikeCallArgs } from './serializeLikeHarvester';
-import { SecurityIdentifier, FoundType } from '../types';
+import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
+import {
+  AssetDocument,
+  Compliance,
+  Distribution,
+  FoundType,
+  SecurityIdentifier,
+  TransferComplianceExemption,
+  TransferManager,
+  TransferRestrictionTypeEnum,
+} from '../types';
+import { Attributes } from './entities/common';
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
@@ -23,7 +34,7 @@ export const fromEntries = <K extends string | number, V, V2>(
 };
 
 export const camelToSnakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+  str[0].toLowerCase() + str.slice(1).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
 export const snakeToCamelCase = (value: string): string =>
   value
@@ -90,6 +101,7 @@ export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V):
 export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
+
 export const serializeAccount = (item: Codec): string | null => {
   const s = item.toString();
 
@@ -108,7 +120,11 @@ export const getFirstValueFromJson = (item: Codec): string => {
 };
 
 export const getTextValue = (item: Codec): string => {
-  return item.toString().trim().length === 0 ? null : item.toString().trim();
+  return item?.toString().trim().length === 0 ? null : item.toString().trim();
+};
+
+export const getNumberValue = (item: Codec): number => {
+  return Number(getTextValue(item));
 };
 
 export const getDateValue = (item: Codec): Date => {
@@ -132,35 +148,198 @@ export const hexToString = (input: string): string => {
 };
 
 export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
-  const parsed = JSON.parse(extrinsic.extrinsic.toString());
-  return u8aToHex(
-    decodeAddress(parsed.signature.signer.id, false, extrinsic.block.registry.chainSS58)
+  return hexStripPrefix(
+    u8aToHex(
+      decodeAddress(
+        extrinsic.extrinsic.signer.toString(),
+        false,
+        extrinsic.extrinsic.registry.chainSS58
+      )
+    )
   );
 };
 
-export const harvesterLikeParamsToObj = (
-  params: HarvesterLikeCallArgs,
-  formatKey = true
-): Record<string, any> => {
-  const obj: Record<string, any> = {};
-  params.forEach(p => {
-    obj[formatKey ? snakeToCamelCase(p.name) : p.name] =
-      p.name === 'asset_type' ? Object.keys(p.value)[0] : p.value;
-  });
-  return obj;
+/**
+ * Parses a raw Asset Document
+ */
+export const getDocValue = (
+  doc: Codec
+): Pick<AssetDocument, 'name' | 'link' | 'contentHash' | 'type' | 'filedAt'> => {
+  const {
+    uri: link,
+    content_hash: documentHash,
+    name,
+    doc_type: type,
+    filing_date: filedAt,
+  } = JSON.parse(doc.toString());
+
+  const hashType = Object.keys(documentHash)[0];
+
+  return {
+    name,
+    link,
+    contentHash: documentHash[hashType],
+    type,
+    filedAt,
+  };
 };
 
-export const formatAssetIdentifiers = (
-  identifiers: Record<string, string>[]
-): SecurityIdentifier[] =>
-  identifiers.map(i => {
+export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
+  const identifiers = JSON.parse(item.toString());
+  return identifiers.map(i => {
     const type = Object.keys(i)[0];
     return {
       type,
       value: i[type],
     };
   });
+};
+
+/**
+ * Parses a Vec<AssetCompliance>
+ */
+export const getComplianceRulesValue = (
+  requirements: Codec
+): Pick<Compliance, 'complianceId' | 'data'>[] => {
+  return JSON.parse(JSON.stringify(requirements));
+};
+
+/**
+ * Parses AssetCompliance
+ */
+export const getComplianceValue = (
+  compliance: Codec
+): Pick<Compliance, 'complianceId' | 'data'> => {
+  const { id, ...data } = JSON.parse(compliance.toString());
+  return {
+    complianceId: Number(id),
+    data,
+  };
+};
+
+/**
+ * Parses AssetTransferManager
+ */
+export const getTransferManagerValue = (
+  manager: Codec
+): Pick<TransferManager, 'type' | 'value'> => {
+  const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
+
+  if (countTransferManager) {
+    return {
+      type: TransferRestrictionTypeEnum.Count,
+      value: Number(countTransferManager),
+    };
+  }
+
+  if (percentageTransferManager) {
+    return {
+      type: TransferRestrictionTypeEnum.Percentage,
+      value: Number(percentageTransferManager),
+    };
+  }
+
+  throw new Error('Unknown transfer restriction type found');
+};
+
+export const getExemptKeyValue = (
+  item: Codec
+): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'> => {
+  const {
+    asset: { ticker },
+    op: opType,
+    claimType,
+  } = JSON.parse(item.toString());
+  return {
+    assetId: hexToString(ticker),
+    opType,
+    claimType,
+  };
+};
+
+export const getExemptionsValue = (exemptions: Codec): string[] => {
+  return JSON.parse(exemptions.toString()) || [];
+};
 
 export const logFoundType = (type: string, rawType: string): void => {
   FoundType.create({ id: type, rawType }).save();
+};
+
+export const END_OF_TIME = BigInt('253402194600000');
+
+export function addIfNotIncludes<T>(arr: T[], item: T): void {
+  if (!arr.includes(item)) {
+    arr.push(item);
+  }
+}
+
+interface MeshPortfolio {
+  did: string;
+  kind: {
+    user: number;
+  };
+}
+
+const meshPortfolioToPortfolio = ({
+  did,
+  kind: { user: number },
+}: MeshPortfolio): Pick<Portfolio, 'identityId' | 'number'> => ({
+  identityId: did,
+  number: number || 0,
+});
+
+export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
+  const meshPortfolio = JSON.parse(item.toString());
+  return meshPortfolioToPortfolio(meshPortfolio);
+};
+
+export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
+  const { local_id: localId, ticker } = JSON.parse(item.toString());
+  return { localId, assetId: hexToString(ticker) };
+};
+
+export interface LegDetails {
+  from: Pick<Portfolio, 'identityId' | 'number'>;
+  to: Pick<Portfolio, 'identityId' | 'number'>;
+  ticker: string;
+  amount: bigint;
+}
+
+export const getLegsValue = (item: Codec): LegDetails[] => {
+  const legs = JSON.parse(item.toString());
+  return legs.map(({ from: fromPortfolio, to: toPortfolio, asset: ticker, amount }) => ({
+    from: meshPortfolioToPortfolio(fromPortfolio),
+    to: meshPortfolioToPortfolio(toPortfolio),
+    ticker: hexToString(ticker),
+    amount: getBigIntValue(amount),
+  }));
+};
+
+export const getSignerAddress = (event: SubstrateEvent): string => {
+  let signer: string;
+  if (event.extrinsic) {
+    signer = getSigner(event.extrinsic);
+  }
+  return signer;
+};
+
+export const getDistributionValue = (
+  item: Codec
+): Pick<
+  Distribution,
+  'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
+> => {
+  const { from, currency, per_share, amount, remaining, payment_at, expires_at } = JSON.parse(
+    item.toString()
+  );
+  const { identityId, number } = meshPortfolioToPortfolio(from);
+  return {
+    portfolioId: `${identityId}/${number}`,
+    currency: hexToString(currency),
+    perShare: getBigIntValue(per_share),
+    amount: getBigIntValue(amount),
+    remaining: getBigIntValue(remaining),
+    paymentAt: getBigIntValue(payment_at),
+    expiresAt: getBigIntValue(expires_at || END_OF_TIME),
+  };
 };

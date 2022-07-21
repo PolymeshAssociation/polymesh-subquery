@@ -1,22 +1,37 @@
-import { mapAsset } from './entities/mapAsset';
-import { GenericExtrinsic } from '@polkadot/types/extrinsic';
 import { Vec } from '@polkadot/types/codec';
-import { AnyTuple, Codec } from '@polkadot/types/types';
-import { logFoundType, harvesterLikeParamsToObj, camelToSnakeCase } from './util';
-import { serializeLikeHarvester, serializeCallArgsLikeHarvester } from './serializeLikeHarvester';
-import { hexStripPrefix, u8aToHex } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
+import { GenericExtrinsic } from '@polkadot/types/extrinsic';
+import { AnyTuple } from '@polkadot/types/types';
+import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { Block, Event, Extrinsic } from '../types';
-import { EventIdEnum, ModuleIdEnum, CallIdEnum } from './entities/common';
+import {
+  Block,
+  CallIdEnum,
+  ClaimTypeEnum,
+  Event,
+  EventIdEnum,
+  Extrinsic,
+  ModuleIdEnum,
+} from '../types';
+import { HandlerArgs } from './entities/common';
+import { mapAsset } from './entities/mapAsset';
 import { mapAuthorization } from './entities/mapAuthorization';
+import { mapBridgeEvent } from './entities/mapBridgeEvent';
+import { mapClaim } from './entities/mapClaim';
+import { mapCompliance } from './entities/mapCompliance';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
-import { mapFunding } from './entities/mapFunding';
+import { mapIdentities } from './entities/mapIdentities';
 import { mapInvestment } from './entities/mapInvestment';
+import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
+import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
+import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
+import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
+import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
+import { mapTransferManager } from './entities/mapTransferManager';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -24,11 +39,8 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
-import { mapTickerExternalAgentAdded } from './entities/mapTickerExternalAgentAdded';
-import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
-import { mapSettlement } from './entities/mapSettlement';
-import { mapClaim } from './entities/mapClaim';
-import { mapHeldTokens } from './entities/mapHeldTokens';
+import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
+import { camelToSnakeCase, getSigner, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   const header = block.block.header;
@@ -82,7 +94,7 @@ const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => 
 
 export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
   const block = event.block;
-  const blockId = block.block.header.number.toNumber();
+  const blockId = block.block.header.number.toString();
   const eventIdx = event.idx;
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
@@ -101,8 +113,8 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
     eventIdx,
     extrinsicIdx: event?.extrinsic?.idx,
     specVersionId: block.specVersion,
-    eventId,
-    moduleId,
+    eventId: eventId as EventIdEnum,
+    moduleId: moduleId as ModuleIdEnum,
     attributesTxt: JSON.stringify(harvesterLikeArgs),
     eventArg_0,
     eventArg_1,
@@ -118,57 +130,43 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
   }).save();
 }
 
-export async function handleToolingCall(extrinsic: SubstrateExtrinsic): Promise<void> {
-  const { blockId, extrinsicIdx, signedbyAddress, address, params } = getCallArgs(extrinsic);
-
-  await Extrinsic.create({
-    id: `${blockId}/${extrinsicIdx}`,
-    blockId,
-    extrinsicIdx,
-    extrinsicLength: extrinsic.extrinsic.length,
-    signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase(),
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method),
-    paramsTxt: JSON.stringify(params),
-    success: extrinsic.success ? 1 : 0,
-    signedbyAddress: signedbyAddress ? 1 : 0,
-    address,
-    nonce: extrinsic.extrinsic.nonce.toNumber(),
-    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
-    specVersionId: extrinsic.block.specVersion,
-  }).save();
-}
-
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
   await handleToolingEvent(event);
 
   const block = event.block;
-  const blockId = block.block.header.number.toNumber();
+  const blockId = block.block.header.number.toString();
   const moduleId = event.event.section.toLowerCase();
   const eventId = event.event.method;
   const args = event.event.data.toArray();
 
-  const handlerArgs: [number, EventIdEnum, ModuleIdEnum, Codec[], SubstrateEvent] = [
+  const handlerArgs: HandlerArgs = {
     blockId,
-    eventId as EventIdEnum,
-    moduleId as ModuleIdEnum,
-    args,
+    eventId: eventId as EventIdEnum,
+    moduleId: moduleId as ModuleIdEnum,
+    params: args,
     event,
-  ];
+  };
+
   const handlerPromises = [
-    mapStakingEvent(...handlerArgs),
-    mapSto(eventId, moduleId, args),
-    mapExternalAgentAction(...handlerArgs),
-    mapTickerExternalAgentAdded(...handlerArgs),
-    mapTickerExternalAgentHistory(...handlerArgs),
-    mapFunding(...handlerArgs),
-    mapAuthorization(blockId, eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
-    mapInvestment(...handlerArgs),
-    mapSettlement(...handlerArgs),
-    mapCorporateActions(...handlerArgs),
-    mapProposal(...handlerArgs),
-    mapHeldTokens(eventId as EventIdEnum, moduleId as ModuleIdEnum, args),
+    mapIdentities(handlerArgs),
+    mapAsset(handlerArgs),
+    mapCompliance(handlerArgs),
+    mapTransferManager(handlerArgs),
+    mapStatistics(handlerArgs),
+    mapPortfolio(handlerArgs),
+    mapSettlement(handlerArgs),
+    mapStakingEvent(handlerArgs),
+    mapBridgeEvent(handlerArgs),
+    mapSto(handlerArgs),
+    mapExternalAgentAction(handlerArgs),
+    mapTickerExternalAgent(handlerArgs),
+    mapTickerExternalAgentHistory(handlerArgs),
+    mapAuthorization(handlerArgs),
+    mapInvestment(handlerArgs),
+    mapCorporateActions(handlerArgs),
+    mapProposal(handlerArgs),
+    mapTrustedClaimIssuer(handlerArgs),
   ];
 
   const harvesterLikeArgs = args.map((arg, i) => ({
@@ -187,11 +185,11 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   } = extractClaimInfo(harvesterLikeArgs);
 
   handlerPromises.push(
-    mapClaim(...handlerArgs, {
+    mapClaim(handlerArgs, {
       claimExpiry,
       claimIssuer,
       claimScope,
-      claimType,
+      claimType: claimType as ClaimTypeEnum,
       issuanceDate,
       lastUpdateDate,
       cddId,
@@ -202,52 +200,27 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
   await Promise.all(handlerPromises);
 }
 
-// handles calls to populate native GraphQL tables as well as what is needed for tooling
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
-  await handleToolingCall(extrinsic);
-
-  const { blockId, moduleId, callId, formattedParams } = getCallArgs(extrinsic);
-
-  const handlerArgs: [number, CallIdEnum, ModuleIdEnum, Record<string, any>, SubstrateExtrinsic] = [
-    blockId,
-    callId as CallIdEnum,
-    moduleId as ModuleIdEnum,
-    formattedParams,
-    extrinsic,
-  ];
-
-  const handlerPromises = [mapAsset(...handlerArgs)];
-  await Promise.all(handlerPromises);
-}
-
-function getCallArgs(extrinsic: SubstrateExtrinsic) {
-  const blockId = extrinsic.block.block.header.number.toNumber();
-  const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
-  const callId = extrinsic.extrinsic.method.method;
+  const blockId = extrinsic.block.block.header.number.toString();
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedbyAddress
-    ? hexStripPrefix(
-        u8aToHex(
-          decodeAddress(
-            extrinsic.extrinsic.signer.toString(),
-            false,
-            extrinsic.extrinsic.registry.chainSS58
-          )
-        )
-      )
-    : null;
+  const address = signedbyAddress ? getSigner(extrinsic) : null;
   const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
-  const formattedParams = harvesterLikeParamsToObj(params);
 
-  return {
+  await Extrinsic.create({
+    id: `${blockId}/${extrinsicIdx}`,
     blockId,
-    moduleId,
-    callId,
     extrinsicIdx,
-    signedbyAddress,
+    extrinsicLength: extrinsic.extrinsic.length,
+    signed: extrinsic.extrinsic.isSigned ? 1 : 0,
+    moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
+    callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
+    paramsTxt: JSON.stringify(params),
+    success: extrinsic.success ? 1 : 0,
+    signedbyAddress: signedbyAddress ? 1 : 0,
     address,
-    params,
-    formattedParams,
-  };
+    nonce: extrinsic.extrinsic.nonce.toNumber(),
+    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+    specVersionId: extrinsic.block.specVersion,
+  }).save();
 }

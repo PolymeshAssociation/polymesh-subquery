@@ -1,11 +1,902 @@
+enum ModuleIdEnum {
+  system
+  babe
+  timestamp
+  indices
+  authorship
+  balances
+  transactionpayment
+  identity
+  cddserviceproviders
+  polymeshcommittee
+  committeemembership
+  technicalcommittee
+  technicalcommitteemembership
+  upgradecommittee
+  upgradecommitteemembership
+  multisig
+  bridge
+  staking
+  offences
+  session
+  authoritydiscovery
+  grandpa
+  historical
+  imonline
+  randomnesscollectiveflip
+  sudo
+  asset
+  capitaldistribution
+  checkpoint
+  compliancemanager
+  corporateaction
+  corporateballot
+  permissions
+  pips
+  portfolio
+  protocolfee
+  scheduler
+  settlement
+  statistics
+  sto
+  treasury
+  utility
+  base
+  externalagents
+  relayer
+  rewards
+  contracts
+  polymeshcontracts
+  preimage
+  testutils
+}
+
+enum EventIdEnum {
+  ## system ##
+  ExtrinsicSuccess
+  ExtrinsicFailed
+  CodeUpdated
+  NewAccount
+  KilledAccount
+  Remarked
+
+  ## babe ##
+
+  ## timestamp ##
+
+  ## indices ##
+  IndexAssigned
+  IndexFreed
+  IndexFrozen
+
+  ## authorship ##
+
+  ## balances ##
+  Endowed
+  # Transfer (already defined in Asset)
+  BalanceSet
+  AccountBalanceBurned
+  Reserved
+  Unreserved
+  ReserveRepatriated
+
+  ## transactionpayment ##
+
+  ## identity ##
+  DidCreated
+  SecondaryKeysAdded
+  SecondaryKeysRemoved
+  SecondaryKeyLeftIdentity
+  SecondaryKeyPermissionsUpdated
+  PrimaryKeyUpdated
+  ClaimAdded
+  ClaimRevoked
+  AssetDidRegistered
+  AuthorizationAdded
+  AuthorizationRevoked
+  AuthorizationRejected
+  AuthorizationConsumed
+  AuthorizationRetryLimitReached
+  CddRequirementForPrimaryKeyUpdated
+  CddClaimsInvalidated
+  SecondaryKeysFrozen
+  SecondaryKeysUnfrozen
+
+  ## cddserviceproviders ##
+  # MemberAdded (already defined in UpgradeCommitteeMembership)
+  # MemberRemoved (already defined in UpgradeCommitteeMembership)
+  # MemberRevoked (already defined in UpgradeCommitteeMembership)
+  # MembersSwapped (already defined in UpgradeCommitteeMembership)
+  # MembersReset (already defined in UpgradeCommitteeMembership)
+  # ActiveLimitChanged (already defined in UpgradeCommitteeMembership)
+  # Dummy (already defined in UpgradeCommitteeMembership)
+
+  ## polymeshcommittee ##
+  Proposed
+  # Voted (already defined in Pips)
+  VoteRetracted
+  FinalVotes
+  Approved
+  Rejected
+  Executed
+  ReleaseCoordinatorUpdated
+  ExpiresAfterUpdated
+  VoteThresholdUpdated
+
+  ## committeemembership ##
+  MemberAdded
+  MemberRemoved
+  MemberRevoked
+  MembersSwapped
+  MembersReset
+  ActiveLimitChanged
+  Dummy
+
+  ## technicalcommittee ##
+  # Proposed (already defined in PolymeshCommittee)
+  # Voted (already defined in Pips)
+  # VoteRetracted (already defined in PolymeshCommittee)
+  # FinalVotes (already defined in PolymeshCommittee)
+  # Approved (already defined in PolymeshCommittee)
+  # Rejected (already defined in PolymeshCommittee)
+  # Executed (already defined in PolymeshCommittee)
+  # Closed (already defined in PolymeshCommittee)
+  # ReleaseCoordinatorUpdated (already defined in PolymeshCommittee)
+  # ExpiresAfterUpdated (already defined in PolymeshCommittee)
+  # VoteThresholdUpdated (already defined in PolymeshCommittee)
+
+  ## technicalcommitteemembership ##
+  # MemberAdded (already defined in CommitteeMembership)
+  # MemberRemoved (already defined in CommitteeMembership)
+  # MemberRevoked (already defined in CommitteeMembership)
+  # MembersSwapped (already defined in CommitteeMembership)
+  # MembersReset (already defined in CommitteeMembership)
+  # ActiveLimitChanged (already defined in CommitteeMembership)
+  # Dummy (already defined in CommitteeMembership)
+
+  ## upgradecommittee ##
+  # Proposed (already defined in TechnicalCommittee)
+  # Voted (already defined in TechnicalCommittee)
+  # VoteRetracted (already defined in TechnicalCommittee)
+  # FinalVotes (already defined in TechnicalCommittee)
+  # Approved (already defined in TechnicalCommittee)
+  # Rejected (already defined in TechnicalCommittee)
+  # Executed (already defined in TechnicalCommittee)
+  # Closed (already defined in TechnicalCommittee)
+  # ReleaseCoordinatorUpdated (already defined in TechnicalCommittee)
+  # ExpiresAfterUpdated (already defined in TechnicalCommittee)
+  # VoteThresholdUpdated (already defined in TechnicalCommittee)
+
+  ## upgradecommitteemembership ##
+  # MemberAdded (already defined in TechnicalCommitteeMembership)
+  # MemberRemoved (already defined in TechnicalCommitteeMembership)
+  # MemberRevoked (already defined in TechnicalCommitteeMembership)
+  # MembersSwapped (already defined in TechnicalCommitteeMembership)
+  # MembersReset (already defined in TechnicalCommitteeMembership)
+  # ActiveLimitChanged (already defined in TechnicalCommitteeMembership)
+  # Dummy (already defined in TechnicalCommitteeMembership)
+
+  ## multisig ##
+  MultiSigCreated
+  ProposalAdded
+  ProposalExecuted
+  MultiSigSignerAdded
+  MultiSigSignerAuthorized
+  MultiSigSignerRemoved
+  MultiSigSignaturesRequiredChanged
+  ProposalApproved
+  ProposalRejectionVote
+  ProposalRejected
+  ProposalExecutionFailed
+  # SchedulingFailed (already defined in Settlement)
+
+  ## bridge ##
+  ControllerChanged
+  AdminChanged
+  TimelockChanged
+  Bridged
+  Frozen
+  Unfrozen
+  FrozenTx
+  UnfrozenTx
+  ExemptedUpdated
+  BridgeLimitUpdated
+  TxsHandled
+  BridgeTxScheduled
+  BridgeTxScheduleFailed
+  FreezeAdminAdded
+  FreezeAdminRemoved
+  TxRemoved
+
+  ## staking ##
+  EraPayout
+  Reward
+  Slash
+  OldSlashingReportDiscarded
+  StakingElection
+  SolutionStored
+  Bonded
+  Unbonded
+  Nominated
+  Withdrawn
+  PermissionedIdentityAdded
+  PermissionedIdentityRemoved
+  InvalidatedNominators
+  CommissionCapUpdated
+  MinimumBondThresholdUpdated
+  RewardPaymentSchedulingInterrupted
+  SlashingAllowedForChanged
+
+  ## offences ##
+  Offence
+
+  ## session ##
+  NewSession
+
+  ## authoritydiscovery ##
+
+  ## grandpa ##
+  NewAuthorities
+  Paused
+  Resumed
+
+  ## historical ##
+
+  ## imonline ##
+  HeartbeatReceived
+  AllGood
+  SomeOffline
+
+  ## randomnesscollectiveflip ##
+
+  ## sudo ##
+  Sudid
+  KeyChanged
+  SudoAsDone
+
+  ## asset ##
+  Transfer
+  Issued
+  Redeemed
+  AssetCreated
+  IdentifiersUpdated
+  DivisibilityChanged
+  TransferWithData
+  IsIssuable
+  TickerRegistered
+  TickerTransferred
+  AssetOwnershipTransferred
+  AssetFrozen
+  AssetUnfrozen
+  AssetRenamed
+  FundingRoundSet
+  DocumentAdded
+  DocumentRemoved
+  ExtensionRemoved
+  ClassicTickerClaimed
+  ControllerTransfer
+  CustomAssetTypeExists
+  CustomAssetTypeRegistered
+  SetAssetMetadataValue
+  SetAssetMetadataValueDetails
+  RegisterAssetMetadataLocalType
+  RegisterAssetMetadataGlobalType
+
+  ## capitaldistribution ##
+  Created
+  BenefitClaimed
+  Reclaimed
+  Removed
+
+  ## checkpoint ##
+  CheckpointCreated
+  MaximumSchedulesComplexityChanged
+  ScheduleCreated
+  ScheduleRemoved
+
+  ## compliancemanager ##
+  ComplianceRequirementCreated
+  ComplianceRequirementRemoved
+  AssetComplianceReplaced
+  AssetComplianceReset
+  AssetComplianceResumed
+  AssetCompliancePaused
+  ComplianceRequirementChanged
+  TrustedDefaultClaimIssuerAdded
+  TrustedDefaultClaimIssuerRemoved
+
+  ## corporateaction ##
+  MaxDetailsLengthChanged
+  DefaultTargetIdentitiesChanged
+  DefaultWithholdingTaxChanged
+  DidWithholdingTaxChanged
+  CAATransferred
+  CAInitiated
+  CALinkedToDoc
+  CARemoved
+  RecordDateChanged
+
+  ## corporateballot ##
+  # Created (already defined in capitaldistribution)
+  VoteCast
+  RangeChanged
+  MetaChanged
+  RCVChanged
+  # Removed (already defined in capitaldistribution)
+
+  ## permissions ##
+
+  ## pips ##
+  HistoricalPipsPruned
+  ProposalCreated
+  ProposalStateUpdated
+  Voted
+  PipClosed
+  ExecutionScheduled
+  DefaultEnactmentPeriodChanged
+  MinimumProposalDepositChanged
+  PendingPipExpiryChanged
+  MaxPipSkipCountChanged
+  ActivePipLimitChanged
+  ProposalRefund
+  SnapshotCleared
+  SnapshotTaken
+  PipSkipped
+  SnapshotResultsEnacted
+  ExecutionSchedulingFailed
+  ExpiryScheduled
+  ExpirySchedulingFailed
+  ExecutionCancellingFailed
+
+  ## portfolio ##
+  PortfolioCreated
+  PortfolioDeleted
+  MovedBetweenPortfolios
+  PortfolioRenamed
+  UserPortfolios
+  PortfolioCustodianChanged
+
+  ## protocolfee ##
+  FeeSet
+  CoefficientSet
+  FeeCharged
+
+  ## scheduler ##
+  Scheduled
+  Canceled
+  Dispatched
+  CallLookupFailed
+
+  ## settlement ##
+  VenueCreated
+  VenueDetailsUpdated
+  VenueTypeUpdated
+  InstructionAuthorized @deprecated
+  InstructionUnauthorized @deprecated
+  InstructionCreated
+  InstructionAffirmed
+  AffirmationWithdrawn
+  InstructionRejected
+  ReceiptClaimed
+  ReceiptValidityChanged
+  ReceiptUnclaimed
+  VenueFiltering
+  VenuesAllowed
+  VenuesBlocked
+  LegFailedExecution
+  InstructionFailed
+  InstructionExecuted
+  VenueUnauthorized
+  SchedulingFailed
+  InstructionRescheduled
+
+  ## statistics ##
+  TransferManagerAdded @deprecated
+  TransferManagerRemoved @deprecated
+  ExemptionsAdded @deprecated
+  ExemptionsRemoved @deprecated
+  StatTypesAdded
+  StatTypesRemoved
+  AssetStatsUpdated
+  SetAssetTransferCompliance
+  TransferConditionExemptionsAdded
+  TransferConditionExemptionsRemoved
+
+  ## sto ##
+  FundraiserCreated
+  Invested
+  FundraiserFrozen
+  FundraiserUnfrozen
+  FundraiserWindowModified
+  FundraiserClosed
+
+  ## treasury ##
+  TreasuryDisbursement
+  TreasuryDisbursementFailed
+  TreasuryReimbursement
+
+  ## utility ##
+  BatchInterrupted
+  BatchOptimisticFailed
+  BatchCompleted
+
+  ## base ##
+  UnexpectedError
+
+  ## externalagents ##
+  GroupCreated
+  GroupPermissionsUpdated
+  AgentAdded
+  AgentRemoved
+  GroupChanged
+
+  ## relayer ##
+  AuthorizedPayingKey
+  AcceptedPayingKey
+  RemovedPayingKey
+  UpdatedPolyxLimit
+
+  ## rewards ##
+  ItnRewardClaimed
+
+  ## contracts ##
+  Instantiated
+  Terminated
+  CodeStored
+  ContractEmitted
+  CodeRemoved
+  ContractCodeUpdated
+
+  ## polymeshcontracts ##
+
+  ## preimage ##
+  Noted
+  Requested
+  Cleared
+
+  ## testutils ##
+  MockInvestorUIDCreated
+  DidStatus
+  CddStatus
+}
+
+enum CallIdEnum {
+  ## system ##
+  fill_block
+  remark
+  set_heap_pages
+  set_code
+  set_code_without_checks
+  set_storage
+  kill_storage
+  kill_prefix
+  remark_with_event
+
+  ## babe ##
+  report_equivocation
+  report_equivocation_unsigned
+  plan_config_change
+
+  ## timestamp ##
+  set
+
+  ## indices ##
+  claim
+  transfer
+  free
+  force_transfer
+  freeze
+
+  ## authorship ##
+  set_uncles
+
+  ## balances ##
+  # transfer (already defined in indices)
+  transfer_with_memo
+  deposit_block_reward_reserve_balance
+  set_balance
+  # force_transfer (already defined in indices)
+  burn_account_balance
+
+  ## transactionpayment ##
+
+  ## identity ##
+  cdd_register_did
+  invalidate_cdd_claims
+  remove_secondary_keys_old
+  accept_primary_key
+  change_cdd_requirement_for_mk_rotation
+  join_identity_as_key
+  leave_identity_as_key
+  add_claim
+  revoke_claim
+  set_permission_to_signer
+  placeholder_legacy_set_permission_to_signer
+  freeze_secondary_keys
+  unfreeze_secondary_keys
+  add_authorization
+  remove_authorization
+  add_secondary_keys_with_authorization_old
+  add_investor_uniqueness_claim
+  gc_add_cdd_claim
+  gc_revoke_cdd_claim
+  add_investor_uniqueness_claim_v2
+  revoke_claim_by_index
+  rotate_primary_key_to_secondary
+  add_secondary_keys_with_authorization
+  set_secondary_key_permissions
+  remove_secondary_keys
+
+  ## cddserviceproviders ##
+  set_active_members_limit
+  disable_member
+  add_member
+  remove_member
+  swap_member
+  reset_members
+  abdicate_membership
+
+  ## polymeshcommittee ##
+  set_vote_threshold
+  set_release_coordinator
+  set_expires_after
+  vote_or_propose
+  vote
+
+  ## committeemembership ##
+  # set_active_members_limit ( already defined in cddserviceproviders)
+  # disable_member ( already defined in cddserviceproviders)
+  # add_member ( already defined in cddserviceproviders)
+  # remove_member ( already defined in cddserviceproviders)
+  # swap_member ( already defined in cddserviceproviders)
+  # reset_members ( already defined in cddserviceproviders)
+  # abdicate_membership ( already defined in cddserviceproviders)
+
+  ## technicalcommittee ##
+  # set_vote_threshold ( already defined in polymeshcommittee)
+  # set_release_coordinator ( already defined in polymeshcommittee)
+  # set_expires_after ( already defined in polymeshcommittee)
+  # vote_or_propose ( already defined in polymeshcommittee)
+  # vote ( already defined in polymeshcommittee)
+
+  ## technicalcommitteemembership ##
+  # set_active_members_limit ( already defined in cddserviceproviders)
+  # disable_member ( already defined in cddserviceproviders)
+  # add_member ( already defined in cddserviceproviders)
+  # remove_member ( already defined in cddserviceproviders)
+  # swap_member ( already defined in cddserviceproviders)
+  # reset_members ( already defined in cddserviceproviders)
+  # abdicate_membership ( already defined in cddserviceproviders)
+
+  ## upgradecommittee ##
+  # set_vote_threshold ( already defined in polymeshcommittee)
+  # set_release_coordinator ( already defined in polymeshcommittee)
+  # set_expires_after ( already defined in polymeshcommittee)
+  # vote_or_propose ( already defined in polymeshcommittee)
+  # vote ( already defined in polymeshcommittee)
+
+  ## upgradecommitteemembership ##
+  # set_active_members_limit ( already defined in cddserviceproviders)
+  # disable_member ( already defined in cddserviceproviders)
+  # add_member ( already defined in cddserviceproviders)
+  # remove_member ( already defined in cddserviceproviders)
+  # swap_member ( already defined in cddserviceproviders)
+  # reset_members ( already defined in cddserviceproviders)
+  # abdicate_membership ( already defined in cddserviceproviders)
+
+  ## multisig ##
+  create_multisig
+  create_or_approve_proposal_as_identity
+  create_or_approve_proposal_as_key
+  create_proposal_as_identity
+  create_proposal_as_key
+  approve_as_identity
+  approve_as_key
+  reject_as_identity
+  reject_as_key
+  accept_multisig_signer_as_identity
+  accept_multisig_signer_as_key
+  add_multisig_signer
+  remove_multisig_signer
+  add_multisig_signers_via_creator
+  remove_multisig_signers_via_creator
+  change_sigs_required
+  make_multisig_secondary
+  make_multisig_primary
+  execute_scheduled_proposal
+
+  ## bridge ##
+  change_controller
+  change_admin
+  change_timelock
+  # freeze ( already defined in indices)
+  # unfreeze ( already defined in asset)
+  change_bridge_limit
+  change_bridge_exempted
+  force_handle_bridge_tx
+  batch_propose_bridge_tx
+  propose_bridge_tx
+  handle_bridge_tx
+  freeze_txs
+  unfreeze_txs
+  handle_scheduled_bridge_tx
+  add_freeze_admin
+  remove_freeze_admin
+  remove_txs
+
+  ## staking ##
+  bond
+  bond_extra
+  unbond
+  withdraw_unbonded
+  validate
+  nominate
+  chill
+  set_payee
+  set_controller
+  set_validator_count
+  increase_validator_count
+  scale_validator_count
+  add_permissioned_validator
+  remove_permissioned_validator
+  validate_cdd_expiry_nominators
+  set_commission_cap
+  set_min_bond_threshold
+  force_no_eras
+  force_new_era
+  set_invulnerables
+  force_unstake
+  force_new_era_always
+  cancel_deferred_slash
+  payout_stakers
+  rebond
+  set_history_depth
+  reap_stash
+  submit_election_solution
+  submit_election_solution_unsigned
+  payout_stakers_by_system
+  change_slashing_allowed_for
+  update_permissioned_validator_intended_count
+
+  ## offences ##
+
+  ## session ##
+  set_keys
+  purge_keys
+
+  ## authoritydiscovery ##
+
+  ## grandpa ##
+  # report_equivocation ( already defined in babe)
+  # report_equivocation_unsigned ( already defined in babe)
+  note_stalled
+
+  ## historical ##
+
+  ## imonline ##
+  heartbeat
+
+  ## randomnesscollectiveflip ##
+
+  ## sudo ##
+  sudo
+  sudo_unchecked_weight
+  set_key
+  sudo_as
+
+  ## asset ##
+  register_ticker
+  accept_ticker_transfer
+  accept_asset_ownership_transfer
+  create_asset
+  # freeze ( already defined in indices)
+  unfreeze
+  rename_asset
+  issue
+  redeem
+  make_divisible
+  add_documents
+  remove_documents
+  set_funding_round
+  update_identifiers
+  claim_classic_ticker
+  reserve_classic_ticker
+  controller_transfer
+  register_custom_asset_type
+  create_asset_with_custom_type
+  set_asset_metadata
+  set_asset_metadata_details
+  register_and_set_local_asset_metadata
+  register_asset_metadata_local_type
+  register_asset_metadata_global_type
+
+  ## capitaldistribution ##
+  distribute
+  # claim ( already defined in indices)
+  push_benefit
+  reclaim
+  remove_distribution
+
+  ## checkpoint ##
+  create_checkpoint
+  set_schedules_max_complexity
+  create_schedule
+  remove_schedule
+
+  ## compliancemanager ##
+  add_compliance_requirement
+  remove_compliance_requirement
+  replace_asset_compliance
+  reset_asset_compliance
+  pause_asset_compliance
+  resume_asset_compliance
+  add_default_trusted_claim_issuer
+  remove_default_trusted_claim_issuer
+  change_compliance_requirement
+
+  ## corporateaction ##
+  set_max_details_length
+  set_default_targets
+  set_default_withholding_tax
+  set_did_withholding_tax
+  initiate_corporate_action
+  link_ca_doc
+  remove_ca
+  change_record_date
+  initiate_corporate_action_and_distribute
+
+  ## corporateballot ##
+  attach_ballot
+  # vote ( already defined in polymeshcommittee)
+  change_end
+  change_meta
+  change_rcv
+  remove_ballot
+
+  ## permissions ##
+
+  ## pips ##
+  set_prune_historical_pips
+  set_min_proposal_deposit
+  set_default_enactment_period
+  set_pending_pip_expiry
+  set_max_pip_skip_count
+  set_active_pip_limit
+  propose
+  # vote ( already defined in polymeshcommittee)
+  approve_committee_proposal
+  reject_proposal
+  prune_proposal
+  reschedule_execution
+  clear_snapshot
+  snapshot
+  enact_snapshot_results
+  execute_scheduled_pip
+  expire_scheduled_pip
+
+  ## portfolio ##
+  create_portfolio
+  delete_portfolio
+  move_portfolio_funds
+  rename_portfolio
+  quit_portfolio_custody
+  accept_portfolio_custody
+
+  ## protocolfee ##
+  change_coefficient
+  change_base_fee
+
+  ## scheduler ##
+  schedule
+  cancel
+  schedule_named
+  cancel_named
+  schedule_after
+  schedule_named_after
+
+  ## settlement ##
+  create_venue
+  update_venue_details
+  update_venue_type
+  add_instruction
+  add_and_affirm_instruction
+  affirm_instruction
+  withdraw_affirmation
+  reject_instruction
+  affirm_with_receipts
+  claim_receipt
+  unclaim_receipt
+  set_venue_filtering
+  allow_venues
+  disallow_venues
+  change_receipt_validity
+  execute_scheduled_instruction
+  reschedule_instruction
+
+  ## statistics ##
+  add_transfer_manager @deprecated
+  add_exempted_entities @deprecated
+  remove_exempted_entities @deprecated
+  remove_transfer_manager @deprecated
+  set_active_asset_stats
+  batch_update_asset_stats
+  set_asset_transfer_compliance
+  set_entities_exempt
+
+  ## sto ##
+  create_fundraiser
+  invest
+  freeze_fundraiser
+  unfreeze_fundraiser
+  modify_fundraiser_window
+  stop
+
+  ## treasury ##
+  disbursement
+  reimbursement
+
+  ## utility ##
+  batch
+  batch_atomic
+  batch_optimistic
+  relay_tx
+
+  ## base ##
+
+  ## externalagents ##
+  create_group
+  set_group_permissions
+  remove_agent
+  abdicate
+  change_group
+  accept_become_agent
+  create_group_and_add_auth
+  create_and_change_custom_group
+
+  ## relayer ##
+  set_paying_key
+  accept_paying_key
+  remove_paying_key
+  update_polyx_limit
+  increase_polyx_limit
+  decrease_polyx_limit
+
+  ## rewards ##
+  claim_itn_reward
+  set_itn_reward_status
+
+  ## contracts ##
+  call
+  instantiate_with_code
+  instantiate
+  upload_code
+  remove_code
+
+  ## polymeshcontracts ##
+  instantiate_with_code_perms
+  instantiate_with_hash_perms
+
+  ## preimage ##
+  note_preimage
+  unnote_preimage
+  request_preimage
+  unrequest_preimage
+
+  ## testutils ##
+  register_did
+  mock_cdd_register_did
+  get_my_did
+  get_cdd_of
+}
+
 type Event @entity {
   id: ID!
-  blockId: Int! @index(unique: false)
+  block: Block!
   eventIdx: Int!
   extrinsicIdx: Int
   specVersionId: Int!
-  moduleId: String! @index(unique: false)
-  eventId: String! @index(unique: false)
+  moduleId: ModuleIdEnum!
+  eventId: EventIdEnum!
   attributesTxt: String!
   eventArg_0: String
   eventArg_1: String
@@ -51,116 +942,204 @@ type Block @entity {
 
 type Extrinsic @entity {
   id: ID!
-  blockId: Int! @index(unique: false)
+  block: Block! @index(unique: false)
   extrinsicIdx: Int!
   extrinsicLength: Int!
   signed: Int!
   signedbyAddress: Int!
   address: String
-  moduleId: String! @index(unique: false)
-  callId: String! @index(unique: false)
+  moduleId: ModuleIdEnum!
+  callId: CallIdEnum!
   paramsTxt: String!
-  success: Int!
+  success: Int! @index(unique: false)
   nonce: Int
   extrinsicHash: String @index(unique: false)
   specVersionId: Int!
 }
 
+type AssetPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type TransactionPermissions @jsonField {
+  type: String!
+  values: [String]!
+}
+
+type PortfolioPermissions @jsonField {
+  type: String!
+  values: [PortfolioJson]!
+}
+
+type Permissions @entity {
+  id: ID!
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Account @entity {
+  id: ID!
+  address: String! @index(unique: true)
+  identity: Identity!
+  eventId: EventIdEnum!
+  permissions: Permissions!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Identity @entity {
+  id: ID!
+  did: String! @index(unique: true)
+  primaryAccount: String! @index(unique: false)
+  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
+  secondaryKeysFrozen: Boolean!
+  eventId: EventIdEnum!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+  heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
+  portfolios: [Portfolio!]! @derivedFrom(field: "identity")
+}
+
+type BridgeEvent @entity {
+  id: ID!
+  identity: Identity!
+  recipient: String!
+  amount: BigInt!
+  txHash: String! @index(unique: false)
+  eventIdx: Int!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
 type StakingEvent @entity {
   id: ID!
-  blockId: Int! @index
-  eventIdx: Int! @index
-  stakingEventId: String! @index
-  date: Date! @index
-  identityId: String
-  stashAccount: String
+  stashAccount: String @index(unique: false)
+  identity: Identity
+  eventId: EventIdEnum!
   amount: BigInt
   nominatedValidators: [String!]
+  transactionId: String
+  datetime: Date! @index
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type TickerExternalAgentAction @entity {
   id: ID!
-  blockId: Int! @index
-  eventIdx: Int! @index
-  ticker: String! @index
-  palletName: String! @index
-  eventId: String! @index
-  callerDid: String! @index
-  datetime: Date!
-}
-
-type Funding @entity {
-  id: ID!
-  blockId: Int!
-  ticker: String! @index(unique: false)
-  fundingName: String! @index(unique: false)
-  value: String!
-  totalIssuedInFundingRound: String!
+  asset: Asset! @index(unique: false)
+  caller: Identity! @index(unique: false)
+  palletName: String! @index(unique: false)
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  createdBlock: Block! @index(unique: false)
+  updatedBlock: Block!
 }
 
 type Sto @entity {
   id: ID!
-  offeringAsset: String!
+  offeringAsset: Asset!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum AuthTypeEnum {
+  AttestPrimaryKeyRotation
+  RotatePrimaryKey
+  RotatePrimaryKeyToSecondary
+  TransferTicker
+  AddMultiSigSigner
+  TransferAssetOwnership
+  JoinIdentity
+  PortfolioCustody
+  BecomeAgent
+  AddRelayerPayingKey
+
+  ## Deprecated ##
+  TransferPrimaryIssuanceAgent @deprecated
+  Custom @deprecated
+  NoData @deprecated
+}
+
+enum AuthorizationStatusEnum {
+  Pending
+  Consumed
+  Rejected
+  Revoked
 }
 
 type Authorization @entity {
   id: ID!
-  createdBlock: Int!
-  authId: Int! @index
-  type: String! @index
-  fromDid: String! @index
-  toDid: String @index
-  toKey: String @index
+  type: AuthTypeEnum!
+  from: Identity! @index(unique: false)
+  to: Identity @index(unique: false)
+  toKey: String @index(unique: false)
   data: String
-  expiry: Date @index
-  status: String!
-  updatedBlock: Int!
+  expiry: Date @index(unique: false)
+  status: AuthorizationStatusEnum!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Investment @entity {
   id: ID!
-  blockId: Int!
-  investor: String!
-  stoId: Int! @index
-  offeringToken: String! @index
+  investor: Identity!
+  stoId: Int! @index(unique: false)
+  offeringToken: String! @index(unique: false)
   raiseToken: String!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type TickerExternalAgentAdded @entity {
-  id: ID! #ticker/caller_did
-  ticker: String! @index
-  callerDid: String! @index
-  blockId: Int!
+type TickerExternalAgent @entity {
+  id: ID! # ticker/callerId
+  asset: Asset! @index(unique: false)
+  caller: Identity! @index(unique: false)
   eventIdx: Int!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 # Type can be "AgentAdded", "AgentPermissionsChanged" or "AgentRemoved".
 # permissions is only present in "AgentAdded" and "AgentPermissionsChanged".
 type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
-  ticker: String! @index
-  did: String! @index
-  blockId: Int!
-  eventIdx: Int!
+  asset: Asset! @index(unique: false)
+  identity: Identity! @index(unique: false)
   datetime: Date!
   type: String!
   permissions: String
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AgentGroup @entity {
   id: ID! #ticker/group_id
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
-  member: String! @index
-  group: AgentGroup! @index
+  member: String! @index(unique: false)
+  group: AgentGroup! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type PortfolioJson @jsonField {
@@ -168,84 +1147,179 @@ type PortfolioJson @jsonField {
   number: Int!
 }
 
-type Leg @jsonField {
-  ticker: String!
-  amount: String!
-  from: PortfolioJson!
-  to: PortfolioJson!
+type Portfolio @entity {
+  id: ID! # did/number
+  identity: Identity! @index(unique: false)
+  number: Int! @index(unique: false)
+  name: String
+  custodian: Identity
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type PortfolioMovement @entity {
+  id: ID!
+  from: Portfolio! @index(unique: false)
+  to: Portfolio! @index(unique: false)
+  asset: Asset!
+  amount: BigInt!
+  address: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum SettlementResultEnum {
+  None
+  Executed
+  Failed
+  Rejected
+}
+
+enum InstructionStatusEnum {
+  Created
+  Executed
+  Rejected
+  Failed
+}
+
+type Leg @entity {
+  id: ID! # instructionId/legIndex
+  asset: Asset!
+  amount: BigInt!
+  from: Portfolio! @index(unique: false)
+  to: Portfolio! @index(unique: false)
+  instruction: Instruction
+  settlement: Settlement
+  addresses: [String!]! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Settlement @entity {
   id: ID!
-  blockId: Int!
-  eventId: String!
-  addresses: [String!]! @index
-  result: String!
-  legs: [Leg!]!
+  result: SettlementResultEnum!
+  legs: [Leg!]! @derivedFrom(field: "settlement")
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Venue @entity {
+  id: ID! # venueId
+  owner: Identity!
+  type: String!
+  details: String
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Instruction @entity {
-  id: ID!
-  blockId: Int!
-  eventId: String!
-  status: String!
-  venueId: String! @index
-  settlementType: String!
-  legs: [Leg!]!
-  addresses: [String!]!
-}
-
-type WithholdingTaxesOfCa @entity {
-  id: ID!
-  ticker: String! @index
-  localId: Int! @index
-  datetime: Date!
-  taxes: BigInt!
-}
-
-type HistoryOfPaymentEventsForCa @entity {
-  id: ID!
-  blockId: Int!
-  eventId: String!
+  id: ID! #instructionId
+  eventId: EventIdEnum!
   eventIdx: Int!
-  eventDid: String!
-  ticker: String! @index
-  localId: Int! @index
-  balance: BigInt!
+  status: InstructionStatusEnum!
+  venue: Venue! @index(unique: false)
+  settlementType: String!
+  endBlock: Int
+  tradeDate: Date
+  valueDate: Date
+  legs: [Leg!]! @derivedFrom(field: "instruction")
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Distribution @entity {
+  id: ID! # assetId/localId
+  identity: Identity!
+  localId: Int! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  portfolio: Portfolio!
+  currency: String!
+  perShare: BigInt!
+  amount: BigInt!
+  remaining: BigInt!
+  paymentAt: BigInt!
+  expiresAt: BigInt
+  taxes: BigInt! # withheld tax for CA
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type DistributionPayment @entity {
+  id: ID!
+  distribution: Distribution!
+  target: Identity!
+  eventId: EventIdEnum!
+  amount: BigInt!
   tax: BigInt!
+  reclaimed: Boolean!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  blockId: Int!
-  eventIdx: Int!
   account: String!
   vote: Boolean!
   weight: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum ProposalStateEnum {
+  All
+  Pending
+  Rejected
+  Scheduled
+  Failed
+  Executed
+  Expired
+}
+
+enum SnapshotEnum {
+  All
+  InSnapshot
+  NotInSnapshot
 }
 
 type Proposal @entity {
   id: ID!
-  blockId: Int!
-  proposer: String! @index
-  state: String! @index
-  identityId: String!
+  proposer: String! @index(unique: false)
+  state: ProposalStateEnum!
+  owner: Identity!
   balance: BigInt!
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
-  lastStateUpdatedAt: Int!
   snapshotted: Boolean!
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type HeldToken @entity {
-  id: ID! # did/ticker
-  did: String! @index
-  token: String!
+enum ClaimTypeEnum {
+  Accredited
+  Affiliate
+  BuyLockup
+  SellLockup
+  CustomerDueDiligence
+  KnowYourCustomer
+  Jurisdiction
+  Exempted
+  Blocked
+  InvestorUniqueness
+  NoData
+  InvestorUniquenessV2
+  NoType
+}
+
+enum ClaimScopeTypeEnum {
+  Identity
+  Ticker
+  Custom
 }
 
 type Scope @jsonField {
@@ -255,53 +1329,38 @@ type Scope @jsonField {
 
 type ClaimScope @entity {
   id: ID!
-  targetDid: String! @index
+  target: String! @index(unique: false)
   ticker: String
   scope: Scope
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Claim @entity {
   id: ID!
-  targetDid: String! @index
-  issuer: String! @index
+  eventIdx: Int! @index(unique: false)
+  target: Identity! @index(unique: false)
+  issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
-  filterExpiry: BigInt! @index
-  type: String! @index
+  filterExpiry: BigInt! @index(unique: false)
+  type: ClaimTypeEnum!
   jurisdiction: String
   scope: Scope
   cddId: String
+  revokeDate: BigInt
+  createdBlock: Block! @index(unique: false)
+  updatedBlock: Block!
 }
 
-type ClaimJson @jsonField {
-  targetDid: String!
-  issuer: String!
-  issuanceDate: BigInt!
-  lastUpdateDate: BigInt!
-  expiry: BigInt
-  type: String!
-  jurisdiction: String
-  scope: Scope
-  cddId: String
-}
-
-type IdentityWithClaims @entity {
+type TrustedClaimIssuer @entity {
   id: ID!
-  did: String! @index
-  claims: [ClaimJson!]!
-}
-
-type IssuerIdentityWithClaims @entity {
-  id: ID!
-  did: String! @index
-  claims: [ClaimJson!]!
-}
-
-type AssetDocument @jsonField {
-  id: Int! # document id
-  name: String!
-  link: String!
+  asset: Asset! @index(unique: false)
+  issuer: String! @index(unique: false)
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type SecurityIdentifier @jsonField {
@@ -316,32 +1375,103 @@ type AssetPendingOwnershipTransfer @entity {
   to: String! @index(unique: false)
   type: String! @index(unique: false)
   data: String
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type AssetComplianceRequirement @jsonField {
-  id: Int! # requirement id
-  data: String!
+enum TransferRestrictionTypeEnum {
+  Count
+  Percentage
 }
 
-type AssetAdvancedCompliance @jsonField {
-  CountTransferManager: String
-  PercentageTransferManager: String
-  ExemptedEntities: [String]!
+type TransferManager @entity {
+  id: ID! # ticker/transferManagerType/value
+  asset: Asset! @index(unique: false)
+  type: TransferRestrictionTypeEnum!
+  value: Int!
+  exemptedEntities: [String]!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
-type AssetCompliance @jsonField {
-  isPaused: Boolean!
-  sender: [AssetComplianceRequirement]!
-  receiver: [AssetComplianceRequirement]!
-  advanced: [AssetAdvancedCompliance]!
+enum StatOpTypeEnum {
+  Count
+  Balance
+}
+
+type StatType @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset!
+  opType: StatOpTypeEnum!
+  claimType: ClaimTypeEnum
+  claimIssuer: Identity
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum TransferComplianceTypeEnum {
+  MaxInvestorCount
+  MaxInvestorOwnership
+  ClaimCount
+  ClaimOwnership
+}
+
+type TransferCompliance @entity {
+  id: ID! # ticker/op/type/claimIssuer
+  asset: Asset! @index(unique: false)
+  type: TransferComplianceTypeEnum!
+  statType: StatType!
+  # value is present only in case of MaxInvestorCount and MaxInvestorOwnership
+  value: BigInt
+  # following values are present in case of ClaimCount and ClaimOwnership
+  claimType: ClaimTypeEnum
+  claimValue: String
+  claimIssuer: Identity
+  min: BigInt
+  max: BigInt
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type TransferComplianceExemption @entity {
+  id: ID! #asset/opType/claimType/exemptedEntityId
+  asset: Asset! @index(unique: false)
+  opType: StatOpTypeEnum!
+  claimType: ClaimTypeEnum
+  exemptedEntityId: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Compliance @entity {
+  id: ID! # ticker/complianceId
+  complianceId: Int!
+  data: String! # This could be expanded into structured data
+  asset: Asset! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type AssetHolder @entity {
-  id: ID! # did:ticker
-  did: String! @index(unique: false)
-  ticker: String! @index(unique: false)
-  amount: String!
-  asset: Asset!
+  id: ID! # ticker/did
+  identity: Identity! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  amount: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type AssetDocument @entity {
+  id: ID! # ticker/documentId
+  documentId: Int!
+  name: String!
+  link: String!
+  contentHash: String
+  type: String
+  filedAt: Date
+  asset: Asset! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 type Asset @entity {
@@ -353,11 +1483,28 @@ type Asset @entity {
   isDivisible: Boolean!
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
-  documents: [AssetDocument]!
   identifiers: [SecurityIdentifier]!
-  ownerDid: String!
+  owner: Identity!
+  documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
-  totalSupply: String!
-  totalTransfers: String!
-  compliance: AssetCompliance!
+  totalSupply: BigInt!
+  totalTransfers: BigInt!
+  isCompliancePaused: Boolean!
+  compliance: [Compliance]! @derivedFrom(field: "asset")
+  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
+  trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type Funding @entity {
+  id: ID!
+  asset: Asset! @index(unique: false)
+  fundingRound: String! @index(unique: false)
+  amount: BigInt!
+  totalFundingAmount: BigInt!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }

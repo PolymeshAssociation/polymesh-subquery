@@ -57,8 +57,13 @@ const main = async () => {
     }
   );
 
-  await postgres.query(readFileSync('../compat.sql', 'utf-8'));
+  await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
   console.log('Applied initial SQL');
+
+  if (env.NODE_ENV === 'local') {
+    await postgres.query(readFileSync('../db/localMigration.sql', 'utf-8'));
+    console.log('Applied migration SQL');
+  }
 };
 
 main()

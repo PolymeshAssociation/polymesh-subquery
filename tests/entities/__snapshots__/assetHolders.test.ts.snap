@@ -1,0 +1,117 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`assetHolders should return all Asset Holders for a particular ticker 1`] = `
+Object {
+  "assetHolders": Object {
+    "__typename": "AssetHoldersConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "-1000000",
+        "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "id": "11BTICKER1/0x0000000000000000000000000000000000000000000000000000000000000000",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999600",
+        "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "id": "11BTICKER1/0x0500000000000000000000000000000000000000000000000000000000000000",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "100",
+        "did": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+        "id": "11BTICKER1/0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "100",
+        "did": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+        "id": "11BTICKER1/0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "100",
+        "did": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+        "id": "11BTICKER1/0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "100",
+        "did": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+        "id": "11BTICKER1/0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+        "ticker": "11BTICKER1",
+      },
+    ],
+  },
+}
+`;
+
+exports[`assetHolders should return all Assets held by an Identity 1`] = `
+Object {
+  "assetHolders": Object {
+    "__typename": "AssetHoldersConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999900",
+        "ticker": "11ATICKER",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999600",
+        "ticker": "11BTICKER1",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "100",
+        "ticker": "11BTICKER2",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999000",
+        "ticker": "12TICKER",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "39900001500",
+        "ticker": "13EARNED",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1900000000",
+        "ticker": "13TICKER",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999950",
+        "ticker": "14TICKER",
+      },
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "0",
+        "ticker": "14TICKERRAIS",
+      },
+    ],
+  },
+}
+`;
+
+exports[`assetHolders should return amount of Assets held by a particular Identity 1`] = `
+Object {
+  "assetHolders": Object {
+    "__typename": "AssetHoldersConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "AssetHolder",
+        "amount": "1999600",
+      },
+    ],
+  },
+}
+`;

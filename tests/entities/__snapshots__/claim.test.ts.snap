@@ -1,0 +1,190 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`claimScopes should return a list of scopes for given identity 1`] = `
+Object {
+  "claimScopes": Object {
+    "__typename": "ClaimScopesConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "ClaimScope",
+        "scope": Object {
+          "type": "Identity",
+          "value": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+        },
+        "ticker": null,
+      },
+      Object {
+        "__typename": "ClaimScope",
+        "scope": Object {
+          "type": "Ticker",
+          "value": "5TICKER",
+        },
+        "ticker": "5TICKER",
+      },
+    ],
+  },
+}
+`;
+
+exports[`claims should return all claims as there are no filters 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523618500",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523618500",
+        "scope": null,
+        "targetId": "0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523677000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523677000",
+        "scope": null,
+        "targetId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523570500",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523570500",
+        "scope": null,
+        "targetId": "0x139dad9675f6d89bbe39d4a1ffcb824b9ff44fce366390090752a926d7c6e689",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523663000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523663000",
+        "scope": null,
+        "targetId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523574000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523574000",
+        "scope": null,
+        "targetId": "0x25ebc60487a6e8c621b5987d0efa148a61be92f4810690b9a7d45298145f4ae8",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523660000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523660000",
+        "scope": null,
+        "targetId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523662000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523662000",
+        "scope": null,
+        "targetId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": null,
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523888000",
+        "issuerId": "0x0400000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523888000",
+        "scope": Object {
+          "type": "Ticker",
+          "value": "15TICKER",
+        },
+        "targetId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "type": "Accredited",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523720500",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523720500",
+        "scope": null,
+        "targetId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "type": "CustomerDueDiligence",
+      },
+      Object {
+        "__typename": "Claim",
+        "cddId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "expiry": null,
+        "filterExpiry": "253402194600000",
+        "issuanceDate": "1633523560000",
+        "issuerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "jurisdiction": null,
+        "lastUpdateDate": "1633523560000",
+        "scope": null,
+        "targetId": "0x406c0c0af84c690b0fd730c53f9518af7b6a11f0aa5b1e3bdf48b5bf7f695fb4",
+        "type": "CustomerDueDiligence",
+      },
+    ],
+    "totalCount": 42,
+  },
+}
+`;
+
+exports[`claims should return filtered claims 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "nodes": Array [],
+    "totalCount": 0,
+  },
+}
+`;
+
+exports[`claims should return just total count 1`] = `
+Object {
+  "claims": Object {
+    "__typename": "ClaimsConnection",
+    "totalCount": 42,
+  },
+}
+`;

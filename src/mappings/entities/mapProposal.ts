@@ -1,98 +1,131 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
-import { Proposal, ProposalVote } from '../../types';
-import { getBigIntValue, getBooleanValue, getFirstValueFromJson, getTextValue } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, ModuleIdEnum, Proposal, ProposalStateEnum, ProposalVote } from '../../types';
+import {
+  getBigIntValue,
+  getBooleanValue,
+  getFirstValueFromJson,
+  getTextValue,
+  serializeAccount,
+} from '../util';
+import { HandlerArgs } from './common';
 
-enum ProposalState {
-  Pending = 'Pending',
-  Rejected = 'Rejected',
-  Scheduled = 'Scheduled',
-  Failed = 'Failed',
-  Executed = 'Executed',
-  Expired = 'Expired',
-}
+const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
+
+  await Proposal.create({
+    id: getTextValue(rawPipId),
+    proposer: getFirstValueFromJson(rawProposer),
+    ownerId: getTextValue(rawDid),
+    state: ProposalStateEnum.Pending,
+    balance: getBigIntValue(rawBalance),
+    url: getTextValue(rawUrl),
+    description: getTextValue(rawDescription),
+    snapshotted: false,
+    totalAyeWeight: BigInt(0),
+    totalNayWeight: BigInt(0),
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
+const handleProposalStateUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [, rawPipId, rawState] = params;
+
+  const pipId = getTextValue(rawPipId);
+  const proposal = await Proposal.get(pipId);
+
+  proposal.state = getTextValue(rawState) as ProposalStateEnum;
+  proposal.updatedBlockId = blockId;
+
+  await proposal.save();
+};
+
+const handleVoted = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [, rawAccount, rawPipId, rawVote, rawWeight] = params;
+
+  const account = serializeAccount(rawAccount);
+  const pipId = getTextValue(rawPipId);
+  const vote = getBooleanValue(rawVote);
+  const weight = getBigIntValue(rawWeight);
+
+  let proposal: Proposal = null;
+  let proposalVote: ProposalVote = null;
+  [proposal, proposalVote] = await Promise.all([
+    Proposal.get(pipId),
+    ProposalVote.get(`${pipId}/${account}`),
+  ]);
+
+  if (proposalVote) {
+    // when vote is changed, remove the previous weights
+    if (proposalVote.vote) {
+      proposal.totalAyeWeight -= proposalVote.weight;
+    } else {
+      proposal.totalNayWeight -= proposalVote.weight;
+    }
+    proposalVote.vote = vote;
+    proposalVote.weight = weight;
+    proposalVote.updatedBlockId = blockId;
+  } else {
+    proposalVote = ProposalVote.create({
+      id: `${pipId}/${account}`,
+      proposalId: pipId,
+      account,
+      vote,
+      weight,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+  }
+
+  if (vote) {
+    proposal.totalAyeWeight += weight;
+  } else {
+    proposal.totalNayWeight += weight;
+  }
+  proposal.updatedBlockId = blockId;
+
+  await Promise.all([proposal.save(), proposalVote.save()]);
+};
+
+const handleSnapshotTaken = async (blockId: string, params: Codec[]): Promise<void> => {
+  const pips = params[2].toJSON() as any;
+  const promises = [];
+  pips.forEach(pip => {
+    const job = async () => {
+      const proposal = await Proposal.get(pip.id);
+      proposal.snapshotted = true;
+      proposal.updatedBlockId = blockId;
+      return proposal.save();
+    };
+    promises.push(job());
+  });
+  await Promise.all(promises);
+};
 
 /**
  * Subscribes to events related to proposals
  */
-export async function mapProposal(
-  blockId: number,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
-  if (moduleId !== ModuleIdEnum.Pips) return;
+export async function mapProposal({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+}: HandlerArgs): Promise<void> {
+  if (moduleId === ModuleIdEnum.pips) {
+    if (eventId === EventIdEnum.ProposalCreated) {
+      await handleProposalCreated(blockId, params);
+    }
 
-  if (eventId === EventIdEnum.ProposalCreated) {
-    await Proposal.create({
-      id: getTextValue(params[2]),
-      proposer: getFirstValueFromJson(params[1]),
-      blockId,
-      identityId: getTextValue(params[0]),
-      state: ProposalState.Pending,
-      balance: getBigIntValue(params[3]),
-      url: getTextValue(params[4]),
-      description: getTextValue(params[5]),
-      snapshotted: false,
-      totalAyeWeight: BigInt(0),
-      totalNayWeight: BigInt(0),
-      lastStateUpdatedAt: blockId,
-    }).save();
-  }
+    if (eventId === EventIdEnum.ProposalStateUpdated) {
+      await handleProposalStateUpdated(blockId, params);
+    }
 
-  if (eventId === EventIdEnum.ProposalStateUpdated) {
-    const pipId = getTextValue(params[1]);
-    const proposal = await Proposal.get(pipId);
-    proposal.state = getTextValue(params[2]);
-    proposal.lastStateUpdatedAt = blockId;
-    await proposal.save();
-  }
+    if (eventId === EventIdEnum.Voted) {
+      await handleVoted(blockId, params);
+    }
 
-  if (eventId === EventIdEnum.Voted) {
-    const account = getTextValue(params[1]);
-    const pipId = getTextValue(params[2]);
-    const vote = getBooleanValue(params[3]);
-    const weight = getBigIntValue(params[4]);
-
-    const promises = [
-      (async () => {
-        const proposal = await Proposal.get(pipId);
-        if (vote) {
-          proposal.totalAyeWeight += weight;
-        } else {
-          proposal.totalNayWeight += weight;
-        }
-        await proposal.save();
-      })(),
-    ];
-
-    promises.push(
-      ProposalVote.create({
-        id: `${blockId}/${event.idx}`,
-        proposalId: pipId,
-        blockId,
-        eventIdx: event.idx,
-        account,
-        vote,
-        weight,
-      }).save()
-    );
-    await Promise.all(promises);
-  }
-
-  if (eventId === EventIdEnum.SnapshotTaken) {
-    const pips = params[2].toJSON() as any;
-    const promises = [];
-    pips.forEach(pip => {
-      const job = async () => {
-        const proposal = await Proposal.get(pip.id);
-        proposal.snapshotted = true;
-        return proposal.save();
-      };
-      promises.push(job());
-    });
-    await Promise.all(promises);
+    if (eventId === EventIdEnum.SnapshotTaken) {
+      await handleSnapshotTaken(blockId, params);
+    }
   }
 }

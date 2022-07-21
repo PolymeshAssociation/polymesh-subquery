@@ -1,0 +1,18 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`tickerExternalAgent should return the time block and event index when an agent was added to a ticker 1`] = `
+Object {
+  "tickerExternalAgents": Object {
+    "__typename": "TickerExternalAgentsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "TickerExternalAgent",
+        "callerDid": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "createdBlockId": "314",
+        "datetime": "2021-10-06T12:34:42",
+        "eventIdx": 1,
+      },
+    ],
+  },
+}
+`;

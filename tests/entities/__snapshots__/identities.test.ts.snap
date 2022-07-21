@@ -1,0 +1,273 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`accounts should return filtered accounts along with their permissions 1`] = `
+Object {
+  "accounts": Object {
+    "__typename": "AccountsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Account",
+        "address": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+        "createdBlockId": "345",
+        "datetime": "2021-10-06T12:34:57.5",
+        "eventId": "SecondaryKeysAdded",
+        "id": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+        "identity": Object {
+          "__typename": "Identity",
+          "did": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+          "primaryAccount": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+          "secondaryKeysFrozen": false,
+        },
+        "identityId": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+        "permissions": Object {
+          "__typename": "Permission",
+          "assets": Object {
+            "type": "these",
+            "values": Array [],
+          },
+          "portfolios": Object {
+            "type": "these",
+            "values": Array [],
+          },
+          "transactionGroups": Array [],
+          "transactions": Object {
+            "type": "these",
+            "values": Array [],
+          },
+        },
+        "permissionsId": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+        "createdBlockId": "341",
+        "datetime": "2021-10-06T12:34:55.5",
+        "eventId": "DidCreated",
+        "id": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+        "identity": Object {
+          "__typename": "Identity",
+          "did": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+          "primaryAccount": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+          "secondaryKeysFrozen": false,
+        },
+        "identityId": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+        "permissions": Object {
+          "__typename": "Permission",
+          "assets": null,
+          "portfolios": null,
+          "transactionGroups": Array [],
+          "transactions": null,
+        },
+        "permissionsId": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+      },
+    ],
+  },
+}
+`;
+
+exports[`accounts should return first 10 accounts as there are no filters 1`] = `
+Object {
+  "accounts": Object {
+    "__typename": "AccountsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Account",
+        "address": "5C7abMfbhWZGrzfnTeS7sTnY9bm7Ec8c1FBAkRdjw8iT41ZD",
+        "createdBlockId": "186",
+        "datetime": "2021-10-06T12:33:38",
+        "eventId": "DidCreated",
+        "identityId": "0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135",
+        "permissionsId": "5C7abMfbhWZGrzfnTeS7sTnY9bm7Ec8c1FBAkRdjw8iT41ZD",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CDKC4cEo9gTRnBNZo4fpDS6ov1pcmngmf6QhNf9HzfBKPk3",
+        "createdBlockId": "149",
+        "datetime": "2021-10-06T12:33:19.5",
+        "eventId": "DidCreated",
+        "identityId": "0x70da84f285540a6174594f6fd69c7facf092cd29210f1b93ee3f4915c4c8f86c",
+        "permissionsId": "5CDKC4cEo9gTRnBNZo4fpDS6ov1pcmngmf6QhNf9HzfBKPk3",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CGTLF38iqat5h8UmDYNyTDu4PD6bUuqJ5LjWJQYwzQayeX3",
+        "createdBlockId": "150",
+        "datetime": "2021-10-06T12:33:20",
+        "eventId": "DidCreated",
+        "identityId": "0x9e0f63e20537f9e5dddd47540266080e25177a329a1b5a0bff9c950fe7a7da1d",
+        "permissionsId": "5CGTLF38iqat5h8UmDYNyTDu4PD6bUuqJ5LjWJQYwzQayeX3",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CM8cBoq3rqSDm8SUMmVsf9gZUtHYb984JAf4eKYmUtAiMhP",
+        "createdBlockId": "125",
+        "datetime": "2021-10-06T12:33:07.5",
+        "eventId": "DidCreated",
+        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "permissionsId": "5CM8cBoq3rqSDm8SUMmVsf9gZUtHYb984JAf4eKYmUtAiMhP",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CRvGY4utGxbmrS5uoxUkrfgyC38L48pixh6dVhpwLznsLZe",
+        "createdBlockId": "176",
+        "datetime": "2021-10-06T12:33:33",
+        "eventId": "DidCreated",
+        "identityId": "0x901facd0a58355c6cd5bd5cfe0179a8b49a721ea8bc2b2c06f43c17938edec3f",
+        "permissionsId": "5CRvGY4utGxbmrS5uoxUkrfgyC38L48pixh6dVhpwLznsLZe",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        "createdBlockId": "229",
+        "datetime": "2021-10-06T12:33:59.5",
+        "eventId": "DidCreated",
+        "identityId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+        "permissionsId": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CaWrWYw133scCHRLGBkQv9ssdFFnanPSZhQHmo8ARMeK79Z",
+        "createdBlockId": "365",
+        "datetime": "2021-10-06T12:35:07.5",
+        "eventId": "DidCreated",
+        "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+        "permissionsId": "5CaWrWYw133scCHRLGBkQv9ssdFFnanPSZhQHmo8ARMeK79Z",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CkwnyhRgn6BuEiYx6jurDDvT6c4MtVnEtDfQbTWAUxbL7Sm",
+        "createdBlockId": "158",
+        "datetime": "2021-10-06T12:33:24",
+        "eventId": "DidCreated",
+        "identityId": "0x56a91c10f2368b30670b7bea260928f0291387abfb75b5953cd722917423bf01",
+        "permissionsId": "5CkwnyhRgn6BuEiYx6jurDDvT6c4MtVnEtDfQbTWAUxbL7Sm",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CrMp8ekpRUDBu1Ytyuqs22B6zXMpH7L2Drh5kALckYD34Ca",
+        "createdBlockId": "67",
+        "datetime": "2021-10-06T12:32:38.5",
+        "eventId": "DidCreated",
+        "identityId": "0x4dfc4fc610db8b59e29bb3df5b0a0b097fd5df5934dcdba475c470e302f205ea",
+        "permissionsId": "5CrMp8ekpRUDBu1Ytyuqs22B6zXMpH7L2Drh5kALckYD34Ca",
+      },
+      Object {
+        "__typename": "Account",
+        "address": "5CrPPidjxv1aaupnq8atgsVpXNUmnZaqfyzhPcBTmkXqqsSt",
+        "createdBlockId": "111",
+        "datetime": "2021-10-06T12:33:00.5",
+        "eventId": "DidCreated",
+        "identityId": "0x6f6e1b8b1554b91f186a5040bad955e00b526e7d27dab20c0f4f4fdedd94cd0b",
+        "permissionsId": "5CrPPidjxv1aaupnq8atgsVpXNUmnZaqfyzhPcBTmkXqqsSt",
+      },
+    ],
+    "totalCount": 41,
+  },
+}
+`;
+
+exports[`accounts should return just total count 1`] = `
+Object {
+  "accounts": Object {
+    "__typename": "AccountsConnection",
+    "totalCount": 41,
+  },
+}
+`;
+
+exports[`identities should return identity details along with accounts and their permissions 1`] = `
+Object {
+  "identities": Object {
+    "__typename": "IdentitiesConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Identity",
+        "createdBlockId": "341",
+        "datetime": "2021-10-06T12:34:55.5",
+        "did": "0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e",
+        "eventId": "DidCreated",
+        "primaryAccount": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+        "secondaryAccounts": Object {
+          "__typename": "AccountsConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Account",
+              "address": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+              "createdBlockId": "345",
+              "eventId": "SecondaryKeysAdded",
+              "permissions": Object {
+                "__typename": "Permission",
+                "assets": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "createdBlockId": "345",
+                "datetime": "2021-10-06T12:34:57.5",
+                "portfolios": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "transactionGroups": Array [],
+                "transactions": Object {
+                  "type": "these",
+                  "values": Array [],
+                },
+                "updatedBlockId": "345",
+              },
+            },
+            Object {
+              "__typename": "Account",
+              "address": "5F77TQS5VkQP7UuEuR9YjqFgyuc9tWgQjzjTi3WMKsbgTrfG",
+              "createdBlockId": "341",
+              "eventId": "DidCreated",
+              "permissions": Object {
+                "__typename": "Permission",
+                "assets": null,
+                "createdBlockId": "341",
+                "datetime": "2021-10-06T12:34:55.5",
+                "portfolios": null,
+                "transactionGroups": Array [],
+                "transactions": null,
+                "updatedBlockId": "341",
+              },
+            },
+          ],
+        },
+        "secondaryKeysFrozen": false,
+        "updatedBlockId": "341",
+      },
+    ],
+  },
+}
+`;
+
+exports[`permissions should return permissions for a given account address 1`] = `
+Object {
+  "permissions": Object {
+    "__typename": "PermissionsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Permission",
+        "assets": Object {
+          "type": "these",
+          "values": Array [],
+        },
+        "createdBlockId": "345",
+        "datetime": "2021-10-06T12:34:57.5",
+        "id": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
+        "nodeId": "WyJwZXJtaXNzaW9ucyIsIjVFWXhMdUZkYkQ5OWpuMkJzWjNmMXJNb2EzcmFEQjhUQW5UTFgzVk1YaFFvSnlydiJd",
+        "portfolios": Object {
+          "type": "these",
+          "values": Array [],
+        },
+        "transactionGroups": Array [],
+        "transactions": Object {
+          "type": "these",
+          "values": Array [],
+        },
+        "updatedBlockId": "345",
+      },
+    ],
+  },
+}
+`;
