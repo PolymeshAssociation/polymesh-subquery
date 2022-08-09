@@ -257,6 +257,10 @@ const handleAssetOwnershipTransferred = async (blockId: string, params: Codec[])
 const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
+  // We ignore the transfer case when Asset tokens are issued
+  if (fromDid === '0x00'.padEnd(66, '0')) {
+    return;
+  }
   const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
   const transferAmount = getBigIntValue(rawAmount);
   const ticker = serializeTicker(rawTicker);

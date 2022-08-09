@@ -27,11 +27,6 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "AssetHolder",
-              "amount": "-1000000",
-              "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
-            },
-            Object {
-              "__typename": "AssetHolder",
               "amount": "1999600",
               "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
             },
@@ -97,11 +92,6 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "AssetHolder",
-              "amount": "-100000",
-              "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
-            },
-            Object {
-              "__typename": "AssetHolder",
               "amount": "200000",
               "did": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
             },
@@ -158,11 +148,6 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "AssetHolder",
-              "amount": "-1000000",
-              "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
-            },
-            Object {
-              "__typename": "AssetHolder",
               "amount": "2000000",
               "did": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
             },
@@ -206,11 +191,6 @@ Object {
         "holders": Object {
           "__typename": "AssetHoldersConnection",
           "nodes": Array [
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "-1000000",
-              "did": "0x0000000000000000000000000000000000000000000000000000000000000000",
-            },
             Object {
               "__typename": "AssetHolder",
               "amount": "2000000",

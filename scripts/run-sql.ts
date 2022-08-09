@@ -1,6 +1,7 @@
 import { createConnection } from 'typeorm';
 import { env, chdir } from 'process';
 import { readFileSync } from 'fs';
+import { migrationQueries } from '../db/migration';
 chdir(__dirname);
 
 require('dotenv').config(); // eslint-disable-line @typescript-eslint/no-var-requires
@@ -34,7 +35,7 @@ const main = async () => {
       await createConnection({
         type: 'postgres',
         host: env.DB_HOST,
-        port: parseInt(env.DB_PORT),
+        port: Number(env.DB_PORT),
         username: env.DB_USER,
         password: env.DB_PASS,
         database: env.DB_DATABASE,
@@ -60,10 +61,8 @@ const main = async () => {
   await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
   console.log('Applied initial SQL');
 
-  if (env.NODE_ENV === 'local') {
-    await postgres.query(readFileSync('../db/localMigration.sql', 'utf-8'));
-    console.log('Applied migration SQL');
-  }
+  await postgres.query(migrationQueries().join('\n'));
+  console.log('Applied migration SQL');
 };
 
 main()
