@@ -29,7 +29,6 @@ services:
       DB_DATABASE: postgres
       DB_HOST: postgres
       DB_PORT: 5432
-      NODE_ENV: local
       START_BLOCK: 1
       # NO_NATIVE_GRAPHQL_DATA: 'TRUE' # Setting this value only processes tooling specific handlers. Native subquery entities are ignored.
       # Polymesh-local
