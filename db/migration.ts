@@ -24,8 +24,8 @@ export const migrationQueries = (): string[] => {
   // We also define identities for first 16 GC identities
   const gcIdentities = Array(16)
     .fill('')
-    .map((v, index) => {
-      const twoDigitNumber = `0${index + 1}`.slice(-2);
+    .map((_, index) => {
+      const twoDigitNumber = `${index + 1}`.padStart(2, '0');
       return `0x${twoDigitNumber}`.padEnd(66, '0');
     });
 
