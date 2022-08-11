@@ -43,7 +43,7 @@ export const extractValue = (obj: unknown, key: string): string => {
   if (obj) {
     return obj[key] || obj[snakeToCamelCase(key)];
   }
-  return null;
+  return undefined;
 };
 
 export const extractClaimScope = (
