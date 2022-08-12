@@ -1036,6 +1036,7 @@ enum CallIdEnum {
   redeem_from @deprecated
   reject_referendum @deprecated
   remove_active_rule @deprecated
+  add_exempted_entities @deprecated
   remove_exempted_entities @deprecated
   remove_primary_issuance_agent @deprecated
   remove_signing_keys @deprecated
