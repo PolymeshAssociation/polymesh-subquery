@@ -43,7 +43,7 @@ export const snakeToCamelCase = (value: string): string =>
 
 export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string): string => s.replace(/\0/g, '');
+export const removeNullChars = (s: string): string => s?.replace(/\0/g, '') || '';
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
