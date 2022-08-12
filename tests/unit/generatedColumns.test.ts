@@ -144,6 +144,32 @@ test('extractClaimInfo', () => {
     cddId: undefined,
     jurisdiction: undefined,
   });
+
+  expect(
+    extractClaimInfo([
+      { value: 'hello' },
+      {
+        value: {
+          claim: {
+            Affiliate: { type: 'Ticker', value: 'STONK' },
+          },
+          claimIssuer: 'me',
+          expiry: 400,
+          lastUpdateDate: 12345,
+          issuanceDate: 12345,
+        },
+      },
+    ])
+  ).toStrictEqual({
+    claimExpiry: '400',
+    claimIssuer: 'me',
+    claimScope: '{"type":"type","value":"Ticker"}',
+    claimType: 'Affiliate',
+    lastUpdateDate: '12345',
+    issuanceDate: '12345',
+    cddId: undefined,
+    jurisdiction: undefined,
+  });
 });
 
 test('extractCorporateActionTicker', () => {

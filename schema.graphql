@@ -49,6 +49,13 @@ enum ModuleIdEnum {
   polymeshcontracts
   preimage
   testutils
+
+  ## deprecated ##
+  confidential @deprecated
+  dividend @deprecated
+  exemption @deprecated
+  finalitytracker @deprecated
+  stocapped @deprecated
 }
 
 enum EventIdEnum {
@@ -458,6 +465,78 @@ enum EventIdEnum {
   MockInvestorUIDCreated
   DidStatus
   CddStatus
+
+  ## deprecated ##
+  Approval @deprecated
+  AssetPurchased @deprecated
+  AssetRuleChanged @deprecated
+  AssetRuleRemoved @deprecated
+  AssetRulesPaused @deprecated
+  AssetRulesReplaced @deprecated
+  AssetRulesReset @deprecated
+  AssetRulesResumed @deprecated
+  BallotCancelled @deprecated
+  BallotCreated @deprecated
+  CddRequirementForMasterKeyUpdated @deprecated
+  Closed @deprecated
+  ContractExecution @deprecated
+  ControllerRedemption @deprecated
+  CustodyAllowanceChanged @deprecated
+  CustodyTransfer @deprecated
+  DividendCanceled @deprecated
+  DividendCreated @deprecated
+  DividendPaidOutToUser @deprecated
+  DividendRemainingClaimed @deprecated
+  Evicted @deprecated
+  ExemptionListModified @deprecated
+  ExtensionAdded @deprecated
+  ExtensionArchived @deprecated
+  ExtensionUnArchive @deprecated
+  FundraiserWindowModifed @deprecated
+  FundsRaised @deprecated
+  GlobalCommissionUpdated @deprecated
+  IndividualCommissionEnabled @deprecated
+  InstantiationFeeChanged @deprecated
+  InstantiationFreezed @deprecated
+  InstantiationUnFreezed @deprecated
+  InvestorUniquenessClaimNotAllowed @deprecated
+  MasterKeyUpdated @deprecated
+  NewAssetRuleCreated @deprecated
+  OffChainAuthorizationRevoked @deprecated
+  PermissionedValidatorAdded @deprecated
+  PermissionedValidatorRemoved @deprecated
+  PermissionedValidatorStatusChanged @deprecated
+  PrimaryIssuanceAgentTransfered @deprecated
+  PrimaryIssuanceAgentTransferred @deprecated
+  ProposalBondAdjusted @deprecated
+  ProposalCoolOffPeriodChanged @deprecated
+  ProposalDetailsAmended @deprecated
+  ProposalDurationChanged @deprecated
+  PutCodeFlagChanged @deprecated
+  QuorumThresholdChanged @deprecated
+  RangeProofAdded @deprecated
+  RangeProofVerified @deprecated
+  ReferendumCreated @deprecated
+  ReferendumScheduled @deprecated
+  ReferendumStateUpdated @deprecated
+  Restored @deprecated
+  ScheduleUpdated @deprecated
+  SecondaryPermissionsUpdated @deprecated
+  SignerLeft @deprecated
+  SigningKeysAdded @deprecated
+  SigningKeysFrozen @deprecated
+  SigningKeysRemoved @deprecated
+  SigningKeysUnfrozen @deprecated
+  SigningPermissionsUpdated @deprecated
+  SlashingParamsUpdated @deprecated
+  TemplateInstantiationFeeChanged @deprecated
+  TemplateMetaUrlChanged @deprecated
+  TemplateOwnershipTransferred @deprecated
+  TemplateUsageFeeChanged @deprecated
+  TreasuryDidSet @deprecated
+  VenueUpdated @deprecated
+  VoteEnactReferendum @deprecated
+  VoteRejectReferendum @deprecated
 }
 
 enum CallIdEnum {
@@ -814,10 +893,6 @@ enum CallIdEnum {
   reschedule_instruction
 
   ## statistics ##
-  add_transfer_manager @deprecated
-  add_exempted_entities @deprecated
-  remove_exempted_entities @deprecated
-  remove_transfer_manager @deprecated
   set_active_asset_stats
   batch_update_asset_stats
   set_asset_transfer_compliance
@@ -887,6 +962,96 @@ enum CallIdEnum {
   mock_cdd_register_did
   get_my_did
   get_cdd_of
+
+  ## deprecated ##
+  accept_authorization @deprecated
+  accept_master_key @deprecated
+  accept_primary_issuance_agent_transfer @deprecated
+  add_active_rule @deprecated
+  add_and_authorize_instruction @deprecated
+  add_ballot @deprecated
+  add_extension @deprecated
+  add_range_proof @deprecated
+  add_transfer_manager @deprecated
+  add_verify_range_proof @deprecated
+  amend_proposal @deprecated
+  approve @deprecated
+  archive_extension @deprecated
+  authorize_instruction @deprecated
+  authorize_with_receipts @deprecated
+  batch_accept_authorization @deprecated
+  batch_add_authorization @deprecated
+  batch_add_claim @deprecated
+  batch_add_default_trusted_claim_issuer @deprecated
+  batch_add_document @deprecated
+  batch_add_secondary_key_with_authorization @deprecated
+  batch_add_signing_key_with_authorization @deprecated
+  batch_change_asset_rule @deprecated
+  batch_change_compliance_requirement @deprecated
+  batch_force_handle_bridge_tx @deprecated
+  batch_freeze_tx @deprecated
+  batch_handle_bridge_tx @deprecated
+  batch_issue @deprecated
+  batch_remove_authorization @deprecated
+  batch_remove_default_trusted_claim_issuer @deprecated
+  batch_remove_document @deprecated
+  batch_revoke_claim @deprecated
+  batch_unfreeze_tx @deprecated
+  bond_additional_deposit @deprecated
+  buy_tokens @deprecated
+  cancel_ballot @deprecated
+  cancel_proposal @deprecated
+  change_all_signers_and_sigs_required @deprecated
+  change_asset_rule @deprecated
+  change_template_fees @deprecated
+  change_template_meta_url @deprecated
+  claim_surcharge @deprecated
+  claim_unclaimed @deprecated
+  close @deprecated
+  controller_redeem @deprecated
+  create_asset_and_mint @deprecated
+  emergency_referendum @deprecated
+  enable_individual_commissions @deprecated
+  enact_referendum @deprecated
+  fast_track_proposal @deprecated
+  final_hint @deprecated
+  forwarded_call @deprecated
+  freeze_instantiation @deprecated
+  freeze_signing_keys @deprecated
+  increase_custody_allowance @deprecated
+  increase_custody_allowance_of @deprecated
+  is_issuable @deprecated
+  join_identity_as_identity @deprecated
+  kill_proposal @deprecated
+  launch_sto @deprecated
+  leave_identity_as_identity @deprecated
+  legacy_set_permission_to_signer @deprecated
+  make_multisig_signer @deprecated
+  modify_exemption_list @deprecated
+  new @deprecated
+  override_referendum_enactment_period @deprecated
+  pause_asset_rules @deprecated
+  pause_sto @deprecated
+  put_code @deprecated
+  redeem_from @deprecated
+  reject_referendum @deprecated
+  remove_active_rule @deprecated
+  remove_exempted_entities @deprecated
+  remove_primary_issuance_agent @deprecated
+  remove_signing_keys @deprecated
+  remove_smart_extension @deprecated
+  remove_transfer_manager @deprecated
+  replace_asset_rules @deprecated
+  reset_active_rules @deprecated
+  reset_caa @deprecated
+  resume_asset_rules @deprecated
+  revoke_offchain_authorization @deprecated
+  set_changes_trie_config @deprecated
+  set_global_commission @deprecated
+  set_master_key @deprecated
+  set_primary_key @deprecated
+  set_proposal_cool_off_period @deprecated
+  set_proposal_duration @deprecated
 }
 
 type Event @entity {
@@ -1063,7 +1228,7 @@ enum AuthTypeEnum {
   BecomeAgent
   AddRelayerPayingKey
 
-  ## Deprecated ##
+  ## deprecated ##
   TransferPrimaryIssuanceAgent @deprecated
   Custom @deprecated
   NoData @deprecated
