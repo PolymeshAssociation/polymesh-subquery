@@ -27,7 +27,7 @@ envsubst <project.template.yaml> project.yaml
 
 (npm run sql || (sleep 3 && kill "$$")) &
 
-node --max-old-space-size=1536 \
+node --max-old-space-size=2048 \
 	/usr/local/lib/node_modules/@subql/node/bin/run $@
 child=$!
 wait "$child"
