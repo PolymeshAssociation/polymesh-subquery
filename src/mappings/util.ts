@@ -343,3 +343,7 @@ export const getDistributionValue = (
     expiresAt: getBigIntValue(expires_at || END_OF_TIME),
   };
 };
+
+export const logError = (message: string): void => {
+  logger.error(message);
+};

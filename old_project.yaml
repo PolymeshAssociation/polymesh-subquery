@@ -1,0 +1,31 @@
+specVersion: 1.0.0
+name: polymesh-subquery
+version: 5.0.0
+runner:
+  node:
+    name: '@subql/node'
+    version: '>=1.0.0'
+  query:
+    name: '@subql/query'
+    version: '*'
+description: A Polymesh Chain Indexer, providing a GraphQL interface
+repository: 'https://github.com/PolymathNetwork/polymesh-subquery'
+schema:
+  file: ./schema.graphql
+network:
+  chainId: '0xd6e0fe8999ed722eae5490e0fb43c547f0ad16f4e795acc2669d50dde88cc00e'
+  endpoint: 'ws://host.docker.internal:9944'
+  chaintypes:
+    file: ./dist/chainTypes/index.js
+dataSources:
+  - kind: substrate/Runtime
+    startBlock: 1
+    mapping:
+      file: ./dist/index.js
+      handlers:
+        - handler: handleBlock
+          kind: substrate/BlockHandler
+        - handler: handleCall
+          kind: substrate/CallHandler
+        - handler: handleEvent
+          kind: substrate/EventHandler

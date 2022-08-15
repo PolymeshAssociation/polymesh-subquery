@@ -40,41 +40,46 @@ import {
   extractTransferTo,
 } from './generatedColumns';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase, getSigner, logFoundType } from './util';
+import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
-  const header = block.block.header;
-  const blockId = header.number.toNumber();
-  let countExtrinsicsSuccess = 0;
+  try {
+    const header = block.block.header;
+    const blockId = header.number.toNumber();
+    let countExtrinsicsSuccess = 0;
 
-  for (const e of block.events) {
-    if (e.event.method == 'ExtrinsicSuccess') {
-      countExtrinsicsSuccess++;
+    for (const e of block.events) {
+      if (e.event.method == 'ExtrinsicSuccess') {
+        countExtrinsicsSuccess++;
+      }
     }
+
+    const { countExtrinsicsSigned, countExtrinsicsUnsigned } = processBlockExtrinsics(
+      block.block.extrinsics
+    );
+    const countExtrinsics = block.block.extrinsics.length;
+
+    await Block.create({
+      id: `${blockId}`,
+      blockId,
+      parentId: blockId - 1,
+      hash: header.hash.toHex(),
+      parentHash: header.parentHash.toHex(),
+      stateRoot: header.stateRoot.toHex(),
+      extrinsicsRoot: header.extrinsicsRoot.toHex(),
+      countExtrinsics,
+      countExtrinsicsUnsigned,
+      countExtrinsicsSigned,
+      countExtrinsicsSuccess,
+      countExtrinsicsError: countExtrinsics - countExtrinsicsSuccess,
+      countEvents: block.events.length,
+      datetime: block.timestamp,
+      specVersionId: block.specVersion,
+    }).save();
+  } catch (error) {
+    logError(`Received an error in handleBlock: ${error.toString()}`);
+    throw error;
   }
-
-  const { countExtrinsicsSigned, countExtrinsicsUnsigned } = processBlockExtrinsics(
-    block.block.extrinsics
-  );
-  const countExtrinsics = block.block.extrinsics.length;
-
-  await Block.create({
-    id: `${blockId}`,
-    blockId,
-    parentId: blockId - 1,
-    hash: header.hash.toHex(),
-    parentHash: header.parentHash.toHex(),
-    stateRoot: header.stateRoot.toHex(),
-    extrinsicsRoot: header.extrinsicsRoot.toHex(),
-    countExtrinsics,
-    countExtrinsicsUnsigned,
-    countExtrinsicsSigned,
-    countExtrinsicsSuccess,
-    countExtrinsicsError: countExtrinsics - countExtrinsicsSuccess,
-    countEvents: block.events.length,
-    datetime: block.timestamp,
-    specVersionId: block.specVersion,
-  }).save();
 }
 
 const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => {
@@ -132,95 +137,105 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
 
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
-  await handleToolingEvent(event);
+  try {
+    await handleToolingEvent(event);
 
-  const block = event.block;
-  const blockId = block.block.header.number.toString();
-  const moduleId = event.event.section.toLowerCase();
-  const eventId = event.event.method;
-  const args = event.event.data.toArray();
+    const block = event.block;
+    const blockId = block.block.header.number.toString();
+    const moduleId = event.event.section.toLowerCase();
+    const eventId = event.event.method;
+    const args = event.event.data.toArray();
 
-  const handlerArgs: HandlerArgs = {
-    blockId,
-    eventId: eventId as EventIdEnum,
-    moduleId: moduleId as ModuleIdEnum,
-    params: args,
-    event,
-  };
+    const handlerArgs: HandlerArgs = {
+      blockId,
+      eventId: eventId as EventIdEnum,
+      moduleId: moduleId as ModuleIdEnum,
+      params: args,
+      event,
+    };
 
-  const handlerPromises = [
-    mapIdentities(handlerArgs),
-    mapAsset(handlerArgs),
-    mapCompliance(handlerArgs),
-    mapTransferManager(handlerArgs),
-    mapStatistics(handlerArgs),
-    mapPortfolio(handlerArgs),
-    mapSettlement(handlerArgs),
-    mapStakingEvent(handlerArgs),
-    mapBridgeEvent(handlerArgs),
-    mapSto(handlerArgs),
-    mapExternalAgentAction(handlerArgs),
-    mapTickerExternalAgent(handlerArgs),
-    mapTickerExternalAgentHistory(handlerArgs),
-    mapAuthorization(handlerArgs),
-    mapInvestment(handlerArgs),
-    mapCorporateActions(handlerArgs),
-    mapProposal(handlerArgs),
-    mapTrustedClaimIssuer(handlerArgs),
-  ];
+    const handlerPromises = [
+      mapIdentities(handlerArgs),
+      mapAsset(handlerArgs),
+      mapCompliance(handlerArgs),
+      mapTransferManager(handlerArgs),
+      mapStatistics(handlerArgs),
+      mapPortfolio(handlerArgs),
+      mapSettlement(handlerArgs),
+      mapStakingEvent(handlerArgs),
+      mapBridgeEvent(handlerArgs),
+      mapSto(handlerArgs),
+      mapExternalAgentAction(handlerArgs),
+      mapTickerExternalAgent(handlerArgs),
+      mapTickerExternalAgentHistory(handlerArgs),
+      mapAuthorization(handlerArgs),
+      mapInvestment(handlerArgs),
+      mapCorporateActions(handlerArgs),
+      mapProposal(handlerArgs),
+      mapTrustedClaimIssuer(handlerArgs),
+    ];
 
-  const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
-  }));
+    const harvesterLikeArgs = args.map((arg, i) => ({
+      value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
+    }));
 
-  const {
-    claimExpiry,
-    claimIssuer,
-    claimScope,
-    claimType,
-    issuanceDate,
-    lastUpdateDate,
-    cddId,
-    jurisdiction,
-  } = extractClaimInfo(harvesterLikeArgs);
-
-  handlerPromises.push(
-    mapClaim(handlerArgs, {
+    const {
       claimExpiry,
       claimIssuer,
       claimScope,
-      claimType: claimType as ClaimTypeEnum,
+      claimType,
       issuanceDate,
       lastUpdateDate,
       cddId,
       jurisdiction,
-    })
-  );
+    } = extractClaimInfo(harvesterLikeArgs);
 
-  await Promise.all(handlerPromises);
+    handlerPromises.push(
+      mapClaim(handlerArgs, {
+        claimExpiry,
+        claimIssuer,
+        claimScope,
+        claimType: claimType as ClaimTypeEnum,
+        issuanceDate,
+        lastUpdateDate,
+        cddId,
+        jurisdiction,
+      })
+    );
+
+    await Promise.all(handlerPromises);
+  } catch (error) {
+    logError(`Received an error in handleEvent function: ${error}`);
+    throw error;
+  }
 }
 
 export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
-  const blockId = extrinsic.block.block.header.number.toString();
-  const extrinsicIdx = extrinsic.idx;
-  const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
-  const address = signedbyAddress ? getSigner(extrinsic) : null;
-  const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
+  try {
+    const blockId = extrinsic.block.block.header.number.toString();
+    const extrinsicIdx = extrinsic.idx;
+    const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
+    const address = signedbyAddress ? getSigner(extrinsic) : null;
+    const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
 
-  await Extrinsic.create({
-    id: `${blockId}/${extrinsicIdx}`,
-    blockId,
-    extrinsicIdx,
-    extrinsicLength: extrinsic.extrinsic.length,
-    signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
-    paramsTxt: JSON.stringify(params),
-    success: extrinsic.success ? 1 : 0,
-    signedbyAddress: signedbyAddress ? 1 : 0,
-    address,
-    nonce: extrinsic.extrinsic.nonce.toNumber(),
-    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
-    specVersionId: extrinsic.block.specVersion,
-  }).save();
+    await Extrinsic.create({
+      id: `${blockId}/${extrinsicIdx}`,
+      blockId,
+      extrinsicIdx,
+      extrinsicLength: extrinsic.extrinsic.length,
+      signed: extrinsic.extrinsic.isSigned ? 1 : 0,
+      moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
+      callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
+      paramsTxt: JSON.stringify(params),
+      success: extrinsic.success ? 1 : 0,
+      signedbyAddress: signedbyAddress ? 1 : 0,
+      address,
+      nonce: extrinsic.extrinsic.nonce.toNumber(),
+      extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+      specVersionId: extrinsic.block.specVersion,
+    }).save();
+  } catch (error) {
+    logError(`Received an Error in handleCall function: ${error.toString()}`);
+    throw error;
+  }
 }
