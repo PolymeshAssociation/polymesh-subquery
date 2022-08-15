@@ -130,7 +130,7 @@ test('extractClaimInfo', () => {
           claim_issuer: 'me',
           expiry: 400,
           last_update_date: 12345,
-          issuance_date: 12345,
+          issuance_date: 0,
         },
       },
     ])
@@ -140,7 +140,7 @@ test('extractClaimInfo', () => {
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: 'Affiliate',
     lastUpdateDate: '12345',
-    issuanceDate: '12345',
+    issuanceDate: '0',
     cddId: undefined,
     jurisdiction: undefined,
   });
@@ -156,7 +156,7 @@ test('extractClaimInfo', () => {
           claimIssuer: 'me',
           expiry: 400,
           lastUpdateDate: 12345,
-          issuanceDate: 12345,
+          issuanceDate: 0,
         },
       },
     ])
@@ -166,7 +166,7 @@ test('extractClaimInfo', () => {
     claimScope: '{"type":"type","value":"Ticker"}',
     claimType: 'Affiliate',
     lastUpdateDate: '12345',
-    issuanceDate: '12345',
+    issuanceDate: '0',
     cddId: undefined,
     jurisdiction: undefined,
   });

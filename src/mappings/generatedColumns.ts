@@ -41,7 +41,10 @@ export const extractEventArgs = (args: any[]) => {
  */
 export const extractValue = (obj: unknown, key: string): string => {
   if (obj) {
-    return obj[key] || obj[snakeToCamelCase(key)];
+    if (Object.keys(obj).includes(key)) {
+      return obj[key];
+    }
+    return obj[snakeToCamelCase(key)];
   }
   return undefined;
 };
