@@ -7,7 +7,6 @@ _term() {
 }
 trap _term SIGTERM
 
-
 if [[ -n "$NO_NATIVE_GRAPHQL_DATA" ]]
 then
   export EVENT_HANDLER='handleToolingEvent'
