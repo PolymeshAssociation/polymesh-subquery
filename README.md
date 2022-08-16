@@ -6,7 +6,7 @@ This project has been initially created to replace [the harvester](https://githu
 
 1. In the [docker-compose.yml](docker-compose.yml) file, set the appropriate [environment variables](#env-settings) for `subquery-node` container
 2. Install subql cli: `npm i -g @subql/cli`
-3. `rerun.sh` (requires docker compose). To persist data between runs, remove the `-v` flag, which causes the docker volume to be removed
+3. `./rerun.sh` (requires docker compose). To persist data between runs, remove the `-v` flag, which causes the docker volume to be removed
 
 ## Using event_arg_x indexes.
 
