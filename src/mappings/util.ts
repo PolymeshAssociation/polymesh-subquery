@@ -258,7 +258,7 @@ export const getExemptKeyValue = (
 };
 
 export const getExemptionsValue = (exemptions: Codec): string[] => {
-  return JSON.parse(exemptions.toString()) || [];
+  return exemptions.toJSON() as string[];
 };
 
 export const logFoundType = (type: string, rawType: string): void => {
