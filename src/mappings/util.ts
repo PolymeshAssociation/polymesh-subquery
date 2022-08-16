@@ -258,7 +258,7 @@ export const getExemptKeyValue = (
 };
 
 export const getExemptionsValue = (exemptions: Codec): string[] => {
-  return JSON.parse(exemptions.toString()) || [];
+  return exemptions.toJSON() as string[];
 };
 
 export const logFoundType = (type: string, rawType: string): void => {
@@ -342,4 +342,8 @@ export const getDistributionValue = (
     paymentAt: getBigIntValue(payment_at),
     expiresAt: getBigIntValue(expires_at || END_OF_TIME),
   };
+};
+
+export const logError = (message: string): void => {
+  logger.error(message);
 };

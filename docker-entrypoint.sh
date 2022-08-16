@@ -27,7 +27,10 @@ envsubst <project.template.yaml> project.yaml
 
 (npm run sql || (sleep 3 && kill "$$")) &
 
-node --max-old-space-size=1536 \
+# Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
+NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}
+
+node --max-old-space-size=$NODE_SPACE \
 	/usr/local/lib/node_modules/@subql/node/bin/run $@
 child=$!
 wait "$child"
