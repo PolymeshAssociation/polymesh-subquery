@@ -1246,7 +1246,7 @@ type Authorization @entity {
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
-  to: Identity @index(unique: false)
+  toId: String @index(unique: false)
   toKey: String @index(unique: false)
   data: String
   expiry: Date @index(unique: false)
