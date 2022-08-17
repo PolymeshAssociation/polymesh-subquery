@@ -186,12 +186,11 @@ const handleSecondaryKeysPermissionsUpdated = async (
   const [, rawSignerDetails, , rawUpdatedPermissions] = params;
 
   let address;
-  try {
+  if (rawSignerDetails instanceof Map) {
     // for chain version < 5.0.0
-    ({
-      signer: { account: address },
-    } = JSON.parse(rawSignerDetails.toString()));
-  } catch (_) {
+    const signer = rawSignerDetails.get('signer').toString();
+    address = JSON.parse(signer).account;
+  } else {
     // for chain version >= 5.0.0
     address = getTextValue(rawSignerDetails);
   }
