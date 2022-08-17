@@ -185,9 +185,16 @@ const handleSecondaryKeysPermissionsUpdated = async (
 ): Promise<void> => {
   const [, rawSignerDetails, , rawUpdatedPermissions] = params;
 
-  const {
-    signer: { account: address },
-  } = JSON.parse(rawSignerDetails.toString());
+  let address;
+  try {
+    // for chain version < 5.0.0
+    ({
+      signer: { account: address },
+    } = JSON.parse(rawSignerDetails.toString()));
+  } catch (_) {
+    // for chain version >= 5.0.0
+    address = getTextValue(rawSignerDetails);
+  }
 
   const permissions = await Permissions.get(address);
   if (!permissions) {
@@ -246,7 +253,15 @@ const handleSecondaryKeysAdded = async (
 
   const promises = [];
 
-  accounts.forEach(({ signer: { account: address }, permissions }) => {
+  accounts.forEach(({ permissions, ...rest }) => {
+    let address;
+    if ('key' in rest) {
+      // for chain version >= 5.0.0
+      address = rest.key;
+    } else if ('signer' in rest) {
+      // for chain version < 5.0.0
+      address = rest.signer.account;
+    }
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(

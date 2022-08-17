@@ -75,12 +75,10 @@
   "AssetMetadataLocalKey": "u64",
   "AssetMetadataGlobalKey": "u64",
   "AssetMetadataKey": { "_enum": { "Global": "u64", "Local": "u64" } },
-  "AssetMetadataLockStatus<Moment>": {
-    "_enum": { "Unlocked": "", "Locked": "", "LockedUntil": "Moment" }
-  },
-  "AssetMetadataValueDetail<Moment>": {
+  "AssetMetadataLockStatus": { "_enum": { "Unlocked": "", "Locked": "", "LockedUntil": "Moment" } },
+  "AssetMetadataValueDetail": {
     "expire": "Option<Moment>",
-    "lock_status": "AssetMetadataLockStatus<Moment>"
+    "lock_status": "AssetMetadataLockStatus"
   },
   "AssetMetadataDescription": "Text",
   "AssetMetadataSpec": {
@@ -125,8 +123,8 @@
     "portfolio": "Option<Vec<PortfolioId>>"
   },
   "Signatory": { "_enum": { "Identity": "IdentityId", "Account": "AccountId" } },
-  "SecondaryKey": { "signer": "Signatory", "permissions": "Permissions" },
-  "SecondaryKeyWithAuth": { "secondary_key": "SecondaryKey", "auth_signature": "Signature" },
+  "SecondaryKey": { "key": "AccountId", "permissions": "Permissions" },
+  "SecondaryKeyWithAuth": { "secondary_key": "SecondaryKey", "auth_signature": "H512" },
   "Subsidy": { "paying_key": "AccountId", "remaining": "Balance" },
   "IdentityRole": {
     "_enum": [
@@ -143,7 +141,16 @@
     ]
   },
   "PreAuthorizedKeyInfo": { "target_id": "IdentityId", "secondary_key": "SecondaryKey" },
-  "DidRecord": { "primary_key": "AccountId", "secondary_keys": "Vec<SecondaryKey>" },
+  "DidRecord": {
+    "primary_key": "Option<AccountId>"
+  },
+  "KeyRecord": {
+    "_enum": {
+      "PrimaryKey": "IdentityId",
+      "SecondaryKey": "(IdentityId, Permissions)",
+      "MultiSigSignerKey": "AccountId"
+    }
+  },
   "KeyIdentityData": { "identity": "IdentityId", "permissions": "Option<Permissions>" },
   "CountryCode": {
     "_enum": [
@@ -477,7 +484,10 @@
   },
   "TrustedFor": { "_enum": { "Any": "", "Specific": "Vec<ClaimType>" } },
   "TrustedIssuer": { "issuer": "IdentityId", "trusted_for": "TrustedFor" },
-  "Condition": { "condition_type": "ConditionType", "issuers": "Vec<TrustedIssuer>" },
+  "Condition": {
+    "condition_type": "ConditionType",
+    "issuers": "Vec<PolymeshPrimitivesConditionTrustedIssuer>"
+  },
   "ConditionResult": { "condition": "Condition", "result": "bool" },
   "TargetIdAuthorization": { "target_id": "IdentityId", "nonce": "u64", "expires_at": "Moment" },
   "TickerRegistration": { "owner": "IdentityId", "expiry": "Option<Moment>" },
@@ -662,8 +672,8 @@
   },
   "CddStatus": { "_enum": { "Ok": "IdentityId", "Err": "Vec<u8>" } },
   "AssetDidResult": { "_enum": { "Ok": "IdentityId", "Err": "Vec<u8>" } },
-  "DidRecordsSuccess": { "primary_key": "AccountId", "secondary_keys": "Vec<SecondaryKey>" },
-  "DidRecords": { "_enum": { "Success": "DidRecordsSuccess", "IdNotFound": "Vec<u8>" } },
+  "RpcDidRecordsSuccess": { "primary_key": "AccountId", "secondary_keys": "Vec<SecondaryKey>" },
+  "RpcDidRecords": { "_enum": { "Success": "RpcDidRecordsSuccess", "IdNotFound": "Vec<u8>" } },
   "VoteCountProposalFound": { "ayes": "u64", "nays": "u64" },
   "VoteCount": {
     "_enum": { "ProposalFound": "VoteCountProposalFound", "ProposalNotFound": "" }

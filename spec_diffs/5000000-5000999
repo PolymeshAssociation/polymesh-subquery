@@ -14,7 +14,7 @@
 +     },
 +   },
 +   "AssetMetadataLocalKey": "u64",
-+   "AssetMetadataLockStatus<Moment>": Object {
++   "AssetMetadataLockStatus": Object {
 +     "_enum": Object {
 +       "Locked": "",
 +       "LockedUntil": "Moment",
@@ -28,39 +28,41 @@
 +     "url": "Option<Url>",
 +   },
 +   "AssetMetadataValue": "Vec<u8>",
-+   "AssetMetadataValueDetail<Moment>": Object {
++   "AssetMetadataValueDetail": Object {
 +     "expire": "Option<Moment>",
-+     "lock_status": "AssetMetadataLockStatus<Moment>",
++     "lock_status": "AssetMetadataLockStatus",
 +   },
     "AssetName": "Text",
     "AssetOwnershipRelation": Object {
       "_enum": Object {
-@@ -54,8 +81,17 @@
-        "Except": "Vec<Ticker>",
+@@ -55,6 +82,15 @@
         "These": "Vec<Ticker>",
         "Whole": "",
-+     },
-    },
+      },
++   },
 +   "AssetScope": Object {
 +     "_enum": Object {
 +       "Ticker": "Ticker",
 +     },
-    },
++   },
 +   "AssetTransferCompliance": Object {
 +     "paused": "bool",
 +     "requirements": "Vec<TransferCondition>",
-+   },
+    },
     "AssetType": Object {
       "_enum": Object {
-        "Commodity": "",
-@@ -266,6 +302,7 @@
+@@ -266,9 +302,10 @@
       "result": "bool",
       "sender_conditions": "Vec<ConditionResult>",
     },
 +   "CompressedRistretto": "[u8; 32]",
     "Condition": Object {
       "condition_type": "ConditionType",
-      "issuers": "Vec<TrustedIssuer>",
+-     "issuers": "Vec<TrustedIssuer>",
++     "issuers": "Vec<PolymeshPrimitivesConditionTrustedIssuer>",
+    },
+    "ConditionResult": Object {
+      "condition": "Condition",
 @@ -291,7 +328,6 @@
       "targets": "TargetIdentities",
       "withholding_tax": "Vec<(IdentityId, Tax)>",
@@ -69,7 +71,27 @@
     "CountryCode": Object {
       "_enum": Array [
         "AF",
-@@ -673,7 +709,7 @@
+@@ -552,18 +588,7 @@
+      "owner": "AccountId",
+    },
+    "DidRecord": Object {
+-     "primary_key": "AccountId",
+-     "secondary_keys": "Vec<SecondaryKey>",
+-   },
+-   "DidRecords": Object {
+-     "_enum": Object {
+-       "IdNotFound": "Vec<u8>",
+-       "Success": "DidRecordsSuccess",
+-     },
+-   },
+-   "DidRecordsSuccess": Object {
+-     "primary_key": "AccountId",
+-     "secondary_keys": "Vec<SecondaryKey>",
++     "primary_key": "Option<AccountId>",
+    },
+    "DidStatus": Object {
+      "_enum": Object {
+@@ -673,7 +698,7 @@
       "self_transfer": "bool",
       "sender_custodian_error": "bool",
       "sender_insufficient_balance": "bool",
@@ -78,7 +100,7 @@
     },
     "HandledTxStatus": Object {
       "_enum": Object {
-@@ -726,7 +762,10 @@
+@@ -726,7 +751,10 @@
       },
     },
     "InvestorUid": "[u8; 16]",
@@ -90,7 +112,21 @@
     "ItnRewardStatus": Object {
       "_enum": Object {
         "Claimed": "",
-@@ -769,7 +808,7 @@
+@@ -737,6 +765,13 @@
+      "identity": "IdentityId",
+      "permissions": "Option<Permissions>",
+    },
++   "KeyRecord": Object {
++     "_enum": Object {
++       "MultiSigSignerKey": "AccountId",
++       "PrimaryKey": "IdentityId",
++       "SecondaryKey": "(IdentityId, Permissions)",
++     },
++   },
+    "Leg": Object {
+      "amount": "Balance",
+      "asset": "Ticker",
+@@ -769,7 +804,7 @@
         "Some": "BlockNumber",
       },
     },
@@ -99,26 +135,57 @@
     "MetaDescription": "Text",
     "MetaUrl": "Text",
     "MetaVersion": "u32",
-@@ -785,14 +824,8 @@
-      "amount": "Balance",
+@@ -786,13 +821,7 @@
       "memo": "Option<Memo>",
       "ticker": "Ticker",
--   },
+    },
 -   "OffChainSignature": Object {
 -     "_enum": Object {
 -       "Ecdsa": "H512",
 -       "Ed25519": "H512",
 -       "Sr25519": "H512",
 -     },
-    },
+-   },
 +   "OffChainSignature": "MultiSignature",
     "PalletName": "Text",
     "PalletPermissions": Object {
       "dispatchable_names": "DispatchableNames",
-@@ -1040,6 +1073,37 @@
+@@ -954,6 +983,16 @@
+      ],
+    },
+    "RistrettoPoint": "[u8; 32]",
++   "RpcDidRecords": Object {
++     "_enum": Object {
++       "IdNotFound": "Vec<u8>",
++       "Success": "RpcDidRecordsSuccess",
++     },
++   },
++   "RpcDidRecordsSuccess": Object {
++     "primary_key": "AccountId",
++     "secondary_keys": "Vec<SecondaryKey>",
++   },
+    "Scalar": "[u8; 32]",
+    "ScheduleId": "u64",
+    "ScheduleSpec": Object {
+@@ -975,11 +1014,11 @@
+    },
+    "ScopeId": "[u8; 32]",
+    "SecondaryKey": Object {
++     "key": "AccountId",
+      "permissions": "Permissions",
+-     "signer": "Signatory",
+    },
+    "SecondaryKeyWithAuth": Object {
+-     "auth_signature": "Signature",
++     "auth_signature": "H512",
+      "secondary_key": "SecondaryKey",
+    },
+    "SecurityToken": Object {
+@@ -1039,7 +1078,38 @@
+    "SnapshottedPip": Object {
       "id": "PipId",
       "weight": "(bool, Balance)",
-    },
++   },
 +   "Stat1stKey": Object {
 +     "asset": "AssetScope",
 +     "stat_type": "StatType",
@@ -145,7 +212,7 @@
 +   "StatType": Object {
 +     "claim_issuer": "Option<(ClaimType, IdentityId)>",
 +     "op": "StatOpType",
-+   },
+    },
 +   "StatUpdate": Object {
 +     "key2": "Stat2ndKey",
 +     "value": "Option<u128>",
@@ -153,7 +220,7 @@
     "StoredSchedule": Object {
       "at": "Moment",
       "id": "ScheduleId",
-@@ -1093,15 +1157,22 @@
+@@ -1093,15 +1163,22 @@
       "max_ticker_length": "u8",
       "registration_length": "Option<Moment>",
     },
@@ -166,14 +233,14 @@
 +       "ClaimOwnership": "(StatClaim, IdentityId, Percentage, Percentage)",
 +       "MaxInvestorCount": "u64",
 +       "MaxInvestorOwnership": "Percentage",
-      },
++     },
     },
--   "TransferManagerResult": Object {
 +   "TransferConditionExemptKey": Object {
 +     "asset": "AssetScope",
 +     "claim_type": "Option<ClaimType>",
 +     "op": "StatOpType",
-+   },
+    },
+-   "TransferManagerResult": Object {
 +   "TransferConditionResult": Object {
 +     "condition": "TransferCondition",
       "result": "bool",
@@ -181,7 +248,7 @@
     },
     "TrustedFor": Object {
       "_enum": Object {
-@@ -1153,6 +1224,12 @@
+@@ -1153,6 +1230,12 @@
       "ayes_stake": "Balance",
       "nays_count": "u32",
       "nays_stake": "Balance",
