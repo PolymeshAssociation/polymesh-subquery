@@ -53,7 +53,7 @@
 -     },
 -   },
 -   "AssetMetadataLocalKey": "u64",
--   "AssetMetadataLockStatus<Moment>": Object {
+-   "AssetMetadataLockStatus": Object {
 -     "_enum": Object {
 -       "Locked": "",
 -       "LockedUntil": "Moment",
@@ -67,9 +67,9 @@
 -     "url": "Option<Url>",
 -   },
 -   "AssetMetadataValue": "Vec<u8>",
--   "AssetMetadataValueDetail<Moment>": Object {
+-   "AssetMetadataValueDetail": Object {
 -     "expire": "Option<Moment>",
--     "lock_status": "AssetMetadataLockStatus<Moment>",
+-     "lock_status": "AssetMetadataLockStatus",
 -   },
 -   "AssetName": "Text",
 -   "AssetOwnershipRelation": Object {
@@ -308,7 +308,7 @@
 -   "CompressedRistretto": "[u8; 32]",
 -   "Condition": Object {
 -     "condition_type": "ConditionType",
--     "issuers": "Vec<TrustedIssuer>",
+-     "issuers": "Vec<PolymeshPrimitivesConditionTrustedIssuer>",
 -   },
 -   "ConditionResult": Object {
 -     "condition": "Condition",
@@ -591,18 +591,7 @@
 -     "owner": "AccountId",
 -   },
 -   "DidRecord": Object {
--     "primary_key": "AccountId",
--     "secondary_keys": "Vec<SecondaryKey>",
--   },
--   "DidRecords": Object {
--     "_enum": Object {
--       "IdNotFound": "Vec<u8>",
--       "Success": "DidRecordsSuccess",
--     },
--   },
--   "DidRecordsSuccess": Object {
--     "primary_key": "AccountId",
--     "secondary_keys": "Vec<SecondaryKey>",
+-     "primary_key": "Option<AccountId>",
 -   },
 -   "DidStatus": Object {
 -     "_enum": Object {
@@ -778,6 +767,13 @@
 -   "KeyIdentityData": Object {
 -     "identity": "IdentityId",
 -     "permissions": "Option<Permissions>",
+-   },
+-   "KeyRecord": Object {
+-     "_enum": Object {
+-       "MultiSigSignerKey": "AccountId",
+-       "PrimaryKey": "IdentityId",
+-       "SecondaryKey": "(IdentityId, Permissions)",
+-     },
 -   },
 -   "Leg": Object {
 -     "amount": "Balance",
@@ -990,6 +986,16 @@
 -     ],
 -   },
 -   "RistrettoPoint": "[u8; 32]",
+-   "RpcDidRecords": Object {
+-     "_enum": Object {
+-       "IdNotFound": "Vec<u8>",
+-       "Success": "RpcDidRecordsSuccess",
+-     },
+-   },
+-   "RpcDidRecordsSuccess": Object {
+-     "primary_key": "AccountId",
+-     "secondary_keys": "Vec<SecondaryKey>",
+-   },
 -   "Scalar": "[u8; 32]",
 -   "ScheduleId": "u64",
 -   "ScheduleSpec": Object {
@@ -1011,11 +1017,11 @@
 -   },
 -   "ScopeId": "[u8; 32]",
 -   "SecondaryKey": Object {
+-     "key": "AccountId",
 -     "permissions": "Permissions",
--     "signer": "Signatory",
 -   },
 -   "SecondaryKeyWithAuth": Object {
--     "auth_signature": "Signature",
+-     "auth_signature": "H512",
 -     "secondary_key": "SecondaryKey",
 -   },
 -   "SecurityToken": Object {
