@@ -1,6 +1,6 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
+import { hexHasPrefix, hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
@@ -14,6 +14,7 @@ import {
   TransferRestrictionTypeEnum,
 } from '../types';
 import { Attributes } from './entities/common';
+import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -147,6 +148,21 @@ export const hexToString = (input: string): string => {
   return removeNullChars(str);
 };
 
+/**
+ * If given string that begins with "0x", this method will create a string from its binary representation.
+ * Otherwise it returns the string as it is.
+ *
+ * @example
+ *   1. "0x424152" => "BAR"
+ *   2. "FOO" => "FOO"
+ */
+export const coerceHexToString = (input: string): string => {
+  if (hexHasPrefix(input)) {
+    return hexToString(input);
+  }
+  return input;
+};
+
 export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   return hexStripPrefix(
     u8aToHex(
@@ -165,21 +181,27 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
 export const getDocValue = (
   doc: Codec
 ): Pick<AssetDocument, 'name' | 'link' | 'contentHash' | 'type' | 'filedAt'> => {
-  const {
-    uri: link,
-    content_hash: documentHash,
-    name,
-    doc_type: type,
-    filing_date: filedAt,
-  } = JSON.parse(doc.toString());
+  const document = JSON.parse(doc.toString());
+
+  const documentHash = extractValue(document, 'content_hash');
 
   const hashType = Object.keys(documentHash)[0];
+  const contentHash = {
+    type: hashType,
+    value: documentHash[hashType],
+  };
+
+  let filedAt;
+  const filingDate = extractString(document, 'filing_date');
+  if (filingDate) {
+    filedAt = new Date(filingDate);
+  }
 
   return {
-    name,
-    link,
-    contentHash: documentHash[hashType],
-    type,
+    name: coerceHexToString(extractString(document, 'name')),
+    link: coerceHexToString(extractString(document, 'uri')),
+    contentHash,
+    type: coerceHexToString(extractString(document, 'doc_type')),
     filedAt,
   };
 };
@@ -190,7 +212,7 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
     const type = Object.keys(i)[0];
     return {
       type,
-      value: i[type],
+      value: coerceHexToString(i[type]),
     };
   });
 };
@@ -294,8 +316,11 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
 };
 
 export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
-  const { local_id: localId, ticker } = JSON.parse(item.toString());
-  return { localId, assetId: hexToString(ticker) };
+  const caId = JSON.parse(item.toString());
+  return {
+    localId: extractNumber(caId, 'local_id'),
+    assetId: coerceHexToString(caId.ticker),
+  };
 };
 
 export interface LegDetails {
@@ -329,18 +354,16 @@ export const getDistributionValue = (
   Distribution,
   'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
 > => {
-  const { from, currency, per_share, amount, remaining, payment_at, expires_at } = JSON.parse(
-    item.toString()
-  );
+  const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
   const { identityId, number } = meshPortfolioToPortfolio(from);
   return {
     portfolioId: `${identityId}/${number}`,
     currency: hexToString(currency),
-    perShare: getBigIntValue(per_share),
+    perShare: BigInt(extractBigInt(rest, 'per_share') || 0),
     amount: getBigIntValue(amount),
     remaining: getBigIntValue(remaining),
-    paymentAt: getBigIntValue(payment_at),
-    expiresAt: getBigIntValue(expires_at || END_OF_TIME),
+    paymentAt: BigInt(extractBigInt(rest, 'payment_at') || 0),
+    expiresAt: BigInt(extractBigInt(rest, 'expires_at') || END_OF_TIME),
   };
 };
 

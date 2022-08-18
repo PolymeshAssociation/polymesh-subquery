@@ -137,13 +137,13 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
 
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
+  const moduleId = event.event.section.toLowerCase();
+  const eventId = event.event.method;
   try {
     await handleToolingEvent(event);
 
     const block = event.block;
     const blockId = block.block.header.number.toString();
-    const moduleId = event.event.section.toLowerCase();
-    const eventId = event.event.method;
     const args = event.event.data.toArray();
 
     const handlerArgs: HandlerArgs = {
@@ -205,7 +205,9 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
     await Promise.all(handlerPromises);
   } catch (error) {
-    logError(`Received an error in handleEvent function: ${error}`);
+    logError(
+      `Received an error in handleEvent function: ${error} while handling the event '${moduleId}.${eventId}'`
+    );
     throw error;
   }
 }

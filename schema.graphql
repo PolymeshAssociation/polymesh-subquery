@@ -1627,12 +1627,17 @@ type AssetHolder @entity {
   updatedBlock: Block!
 }
 
+type ContentHash @jsonField {
+  type: String
+  value: String
+}
+
 type AssetDocument @entity {
   id: ID! # ticker/documentId
   documentId: Int!
   name: String!
   link: String!
-  contentHash: String
+  contentHash: ContentHash
   type: String
   filedAt: Date
   asset: Asset! @index(unique: false)
