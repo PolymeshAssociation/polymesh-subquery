@@ -22,10 +22,10 @@ export const migrationQueries = (): string[] => {
   ];
 
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
-  const gcIdentities = Array(17)
+  const gcIdentities = Array(33)
     .fill('')
     .map((_, index) => {
-      const twoDigitNumber = `${index}`.padStart(2, '0');
+      const twoDigitNumber = index.toString(16).padStart(2, '0');
       return `0x${twoDigitNumber}`.padEnd(66, '0');
     });
 
