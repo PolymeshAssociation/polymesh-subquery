@@ -346,18 +346,16 @@ export const getDistributionValue = (
   Distribution,
   'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
 > => {
-  const { from, currency, amount, remaining, per_share, payment_at, expires_at } = JSON.parse(
-    item.toString()
-  );
+  const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
   const { identityId, number } = meshPortfolioToPortfolio(from);
   return {
     portfolioId: `${identityId}/${number}`,
     currency: hexToString(currency),
-    perShare: getBigIntValue(per_share),
+    perShare: BigInt(extractValue<bigint>(rest, 'per_share') || 0),
     amount: getBigIntValue(amount),
     remaining: getBigIntValue(remaining),
-    paymentAt: getBigIntValue(payment_at),
-    expiresAt: getBigIntValue(expires_at || END_OF_TIME),
+    paymentAt: BigInt(extractValue<bigint>(rest, 'payment_at') || 0),
+    expiresAt: BigInt(extractValue<bigint>(rest, 'expires_at') || END_OF_TIME),
   };
 };
 
