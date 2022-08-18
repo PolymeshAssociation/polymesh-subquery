@@ -133,7 +133,10 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "AssetDocument",
-              "contentHash": null,
+              "contentHash": {
+                "type": "none",
+                "value": null,
+              },
               "filedAt": null,
               "id": 0,
               "link": "www.google.com",
