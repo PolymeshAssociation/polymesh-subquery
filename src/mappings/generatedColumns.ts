@@ -39,12 +39,12 @@ export const extractEventArgs = (args: any[]) => {
  * Function to get value for a specific key
  * It searches for snake_case and camelCase value for the given key
  */
-export const extractValue = (obj: unknown, key: string): string => {
+export const extractValue = <T>(obj: unknown, key: string): T => {
   if (obj) {
     if (Object.keys(obj).includes(key)) {
-      return obj[key];
+      return obj[key] as T;
     }
-    return obj[snakeToCamelCase(key)];
+    return obj[snakeToCamelCase(key)] as T;
   }
   return undefined;
 };
@@ -97,10 +97,14 @@ export const extractClaimInfo = (args: any[]) => {
   return {
     claimType,
     claimScope: JSONStringifyExceptStringAndNull(extractClaimScope(claimType, args)),
-    claimIssuer: JSONStringifyExceptStringAndNull(extractValue(claimValue, 'claim_issuer')),
-    claimExpiry: JSONStringifyExceptStringAndNull(extractValue(claimValue, 'expiry')),
-    issuanceDate: JSONStringifyExceptStringAndNull(extractValue(claimValue, 'issuance_date')),
-    lastUpdateDate: JSONStringifyExceptStringAndNull(extractValue(claimValue, 'last_update_date')),
+    claimIssuer: JSONStringifyExceptStringAndNull(extractValue<string>(claimValue, 'claim_issuer')),
+    claimExpiry: JSONStringifyExceptStringAndNull(extractValue<string>(claimValue, 'expiry')),
+    issuanceDate: JSONStringifyExceptStringAndNull(
+      extractValue<string>(claimValue, 'issuance_date')
+    ),
+    lastUpdateDate: JSONStringifyExceptStringAndNull(
+      extractValue<string>(claimValue, 'last_update_date')
+    ),
     cddId,
     jurisdiction,
   };
@@ -118,7 +122,8 @@ export const extractCorporateActionTicker = (args: any[]) => {
   return null;
 };
 
-export const extractOfferingAsset = (args: any[]) => extractValue(args[3]?.value, 'offering_asset');
+export const extractOfferingAsset = (args: any[]) =>
+  extractValue<string>(args[3]?.value, 'offering_asset');
 
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);

@@ -22,10 +22,10 @@ export const migrationQueries = (): string[] => {
   ];
 
   // We also define identities for first 16 GC identities
-  const gcIdentities = Array(16)
+  const gcIdentities = Array(17)
     .fill('')
     .map((_, index) => {
-      const twoDigitNumber = `${index + 1}`.padStart(2, '0');
+      const twoDigitNumber = `${index}`.padStart(2, '0');
       return `0x${twoDigitNumber}`.padEnd(66, '0');
     });
 

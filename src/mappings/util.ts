@@ -1,6 +1,6 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
+import { hexHasPrefix, hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
@@ -14,6 +14,7 @@ import {
   TransferRestrictionTypeEnum,
 } from '../types';
 import { Attributes } from './entities/common';
+import { extractValue } from './generatedColumns';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -147,6 +148,13 @@ export const hexToString = (input: string): string => {
   return removeNullChars(str);
 };
 
+export const maybeHexToString = (input: string): string => {
+  if (hexHasPrefix(input)) {
+    return hexToString(input);
+  }
+  return input;
+};
+
 export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   return hexStripPrefix(
     u8aToHex(
@@ -165,21 +173,27 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
 export const getDocValue = (
   doc: Codec
 ): Pick<AssetDocument, 'name' | 'link' | 'contentHash' | 'type' | 'filedAt'> => {
-  const {
-    uri: link,
-    content_hash: documentHash,
-    name,
-    doc_type: type,
-    filing_date: filedAt,
-  } = JSON.parse(doc.toString());
+  const document = JSON.parse(doc.toString());
+
+  const documentHash = extractValue(document, 'content_hash');
 
   const hashType = Object.keys(documentHash)[0];
+  const contentHash = {
+    type: hashType,
+    value: maybeHexToString(documentHash[hashType]),
+  };
+
+  let filedAt;
+  const filingDate = extractValue<number>(document, 'filing_date');
+  if (filingDate) {
+    filedAt = new Date(filingDate);
+  }
 
   return {
-    name,
-    link,
-    contentHash: documentHash[hashType],
-    type,
+    name: maybeHexToString(extractValue<string>(document, 'name')),
+    link: maybeHexToString(extractValue<string>(document, 'uri')),
+    contentHash,
+    type: maybeHexToString(extractValue<string>(document, 'doc_type')),
     filedAt,
   };
 };
@@ -190,7 +204,7 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
     const type = Object.keys(i)[0];
     return {
       type,
-      value: i[type],
+      value: maybeHexToString(i[type]),
     };
   });
 };
@@ -294,8 +308,11 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
 };
 
 export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
-  const { local_id: localId, ticker } = JSON.parse(item.toString());
-  return { localId, assetId: hexToString(ticker) };
+  const caId = JSON.parse(item.toString());
+  return {
+    localId: extractValue<number>(caId, 'local_id'),
+    assetId: maybeHexToString(caId.ticker),
+  };
 };
 
 export interface LegDetails {
@@ -329,7 +346,7 @@ export const getDistributionValue = (
   Distribution,
   'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
 > => {
-  const { from, currency, per_share, amount, remaining, payment_at, expires_at } = JSON.parse(
+  const { from, currency, amount, remaining, per_share, payment_at, expires_at } = JSON.parse(
     item.toString()
   );
   const { identityId, number } = meshPortfolioToPortfolio(from);
