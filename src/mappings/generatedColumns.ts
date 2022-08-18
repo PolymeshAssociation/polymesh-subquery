@@ -49,6 +49,12 @@ export const extractValue = <T>(obj: unknown, key: string): T => {
   return undefined;
 };
 
+export const extractString = (obj: unknown, key: string): string => extractValue<string>(obj, key);
+
+export const extractNumber = (obj: unknown, key: string): number => extractValue<number>(obj, key);
+
+export const extractBigInt = (obj: unknown, key: string): bigint => extractValue<bigint>(obj, key);
+
 export const extractClaimScope = (
   claimType: string,
   args: any[]
@@ -97,14 +103,10 @@ export const extractClaimInfo = (args: any[]) => {
   return {
     claimType,
     claimScope: JSONStringifyExceptStringAndNull(extractClaimScope(claimType, args)),
-    claimIssuer: JSONStringifyExceptStringAndNull(extractValue<string>(claimValue, 'claim_issuer')),
-    claimExpiry: JSONStringifyExceptStringAndNull(extractValue<string>(claimValue, 'expiry')),
-    issuanceDate: JSONStringifyExceptStringAndNull(
-      extractValue<string>(claimValue, 'issuance_date')
-    ),
-    lastUpdateDate: JSONStringifyExceptStringAndNull(
-      extractValue<string>(claimValue, 'last_update_date')
-    ),
+    claimIssuer: JSONStringifyExceptStringAndNull(extractString(claimValue, 'claim_issuer')),
+    claimExpiry: JSONStringifyExceptStringAndNull(extractString(claimValue, 'expiry')),
+    issuanceDate: JSONStringifyExceptStringAndNull(extractString(claimValue, 'issuance_date')),
+    lastUpdateDate: JSONStringifyExceptStringAndNull(extractString(claimValue, 'last_update_date')),
     cddId,
     jurisdiction,
   };
@@ -123,7 +125,7 @@ export const extractCorporateActionTicker = (args: any[]) => {
 };
 
 export const extractOfferingAsset = (args: any[]) =>
-  extractValue<string>(args[3]?.value, 'offering_asset');
+  extractString(args[3]?.value, 'offering_asset');
 
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);

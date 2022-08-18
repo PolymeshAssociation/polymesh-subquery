@@ -14,7 +14,7 @@ import {
   TransferRestrictionTypeEnum,
 } from '../types';
 import { Attributes } from './entities/common';
-import { extractValue } from './generatedColumns';
+import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -148,7 +148,15 @@ export const hexToString = (input: string): string => {
   return removeNullChars(str);
 };
 
-export const maybeHexToString = (input: string): string => {
+/**
+ * If given string that begins with "0x", this method will create a string from its binary representation.
+ * Otherwise it returns the string as it is.
+ *
+ * @example
+ *   1. "0x424152" => "BAR"
+ *   2. "FOO" => "FOO"
+ */
+export const coerceHexToString = (input: string): string => {
   if (hexHasPrefix(input)) {
     return hexToString(input);
   }
@@ -180,20 +188,20 @@ export const getDocValue = (
   const hashType = Object.keys(documentHash)[0];
   const contentHash = {
     type: hashType,
-    value: maybeHexToString(documentHash[hashType]),
+    value: documentHash[hashType],
   };
 
   let filedAt;
-  const filingDate = extractValue<number>(document, 'filing_date');
+  const filingDate = extractString(document, 'filing_date');
   if (filingDate) {
     filedAt = new Date(filingDate);
   }
 
   return {
-    name: maybeHexToString(extractValue<string>(document, 'name')),
-    link: maybeHexToString(extractValue<string>(document, 'uri')),
+    name: coerceHexToString(extractString(document, 'name')),
+    link: coerceHexToString(extractString(document, 'uri')),
     contentHash,
-    type: maybeHexToString(extractValue<string>(document, 'doc_type')),
+    type: coerceHexToString(extractString(document, 'doc_type')),
     filedAt,
   };
 };
@@ -204,7 +212,7 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
     const type = Object.keys(i)[0];
     return {
       type,
-      value: maybeHexToString(i[type]),
+      value: coerceHexToString(i[type]),
     };
   });
 };
@@ -310,8 +318,8 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
 export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
   const caId = JSON.parse(item.toString());
   return {
-    localId: extractValue<number>(caId, 'local_id'),
-    assetId: maybeHexToString(caId.ticker),
+    localId: extractNumber(caId, 'local_id'),
+    assetId: coerceHexToString(caId.ticker),
   };
 };
 
@@ -351,11 +359,11 @@ export const getDistributionValue = (
   return {
     portfolioId: `${identityId}/${number}`,
     currency: hexToString(currency),
-    perShare: BigInt(extractValue<bigint>(rest, 'per_share') || 0),
+    perShare: BigInt(extractBigInt(rest, 'per_share') || 0),
     amount: getBigIntValue(amount),
     remaining: getBigIntValue(remaining),
-    paymentAt: BigInt(extractValue<bigint>(rest, 'payment_at') || 0),
-    expiresAt: BigInt(extractValue<bigint>(rest, 'expires_at') || END_OF_TIME),
+    paymentAt: BigInt(extractBigInt(rest, 'payment_at') || 0),
+    expiresAt: BigInt(extractBigInt(rest, 'expires_at') || END_OF_TIME),
   };
 };
 

@@ -21,7 +21,7 @@ export const migrationQueries = (): string[] => {
     '0x73797374656d3a726577617264735f6d6f64756c655f64696400000000000000', // Rewards
   ];
 
-  // We also define identities for first 16 GC identities
+  // There are special Identities specified in the chain's genesis block that need to be included in the DB.
   const gcIdentities = Array(17)
     .fill('')
     .map((_, index) => {

@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "AssetDocument",
-        "contentHash": {
+        "contentHash": Object {
           "type": "none",
           "value": null,
         },
