@@ -11,7 +11,7 @@ import {
 } from '../../types';
 import { getTextValue } from '../util';
 import { HandlerArgs } from './common';
-import { createPortfolio } from './mapPortfolio';
+import { createPortfolio, getPortfolio } from './mapPortfolio';
 
 /**
  * Subscribes to the Identities related events
@@ -52,12 +52,44 @@ export async function mapIdentities({
   }
 }
 
-const getIdentity = async (param: Codec): Promise<Identity> => {
-  const did = getTextValue(param);
-
+/**
+ * Returns Identity for a given DID
+ *
+ * @throws if no Identity is found
+ */
+const getIdentity = async (did: string): Promise<Identity> => {
   const identity = await Identity.get(did);
   if (!identity) {
     throw new Error(`Identity with DID ${did} was not found`);
+  }
+
+  return identity;
+};
+
+/**
+ * Returns Identity for a given DID. If no Identity exists, it creates one along with its default Portfolio before returning the created Identity
+ */
+export const getOrCreateIdentity = async (did: string, blockId: string): Promise<Identity> => {
+  let identity = await Identity.get(did);
+  if (!identity) {
+    identity = Identity.create({
+      id: did,
+      did,
+      secondaryKeysFrozen: false,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+
+    await identity.save();
+
+    await createPortfolio(
+      {
+        identityId: did,
+        number: 0,
+        eventIdx: 1,
+      },
+      blockId
+    );
   }
 
   return identity;
@@ -75,16 +107,40 @@ const handleDidCreated = async (
   const did = getTextValue(rawDid);
   const address = getTextValue(rawAddress);
 
-  const identity = Identity.create({
-    id: did,
-    did,
-    primaryAccount: address,
-    secondaryKeysFrozen: false,
-    eventId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    datetime,
-  }).save();
+  let defaultPortfolio;
+  let identity = await Identity.get(did);
+  if (identity) {
+    Object.assign(identity, {
+      primaryAccount: address,
+      updatedBlockId: blockId,
+      eventId,
+      datetime,
+    });
+
+    const portfolio = await getPortfolio({ identityId: did, number: 0 });
+    portfolio.updatedBlockId = blockId;
+    defaultPortfolio = portfolio.save();
+  } else {
+    identity = Identity.create({
+      id: did,
+      did,
+      primaryAccount: address,
+      secondaryKeysFrozen: false,
+      eventId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+      datetime,
+    });
+
+    defaultPortfolio = createPortfolio(
+      {
+        identityId: did,
+        number: 0,
+        eventIdx,
+      },
+      blockId
+    );
+  }
 
   const permissions = Permissions.create({
     id: address,
@@ -108,16 +164,7 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  const defaultPortfolio = createPortfolio(
-    {
-      identityId: did,
-      number: 0,
-      eventIdx,
-    },
-    blockId
-  );
-
-  await Promise.all([identity, permissions, account, defaultPortfolio]);
+  await Promise.all([identity.save(), permissions, account, defaultPortfolio]);
 };
 
 const getPermissions = (
@@ -227,7 +274,7 @@ const handleSecondaryKeysFrozen = async (
   frozen: boolean
 ): Promise<void> => {
   const [rawDid] = params;
-  const identity = await getIdentity(rawDid);
+  const identity = await getIdentity(getTextValue(rawDid));
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -246,7 +293,7 @@ const handleSecondaryKeysAdded = async (
 ): Promise<void> => {
   const [rawDid, rawAccounts] = params;
 
-  const { id: identityId } = await getIdentity(rawDid);
+  const { id: identityId } = await getIdentity(getTextValue(rawDid));
 
   const accounts = JSON.parse(rawAccounts.toString());
 

@@ -1160,14 +1160,16 @@ type Account @entity {
   updatedBlock: Block!
 }
 
+# Identity will have null values for `primaryAccount`, `eventId`, `datetime` in cases where Identity is referenced without actually being created as in Authorization/Instruction
+# Once Identity is created, values will be updated for these attributes
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
-  primaryAccount: String! @index(unique: false)
+  primaryAccount: String @index(unique: false)
   secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
-  eventId: EventIdEnum!
-  datetime: Date!
+  eventId: EventIdEnum
+  datetime: Date
   createdBlock: Block!
   updatedBlock: Block!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
@@ -1313,6 +1315,7 @@ type PortfolioJson @jsonField {
   number: Int!
 }
 
+# For each entry in DID, a default Portfolio (which contains number as 0) entry is created.
 type Portfolio @entity {
   id: ID! # did/number
   identity: Identity! @index(unique: false)
