@@ -1165,11 +1165,11 @@ type Account @entity {
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
-  primaryAccount: String @index(unique: false)
+  primaryAccount: String! @index(unique: false)
   secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
-  eventId: EventIdEnum
-  datetime: Date
+  eventId: EventIdEnum!
+  datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")

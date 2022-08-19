@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
 import {
   Account,
   AssetPermissions,
@@ -67,15 +68,22 @@ const getIdentity = async (did: string): Promise<Identity> => {
 };
 
 /**
- * Returns Identity for a given DID. If no Identity exists, it creates one along with its default Portfolio before returning the created Identity
+ * Creates an Identity if already not present. It also creates default Portfolio for that Identity
  */
-export const getOrCreateIdentity = async (did: string, blockId: string): Promise<Identity> => {
+export const createIdentityIfNotExists = async (
+  did: string,
+  blockId: string,
+  event: SubstrateEvent
+): Promise<void> => {
   let identity = await Identity.get(did);
   if (!identity) {
     identity = Identity.create({
       id: did,
       did,
+      primaryAccount: '',
+      eventId: event.event.method as EventIdEnum,
       secondaryKeysFrozen: false,
+      datetime: event.block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     });
@@ -86,13 +94,11 @@ export const getOrCreateIdentity = async (did: string, blockId: string): Promise
       {
         identityId: did,
         number: 0,
-        eventIdx: 1,
+        eventIdx: event.idx,
       },
       blockId
     );
   }
-
-  return identity;
 };
 
 const handleDidCreated = async (

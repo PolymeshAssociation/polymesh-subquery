@@ -10,6 +10,7 @@ import {
   serializeTicker,
 } from '../util';
 import { Attributes, HandlerArgs } from './common';
+import { createIdentityIfNotExists } from './mapIdentities';
 
 export const getPortfolio = async ({
   identityId,
@@ -39,6 +40,30 @@ export const createPortfolio = (
   }).save();
 };
 
+/**
+ * Creates a Portfolio if not present.
+ * This can be need in case where someone creates an Instruction before the recipient Portfolio is created
+ */
+export const createPortfolioIfNotExists = async (
+  { identityId, number }: Pick<Portfolio, 'identityId' | 'number'>,
+  blockId: string,
+  event: SubstrateEvent
+): Promise<void> => {
+  await createIdentityIfNotExists(identityId, blockId, event);
+
+  if (number) {
+    await createPortfolio(
+      {
+        identityId,
+        number,
+        name: '',
+        eventIdx: event.idx,
+      },
+      blockId
+    );
+  }
+};
+
 const handlePortfolioCreated = async (
   blockId: string,
   params: Codec[],
@@ -50,15 +75,26 @@ const handlePortfolioCreated = async (
   const number = getNumberValue(rawPortfolioNumber);
   const name = getTextValue(rawName);
 
-  await createPortfolio(
-    {
-      identityId: ownerId,
-      number,
+  const portfolio = await Portfolio.get(`${ownerId}/${number}`);
+  if (!portfolio) {
+    await createPortfolio(
+      {
+        identityId: ownerId,
+        number,
+        name,
+        eventIdx,
+      },
+      blockId
+    );
+  } else {
+    Object.assign(portfolio, {
       name,
       eventIdx,
-    },
-    blockId
-  );
+      updatedBlockId: blockId,
+    });
+
+    await portfolio.save();
+  }
 };
 
 const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise<void> => {
