@@ -108,7 +108,7 @@ const handleDidCreated = async (
   const address = getTextValue(rawAddress);
 
   let defaultPortfolio;
-  let identity = await Identity.get(did);
+  const identity = await Identity.get(did);
   if (identity) {
     Object.assign(identity, {
       primaryAccount: address,
@@ -116,12 +116,13 @@ const handleDidCreated = async (
       eventId,
       datetime,
     });
+    await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
     portfolio.updatedBlockId = blockId;
     defaultPortfolio = portfolio.save();
   } else {
-    identity = Identity.create({
+    await Identity.create({
       id: did,
       did,
       primaryAccount: address,
@@ -130,7 +131,7 @@ const handleDidCreated = async (
       createdBlockId: blockId,
       updatedBlockId: blockId,
       datetime,
-    });
+    }).save();
 
     defaultPortfolio = createPortfolio(
       {
@@ -164,7 +165,7 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  await Promise.all([identity.save(), permissions, account, defaultPortfolio]);
+  await Promise.all([permissions, account, defaultPortfolio]);
 };
 
 const getPermissions = (
