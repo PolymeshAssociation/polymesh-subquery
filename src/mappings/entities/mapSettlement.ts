@@ -3,12 +3,12 @@ import { SubstrateEvent } from '@subql/types';
 import {
   EventIdEnum,
   Instruction,
+  InstructionStatusEnum,
   Leg,
   ModuleIdEnum,
   Settlement,
-  Venue,
   SettlementResultEnum,
-  InstructionStatusEnum,
+  Venue,
 } from '../../types';
 import {
   getDateValue,
@@ -20,6 +20,7 @@ import {
   LegDetails,
 } from '../util';
 import { HandlerArgs } from './common';
+import { createPortfolioIfNotExists } from './mapPortfolio';
 
 const updateEvents: EventIdEnum[] = [
   EventIdEnum.InstructionAuthorized,
@@ -52,9 +53,16 @@ export const createLeg = async (
   instructionId: string,
   address: string,
   legIndex: number,
-  { ticker, amount, from, to }: LegDetails
-): Promise<void> =>
-  Leg.create({
+  { ticker, amount, from, to }: LegDetails,
+  event: SubstrateEvent
+): Promise<void> => {
+  // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
+  await Promise.all([
+    createPortfolioIfNotExists(from, blockId, event),
+    createPortfolioIfNotExists(to, blockId, event),
+  ]);
+
+  return Leg.create({
     id: `${instructionId}/${legIndex}`,
     assetId: ticker,
     amount,
@@ -65,6 +73,7 @@ export const createLeg = async (
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
+};
 
 const updateLegs = async (
   blockId: string,
@@ -159,7 +168,9 @@ const handleInstructionCreated = async (
   await instruction.save();
 
   await Promise.all(
-    legs.map((legDetails, index) => createLeg(blockId, instructionId, address, index, legDetails))
+    legs.map((legDetails, index) =>
+      createLeg(blockId, instructionId, address, index, legDetails, event)
+    )
   );
 };
 

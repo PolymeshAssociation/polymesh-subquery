@@ -1313,6 +1313,7 @@ type PortfolioJson @jsonField {
   number: Int!
 }
 
+# For each entry in `Identity`, a default Portfolio (which contains number as 0) entry is created.
 type Portfolio @entity {
   id: ID! # did/number
   identity: Identity! @index(unique: false)

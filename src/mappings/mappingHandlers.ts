@@ -206,7 +206,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     await Promise.all(handlerPromises);
   } catch (error) {
     logError(
-      `Received an error in handleEvent function: ${error} while handling the event '${moduleId}.${eventId}'`
+      `Received an error in handleEvent while handling the event '${moduleId}.${eventId}': ${error.stack}`
     );
     throw error;
   }

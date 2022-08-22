@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
 import {
   Account,
   AssetPermissions,
@@ -11,7 +12,7 @@ import {
 } from '../../types';
 import { getTextValue } from '../util';
 import { HandlerArgs } from './common';
-import { createPortfolio } from './mapPortfolio';
+import { createPortfolio, getPortfolio } from './mapPortfolio';
 
 /**
  * Subscribes to the Identities related events
@@ -52,15 +53,55 @@ export async function mapIdentities({
   }
 }
 
-const getIdentity = async (param: Codec): Promise<Identity> => {
-  const did = getTextValue(param);
-
+/**
+ * Returns Identity for a given DID
+ *
+ * @throws if no Identity is found
+ */
+const getIdentity = async (did: string): Promise<Identity> => {
   const identity = await Identity.get(did);
   if (!identity) {
     throw new Error(`Identity with DID ${did} was not found`);
   }
 
   return identity;
+};
+
+/**
+ * Creates an Identity if already not present. It also creates default Portfolio for that Identity
+ *
+ * @note WARNING: This function should only be used for the events that do not validate a DID to exists, before execution of the underlying extrinsic.
+ * For e.g. `settlement.InstructionCreated` as it doesn't validates the target DID
+ */
+export const createIdentityIfNotExists = async (
+  did: string,
+  blockId: string,
+  event: SubstrateEvent
+): Promise<void> => {
+  let identity = await Identity.get(did);
+  if (!identity) {
+    identity = Identity.create({
+      id: did,
+      did,
+      primaryAccount: '',
+      eventId: event.event.method as EventIdEnum,
+      secondaryKeysFrozen: false,
+      datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+
+    await identity.save();
+
+    await createPortfolio(
+      {
+        identityId: did,
+        number: 0,
+        eventIdx: event.idx,
+      },
+      blockId
+    );
+  }
 };
 
 const handleDidCreated = async (
@@ -75,16 +116,41 @@ const handleDidCreated = async (
   const did = getTextValue(rawDid);
   const address = getTextValue(rawAddress);
 
-  const identity = Identity.create({
-    id: did,
-    did,
-    primaryAccount: address,
-    secondaryKeysFrozen: false,
-    eventId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    datetime,
-  }).save();
+  let defaultPortfolio;
+  const identity = await Identity.get(did);
+  if (identity) {
+    Object.assign(identity, {
+      primaryAccount: address,
+      updatedBlockId: blockId,
+      eventId,
+      datetime,
+    });
+    await identity.save();
+
+    const portfolio = await getPortfolio({ identityId: did, number: 0 });
+    portfolio.updatedBlockId = blockId;
+    defaultPortfolio = portfolio.save();
+  } else {
+    await Identity.create({
+      id: did,
+      did,
+      primaryAccount: address,
+      secondaryKeysFrozen: false,
+      eventId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+      datetime,
+    }).save();
+
+    defaultPortfolio = createPortfolio(
+      {
+        identityId: did,
+        number: 0,
+        eventIdx,
+      },
+      blockId
+    );
+  }
 
   const permissions = Permissions.create({
     id: address,
@@ -108,16 +174,7 @@ const handleDidCreated = async (
     datetime,
   }).save();
 
-  const defaultPortfolio = createPortfolio(
-    {
-      identityId: did,
-      number: 0,
-      eventIdx,
-    },
-    blockId
-  );
-
-  await Promise.all([identity, permissions, account, defaultPortfolio]);
+  await Promise.all([permissions, account, defaultPortfolio]);
 };
 
 const getPermissions = (
@@ -227,7 +284,7 @@ const handleSecondaryKeysFrozen = async (
   frozen: boolean
 ): Promise<void> => {
   const [rawDid] = params;
-  const identity = await getIdentity(rawDid);
+  const identity = await getIdentity(getTextValue(rawDid));
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -246,7 +303,7 @@ const handleSecondaryKeysAdded = async (
 ): Promise<void> => {
   const [rawDid, rawAccounts] = params;
 
-  const { id: identityId } = await getIdentity(rawDid);
+  const { id: identityId } = await getIdentity(getTextValue(rawDid));
 
   const accounts = JSON.parse(rawAccounts.toString());
 
