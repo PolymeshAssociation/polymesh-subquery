@@ -42,7 +42,8 @@ export const createPortfolio = (
 
 /**
  * Creates a Portfolio if not present.
- * This can be need in case where someone creates an Instruction before the recipient Portfolio is created
+ *
+ * @note - WARNING: This is needed when an Instruction is created with a target Portfolio that doesn't exist. It should not be used unless necessary.
  */
 export const createPortfolioIfNotExists = async (
   { identityId, number }: Pick<Portfolio, 'identityId' | 'number'>,
@@ -51,7 +52,8 @@ export const createPortfolioIfNotExists = async (
 ): Promise<void> => {
   await createIdentityIfNotExists(identityId, blockId, event);
 
-  if (number) {
+  const portfolio = await Portfolio.get(`${identityId}/${number}`);
+  if (!portfolio) {
     await createPortfolio(
       {
         identityId,

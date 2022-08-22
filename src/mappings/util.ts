@@ -220,10 +220,12 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
 /**
  * Parses a Vec<AssetCompliance>
  */
-export const getComplianceRulesValue = (
+export const getComplianceValues = (
   requirements: Codec
 ): Pick<Compliance, 'complianceId' | 'data'>[] => {
-  return JSON.parse(JSON.stringify(requirements));
+  const compliances = JSON.parse(requirements.toString());
+
+  return compliances.map(({ id, ...data }) => ({ complianceId: Number(id), data }));
 };
 
 /**

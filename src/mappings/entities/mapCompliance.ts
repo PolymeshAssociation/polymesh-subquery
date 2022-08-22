@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { Compliance, EventIdEnum, ModuleIdEnum } from '../../types';
-import { getComplianceValue, getNumberValue, serializeTicker } from '../util';
+import { getComplianceValue, getComplianceValues, getNumberValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 import { getAsset } from './mapAsset';
 
@@ -26,13 +26,8 @@ const handleComplianceReset = async (params: Codec[]) => {
   await Promise.all(complianceRequirements.map(({ id }) => Compliance.remove(id)));
 };
 
-const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
-  const [, rawTicker, rawCompliance] = params;
-
-  const ticker = serializeTicker(rawTicker);
-  const { complianceId, data } = getComplianceValue(rawCompliance);
-
-  await Compliance.create({
+const createCompliance = (ticker: string, complianceId: number, data: any, blockId: string) =>
+  Compliance.create({
     id: `${ticker}/${complianceId}`,
     complianceId,
     data,
@@ -40,6 +35,33 @@ const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
+
+const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
+  const [, rawTicker, rawCompliance] = params;
+
+  const ticker = serializeTicker(rawTicker);
+  const { complianceId, data } = getComplianceValue(rawCompliance);
+
+  await createCompliance(ticker, complianceId, data, blockId);
+};
+
+const handleComplianceReplaced = async (blockId: string, params: Codec[]) => {
+  const [, rawTicker, rawCompliances] = params;
+
+  const ticker = serializeTicker(rawTicker);
+
+  const existingCompliances = await Compliance.getByAssetId(ticker);
+
+  logger.info(JSON.stringify(rawCompliances.toJSON()));
+
+  const compliances = getComplianceValues(rawCompliances);
+
+  await Promise.all([
+    ...existingCompliances.map(({ id }) => Compliance.remove(id)),
+    ...compliances.map(({ complianceId, data }) =>
+      createCompliance(ticker, complianceId, data, blockId)
+    ),
+  ]);
 };
 
 const handleComplianceRemoved = async (params: Codec[]) => {
@@ -68,7 +90,7 @@ export async function mapCompliance({
       await handleComplianceReset(params);
     }
     if (eventId === EventIdEnum.AssetComplianceReplaced) {
-      await Promise.all([handleComplianceReset(params), handleComplianceCreated(blockId, params)]);
+      await handleComplianceReplaced(blockId, params);
     }
     if (eventId === EventIdEnum.ComplianceRequirementCreated) {
       await handleComplianceCreated(blockId, params);

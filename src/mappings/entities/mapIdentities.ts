@@ -69,6 +69,9 @@ const getIdentity = async (did: string): Promise<Identity> => {
 
 /**
  * Creates an Identity if already not present. It also creates default Portfolio for that Identity
+ *
+ * @note WARNING: This function should only be used for the events that do not validate a DID to exists, before execution of the underlying extrinsic.
+ * For e.g. `settlement.InstructionCreated` as it doesn't validates the target DID
  */
 export const createIdentityIfNotExists = async (
   did: string,
