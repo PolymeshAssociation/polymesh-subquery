@@ -52,8 +52,6 @@ const handleComplianceReplaced = async (blockId: string, params: Codec[]) => {
 
   const existingCompliances = await Compliance.getByAssetId(ticker);
 
-  logger.info(JSON.stringify(rawCompliances.toJSON()));
-
   const compliances = getComplianceValues(rawCompliances);
 
   await Promise.all([
