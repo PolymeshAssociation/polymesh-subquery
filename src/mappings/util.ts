@@ -372,3 +372,8 @@ export const getDistributionValue = (
 export const logError = (message: string): void => {
   logger.error(message);
 };
+
+export const getOfferingAsset = (item: Codec): string => {
+  const fundraiser = JSON.parse(item.toString());
+  return hexToString(extractValue(fundraiser, 'offering_asset'));
+};

@@ -8,6 +8,7 @@ import {
 import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
 import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
 import { HandlerArgs } from './common';
+import { createIdentityIfNotExists } from './mapIdentities';
 
 const authorizationEvents = new Set<string>([
   EventIdEnum.AuthorizationAdded,
@@ -29,17 +30,24 @@ export async function mapAuthorization({
   eventId,
   moduleId,
   params,
+  event,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.identity && isAuthorizationEvent(eventId)) {
     if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
       auth.status = authorizationEventStatusMapping.get(eventId);
       auth.updatedBlockId = blockId;
+
       await auth.save();
     } else {
+      const fromId = getTextValue(params[0]);
+
+      // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
+      await createIdentityIfNotExists(fromId, blockId, event);
+
       await Authorization.create({
         id: getTextValue(params[3]),
-        fromId: getTextValue(params[0]),
+        fromId,
         toId: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])) as AuthTypeEnum,
