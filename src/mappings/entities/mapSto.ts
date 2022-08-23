@@ -1,5 +1,5 @@
 import { EventIdEnum, ModuleIdEnum, Sto } from '../../types';
-import { getTextValue, serializeTicker } from '../util';
+import { getOfferingAsset, getTextValue } from '../util';
 import { HandlerArgs } from './common';
 
 /**
@@ -7,13 +7,12 @@ import { HandlerArgs } from './common';
  */
 export async function mapSto({ blockId, eventId, moduleId, params }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.sto && eventId === EventIdEnum.FundraiserCreated) {
-    const offeringAsset = params[3] instanceof Map ? params[3].get('offering_asset') : undefined;
-    if (!offeringAsset) {
-      throw new Error("Couldn't find offeringAsset for sto");
-    }
+    const [, rawStoId, , rawFundraiser] = params;
+    const offeringAssetId = getOfferingAsset(rawFundraiser);
+
     await Sto.create({
-      id: getTextValue(params[1]),
-      offeringAssetId: serializeTicker(offeringAsset),
+      id: getTextValue(rawStoId),
+      offeringAssetId,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

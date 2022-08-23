@@ -105,9 +105,21 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
   const eventId = event.event.method;
   const args = event.event.data.toArray();
 
-  const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
-  }));
+  const harvesterLikeArgs = args.map((arg, i) => {
+    let type;
+    const typeName = event.event.meta.fields[i].typeName;
+    if (typeName.isSome) {
+      // for metadata >= v14
+      type = typeName.unwrap().toString();
+    } else {
+      // for metadata < v14
+      type = event.event.meta.args[i].toString();
+    }
+    return {
+      value: serializeLikeHarvester(arg, type, logFoundType),
+    };
+  });
+
   const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
 
   const { claimExpiry, claimIssuer, claimScope, claimType } = extractClaimInfo(harvesterLikeArgs);

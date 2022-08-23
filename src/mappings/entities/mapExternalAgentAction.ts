@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { EventIdEnum, ModuleIdEnum, Sto, TickerExternalAgentAction } from '../../types';
-import { getOrDefault, getTextValue, serializeTicker } from '../util';
+import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 
 /**
@@ -225,12 +225,7 @@ class ExternalAgentEventsManager {
       // Special case for the Sto pallet because most events don't contain the ticker,
       // they contain a reference to a previously created fundraiser instead.
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params => {
-        const offeringAsset =
-          params[3] instanceof Map ? params[3].get('offering_asset') : undefined;
-        if (!offeringAsset) {
-          throw new Error("Couldn't find offeringAsset for sto");
-        }
-        return serializeTicker(offeringAsset);
+        return getOfferingAsset(params[3]);
       })
       .add(
         ModuleIdEnum.sto,
