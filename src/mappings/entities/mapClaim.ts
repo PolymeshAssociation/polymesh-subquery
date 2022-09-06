@@ -130,13 +130,11 @@ const handleClaimRevoked = async (
   const id = getId(target, claimType, scope, jurisdiction, cddId);
 
   const claim = await Claim.get(id);
-  if (!claim) {
-    throw new Error(`Claim with id ${id} was not found`);
+
+  if (claim) {
+    claim.revokeDate = issuanceDate;
+    await claim.save();
   }
-
-  claim.revokeDate = issuanceDate;
-
-  await claim.save();
 };
 
 const handleScopes = async (
