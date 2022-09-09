@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
+import { createIdentityIfNotExists } from './mapIdentities';
 
 interface ClaimParams {
   claimExpiry: bigint | undefined;
@@ -93,6 +94,9 @@ const handleClaimAdded = async (
   const scope = JSON.parse(claimScope) as Scope;
 
   const filterExpiry = claimExpiry || END_OF_TIME;
+
+  // The `target` for any claim is not validated, so we make sure it is present in `identities` table
+  await createIdentityIfNotExists(target, blockId, event);
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId),
