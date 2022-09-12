@@ -1321,6 +1321,7 @@ type Portfolio @entity {
   name: String
   custodian: Identity
   eventIdx: Int!
+  deletedAt: Date
   createdBlock: Block!
   updatedBlock: Block!
 }

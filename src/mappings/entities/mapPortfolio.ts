@@ -113,13 +113,21 @@ const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise
   await portfolio.save();
 };
 
-const handlePortfolioDeleted = async (params: Codec[]): Promise<void> => {
+const handlePortfolioDeleted = async (
+  blockId: string,
+  params: Codec[],
+  datetime: Date
+): Promise<void> => {
   const [rawOwnerDid, rawPortfolioNumber] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
 
-  await Portfolio.remove(`${ownerId}/${number}`);
+  const portfolio = await Portfolio.get(`${ownerId}/${number}`);
+  portfolio.deletedAt = datetime;
+  portfolio.updatedBlockId = blockId;
+
+  await portfolio.save();
 };
 
 const handlePortfolioCustodianChanged = async (blockId: string, params: Codec[]): Promise<void> => {
@@ -177,7 +185,7 @@ export async function mapPortfolio({
       await handlePortfolioCustodianChanged(blockId, params);
     }
     if (eventId === EventIdEnum.PortfolioDeleted) {
-      await handlePortfolioDeleted(params);
+      await handlePortfolioDeleted(blockId, params, event.block.timestamp);
     }
     if (eventId === EventIdEnum.MovedBetweenPortfolios) {
       await handlePortfolioMovement(blockId, params, event);
