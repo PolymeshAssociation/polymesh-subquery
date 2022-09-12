@@ -267,14 +267,26 @@ const handleSecondaryKeysPermissionsUpdated = async (
   await permissions.save();
 };
 
+type MeshAccount = string | { account: string };
+
 const handleSecondaryKeysRemoved = async (params: Codec[]): Promise<void> => {
   const [, rawAccounts] = params;
 
-  const accounts = JSON.parse(rawAccounts.toString());
+  const accounts = rawAccounts.toJSON() as MeshAccount[];
 
-  const removePromises = accounts.map(({ account }) => Account.remove(account));
+  const removePromises = accounts.map(account => {
+    let address;
+    if (typeof account === 'string') {
+      // for chain version >= 5.0.0
+      address = account;
+    } else {
+      // for chain version < 5.0.0
+      ({ account: address } = account);
+    }
+    return [Account.remove(address), Permissions.remove(address)];
+  });
 
-  await Promise.all(removePromises);
+  await Promise.all(removePromises.flat());
 };
 
 const handleSecondaryKeysFrozen = async (
