@@ -1,4 +1,5 @@
 import { BridgeEvent, EventIdEnum, ModuleIdEnum } from '../../types';
+import { extractString } from '../generatedColumns';
 import { getTextValue } from '../util';
 import { HandlerArgs } from './common';
 
@@ -15,14 +16,14 @@ export async function mapBridgeEvent({
   if (moduleId === ModuleIdEnum.bridge && eventId === EventIdEnum.Bridged) {
     const [rawDid, rawBridgeDetails] = params;
 
-    const { recipient, amount, tx_hash: txHash } = JSON.parse(rawBridgeDetails.toString());
+    const { recipient, amount, ...rest } = JSON.parse(rawBridgeDetails.toString());
 
     await BridgeEvent.create({
       id: `${blockId}/${event.idx}`,
       identityId: getTextValue(rawDid),
       recipient,
       amount: BigInt(amount) / BigInt(1000000),
-      txHash,
+      txHash: extractString(rest, 'tx_hash'),
       eventIdx: event.idx,
       datetime: event.block.timestamp,
       createdBlockId: blockId,

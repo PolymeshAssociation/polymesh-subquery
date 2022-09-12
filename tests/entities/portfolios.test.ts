@@ -9,6 +9,7 @@ describe('portfolios', () => {
         query {
           portfolios(
             filter: {
+              deletedAt: { isNull: true }
               identityId: {
                 equalTo: "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1"
               }
@@ -40,6 +41,7 @@ describe('portfolios', () => {
         query {
           portfolios(
             filter: {
+              deletedAt: { isNull: true }
               identityId: {
                 equalTo: "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1"
               }
