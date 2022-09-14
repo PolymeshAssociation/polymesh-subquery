@@ -3,7 +3,8 @@
 // more readable code than relying on generated columns or materialized views and has
 // the same storage overhead.
 
-import { ClaimTypeEnum } from './entities/common';
+import { ClaimTypeEnum } from '../types';
+import { snakeToCamelCase } from './util';
 
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
@@ -33,6 +34,26 @@ export const extractEventArgs = (args: any[]) => {
     eventArg_3: extractEventArg(arg3, args.length > 3),
   };
 };
+
+/**
+ * Function to get value for a specific key
+ * It searches for snake_case and camelCase value for the given key
+ */
+export const extractValue = <T>(obj: unknown, key: string): T => {
+  if (obj) {
+    if (Object.keys(obj).includes(key)) {
+      return obj[key] as T;
+    }
+    return obj[snakeToCamelCase(key)] as T;
+  }
+  return undefined;
+};
+
+export const extractString = (obj: unknown, key: string): string => extractValue<string>(obj, key);
+
+export const extractNumber = (obj: unknown, key: string): number => extractValue<number>(obj, key);
+
+export const extractBigInt = (obj: unknown, key: string): bigint => extractValue<bigint>(obj, key);
 
 export const extractClaimScope = (
   claimType: string,
@@ -67,23 +88,25 @@ export const extractClaimScope = (
 };
 
 export const extractClaimInfo = (args: any[]) => {
-  const claimType: string | undefined = Object.keys(args?.[1]?.value?.claim || {})[0];
+  const claimValue = args?.[1]?.value || {};
+  const claim = claimValue.claim || {};
+  const claimType: string | undefined = Object.keys(claim)[0];
 
   let cddId: any;
   let jurisdiction: any;
   if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
-    cddId = JSONStringifyExceptStringAndNull(args?.[1]?.value?.claim?.CustomerDueDiligence);
+    cddId = JSONStringifyExceptStringAndNull(claim.CustomerDueDiligence);
   } else if (claimType === ClaimTypeEnum.Jurisdiction) {
-    jurisdiction = JSONStringifyExceptStringAndNull(args?.[1]?.value?.claim?.Jurisdiction?.col1);
+    jurisdiction = JSONStringifyExceptStringAndNull(claim.Jurisdiction?.col1);
   }
 
   return {
     claimType,
     claimScope: JSONStringifyExceptStringAndNull(extractClaimScope(claimType, args)),
-    claimIssuer: JSONStringifyExceptStringAndNull(args[1]?.value?.claim_issuer),
-    claimExpiry: JSONStringifyExceptStringAndNull(args[1]?.value?.expiry),
-    issuanceDate: JSONStringifyExceptStringAndNull(args[1]?.value?.issuance_date),
-    lastUpdateDate: JSONStringifyExceptStringAndNull(args[1]?.value?.last_update_date),
+    claimIssuer: JSONStringifyExceptStringAndNull(extractString(claimValue, 'claim_issuer')),
+    claimExpiry: JSONStringifyExceptStringAndNull(extractString(claimValue, 'expiry')),
+    issuanceDate: JSONStringifyExceptStringAndNull(extractString(claimValue, 'issuance_date')),
+    lastUpdateDate: JSONStringifyExceptStringAndNull(extractString(claimValue, 'last_update_date')),
     cddId,
     jurisdiction,
   };
@@ -101,7 +124,8 @@ export const extractCorporateActionTicker = (args: any[]) => {
   return null;
 };
 
-export const extractOfferingAsset = (args: any[]) => args[3]?.value?.offering_asset;
+export const extractOfferingAsset = (args: any[]) =>
+  extractString(args[3]?.value, 'offering_asset');
 
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);

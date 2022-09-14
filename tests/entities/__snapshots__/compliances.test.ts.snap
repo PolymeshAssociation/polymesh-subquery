@@ -1,0 +1,16 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`compliances should return all compliance requirements for a particular asset 1`] = `
+Object {
+  "compliances": Object {
+    "__typename": "CompliancesConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Compliance",
+        "data": "{\\"sender_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}],\\"receiver_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}]}",
+        "id": 1,
+      },
+    ],
+  },
+}
+`;

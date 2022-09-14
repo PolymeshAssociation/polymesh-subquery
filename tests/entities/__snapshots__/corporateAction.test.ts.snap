@@ -1,0 +1,35 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`distributionPayments should get payment history for a distribution 1`] = `
+Object {
+  "distributionPayments": Object {
+    "__typename": "DistributionPaymentsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "DistributionPayment",
+        "amount": "100000000",
+        "createdBlockId": "358",
+        "datetime": "2021-10-06T12:35:04",
+        "eventDid": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
+        "eventId": "BenefitClaimed",
+        "tax": "15",
+      },
+    ],
+    "totalCount": 1,
+  },
+}
+`;
+
+exports[`distributions should return the withholding taxes for a distribution 1`] = `
+Object {
+  "distributions": Object {
+    "__typename": "DistributionsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Distribution",
+        "taxes": "1500000000",
+      },
+    ],
+  },
+}
+`;

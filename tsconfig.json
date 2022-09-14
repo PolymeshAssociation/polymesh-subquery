@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
-    "incremental": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
     "declaration": true,
     "importHelpers": true,
+    "incremental": true,
     "resolveJsonModule": true,
     "module": "commonjs",
     "outDir": "dist",
@@ -13,13 +13,12 @@
     "rootDir": "src",
     "target": "es2017",
     "paths": {
-      // this is the package name we use (in the interface imports, --package for generators) */
+      // this is the package name we use (in the interface imports, --package for generators)
       "polymesh-subql/*": ["src/*"],
-      // here we replace the @polkadot/api augmentation with our own, generated from chain
-      "@polkadot/api/augment": ["src/api-interfaces/augment-api.ts"],
-      // replace the augmented types with our own, as generated from definitions
-      "@polkadot/types/augment": ["src/api-interfaces/augment-types.ts"]
     }
   },
-  "include": ["src/**/*", "node_modules/@subql/types/dist/global.d.ts"]
+  "include": [
+    "src/**/*",
+    "node_modules/@subql/types/dist/global.d.ts"
+  ]
 }

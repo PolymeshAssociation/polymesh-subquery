@@ -1,0 +1,51 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`portfolios should return all Portfolios for a particular identity 1`] = `
+Object {
+  "portfolios": Object {
+    "__typename": "PortfoliosConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Portfolio",
+        "createdBlockId": "125",
+        "custodianId": null,
+        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/0",
+        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "name": null,
+        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzAiXQ==",
+        "number": 0,
+      },
+      Object {
+        "__typename": "Portfolio",
+        "createdBlockId": "135",
+        "custodianId": null,
+        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1",
+        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "name": "4_portfolio",
+        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzEiXQ==",
+        "number": 1,
+      },
+    ],
+  },
+}
+`;
+
+exports[`portfolios should return all numbered Portfolio held by an Identity 1`] = `
+Object {
+  "portfolios": Object {
+    "__typename": "PortfoliosConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Portfolio",
+        "createdBlockId": "135",
+        "custodianId": null,
+        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1",
+        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "name": "4_portfolio",
+        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzEiXQ==",
+        "number": 1,
+      },
+    ],
+  },
+}
+`;

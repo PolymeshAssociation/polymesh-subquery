@@ -1,15 +1,14 @@
-import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
-import { Codec } from '@polkadot/types/types';
-import { Authorization } from '../../types';
+import {
+  Authorization,
+  AuthorizationStatusEnum,
+  AuthTypeEnum,
+  EventIdEnum,
+  ModuleIdEnum,
+} from '../../types';
 import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
-
-enum AuthorizationStatus {
-  Pending = 'Pending',
-  Consumed = 'Consumed',
-  Rejected = 'Rejected',
-  Revoked = 'Revoked',
-}
+import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
+import { HandlerArgs } from './common';
+import { createIdentityIfNotExists } from './mapIdentities';
 
 const authorizationEvents = new Set<string>([
   EventIdEnum.AuthorizationAdded,
@@ -20,37 +19,43 @@ const authorizationEvents = new Set<string>([
 
 const isAuthorizationEvent = (e: string): e is EventIdEnum => authorizationEvents.has(e);
 
-const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus>([
-  [EventIdEnum.AuthorizationConsumed, AuthorizationStatus.Consumed],
-  [EventIdEnum.AuthorizationRevoked, AuthorizationStatus.Revoked],
-  [EventIdEnum.AuthorizationRejected, AuthorizationStatus.Rejected],
+const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatusEnum>([
+  [EventIdEnum.AuthorizationConsumed, AuthorizationStatusEnum.Consumed],
+  [EventIdEnum.AuthorizationRevoked, AuthorizationStatusEnum.Revoked],
+  [EventIdEnum.AuthorizationRejected, AuthorizationStatusEnum.Rejected],
 ]);
 
-export async function mapAuthorization(
-  blockId: number,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[]
-): Promise<void> {
-  if (moduleId === ModuleIdEnum.Identity && isAuthorizationEvent(eventId)) {
+export async function mapAuthorization({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
+  if (moduleId === ModuleIdEnum.identity && isAuthorizationEvent(eventId)) {
     if (authorizationEventStatusMapping.has(eventId)) {
       const auth = await Authorization.get(params[2].toString());
       auth.status = authorizationEventStatusMapping.get(eventId);
-      auth.updatedBlock = blockId;
+      auth.updatedBlockId = blockId;
+
       await auth.save();
     } else {
+      const fromId = getTextValue(params[0]);
+
+      // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
+      await createIdentityIfNotExists(fromId, blockId, event);
+
       await Authorization.create({
-        id: params[3],
-        createdBlock: blockId,
-        authId: params[3],
-        fromDid: getTextValue(params[0]),
-        toDid: getTextValue(params[1]),
+        id: getTextValue(params[3]),
+        fromId,
+        toId: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),
-        type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])),
+        type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])) as AuthTypeEnum,
         data: getFirstValueFromJson(params[4]),
         expiry: getDateValue(params[5]),
-        status: AuthorizationStatus.Pending,
-        updatedBlock: blockId,
+        status: AuthorizationStatusEnum.Pending,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
       }).save();
     }
   }

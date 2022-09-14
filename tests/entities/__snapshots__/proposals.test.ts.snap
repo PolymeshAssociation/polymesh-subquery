@@ -1,0 +1,99 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`proposalVotes should return proposalVotes filtered by proposal ID 1`] = `
+Object {
+  "proposalVotes": Object {
+    "__typename": "ProposalVotesConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "ProposalVote",
+        "account": "0x58bde49478e69c60e80b6c80f10a78b8c360489cb445d535fd091a2c3dbfb56b",
+        "createdBlockId": "238",
+        "id": "1/0x58bde49478e69c60e80b6c80f10a78b8c360489cb445d535fd091a2c3dbfb56b",
+        "weight": "10",
+      },
+    ],
+    "totalCount": 1,
+  },
+}
+`;
+
+exports[`proposals should get proposal by id 1`] = `
+Object {
+  "proposal": Object {
+    "__typename": "Proposal",
+    "balance": "10000000000",
+    "description": "second",
+    "id": "1",
+    "ownerId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+    "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+    "state": "Executed",
+    "url": "google.com",
+    "votes": Object {
+      "__typename": "ProposalVotesConnection",
+      "nodes": Array [
+        Object {
+          "__typename": "ProposalVote",
+          "account": "0x58bde49478e69c60e80b6c80f10a78b8c360489cb445d535fd091a2c3dbfb56b",
+          "vote": true,
+          "weight": "10",
+        },
+      ],
+      "totalCount": 1,
+    },
+  },
+}
+`;
+
+exports[`proposals should return proposals without filters 1`] = `
+Object {
+  "proposals": Object {
+    "__typename": "ProposalsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "Proposal",
+        "balance": "9000000000",
+        "description": "first",
+        "id": "0",
+        "lastStateUpdatedAt": "245",
+        "nay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 0,
+        },
+        "ownerId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+        "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        "state": "Rejected",
+        "totalAyeWeight": "0",
+        "totalNayWeight": "0",
+        "url": "google.com",
+        "yay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 0,
+        },
+      },
+      Object {
+        "__typename": "Proposal",
+        "balance": "10000000000",
+        "description": "second",
+        "id": "1",
+        "lastStateUpdatedAt": "247",
+        "nay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 0,
+        },
+        "ownerId": "0x9b8597fea4fa31fb8a1367a0230e3e52391a401aa0a5c79c712e7a9c24643ef3",
+        "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        "state": "Executed",
+        "totalAyeWeight": "10",
+        "totalNayWeight": "0",
+        "url": "google.com",
+        "yay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 1,
+        },
+      },
+    ],
+    "totalCount": 2,
+  },
+}
+`;

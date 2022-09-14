@@ -7,8 +7,17 @@ import {
   removeNullChars,
   serializeTicker,
 } from './util';
-import { Enum, Option, Vec, Compact, Struct, Tuple, Result, VecFixed } from '@polkadot/types/codec';
-import { CodecMap } from '@polkadot/types/codec/Map';
+import {
+  Enum,
+  Option,
+  Vec,
+  Compact,
+  Struct,
+  Tuple,
+  Result,
+  VecFixed,
+  CodecMap,
+} from '@polkadot/types/codec';
 import { TextDecoder } from 'util';
 import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
 import BN from 'bn.js';
@@ -65,12 +74,18 @@ export const serializeLikeHarvester = (
     }
   } else if (rawType === 'Text') {
     return removeNullChars(item.toString());
-  } else if (type === 'Ticker') {
+  } else if (type === 'Ticker' || type === 'PolymeshPrimitivesTicker') {
     return serializeTicker(item);
   } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
+    let hexCallIndex;
+    if (e.callIndex instanceof Uint8Array) {
+      hexCallIndex = u8aToHex(e.callIndex);
+    } else {
+      hexCallIndex = e.getT('callIndex').toString();
+    }
     return {
-      call_index: hexStripPrefix(u8aToHex(e.callIndex)),
+      call_index: hexStripPrefix(hexCallIndex),
       call_function: camelToSnakeCase(e.method),
       call_module: capitalizeFirstLetter(e.section),
       call_args: serializeCallArgsLikeHarvester(e, logFoundType),
@@ -145,7 +160,7 @@ export const serializeCallArgsLikeHarvester = (
 ): HarvesterLikeCallArgs => {
   const meta = extrinsic.meta.args;
   return extrinsic.args.map((arg, i) => ({
-    name: meta[i].name.toString(),
+    name: camelToSnakeCase(meta[i].name.toString()),
     value: serializeLikeHarvester(arg, meta[i].type.toString(), logFoundType, true),
   }));
 };
