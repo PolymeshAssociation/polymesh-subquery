@@ -878,7 +878,9 @@ enum CallIdEnum {
   update_venue_details
   update_venue_type
   add_instruction
+  add_instruction_with_memo
   add_and_affirm_instruction
+  add_and_affirm_instruction_with_memo
   affirm_instruction
   withdraw_affirmation
   reject_instruction
@@ -1392,6 +1394,7 @@ type Instruction @entity {
   tradeDate: Date
   valueDate: Date
   legs: [Leg!]! @derivedFrom(field: "instruction")
+  memo: String
   createdBlock: Block!
   updatedBlock: Block!
 }

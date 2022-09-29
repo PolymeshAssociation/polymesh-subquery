@@ -1,7 +1,8 @@
 import twoZeroZero from './2.0.0.json';
 import fourZeroZero from './4.0.0.json';
 import fourOneX from './4.1.x.json';
-import fiveXX from './5.x.x.json';
+import fiveZeroX from './5.0.x.json';
+import fiveOneX from './5.1.x.json';
 import harvesterTypes from './harvesterTypes.json';
 
 const specTypes = {
@@ -11,8 +12,12 @@ const specTypes = {
       types: twoZeroZero,
     },
     {
-      minmax: [5000000, 5000999],
-      types: fiveXX,
+      minmax: [5000000, 5000009],
+      types: fiveZeroX,
+    },
+    {
+      minmax: [5001000, 5001009],
+      types: fiveOneX,
     },
     {
       minmax: [3010, 3019],

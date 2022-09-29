@@ -55,20 +55,20 @@ const handleAssetCreated = async (
   params: Codec[],
   eventIdx: number
 ): Promise<void> => {
-  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu] = params;
+  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu, rawAssetName] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
   /**
-   * Name isn't present on the event so we need to query storage.
-   * See MESH-1808 on Jira for the status on including name in the event
+   * Name isn't present on the old events so we need to query storage.
+   * Events from chain >= 5.1.0 has it, so its faster to sync using it
    *
    * @note
    *   - For chain >= 5.0.0, asset.assetNames provides a hex value
    *   - For chain < 5.0.0, asset.assetNames provides name of the ticker in plain text. In case
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
-  const rawName = await api.query.asset.assetNames(rawTicker);
+  const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
   const nameString = getTextValue(rawName);
   let name;
   if (isHex(nameString)) {

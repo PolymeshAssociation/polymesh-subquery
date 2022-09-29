@@ -146,11 +146,20 @@ const handleInstructionCreated = async (
 ): Promise<void> => {
   const address = getSignerAddress(event);
 
-  const [, rawVenueId, rawInstructionId, rawSettlementType, rawTradeDate, rawValueDate, rawLegs] =
-    params;
+  const [
+    ,
+    rawVenueId,
+    rawInstructionId,
+    rawSettlementType,
+    rawTradeDate,
+    rawValueDate,
+    rawLegs,
+    rawOptMemo,
+  ] = params;
 
   const legs = getLegsValue(rawLegs);
   const instructionId = getTextValue(rawInstructionId);
+  const memo = getTextValue(rawOptMemo);
 
   const instruction = Instruction.create({
     id: instructionId,
@@ -162,6 +171,7 @@ const handleInstructionCreated = async (
     endBlock: Number(getFirstValueFromJson(rawSettlementType)),
     tradeDate: getDateValue(rawTradeDate),
     valueDate: getDateValue(rawValueDate),
+    memo,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
