@@ -61,7 +61,7 @@ const handleAssetCreated = async (
   const type = getTextValue(rawType);
   /**
    * Name isn't present on the old events so we need to query storage.
-   * Events from chain >= 5.1.0 has it, so its faster to sync using it
+   * Events from chain >= 5.1.0 has it, and its faster to sync using it
    *
    * @note
    *   - For chain >= 5.0.0, asset.assetNames provides a hex value
