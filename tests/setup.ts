@@ -35,7 +35,10 @@ export = async (): Promise<void> => {
     console.log('');
     console.log('Starting test environment, might take a minute or two...');
     await Promise.all([
-      execAsync('polymesh-local start -s 4.0.0 -c -o chain', { cwd }),
+      execAsync(
+        'polymesh-local start -s 4.0.0 -i polymeshassociation/polymesh:4.1.2-mainnet-debian -c -o chain',
+        { cwd }
+      ),
       execAsync('docker-compose up --build -d --always-recreate-deps -V', {
         cwd,
       }),
