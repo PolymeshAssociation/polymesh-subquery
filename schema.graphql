@@ -773,6 +773,7 @@ enum CallIdEnum {
   rename_asset
   issue
   redeem
+  redeem_from_portfolio
   make_divisible
   add_documents
   remove_documents
