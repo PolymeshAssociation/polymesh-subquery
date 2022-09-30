@@ -121,7 +121,7 @@ export const getFirstValueFromJson = (item: Codec): string => {
 };
 
 export const getTextValue = (item: Codec): string => {
-  return item?.toString().trim().length === 0 ? null : item.toString().trim();
+  return item?.toString().trim().length > 0 ? item.toString().trim() : null;
 };
 
 export const getNumberValue = (item: Codec): number => {
@@ -129,7 +129,7 @@ export const getNumberValue = (item: Codec): number => {
 };
 
 export const getDateValue = (item: Codec): Date => {
-  return item.toString().trim().length === 0 ? null : new Date(Number(item.toString()));
+  return item.toString().trim().length > 0 ? new Date(Number(item.toString())) : null;
 };
 
 export const getBigIntValue = (item: Codec): bigint => {

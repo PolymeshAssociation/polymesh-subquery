@@ -396,6 +396,7 @@ enum EventIdEnum {
   VenueUnauthorized
   SchedulingFailed
   InstructionRescheduled
+  VenueSignersUpdated
 
   ## statistics ##
   TransferManagerAdded @deprecated
@@ -605,6 +606,7 @@ enum CallIdEnum {
   add_secondary_keys_with_authorization
   set_secondary_key_permissions
   remove_secondary_keys
+  register_custom_claim_type
 
   ## cddserviceproviders ##
   set_active_members_limit
@@ -773,6 +775,7 @@ enum CallIdEnum {
   rename_asset
   issue
   redeem
+  redeem_from_portfolio
   make_divisible
   add_documents
   remove_documents
@@ -878,7 +881,9 @@ enum CallIdEnum {
   update_venue_details
   update_venue_type
   add_instruction
+  add_instruction_with_memo
   add_and_affirm_instruction
+  add_and_affirm_instruction_with_memo
   affirm_instruction
   withdraw_affirmation
   reject_instruction
@@ -1392,6 +1397,7 @@ type Instruction @entity {
   tradeDate: Date
   valueDate: Date
   legs: [Leg!]! @derivedFrom(field: "instruction")
+  memo: String
   createdBlock: Block!
   updatedBlock: Block!
 }
