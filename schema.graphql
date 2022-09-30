@@ -97,6 +97,7 @@ enum EventIdEnum {
   SecondaryKeyPermissionsUpdated
   PrimaryKeyUpdated
   ClaimAdded
+  CustomClaimTypeAdded
   ClaimRevoked
   AssetDidRegistered
   AuthorizationAdded
