@@ -897,6 +897,7 @@ enum CallIdEnum {
   change_receipt_validity
   execute_scheduled_instruction
   reschedule_instruction
+  update_venue_signers
 
   ## statistics ##
   set_active_asset_stats
