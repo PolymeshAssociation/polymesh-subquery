@@ -1,8 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { isHex } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { Asset, AssetDocument, AssetHolder, EventIdEnum, Funding, ModuleIdEnum } from '../../types';
 import {
+  bytesToString,
   getBigIntValue,
   getBooleanValue,
   getDocValue,
@@ -10,8 +10,6 @@ import {
   getPortfolioValue,
   getSecurityIdentifiers,
   getTextValue,
-  hexToString,
-  removeNullChars,
   serializeTicker,
 } from '../util';
 import { HandlerArgs } from './common';
@@ -55,7 +53,17 @@ const handleAssetCreated = async (
   params: Codec[],
   eventIdx: number
 ): Promise<void> => {
-  const [rawOwnerDid, rawTicker, divisible, rawType, , disableIu, rawAssetName] = params;
+  const [
+    rawOwnerDid,
+    rawTicker,
+    divisible,
+    rawType,
+    ,
+    disableIu,
+    rawAssetName,
+    rawIdentifiers,
+    rawFundingRound,
+  ] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
@@ -69,24 +77,21 @@ const handleAssetCreated = async (
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
   const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
-  const nameString = getTextValue(rawName);
-  let name;
-  if (isHex(nameString)) {
-    name = hexToString(nameString);
-  } else {
-    name = removeNullChars(nameString);
-  }
+  const name = bytesToString(rawName);
+
+  const fundingRound = bytesToString(rawFundingRound);
+  const identifiers = getSecurityIdentifiers(rawIdentifiers);
 
   await Asset.create({
     id: ticker,
     ticker,
     name,
     type,
-    fundingRound: null,
+    fundingRound,
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
     isUniquenessRequired: !getBooleanValue(disableIu),
-    identifiers: [],
+    identifiers,
     ownerId,
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
@@ -103,7 +108,7 @@ const handleAssetRenamed = async (blockId: string, params: Codec[]): Promise<voi
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
-  asset.name = getTextValue(rawName);
+  asset.name = bytesToString(rawName);
   asset.updatedBlockId = blockId;
 
   await asset.save();
@@ -115,7 +120,7 @@ const handleFundingRoundSet = async (blockId: string, params: Codec[]): Promise<
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
-  asset.fundingRound = getTextValue(rawFundingRound);
+  asset.fundingRound = bytesToString(rawFundingRound);
   asset.updatedBlockId = blockId;
 
   await asset.save();
@@ -182,8 +187,7 @@ const handleIssued = async (
 
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
-
-  const fundingRound = getTextValue(rawFundingRound);
+  const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
   const asset = await getAsset(ticker);
@@ -257,11 +261,11 @@ const handleAssetOwnershipTransferred = async (blockId: string, params: Codec[])
 const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
-  // We ignore the transfer case when Asset tokens are issued
-  if (fromDid === '0x00'.padEnd(66, '0')) {
+  const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
+  // We ignore the transfer case when Asset tokens are issued/redeemed
+  if ([fromDid, toDid].includes('0x00'.padEnd(66, '0'))) {
     return;
   }
-  const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
   const transferAmount = getBigIntValue(rawAmount);
   const ticker = serializeTicker(rawTicker);
 
