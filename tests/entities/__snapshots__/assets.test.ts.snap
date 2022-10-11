@@ -219,6 +219,51 @@ Object {
         },
         "type": "EquityCommon",
       },
+      Object {
+        "__typename": "Asset",
+        "compliance": Object {
+          "__typename": "CompliancesConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Compliance",
+              "data": "{\\"sender_conditions\\":[],\\"receiver_conditions\\":[]}",
+              "id": 1,
+            },
+          ],
+        },
+        "documents": Object {
+          "__typename": "AssetDocumentsConnection",
+          "nodes": Array [],
+        },
+        "fundingRound": "first",
+        "holders": Object {
+          "__typename": "AssetHoldersConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "1000100",
+              "did": "0xd7a5d0a364f335632cbbb59bb5615c12286f5b7298f6ddd58b584a6c08734538",
+            },
+          ],
+        },
+        "id": "8TICKER",
+        "identifiers": Array [],
+        "isCompliancePaused": false,
+        "isDivisible": true,
+        "isFrozen": false,
+        "isUniquenessRequired": false,
+        "name": "8TICKER",
+        "nodeId": "WyJhc3NldHMiLCI4VElDS0VSIl0=",
+        "ownerDid": "0xd7a5d0a364f335632cbbb59bb5615c12286f5b7298f6ddd58b584a6c08734538",
+        "ticker": "8TICKER",
+        "totalSupply": "1000100",
+        "totalTransfers": "0",
+        "transferManagers": Object {
+          "__typename": "TransferManagersConnection",
+          "nodes": Array [],
+        },
+        "type": "EquityCommon",
+      },
     ],
   },
 }

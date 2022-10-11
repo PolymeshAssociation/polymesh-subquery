@@ -70,7 +70,7 @@ const handleAssetCreated = async (
     disableIu,
     rawAssetName,
     rawIdentifiers,
-    rawFundingRound,
+    rawFundingRoundName,
   ] = params;
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
@@ -87,13 +87,23 @@ const handleAssetCreated = async (
   const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
   const name = bytesToString(rawName);
 
-  // fundingRound and identifiers are emitted from chain >= 5.1.0
+  /**
+   * FundingRound isn't present on the old events so we need to query storage.
+   * Events from chain >= 5.1.0 has it, and its faster to sync using it
+   */
   let fundingRound: string = null;
-  if (rawFundingRound) {
+
+  const rawFundingRound = rawFundingRoundName ?? (await api.query.asset.fundingRound(rawTicker));
+  if (!rawFundingRound.isEmpty) {
     fundingRound = bytesToString(rawFundingRound);
   }
 
+  /**
+   * Events from chain >= 5.1.0 has identifiers emitted as well
+   * For older chains, this gets automatically populated with `IdentifiersUpdated` event
+   */
   let identifiers: SecurityIdentifier[] = [];
+
   if (rawIdentifiers) {
     identifiers = getSecurityIdentifiers(rawIdentifiers);
   }
