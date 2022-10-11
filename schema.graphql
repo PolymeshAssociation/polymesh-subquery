@@ -1339,6 +1339,7 @@ type PortfolioMovement @entity {
   to: Portfolio! @index(unique: false)
   asset: Asset!
   amount: BigInt!
+  memo: String
   address: String!
   createdBlock: Block!
   updatedBlock: Block!

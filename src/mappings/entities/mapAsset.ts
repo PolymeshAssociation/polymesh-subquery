@@ -1,6 +1,14 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Asset, AssetDocument, AssetHolder, EventIdEnum, Funding, ModuleIdEnum } from '../../types';
+import {
+  Asset,
+  AssetDocument,
+  AssetHolder,
+  EventIdEnum,
+  Funding,
+  ModuleIdEnum,
+  SecurityIdentifier,
+} from '../../types';
 import {
   bytesToString,
   getBigIntValue,
@@ -79,8 +87,16 @@ const handleAssetCreated = async (
   const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
   const name = bytesToString(rawName);
 
-  const fundingRound = bytesToString(rawFundingRound);
-  const identifiers = getSecurityIdentifiers(rawIdentifiers);
+  // fundingRound and identifiers are emitted from chain >= 5.1.0
+  let fundingRound: string = null;
+  if (rawFundingRound) {
+    fundingRound = bytesToString(rawFundingRound);
+  }
+
+  let identifiers: SecurityIdentifier[] = [];
+  if (rawIdentifiers) {
+    identifiers = getSecurityIdentifiers(rawIdentifiers);
+  }
 
   await Asset.create({
     id: ticker,
