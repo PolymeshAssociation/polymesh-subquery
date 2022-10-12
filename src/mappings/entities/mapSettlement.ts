@@ -11,6 +11,7 @@ import {
   Venue,
 } from '../../types';
 import {
+  bytesToString,
   getDateValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
@@ -111,7 +112,7 @@ const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<voi
   await Venue.create({
     id: getTextValue(rawVenueId),
     ownerId: getTextValue(rawIdentity),
-    details: getTextValue(rawDetails),
+    details: bytesToString(rawDetails),
     type: getTextValue(rawType),
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -122,7 +123,7 @@ const handleVenueDetailsUpdated = async (blockId: string, params: Codec[]): Prom
   const [, rawVenueId, rawDetails] = params;
 
   const venue = await getVenue(getTextValue(rawVenueId));
-  venue.details = getTextValue(rawDetails);
+  venue.details = bytesToString(rawDetails);
   venue.updatedBlockId = blockId;
 
   await venue.save();
@@ -159,7 +160,7 @@ const handleInstructionCreated = async (
 
   const legs = getLegsValue(rawLegs);
   const instructionId = getTextValue(rawInstructionId);
-  const memo = getTextValue(rawOptMemo);
+  const memo = bytesToString(rawOptMemo);
 
   const instruction = Instruction.create({
     id: instructionId,

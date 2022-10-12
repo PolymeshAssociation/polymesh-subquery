@@ -1,6 +1,6 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { hexHasPrefix, hexStripPrefix, u8aToHex, u8aToString } from '@polkadot/util';
+import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
@@ -376,4 +376,12 @@ export const logError = (message: string): void => {
 export const getOfferingAsset = (item: Codec): string => {
   const fundraiser = JSON.parse(item.toString());
   return hexToString(extractValue(fundraiser, 'offering_asset'));
+};
+
+export const bytesToString = (item: Codec): string => {
+  const value = getTextValue(item);
+  if (isHex(value)) {
+    return hexToString(value);
+  }
+  return removeNullChars(value);
 };

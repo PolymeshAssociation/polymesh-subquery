@@ -7,7 +7,9 @@ describe('assets', () => {
     const q = {
       query: gql`
         query {
-          assets(filter: { ticker: { in: ["4TICKER", "15TICKER", "7TICKER", "11BTICKER1"] } }) {
+          assets(
+            filter: { ticker: { in: ["4TICKER", "15TICKER", "7TICKER", "8TICKER", "11BTICKER1"] } }
+          ) {
             nodes {
               nodeId
               id

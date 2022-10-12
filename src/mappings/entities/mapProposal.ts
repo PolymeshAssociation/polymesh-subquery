@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { EventIdEnum, ModuleIdEnum, Proposal, ProposalStateEnum, ProposalVote } from '../../types';
 import {
+  bytesToString,
   getBigIntValue,
   getBooleanValue,
   getFirstValueFromJson,
@@ -18,8 +19,8 @@ const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
     balance: getBigIntValue(rawBalance),
-    url: getTextValue(rawUrl),
-    description: getTextValue(rawDescription),
+    url: bytesToString(rawUrl),
+    description: bytesToString(rawDescription),
     snapshotted: false,
     totalAyeWeight: BigInt(0),
     totalNayWeight: BigInt(0),

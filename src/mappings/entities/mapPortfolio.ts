@@ -2,6 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, Portfolio, PortfolioMovement } from '../../types';
 import {
+  bytesToString,
   getBigIntValue,
   getNumberValue,
   getPortfolioValue,
@@ -75,7 +76,7 @@ const handlePortfolioCreated = async (
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = getTextValue(rawName);
+  const name = bytesToString(rawName);
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
   if (!portfolio) {
@@ -104,7 +105,7 @@ const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = getTextValue(rawName);
+  const name = bytesToString(rawName);
 
   const portfolio = await getPortfolio({ identityId: ownerId, number });
   portfolio.name = name;
@@ -148,12 +149,13 @@ const handlePortfolioMovement = async (
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  const [, rawFromPortfolio, rawToPortfolio, rawTicker, rawAmount] = params;
+  const [, rawFromPortfolio, rawToPortfolio, rawTicker, rawAmount, rawMemo] = params;
   const address = getSignerAddress(event);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
   const ticker = serializeTicker(rawTicker);
   const amount = getBigIntValue(rawAmount);
+  const memo = bytesToString(rawMemo);
 
   await PortfolioMovement.create({
     id: `${blockId}/${event.idx}`,
@@ -162,6 +164,7 @@ const handlePortfolioMovement = async (
     assetId: ticker,
     amount,
     address,
+    memo,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
