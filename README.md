@@ -34,3 +34,4 @@ More advanced options are:
 
 - `NO_NATIVE_GRAPHQL_DATA` — this will set the event handler to only record what is necessary for tooling gql. This allows a stable indexer to be ran as native GraphQL handlers get developed
 - `MAX_OLD_SPACE_SIZE` — this will be passed onto the node process as `--max-old-space-size` flag. The recommendation is for this to be ~75% of available RAM. Defaults to 1536, a setting appropriate for 2GB.
+- `CURRENT_SQ_VERSION` & `PREVIOUS_SQ_VERSION` - this will automatically run the required migration files to migrate your database, if any, from previously run subquery version to current one. This can be used to avoid resync and incorporate schema changes required for current version.

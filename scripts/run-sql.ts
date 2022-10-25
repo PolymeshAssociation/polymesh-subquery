@@ -1,6 +1,6 @@
-import { createConnection } from 'typeorm';
+import { Connection, createConnection } from 'typeorm';
 import { env, chdir } from 'process';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { migrationQueries } from '../db/migration';
 chdir(__dirname);
 
@@ -25,6 +25,37 @@ const retry = async <T>(
     await sleep(ms);
   }
   throw err;
+};
+
+const migrations = async (postgres: Connection) => {
+  const migrations = readdirSync('../db/migrations');
+
+  const { CURRENT_SQ_VERSION, PREVIOUS_SQ_VERSION } = env;
+
+  const getSQVersion = (value: string): string =>
+    value
+      .split('.')
+      .map(number => `00${number}`.slice(-3))
+      .join('');
+
+  if (PREVIOUS_SQ_VERSION && CURRENT_SQ_VERSION) {
+    console.log(`Migrating from ${PREVIOUS_SQ_VERSION} to ${CURRENT_SQ_VERSION}`);
+    const migrationsToRun = migrations
+      .map(file => file.substring(0, file.indexOf('.sql')))
+      .filter(
+        file =>
+          getSQVersion(file) > getSQVersion(PREVIOUS_SQ_VERSION) &&
+          getSQVersion(file) <= getSQVersion(CURRENT_SQ_VERSION)
+      );
+
+    const promises = migrationsToRun.map(migration => {
+      console.log(`Running migration - ${migration}`);
+      return postgres.query(readFileSync(`../db/migrations/${migration}.sql`, 'utf-8'));
+    });
+
+    await Promise.all(promises);
+    console.log('Applied all migrations');
+  }
 };
 
 const main = async () => {
@@ -62,7 +93,9 @@ const main = async () => {
   console.log('Applied initial SQL');
 
   await postgres.query(migrationQueries().join('\n'));
-  console.log('Applied migration SQL');
+  console.log('Applied initial migration SQL');
+
+  await migrations(postgres);
 };
 
 main()

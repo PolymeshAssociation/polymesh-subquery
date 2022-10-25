@@ -30,6 +30,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       START_BLOCK: 1
+      ## Set the below two values to run all migration required from version `PREVIOUS_SQ_VERSION` to `CURRENT_SQ_VERSION`
+      PREVIOUS_SQ_VERSION: 5.3.8
+      CURRENT_SQ_VERSION: 5.4.3
       # NO_NATIVE_GRAPHQL_DATA: 'TRUE' # Setting this value only processes tooling specific handlers. Native subquery entities are ignored.
       # Polymesh-local
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
