@@ -1,1 +1,1 @@
-alter table instructions add memo text;
+alter table instructions add column if not exists memo text;

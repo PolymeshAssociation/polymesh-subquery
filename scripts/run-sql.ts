@@ -1,81 +1,10 @@
-import { Connection, createConnection } from 'typeorm';
-import { env, chdir } from 'process';
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { migrationQueries } from '../db/migration';
-chdir(__dirname);
-
-require('dotenv').config(); // eslint-disable-line @typescript-eslint/no-var-requires
-
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-const retry = async <T>(
-  n: number,
-  ms: number,
-  f: () => Promise<T>,
-  onRetry: () => void = () => {}
-): Promise<T> => {
-  let err = undefined;
-  for (let i = 0; i < n; i++) {
-    try {
-      return await f();
-    } catch (e) {
-      err = e;
-    }
-
-    onRetry();
-    await sleep(ms);
-  }
-  throw err;
-};
-
-const migrations = async (postgres: Connection) => {
-  const migrations = readdirSync('../db/migrations');
-
-  const { CURRENT_SQ_VERSION, PREVIOUS_SQ_VERSION } = env;
-
-  const getSQVersion = (value: string): string =>
-    value
-      .split('.')
-      .map(number => `00${number}`.slice(-3))
-      .join('');
-
-  if (PREVIOUS_SQ_VERSION && CURRENT_SQ_VERSION) {
-    console.log(`Migrating from ${PREVIOUS_SQ_VERSION} to ${CURRENT_SQ_VERSION}`);
-    const migrationsToRun = migrations
-      .map(file => file.substring(0, file.indexOf('.sql')))
-      .filter(
-        file =>
-          getSQVersion(file) > getSQVersion(PREVIOUS_SQ_VERSION) &&
-          getSQVersion(file) <= getSQVersion(CURRENT_SQ_VERSION)
-      );
-
-    const promises = migrationsToRun.map(migration => {
-      console.log(`Running migration - ${migration}`);
-      return postgres.query(readFileSync(`../db/migrations/${migration}.sql`, 'utf-8'));
-    });
-
-    await Promise.all(promises);
-    console.log('Applied all migrations');
-  }
-};
+import { schemaMigrations } from '../db/schemaMigrations';
+import { getPostgresConnection, retry } from '../db/utils';
 
 const main = async () => {
-  const postgres = await retry(
-    env.NODE_ENV === 'local' ? 10 : 1,
-    1000,
-    async () =>
-      await createConnection({
-        type: 'postgres',
-        host: env.DB_HOST,
-        port: Number(env.DB_PORT),
-        username: env.DB_USER,
-        password: env.DB_PASS,
-        database: env.DB_DATABASE,
-        name: 'postgres',
-      }),
-    () => {
-      console.log('Database connection not ready, retrying in 1s');
-    }
-  );
+  const postgres = await getPostgresConnection();
 
   await retry(
     100,
@@ -95,7 +24,7 @@ const main = async () => {
   await postgres.query(migrationQueries().join('\n'));
   console.log('Applied initial migration SQL');
 
-  await migrations(postgres);
+  await schemaMigrations(postgres);
 };
 
 main()
