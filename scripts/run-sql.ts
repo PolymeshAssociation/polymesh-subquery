@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { migrationQueries } from '../db/migration';
-import { schemaMigrations } from '../db/schemaMigrations';
+import { updateVersion } from '../db/schemaMigrations';
 import { getPostgresConnection, retry } from '../db/utils';
 
 const main = async () => {
@@ -24,7 +24,7 @@ const main = async () => {
   await postgres.query(migrationQueries().join('\n'));
   console.log('Applied initial migration SQL');
 
-  await schemaMigrations(postgres);
+  await updateVersion(postgres);
 };
 
 main()

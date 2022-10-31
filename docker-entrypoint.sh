@@ -25,6 +25,8 @@ fi
 
 envsubst <project.template.yaml> project.yaml
 
+npm run migrations ${PREVIOUS_SQ_VERSION}
+
 (npm run sql || (sleep 3 && kill "$$")) &
 
 # Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
