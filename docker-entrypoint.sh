@@ -25,7 +25,7 @@ fi
 
 envsubst <project.template.yaml> project.yaml
 
-npm run migrations ${PREVIOUS_SQ_VERSION}
+npm run migrations
 
 (npm run sql || (sleep 3 && kill "$$")) &
 

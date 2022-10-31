@@ -1,14 +1,14 @@
 import { schemaMigrations } from '../db/schemaMigrations';
 
-const main = async (migrateFrom?: string) => {
+const main = async () => {
   try {
-    return await schemaMigrations(undefined, migrateFrom);
+    return await schemaMigrations();
   } catch (e) {
     console.log("Couldn't run schema migrations ", e);
   }
 };
 
-main(process.argv[2])
+main()
   .then(() => process.exit(0))
   .catch(async e => {
     console.error(e);
