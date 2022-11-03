@@ -1,3 +1,8 @@
+[![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
+[![Github Actions Workflow](https://github.com/PolymeshAssociation/polymesh-subquery/actions/workflows/main.yml/badge.svg)](https://github.com/PolymeshAssociation/polymesh-subquery/actions)
+[![Sonar Status](https://sonarcloud.io/api/project_badges/measure?project=PolymeshAssociation_polymesh-subquery&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=PolymeshAssociation_polymesh-subquery)
+[![Issues](https://img.shields.io/github/issues/PolymeshAssociation/polymesh-subquery)](https://github.com/PolymeshAssociation/polymesh-subquery/issues)
+
 # Polymesh Subquery
 
 This project has been initially created to replace [the harvester](https://github.com/PolymathNetwork/polkascan-pre-harvester) meaning the output of both should match as much as possible, however since the harvester serializes chain objects in slightly different ways than polkadot-js, this project contains a list of special cases handled both at the initial deserialization level (in [project.yaml](project.yaml).network.types) and at the serialization level in [serializeLikeHarvester.ts](src/mappings/serializeLikeHarvester.ts).
