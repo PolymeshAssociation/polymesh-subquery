@@ -1,8 +1,10 @@
+import * as dotenv from 'dotenv';
+import { chdir, env } from 'process';
 import { Connection, createConnection } from 'typeorm';
-import { env, chdir } from 'process';
+
 chdir(__dirname);
 
-require('dotenv').config(); // eslint-disable-line @typescript-eslint/no-var-requires
+dotenv.config(); // eslint-disable-line @typescript-eslint/no-var-requires
 
 export const sleep = (ms: number): Promise<void> => new Promise(res => setTimeout(res, ms));
 
@@ -27,8 +29,9 @@ export const retry = async <T>(
 };
 
 export const getPostgresConnection = async (): Promise<Connection> => {
+  const maxAttempts = env.NODE_ENV === 'local' ? 10 : 1;
   return retry(
-    env.NODE_ENV === 'local' ? 10 : 1,
+    maxAttempts,
     1000,
     async () =>
       await createConnection({
