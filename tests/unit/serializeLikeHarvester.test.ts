@@ -403,9 +403,7 @@ describe('serializeLikeHarvester', () => {
       call_args: [
         {
           name: 'who',
-          value: {
-            Id: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          },
+          value: '0x0000000000000000000000000000000000000000000000000000000000000000',
         },
         { name: 'new_free', value: 0 },
         { name: 'new_reserved', value: 0 },
