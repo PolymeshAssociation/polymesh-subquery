@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "262",
+        "createdBlockId": "230",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -26,7 +26,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x6507cde10425d03a8964c5937ccb5760a95d4fd1cda5fc8cdadad8b51e13a38f",
+                "identityId": "0x0d0323fe51cc80a9666aee6103d4895be2babde33f0a58a7a7363eb53598f403",
                 "number": 0,
               },
             },
@@ -36,7 +36,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "294",
+        "createdBlockId": "262",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -53,7 +53,7 @@ Object {
               "assetId": "11BTICKER2",
               "from": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                 "number": 0,
               },
               "to": Object {
@@ -80,7 +80,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                 "number": 0,
               },
             },
@@ -102,7 +102,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                 "number": 0,
               },
             },
@@ -124,7 +124,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                 "number": 0,
               },
             },
@@ -146,7 +146,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                 "number": 0,
               },
             },
@@ -156,7 +156,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "327",
+        "createdBlockId": "294",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -175,7 +175,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+                "identityId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
                 "number": 0,
               },
             },
@@ -185,7 +185,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "354",
+        "createdBlockId": "324",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -204,7 +204,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
+                "identityId": "0x89100903bc302c7b57438722751818bb147505d00c11b673724083de17cef001",
                 "number": 0,
               },
             },
@@ -214,7 +214,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "380",
+        "createdBlockId": "350",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -224,16 +224,16 @@ Object {
                 "16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
                 "d2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
               ],
-              "amount": "1000",
+              "amount": "100000",
               "assetId": "14TICKERRAIS",
               "from": Object {
                 "__typename": "Portfolio",
-                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "identityId": "0x73169195239ea1e63d5eb7042d234f62c647d09985d6e8413e3021c9a4826af8",
                 "number": 0,
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "identityId": "0x0d99491631d116d39ee41bbfeee6241bf1d9d4d243697b730768a3c05bf71183",
                 "number": 0,
               },
             },
@@ -243,7 +243,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "383",
+        "createdBlockId": "353",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -252,7 +252,7 @@ Object {
               "addresses": Array [
                 "16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
               ],
-              "amount": "40",
+              "amount": "30000",
               "assetId": "14TICKER",
               "from": Object {
                 "__typename": "Portfolio",
@@ -261,7 +261,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "identityId": "0x73169195239ea1e63d5eb7042d234f62c647d09985d6e8413e3021c9a4826af8",
                 "number": 0,
               },
             },
@@ -270,11 +270,11 @@ Object {
               "addresses": Array [
                 "16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
               ],
-              "amount": "0",
+              "amount": "1200",
               "assetId": "14TICKERRAIS",
               "from": Object {
                 "__typename": "Portfolio",
-                "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                "identityId": "0x73169195239ea1e63d5eb7042d234f62c647d09985d6e8413e3021c9a4826af8",
                 "number": 0,
               },
               "to": Object {
@@ -289,7 +289,7 @@ Object {
       },
       Object {
         "__typename": "Settlement",
-        "createdBlockId": "384",
+        "createdBlockId": "354",
         "legs": Object {
           "__typename": "LegsConnection",
           "nodes": Array [
@@ -298,7 +298,7 @@ Object {
               "addresses": Array [
                 "d2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
               ],
-              "amount": "10",
+              "amount": "10000",
               "assetId": "14TICKER",
               "from": Object {
                 "__typename": "Portfolio",
@@ -307,7 +307,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "identityId": "0x0d99491631d116d39ee41bbfeee6241bf1d9d4d243697b730768a3c05bf71183",
                 "number": 0,
               },
             },
@@ -316,11 +316,11 @@ Object {
               "addresses": Array [
                 "d2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
               ],
-              "amount": "0",
+              "amount": "400",
               "assetId": "14TICKERRAIS",
               "from": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                "identityId": "0x0d99491631d116d39ee41bbfeee6241bf1d9d4d243697b730768a3c05bf71183",
                 "number": 0,
               },
               "to": Object {
@@ -348,8 +348,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -366,7 +366,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -393,7 +393,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -415,7 +415,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -437,7 +437,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -459,7 +459,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -472,8 +472,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -490,7 +490,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -517,7 +517,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -539,7 +539,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -561,7 +561,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -583,7 +583,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -596,8 +596,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -614,7 +614,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -641,7 +641,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -663,7 +663,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -685,7 +685,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -707,7 +707,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -720,8 +720,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -738,7 +738,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -765,7 +765,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -787,7 +787,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -809,7 +809,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -831,7 +831,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -854,8 +854,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "262",
-          "id": "262/1",
+          "createdBlockId": "230",
+          "id": "230/1",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -874,7 +874,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x6507cde10425d03a8964c5937ccb5760a95d4fd1cda5fc8cdadad8b51e13a38f",
+                  "identityId": "0x0d0323fe51cc80a9666aee6103d4895be2babde33f0a58a7a7363eb53598f403",
                   "number": 0,
                 },
               },
@@ -887,8 +887,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -905,7 +905,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -932,7 +932,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -954,7 +954,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -976,7 +976,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -998,7 +998,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -1011,8 +1011,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1029,7 +1029,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -1056,7 +1056,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -1078,7 +1078,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -1100,7 +1100,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -1122,7 +1122,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -1135,8 +1135,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1153,7 +1153,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -1180,7 +1180,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -1202,7 +1202,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -1224,7 +1224,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -1246,7 +1246,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -1259,8 +1259,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "294",
-          "id": "294/5",
+          "createdBlockId": "262",
+          "id": "262/5",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1277,7 +1277,7 @@ Object {
                 "assetId": "11BTICKER2",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
                 "to": Object {
@@ -1304,7 +1304,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+                  "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
                   "number": 0,
                 },
               },
@@ -1326,7 +1326,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+                  "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                   "number": 0,
                 },
               },
@@ -1348,7 +1348,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+                  "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                   "number": 0,
                 },
               },
@@ -1370,7 +1370,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+                  "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                   "number": 0,
                 },
               },
@@ -1383,8 +1383,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "327",
-          "id": "327/1",
+          "createdBlockId": "294",
+          "id": "294/1",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1403,7 +1403,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+                  "identityId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
                   "number": 0,
                 },
               },
@@ -1416,8 +1416,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "354",
-          "id": "354/1",
+          "createdBlockId": "324",
+          "id": "324/1",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1436,7 +1436,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
+                  "identityId": "0x89100903bc302c7b57438722751818bb147505d00c11b673724083de17cef001",
                   "number": 0,
                 },
               },
@@ -1449,8 +1449,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "383",
-          "id": "383/6",
+          "createdBlockId": "353",
+          "id": "353/6",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1459,7 +1459,7 @@ Object {
                 "addresses": Array [
                   "16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
                 ],
-                "amount": "40",
+                "amount": "30000",
                 "assetId": "14TICKER",
                 "from": Object {
                   "__typename": "Portfolio",
@@ -1468,7 +1468,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                  "identityId": "0x73169195239ea1e63d5eb7042d234f62c647d09985d6e8413e3021c9a4826af8",
                   "number": 0,
                 },
               },
@@ -1477,11 +1477,11 @@ Object {
                 "addresses": Array [
                   "16bc52d9ae4224c6f50ea0e1c2fb1f71aa92bc686d1afa252d7c90b69e037775",
                 ],
-                "amount": "0",
+                "amount": "1200",
                 "assetId": "14TICKERRAIS",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0xad05ae379784a960d841080123d88b7431bf957a596f0afcea1851902a5f7944",
+                  "identityId": "0x73169195239ea1e63d5eb7042d234f62c647d09985d6e8413e3021c9a4826af8",
                   "number": 0,
                 },
                 "to": Object {
@@ -1499,8 +1499,8 @@ Object {
         "__typename": "Leg",
         "settlement": Object {
           "__typename": "Settlement",
-          "createdBlockId": "384",
-          "id": "384/6",
+          "createdBlockId": "354",
+          "id": "354/6",
           "legs": Object {
             "__typename": "LegsConnection",
             "nodes": Array [
@@ -1509,7 +1509,7 @@ Object {
                 "addresses": Array [
                   "d2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
                 ],
-                "amount": "10",
+                "amount": "10000",
                 "assetId": "14TICKER",
                 "from": Object {
                   "__typename": "Portfolio",
@@ -1518,7 +1518,7 @@ Object {
                 },
                 "to": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                  "identityId": "0x0d99491631d116d39ee41bbfeee6241bf1d9d4d243697b730768a3c05bf71183",
                   "number": 0,
                 },
               },
@@ -1527,11 +1527,11 @@ Object {
                 "addresses": Array [
                   "d2d8ff9e17bc4fb99e2f55d7828f241a80ad54d8e05dff8fccd39aeaa4d5593f",
                 ],
-                "amount": "0",
+                "amount": "400",
                 "assetId": "14TICKERRAIS",
                 "from": Object {
                   "__typename": "Portfolio",
-                  "identityId": "0x43b3e9575f1f5830fe5451bf1caa1fdee5631ef1644ece1d788250ccb7a95144",
+                  "identityId": "0x0d99491631d116d39ee41bbfeee6241bf1d9d4d243697b730768a3c05bf71183",
                   "number": 0,
                 },
                 "to": Object {

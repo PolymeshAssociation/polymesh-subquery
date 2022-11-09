@@ -29,14 +29,17 @@ const retry = async <T>(
   }
   throw err;
 };
-const WAIT_UNTIL_BLOCK = 1000;
-export = async (): Promise<void> => {
+
+const WAIT_UNTIL_BLOCK = 450;
+
+export default async (): Promise<void> => {
   try {
     console.log('');
     console.log('Starting test environment, might take a minute or two...');
     await Promise.all([
       execAsync(
-        'polymesh-local start -s 4.0.0 -i polymeshassociation/polymesh:4.1.2-mainnet-debian -c -o chain',
+        // 'polymesh-local start -s 4.0.0 -i polymeshassociation/polymesh:4.1.2-mainnet-debian -c -o chain',
+        'polymesh-local start -i  polymeshassociation/polymesh:5.1.0-develop-debian -s ~/Desktop/test-snap-3.tgz -o chain',
         { cwd }
       ),
       execAsync('docker-compose up --build -d --always-recreate-deps -V', {

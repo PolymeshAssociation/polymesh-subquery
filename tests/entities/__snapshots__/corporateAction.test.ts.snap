@@ -8,9 +8,9 @@ Object {
       Object {
         "__typename": "DistributionPayment",
         "amount": "100000000",
-        "createdBlockId": "358",
-        "datetime": "2021-10-06T12:35:04",
-        "eventDid": "0x6c15581b6ded46773fbb9786b44624fb2d44397f89bfd71b077462c22ac4b72d",
+        "createdBlockId": "329",
+        "datetime": "2022-11-08T19:03:02.001",
+        "eventDid": "0x89100903bc302c7b57438722751818bb147505d00c11b673724083de17cef001",
         "eventId": "BenefitClaimed",
         "tax": "15",
       },

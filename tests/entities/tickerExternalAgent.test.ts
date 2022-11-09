@@ -2,17 +2,18 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
+const ticker = '12TICKER';
 describe('tickerExternalAgent', () => {
   it('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
-      variables: { ticker: '12TICKER' },
+      variables: { ticker },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgents(
             filter: {
               assetId: { equalTo: $ticker }
               callerId: {
-                equalTo: "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c"
+                equalTo: "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42"
               }
             }
           ) {
@@ -34,7 +35,7 @@ describe('tickerExternalAgent', () => {
   });
   it('should return empty when an agent has been removed', async () => {
     const q = {
-      variables: { ticker: '12TICKER' },
+      variables: { ticker },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgents(
@@ -62,7 +63,7 @@ describe('tickerExternalAgent', () => {
   });
   it('should return empty when the agent is not found', async () => {
     const res = await query({
-      variables: { ticker: '12TICKER' },
+      variables: { ticker },
       query: gql`
         query q($ticker: String!) {
           tickerExternalAgents(

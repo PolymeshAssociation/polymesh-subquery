@@ -4,44 +4,7 @@ exports[`tickerExternalAgentActions should filter by caller DID 1`] = `
 Object {
   "tickerExternalAgentActions": Object {
     "__typename": "TickerExternalAgentActionsConnection",
-    "nodes": Array [
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "AgentAdded",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "FundraiserCreated",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "FundraiserFrozen",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "FundraiserUnfrozen",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "FundraiserWindowModified",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
-        "eventId": "FundraiserClosed",
-        "palletName": "sto",
-      },
-    ],
+    "nodes": Array [],
   },
 }
 `;
@@ -53,7 +16,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserFrozen",
         "palletName": "sto",
       },
@@ -92,6 +55,12 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "AgentAdded",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventId": "Issued",
         "palletName": "asset",
       },
@@ -109,13 +78,13 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0xeb686d5391c1123fcd252419bc1e77b525f46bddc8964d34e74be0988c419fea",
+        "callerId": "0xbe22c6f8fe0d907365c3ccbf7e955bab29844d0009e21944c66c56973c67fdd2",
         "eventId": "AgentAdded",
         "palletName": "externalagents",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "AgentAdded",
         "palletName": "externalagents",
       },
@@ -163,36 +132,36 @@ Object {
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserCreated",
         "palletName": "sto",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserFrozen",
         "palletName": "sto",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserUnfrozen",
         "palletName": "sto",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserWindowModified",
         "palletName": "sto",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0854afeca045161ef42ba9be94c973f65efc0e8532933500865a1fd655148f6c",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserClosed",
         "palletName": "sto",
       },
     ],
-    "totalCount": 18,
+    "totalCount": 19,
   },
 }
 `;
