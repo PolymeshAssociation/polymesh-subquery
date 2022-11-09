@@ -78,8 +78,6 @@ services:
     command:
       - --name=public
       - --playground
-    healthcheck:
-      test: ['CMD','true']
 
 volumes:
   db-data:

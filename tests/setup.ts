@@ -4,6 +4,7 @@ import { join } from 'path';
 import { gql } from '@apollo/client/core';
 import { getApolloClient } from './util';
 import teardown from './teardown';
+import fetch from 'cross-fetch';
 const execAsync = promisify(exec);
 
 const cwd = join(__dirname, '..');
@@ -30,8 +31,6 @@ const retry = async <T>(
   throw err;
 };
 
-const WAIT_UNTIL_BLOCK = 450;
-
 /**
  * record of historical snapshots that were tested against. Most recent should go at top
  * The most recent *should* be good enough for CI, but a record should be kept just in case
@@ -52,6 +51,9 @@ export default async (): Promise<void> => {
     ]);
     console.log('Test environment started, waiting for subquery to catch up');
     await sleep(20000);
+
+    const latestBlock = await fetchLatestBlock();
+
     await retry(200, 2000, async () => {
       const { errors, data } = await query({
         query: gql`
@@ -67,8 +69,8 @@ export default async (): Promise<void> => {
       if (errors) {
         throw errors;
       }
-      if (!(data.blocks.nodes[0].blockId > WAIT_UNTIL_BLOCK)) {
-        console.log(`Last processed block: ${data.blocks.nodes[0].blockId}/${WAIT_UNTIL_BLOCK}`);
+      if (!(data.blocks.nodes[0].blockId > latestBlock)) {
+        console.log(`Last processed block: ${data.blocks.nodes[0].blockId}/${latestBlock}`);
         throw new Error('Subquery not caught up');
       }
     });
@@ -77,4 +79,19 @@ export default async (): Promise<void> => {
     await teardown();
     throw e;
   }
+};
+
+const fetchLatestBlock = async (): Promise<number> => {
+  const chainHttp = 'http://localhost:9933';
+
+  const lastBlockBody = { method: 'POST', body: { id: '1', method: 'system_syncState' } };
+  const response = await fetch(chainHttp, {
+    method: 'POST',
+    body: JSON.stringify(lastBlockBody),
+  });
+  const {
+    result: { currentBlock },
+  } = await response.json();
+
+  return currentBlock - 5; // give some buffer for non finalized blocks
 };
