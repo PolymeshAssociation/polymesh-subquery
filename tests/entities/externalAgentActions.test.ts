@@ -4,6 +4,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 const ticker = '12TICKER';
+
 describe('tickerExternalAgentActions', () => {
   it('should return the transactions for ticker', async () => {
     const q = {

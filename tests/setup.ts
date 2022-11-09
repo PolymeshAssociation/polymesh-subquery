@@ -32,16 +32,20 @@ const retry = async <T>(
 
 const WAIT_UNTIL_BLOCK = 450;
 
+/**
+ * record of historical snapshots that were tested against. Most recent should go at top
+ * The most recent *should* be good enough for CI, but a record should be kept just in case
+ */
+const snapShotArgs = [
+  '-v 5.0.3 -s https://github.com/PolymeshAssociation/polymesh-local/releases/download/assets/v5.0.3-integration-snapshot.tgz',
+  '-i polymeshassociation/polymesh:4.1.2-mainnet-debian -s https://github.com/PolymeshAssociation/polymesh-local/releases/download/assets/4.0.0-integration-snapshot.tgz',
+];
+
 export default async (): Promise<void> => {
   try {
-    console.log('');
-    console.log('Starting test environment, might take a minute or two...');
+    console.log('\nStarting test environment, might take a minute or two...');
     await Promise.all([
-      execAsync(
-        // 'polymesh-local start -s 4.0.0 -i polymeshassociation/polymesh:4.1.2-mainnet-debian -c -o chain',
-        'polymesh-local start -i  polymeshassociation/polymesh:5.1.0-develop-debian -s ~/Desktop/test-snap-3.tgz -o chain',
-        { cwd }
-      ),
+      execAsync(`polymesh-local start -o chain ${snapShotArgs[0]}`, { cwd }),
       execAsync('docker-compose up --build -d --always-recreate-deps -V', {
         cwd,
       }),

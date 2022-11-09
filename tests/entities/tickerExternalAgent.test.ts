@@ -4,6 +4,7 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 const ticker = '12TICKER';
+
 describe('tickerExternalAgent', () => {
   it('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
