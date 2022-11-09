@@ -1,10 +1,19 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`claimScopes should return a list of scopes for given identity 1`] = `
+exports[`claimScopes should return a list of scopes for a given ticker 1`] = `
 Object {
   "claimScopes": Object {
     "__typename": "ClaimScopesConnection",
-    "nodes": Array [],
+    "nodes": Array [
+      Object {
+        "__typename": "ClaimScope",
+        "scope": Object {
+          "type": "Ticker",
+          "value": "5TICKER",
+        },
+        "ticker": "5TICKER",
+      },
+    ],
   },
 }
 `;

@@ -3,6 +3,24 @@ import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('portfolioMovements', () => {
+  let fromId: string;
+
+  beforeEach(async () => {
+    const q = {
+      query: gql`
+        query {
+          portfolioMovements(first: 1, orderBy: CREATED_BLOCK_ID_ASC) {
+            nodes {
+              fromId
+            }
+          }
+        }
+      `,
+    };
+    const result = await query(q);
+
+    fromId = result.data.portfolioMovements.nodes[0].fromId;
+  });
   it('should return all movements associated with a particular Portfolio', async () => {
     const q = {
       query: gql`
@@ -10,7 +28,7 @@ describe('portfolioMovements', () => {
           portfolioMovements(
             filter: {
               fromId: {
-                equalTo: "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1"
+                equalTo: "${fromId}"
               }
             }
           ) {
@@ -35,13 +53,14 @@ describe('portfolioMovements', () => {
   });
 
   it('should return all Portfolio movements associated with a particular Identity', async () => {
+    const fromDid = fromId.split('/')[0];
     const q = {
       query: gql`
         query {
           portfolioMovements(
             filter: {
               fromId: {
-                startsWith: "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/"
+                startsWith: "${fromDid}"
               }
             }
           ) {

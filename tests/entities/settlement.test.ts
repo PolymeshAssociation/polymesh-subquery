@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client/core';
+import { eveDid } from '../consts';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
@@ -46,7 +47,7 @@ describe('settlements', () => {
           legs(
             filter: {
               fromId: {
-                startsWith: "0x0500000000000000000000000000000000000000000000000000000000000000/"
+                startsWith: "${eveDid}"
               }
             }
           ) {
