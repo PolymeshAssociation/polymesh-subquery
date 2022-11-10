@@ -1,50 +1,10 @@
-import { createConnection } from 'typeorm';
-import { env, chdir } from 'process';
 import { readFileSync } from 'fs';
 import { migrationQueries } from '../db/migration';
-chdir(__dirname);
-
-require('dotenv').config(); // eslint-disable-line @typescript-eslint/no-var-requires
-
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-const retry = async <T>(
-  n: number,
-  ms: number,
-  f: () => Promise<T>,
-  onRetry: () => void = () => {}
-): Promise<T> => {
-  let err = undefined;
-  for (let i = 0; i < n; i++) {
-    try {
-      return await f();
-    } catch (e) {
-      err = e;
-    }
-
-    onRetry();
-    await sleep(ms);
-  }
-  throw err;
-};
+import { updateVersion } from '../db/schemaMigrations';
+import { getPostgresConnection, retry } from '../db/utils';
 
 const main = async () => {
-  const postgres = await retry(
-    env.NODE_ENV === 'local' ? 10 : 1,
-    1000,
-    async () =>
-      await createConnection({
-        type: 'postgres',
-        host: env.DB_HOST,
-        port: Number(env.DB_PORT),
-        username: env.DB_USER,
-        password: env.DB_PASS,
-        database: env.DB_DATABASE,
-        name: 'postgres',
-      }),
-    () => {
-      console.log('Database connection not ready, retrying in 1s');
-    }
-  );
+  const postgres = await getPostgresConnection();
 
   await retry(
     100,
@@ -62,7 +22,9 @@ const main = async () => {
   console.log('Applied initial SQL');
 
   await postgres.query(migrationQueries().join('\n'));
-  console.log('Applied migration SQL');
+  console.log('Applied initial migration SQL');
+
+  await updateVersion(postgres);
 };
 
 main()

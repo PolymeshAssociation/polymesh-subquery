@@ -1,12 +1,13 @@
 {
   "name": "polymesh-subquery",
-  "version": "5.0.0",
+  "version": "5.5.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -b",
     "compare": "scripts/run-compare.sh",
     "sql": "ts-node scripts/run-sql.ts",
+    "migrations": "ts-node scripts/run-migrations.ts",
     "prepack": "rm -rf dist && yarn build",
     "prepare": "husky install",
     "lint": "eslint . --ext .ts",
@@ -19,6 +20,7 @@
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict",
     "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
+    "update:version": "ts-node scripts/update-version.ts",
     "semantic-release": "semantic-release"
   },
   "homepage": "https://polymath.network/",
