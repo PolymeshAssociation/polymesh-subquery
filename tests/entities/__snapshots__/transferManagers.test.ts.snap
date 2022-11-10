@@ -1,0 +1,19 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`transferManagers should return all transfer managers for a particular asset 1`] = `
+Object {
+  "transferManagers": Object {
+    "__typename": "TransferManagersConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "TransferManager",
+        "exemptedEntities": Array [],
+        "id": "15TICKER/Count/10",
+        "ticker": "15TICKER",
+        "type": "Count",
+        "value": 10,
+      },
+    ],
+  },
+}
+`;

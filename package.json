@@ -1,23 +1,27 @@
 {
-  "name": "polymesh-subql",
-  "version": "5.0.0",
+  "name": "polymesh-subquery",
+  "version": "5.5.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -b",
     "compare": "scripts/run-compare.sh",
     "sql": "ts-node scripts/run-sql.ts",
+    "migrations": "ts-node scripts/run-migrations.ts",
     "prepack": "rm -rf dist && yarn build",
     "prepare": "husky install",
     "lint": "eslint . --ext .ts",
     "test": "jest",
     "diff_versions": "ts-node scripts/diff_versions",
     "codegen": "./node_modules/.bin/subql codegen",
+    "validate": "./node_modules/.bin/subql validate",
     "commit": "npx git-cz",
     "start:docker": "docker-compose pull && docker-compose up --remove-orphans",
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict",
-    "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write"
+    "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
+    "update:version": "ts-node scripts/update-version.ts",
+    "semantic-release": "semantic-release"
   },
   "homepage": "https://polymath.network/",
   "repository": "github:PolymathNetwork/polymesh-subquery",
@@ -27,14 +31,11 @@
     "project.yaml"
   ],
   "dependencies": {
-    "@babel/preset-typescript": "^7.15.0",
-    "@polkadot/api": "5.1.1",
-    "@polkadot/util": "7.2.1",
-    "@polkadot/util-crypto": "7.2.1",
-    "bn.js": "^4.11.9",
+    "@polkadot/api": "^8",
+    "bignumber.js": "^9.0.2",
     "typeorm": "^0.2.34"
   },
-  "author": "raycar5",
+  "author": "Polymath",
   "license": "Apache-2.0",
   "devDependencies": {
     "@apollo/client": "^3.4.16",
@@ -44,6 +45,8 @@
     "@commitlint/config-conventional": "13.1.0",
     "@polkadot/typegen": "5.1.1",
     "@polkadot/types-support": "5.5.1",
+    "@semantic-release/changelog": "^6.0.1",
+    "@semantic-release/github": "^8.0.6",
     "@subql/cli": "latest",
     "@subql/types": "latest",
     "@types/bn.js": "^4.11.6",
@@ -67,8 +70,8 @@
     "eslint-plugin-standard": "5.0.0",
     "expect": "^27.0.6",
     "git-cz": "^4.8.0",
-    "husky": "7.0.1",
     "graphql": "^15.6.1",
+    "husky": "7.0.1",
     "jest": "^27.0.6",
     "jest-diff": "^27.2.0",
     "js-yaml": "^4.1.0",
@@ -76,12 +79,11 @@
     "mysql2": "^2.2.5",
     "npm-run-path": "^4.0.1",
     "pg": "^8.6.0",
+    "polymesh-local": "^2.1.0",
     "prettier": "2.3.2",
     "prettier-eslint": "13.0.0",
     "prettier-eslint-cli": "5.0.1",
-    "semantic-release": "^18.0.0",
-    "semantic-release-docker": "^2.2.0",
-    "polymesh-local": "^2.1.0",
+    "semantic-release": "^19.0.5",
     "ts-jest": "^27.0.4",
     "ts-node": "^8.10.2",
     "typescript": "^4.1.3"
@@ -91,22 +93,7 @@
       "path": "./node_modules/cz-conventional-changelog"
     }
   },
-  "release": {
-    "branches": [
-      "master"
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
-      "semantic-release-docker"
-    ],
-    "verifyConditions": {
-      "path": "semantic-release-docker",
-      "registryUrl": "docker.io"
-    },
-    "publish": {
-      "path": "semantic-release-docker",
-      "name": "docker.io/polymathnet/polymesh-subquery"
-    }
+  "exports": {
+    "chainTypes": "./src/chainTypes/index.ts"
   }
 }

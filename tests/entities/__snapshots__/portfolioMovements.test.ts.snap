@@ -1,0 +1,30 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`portfolioMovements should return all Portfolio movements associated with a particular Identity 1`] = `
+Object {
+  "portfolioMovements": Object {
+    "__typename": "PortfolioMovementsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "PortfolioMovement",
+        "address": "bc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
+        "amount": "100",
+        "assetId": "4TICKER",
+        "fromId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/0",
+        "id": "139/1",
+        "nodeId": "WyJwb3J0Zm9saW9fbW92ZW1lbnRzIiwiMTM5LzEiXQ==",
+        "toId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1",
+      },
+    ],
+  },
+}
+`;
+
+exports[`portfolioMovements should return all movements associated with a particular Portfolio 1`] = `
+Object {
+  "portfolioMovements": Object {
+    "__typename": "PortfolioMovementsConnection",
+    "nodes": Array [],
+  },
+}
+`;

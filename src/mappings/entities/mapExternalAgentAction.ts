@@ -1,30 +1,29 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
-import { Sto, TickerExternalAgentAction } from '../../types';
-import { getOrDefault, serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, ModuleIdEnum, Sto, TickerExternalAgentAction } from '../../types';
+import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
+import { HandlerArgs } from './common';
 
 /**
  * Subscribes to the events related to external agents
  */
-export async function mapExternalAgentAction(
-  blockId: number,
-  eventId: EventIdEnum,
-  moduleId: ModuleIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> {
+export async function mapExternalAgentAction({
+  blockId,
+  eventId,
+  moduleId,
+  params,
+  event,
+}: HandlerArgs): Promise<void> {
   const ticker = await mgr.getTicker(moduleId, eventId, blockId, params);
   if (ticker) {
     await TickerExternalAgentAction.create({
       id: `${blockId}/${event.idx}`,
-      blockId,
       eventIdx: event.idx,
-      ticker,
+      assetId: ticker,
       palletName: moduleId,
       eventId,
-      callerDid: params[0].toString(),
-      datetime: event.block.timestamp,
+      callerId: getTextValue(params[0]),
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
 }
@@ -54,6 +53,7 @@ const tickerFromCorporateAction: TickerFromParams = async params => {
   }
   throw new Error("Event didn't have a CaID parameter");
 };
+
 /**
  * Class designed to manage the list of events produced by external agent authorized extrinsics
  * in a single source of truth.
@@ -64,15 +64,15 @@ const tickerFromCorporateAction: TickerFromParams = async params => {
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
 
-  // explicit private empty constructor
   // eslint-disable-next-line no-useless-constructor, @typescript-eslint/no-empty-function
   private constructor() {
-    // This is intentional
+    // Explicit private empty constructor
   }
+
   public async getTicker(
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,
-    blockId: number,
+    blockId: string,
     params: Codec[]
   ): Promise<string | undefined> {
     const entries = this.entries.get(moduleId)?.get(eventId);
@@ -82,10 +82,10 @@ class ExternalAgentEventsManager {
     }
 
     for (const entry of entries) {
-      if (entry.options.maxBlock && blockId > entry.options.maxBlock) {
+      if (entry.options.maxBlock && Number(blockId) > entry.options.maxBlock) {
         continue;
       }
-      if (entry.options.minBlock && blockId < entry.options.minBlock) {
+      if (entry.options.minBlock && Number(blockId) < entry.options.minBlock) {
         continue;
       }
       if (entry.type === 'standard') {
@@ -110,7 +110,7 @@ class ExternalAgentEventsManager {
      */
     eventsManager
       .add(
-        ModuleIdEnum.Statistics,
+        ModuleIdEnum.statistics,
         [
           EventIdEnum.TransferManagerAdded,
           EventIdEnum.TransferManagerRemoved,
@@ -120,7 +120,7 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
-        ModuleIdEnum.Corporateaction,
+        ModuleIdEnum.corporateaction,
         [
           EventIdEnum.DefaultTargetIdentitiesChanged,
           EventIdEnum.DefaultWithholdingTaxChanged,
@@ -129,28 +129,28 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
-        ModuleIdEnum.Corporateaction,
+        ModuleIdEnum.corporateaction,
         [
-          EventIdEnum.CaInitiated,
-          EventIdEnum.CaLinkedToDoc,
-          EventIdEnum.CaRemoved,
+          EventIdEnum.CAInitiated,
+          EventIdEnum.CALinkedToDoc,
+          EventIdEnum.CARemoved,
           EventIdEnum.RecordDateChanged,
         ],
         tickerFromCorporateAction
       )
       .add(
-        ModuleIdEnum.Corporateballot,
+        ModuleIdEnum.corporateballot,
         [
           EventIdEnum.Created,
           EventIdEnum.RangeChanged,
           EventIdEnum.MetaChanged,
-          EventIdEnum.RcvChanged,
+          EventIdEnum.RCVChanged,
           EventIdEnum.Removed,
         ],
         tickerFromCorporateAction
       )
       .add(
-        ModuleIdEnum.Compliancemanager,
+        ModuleIdEnum.compliancemanager,
         [
           EventIdEnum.ComplianceRequirementCreated,
           EventIdEnum.ComplianceRequirementRemoved,
@@ -165,17 +165,17 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
-        ModuleIdEnum.Capitaldistribution,
+        ModuleIdEnum.capitaldistribution,
         [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.BenefitClaimed],
         tickerFromCorporateAction
       )
       .add(
-        ModuleIdEnum.Checkpoint,
+        ModuleIdEnum.checkpoint,
         [EventIdEnum.CheckpointCreated, EventIdEnum.ScheduleCreated, EventIdEnum.ScheduleRemoved],
         1
       )
       .add(
-        ModuleIdEnum.Asset,
+        ModuleIdEnum.asset,
         [
           EventIdEnum.AssetOwnershipTransferred,
           /*
@@ -202,7 +202,7 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
-        ModuleIdEnum.Externalagents,
+        ModuleIdEnum.externalagents,
         [
           EventIdEnum.AgentAdded,
           EventIdEnum.GroupCreated,
@@ -213,7 +213,7 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
-        ModuleIdEnum.Settlement,
+        ModuleIdEnum.settlement,
         [
           EventIdEnum.VenueFiltering,
           EventIdEnum.VenuesAllowed,
@@ -224,26 +224,21 @@ class ExternalAgentEventsManager {
       )
       // Special case for the Sto pallet because most events don't contain the ticker,
       // they contain a reference to a previously created fundraiser instead.
-      .add(ModuleIdEnum.Sto, [EventIdEnum.FundraiserCreated], async params => {
-        const offeringAsset =
-          params[3] instanceof Map ? params[3].get('offering_asset') : undefined;
-        if (!offeringAsset) {
-          throw new Error("Couldn't find offeringAsset for sto");
-        }
-        return serializeTicker(offeringAsset);
+      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params => {
+        return getOfferingAsset(params[3]);
       })
       .add(
-        ModuleIdEnum.Sto,
+        ModuleIdEnum.sto,
         [
           EventIdEnum.FundraiserClosed,
-          EventIdEnum.FundraiserWindowModifed,
+          EventIdEnum.FundraiserWindowModified,
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
         async params => {
           const stoId = params[1].toString();
           const sto = await Sto.get(stoId);
-          return sto.offeringAsset;
+          return sto.offeringAssetId;
         }
       );
     return eventsManager;

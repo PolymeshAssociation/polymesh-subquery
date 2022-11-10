@@ -1,20 +1,20 @@
-import { Codec } from '@polkadot/types/types';
-import { Sto } from '../../types';
-import { serializeTicker } from '../util';
-import { EventIdEnum, ModuleIdEnum } from './common';
+import { EventIdEnum, ModuleIdEnum, Sto } from '../../types';
+import { getOfferingAsset, getTextValue } from '../util';
+import { HandlerArgs } from './common';
 
 /**
  * Subscribes to events related to STOs
  */
-export async function mapSto(eventId: string, moduleId: string, params: Codec[]): Promise<void> {
-  if (moduleId === ModuleIdEnum.Sto && eventId === EventIdEnum.FundraiserCreated) {
-    const offeringAsset = params[3] instanceof Map ? params[3].get('offering_asset') : undefined;
-    if (!offeringAsset) {
-      throw new Error("Couldn't find offeringAsset for sto");
-    }
+export async function mapSto({ blockId, eventId, moduleId, params }: HandlerArgs): Promise<void> {
+  if (moduleId === ModuleIdEnum.sto && eventId === EventIdEnum.FundraiserCreated) {
+    const [, rawStoId, , rawFundraiser] = params;
+    const offeringAssetId = getOfferingAsset(rawFundraiser);
+
     await Sto.create({
-      id: params[1].toString(),
-      offeringAsset: serializeTicker(offeringAsset),
+      id: getTextValue(rawStoId),
+      offeringAssetId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save();
   }
 }

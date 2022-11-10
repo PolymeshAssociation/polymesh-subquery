@@ -1,0 +1,85 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`stakingEvents should filter by account 1`] = `
+Object {
+  "stakingEvents": Object {
+    "__typename": "StakingEventsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "StakingEvent",
+        "amount": "1000000",
+        "datetime": "2021-10-06T12:35:22",
+        "eventId": "Bonded",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": null,
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "datetime": "2021-10-06T12:35:22.5",
+        "eventId": "Nominated",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        ],
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": "100",
+        "datetime": "2021-10-06T12:38:10",
+        "eventId": "Unbonded",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": null,
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "datetime": "2021-10-06T12:38:10.5",
+        "eventId": "Nominated",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        ],
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+    ],
+    "totalCount": 4,
+  },
+}
+`;
+
+exports[`stakingEvents should return nomination events 1`] = `
+Object {
+  "stakingEvents": Object {
+    "__typename": "StakingEventsConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "datetime": "2021-10-06T12:35:22.5",
+        "eventId": "Nominated",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+        ],
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": null,
+        "datetime": "2021-10-06T12:38:10.5",
+        "eventId": "Nominated",
+        "identityId": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "nominatedValidators": Array [
+          "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        ],
+        "stashAccount": "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121",
+      },
+    ],
+    "totalCount": 2,
+  },
+}
+`;

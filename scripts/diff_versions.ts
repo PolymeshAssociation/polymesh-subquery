@@ -1,16 +1,10 @@
-import { load } from 'js-yaml';
-import { readFileSync, writeFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { diff } from 'jest-diff';
 import { join } from 'path';
+import chainTypes from '../src/chainTypes';
 
-const project: any = load(
-  readFileSync(join(__dirname, '../project.template.yaml'), {
-    encoding: 'utf-8',
-  })
-);
-
-let versions: { minmax: [number, number]; types: Record<string, string> }[] =
-  project.network.typesBundle.spec.polymesh.types;
+let versions: { minmax: number[]; types: Record<string, string> }[] =
+  chainTypes.typesBundle.spec.polymesh.types;
 versions = versions.reverse();
 
 let previous = {};
