@@ -1,5 +1,6 @@
 import { Vec } from '@polkadot/types/codec';
 import { GenericExtrinsic } from '@polkadot/types/extrinsic';
+import { GenericEvent } from '@polkadot/types/generic';
 import { AnyTuple } from '@polkadot/types/types';
 import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
@@ -98,22 +99,23 @@ const processBlockExtrinsics = (extrinsics: Vec<GenericExtrinsic<AnyTuple>>) => 
 };
 
 export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
+  const genericEvent = event.event as GenericEvent;
   const block = event.block;
   const blockId = block.block.header.number.toString();
   const eventIdx = event.idx;
-  const moduleId = event.event.section.toLowerCase();
-  const eventId = event.event.method;
-  const args = event.event.data.toArray();
+  const moduleId = genericEvent.section.toLowerCase();
+  const eventId = genericEvent.method;
+  const args = genericEvent.data;
 
   const harvesterLikeArgs = args.map((arg, i) => {
     let type;
-    const typeName = event.event.meta.fields[i].typeName;
+    const typeName = genericEvent.meta.fields[i].typeName;
     if (typeName.isSome) {
       // for metadata >= v14
       type = typeName.unwrap().toString();
     } else {
       // for metadata < v14
-      type = event.event.meta.args[i].toString();
+      type = genericEvent.meta.args[i].toString();
     }
     return {
       value: serializeLikeHarvester(arg, type, logFoundType),
@@ -149,14 +151,15 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<void> {
 
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
 export async function handleEvent(event: SubstrateEvent): Promise<void> {
-  const moduleId = event.event.section.toLowerCase();
-  const eventId = event.event.method;
+  const genericEvent = event.event as GenericEvent;
+  const moduleId = genericEvent.section.toLowerCase();
+  const eventId = genericEvent.method;
   try {
     await handleToolingEvent(event);
 
     const block = event.block;
     const blockId = block.block.header.number.toString();
-    const args = event.event.data.toArray();
+    const args = genericEvent.data;
 
     const handlerArgs: HandlerArgs = {
       blockId,
@@ -188,7 +191,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({
-      value: serializeLikeHarvester(arg, event.event.meta.args[i].toString(), logFoundType),
+      value: serializeLikeHarvester(arg, genericEvent.meta.args[i].toString(), logFoundType),
     }));
 
     const {
