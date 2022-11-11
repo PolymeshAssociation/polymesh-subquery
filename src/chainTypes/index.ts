@@ -8,10 +8,6 @@ import harvesterTypes from './harvesterTypes.json';
 const specTypes = {
   types: [
     {
-      minmax: [2021, 2023],
-      types: twoZeroZero,
-    },
-    {
       minmax: [5001000, 5001009],
       types: fiveOneX,
     },
@@ -34,6 +30,10 @@ const specTypes = {
     {
       minmax: [3000, 3001],
       types: fourZeroZero,
+    },
+    {
+      minmax: [2021, 2023],
+      types: twoZeroZero,
     },
   ],
 };
