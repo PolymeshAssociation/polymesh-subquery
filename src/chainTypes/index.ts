@@ -12,12 +12,12 @@ const specTypes = {
       types: twoZeroZero,
     },
     {
-      minmax: [5000000, 5000009],
-      types: fiveZeroX,
-    },
-    {
       minmax: [5001000, 5001009],
       types: fiveOneX,
+    },
+    {
+      minmax: [5000000, 5000009],
+      types: fiveZeroX,
     },
     {
       minmax: [3010, 3019],

@@ -40,6 +40,7 @@
 -     "_enum": Object {
 -       "CINS": "[u8; 9]",
 -       "CUSIP": "[u8; 9]",
+-       "FIGI": "[u8; 12]",
 -       "ISIN": "[u8; 12]",
 -       "LEI": "[u8; 20]",
 -     },
@@ -305,10 +306,9 @@
 -     "result": "bool",
 -     "sender_conditions": "Vec<ConditionResult>",
 -   },
--   "CompressedRistretto": "[u8; 32]",
 -   "Condition": Object {
 -     "condition_type": "ConditionType",
--     "issuers": "Vec<PolymeshPrimitivesConditionTrustedIssuer>",
+-     "issuers": "Vec<TrustedIssuer>",
 -   },
 -   "ConditionResult": Object {
 -     "condition": "Condition",
@@ -647,7 +647,6 @@
 -   "EthereumAddress": "[u8; 20]",
 -   "EventCounts": "Vec<u32>",
 -   "EventDid": "IdentityId",
--   "ExtVersion": "u32",
 -   "ExtensionAttributes": Object {
 -     "usage_fee": "Balance",
 -     "version": "MetaVersion",
@@ -736,6 +735,16 @@
 -     "expiry": "Option<Moment>",
 -     "id": "IdentityId",
 -   },
+-   "InitiateCorporateActionArgs": Object {
+-     "decl_date": "Moment",
+-     "default_withholding_tax": "Option<Tax>",
+-     "details": "CADetails",
+-     "kind": "CAKind",
+-     "record_date": "Option<RecordDateSpec>",
+-     "targets": "Option<TargetIdentities>",
+-     "ticker": "Ticker",
+-     "withholding_tax": "Option<Vec<(IdentityId, Tax)>>",
+-   },
 -   "Instruction": Object {
 -     "created_at": "Option<Moment>",
 -     "instruction_id": "InstructionId",
@@ -754,10 +763,7 @@
 -     },
 -   },
 -   "InvestorUid": "[u8; 16]",
--   "InvestorZKProofData": Object {
--     "r": "CompressedRistretto",
--     "s": "Scalar",
--   },
+-   "InvestorZKProofData": "[u8; 64]",
 -   "ItnRewardStatus": Object {
 -     "_enum": Object {
 -       "Claimed": "",
@@ -789,16 +795,6 @@
 -       "PendingTokenLock": "",
 -     },
 -   },
--   "LegacyPalletPermissions": Object {
--     "dispatchable_names": "Vec<DispatchableName>",
--     "pallet_name": "PalletName",
--     "total": "bool",
--   },
--   "LegacyPermissions": Object {
--     "asset": "Option<Vec<Ticker>>",
--     "extrinsic": "Option<Vec<LegacyPalletPermissions>>",
--     "portfolio": "Option<Vec<PortfolioId>>",
--   },
 -   "LocalCAId": "u32",
 -   "LookupSource": "MultiAddress",
 -   "MaybeBlock": Object {
@@ -808,9 +804,6 @@
 -     },
 -   },
 -   "Memo": "[u8; 32]",
--   "MetaDescription": "Text",
--   "MetaUrl": "Text",
--   "MetaVersion": "u32",
 -   "Moment": "u64",
 -   "Motion": Object {
 -     "choices": "Vec<ChoiceTitle>",
@@ -844,7 +837,6 @@
 -     "id": "PipId",
 -     "proposal": "Call",
 -     "proposer": "Proposer",
--     "state": "ProposalState",
 -   },
 -   "PipDescription": "Text",
 -   "PipId": "u32",
@@ -1050,21 +1042,6 @@
 -       "None",
 -     ],
 -   },
--   "SmartExtension": Object {
--     "extension_id": "AccountId",
--     "extension_name": "SmartExtensionName",
--     "extension_type": "SmartExtensionType",
--     "is_archive": "bool",
--   },
--   "SmartExtensionName": "Text",
--   "SmartExtensionType": Object {
--     "_enum": Object {
--       "Custom": "Vec<u8>",
--       "Offerings": "",
--       "SmartWallet": "",
--       "TransferManager": "",
--     },
--   },
 -   "SnapshotId": "u32",
 -   "SnapshotMetadata": Object {
 -     "created_at": "BlockNumber",
@@ -1145,18 +1122,6 @@
 -     ],
 -   },
 -   "Tax": "Permill",
--   "TemplateDetails": Object {
--     "frozen": "bool",
--     "instantiation_fee": "Balance",
--     "owner": "IdentityId",
--   },
--   "TemplateMetadata": Object {
--     "description": "MetaDescription",
--     "se_type": "SmartExtensionType",
--     "url": "Option<MetaUrl>",
--     "usage_fee": "Balance",
--     "version": "MetaVersion",
--   },
 -   "Ticker": "[u8; 12]",
 -   "TickerRegistration": Object {
 -     "expiry": "Option<Moment>",
