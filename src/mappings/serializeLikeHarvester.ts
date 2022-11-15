@@ -1,5 +1,21 @@
 import { GenericCall, GenericExtrinsic, u64 } from '@polkadot/types';
 import {
+  CodecMap,
+  Compact,
+  Enum,
+  Option,
+  Result,
+  Struct,
+  Tuple,
+  Vec,
+  VecFixed,
+} from '@polkadot/types/codec';
+import { AnyJson, AnyTuple, Codec } from '@polkadot/types/types';
+import { hexStripPrefix, u8aToHex } from '@polkadot/util';
+import { decodeAddress } from '@polkadot/util-crypto';
+import BN from 'bn.js';
+import { TextDecoder } from 'util';
+import {
   camelToSnakeCase,
   capitalizeFirstLetter,
   findTopLevelCommas,
@@ -7,22 +23,6 @@ import {
   removeNullChars,
   serializeTicker,
 } from './util';
-import {
-  Enum,
-  Option,
-  Vec,
-  Compact,
-  Struct,
-  Tuple,
-  Result,
-  VecFixed,
-  CodecMap,
-} from '@polkadot/types/codec';
-import { TextDecoder } from 'util';
-import { AnyTuple, Codec, AnyJson } from '@polkadot/types/types';
-import BN from 'bn.js';
-import { u8aToHex, hexStripPrefix } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
 
 /**
  * @returns A json representation of `item` serialized using the same rules as the harvester.
@@ -76,6 +76,8 @@ export const serializeLikeHarvester = (
     return removeNullChars(item.toString());
   } else if (type === 'Ticker' || type === 'PolymeshPrimitivesTicker') {
     return serializeTicker(item);
+  } else if (rawType.startsWith('[u8;') && rawType.endsWith(']')) {
+    return item.toHex();
   } else if (rawType === 'Call') {
     const e = item as unknown as GenericCall;
     let hexCallIndex;

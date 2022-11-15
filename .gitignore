@@ -55,3 +55,5 @@ coverage
 
 project.yaml
 tsconfig.tsbuildinfo
+
+metadata.json
