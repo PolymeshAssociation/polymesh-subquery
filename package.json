@@ -1,6 +1,8 @@
 {
   "name": "polymesh-subquery",
   "version": "5.5.0",
+  "author": "Polymesh Association",
+  "license": "Apache 2.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
   "main": "dist/index.js",
   "scripts": {
@@ -35,8 +37,6 @@
     "bignumber.js": "^9.0.2",
     "typeorm": "^0.2.34"
   },
-  "author": "Polymath",
-  "license": "Apache-2.0",
   "devDependencies": {
     "@apollo/client": "^3.4.16",
     "@babel/plugin-transform-runtime": "^7.15.0",
