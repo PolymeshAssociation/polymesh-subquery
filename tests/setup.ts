@@ -89,6 +89,7 @@ const fetchLatestBlock = async (): Promise<number> => {
     method: 'POST',
     body: JSON.stringify(lastBlockBody),
   });
+  console.log('system_synState response: ', response);
   const {
     result: { currentBlock },
   } = await response.json();
