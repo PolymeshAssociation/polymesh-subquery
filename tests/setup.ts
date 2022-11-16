@@ -83,13 +83,17 @@ export default async (): Promise<void> => {
 
 const fetchLatestBlock = async (): Promise<number> => {
   const chainHttp = 'http://localhost:9933';
+  const headers = { 'Content-Type': 'application/json' };
 
   const lastBlockBody = { method: 'POST', body: { id: '1', method: 'system_syncState' } };
   const response = await fetch(chainHttp, {
+    headers,
     method: 'POST',
     body: JSON.stringify(lastBlockBody),
   });
+
   console.log('system_synState response: ', response);
+
   const {
     result: { currentBlock },
   } = await response.json();
