@@ -92,11 +92,11 @@ const fetchLatestBlock = async (): Promise<number> => {
     body: JSON.stringify(lastBlockBody),
   });
 
-  console.log('system_synState response: ', response);
-
+  const jsonResponse = response.json();
+  console.log('json response: ', jsonResponse);
   const {
     result: { currentBlock },
-  } = await response.json();
+  } = jsonResponse as any;
 
   return currentBlock - 5; // give some buffer for non finalized blocks
 };
