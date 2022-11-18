@@ -29,3 +29,6 @@ dataSources:
           kind: substrate/CallHandler
         - handler: ${EVENT_HANDLER}
           kind: substrate/EventHandler
+        - handler: handleChainMigration
+          kind: substrate/ChainMigrationHandler
+          filter: 
