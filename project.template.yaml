@@ -30,5 +30,7 @@ dataSources:
         - handler: ${EVENT_HANDLER}
           kind: substrate/EventHandler
         - handler: handleChainMigration
-          kind: substrate/ChainMigrationHandler
-          filter: 
+          kind: substrate/EventHandler
+          filter:
+            module: system
+            method: CodeUpdated
