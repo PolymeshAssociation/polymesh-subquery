@@ -13,7 +13,6 @@ import {
   Extrinsic,
   ModuleIdEnum,
 } from '../types';
-import { mapCodeUpdated } from './chainMigrations/codeUpdated';
 import { HandlerArgs } from './entities/common';
 import { mapAsset } from './entities/mapAsset';
 import { mapAuthorization } from './entities/mapAuthorization';
@@ -160,6 +159,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
     const block = event.block;
     const blockId = block.block.header.number.toString();
+    const specVersion = block.specVersion;
     const args = genericEvent.data;
 
     const handlerArgs: HandlerArgs = {
@@ -168,6 +168,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       moduleId: moduleId as ModuleIdEnum,
       params: args,
       event,
+      specVersion,
     };
 
     const handlerPromises = [
@@ -254,15 +255,6 @@ export async function handleCall(extrinsic: SubstrateExtrinsic): Promise<void> {
     }).save();
   } catch (error) {
     logError(`Received an Error in handleCall function: ${error.toString()}`);
-    throw error;
-  }
-}
-
-export async function handleChainMigration(event: SubstrateEvent): Promise<void> {
-  try {
-    await mapCodeUpdated(event);
-  } catch (error) {
-    logError(`Received an Error in handleChainMigration function: ${error.toString()}`);
     throw error;
   }
 }

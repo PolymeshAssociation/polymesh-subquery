@@ -8,6 +8,8 @@ import {
   Funding,
   ModuleIdEnum,
   SecurityIdentifier,
+  StatOpTypeEnum,
+  StatType,
 } from '../../types';
 import {
   bytesToString,
@@ -207,7 +209,8 @@ const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Prom
 const handleIssued = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  event: SubstrateEvent,
+  specVersion: number
 ): Promise<void> => {
   const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
 
@@ -240,10 +243,29 @@ const handleIssued = async (
     );
   }
 
+  // Assets with non 0 balances before the v5.0 chain upgrade have stats created by a chain migration
+  if (specVersion < 5000000) {
+    promises.push(
+      StatType.create({
+        id: `${ticker}/Count`,
+        opType: StatOpTypeEnum.Count,
+        assetId: ticker,
+        claimType: null,
+        claimIssuerId: null,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save()
+    );
+  }
+
   await Promise.all(promises);
 };
 
-const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleRedeemed = async (
+  blockId: string,
+  params: Codec[],
+  specVersion: number
+): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -257,7 +279,13 @@ const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> =
   assetOwner.amount -= issuedAmount;
   assetOwner.updatedBlockId = blockId;
 
-  await Promise.all([asset.save(), assetOwner.save()]);
+  const promises = [asset.save(), assetOwner.save()];
+
+  if (specVersion < 5000000 && asset.totalSupply === BigInt(0)) {
+    promises.push(StatType.remove(`${ticker}/Count`));
+  }
+
+  await Promise.all(promises);
 };
 
 const handleFrozen = async (blockId: string, params: Codec[], isFrozen: boolean): Promise<void> => {
@@ -347,6 +375,7 @@ export async function mapAsset({
   moduleId,
   params,
   event,
+  specVersion,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.asset) {
     return;
@@ -358,10 +387,10 @@ export async function mapAsset({
     await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.Issued) {
-    await handleIssued(blockId, params, event);
+    await handleIssued(blockId, params, event, specVersion);
   }
   if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeemed(blockId, params);
+    await handleRedeemed(blockId, params, specVersion);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAssetOwnershipTransferred(blockId, params);

@@ -13,4 +13,5 @@ export interface HandlerArgs {
   moduleId: ModuleIdEnum;
   params: Codec[];
   event: SubstrateEvent;
+  specVersion: number;
 }

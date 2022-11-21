@@ -1,5 +1,12 @@
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, ModuleIdEnum, TransferManager } from '../../types';
+import {
+  EventIdEnum,
+  ModuleIdEnum,
+  TransferCompliance,
+  TransferComplianceTypeEnum,
+  TransferManager,
+  TransferRestrictionTypeEnum,
+} from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 
@@ -19,16 +26,32 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
 
   const ticker = serializeTicker(rawTicker);
   const { type, value } = getTransferManagerValue(rawManager);
+  const id = `${ticker}/${type}/${value}`;
+  const complianceType =
+    type === TransferRestrictionTypeEnum.Percentage
+      ? TransferComplianceTypeEnum.MaxInvestorOwnership
+      : TransferComplianceTypeEnum.MaxInvestorCount;
 
-  await TransferManager.create({
-    id: `${ticker}/${type}/${value}`,
-    assetId: ticker,
-    type,
-    value,
-    exemptedEntities: [],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  await Promise.all([
+    TransferManager.create({
+      id,
+      assetId: ticker,
+      type,
+      value,
+      exemptedEntities: [],
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save(),
+    TransferCompliance.create({
+      id,
+      assetId: ticker,
+      type: complianceType,
+      statTypeId: `${ticker}/${type}`,
+      value: null,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save(),
+  ]);
 };
 
 const handleTransferManagerRemoved = async (params: Codec[]) => {
@@ -36,8 +59,9 @@ const handleTransferManagerRemoved = async (params: Codec[]) => {
 
   const ticker = serializeTicker(rawTicker);
   const { type, value } = getTransferManagerValue(rawManager);
+  const id = `${ticker}/${type}/${value}`;
 
-  await TransferManager.remove(`${ticker}/${type}/${value}`);
+  await Promise.all([TransferManager.remove(id), TransferCompliance.remove(id)]);
 };
 
 const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<void> => {
