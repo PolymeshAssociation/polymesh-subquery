@@ -13,11 +13,11 @@ select id || '/Count', id, 'Count', created_block_id, created_block_id, created_
 from asset_data
 on conflict(id)
 do update do nothing
--- set
--- created_at = excluded.created_at,
--- updated_at = excluded.created_at,
--- created_block_id = excluded.created_block_id,
--- updated_block_id = excluded.created_block_id;
+set
+created_at = excluded.created_at,
+updated_at = excluded.created_at,
+created_block_id = excluded.created_block_id,
+updated_block_id = excluded.created_block_id;
 
 with tm_data as (
   select

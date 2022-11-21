@@ -2,6 +2,8 @@ import { Codec } from '@polkadot/types/types';
 import {
   EventIdEnum,
   ModuleIdEnum,
+  StatOpTypeEnum,
+  StatType,
   TransferCompliance,
   TransferComplianceTypeEnum,
   TransferManager,
@@ -32,7 +34,7 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
       ? TransferComplianceTypeEnum.MaxInvestorOwnership
       : TransferComplianceTypeEnum.MaxInvestorCount;
 
-  await Promise.all([
+  const promises = [
     TransferManager.create({
       id,
       assetId: ticker,
@@ -51,7 +53,23 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save(),
-  ]);
+  ];
+
+  if (complianceType === TransferComplianceTypeEnum.MaxInvestorOwnership) {
+    promises.push(
+      StatType.create({
+        id: `${ticker}/Balance`,
+        opType: StatOpTypeEnum.Balance,
+        assetId: ticker,
+        claimType: null,
+        claimIssuerId: null,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save()
+    );
+  }
+
+  await Promise.all(promises);
 };
 
 const handleTransferManagerRemoved = async (params: Codec[]) => {
