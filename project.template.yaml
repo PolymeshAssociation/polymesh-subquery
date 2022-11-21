@@ -1,6 +1,6 @@
 specVersion: 1.0.0
 name: polymesh-subquery
-version: 5.0.0
+version: 8.4.0
 runner:
   node:
     name: '@subql/node'
