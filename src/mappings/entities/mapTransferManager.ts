@@ -12,7 +12,6 @@ import {
 } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
-import { mapTickerExternalAgentHistory } from './mapTickerExternalAgentHistory';
 
 const getTransferManageId = (
   ticker: string,
@@ -97,7 +96,6 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<
 
   const ticker = serializeTicker(rawTicker);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
-  const { type: tmType, value: tmValue } = transferManagerValue;
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
   const transferManager = await getTransferManager(ticker, transferManagerValue);
