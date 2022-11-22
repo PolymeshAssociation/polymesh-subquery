@@ -169,8 +169,16 @@ const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
 
   const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
 
+  const selectedOpType =
+    transferManagerValue.type === TransferRestrictionTypeEnum.Percentage
+      ? StatOpTypeEnum.Balance
+      : StatOpTypeEnum.Count;
+
   transferComplianceExemptions
-    .filter(({ exemptedEntityId }) => parsedExemptions.includes(exemptedEntityId))
+    .filter(
+      ({ exemptedEntityId, opType }) =>
+        opType === selectedOpType && parsedExemptions.includes(exemptedEntityId)
+    )
     .forEach(({ id }) => promises.push(TransferComplianceExemption.remove(id)));
 
   await Promise.all(promises);
