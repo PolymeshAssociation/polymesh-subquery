@@ -1209,7 +1209,7 @@ type StakingEvent @entity {
 type TickerExternalAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
-  caller: Identity! @index(unique: false)
+  caller: Identity @index(unique: false)
   palletName: String! @index(unique: false)
   eventId: EventIdEnum!
   eventIdx: Int!
