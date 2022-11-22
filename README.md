@@ -39,3 +39,9 @@ More advanced options are:
 
 - `NO_NATIVE_GRAPHQL_DATA` — this will set the event handler to only record what is necessary for tooling gql. This allows a stable indexer to be ran as native GraphQL handlers get developed
 - `MAX_OLD_SPACE_SIZE` — this will be passed onto the node process as `--max-old-space-size` flag. The recommendation is for this to be ~75% of available RAM. Defaults to 1536, a setting appropriate for 2GB.
+
+## License
+
+This project uses [SubQuery](https://github.com/subquery/subql), which is [Apache 2.0 licensed](./LICENSE).
+
+The project itself is also [Apache 2.0 licensed](./LICENSE).
