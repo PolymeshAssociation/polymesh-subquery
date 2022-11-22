@@ -5,6 +5,7 @@ import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
+  ClaimTypeEnum,
   Compliance,
   Distribution,
   FoundType,
@@ -272,8 +273,17 @@ export const getExemptKeyValue = (
   const {
     asset: { ticker },
     op: opType,
-    claimType,
+    claimType: claimTypeValue,
   } = JSON.parse(item.toString());
+
+  let claimType;
+  if (!claimTypeValue || typeof claimTypeValue === 'string') {
+    claimType = claimTypeValue;
+  } else {
+    // from 5.1.0 chain version, Custom(CustomClaimTypeId) was added to the ClaimTypeEnum, polkadot now reads values as {"accredited": null}
+    claimType = capitalizeFirstLetter(Object.keys(claimTypeValue)[0]) as ClaimTypeEnum;
+  }
+
   return {
     assetId: hexToString(ticker),
     opType,
