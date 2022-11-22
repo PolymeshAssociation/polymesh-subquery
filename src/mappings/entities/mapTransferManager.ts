@@ -41,17 +41,21 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   const promises = [];
 
   if (complianceType === TransferComplianceTypeEnum.MaxInvestorOwnership) {
-    promises.push(
-      StatType.create({
-        id: `${ticker}/Balance`,
-        opType: StatOpTypeEnum.Balance,
-        assetId: ticker,
-        claimType: null,
-        claimIssuerId: null,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      }).save()
-    );
+    const statId = `${ticker}/Balance`;
+    const stat = await StatType.get(statId);
+    if (!stat) {
+      promises.push(
+        StatType.create({
+          id: statId,
+          opType: StatOpTypeEnum.Balance,
+          assetId: ticker,
+          claimType: null,
+          claimIssuerId: null,
+          createdBlockId: blockId,
+          updatedBlockId: blockId,
+        }).save()
+      );
+    }
   }
 
   promises.push(
