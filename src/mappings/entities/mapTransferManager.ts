@@ -5,12 +5,14 @@ import {
   StatOpTypeEnum,
   StatType,
   TransferCompliance,
+  TransferComplianceExemption,
   TransferComplianceTypeEnum,
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
+import { mapTickerExternalAgentHistory } from './mapTickerExternalAgentHistory';
 
 const getTransferManageId = (
   ticker: string,
@@ -29,31 +31,15 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   const ticker = serializeTicker(rawTicker);
   const { type, value } = getTransferManagerValue(rawManager);
   const id = `${ticker}/${type}/${value}`;
-  const complianceType =
-    type === TransferRestrictionTypeEnum.Percentage
-      ? TransferComplianceTypeEnum.MaxInvestorOwnership
-      : TransferComplianceTypeEnum.MaxInvestorCount;
 
-  const promises = [
-    TransferManager.create({
-      id,
-      assetId: ticker,
-      type,
-      value,
-      exemptedEntities: [],
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save(),
-    TransferCompliance.create({
-      id,
-      assetId: ticker,
-      type: complianceType,
-      statTypeId: `${ticker}/${type}`,
-      value: null,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save(),
-  ];
+  let complianceType = TransferComplianceTypeEnum.MaxInvestorCount;
+  let opType = StatOpTypeEnum.Count;
+  if (type === TransferRestrictionTypeEnum.Percentage) {
+    complianceType = TransferComplianceTypeEnum.MaxInvestorOwnership;
+    opType = StatOpTypeEnum.Balance;
+  }
+
+  const promises = [];
 
   if (complianceType === TransferComplianceTypeEnum.MaxInvestorOwnership) {
     promises.push(
@@ -68,6 +54,30 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
       }).save()
     );
   }
+
+  promises.push(
+    TransferManager.create({
+      id,
+      assetId: ticker,
+      type,
+      value,
+      exemptedEntities: [],
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save()
+  );
+
+  promises.push(
+    TransferCompliance.create({
+      id,
+      assetId: ticker,
+      type: complianceType,
+      statTypeId: `${ticker}/${opType}`,
+      value: BigInt(value),
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save()
+  );
 
   await Promise.all(promises);
 };
@@ -87,9 +97,17 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<
 
   const ticker = serializeTicker(rawTicker);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
+  const { type: tmType, value: tmValue } = transferManagerValue;
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
   const transferManager = await getTransferManager(ticker, transferManagerValue);
+
+  const opType =
+    transferManager.type === TransferRestrictionTypeEnum.Percentage
+      ? StatOpTypeEnum.Balance
+      : StatOpTypeEnum.Count;
+
+  const promises = [];
 
   if (transferManager) {
     transferManager.exemptedEntities = [
@@ -97,12 +115,40 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<
     ];
     transferManager.updatedBlockId = blockId;
 
-    await transferManager.save();
+    promises.push(transferManager.save());
+
+    const exemptKey = {
+      assetId: ticker,
+      opType,
+      claimType: null,
+    };
+    transferManager.exemptedEntities.forEach(entity => {
+      const upsert = async () => {
+        const exemptionId = `${ticker}/${opType}/null/${entity}`;
+        let exemption = await TransferComplianceExemption.get(exemptionId);
+        if (exemption) {
+          exemption.updatedBlockId = blockId;
+        } else {
+          exemption = TransferComplianceExemption.create({
+            id: exemptionId,
+            ...exemptKey,
+            exemptedEntityId: entity,
+            createdBlockId: blockId,
+            updatedBlockId: blockId,
+          });
+        }
+        return exemption.save();
+      };
+      promises.push(upsert());
+    });
   }
+  await Promise.all(promises);
 };
 
 const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+
+  const promises = [];
 
   const ticker = serializeTicker(rawTicker);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
@@ -116,8 +162,16 @@ const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
     );
     transferManager.updatedBlockId = blockId;
 
-    await transferManager.save();
+    promises.push(transferManager.save());
   }
+
+  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
+
+  transferComplianceExemptions
+    .filter(({ exemptedEntityId }) => parsedExemptions.includes(exemptedEntityId))
+    .forEach(({ id }) => promises.push(TransferComplianceExemption.remove(id)));
+
+  await Promise.all(promises);
 };
 
 export async function mapTransferManager({

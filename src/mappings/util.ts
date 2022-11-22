@@ -1,7 +1,7 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { Entity, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,

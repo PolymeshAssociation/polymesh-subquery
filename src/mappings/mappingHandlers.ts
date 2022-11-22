@@ -159,7 +159,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
 
     const block = event.block;
     const blockId = block.block.header.number.toString();
-    const specVersion = block.specVersion;
     const args = genericEvent.data;
 
     const handlerArgs: HandlerArgs = {
@@ -168,7 +167,6 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       moduleId: moduleId as ModuleIdEnum,
       params: args,
       event,
-      specVersion,
     };
 
     const handlerPromises = [

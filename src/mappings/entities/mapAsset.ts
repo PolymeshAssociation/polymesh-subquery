@@ -209,8 +209,7 @@ const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Prom
 const handleIssued = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent,
-  specVersion: number
+  event: SubstrateEvent
 ): Promise<void> => {
   const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
 
@@ -218,6 +217,7 @@ const handleIssued = async (
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
+  const { specVersion } = event.block;
 
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
@@ -264,9 +264,10 @@ const handleIssued = async (
 const handleRedeemed = async (
   blockId: string,
   params: Codec[],
-  specVersion: number
+  event: SubstrateEvent
 ): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
+  const { specVersion } = event.block;
 
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
@@ -375,7 +376,6 @@ export async function mapAsset({
   moduleId,
   params,
   event,
-  specVersion,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.asset) {
     return;
@@ -387,10 +387,10 @@ export async function mapAsset({
     await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.Issued) {
-    await handleIssued(blockId, params, event, specVersion);
+    await handleIssued(blockId, params, event);
   }
   if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeemed(blockId, params, specVersion);
+    await handleRedeemed(blockId, params, event);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAssetOwnershipTransferred(blockId, params);
