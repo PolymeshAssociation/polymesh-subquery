@@ -8,7 +8,6 @@ import {
   Funding,
   ModuleIdEnum,
   SecurityIdentifier,
-  StatType,
 } from '../../types';
 import {
   bytesToString,
@@ -244,13 +243,8 @@ const handleIssued = async (
   await Promise.all(promises);
 };
 
-const handleRedeemed = async (
-  blockId: string,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> => {
+const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
   const [, rawTicker, , rawAmount] = params;
-  const { specVersion } = event.block;
 
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
@@ -264,10 +258,6 @@ const handleRedeemed = async (
   assetOwner.updatedBlockId = blockId;
 
   const promises = [asset.save(), assetOwner.save()];
-
-  if (specVersion < 5000000 && asset.totalSupply === BigInt(0)) {
-    promises.push(StatType.remove(`${ticker}/Count`));
-  }
 
   await Promise.all(promises);
 };
@@ -373,7 +363,7 @@ export async function mapAsset({
     await handleIssued(blockId, params, event);
   }
   if (eventId === EventIdEnum.Redeemed) {
-    await handleRedeemed(blockId, params, event);
+    await handleRedeemed(blockId, params);
   }
   if (eventId === EventIdEnum.AssetOwnershipTransferred) {
     await handleAssetOwnershipTransferred(blockId, params);
