@@ -245,7 +245,7 @@ const handleIssued = async (
 
   // Assets with non 0 balances before the v5.0 chain upgrade have stats created by a chain migration
   if (specVersion < 5000000) {
-    const statId = `${ticker}/Count`;
+    const statId = `${ticker}/${StatOpTypeEnum.Count}`;
     const stat = await StatType.get(statId);
     if (!stat) {
       promises.push(

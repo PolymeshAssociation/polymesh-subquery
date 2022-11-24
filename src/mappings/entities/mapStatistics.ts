@@ -8,8 +8,16 @@ import {
   TransferCompliance,
   TransferComplianceExemption,
   TransferComplianceTypeEnum,
+  TransferRestrictionTypeEnum,
 } from '../../types';
-import { capitalizeFirstLetter, getExemptKeyValue, hexToString } from '../util';
+import {
+  capitalizeFirstLetter,
+  getExemptionsValue,
+  getExemptKeyValue,
+  getTransferManagerValue,
+  hexToString,
+  serializeTicker,
+} from '../util';
 import { Attributes, HandlerArgs } from './common';
 
 const getStatisticsScope = (item: Codec): { assetId: string } => {
@@ -256,6 +264,101 @@ const handleExemptionsRemoved = async (params: Codec[]) => {
   );
 };
 
+const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
+  const [, rawTicker, rawManager] = params;
+
+  const ticker = serializeTicker(rawTicker);
+  const { type } = getTransferManagerValue(rawManager);
+
+  if (type === TransferRestrictionTypeEnum.Percentage) {
+    const statId = `${ticker}/${StatOpTypeEnum.Balance}`;
+    const stat = await StatType.get(statId);
+    if (!stat) {
+      await StatType.create({
+        id: statId,
+        opType: StatOpTypeEnum.Balance,
+        assetId: ticker,
+        claimType: null,
+        claimIssuerId: null,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save();
+    }
+  }
+};
+
+const handleTransferManagerExemptionsAdded = async (
+  blockId: string,
+  params: Codec[]
+): Promise<void> => {
+  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+
+  const ticker = serializeTicker(rawTicker);
+  const { type } = getTransferManagerValue(rawAgentGroup);
+  const parsedExemptions = getExemptionsValue(rawExemptions);
+
+  const opType =
+    type === TransferRestrictionTypeEnum.Percentage ? StatOpTypeEnum.Balance : StatOpTypeEnum.Count;
+
+  const exemptKey = {
+    assetId: ticker,
+    opType,
+    claimType: null,
+  };
+
+  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
+
+  const existingExemptions = transferComplianceExemptions.filter(
+    ({ opType: exemptionType, exemptedEntityId }) =>
+      exemptionType == opType && parsedExemptions.includes(exemptedEntityId)
+  );
+
+  const promises = parsedExemptions.map(exemption => {
+    const existingExemption = existingExemptions.find(
+      ({ exemptedEntityId }) => exemption === exemptedEntityId
+    );
+
+    if (existingExemption) {
+      existingExemption.updatedBlockId = blockId;
+      return existingExemption.save();
+    }
+
+    return TransferComplianceExemption.create({
+      id: exemption,
+      ...exemptKey,
+      exemptedEntityId: exemption,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save();
+  });
+
+  await Promise.all(promises);
+};
+
+const handleTransferManagerExemptionsRemoved = async (blockId: string, params: Codec[]) => {
+  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+
+  const ticker = serializeTicker(rawTicker);
+  const transferManagerValue = getTransferManagerValue(rawAgentGroup);
+  const parsedExemptions = getExemptionsValue(rawExemptions);
+
+  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
+
+  const selectedOpType =
+    transferManagerValue.type === TransferRestrictionTypeEnum.Percentage
+      ? StatOpTypeEnum.Balance
+      : StatOpTypeEnum.Count;
+
+  const promises = transferComplianceExemptions
+    .filter(
+      ({ exemptedEntityId, opType }) =>
+        opType === selectedOpType && parsedExemptions.includes(exemptedEntityId)
+    )
+    .map(({ id }) => TransferComplianceExemption.remove(id));
+
+  await Promise.all(promises);
+};
+
 export async function mapStatistics({
   blockId,
   eventId,
@@ -277,6 +380,19 @@ export async function mapStatistics({
     }
     if (eventId === EventIdEnum.TransferConditionExemptionsRemoved) {
       await handleExemptionsRemoved(params);
+    }
+  }
+
+  // TransferManager was the name before chain v5
+  if (moduleId === ModuleIdEnum.statistics) {
+    if (eventId === EventIdEnum.TransferManagerAdded) {
+      handleTransferManagerAdded(blockId, params);
+    }
+    if (eventId === EventIdEnum.ExemptionsAdded) {
+      await handleTransferManagerExemptionsAdded(blockId, params);
+    }
+    if (eventId === EventIdEnum.ExemptionsRemoved) {
+      await handleTransferManagerExemptionsRemoved(blockId, params);
     }
   }
 }
