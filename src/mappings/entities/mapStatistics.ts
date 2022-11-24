@@ -1,5 +1,7 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
 import {
+  Asset,
   ClaimTypeEnum,
   EventIdEnum,
   ModuleIdEnum,
@@ -29,6 +31,8 @@ interface MeshStatType {
   op: string;
   claimIssuer: string[] | null;
 }
+
+const transferManagerSpecVersion = 5000000;
 
 const getStatTypes = (item: Codec): Pick<StatType, 'opType' | 'claimType' | 'claimIssuerId'>[] => {
   const statTypes = JSON.parse(item.toString()) as MeshStatType[];
@@ -359,11 +363,48 @@ const handleTransferManagerExemptionsRemoved = async (blockId: string, params: C
   await Promise.all(promises);
 };
 
+const handleAssetIssued = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
+  const [, rawTicker] = params;
+
+  const ticker = serializeTicker(rawTicker);
+  const { specVersion } = event.block;
+  // Assets with non 0 balances before the v5.0 chain upgrade have stats created by a chain migration
+  if (specVersion < transferManagerSpecVersion) {
+    const statId = `${ticker}/${StatOpTypeEnum.Count}`;
+    const stat = await StatType.get(statId);
+    if (!stat) {
+      await StatType.create({
+        id: statId,
+        opType: StatOpTypeEnum.Count,
+        assetId: ticker,
+        claimType: null,
+        claimIssuerId: null,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save();
+    }
+  }
+};
+
+const handleAssetRedeemed = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
+  const [, rawTicker] = params;
+  const ticker = serializeTicker(rawTicker);
+
+  const specVersion = event.block.specVersion;
+  if (specVersion < transferManagerSpecVersion) {
+    const asset = await Asset.getByTicker(ticker);
+    if (asset.totalSupply === BigInt(0)) {
+      await StatType.remove(`${ticker}/Count`);
+    }
+  }
+};
+
 export async function mapStatistics({
   blockId,
   eventId,
   moduleId,
   params,
+  event,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.statistics) {
     if (eventId === EventIdEnum.StatTypesAdded) {
@@ -393,6 +434,16 @@ export async function mapStatistics({
     }
     if (eventId === EventIdEnum.ExemptionsRemoved) {
       await handleTransferManagerExemptionsRemoved(blockId, params);
+    }
+  }
+
+  if (moduleId === ModuleIdEnum.asset) {
+    if (eventId === EventIdEnum.Issued) {
+      await handleAssetIssued(blockId, params, event);
+    }
+
+    if (eventId === EventIdEnum.Redeemed) {
+      await handleAssetRedeemed(blockId, params, event);
     }
   }
 }

@@ -8,7 +8,6 @@ import {
   Funding,
   ModuleIdEnum,
   SecurityIdentifier,
-  StatOpTypeEnum,
   StatType,
 } from '../../types';
 import {
@@ -217,7 +216,6 @@ const handleIssued = async (
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
-  const { specVersion } = event.block;
 
   const asset = await getAsset(ticker);
   asset.totalSupply += issuedAmount;
@@ -241,25 +239,6 @@ const handleIssued = async (
         updatedBlockId: blockId,
       }).save()
     );
-  }
-
-  // Assets with non 0 balances before the v5.0 chain upgrade have stats created by a chain migration
-  if (specVersion < 5000000) {
-    const statId = `${ticker}/${StatOpTypeEnum.Count}`;
-    const stat = await StatType.get(statId);
-    if (!stat) {
-      promises.push(
-        StatType.create({
-          id: statId,
-          opType: StatOpTypeEnum.Count,
-          assetId: ticker,
-          claimType: null,
-          claimIssuerId: null,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
-        }).save()
-      );
-    }
   }
 
   await Promise.all(promises);
