@@ -79,7 +79,7 @@
     "mysql2": "^2.2.5",
     "npm-run-path": "^4.0.1",
     "pg": "^8.6.0",
-    "polymesh-local": "^2.1.0",
+    "@polymeshassociation/polymesh-local": "^5.2.0",
     "prettier": "2.3.2",
     "prettier-eslint": "13.0.0",
     "prettier-eslint-cli": "5.0.1",

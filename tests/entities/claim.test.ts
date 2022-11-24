@@ -1,10 +1,11 @@
 import { gql } from '@apollo/client/core';
+import { notFoundDid } from '../consts';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
 describe('claimScopes', () => {
   it('should return an empty list as given identity has no claims', async () => {
-    const identityId = '0x0200000000000000000000000000000000000000000000000000000000000001';
+    const identityId = notFoundDid;
     const res = await query({
       query: gql`
         query {
@@ -27,15 +28,15 @@ describe('claimScopes', () => {
     return expect(res?.data?.claimScopes?.nodes?.length).toEqual(0);
   });
 
-  it('should return a list of scopes for given identity', async () => {
-    const identityId = '0x69650eb2544ed57930cc0bedacdfceeee3b5905470e56edb0eb96271e0e9fef3';
+  it('should return a list of scopes for a given ticker', async () => {
+    const ticker = '5TICKER';
     const q = {
       query: gql`
       query {
         claimScopes(
           filter: {
-            target: {
-              equalTo: "${identityId}"
+            ticker: {
+              equalTo: "${ticker}"
             }
           }
         ) {
@@ -58,7 +59,7 @@ describe('claimScopes', () => {
 
 describe('claims', () => {
   it('should return no registries as given identity has no claims', async () => {
-    const identityId = '0x9900000000000000000000000000000000000000000000000000000000000000';
+    const identityId = notFoundDid;
     const res = await query({
       query: gql`
         query{
@@ -131,7 +132,7 @@ describe('claims', () => {
           claims(filter: {
             scope: {
               equalTo: {
-                type: ${scopeType}, 
+                type: ${scopeType},
                 value: $scopeValue
               }
             },

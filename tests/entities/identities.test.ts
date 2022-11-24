@@ -2,9 +2,9 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
+const identityId = '0xa05d9333759c804fbab61d454f6317c1a8257c01c49c68e029a112f9123e9c0b';
 describe('accounts', () => {
   it('should return number of accounts associated with a given identity', async () => {
-    const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
         query {
@@ -61,7 +61,6 @@ describe('accounts', () => {
   });
 
   it('should return filtered accounts along with their permissions', async () => {
-    const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const result = await query({
       query: gql`
         query {
@@ -134,7 +133,6 @@ describe('permissions', () => {
 
 describe('identities', () => {
   it('should return identity details along with accounts and their permissions', async () => {
-    const identityId = '0xc5ccde150ee81ea66cb9a7d49250ba6590087504322412bef75093b68134c59e';
     const res = await query({
       query: gql`
       query {
