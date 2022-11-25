@@ -32,7 +32,7 @@ interface MeshStatType {
   claimIssuer: string[] | null;
 }
 
-const transferManagerSpecVersion = 5000000;
+const transferRestrictionSpecVersion = 5000000;
 
 const getStatTypes = (item: Codec): Pick<StatType, 'opType' | 'claimType' | 'claimIssuerId'>[] => {
   const statTypes = JSON.parse(item.toString()) as MeshStatType[];
@@ -49,6 +49,28 @@ const getStatTypes = (item: Codec): Pick<StatType, 'opType' | 'claimType' | 'cla
       claimIssuerId,
     };
   });
+};
+
+const upsertStatType = async (
+  { assetId, opType, claimType, claimIssuerId }: Attributes<StatType>,
+  blockId: string
+) => {
+  const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId);
+  let statType = await StatType.get(statTypeId);
+  if (statType) {
+    statType.updatedBlockId = blockId;
+  } else {
+    statType = StatType.create({
+      id: statTypeId,
+      assetId,
+      opType,
+      claimType,
+      claimIssuerId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+  }
+  return statType.save();
 };
 
 interface MeshStatClaim {
@@ -143,22 +165,7 @@ const handleStatTypeAdded = async (blockId: string, params: Codec[]) => {
   const promises = [];
   statTypes.forEach(({ opType, claimType, claimIssuerId }) => {
     const upsert = async () => {
-      const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId);
-      let statType = await StatType.get(statTypeId);
-      if (statType) {
-        statType.updatedBlockId = blockId;
-      } else {
-        statType = StatType.create({
-          id: statTypeId,
-          assetId,
-          opType,
-          claimType,
-          claimIssuerId,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
-        });
-      }
-      return statType.save();
+      return upsertStatType({ assetId, opType, claimType, claimIssuerId }, blockId);
     };
     promises.push(upsert());
   });
@@ -271,23 +278,14 @@ const handleExemptionsRemoved = async (params: Codec[]) => {
 const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   const [, rawTicker, rawManager] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = serializeTicker(rawTicker);
   const { type } = getTransferManagerValue(rawManager);
 
   if (type === TransferRestrictionTypeEnum.Percentage) {
-    const statId = `${ticker}/${StatOpTypeEnum.Balance}`;
-    const stat = await StatType.get(statId);
-    if (!stat) {
-      await StatType.create({
-        id: statId,
-        opType: StatOpTypeEnum.Balance,
-        assetId: ticker,
-        claimType: null,
-        claimIssuerId: null,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      }).save();
-    }
+    await upsertStatType(
+      { assetId, opType: StatOpTypeEnum.Balance, claimType: null, claimIssuerId: null },
+      blockId
+    );
   }
 };
 
@@ -366,23 +364,13 @@ const handleTransferManagerExemptionsRemoved = async (blockId: string, params: C
 const handleAssetIssued = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
   const [, rawTicker] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = serializeTicker(rawTicker);
   const { specVersion } = event.block;
-  // Assets with non 0 balances before the v5.0 chain upgrade have stats created by a chain migration
-  if (specVersion < transferManagerSpecVersion) {
-    const statId = `${ticker}/${StatOpTypeEnum.Count}`;
-    const stat = await StatType.get(statId);
-    if (!stat) {
-      await StatType.create({
-        id: statId,
-        opType: StatOpTypeEnum.Count,
-        assetId: ticker,
-        claimType: null,
-        claimIssuerId: null,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      }).save();
-    }
+  if (specVersion < transferRestrictionSpecVersion) {
+    await upsertStatType(
+      { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
+      blockId
+    );
   }
 };
 
@@ -391,7 +379,7 @@ const handleAssetRedeemed = async (blockId: string, params: Codec[], event: Subs
   const ticker = serializeTicker(rawTicker);
 
   const specVersion = event.block.specVersion;
-  if (specVersion < transferManagerSpecVersion) {
+  if (specVersion < transferRestrictionSpecVersion) {
     const asset = await Asset.getByTicker(ticker);
     if (asset.totalSupply === BigInt(0)) {
       await StatType.remove(`${ticker}/Count`);
