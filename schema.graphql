@@ -1561,6 +1561,7 @@ enum TransferRestrictionTypeEnum {
   Percentage
 }
 
+# deprecated in favor of `TransferCompliance`
 type TransferManager @entity {
   id: ID! # ticker/transferManagerType/value
   asset: Asset! @index(unique: false)

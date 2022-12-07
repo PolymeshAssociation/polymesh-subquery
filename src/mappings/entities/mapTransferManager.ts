@@ -19,9 +19,10 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
 
   const ticker = serializeTicker(rawTicker);
   const { type, value } = getTransferManagerValue(rawManager);
+  const id = `${ticker}/${type}/${value}`;
 
   await TransferManager.create({
-    id: `${ticker}/${type}/${value}`,
+    id,
     assetId: ticker,
     type,
     value,
@@ -36,8 +37,9 @@ const handleTransferManagerRemoved = async (params: Codec[]) => {
 
   const ticker = serializeTicker(rawTicker);
   const { type, value } = getTransferManagerValue(rawManager);
+  const id = `${ticker}/${type}/${value}`;
 
-  await TransferManager.remove(`${ticker}/${type}/${value}`);
+  await TransferManager.remove(id);
 };
 
 const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<void> => {
