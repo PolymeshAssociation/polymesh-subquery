@@ -64,6 +64,7 @@ services:
       interval: 3s
       timeout: 5s
       retries: 10
+      start_period: 30s
 
   graphql-engine:
     image: onfinality/subql-query:v1.0.0
