@@ -36,5 +36,6 @@ node --max-old-space-size=$NODE_SPACE \
 	/usr/local/lib/node_modules/@subql/node/bin/run $@ \
 	--disable-historical=true
 	--timestamp-field
+	--db-schema=public
 child=$!
 wait "$child"
