@@ -1,6 +1,6 @@
 {
   "name": "polymesh-subquery",
-  "version": "8.5.04",
+  "version": "8.5.06",
   "author": "Polymesh Association",
   "license": "Apache-2.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
