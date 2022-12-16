@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Compliance",
-        "data": "{\\"sender_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}],\\"receiver_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}]}",
+        "data": "{\\"senderConditions\\":[{\\"conditionType\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0\\",\\"trustedFor\\":{\\"any\\":null}}]}],\\"receiverConditions\\":[{\\"conditionType\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0\\",\\"trustedFor\\":{\\"any\\":null}}]}]}",
         "id": 1,
       },
     ],

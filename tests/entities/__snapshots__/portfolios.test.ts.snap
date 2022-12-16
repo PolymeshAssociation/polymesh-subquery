@@ -7,23 +7,13 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Portfolio",
-        "createdBlockId": "125",
+        "createdBlockId": "0",
         "custodianId": null,
-        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/0",
-        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "id": "0x73797374656d3a736574746c656d656e745f6d6f64756c655f64696400000000/0",
+        "identityId": "0x73797374656d3a736574746c656d656e745f6d6f64756c655f64696400000000",
         "name": null,
-        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzAiXQ==",
+        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHg3Mzc5NzM3NDY1NmQzYTczNjU3NDc0NmM2NTZkNjU2ZTc0NWY2ZDZmNjQ3NTZjNjU1ZjY0Njk2NDAwMDAwMDAwLzAiXQ==",
         "number": 0,
-      },
-      Object {
-        "__typename": "Portfolio",
-        "createdBlockId": "135",
-        "custodianId": null,
-        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1",
-        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-        "name": "4_portfolio",
-        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzEiXQ==",
-        "number": 1,
       },
     ],
   },
@@ -34,18 +24,7 @@ exports[`portfolios should return all numbered Portfolio held by an Identity 1`]
 Object {
   "portfolios": Object {
     "__typename": "PortfoliosConnection",
-    "nodes": Array [
-      Object {
-        "__typename": "Portfolio",
-        "createdBlockId": "135",
-        "custodianId": null,
-        "id": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1/1",
-        "identityId": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
-        "name": "4_portfolio",
-        "nodeId": "WyJwb3J0Zm9saW9zIiwiMHhjNWUyZDU1NDIzM2RhNjNkNTA5ZWU0ODJkYmVlZDBkZGVjOTRkYzFkMGI0NWViZmRjZGM0OGJkMDkyODIyMmIxLzEiXQ==",
-        "number": 1,
-      },
-    ],
+    "nodes": Array [],
   },
 }
 `;

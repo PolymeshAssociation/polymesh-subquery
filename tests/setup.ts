@@ -4,6 +4,7 @@ import { join } from 'path';
 import { gql } from '@apollo/client/core';
 import { getApolloClient } from './util';
 import teardown from './teardown';
+import fetch from 'cross-fetch';
 const execAsync = promisify(exec);
 
 const cwd = join(__dirname, '..');
@@ -29,22 +30,30 @@ const retry = async <T>(
   }
   throw err;
 };
-const WAIT_UNTIL_BLOCK = 1000;
-export = async (): Promise<void> => {
+
+/**
+ * record of historical snapshots that were tested against. Most recent should go at top
+ * The most recent *should* be good enough for CI, but a record should be kept just in case
+ */
+const snapShotArgs = [
+  '-v 5.0.3 -s https://github.com/PolymeshAssociation/polymesh-local/releases/download/assets/v5.0.3-integration-snapshot.tgz',
+  '-i polymeshassociation/polymesh:4.1.2-mainnet-debian -s https://github.com/PolymeshAssociation/polymesh-local/releases/download/assets/4.0.0-integration-snapshot.tgz',
+];
+
+export default async (): Promise<void> => {
   try {
-    console.log('');
-    console.log('Starting test environment, might take a minute or two...');
+    console.log('\nStarting test environment, might take a minute or two...');
     await Promise.all([
-      execAsync(
-        'polymesh-local start -s 4.0.0 -i polymeshassociation/polymesh:4.1.2-mainnet-debian -c -o chain',
-        { cwd }
-      ),
+      execAsync(`polymesh-local start -o chain ${snapShotArgs[0]}`, { cwd }),
       execAsync('docker-compose up --build -d --always-recreate-deps -V', {
         cwd,
       }),
     ]);
     console.log('Test environment started, waiting for subquery to catch up');
     await sleep(20000);
+
+    const latestBlock = await fetchLatestBlock();
+
     await retry(200, 2000, async () => {
       const { errors, data } = await query({
         query: gql`
@@ -60,8 +69,8 @@ export = async (): Promise<void> => {
       if (errors) {
         throw errors;
       }
-      if (!(data.blocks.nodes[0].blockId > WAIT_UNTIL_BLOCK)) {
-        console.log(`Last processed block: ${data.blocks.nodes[0].blockId}/${WAIT_UNTIL_BLOCK}`);
+      if (!(data.blocks.nodes[0].blockId > latestBlock)) {
+        console.log(`Last processed block: ${data.blocks.nodes[0].blockId}/${latestBlock}`);
         throw new Error('Subquery not caught up');
       }
     });
@@ -70,4 +79,23 @@ export = async (): Promise<void> => {
     await teardown();
     throw e;
   }
+};
+
+export const fetchLatestBlock = async (): Promise<number> => {
+  const chainHttp = 'http://localhost:9933';
+  const headers = { 'Content-Type': 'application/json' };
+
+  const lastBlockRequest = { id: '1', jsonrpc: '2.0', method: 'system_syncState' };
+  const response = await fetch(chainHttp, {
+    headers,
+    method: 'POST',
+    body: JSON.stringify(lastBlockRequest),
+  });
+
+  const jsonResponse = await response.json();
+  const {
+    result: { currentBlock },
+  } = jsonResponse as any;
+
+  return currentBlock - 5; // give some buffer for non finalized blocks
 };
