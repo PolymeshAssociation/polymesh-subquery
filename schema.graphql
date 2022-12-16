@@ -1361,7 +1361,7 @@ enum InstructionStatusEnum {
 
 type Leg @entity {
   id: ID! # instructionId/legIndex
-  asset: Asset!
+  assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
   amount: BigInt!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
@@ -1561,6 +1561,7 @@ enum TransferRestrictionTypeEnum {
   Percentage
 }
 
+# deprecated in favor of `TransferCompliance`
 type TransferManager @entity {
   id: ID! # ticker/transferManagerType/value
   asset: Asset! @index(unique: false)

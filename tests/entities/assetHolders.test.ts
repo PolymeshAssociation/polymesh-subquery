@@ -1,5 +1,6 @@
 import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
+import { eveDid } from '../consts';
 const { query } = getApolloClient();
 
 describe('assetHolders', () => {
@@ -32,7 +33,7 @@ describe('assetHolders', () => {
           assetHolders(
             filter: {
               identityId: {
-                equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000"
+                equalTo: "${eveDid}"
               }
             }
           ) {
@@ -58,7 +59,7 @@ describe('assetHolders', () => {
           assetHolders(
             filter: {
               identityId: {
-                equalTo: "0x0500000000000000000000000000000000000000000000000000000000000000"
+                equalTo: "${eveDid}"
               }
               assetId: { equalTo: "11BTICKER1" }
             }

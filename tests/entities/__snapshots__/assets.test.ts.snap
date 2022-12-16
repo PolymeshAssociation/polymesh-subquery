@@ -12,7 +12,7 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "Compliance",
-              "data": "{\\"sender_conditions\\":[],\\"receiver_conditions\\":[]}",
+              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
               "id": 1,
             },
           ],
@@ -33,22 +33,22 @@ Object {
             Object {
               "__typename": "AssetHolder",
               "amount": "100",
-              "did": "0x1c18365371d85ae8662de63bfb0fb90da99b93482e8f043de61ffc83994f8858",
+              "did": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
             },
             Object {
               "__typename": "AssetHolder",
               "amount": "100",
-              "did": "0x2795441b98ef5a844c7675df8f6030126a297b898ec2d6029dcf81c72d59e553",
+              "did": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
             },
             Object {
               "__typename": "AssetHolder",
               "amount": "100",
-              "did": "0x2fbb6ef977181d14c7714e134cd5382d42e4214aaf81a2e60b57663946b644c5",
+              "did": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
             },
             Object {
               "__typename": "AssetHolder",
               "amount": "100",
-              "did": "0x553aa64ffcf49987f124633a835e6363a413cfbd10fb2b77ad8bf17afc7606ff",
+              "did": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
             },
           ],
         },
@@ -77,7 +77,7 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "Compliance",
-              "data": "{\\"sender_conditions\\":[],\\"receiver_conditions\\":[]}",
+              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
               "id": 1,
             },
           ],
@@ -93,7 +93,7 @@ Object {
             Object {
               "__typename": "AssetHolder",
               "amount": "100000",
-              "did": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+              "did": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
             },
           ],
         },
@@ -105,20 +105,13 @@ Object {
         "isUniquenessRequired": false,
         "name": "15TICKER",
         "nodeId": "WyJhc3NldHMiLCIxNVRJQ0tFUiJd",
-        "ownerDid": "0x3ece7406def5b26835178d981c4c4a33e9f1b7a79c4432bff1f381c37308ac2f",
+        "ownerDid": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
         "ticker": "15TICKER",
         "totalSupply": "100000",
         "totalTransfers": "0",
         "transferManagers": Object {
           "__typename": "TransferManagersConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "TransferManager",
-              "exemptedEntities": Array [],
-              "type": "Count",
-              "value": 10,
-            },
-          ],
+          "nodes": Array [],
         },
         "type": "EquityCommon",
       },
@@ -152,7 +145,7 @@ Object {
             Object {
               "__typename": "AssetHolder",
               "amount": "1000000",
-              "did": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+              "did": "0xa9755a2d863adf7981d60f816884783bb2b71788efdfae845fc2830c36500551",
             },
           ],
         },
@@ -164,7 +157,7 @@ Object {
         "isUniquenessRequired": false,
         "name": "4TICKER",
         "nodeId": "WyJhc3NldHMiLCI0VElDS0VSIl0=",
-        "ownerDid": "0xc5e2d554233da63d509ee482dbeed0ddec94dc1d0b45ebfdcdc48bd0928222b1",
+        "ownerDid": "0xa9755a2d863adf7981d60f816884783bb2b71788efdfae845fc2830c36500551",
         "ticker": "4TICKER",
         "totalSupply": "1000000",
         "totalTransfers": "0",
@@ -181,7 +174,7 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "Compliance",
-              "data": "{\\"sender_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}],\\"receiver_conditions\\":[{\\"condition_type\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135\\",\\"trusted_for\\":{\\"any\\":null}}]}]}",
+              "data": "{\\"senderConditions\\":[{\\"conditionType\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0\\",\\"trustedFor\\":{\\"any\\":null}}]}],\\"receiverConditions\\":[{\\"conditionType\\":{\\"isPresent\\":{\\"exempted\\":{\\"ticker\\":\\"0x375449434b45520000000000\\"}}},\\"issuers\\":[{\\"issuer\\":\\"0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0\\",\\"trustedFor\\":{\\"any\\":null}}]}]}",
               "id": 1,
             },
           ],
@@ -197,7 +190,7 @@ Object {
             Object {
               "__typename": "AssetHolder",
               "amount": "1000000",
-              "did": "0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135",
+              "did": "0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0",
             },
           ],
         },
@@ -209,7 +202,7 @@ Object {
         "isUniquenessRequired": false,
         "name": "7TICKER",
         "nodeId": "WyJhc3NldHMiLCI3VElDS0VSIl0=",
-        "ownerDid": "0x0096ea2b9174cbe71c1d3125850b06b2a6e6007cdb3cb33fc371f07154847135",
+        "ownerDid": "0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0",
         "ticker": "7TICKER",
         "totalSupply": "1000000",
         "totalTransfers": "0",
@@ -226,7 +219,7 @@ Object {
           "nodes": Array [
             Object {
               "__typename": "Compliance",
-              "data": "{\\"sender_conditions\\":[],\\"receiver_conditions\\":[]}",
+              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
               "id": 1,
             },
           ],
@@ -242,7 +235,7 @@ Object {
             Object {
               "__typename": "AssetHolder",
               "amount": "1000100",
-              "did": "0xd7a5d0a364f335632cbbb59bb5615c12286f5b7298f6ddd58b584a6c08734538",
+              "did": "0xb92252cbcfe17dc4dfaec11ec63930a028d5d7cd106bacf54e1603d27c59df70",
             },
           ],
         },
@@ -254,7 +247,7 @@ Object {
         "isUniquenessRequired": false,
         "name": "8TICKER",
         "nodeId": "WyJhc3NldHMiLCI4VElDS0VSIl0=",
-        "ownerDid": "0xd7a5d0a364f335632cbbb59bb5615c12286f5b7298f6ddd58b584a6c08734538",
+        "ownerDid": "0xb92252cbcfe17dc4dfaec11ec63930a028d5d7cd106bacf54e1603d27c59df70",
         "ticker": "8TICKER",
         "totalSupply": "1000100",
         "totalTransfers": "0",

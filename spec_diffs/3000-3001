@@ -1,8 +1,10 @@
 - Expected
 + Received
 
-- Object {}
-+ Object {
+  Object {
+-   "AccountInfo": "AccountInfoWithRefCount",
+-   "Address": "IndicesLookupSource",
+-   "LookupSource": "IndicesLookupSource",
 +   "AGId": "u32",
 +   "AccountInfo": "AccountInfoWithDualRefCount",
 +   "Address": "MultiAddress",
@@ -1163,4 +1165,4 @@
 +     "challenge_responses": "[Scalar; 2]",
 +     "subtract_expressions_res": "RistrettoPoint",
 +   },
-+ }
+  }

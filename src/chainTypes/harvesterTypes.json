@@ -96,5 +96,6 @@
   "AuthorityList": "Vec<NextAuthority>",
   "ElectionCompute": {
     "_enum": ["OnChain", "Signed", "Authority"]
-  }
+  },
+  "DispatchErrorModule": "DispatchErrorModuleU8"
 }

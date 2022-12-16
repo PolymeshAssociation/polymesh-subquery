@@ -257,7 +257,9 @@ const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> =
   assetOwner.amount -= issuedAmount;
   assetOwner.updatedBlockId = blockId;
 
-  await Promise.all([asset.save(), assetOwner.save()]);
+  const promises = [asset.save(), assetOwner.save()];
+
+  await Promise.all(promises);
 };
 
 const handleFrozen = async (blockId: string, params: Codec[], isFrozen: boolean): Promise<void> => {

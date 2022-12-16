@@ -1,0 +1,18 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`transferCompliances should return all transfer managers for a particular asset 1`] = `
+Object {
+  "transferCompliances": Object {
+    "__typename": "TransferCompliancesConnection",
+    "nodes": Array [
+      Object {
+        "__typename": "TransferCompliance",
+        "id": "15TICKER/Count",
+        "ticker": "15TICKER",
+        "type": "MaxInvestorCount",
+        "value": "10",
+      },
+    ],
+  },
+}
+`;
