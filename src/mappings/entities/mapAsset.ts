@@ -4,6 +4,8 @@ import {
   Asset,
   AssetDocument,
   AssetHolder,
+  AssetTransaction,
+  CallIdEnum,
   EventIdEnum,
   Funding,
   ModuleIdEnum,
@@ -11,6 +13,7 @@ import {
 } from '../../types';
 import {
   bytesToString,
+  camelToSnakeCase,
   getBigIntValue,
   getBooleanValue,
   getDocValue,
@@ -224,7 +227,20 @@ const handleIssued = async (
   assetOwner.amount += issuedAmount;
   assetOwner.updatedBlockId = blockId;
 
-  const promises = [asset.save(), assetOwner.save()];
+  const assetTransaction = AssetTransaction.create({
+    id: `${blockId}/${event.idx}`,
+    assetId: ticker,
+    toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
+    eventId: EventIdEnum.Issued,
+    eventIdx: event.idx,
+    amount: issuedAmount,
+    fundingRound,
+    datetime: event.block.timestamp,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  const promises = [asset.save(), assetOwner.save(), assetTransaction.save()];
   if (fundingRound) {
     promises.push(
       Funding.create({
@@ -286,32 +302,73 @@ const handleAssetOwnershipTransferred = async (blockId: string, params: Codec[])
   await asset.save();
 };
 
-const handleAssetTransfer = async (blockId: string, params: Codec[]) => {
+const handleAssetTransfer = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
-  const { identityId: fromDid } = getPortfolioValue(rawFromPortfolio);
-  const { identityId: toDid } = getPortfolioValue(rawToPortfolio);
-  // We ignore the transfer case when Asset tokens are issued/redeemed
-  if ([fromDid, toDid].includes('0x00'.padEnd(66, '0'))) {
-    return;
-  }
-  const transferAmount = getBigIntValue(rawAmount);
+  const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
+  const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
   const ticker = serializeTicker(rawTicker);
+  const transferAmount = getBigIntValue(rawAmount);
 
-  const asset = await getAsset(ticker);
-  asset.totalTransfers += BigInt(1);
-  asset.updatedBlockId = blockId;
+  let fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
+  let toPortfolioId = `${toDid}/${toPortfolioNumber}`;
 
-  const [fromHolder, toHolder] = await Promise.all([
-    getAssetHolder(ticker, fromDid, blockId),
-    getAssetHolder(ticker, toDid, blockId),
-  ]);
+  const promises = [];
 
-  fromHolder.amount = fromHolder.amount - transferAmount;
-  fromHolder.updatedBlockId = blockId;
-  toHolder.amount = toHolder.amount + transferAmount;
-  toHolder.updatedBlockId = blockId;
+  if (fromDid === '0x00'.padEnd(66, '0')) {
+    fromPortfolioId = null;
+    return; // We ignore the transfer case when Asset tokens are issued
+  }
+  if (toDid === '0x00'.padEnd(66, '0')) {
+    // case for Assets being redeemed
+    toPortfolioId = null;
+  }
 
-  await Promise.all([asset.save(), fromHolder.save(), toHolder.save()]);
+  if (fromPortfolioId && toPortfolioId) {
+    const asset = await getAsset(ticker);
+    asset.totalTransfers += BigInt(1);
+    asset.updatedBlockId = blockId;
+    promises.push(asset.save());
+
+    const [fromHolder, toHolder] = await Promise.all([
+      getAssetHolder(ticker, fromDid, blockId),
+      getAssetHolder(ticker, toDid, blockId),
+    ]);
+
+    fromHolder.amount = fromHolder.amount - transferAmount;
+    fromHolder.updatedBlockId = blockId;
+    promises.push(fromHolder.save());
+
+    toHolder.amount = toHolder.amount + transferAmount;
+    toHolder.updatedBlockId = blockId;
+    promises.push(toHolder.save());
+  }
+
+  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
+
+  const callToEventMappings = {
+    [CallIdEnum.issue]: EventIdEnum.Issued,
+    [CallIdEnum.redeem]: EventIdEnum.Redeemed,
+    [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
+    [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
+    default: EventIdEnum.Transfer,
+  };
+
+  promises.push(
+    AssetTransaction.create({
+      id: `${blockId}/${event.idx}`,
+      assetId: ticker,
+      fromPortfolioId,
+      toPortfolioId,
+      amount: transferAmount,
+      eventId: callToEventMappings[callId],
+      eventIdx: event.idx,
+      datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save()
+  );
+
+  await Promise.all(promises);
 };
 
 const handleAssetUpdateEvents = async (
@@ -369,7 +426,7 @@ export async function mapAsset({
     await handleAssetOwnershipTransferred(blockId, params);
   }
   if (eventId === EventIdEnum.Transfer) {
-    await handleAssetTransfer(blockId, params);
+    await handleAssetTransfer(blockId, params, event);
   }
   await handleAssetUpdateEvents(blockId, eventId, params, event);
 

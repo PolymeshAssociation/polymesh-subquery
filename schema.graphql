@@ -1681,6 +1681,20 @@ type Asset @entity {
   updatedBlock: Block!
 }
 
+type AssetTransaction @entity {
+  id: ID!
+  asset: Asset!
+  fromPortfolio: Portfolio
+  toPortfolio: Portfolio
+  amount: BigInt!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  fundingRound: String #(optional) for the cases where Assets are issued with a fundingRound name
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
 type Funding @entity {
   id: ID!
   asset: Asset! @index(unique: false)
