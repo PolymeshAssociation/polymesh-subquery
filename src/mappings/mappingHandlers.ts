@@ -32,7 +32,7 @@ import { mapSto } from './entities/mapSto';
 import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
-import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
+import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -42,6 +42,7 @@ import {
 } from './generatedColumns';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
@@ -188,6 +189,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       mapCorporateActions(handlerArgs),
       mapProposal(handlerArgs),
       mapTrustedClaimIssuer(handlerArgs),
+      mapPolyxTransaction(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({

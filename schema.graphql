@@ -1696,3 +1696,20 @@ type SubqueryVersion @entity {
   id: ID!
   version: String!
 }
+
+type PolyxTransaction @entity {
+  id: ID!
+  identityId: String
+  address: String
+  moduleId: ModuleIdEnum
+  callId: CallIdEnum
+  eventId: EventIdEnum
+  toId: String
+  toAddress: String
+  memo: String
+  amount: BigInt!
+  extrinsic: Extrinsic
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
