@@ -351,6 +351,9 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
     [CallIdEnum.redeem]: EventIdEnum.Redeemed,
     [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
     [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
+    [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.invest]: EventIdEnum.Invested,
     default: EventIdEnum.Transfer,
   };
 
@@ -361,7 +364,7 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
       fromPortfolioId,
       toPortfolioId,
       amount: transferAmount,
-      eventId: callToEventMappings[callId],
+      eventId: callToEventMappings[callId] || callToEventMappings['default'],
       eventIdx: event.idx,
       datetime: event.block.timestamp,
       createdBlockId: blockId,
