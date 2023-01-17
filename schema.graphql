@@ -1697,17 +1697,27 @@ type SubqueryVersion @entity {
   version: String!
 }
 
+enum BalanceType {
+  Free
+  Reserved
+  Unreserved
+  Bonded
+  Unbonded
+  Locked
+}
+
 type PolyxTransaction @entity {
   id: ID!
   identityId: String
   address: String
+  toId: String
+  toAddress: String
+  amount: BigInt!
+  type: BalanceType!
   moduleId: ModuleIdEnum
   callId: CallIdEnum
   eventId: EventIdEnum
-  toId: String
-  toAddress: String
   memo: String
-  amount: BigInt!
   extrinsic: Extrinsic
   datetime: Date!
   createdBlock: Block!
