@@ -14,6 +14,7 @@ import {
 import {
   bytesToString,
   camelToSnakeCase,
+  emptyDid,
   getBigIntValue,
   getBooleanValue,
   getDocValue,
@@ -314,11 +315,11 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
 
   const promises = [];
 
-  if (fromDid === '0x00'.padEnd(66, '0')) {
+  if (fromDid === emptyDid) {
     fromPortfolioId = null;
     return; // We ignore the transfer case when Asset tokens are issued
   }
-  if (toDid === '0x00'.padEnd(66, '0')) {
+  if (toDid === emptyDid) {
     // case for Assets being redeemed
     toPortfolioId = null;
   }
