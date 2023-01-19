@@ -3,7 +3,7 @@ import { migrationQueries } from '../db/migration';
 import { updateVersion } from '../db/schemaMigrations';
 import { getPostgresConnection, retry } from '../db/utils';
 
-const main = async () => {
+const main = async (): Promise<void> => {
   const postgres = await getPostgresConnection();
 
   await retry(
@@ -18,13 +18,18 @@ const main = async () => {
     }
   );
 
-  await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
-  console.log('Applied initial SQL');
+  try {
+    await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
+    console.log('Applied initial SQL');
 
-  await postgres.query(migrationQueries().join('\n'));
-  console.log('Applied initial migration SQL');
+    await postgres.query(migrationQueries().join('\n'));
+    console.log('Applied initial migration SQL');
 
-  await updateVersion(postgres);
+    await updateVersion(postgres);
+  } catch (e) {
+    console.error('Error occurred while running initial migrations', e);
+    process.exit(1);
+  }
 };
 
 main()
