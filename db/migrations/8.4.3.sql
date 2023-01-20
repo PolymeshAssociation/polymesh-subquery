@@ -12,7 +12,7 @@ insert into stat_types(id, asset_id, op_type, created_block_id, updated_block_id
 select id || '/Count', id, 'Count', created_block_id, created_block_id, created_at, created_at
 from asset_data
 on conflict(id)
-do update do nothing
+do update
 set
 created_at = excluded.created_at,
 updated_at = excluded.created_at,
