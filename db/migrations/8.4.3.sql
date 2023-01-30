@@ -1,3 +1,4 @@
+-- Inserts legacy stat data for assets issued before chain 5.0.0
 with asset_data as (
   select distinct a.id, a.created_block_id, a.created_at
   from assets a
