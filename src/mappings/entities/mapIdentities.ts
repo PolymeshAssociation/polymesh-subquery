@@ -50,6 +50,14 @@ export async function mapIdentities({
     if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
       await handleSecondaryKeysPermissionsUpdated(blockId, params);
     }
+
+    if (eventId === EventIdEnum.PrimaryKeyUpdated) {
+      await handlePrimaryKeyUpdated(blockId, eventId, params);
+    }
+
+    if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
+      await handleSecondaryKeyLeftIdentity(params);
+    }
   }
 }
 
@@ -360,4 +368,40 @@ const handleSecondaryKeysAdded = async (
   });
 
   await Promise.all(promises);
+};
+
+const handlePrimaryKeyUpdated = async (
+  blockId: string,
+  eventId,
+  params: Codec[]
+): Promise<void> => {
+  const [rawDid, , newKey] = params;
+  const address = getTextValue(newKey);
+
+  const identity = await getIdentity(getTextValue(rawDid));
+
+  Object.assign(identity, {
+    primaryAccount: address,
+    updatedBlockId: blockId,
+    eventId,
+  });
+
+  await identity.save();
+};
+
+const handleSecondaryKeyLeftIdentity = async (params: Codec[]): Promise<void> => {
+  const [, rawAccount] = params;
+
+  const account = rawAccount.toString() as MeshAccount;
+
+  let address;
+  if (typeof account === 'string') {
+    // for chain version >= 5.0.0
+    address = account;
+  } else {
+    // for chain version < 5.0.0
+    ({ account: address } = account);
+  }
+
+  await Promise.all([[Account.remove(address), Permissions.remove(address)]]);
 };
