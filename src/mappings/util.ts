@@ -113,20 +113,12 @@ export const serializeAccount = (item: Codec): string | null => {
   return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
 };
 
-export const getNthKeyFromJson = (item: Codec, index = 0): string => {
-  return Object.keys(item.toJSON())[index];
-};
-
-export const getNthValueFromJson = (item: Codec, index = 0): string => {
-  return item.toJSON()[getNthKeyFromJson(item, index)];
-};
-
 export const getFirstKeyFromJson = (item: Codec): string => {
-  return getNthKeyFromJson(item);
+  return Object.keys(item.toJSON())[0];
 };
 
 export const getFirstValueFromJson = (item: Codec): string => {
-  return getNthValueFromJson(item);
+  return item.toJSON()[getFirstKeyFromJson(item)];
 };
 
 export const getTextValue = (item: Codec): string => {
