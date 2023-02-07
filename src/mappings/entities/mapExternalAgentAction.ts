@@ -226,9 +226,9 @@ class ExternalAgentEventsManager {
       )
       // Special case for the Sto pallet because most events don't contain the ticker,
       // they contain a reference to a previously created fundraiser instead.
-      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params => {
-        return getOfferingAsset(params[3]);
-      })
+      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params =>
+        getOfferingAsset(params[3])
+      )
       .add(
         ModuleIdEnum.sto,
         [
@@ -237,10 +237,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (_, event) => {
-          logger.info(JSON.stringify(serializeTicker(event.extrinsic.extrinsic.args[0])));
-          return serializeTicker(event.extrinsic.extrinsic.args[0]);
-        }
+        async (_, event) => serializeTicker(event.extrinsic.extrinsic.args[0])
       );
     return eventsManager;
   }
