@@ -245,7 +245,8 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserUnfrozen,
         ],
         async (_, event) => {
-          return hexToString(getNthValueFromJson(event.extrinsic.extrinsic));
+          logger.info(JSON.stringify(serializeTicker(event.extrinsic.extrinsic.args[0])));
+          return serializeTicker(event.extrinsic.extrinsic.args[0]);
         }
       );
     return eventsManager;
