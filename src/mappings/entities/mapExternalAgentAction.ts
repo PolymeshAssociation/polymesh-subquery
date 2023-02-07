@@ -1,6 +1,14 @@
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, ModuleIdEnum, Sto, TickerExternalAgentAction } from '../../types';
-import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
+import { SubstrateEvent } from '@subql/types';
+import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../types';
+import {
+  getNthValueFromJson,
+  getOfferingAsset,
+  getOrDefault,
+  getTextValue,
+  hexToString,
+  serializeTicker,
+} from '../util';
 import { HandlerArgs } from './common';
 
 /**
@@ -13,7 +21,7 @@ export async function mapExternalAgentAction({
   params,
   event,
 }: HandlerArgs): Promise<void> {
-  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params);
+  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params, event);
   if (ticker) {
     await TickerExternalAgentAction.create({
       id: `${blockId}/${event.idx}`,
@@ -37,7 +45,7 @@ type StandardEntry = {
   paramIndex: number;
   options: EntryOptions;
 };
-type TickerFromParams = (params: Codec[]) => Promise<string>;
+type TickerFromParams = (params: Codec[], event: SubstrateEvent) => Promise<string>;
 type SpecialEntry = {
   type: 'special';
   tickerFromParams: TickerFromParams;
@@ -73,7 +81,8 @@ class ExternalAgentEventsManager {
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,
     blockId: string,
-    params: Codec[]
+    params: Codec[],
+    event: SubstrateEvent
   ): Promise<string | undefined> {
     const entries = this.entries.get(moduleId)?.get(eventId);
 
@@ -91,7 +100,7 @@ class ExternalAgentEventsManager {
       if (entry.type === 'standard') {
         return serializeTicker(params[entry.paramIndex]);
       } else {
-        return entry.tickerFromParams(params);
+        return entry.tickerFromParams(params, event);
       }
     }
     return undefined;
@@ -235,10 +244,8 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async params => {
-          const stoId = params[1].toString();
-          const sto = await Sto.get(stoId);
-          return sto.offeringAssetId;
+        async (_, event) => {
+          return hexToString(getNthValueFromJson(event.extrinsic.extrinsic));
         }
       );
     return eventsManager;

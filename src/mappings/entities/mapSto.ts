@@ -1,5 +1,5 @@
 import { EventIdEnum, ModuleIdEnum, Sto } from '../../types';
-import { getOfferingAsset, getTextValue } from '../util';
+import { getNumberValue, getOfferingAsset } from '../util';
 import { HandlerArgs } from './common';
 
 /**
@@ -9,9 +9,11 @@ export async function mapSto({ blockId, eventId, moduleId, params }: HandlerArgs
   if (moduleId === ModuleIdEnum.sto && eventId === EventIdEnum.FundraiserCreated) {
     const [, rawStoId, , rawFundraiser] = params;
     const offeringAssetId = getOfferingAsset(rawFundraiser);
+    const stoId = getNumberValue(rawStoId);
 
     await Sto.create({
-      id: getTextValue(rawStoId),
+      id: `${offeringAssetId}/${stoId}`,
+      stoId,
       offeringAssetId,
       createdBlockId: blockId,
       updatedBlockId: blockId,
