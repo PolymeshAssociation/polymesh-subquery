@@ -209,6 +209,7 @@ enum EventIdEnum {
   UnfrozenTx
   ExemptedUpdated
   BridgeLimitUpdated
+  BridgeTxFailed
   TxsHandled
   BridgeTxScheduled
   BridgeTxScheduleFailed
@@ -277,6 +278,7 @@ enum EventIdEnum {
   AssetFrozen
   AssetUnfrozen
   AssetRenamed
+  AssetTypeChanged
   FundingRoundSet
   DocumentAdded
   DocumentRemoved
@@ -384,6 +386,7 @@ enum EventIdEnum {
   InstructionCreated
   InstructionAffirmed
   AffirmationWithdrawn
+  FailedToExecuteInstruction
   InstructionRejected
   ReceiptClaimed
   ReceiptValidityChanged
@@ -396,6 +399,7 @@ enum EventIdEnum {
   InstructionExecuted
   VenueUnauthorized
   SchedulingFailed
+  SettlementManuallyExecuted
   InstructionRescheduled
   VenueSignersUpdated
 
@@ -583,6 +587,7 @@ enum CallIdEnum {
 
   ## identity ##
   cdd_register_did
+  cdd_register_did_with_cdd
   invalidate_cdd_claims
   remove_secondary_keys_old
   accept_primary_key
@@ -714,6 +719,7 @@ enum CallIdEnum {
   validate
   nominate
   chill
+  chill_from_governance
   set_payee
   set_controller
   set_validator_count
@@ -773,6 +779,7 @@ enum CallIdEnum {
   create_asset
   # freeze ( already defined in indices)
   unfreeze
+  update_asset_type
   rename_asset
   issue
   redeem
@@ -894,6 +901,7 @@ enum CallIdEnum {
   set_venue_filtering
   allow_venues
   disallow_venues
+  execute_manual_instruction
   change_receipt_validity
   execute_scheduled_instruction
   reschedule_instruction
@@ -957,6 +965,7 @@ enum CallIdEnum {
   ## polymeshcontracts ##
   instantiate_with_code_perms
   instantiate_with_hash_perms
+  update_call_runtime_whitelist
 
   ## preimage ##
   note_preimage
@@ -1219,6 +1228,7 @@ type TickerExternalAgentAction @entity {
 
 type Sto @entity {
   id: ID!
+  stoId: Int! @index(unique: false)
   offeringAsset: Asset!
   createdBlock: Block!
   updatedBlock: Block!
