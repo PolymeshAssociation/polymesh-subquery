@@ -1226,10 +1226,34 @@ type TickerExternalAgentAction @entity {
   updatedBlock: Block!
 }
 
+type FundraiserTierJson @jsonField {
+  price: BigInt!
+  remaining: BigInt!
+  total: BigInt!
+}
+
+enum StoStatus {
+  Live
+  Frozen
+  Closed
+  ClosedEarly
+}
+
 type Sto @entity {
-  id: ID!
+  id: ID! #offeringAsset/stoId
   stoId: Int! @index(unique: false)
+  name: String!
+  venue: Venue!
   offeringAsset: Asset!
+  offeringPortfolio: Portfolio!
+  raisingAssetId: String!
+  raisingPortfolio: Portfolio!
+  creator: Identity!
+  start: Date
+  end: Date
+  tiers: [FundraiserTierJson!]
+  status: StoStatus!
+  minimumInvestment: BigInt!
   createdBlock: Block!
   updatedBlock: Block!
 }

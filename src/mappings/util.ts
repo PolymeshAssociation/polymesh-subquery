@@ -10,6 +10,7 @@ import {
   Distribution,
   FoundType,
   SecurityIdentifier,
+  Sto,
   TransferComplianceExemption,
   TransferManager,
   TransferRestrictionTypeEnum,
@@ -130,7 +131,7 @@ export const getNumberValue = (item: Codec): number => {
 };
 
 export const getDateValue = (item: Codec): Date => {
-  return item.toString().trim().length > 0 ? new Date(Number(item.toString())) : null;
+  return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : null;
 };
 
 export const getBigIntValue = (item: Codec): bigint => {
@@ -327,6 +328,11 @@ export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | '
   return meshPortfolioToPortfolio(meshPortfolio);
 };
 
+export const getPortfolioId = ({
+  identityId,
+  number,
+}: Pick<Portfolio, 'identityId' | 'number'>): string => `${identityId}/${number}`;
+
 export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
   const caId = JSON.parse(item.toString());
   return {
@@ -394,4 +400,25 @@ export const bytesToString = (item: Codec): string => {
     return hexToString(value);
   }
   return removeNullChars(value);
+};
+
+export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
+  const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
+
+  const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
+  const raisingPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'raising_portfolio'));
+
+  return {
+    creatorId,
+    status,
+    start: getDateValue(start),
+    end: getDateValue(end),
+    tiers,
+    minimumInvestment: extractBigInt(rest, 'minimum_investment'),
+    offeringAssetId: hexToString(extractString(rest, 'offering_asset')),
+    offeringPortfolioId: getPortfolioId(offeringPortfolio),
+    raisingAssetId: hexToString(extractString(rest, 'raising_asset')),
+    raisingPortfolioId: getPortfolioId(raisingPortfolio),
+    venueId: extractString(rest, 'venue_id'),
+  };
 };
