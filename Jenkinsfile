@@ -60,18 +60,18 @@ node {
         echo "GIT_COMMIT: ${env.GIT_COMMIT}"
 
         stage('Build') {
-            sh (label: 'Run `./build.sh`',
-                script: './build.sh')
+            sh (label: 'Run `./deploy/build.sh`',
+                script: './deploy/build.sh')
         }
 
         //stage('Test') {
-        //    sh (label: 'Run `./test.sh`',
-        //        script: './test.sh')
+        //    sh (label: 'Run `./deploy/test.sh`',
+        //        script: './deploy/test.sh')
         //}
 
         stage('Push') {
-            sh (label: 'Run `./push.sh`',
-                script: './push.sh')
+            sh (label: 'Run `./deploy/push.sh`',
+                script: './deploy/push.sh')
         }
 
     }
