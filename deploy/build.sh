@@ -6,4 +6,4 @@ set -exu -o pipefail
 : "${CONTAINER_REGISTRY:=201135299591.dkr.ecr.${AWS_REGION}.amazonaws.com}"
 : "${CONTAINER_TAG:=$(git rev-parse HEAD)}"
 
-docker build -f docker/sq-Dockerfile -t "${CONTAINER_REGISTRY}/polymesh/subquery:${CONTAINER_TAG}" .
+docker build -f deploy/Dockerfile -t "${CONTAINER_REGISTRY}/polymesh/subquery:${CONTAINER_TAG}" .
