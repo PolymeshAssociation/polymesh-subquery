@@ -3,8 +3,7 @@ RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false su
 RUN apk add --no-cache bash gettext
 
 # arm64 dependencies
-RUN apk add --no-cache python3 pythonispython3 make
-
+RUN apk add --no-cache python3 pythonispython3 make gcc
 
 # Dependencies
 WORKDIR /app
