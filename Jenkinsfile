@@ -34,7 +34,6 @@ node {
         ]
 
         if (IS_PULL_REQUEST) {
-            //SCM_CHECKOUT_BRANCHES.push([name: "*/${env.CHANGE_TARGET}"])
             SCM_CHECKOUT_BRANCHES.push([name: "*/${env.CHANGE_BRANCH}"])
             //SCM_CHECKOUT_EXTENSIONS.push([$class: 'PreBuildMerge',
             //                               options: [mergeRemote: 'origin',
@@ -48,11 +47,6 @@ node {
         scm_variables = checkout([$class: 'GitSCM',
                                   branches: SCM_CHECKOUT_BRANCHES,
                                   extensions: SCM_CHECKOUT_EXTENSIONS,
-
-                                  //traits: [ // to-do
-                                  //  skipNotifications(),
-                                  //]
-
                                   userRemoteConfigs: [[url: 'https://github.com/PolymeshAssociation/polymesh-subquery.git',
                                                        credentialsId: 'github_username_personal_access_token']]])
 
