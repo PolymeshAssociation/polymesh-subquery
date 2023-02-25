@@ -26,38 +26,40 @@ export async function mapIdentities({
 }: HandlerArgs): Promise<void> {
   const datetime = event.block.timestamp;
 
-  if (moduleId === ModuleIdEnum.identity) {
-    if (eventId === EventIdEnum.DidCreated) {
-      await handleDidCreated(blockId, eventId, params, datetime, event.idx);
-    }
+  if (moduleId !== ModuleIdEnum.identity) {
+    return;
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeysAdded) {
-      await handleSecondaryKeysAdded(blockId, eventId, params, datetime);
-    }
+  if (eventId === EventIdEnum.DidCreated) {
+    await handleDidCreated(blockId, eventId, params, datetime, event.idx);
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeysFrozen) {
-      await handleSecondaryKeysFrozen(blockId, eventId, params, true);
-    }
+  if (eventId === EventIdEnum.SecondaryKeysAdded) {
+    await handleSecondaryKeysAdded(blockId, eventId, params, datetime);
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeysUnfrozen) {
-      await handleSecondaryKeysFrozen(blockId, eventId, params, false);
-    }
+  if (eventId === EventIdEnum.SecondaryKeysFrozen) {
+    await handleSecondaryKeysFrozen(blockId, eventId, params, true);
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeysRemoved) {
-      await handleSecondaryKeysRemoved(params);
-    }
+  if (eventId === EventIdEnum.SecondaryKeysUnfrozen) {
+    await handleSecondaryKeysFrozen(blockId, eventId, params, false);
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
-      await handleSecondaryKeysPermissionsUpdated(blockId, params);
-    }
+  if (eventId === EventIdEnum.SecondaryKeysRemoved) {
+    await handleSecondaryKeysRemoved(params);
+  }
 
-    if (eventId === EventIdEnum.PrimaryKeyUpdated) {
-      await handlePrimaryKeyUpdated(blockId, eventId, params);
-    }
+  if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
+    await handleSecondaryKeysPermissionsUpdated(blockId, params);
+  }
 
-    if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
-      await handleSecondaryKeyLeftIdentity(params);
-    }
+  if (eventId === EventIdEnum.PrimaryKeyUpdated) {
+    await handlePrimaryKeyUpdated(blockId, eventId, params);
+  }
+
+  if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
+    await handleSecondaryKeyLeftIdentity(params);
   }
 }
 
@@ -392,7 +394,7 @@ const handlePrimaryKeyUpdated = async (
 const handleSecondaryKeyLeftIdentity = async (params: Codec[]): Promise<void> => {
   const [, rawAccount] = params;
 
-  const account = rawAccount.toString() as MeshAccount;
+  const account = JSON.parse(rawAccount.toString()) as MeshAccount;
 
   let address;
   if (typeof account === 'string') {
