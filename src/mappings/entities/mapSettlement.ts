@@ -39,6 +39,7 @@ const settlementResultMap = {
   [EventIdEnum.InstructionExecuted]: SettlementResultEnum.Executed,
   [EventIdEnum.InstructionRejected]: SettlementResultEnum.Rejected,
   [EventIdEnum.InstructionFailed]: SettlementResultEnum.Failed,
+  [EventIdEnum.FailedToExecuteInstruction]: SettlementResultEnum.Failed,
   default: SettlementResultEnum.None,
 };
 
@@ -47,6 +48,7 @@ const instructionStatusMap = {
   [EventIdEnum.InstructionRejected]: InstructionStatusEnum.Rejected,
   [EventIdEnum.InstructionFailed]: InstructionStatusEnum.Failed,
   [EventIdEnum.InstructionCreated]: InstructionStatusEnum.Created,
+  [EventIdEnum.FailedToExecuteInstruction]: InstructionStatusEnum.Failed,
 };
 
 export const createLeg = async (
@@ -245,6 +247,22 @@ const handleInstructionFinalizedEvent = async (
   ]);
 };
 
+const handleFailedToExecuteInstruction = async (
+  blockId: string,
+  params: Codec[]
+): Promise<void> => {
+  const [rawInstructionId] = params;
+  const instructionId = getTextValue(rawInstructionId);
+
+  const instruction = await getInstruction(instructionId);
+
+  instruction.eventId = EventIdEnum.FailedToExecuteInstruction;
+  instruction.status = instructionStatusMap[EventIdEnum.FailedToExecuteInstruction];
+  instruction.updatedBlockId = blockId;
+
+  await instruction.save();
+};
+
 export async function mapSettlement({
   blockId,
   eventId,
@@ -275,6 +293,10 @@ export async function mapSettlement({
 
     if (finalizedEvents.includes(eventId)) {
       await handleInstructionFinalizedEvent(blockId, eventId, params, event);
+    }
+
+    if (eventId === EventIdEnum.FailedToExecuteInstruction) {
+      await handleFailedToExecuteInstruction(blockId, params);
     }
   }
 }
