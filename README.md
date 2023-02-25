@@ -33,7 +33,7 @@ The behavior of the dev image can be controlled by setting ENV variables. The de
 
 - `NETWORK_ENDPOINT` - the wss endpoint of the blockchain to be indexed
 - `NETWORK_CHAIN_ID` - The genesis hash of the chain. This value can be retrieved by going to the explorer and looking for the block hash of block 0. e.g. [for mainnet](https://mainnet-app.polymesh.network/#/explorer/query/0)
-- `START_BLOCK` - block from which indexing should start. Generally this should be set to 0, but other values can be useful for debugging.
+- `START_BLOCK` - block from which indexing should start. Generally this should be set to 1, but other values can be useful for debugging.
 
 More advanced options are:
 
