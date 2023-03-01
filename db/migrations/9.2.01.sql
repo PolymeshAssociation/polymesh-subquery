@@ -83,7 +83,7 @@ with sto_data as (
   where module_id = 'sto' and event_id in ('FundraiserCreated')
   order by block_id::int
 )
-INSERT INTO "public"."stos" ("id", "sto_id", "name", "venue_id", "offering_asset_id", "offering_portfolio_id", 
+insert into "public"."stos" ("id", "sto_id", "name", "venue_id", "offering_asset_id", "offering_portfolio_id", 
 "raising_asset_id", "raising_portfolio_id", "creator_id", "start", "end", "tiers", "status", "minimum_investment",
 "created_block_id", "updated_block_id", "created_at", "updated_at")
 select 

@@ -40,17 +40,19 @@ const handleFundraiserStatus = async (
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
 
-  if (sto) {
-    sto.status = status;
-    if (status === StoStatus.Closed) {
-      // if sto is closed before the configured end time, status should be set as `ClosedEarly`
-      if (sto.end && event.block.timestamp < sto.end) {
-        sto.status = StoStatus.ClosedEarly;
-      }
-    }
-    sto.updatedBlockId = blockId;
-    await sto.save();
+  if (!sto) {
+    throw new Error(`Sto with id ${offeringAssetId}/${stoId} was not found`);
   }
+
+  sto.status = status;
+  if (status === StoStatus.Closed) {
+    // if sto is closed before the configured end time, status should be set as `ClosedEarly`
+    if (sto.end && event.block.timestamp < sto.end) {
+      sto.status = StoStatus.ClosedEarly;
+    }
+  }
+  sto.updatedBlockId = blockId;
+  await sto.save();
 };
 
 const handleFundraiserWindowModified = async (

@@ -1251,7 +1251,7 @@ type Sto @entity {
   creator: Identity!
   start: Date
   end: Date
-  tiers: [FundraiserTierJson!]
+  tiers: [FundraiserTierJson!]!
   status: StoStatus!
   minimumInvestment: BigInt!
   createdBlock: Block!
