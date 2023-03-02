@@ -14,11 +14,11 @@ add column if not exists tiers jsonb,
 add column if not exists "status" public_enum_9ceea16a44, 
 add column if not exists minimum_investment numeric;
 
-create index if not exists "stos_creator_id" using hash(creator_id);
-create index if not exists "stos_offering_portfolio_id" using hash(offering_portfolio_id);
-create index if not exists "stos_raising_portfolio_id" using hash(raising_portfolio_id);
-create index if not exists "stos_tiers" using gin(tiers);
-create index if not exists "stos_venue_id" using hash(venue_id);
+create index if not exists "stos_creator_id" on stos using hash(creator_id);
+create index if not exists "stos_offering_portfolio_id" on stos using hash(offering_portfolio_id);
+create index if not exists "stos_raising_portfolio_id" on stos using hash(raising_portfolio_id);
+create index if not exists "stos_tiers" on stos using gin(tiers);
+create index if not exists "stos_venue_id" on stos using hash(venue_id);
 
 alter table stos 
 drop constraint if exists "stos_creator_id_fkey",
