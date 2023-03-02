@@ -808,6 +808,8 @@ enum CallIdEnum {
   register_and_set_local_asset_metadata
   register_asset_metadata_local_type
   register_asset_metadata_global_type
+  remove_local_metadata_key
+  remove_metadata_value
 
   ## capitaldistribution ##
   distribute
