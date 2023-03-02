@@ -1,3 +1,12 @@
+-- Create StoStatus enum
+DO $$
+BEGIN
+    IF NOT EXISTS (select 1 from pg_type where typname = 'public_enum_9ceea16a44') then
+        create type public_enum_9ceea16a44 AS ENUM ('Live', 'Frozen', 'Closed', 'ClosedEarly');
+    END IF;
+END
+$$;
+
 /** 
  * STO entity creation - Add new columns, index and constraints for each newly added attribute in the entity
  */
