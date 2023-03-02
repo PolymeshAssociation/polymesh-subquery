@@ -60,7 +60,7 @@ with sto_data as (
       ) as offering_portfolio,
     coalesce(
         attributes->3->'value'->>'raisingAsset',
-        attributes->3->'value'->>'raisiing_asset' --needed for chain < 5.0.0
+        attributes->3->'value'->>'raising_asset' --needed for chain < 5.0.0
       ) as raising_asset_id,
     coalesce(
         attributes->3->'value'->'raisingPortfolio',
@@ -70,7 +70,7 @@ with sto_data as (
     to_timestamp(("attributes"->3->'value'->>'start')::NUMERIC/1000) as start,
     to_timestamp(("attributes"->3->'value'->>'end')::NUMERIC/1000) as end,
     "attributes"->3->'value'->'tiers' as tiers,
-    "attributes"->3->'value'->>'status' as status,
+    'Live' as status,
     coalesce(
         attributes->3->'value'->'minimumInvestment',
         attributes->3->'value'->'minimum_investment' --needed for chain < 5.0.0

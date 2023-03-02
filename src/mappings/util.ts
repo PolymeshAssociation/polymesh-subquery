@@ -408,9 +408,15 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
   const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
   const raisingPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'raising_portfolio'));
 
+  let stoStatus = status;
+  if (typeof status !== 'string') {
+    // for chain < 5.0.0, status comes as {'live': []}
+    stoStatus = capitalizeFirstLetter(Object.keys(status)[0]);
+  }
+
   return {
     creatorId,
-    status,
+    status: stoStatus,
     start: getDateValue(start),
     end: getDateValue(end),
     tiers,
