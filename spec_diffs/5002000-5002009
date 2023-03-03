@@ -1,0 +1,63 @@
+- Expected
++ Received
+
+@@ -242,10 +242,11 @@
+        "Affiliate": "Scope",
+        "Blocked": "Scope",
+        "BuyLockup": "Scope",
++       "Custom": "(CustomClaimTypeId, Option<Scope>)",
+        "CustomerDueDiligence": "CddId",
+        "Exempted": "Scope",
+        "InvestorUniqueness": "(Scope, ScopeId, CddId)",
+-       "InvestorUniquenessV2": "(CddId)",
++       "InvestorUniquenessV2": "CddId",
+        "Jurisdiction": "(CountryCode, Scope)",
+        "KnowYourCustomer": "Scope",
+        "NoData": "",
+@@ -266,6 +267,7 @@
+        "Affiliate": "",
+        "Blocked": "",
+        "BuyLockup": "",
++       "Custom": "CustomClaimTypeId",
+        "CustomerDueDiligence": "",
+        "Exempted": "",
+        "InvestorUniqueness": "",
+@@ -583,6 +585,7 @@
+      ],
+    },
+    "CustomAssetTypeId": "u32",
++   "CustomClaimTypeId": "u32",
+    "DepositInfo": Object {
+      "amount": "Balance",
+      "owner": "AccountId",
+@@ -644,10 +647,6 @@
+    "EthereumAddress": "[u8; 20]",
+    "EventCounts": "Vec<u32>",
+    "EventDid": "IdentityId",
+-   "ExtensionAttributes": Object {
+-     "usage_fee": "Balance",
+-     "version": "MetaVersion",
+-   },
+    "ExtrinsicPermissions": Object {
+      "_enum": Object {
+        "Except": "Vec<PalletPermissions>",
+@@ -800,6 +799,11 @@
+        "Some": "BlockNumber",
+      },
+    },
++   "Member": Object {
++     "expiry_at": "Option<Moment>",
++     "id": "IdentityId",
++     "inactive_from": "Option<Moment>",
++   },
+    "Memo": "[u8; 32]",
+    "Moment": "u64",
+    "Motion": Object {
+@@ -1021,6 +1025,7 @@
+    },
+    "SettlementType": Object {
+      "_enum": Object {
++       "SettleManual": "BlockNumber",
+        "SettleOnAffirmation": "",
+        "SettleOnBlock": "BlockNumber",
+      },
