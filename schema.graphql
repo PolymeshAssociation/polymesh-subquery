@@ -49,6 +49,7 @@ enum ModuleIdEnum {
   polymeshcontracts
   preimage
   testutils
+  nft
 
   ## deprecated ##
   confidential @deprecated
@@ -362,6 +363,8 @@ enum EventIdEnum {
   PortfolioCreated
   PortfolioDeleted
   MovedBetweenPortfolios
+  FungibleTokensMovedBetweenPortfolios
+  NFTsMovedBetweenPortfolios
   PortfolioRenamed
   UserPortfolios
   PortfolioCustodianChanged
@@ -384,6 +387,7 @@ enum EventIdEnum {
   InstructionAuthorized @deprecated
   InstructionUnauthorized @deprecated
   InstructionCreated
+  InstructionV2Created
   InstructionAffirmed
   AffirmationWithdrawn
   FailedToExecuteInstruction
@@ -471,6 +475,11 @@ enum EventIdEnum {
   MockInvestorUIDCreated
   DidStatus
   CddStatus
+
+  ## nft ##
+  IssuedNFT
+  NftCollectionCreated
+  RedeemedNFT
 
   ## deprecated ##
   Approval @deprecated
@@ -799,6 +808,8 @@ enum CallIdEnum {
   register_and_set_local_asset_metadata
   register_asset_metadata_local_type
   register_asset_metadata_global_type
+  remove_local_metadata_key
+  remove_metadata_value
 
   ## capitaldistribution ##
   distribute
@@ -868,6 +879,7 @@ enum CallIdEnum {
   create_portfolio
   delete_portfolio
   move_portfolio_funds
+  move_portfolio_funds_v2
   rename_portfolio
   quit_portfolio_custody
   accept_portfolio_custody
@@ -890,14 +902,21 @@ enum CallIdEnum {
   update_venue_type
   add_instruction
   add_instruction_with_memo
+  add_instruction_with_memo_v2
   add_and_affirm_instruction
   add_and_affirm_instruction_with_memo
+  add_and_affirm_instruction_with_memo_v2
   affirm_instruction
+  affirm_instruction_v2
   withdraw_affirmation
+  withdraw_affirmation_v2
   reject_instruction
+  reject_instruction_v2
   affirm_with_receipts
   claim_receipt
+  placeholder_claim_receipt
   unclaim_receipt
+  placeholder_unclaim_receipt
   set_venue_filtering
   allow_venues
   disallow_venues
@@ -978,6 +997,11 @@ enum CallIdEnum {
   mock_cdd_register_did
   get_my_did
   get_cdd_of
+
+  ## nft ##
+  create_nft_collection
+  issue_nft
+  redeem_nft
 
   ## deprecated ##
   accept_authorization @deprecated
@@ -1226,10 +1250,34 @@ type TickerExternalAgentAction @entity {
   updatedBlock: Block!
 }
 
+type FundraiserTierJson @jsonField {
+  price: BigInt!
+  remaining: BigInt!
+  total: BigInt!
+}
+
+enum StoStatus {
+  Live
+  Frozen
+  Closed
+  ClosedEarly
+}
+
 type Sto @entity {
-  id: ID!
+  id: ID! #offeringAsset/stoId
   stoId: Int! @index(unique: false)
+  name: String!
+  venue: Venue!
   offeringAsset: Asset!
+  offeringPortfolio: Portfolio!
+  raisingAssetId: String!
+  raisingPortfolio: Portfolio!
+  creator: Identity!
+  start: Date
+  end: Date
+  tiers: [FundraiserTierJson!]!
+  status: StoStatus!
+  minimumInvestment: BigInt!
   createdBlock: Block!
   updatedBlock: Block!
 }
