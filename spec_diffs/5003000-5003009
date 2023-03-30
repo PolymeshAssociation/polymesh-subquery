@@ -1,0 +1,84 @@
+- Expected
++ Received
+
+@@ -102,6 +102,7 @@
+        "EquityPreferred": "",
+        "FixedIncome": "",
+        "Fund": "",
++       "NonFungible": "NonFungibleType",
+        "REIT": "",
+        "RevenueShareAgreement": "",
+        "StableCoin": "",
+@@ -654,6 +655,16 @@
+        "Whole": "",
+      },
+    },
++   "Fund": Object {
++     "description": "FundDescription",
++     "memo": "Option<Memo>",
++   },
++   "FundDescription": Object {
++     "_enum": Object {
++       "Fungible": "FungibleToken",
++       "NonFungible": "NFTs",
++     },
++   },
+    "FundingRoundName": "Text",
+    "Fundraiser": Object {
+      "creator": "IdentityId",
+@@ -683,6 +694,10 @@
+      "remaining": "Balance",
+      "total": "Balance",
+    },
++   "FungibleToken": Object {
++     "amount": "Balance",
++     "ticker": "Ticker",
++   },
+    "GranularCanTransferResult": Object {
+      "asset_frozen": "bool",
+      "compliance_result": "AssetComplianceResult",
+@@ -783,6 +798,12 @@
+      "from": "PortfolioId",
+      "to": "PortfolioId",
+    },
++   "LegAsset": Object {
++     "_enum": Object {
++       "Fungible": "FungibleToken",
++       "NonFungible": "NFTs",
++     },
++   },
+    "LegId": "u64",
+    "LegStatus": Object {
+      "_enum": Object {
+@@ -791,6 +812,11 @@
+        "PendingTokenLock": "",
+      },
+    },
++   "LegV2": Object {
++     "asset": "LegAsset",
++     "from": "PortfolioId",
++     "to": "PortfolioId",
++   },
+    "LocalCAId": "u32",
+    "LookupSource": "MultiAddress",
+    "MaybeBlock": Object {
+@@ -817,6 +843,19 @@
+      "amount": "Balance",
+      "memo": "Option<Memo>",
+      "ticker": "Ticker",
++   },
++   "NFTId": "u64",
++   "NFTs": Object {
++     "ids": "Vec<NFTId>",
++     "ticker": "Ticker",
++   },
++   "NonFungibleType": Object {
++     "_enum": Object {
++       "Custom": "CustomAssetTypeId",
++       "Derivative": "",
++       "FixedIncome": "",
++       "Invoice": "",
++     },
+    },
+    "OffChainSignature": "MultiSignature",
+    "PalletName": "Text",
