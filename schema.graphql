@@ -1,3 +1,6 @@
+"""
+Represents all known chain "pallets"
+"""
 enum ModuleIdEnum {
   system
   babe
@@ -59,6 +62,9 @@ enum ModuleIdEnum {
   stocapped @deprecated
 }
 
+"""
+Events are emitted when chain state is changed. This enum represents all known events
+"""
 enum EventIdEnum {
   ## system ##
   ExtrinsicSuccess
@@ -554,6 +560,9 @@ enum EventIdEnum {
   VoteRejectReferendum @deprecated
 }
 
+"""
+Represents all known chain extrinsics
+"""
 enum CallIdEnum {
   ## system ##
   fill_block
@@ -1095,6 +1104,9 @@ enum CallIdEnum {
   set_proposal_duration @deprecated
 }
 
+"""
+Information of a chain state transition on. For most use cases a more specific entity should be queried
+"""
 type Event @entity {
   id: ID!
   block: Block!
@@ -1128,11 +1140,14 @@ type FoundType @entity {
   rawType: String!
 }
 
+"""
+A set of transactions that were executed together. Includes a reference to its parent, which reference its parent, this forms a chain to the genesis block
+"""
 type Block @entity {
   id: ID!
   blockId: Int! @index(unique: false)
   parentId: Int!
-  hash: String!
+  hash: String! # a hash value
   parentHash: String!
   stateRoot: String!
   extrinsicsRoot: String!
@@ -1146,13 +1161,18 @@ type Block @entity {
   specVersionId: Int!
 }
 
+"""
+Represents external data included into the chain. Virtually all user actions, as well as runtime operations are extrinsics
+
+Usually extrinsics are signed. When the block author includes data, e.g. `timestamp.set` then the signature is implied. This is indicated with `signed = 0`
+"""
 type Extrinsic @entity {
   id: ID!
   block: Block! @index(unique: false)
   extrinsicIdx: Int!
   extrinsicLength: Int!
   signed: Int!
-  signedbyAddress: Int!
+  signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
   address: String
   moduleId: ModuleIdEnum!
   callId: CallIdEnum!
@@ -1163,21 +1183,33 @@ type Extrinsic @entity {
   specVersionId: Int!
 }
 
+"""
+Represents which permissions an account may have over an Identity's assets
+"""
 type AssetPermissions @jsonField {
   type: String!
   values: [String]!
 }
 
+"""
+Represents which extrinsics an Account may sign for an Identity
+"""
 type TransactionPermissions @jsonField {
   type: String!
   values: [String]!
 }
 
+"""
+Represents which portfolios an Account can manage for an Identity
+"""
 type PortfolioPermissions @jsonField {
   type: String!
   values: [PortfolioJson]!
 }
 
+"""
+Represents an Account's permissions. The primary key for an Identity always has full permission
+"""
 type Permissions @entity {
   id: ID!
   assets: AssetPermissions
@@ -1189,6 +1221,11 @@ type Permissions @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a public/private key pair. Most actions must be signed by an appropriately permissioned Account
+
+Before an Account can sign most Extrinsics it must first be attached to an Identity
+"""
 type Account @entity {
   id: ID!
   address: String! @index(unique: true)
@@ -1200,6 +1237,11 @@ type Account @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a person or business on chain. All Polymesh assets belong to an Identity. A single Identity can have many accounts (i.e. "keys")
+
+An Identity needs a valid CDD claim from at least one KYC/KYB provider to perform most actions on chain
+"""
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
@@ -1214,6 +1256,9 @@ type Identity @entity {
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
 }
 
+"""
+Represents `POLY`, the Ethereum based ERC-20 token, being converted to POLYX, the native Polymesh token
+"""
 type BridgeEvent @entity {
   id: ID!
   identity: Identity!
@@ -1226,6 +1271,9 @@ type BridgeEvent @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a change in staking status
+"""
 type StakingEvent @entity {
   id: ID!
   stashAccount: String @index(unique: false)
@@ -1239,6 +1287,9 @@ type StakingEvent @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
+"""
 type TickerExternalAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
@@ -1250,12 +1301,18 @@ type TickerExternalAgentAction @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents how much tokens can be purchased at a certain price as part of an Offering
+"""
 type FundraiserTierJson @jsonField {
   price: BigInt!
   remaining: BigInt!
   total: BigInt!
 }
 
+"""
+Represents all possible statuses for a STO
+"""
 enum StoStatus {
   Live
   Frozen
@@ -1263,6 +1320,9 @@ enum StoStatus {
   ClosedEarly
 }
 
+"""
+Securities Token Offering. Represents a fund raising effort from a company. e.g. sale of company equity in exchange for a stable coin
+"""
 type Sto @entity {
   id: ID! #offeringAsset/stoId
   stoId: Int! @index(unique: false)
@@ -1282,6 +1342,9 @@ type Sto @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible authorization types
+"""
 enum AuthTypeEnum {
   AttestPrimaryKeyRotation
   RotatePrimaryKey
@@ -1300,6 +1363,9 @@ enum AuthTypeEnum {
   NoData @deprecated
 }
 
+"""
+Represents all possible authorization statuses
+"""
 enum AuthorizationStatusEnum {
   Pending
   Consumed
@@ -1307,6 +1373,9 @@ enum AuthorizationStatusEnum {
   Revoked
 }
 
+"""
+Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
+"""
 type Authorization @entity {
   id: ID!
   type: AuthTypeEnum!
@@ -1320,6 +1389,9 @@ type Authorization @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents participation in an STO
+"""
 type Investment @entity {
   id: ID!
   investor: Identity!
@@ -1333,6 +1405,9 @@ type Investment @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents an Identity authorized to perform actions on behalf of a company
+"""
 type TickerExternalAgent @entity {
   id: ID! # ticker/callerId
   asset: Asset! @index(unique: false)
@@ -1343,8 +1418,11 @@ type TickerExternalAgent @entity {
   updatedBlock: Block!
 }
 
-# Type can be "AgentAdded", "AgentPermissionsChanged" or "AgentRemoved".
-# permissions is only present in "AgentAdded" and "AgentPermissionsChanged".
+"""
+Represents a change in the status of an external agent.
+
+"AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
+"""
 type TickerExternalAgentHistory @entity {
   id: ID! #block_di/event_idx/did
   asset: Asset! @index(unique: false)
@@ -1357,6 +1435,9 @@ type TickerExternalAgentHistory @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a set of agents authorized to perform actions for a given Asset
+"""
 type AgentGroup @entity {
   id: ID! #ticker/group_id
   permissions: String!
@@ -1365,6 +1446,9 @@ type AgentGroup @entity {
   updatedBlock: Block!
 }
 
+"""
+Represent membership in a group. Tracks which members belong to which groups
+"""
 type AgentGroupMembership @entity {
   id: ID! #ticker/group_id/member
   member: String! @index(unique: false)
@@ -1373,12 +1457,19 @@ type AgentGroupMembership @entity {
   updatedBlock: Block!
 }
 
+"""
+JSON representation of a Portfolio identifier. Portfolios are uniquely identified by the tuple (Identity DID, portfolio ID)
+"""
 type PortfolioJson @jsonField {
   did: String!
   number: Int!
 }
 
-# For each entry in `Identity`, a default Portfolio (which contains number as 0) entry is created.
+"""
+Represents a grouping of Assets held by an Identity. Particular accounts maybe authorized only over certain portfolios
+
+Note: identities will always have a default Portfolio (id = 0)
+"""
 type Portfolio @entity {
   id: ID! # did/number
   identity: Identity! @index(unique: false)
@@ -1391,6 +1482,11 @@ type Portfolio @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a transfer of Assets between a single identities portfolios.
+
+Note: transfers between identities are known as `Settlements`
+"""
 type PortfolioMovement @entity {
   id: ID!
   from: Portfolio! @index(unique: false)
@@ -1403,6 +1499,9 @@ type PortfolioMovement @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible states of a Settlement
+"""
 enum SettlementResultEnum {
   None
   Executed
@@ -1410,6 +1509,9 @@ enum SettlementResultEnum {
   Rejected
 }
 
+"""
+Represents all possible states of an Instruction
+"""
 enum InstructionStatusEnum {
   Created
   Executed
@@ -1417,6 +1519,9 @@ enum InstructionStatusEnum {
   Failed
 }
 
+"""
+Represents the movement of a single Asset in a trade, e.g. Alice will give Bob 1 USDS
+"""
 type Leg @entity {
   id: ID! # instructionId/legIndex
   assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
@@ -1430,6 +1535,9 @@ type Leg @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a trade of assets between parties
+"""
 type Settlement @entity {
   id: ID!
   result: SettlementResultEnum!
@@ -1438,6 +1546,11 @@ type Settlement @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
+
+e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
+"""
 type Venue @entity {
   id: ID! # venueId
   owner: Identity!
@@ -1447,6 +1560,11 @@ type Venue @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a request to exchange Assets between parties.
+
+Before an Instruction is executed all involved parties must sign and submit an affirmation. Once an Instruction is affirmed it will then be attempted to be executed. If any party fails to satisfy any compliance or transfer restriction the Instruction will fail, and no movement of assets will occur.
+"""
 type Instruction @entity {
   id: ID! #instructionId
   eventId: EventIdEnum!
@@ -1463,6 +1581,9 @@ type Instruction @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a distribution to the owners of an Asset. e.g. dividend payment
+"""
 type Distribution @entity {
   id: ID! # assetId/localId
   identity: Identity!
@@ -1480,6 +1601,9 @@ type Distribution @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents an owner of an asset collecting a distribution e.g. accepting a dividend
+"""
 type DistributionPayment @entity {
   id: ID!
   distribution: Distribution!
@@ -1493,6 +1617,9 @@ type DistributionPayment @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a vote on a governance proposal
+"""
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
@@ -1503,6 +1630,9 @@ type ProposalVote @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible Proposal statuses
+"""
 enum ProposalStateEnum {
   All
   Pending
@@ -1519,6 +1649,9 @@ enum SnapshotEnum {
   NotInSnapshot
 }
 
+"""
+Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
+"""
 type Proposal @entity {
   id: ID!
   proposer: String! @index(unique: false)
@@ -1535,6 +1668,9 @@ type Proposal @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible claims that can be made of an identity
+"""
 enum ClaimTypeEnum {
   Accredited
   Affiliate
@@ -1551,17 +1687,28 @@ enum ClaimTypeEnum {
   NoType
 }
 
+"""
+Represents all possible scopes a claim may have
+"""
 enum ClaimScopeTypeEnum {
   Identity
   Ticker
   Custom
 }
 
+"""
+Represents where this claim may apply
+"""
 type Scope @jsonField {
   type: String!
   value: String!
 }
 
+"""
+The scope of a claim.
+
+e.g. `target` is Blocked from owning "TICKER-A" or `target` is an Affiliate of "TICKER-B"
+"""
 type ClaimScope @entity {
   id: ID!
   target: String! @index(unique: false)
@@ -1571,6 +1718,11 @@ type ClaimScope @entity {
   updatedBlock: Block!
 }
 
+"""
+A claim made about an Identity. All active identities must have a valid CDD claim, but additional claims can be made.
+
+e.g. The Identity belongs to an accredited, US citizen
+"""
 type Claim @entity {
   id: ID!
   eventIdx: Int! @index(unique: false)
@@ -1589,6 +1741,11 @@ type Claim @entity {
   updatedBlock: Block!
 }
 
+"""
+An claim issuer that is trusted for an Asset.
+
+Assets relying on on chain compliance should be explicit on which issuers they trust
+"""
 type TrustedClaimIssuer @entity {
   id: ID!
   asset: Asset! @index(unique: false)
@@ -1598,11 +1755,17 @@ type TrustedClaimIssuer @entity {
   updatedBlock: Block!
 }
 
+"""
+An off chain identifier for a given Asset. e.g. ISIN, CUSIP, FIGI, etc.
+"""
 type SecurityIdentifier @jsonField {
   type: String!
   value: String!
 }
 
+"""
+Represents a request to take ownership of a particular Asset
+"""
 type AssetPendingOwnershipTransfer @entity {
   id: ID! # authorization id
   ticker: String! @index(unique: false)
@@ -1614,12 +1777,17 @@ type AssetPendingOwnershipTransfer @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible transfer restriction types
+"""
 enum TransferRestrictionTypeEnum {
   Count
   Percentage
 }
 
-# deprecated in favor of `TransferCompliance`
+"""
+deprecated in favor of `TransferCompliance`
+"""
 type TransferManager @entity {
   id: ID! # ticker/transferManagerType/value
   asset: Asset! @index(unique: false)
@@ -1630,11 +1798,21 @@ type TransferManager @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all known stat types
+"""
 enum StatOpTypeEnum {
   Count
   Balance
 }
 
+"""
+Represents an on chain statistic about the Asset owners. e.g. How many investors hold the Asset
+
+These are required to be enabled in order for the chain to enforce transfer restrictions
+
+e.g. A restriction requiring ownership to be at least 50% Canadian would require a StatType of type `Balance` scoped to Jurisdiction before being created
+"""
 type StatType @entity {
   id: ID! # ticker/op/type/claimIssuer
   asset: Asset!
@@ -1645,6 +1823,9 @@ type StatType @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents all possible transfer restriction rules that can be enabled
+"""
 enum TransferComplianceTypeEnum {
   MaxInvestorCount
   MaxInvestorOwnership
@@ -1652,6 +1833,11 @@ enum TransferComplianceTypeEnum {
   ClaimOwnership
 }
 
+"""
+Represents restriction that will ensure the composition of ownership remains a certain way
+
+e.g. No more than 2000 individual investors to avoid additional reporting requirements
+"""
 type TransferCompliance @entity {
   id: ID! # ticker/op/type/claimIssuer
   asset: Asset! @index(unique: false)
@@ -1669,6 +1855,9 @@ type TransferCompliance @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents an exemption for an individual for TransferCompliance rules
+"""
 type TransferComplianceExemption @entity {
   id: ID! #asset/opType/claimType/exemptedEntityId
   asset: Asset! @index(unique: false)
@@ -1679,6 +1868,11 @@ type TransferComplianceExemption @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a restriction all investor must comply with for a given Asset
+
+e.g. All investors must be German citizens
+"""
 type Compliance @entity {
   id: ID! # ticker/complianceId
   complianceId: Int!
@@ -1688,6 +1882,9 @@ type Compliance @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents how much of a given Asset an Identity owns
+"""
 type AssetHolder @entity {
   id: ID! # ticker/did
   identity: Identity! @index(unique: false)
@@ -1697,11 +1894,19 @@ type AssetHolder @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a hash of a document
+"""
 type ContentHash @jsonField {
   type: String
   value: String
 }
 
+"""
+Represents off chain documentation for an Asset. A hash should be included on chain so readers can be sure their copy has not been tampered with
+
+e.g. A companies 10-K report
+"""
 type AssetDocument @entity {
   id: ID! # ticker/documentId
   documentId: Int!
@@ -1715,6 +1920,9 @@ type AssetDocument @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents a tokenized Asset on the Polymesh chain. The central data structure for the ecosystem
+"""
 type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
@@ -1739,6 +1947,9 @@ type Asset @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents an investment into an Asset
+"""
 type Funding @entity {
   id: ID!
   asset: Asset! @index(unique: false)
@@ -1750,6 +1961,9 @@ type Funding @entity {
   updatedBlock: Block!
 }
 
+"""
+Represents the deployed version of the node indexing the data
+"""
 type SubqueryVersion @entity {
   id: ID!
   version: String!
