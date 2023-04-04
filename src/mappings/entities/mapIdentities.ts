@@ -405,5 +405,5 @@ const handleSecondaryKeyLeftIdentity = async (params: Codec[]): Promise<void> =>
     ({ account: address } = account);
   }
 
-  await Promise.all([[Account.remove(address), Permissions.remove(address)]]);
+  await Permissions.remove(address);
 };
