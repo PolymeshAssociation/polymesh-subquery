@@ -28,7 +28,7 @@ WHERE identities.id = event_data.did;
 
 WITH event_data AS (
   SELECT
-    event_arg_1 as id,
+    event_arg_1 as id
   FROM events
   WHERE event_id = 'SecondaryKeyLeftIdentity'
   ORDER BY created_at DESC
@@ -53,7 +53,7 @@ WITH event_data AS (
 UPDATE identities
 SET
   primary_account = event_data.new_key,
-  event_id = event_data.event_id
+  event_id = event_data.event_id,
   updated_block_id = event_data.updated_block_id,
   updated_at = event_data.updated_at
 FROM event_data
