@@ -366,6 +366,7 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
       amount: transferAmount,
       eventId: callToEventMappings[callId] || callToEventMappings['default'],
       eventIdx: event.idx,
+      extrinsicIdx: event.extrinsic?.idx,
       datetime: event.block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,
