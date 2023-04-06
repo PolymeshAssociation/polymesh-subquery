@@ -19,8 +19,8 @@ const getVersionFromDB = (postgres: Connection) => {
     .getRawOne();
 };
 
-const upsertVersionMetadata = `INSERT INTO "public"."subquery_versions" ("id", "version", "created_at", "updated_at") 
-VALUES ('${getSQVersion(latestVersion)}', '${latestVersion}', now(), now()) 
+const upsertVersionMetadata = `INSERT INTO "public"."subquery_versions" ("id", "version", "created_at", "updated_at")
+VALUES ('${getSQVersion(latestVersion)}', '${latestVersion}', now(), now())
 ON CONFLICT(id) DO UPDATE SET "updated_at" = now();`;
 
 export const schemaMigrations = async (connection?: Connection): Promise<void> => {
@@ -31,7 +31,7 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
     ({ sqVersion: previousVersion } = await getVersionFromDB(postgres));
   } catch (e) {
     console.log(
-      'It seems you are running version older than `5.5.0`. We recommend you to resync with clean db'
+      `there was a problem fetching the current DB version. If you are migrating from a SQ version older than "5.5.0" a complete resync is recommended. Error message: ${e.message}`
     );
     previousVersion = getSQVersion('5.3.7');
   }

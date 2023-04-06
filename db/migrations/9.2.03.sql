@@ -1,0 +1,2 @@
+alter type public_enum_0bf3c7d4ef add value if not exists 'remove_local_metadata_key' after 'register_asset_metadata_global_type';
+alter type public_enum_0bf3c7d4ef add value if not exists 'remove_metadata_value' after 'remove_local_metadata_key';
