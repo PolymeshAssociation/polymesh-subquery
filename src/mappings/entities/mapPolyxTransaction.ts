@@ -1,5 +1,5 @@
 import { SubstrateEvent } from '@subql/types';
-import { PolyxTransactionProps } from 'polymesh-subql/types/models/PolyxTransaction';
+import BigNumber from 'bignumber.js';
 import {
   BalanceType,
   CallIdEnum,
@@ -8,6 +8,8 @@ import {
   ModuleIdEnum,
   PolyxTransaction,
 } from '../../types';
+import { PolyxTransactionProps } from '../../types/models/PolyxTransaction';
+import { getAccountId, systematicIssuers } from '../consts';
 import { bytesToString, camelToSnakeCase, getBigIntValue, getTextValue } from '../util';
 import { HandlerArgs } from './common';
 
@@ -39,11 +41,38 @@ const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => 
 
   const did = getTextValue(rawIdentity);
   const identity = await Identity.get(did);
+
+  // treasury reimbursement is only 80% of the actual amount deducted
+  const reimbursementBalance = new BigNumber(getTextValue(rawBalance) || 0);
+  logger.info(reimbursementBalance.toString());
+  logger.info(
+    reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
+  );
+  const amount = BigInt(
+    reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
+  );
+  const details = getBasicDetails(args);
+
+  if (details.extrinsicId) {
+    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const protocolFeePolyxTransaction = transactions.find(
+      ({ eventId }) => eventId === EventIdEnum.FeeCharged
+    );
+    if (protocolFeePolyxTransaction && amount === protocolFeePolyxTransaction.amount) {
+      // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
+      // We ignore this case to insert in PolyxTransaction
+      return;
+    }
+  }
+
+  const { did: treasuryDid, accountId: treasuryAccount } = systematicIssuers.treasury;
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
+    ...details,
     identityId: did,
     address: identity?.primaryAccount,
-    amount: getBigIntValue(rawBalance),
+    toId: treasuryDid,
+    toAddress: getAccountId(treasuryAccount, rawIdentity.registry.chainSS58),
+    amount,
     type: BalanceType.Free,
   }).save();
 };
@@ -64,8 +93,34 @@ const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
 const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
   const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance, rawMemo] = args.params;
 
+  const amount = getBigIntValue(rawBalance);
+  const details = getBasicDetails(args);
+  if (details.extrinsicId) {
+    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const endowedPolyxTransaction = transactions.find(
+      ({ eventId }) => eventId === EventIdEnum.Endowed
+    );
+    /**
+     * in case when `balances.transfer` extrinsic is used to transfer some balance
+     * to an account for the first time, both `Endowed` and `Transfer` events are triggered,
+     * in this case we update the `Endowed` entry to reflect details of the account from which
+     * transfer was initiated and skip adding a separate `Transfer` entry
+     */
+    if (endowedPolyxTransaction && amount === endowedPolyxTransaction.amount) {
+      // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
+      // We ignore this case to insert in PolyxTransaction
+      Object.assign(endowedPolyxTransaction, {
+        identityId: getTextValue(rawFromDid),
+        address: getTextValue(rawFrom),
+        memo: bytesToString(rawMemo),
+      });
+      await endowedPolyxTransaction.save();
+      return;
+    }
+  }
+
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
+    ...details,
     identityId: getTextValue(rawFromDid),
     address: getTextValue(rawFrom),
     toId: getTextValue(rawToDid),
