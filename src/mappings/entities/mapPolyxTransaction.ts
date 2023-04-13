@@ -44,10 +44,6 @@ const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => 
 
   // treasury reimbursement is only 80% of the actual amount deducted
   const reimbursementBalance = new BigNumber(getTextValue(rawBalance) || 0);
-  logger.info(reimbursementBalance.toString());
-  logger.info(
-    reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
-  );
   const amount = BigInt(
     reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
   );
