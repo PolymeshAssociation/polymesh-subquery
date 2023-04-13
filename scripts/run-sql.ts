@@ -22,7 +22,7 @@ const main = async (): Promise<void> => {
     await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
     console.log('Applied initial SQL');
 
-    await postgres.query(migrationQueries().join('\n'));
+    await postgres.query((await migrationQueries()).join('\n'));
     console.log('Applied initial migration SQL');
 
     await updateVersion(postgres);
