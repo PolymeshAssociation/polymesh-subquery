@@ -93,6 +93,7 @@ enum EventIdEnum {
   Reserved
   Unreserved
   ReserveRepatriated
+  TransactionFeePaid
 
   ## transactionpayment ##
 
@@ -298,6 +299,8 @@ enum EventIdEnum {
   SetAssetMetadataValueDetails
   RegisterAssetMetadataLocalType
   RegisterAssetMetadataGlobalType
+  MetadataValueDeleted
+  LocalMetadataKeyDeleted
 
   ## capitaldistribution ##
   Created
