@@ -73,6 +73,7 @@ enum EventIdEnum {
   NewAccount
   KilledAccount
   Remarked
+  PlaceholderFillBlock
 
   ## babe ##
 
@@ -388,6 +389,9 @@ enum EventIdEnum {
   Canceled
   Dispatched
   CallLookupFailed
+  CallUnavailable
+  PeriodicFailed
+  PermanentlyOverweight
 
   ## settlement ##
   VenueCreated
@@ -472,6 +476,8 @@ enum EventIdEnum {
   ContractEmitted
   CodeRemoved
   ContractCodeUpdated
+  Called
+  DelegateCalled
 
   ## polymeshcontracts ##
 
@@ -577,6 +583,7 @@ enum CallIdEnum {
   kill_storage
   kill_prefix
   remark_with_event
+  placeholder_fill_block
 
   ## babe ##
   report_equivocation
@@ -935,6 +942,7 @@ enum CallIdEnum {
   execute_manual_instruction
   change_receipt_validity
   execute_scheduled_instruction
+  execute_scheduled_instruction_v2
   reschedule_instruction
   update_venue_signers
 
@@ -992,6 +1000,9 @@ enum CallIdEnum {
   instantiate
   upload_code
   remove_code
+  call_old_weight
+  instantiate_with_code_old_weight
+  instantiate_old_weight
 
   ## polymeshcontracts ##
   instantiate_with_code_perms
