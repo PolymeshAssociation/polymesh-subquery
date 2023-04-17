@@ -76,9 +76,37 @@ const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => 
 const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
   const [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;
 
+  const amount = getBigIntValue(rawBalance);
+  const details = getBasicDetails(args);
+  if (details.extrinsicId) {
+    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const transferPolyxTransaction = transactions.find(
+      ({ eventId }) => eventId === EventIdEnum.Transfer
+    );
+    /**
+     * in case when `treasury.disbursement` extrinsic is used to disburse some amount to an identity,
+     * both `Transfer` and `TreasuryDisbursement` events are triggered,
+     * in this case we update the `Transfer` entry to reflect `Disbursement`
+     * and skip adding a separate `TreasuryDisbursement` entry
+     */
+    if (transferPolyxTransaction && amount === transferPolyxTransaction.amount) {
+      // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
+      // We ignore this case to insert in PolyxTransaction
+      Object.assign(transferPolyxTransaction, {
+        eventId: EventIdEnum.TreasuryDisbursement,
+      });
+      await transferPolyxTransaction.save();
+      return;
+    }
+  }
+
+  const fromDid = getTextValue(rawFromIdentity);
+  const fromIdentity = await Identity.get(fromDid);
+
   await PolyxTransaction.create({
     ...getBasicDetails(args),
-    identityId: getTextValue(rawFromIdentity),
+    identityId: fromDid,
+    address: fromIdentity?.primaryAccount,
     toId: getTextValue(rawToDid),
     toAddress: getTextValue(rawTo),
     amount: getBigIntValue(rawBalance),
@@ -177,6 +205,28 @@ const handleBalanceSpent = async (args: HandlerArgs, type: BalanceType): Promise
   }).save();
 };
 
+const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
+  const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
+
+  // add the newly set free balance
+  await PolyxTransaction.create({
+    ...getBasicDetails(args),
+    toId: getTextValue(rawDid),
+    toAddress: getTextValue(rawAddress),
+    amount: getBigIntValue(rawFreeBalance),
+    type: BalanceType.Free,
+  }).save();
+
+  // add the newly set reserve balance
+  await PolyxTransaction.create({
+    ...getBasicDetails(args),
+    toId: getTextValue(rawDid),
+    toAddress: getTextValue(rawAddress),
+    amount: getBigIntValue(rawReservedBalance),
+    type: BalanceType.Reserved,
+  }).save();
+};
+
 const handleTreasury = async (args: HandlerArgs): Promise<void> => {
   const { eventId } = args;
   if (eventId === EventIdEnum.TreasuryReimbursement) {
@@ -197,16 +247,18 @@ const handleBalances = async (args: HandlerArgs): Promise<void> => {
       await handleBalanceReceived(args, BalanceType.Free);
       break;
     case EventIdEnum.Reserved:
-      await handleBalanceCharged(args, BalanceType.Free);
+      await handleBalanceCharged(args, BalanceType.Reserved);
       break;
     case EventIdEnum.Unreserved:
       await handleBalanceAdded(args, BalanceType.Free);
       break;
     case EventIdEnum.AccountBalanceBurned:
-      await handleBalanceSpent(args, BalanceType.Unbonded);
+      await handleBalanceSpent(args, BalanceType.Free);
+      break;
+    case EventIdEnum.BalanceSet:
+      await handleBalanceSet(args);
       break;
   }
-  // BalanceSet and ReserveRepatriated left to be handled
 };
 
 const handleStaking = async (args: HandlerArgs): Promise<void> => {
