@@ -1,6 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
 import {
+  Account,
   BalanceType,
   CallIdEnum,
   EventIdEnum,
@@ -155,13 +156,57 @@ const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
+const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
+  const [rawAddress, rawActualFee] = args.params;
+
+  const amount = getBigIntValue(rawActualFee);
+  const address = getTextValue(rawAddress);
+  const details = getBasicDetails(args);
+  if (details.extrinsicId) {
+    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const reimbursementTransaction = transactions
+      .reverse()
+      .find(({ eventId }) => eventId === EventIdEnum.TreasuryReimbursement);
+    /**
+     * From chain 5.4, with `TreasuryReimbursement` there is a `TransactionFeePaid` event as well.
+     * In this case, we will update the already inserted `TreasuryReimbursement` to point that it was indeed for done for `TransactionFeePaid`
+     * We also update the amount to get the exact value (since in treasury reimbursement, we calculate the amount as amount * 1.25 which can be off by some balance amount)
+     */
+    if (reimbursementTransaction) {
+      Object.assign(reimbursementTransaction, {
+        address,
+        amount,
+        moduleId: ModuleIdEnum.transactionpayment,
+        eventId: EventIdEnum.TransactionFeePaid,
+      });
+      await reimbursementTransaction.save();
+      return;
+    }
+  }
+
+  const account = await Account.get(address);
+
+  await PolyxTransaction.create({
+    ...details,
+    identityId: account?.identityId,
+    address,
+    amount,
+    type: BalanceType.Free,
+  }).save();
+};
+
 const handleBalanceAdded = async (args: HandlerArgs, type: BalanceType): Promise<void> => {
   const [rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
+  const address = getTextValue(rawAddress);
+
+  const account = await Account.get(address);
+
   await PolyxTransaction.create({
     ...getBasicDetails(args),
-    toAddress: getTextValue(rawAddress),
+    toAddress: address,
+    toId: account?.identityId,
     amount,
     type,
   }).save();
@@ -171,9 +216,16 @@ const handleBalanceCharged = async (args: HandlerArgs, type: BalanceType): Promi
   const [rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
+  const address = getTextValue(rawAddress);
+
+  const account = await Account.get(address);
+
+  logger.info(address, account);
+
   await PolyxTransaction.create({
     ...getBasicDetails(args),
-    address: getTextValue(rawAddress),
+    address,
+    identityId: account?.identityId,
     amount,
     type,
   }).save();
@@ -286,6 +338,13 @@ const handleProtocolFee = async (args: HandlerArgs): Promise<void> => {
   }
 };
 
+const handleTransactionPayment = async (args: HandlerArgs): Promise<void> => {
+  const { eventId } = args;
+  if (eventId === EventIdEnum.TransactionFeePaid) {
+    await handleTransactionFeePaid(args);
+  }
+};
+
 export async function mapPolyxTransaction(args: HandlerArgs): Promise<void> {
   const { moduleId } = args;
   if (moduleId === ModuleIdEnum.treasury) {
@@ -299,5 +358,8 @@ export async function mapPolyxTransaction(args: HandlerArgs): Promise<void> {
   }
   if (moduleId === ModuleIdEnum.protocolfee) {
     await handleProtocolFee(args);
+  }
+  if (moduleId === ModuleIdEnum.transactionpayment) {
+    await handleTransactionPayment(args);
   }
 }
