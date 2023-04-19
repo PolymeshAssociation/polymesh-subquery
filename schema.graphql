@@ -1983,15 +1983,20 @@ type SubqueryVersion @entity {
   version: String!
 }
 
-enum BalanceType {
+"""
+Represents possible all possible balance types
+"""
+enum BalanceTypeEnum {
   Free
   Reserved
-  Unreserved
   Bonded
   Unbonded
   Locked
 }
 
+"""
+Represents transactions involving POLYX
+"""
 type PolyxTransaction @entity {
   id: ID!
   identityId: String
@@ -1999,7 +2004,7 @@ type PolyxTransaction @entity {
   toId: String
   toAddress: String
   amount: BigInt!
-  type: BalanceType!
+  type: BalanceTypeEnum!
   moduleId: ModuleIdEnum
   callId: CallIdEnum
   eventId: EventIdEnum

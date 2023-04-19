@@ -2,7 +2,7 @@ import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
 import {
   Account,
-  BalanceType,
+  BalanceTypeEnum,
   CallIdEnum,
   EventIdEnum,
   Identity,
@@ -70,7 +70,7 @@ const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => 
     toId: treasuryDid,
     toAddress: getAccountId(treasuryAccount, rawIdentity.registry.chainSS58),
     amount,
-    type: BalanceType.Free,
+    type: BalanceTypeEnum.Free,
   }).save();
 };
 
@@ -111,7 +111,7 @@ const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
     toId: getTextValue(rawToDid),
     toAddress: getTextValue(rawTo),
     amount: getBigIntValue(rawBalance),
-    type: BalanceType.Free,
+    type: BalanceTypeEnum.Free,
   }).save();
 };
 
@@ -152,7 +152,7 @@ const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
     toAddress: getTextValue(rawTo),
     amount: getBigIntValue(rawBalance),
     memo: bytesToString(rawMemo),
-    type: BalanceType.Free,
+    type: BalanceTypeEnum.Free,
   }).save();
 };
 
@@ -191,11 +191,11 @@ const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
     identityId: account?.identityId,
     address,
     amount,
-    type: BalanceType.Free,
+    type: BalanceTypeEnum.Free,
   }).save();
 };
 
-const handleBalanceAdded = async (args: HandlerArgs, type: BalanceType): Promise<void> => {
+const handleBalanceAdded = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
   const [rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
@@ -212,7 +212,7 @@ const handleBalanceAdded = async (args: HandlerArgs, type: BalanceType): Promise
   }).save();
 };
 
-const handleBalanceCharged = async (args: HandlerArgs, type: BalanceType): Promise<void> => {
+const handleBalanceCharged = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
   const [rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
@@ -231,7 +231,7 @@ const handleBalanceCharged = async (args: HandlerArgs, type: BalanceType): Promi
   }).save();
 };
 
-const handleBalanceReceived = async (args: HandlerArgs, type: BalanceType): Promise<void> => {
+const handleBalanceReceived = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
   const [rawDid, rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
@@ -244,7 +244,7 @@ const handleBalanceReceived = async (args: HandlerArgs, type: BalanceType): Prom
   }).save();
 };
 
-const handleBalanceSpent = async (args: HandlerArgs, type: BalanceType): Promise<void> => {
+const handleBalanceSpent = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
   const [rawDid, rawAddress, rawBalance] = args.params;
 
   const amount = getBigIntValue(rawBalance);
@@ -266,7 +266,7 @@ const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
     toId: getTextValue(rawDid),
     toAddress: getTextValue(rawAddress),
     amount: getBigIntValue(rawFreeBalance),
-    type: BalanceType.Free,
+    type: BalanceTypeEnum.Free,
   }).save();
 
   // add the newly set reserve balance
@@ -275,7 +275,7 @@ const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
     toId: getTextValue(rawDid),
     toAddress: getTextValue(rawAddress),
     amount: getBigIntValue(rawReservedBalance),
-    type: BalanceType.Reserved,
+    type: BalanceTypeEnum.Reserved,
   }).save();
 };
 
@@ -296,16 +296,16 @@ const handleBalances = async (args: HandlerArgs): Promise<void> => {
       await handleBalanceTransfer(args);
       break;
     case EventIdEnum.Endowed:
-      await handleBalanceReceived(args, BalanceType.Free);
+      await handleBalanceReceived(args, BalanceTypeEnum.Free);
       break;
     case EventIdEnum.Reserved:
-      await handleBalanceCharged(args, BalanceType.Reserved);
+      await handleBalanceCharged(args, BalanceTypeEnum.Reserved);
       break;
     case EventIdEnum.Unreserved:
-      await handleBalanceAdded(args, BalanceType.Free);
+      await handleBalanceAdded(args, BalanceTypeEnum.Free);
       break;
     case EventIdEnum.AccountBalanceBurned:
-      await handleBalanceSpent(args, BalanceType.Free);
+      await handleBalanceSpent(args, BalanceTypeEnum.Free);
       break;
     case EventIdEnum.BalanceSet:
       await handleBalanceSet(args);
@@ -317,16 +317,16 @@ const handleStaking = async (args: HandlerArgs): Promise<void> => {
   const { eventId } = args;
   switch (eventId) {
     case EventIdEnum.Bonded:
-      await handleBalanceSpent(args, BalanceType.Bonded);
+      await handleBalanceSpent(args, BalanceTypeEnum.Bonded);
       break;
     case EventIdEnum.Unbonded:
-      await handleBalanceReceived(args, BalanceType.Unbonded);
+      await handleBalanceReceived(args, BalanceTypeEnum.Unbonded);
       break;
     case EventIdEnum.Reward:
-      await handleBalanceReceived(args, BalanceType.Free);
+      await handleBalanceReceived(args, BalanceTypeEnum.Free);
       break;
     case EventIdEnum.Withdrawn:
-      await handleBalanceAdded(args, BalanceType.Unbonded);
+      await handleBalanceAdded(args, BalanceTypeEnum.Unbonded);
       break;
   }
 };
@@ -334,7 +334,7 @@ const handleStaking = async (args: HandlerArgs): Promise<void> => {
 const handleProtocolFee = async (args: HandlerArgs): Promise<void> => {
   const { eventId } = args;
   if (eventId === EventIdEnum.FeeCharged) {
-    await handleBalanceCharged(args, BalanceType.Free);
+    await handleBalanceCharged(args, BalanceTypeEnum.Free);
   }
 };
 
