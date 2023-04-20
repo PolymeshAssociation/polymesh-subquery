@@ -1,8 +1,7 @@
-import { decodeAddress } from '@polkadot/keyring';
+import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
   ClaimTypeEnum,
@@ -15,6 +14,7 @@ import {
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
+import { Portfolio } from '../types/models/Portfolio';
 import { Attributes } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
@@ -112,6 +112,10 @@ export const serializeAccount = (item: Codec): string | null => {
     return null;
   }
   return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
+};
+
+export const getAccountKey = (item: string, ss58Format?: number): string => {
+  return encodeAddress(item.toString(), ss58Format);
 };
 
 export const getFirstKeyFromJson = (item: Codec): string => {

@@ -42,12 +42,16 @@ import {
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
 import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
+import migrationHandlers from './migrations/migrationHandlers';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
     const header = block.block.header;
     const blockId = header.number.toNumber();
+    const ss58Format = header.registry.chainSS58;
+
     let countExtrinsicsSuccess = 0;
+    await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
     for (const e of block.events) {
       if (e.event.method == 'ExtrinsicSuccess') {

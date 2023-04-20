@@ -3,15 +3,23 @@ import BigNumber from 'bignumber.js';
 import {
   Account,
   BalanceTypeEnum,
+  Block,
   CallIdEnum,
+  Event,
   EventIdEnum,
+  Extrinsic,
   Identity,
   ModuleIdEnum,
   PolyxTransaction,
 } from '../../types';
 import { PolyxTransactionProps } from '../../types/models/PolyxTransaction';
-import { getAccountId, systematicIssuers } from '../consts';
-import { bytesToString, camelToSnakeCase, getBigIntValue, getTextValue } from '../util';
+import {
+  bytesToString,
+  camelToSnakeCase,
+  getAccountKey,
+  getBigIntValue,
+  getTextValue,
+} from '../util';
 import { HandlerArgs } from './common';
 
 const getExtrinsicDetails = (
@@ -27,28 +35,54 @@ const getExtrinsicDetails = (
   return { callId, extrinsicId };
 };
 
-const getBasicDetails = ({ blockId, eventId, moduleId, event }: HandlerArgs) => ({
-  id: `${blockId}/${event.idx}`,
-  moduleId,
-  eventId,
-  ...getExtrinsicDetails(blockId, event),
-  datetime: event.block.timestamp,
-  createdBlockId: blockId,
-  updatedBlockId: blockId,
-});
+const getBasicDetails = async (args: HandlerArgs | Event) => {
+  if (args instanceof Event) {
+    const { id, moduleId, eventId, blockId } = args;
+    const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
+    const block = await Block.get(blockId);
+    return {
+      id,
+      moduleId,
+      eventId,
+      callId: extrinsic?.callId,
+      extrinsicId: extrinsic?.id,
+      datetime: block?.datetime,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  } else {
+    const { blockId, eventId, moduleId, event } = args;
+    return {
+      id: `${blockId}/${event.idx}`,
+      moduleId,
+      eventId,
+      ...getExtrinsicDetails(blockId, event),
+      datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  }
+};
 
-const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => {
-  const [rawIdentity, rawBalance] = args.params;
+const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<void> => {
+  let did, balance;
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    [{ value: did }, { value: balance }] = attributes;
+  } else {
+    const [rawIdentity, rawBalance] = args.params;
+    did = getTextValue(rawIdentity);
+    balance = getTextValue(rawBalance);
+  }
 
-  const did = getTextValue(rawIdentity);
   const identity = await Identity.get(did);
 
   // treasury reimbursement is only 80% of the actual amount deducted
-  const reimbursementBalance = new BigNumber(getTextValue(rawBalance) || 0);
+  const reimbursementBalance = new BigNumber(balance || 0);
   const amount = BigInt(
     reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
   );
-  const details = getBasicDetails(args);
+  const details = await getBasicDetails(args);
 
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
@@ -62,23 +96,39 @@ const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => 
     }
   }
 
-  const { did: treasuryDid, accountId: treasuryAccount } = systematicIssuers.treasury;
   await PolyxTransaction.create({
     ...details,
     identityId: did,
     address: identity?.primaryAccount,
-    toId: treasuryDid,
-    toAddress: getAccountId(treasuryAccount, rawIdentity.registry.chainSS58),
+    toId: null,
+    toAddress: null,
     amount,
     type: BalanceTypeEnum.Free,
   }).save();
 };
 
-const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
-  const [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;
+const handleTreasuryDisbursement = async (
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> => {
+  let identityId, toId, toAddress, amount;
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: did }, { value: toDid }, { value: toAddressHex }, { value: balance }] =
+      attributes;
+    identityId = did;
+    toId = toDid;
+    amount = BigInt(balance);
+    toAddress = getAccountKey(toAddressHex, ss58Format);
+  } else {
+    const [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;
+    identityId = getTextValue(rawFromIdentity);
+    toId = getTextValue(rawToDid);
+    toAddress = getTextValue(rawTo);
+    amount = getBigIntValue(rawBalance);
+  }
 
-  const amount = getBigIntValue(rawBalance);
-  const details = getBasicDetails(args);
+  const details = await getBasicDetails(args);
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const transferPolyxTransaction = transactions.find(
@@ -101,25 +151,54 @@ const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
     }
   }
 
-  const fromDid = getTextValue(rawFromIdentity);
-  const fromIdentity = await Identity.get(fromDid);
+  const fromIdentity = await Identity.get(identityId);
 
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
-    identityId: fromDid,
+    ...details,
+    identityId,
     address: fromIdentity?.primaryAccount,
-    toId: getTextValue(rawToDid),
-    toAddress: getTextValue(rawTo),
-    amount: getBigIntValue(rawBalance),
+    toId,
+    toAddress,
+    amount,
     type: BalanceTypeEnum.Free,
   }).save();
 };
 
-const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
-  const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance, rawMemo] = args.params;
+const handleBalanceTransfer = async (
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> => {
+  let identityId, address, toId, toAddress, amount, memo;
+  if (args instanceof Event) {
+    let balance = 0;
+    let addressHex = null,
+      toAddressHex = null;
+    const attributes = JSON.parse(args.attributesTxt);
+    [
+      { value: identityId },
+      { value: addressHex },
+      { value: toId },
+      { value: toAddressHex },
+      { value: balance },
+      { value: memo },
+    ] = attributes;
 
-  const amount = getBigIntValue(rawBalance);
-  const details = getBasicDetails(args);
+    amount = BigInt(balance);
+    address = getAccountKey(addressHex, ss58Format);
+    toAddress = getAccountKey(toAddressHex, ss58Format);
+  } else {
+    const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance, rawMemo] = args.params;
+
+    amount = getBigIntValue(rawBalance);
+    identityId = getTextValue(rawFromDid);
+    address = getTextValue(rawFrom);
+    toId = getTextValue(rawToDid);
+    toAddress = getTextValue(rawTo);
+    memo = bytesToString(rawMemo);
+  }
+
+  const details = await getBasicDetails(args);
+
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const endowedPolyxTransaction = transactions.find(
@@ -135,9 +214,9 @@ const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
       // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
       // We ignore this case to insert in PolyxTransaction
       Object.assign(endowedPolyxTransaction, {
-        identityId: getTextValue(rawFromDid),
-        address: getTextValue(rawFrom),
-        memo: bytesToString(rawMemo),
+        identityId,
+        address,
+        memo,
       });
       await endowedPolyxTransaction.save();
       return;
@@ -146,22 +225,34 @@ const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
 
   await PolyxTransaction.create({
     ...details,
-    identityId: getTextValue(rawFromDid),
-    address: getTextValue(rawFrom),
-    toId: getTextValue(rawToDid),
-    toAddress: getTextValue(rawTo),
-    amount: getBigIntValue(rawBalance),
-    memo: bytesToString(rawMemo),
+    identityId,
+    address,
+    toId,
+    toAddress,
+    amount,
+    memo,
     type: BalanceTypeEnum.Free,
   }).save();
 };
 
-const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
-  const [rawAddress, rawActualFee] = args.params;
+const handleTransactionFeePaid = async (
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> => {
+  let address, amount;
 
-  const amount = getBigIntValue(rawActualFee);
-  const address = getTextValue(rawAddress);
-  const details = getBasicDetails(args);
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: addressHex }, { value: balance }] = attributes;
+    address = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+  } else {
+    const [rawAddress, rawActualFee] = args.params;
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawActualFee);
+  }
+
+  const details = await getBasicDetails(args);
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const reimbursementTransaction = transactions
@@ -195,16 +286,28 @@ const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleBalanceAdded = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
-  const [rawAddress, rawBalance] = args.params;
+const handleBalanceAdded = async (
+  args: HandlerArgs | Event,
+  type: BalanceTypeEnum,
+  ss58Format?: number
+): Promise<void> => {
+  let address, amount;
 
-  const amount = getBigIntValue(rawBalance);
-  const address = getTextValue(rawAddress);
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: addressHex }, { value: balance }] = attributes;
+    address = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+  } else {
+    const [rawAddress, rawBalance] = args.params;
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  }
 
   const account = await Account.get(address);
 
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
+    ...(await getBasicDetails(args)),
     toAddress: address,
     toId: account?.identityId,
     amount,
@@ -212,18 +315,28 @@ const handleBalanceAdded = async (args: HandlerArgs, type: BalanceTypeEnum): Pro
   }).save();
 };
 
-const handleBalanceCharged = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
-  const [rawAddress, rawBalance] = args.params;
+const handleBalanceCharged = async (
+  args: HandlerArgs | Event,
+  type: BalanceTypeEnum,
+  ss58Format?: number
+): Promise<void> => {
+  let address, amount;
 
-  const amount = getBigIntValue(rawBalance);
-  const address = getTextValue(rawAddress);
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: addressHex }, { value: balance }] = attributes;
+    address = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+  } else {
+    const [rawAddress, rawBalance] = args.params;
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  }
 
   const account = await Account.get(address);
 
-  logger.info(address, account);
-
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
+    ...(await getBasicDetails(args)),
     address,
     identityId: account?.identityId,
     amount,
@@ -231,127 +344,180 @@ const handleBalanceCharged = async (args: HandlerArgs, type: BalanceTypeEnum): P
   }).save();
 };
 
-const handleBalanceReceived = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
-  const [rawDid, rawAddress, rawBalance] = args.params;
+const handleBalanceReceived = async (
+  args: HandlerArgs | Event,
+  type: BalanceTypeEnum,
+  ss58Format?: number
+): Promise<void> => {
+  let toId, toAddress, amount;
 
-  const amount = getBigIntValue(rawBalance);
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: did }, { value: addressHex }, { value: balance }] = attributes;
+    toId = did;
+    toAddress = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+  } else {
+    const [rawDid, rawAddress, rawBalance] = args.params;
+    toId = getTextValue(rawDid);
+    toAddress = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  }
+
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
-    toId: getTextValue(rawDid),
-    toAddress: getTextValue(rawAddress),
+    ...(await getBasicDetails(args)),
+    toId,
+    toAddress,
     amount,
     type,
   }).save();
 };
 
-const handleBalanceSpent = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
-  const [rawDid, rawAddress, rawBalance] = args.params;
+const handleBalanceSpent = async (
+  args: HandlerArgs | Event,
+  type: BalanceTypeEnum,
+  ss58Format?: number
+): Promise<void> => {
+  let identityId, address, amount;
 
-  const amount = getBigIntValue(rawBalance);
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: did }, { value: addressHex }, { value: balance }] = attributes;
+    identityId = did;
+    address = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+  } else {
+    const [rawDid, rawAddress, rawBalance] = args.params;
+    identityId = getTextValue(rawDid);
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  }
+
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
-    identityId: getTextValue(rawDid),
-    address: getTextValue(rawAddress),
+    ...(await getBasicDetails(args)),
+    identityId,
+    address,
     amount,
     type,
   }).save();
 };
 
-const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
-  const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
+const handleBalanceSet = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
+  let toId, toAddress, amount, reservedAmount;
+
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    const [{ value: did }, { value: addressHex }, { value: balance }, { value: reservedBalance }] =
+      attributes;
+    toId = did;
+    toAddress = getAccountKey(addressHex, ss58Format);
+    amount = BigInt(balance);
+    reservedAmount = BigInt(reservedBalance);
+  } else {
+    const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
+    toId = getTextValue(rawDid);
+    toAddress = getTextValue(rawAddress);
+    amount = getBigIntValue(rawFreeBalance);
+    reservedAmount = getBigIntValue(rawReservedBalance);
+  }
+
+  const details = await getBasicDetails(args);
 
   // add the newly set free balance
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
-    toId: getTextValue(rawDid),
-    toAddress: getTextValue(rawAddress),
-    amount: getBigIntValue(rawFreeBalance),
+    ...details,
+    toId,
+    toAddress,
+    amount,
     type: BalanceTypeEnum.Free,
   }).save();
 
   // add the newly set reserve balance
   await PolyxTransaction.create({
-    ...getBasicDetails(args),
-    toId: getTextValue(rawDid),
-    toAddress: getTextValue(rawAddress),
-    amount: getBigIntValue(rawReservedBalance),
+    ...details,
+    toId,
+    toAddress,
+    amount: reservedAmount,
     type: BalanceTypeEnum.Reserved,
   }).save();
 };
 
-const handleTreasury = async (args: HandlerArgs): Promise<void> => {
+const handleTreasury = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
   const { eventId } = args;
   if (eventId === EventIdEnum.TreasuryReimbursement) {
     await handleTreasuryReimbursement(args);
   }
   if (eventId === EventIdEnum.TreasuryDisbursement) {
-    await handleTreasuryDisbursement(args);
+    await handleTreasuryDisbursement(args, ss58Format);
   }
 };
 
-const handleBalances = async (args: HandlerArgs): Promise<void> => {
+const handleBalances = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
   const { eventId } = args;
   switch (eventId) {
     case EventIdEnum.Transfer:
-      await handleBalanceTransfer(args);
+      await handleBalanceTransfer(args, ss58Format);
       break;
     case EventIdEnum.Endowed:
-      await handleBalanceReceived(args, BalanceTypeEnum.Free);
+      await handleBalanceReceived(args, BalanceTypeEnum.Free, ss58Format);
       break;
     case EventIdEnum.Reserved:
-      await handleBalanceCharged(args, BalanceTypeEnum.Reserved);
+      await handleBalanceCharged(args, BalanceTypeEnum.Reserved, ss58Format);
       break;
     case EventIdEnum.Unreserved:
-      await handleBalanceAdded(args, BalanceTypeEnum.Free);
+      await handleBalanceAdded(args, BalanceTypeEnum.Free, ss58Format);
       break;
     case EventIdEnum.AccountBalanceBurned:
-      await handleBalanceSpent(args, BalanceTypeEnum.Free);
+      await handleBalanceSpent(args, BalanceTypeEnum.Free, ss58Format);
       break;
     case EventIdEnum.BalanceSet:
-      await handleBalanceSet(args);
+      await handleBalanceSet(args, ss58Format);
       break;
   }
 };
 
-const handleStaking = async (args: HandlerArgs): Promise<void> => {
+const handleStaking = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
   const { eventId } = args;
   switch (eventId) {
     case EventIdEnum.Bonded:
-      await handleBalanceSpent(args, BalanceTypeEnum.Bonded);
+      await handleBalanceSpent(args, BalanceTypeEnum.Bonded, ss58Format);
       break;
     case EventIdEnum.Unbonded:
-      await handleBalanceReceived(args, BalanceTypeEnum.Unbonded);
+      await handleBalanceReceived(args, BalanceTypeEnum.Unbonded, ss58Format);
       break;
     case EventIdEnum.Reward:
-      await handleBalanceReceived(args, BalanceTypeEnum.Free);
+      await handleBalanceReceived(args, BalanceTypeEnum.Free, ss58Format);
       break;
     case EventIdEnum.Withdrawn:
-      await handleBalanceAdded(args, BalanceTypeEnum.Unbonded);
+      await handleBalanceAdded(args, BalanceTypeEnum.Unbonded, ss58Format);
       break;
   }
 };
 
-const handleProtocolFee = async (args: HandlerArgs): Promise<void> => {
+const handleProtocolFee = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
   const { eventId } = args;
   if (eventId === EventIdEnum.FeeCharged) {
-    await handleBalanceCharged(args, BalanceTypeEnum.Free);
+    await handleBalanceCharged(args, BalanceTypeEnum.Free, ss58Format);
   }
 };
 
-const handleTransactionPayment = async (args: HandlerArgs): Promise<void> => {
+const handleTransactionPayment = async (args: HandlerArgs | Event): Promise<void> => {
   const { eventId } = args;
   if (eventId === EventIdEnum.TransactionFeePaid) {
     await handleTransactionFeePaid(args);
   }
 };
 
-export async function mapPolyxTransaction(args: HandlerArgs): Promise<void> {
+export async function mapPolyxTransaction(
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> {
   const { moduleId } = args;
   if (moduleId === ModuleIdEnum.treasury) {
     await handleTreasury(args);
   }
   if (moduleId === ModuleIdEnum.balances) {
-    await handleBalances(args);
+    await handleBalances(args, ss58Format);
   }
   if (moduleId === ModuleIdEnum.staking) {
     await handleStaking(args);
