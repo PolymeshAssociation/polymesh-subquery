@@ -291,24 +291,25 @@ const handleBalanceAdded = async (
   type: BalanceTypeEnum,
   ss58Format?: number
 ): Promise<void> => {
-  let address, amount;
+  let toAddress, amount;
 
   if (args instanceof Event) {
     const attributes = JSON.parse(args.attributesTxt);
     const [{ value: addressHex }, { value: balance }] = attributes;
-    address = getAccountKey(addressHex, ss58Format);
+    toAddress = getAccountKey(addressHex, ss58Format);
     amount = BigInt(balance);
   } else {
     const [rawAddress, rawBalance] = args.params;
-    address = getTextValue(rawAddress);
+    toAddress = getTextValue(rawAddress);
     amount = getBigIntValue(rawBalance);
   }
 
-  const account = await Account.get(address);
+  const details = await getBasicDetails(args);
+  const account = await Account.get(toAddress);
 
   await PolyxTransaction.create({
-    ...(await getBasicDetails(args)),
-    toAddress: address,
+    ...details,
+    toAddress: toAddress,
     toId: account?.identityId,
     amount,
     type,
