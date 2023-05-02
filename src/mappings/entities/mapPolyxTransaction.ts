@@ -37,7 +37,7 @@ const getExtrinsicDetails = (
 
 const getBasicDetails = async (args: HandlerArgs | Event) => {
   if (args instanceof Event) {
-    const { id, moduleId, eventId, blockId } = args;
+    const { id, moduleId, eventId, blockId, eventIdx } = args;
     const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
     const block = await Block.get(blockId);
     return {
@@ -47,6 +47,7 @@ const getBasicDetails = async (args: HandlerArgs | Event) => {
       callId: extrinsic?.callId,
       extrinsicId: extrinsic?.id,
       datetime: block?.datetime,
+      eventIdx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     };
@@ -58,6 +59,7 @@ const getBasicDetails = async (args: HandlerArgs | Event) => {
       eventId,
       ...getExtrinsicDetails(blockId, event),
       datetime: event.block.timestamp,
+      eventIdx: event.idx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     };

@@ -2011,6 +2011,7 @@ type PolyxTransaction @entity {
   memo: String
   extrinsic: Extrinsic
   datetime: Date!
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
