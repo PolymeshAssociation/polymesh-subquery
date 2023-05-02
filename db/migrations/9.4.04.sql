@@ -1,7 +1,7 @@
 -- creating asset_transactions table for already running SQ
 create table if not exists asset_transactions
 (
-  id text not null,
+  id text not null PRIMARY KEY,
   asset_id  text not null,
   from_portfolio_id text,
   to_portfolio_id text,
@@ -32,11 +32,11 @@ alter table asset_transactions
   add constraint "asset_transactions_updated_block_id_fkey" foreign key (updated_block_id) references blocks(id) on update cascade;
 
 create index if not exists "asset_transactions_pkey" on asset_transactions using btree (id);
-create index if not exists "asset_transactions_asset_id" on asset_transactions using hash (asset_id)
-create index if not exists "asset_transactions_created_block_id" on asset_transactions using hash (created_block_id)
-create index if not exists "asset_transactions_from_portfolio_id" on asset_transactions using hash (from_portfolio_id)
-create index if not exists "asset_transactions_to_portfolio_id" on asset_transactions using hash (to_portfolio_id)
-create index if not exists "asset_transactions_updated_block_id" on asset_transactions using hash (updated_block_id)
+create index if not exists "asset_transactions_asset_id" on asset_transactions using hash (asset_id);
+create index if not exists "asset_transactions_created_block_id" on asset_transactions using hash (created_block_id);
+create index if not exists "asset_transactions_from_portfolio_id" on asset_transactions using hash (from_portfolio_id);
+create index if not exists "asset_transactions_to_portfolio_id" on asset_transactions using hash (to_portfolio_id);
+create index if not exists "asset_transactions_updated_block_id" on asset_transactions using hash (updated_block_id);
 
 -- Inserting data for already processed blocks
 insert into asset_transactions 
