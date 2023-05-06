@@ -1,7 +1,10 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
+import { v4 as uuid } from 'uuid';
+import { AccountHistoryProps } from 'polymesh-subql/types/models/AccountHistory';
 import {
   Account,
+  AccountHistory,
   AssetPermissions,
   EventIdEnum,
   Identity,
@@ -55,13 +58,35 @@ export async function mapIdentities({
   }
 
   if (eventId === EventIdEnum.PrimaryKeyUpdated) {
-    await handlePrimaryKeyUpdated(blockId, eventId, params);
+    await handlePrimaryKeyUpdated(blockId, eventId, params, datetime);
   }
 
   if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
-    await handleSecondaryKeyLeftIdentity(params);
+    await handleSecondaryKeyLeftIdentity(params, eventId, blockId, datetime);
   }
 }
+
+const createHistoryEntry = async (
+  eventId: EventIdEnum,
+  identityId: string,
+  address: string,
+  blockId: string,
+  datetime: Date
+): Promise<void> => {
+  const historyData: Omit<AccountHistoryProps, 'id'> = {
+    eventId,
+    accountId: address,
+    identityId,
+    permissionsId: address,
+    updatedBlockId: blockId,
+    datetime,
+  };
+
+  const historyEntry = new AccountHistory(uuid());
+  Object.assign(historyEntry, historyData);
+
+  await historyEntry.save();
+};
 
 /**
  * Returns Identity for a given DID
@@ -375,12 +400,17 @@ const handleSecondaryKeysAdded = async (
 const handlePrimaryKeyUpdated = async (
   blockId: string,
   eventId,
-  params: Codec[]
+  params: Codec[],
+  datetime: Date
 ): Promise<void> => {
   const [rawDid, , newKey] = params;
   const address = getTextValue(newKey);
 
   const identity = await getIdentity(getTextValue(rawDid));
+  const [account, permissions] = await Promise.all([
+    Account.get(identity.primaryAccount),
+    Permissions.get(identity.primaryAccount),
+  ]);
 
   Object.assign(identity, {
     primaryAccount: address,
@@ -388,10 +418,41 @@ const handlePrimaryKeyUpdated = async (
     eventId,
   });
 
-  await identity.save();
+  const newPermissions = new Permissions(address);
+  account.identityId = null;
+  permissions.id = address;
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, ...oldPermissions } = permissions;
+
+  Object.assign(newPermissions, oldPermissions);
+
+  await Promise.all([
+    identity.save(),
+    newPermissions.save(),
+    Account.create({
+      id: address,
+      address,
+      identityId: identity.id,
+      permissionsId: address,
+      eventId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+      datetime,
+    }).save(),
+    // unlink the old account from the identity
+    account.save(),
+    Permissions.remove(account.id),
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime),
+  ]);
 };
 
-const handleSecondaryKeyLeftIdentity = async (params: Codec[]): Promise<void> => {
+const handleSecondaryKeyLeftIdentity = async (
+  params: Codec[],
+  eventId: EventIdEnum,
+  blockId: string,
+  datetime: Date
+): Promise<void> => {
   const [, rawAccount] = params;
 
   const account = JSON.parse(rawAccount.toString()) as MeshAccount;
@@ -405,5 +466,13 @@ const handleSecondaryKeyLeftIdentity = async (params: Codec[]): Promise<void> =>
     ({ account: address } = account);
   }
 
-  await Permissions.remove(address);
+  const accountEntity = await Account.get(address);
+  const did = accountEntity.identityId;
+  accountEntity.identityId = null;
+
+  await Promise.all([
+    Permissions.remove(address),
+    accountEntity.save(),
+    createHistoryEntry(eventId, did, address, blockId, datetime),
+  ]);
 };

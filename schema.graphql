@@ -1244,11 +1244,24 @@ Before an Account can sign most Extrinsics it must first be attached to an Ident
 type Account @entity {
   id: ID!
   address: String! @index(unique: true)
-  identity: Identity!
+  identity: Identity
   eventId: EventIdEnum!
   permissions: Permissions!
   datetime: Date!
   createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents historical data of identites assigned to an account
+"""
+type AccountHistory @entity {
+  id: ID!
+  account: Account!
+  identity: Identity!
+  eventId: EventIdEnum!
+  permissions: Permissions!
+  datetime: Date!
   updatedBlock: Block!
 }
 

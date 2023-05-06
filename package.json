@@ -35,7 +35,8 @@
   "dependencies": {
     "@polkadot/api": "^9",
     "bignumber.js": "^9.0.2",
-    "typeorm": "^0.2.34"
+    "typeorm": "^0.2.34",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@apollo/client": "^3.4.16",
