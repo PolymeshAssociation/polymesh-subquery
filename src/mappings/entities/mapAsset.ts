@@ -209,8 +209,10 @@ const handleIssued = async (
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
+  const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
+    params;
 
+  const issuerDid = getTextValue(rawBeneficiaryDid);
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
@@ -220,11 +222,11 @@ const handleIssued = async (
   asset.totalSupply += issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
-  assetOwner.amount += issuedAmount;
-  assetOwner.updatedBlockId = blockId;
+  const assetHolder = await getAssetHolder(ticker, issuerDid, blockId);
+  assetHolder.amount += issuedAmount;
+  assetHolder.updatedBlockId = blockId;
 
-  const promises = [asset.save(), assetOwner.save()];
+  const promises = [asset.save(), assetHolder.save()];
   if (fundingRound) {
     promises.push(
       Funding.create({
@@ -244,8 +246,9 @@ const handleIssued = async (
 };
 
 const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
-  const [, rawTicker, , rawAmount] = params;
+  const [, rawTicker, rawBeneficiaryDid, rawAmount] = params;
 
+  const issuerDid = getTextValue(rawBeneficiaryDid);
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
 
@@ -253,11 +256,11 @@ const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> =
   asset.totalSupply -= issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
-  assetOwner.amount -= issuedAmount;
-  assetOwner.updatedBlockId = blockId;
+  const assetHolder = await getAssetHolder(ticker, issuerDid, blockId);
+  assetHolder.amount -= issuedAmount;
+  assetHolder.updatedBlockId = blockId;
 
-  const promises = [asset.save(), assetOwner.save()];
+  const promises = [asset.save(), assetHolder.save()];
 
   await Promise.all(promises);
 };
