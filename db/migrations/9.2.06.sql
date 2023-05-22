@@ -1,37 +1,23 @@
-DO $$
-BEGIN
-   IF EXISTS (
-      SELECT 1
-      FROM information_schema.columns 
-      WHERE table_schema = 'public'
-            AND table_name = 'accounts'
-            AND column_name = 'identity_id'
-      ) 
-   THEN 
-      IF EXISTS (
-         SELECT 1
-         FROM information_schema.columns 
-         WHERE table_schema = 'public'
-               AND table_name = 'accounts'
-               AND column_name = 'identity_id'
-               AND is_nullable = 'NO' )
-      THEN
-         ALTER TABLE public.accounts ALTER COLUMN identity_id DROP NOT NULL;
-      END IF;
-   END IF;
-END $$;
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+ALTER TABLE public.accounts ALTER COLUMN identity_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS account_history (
-    id text NOT NULL DEFAULT uuid_generate_v4(),
-    account_id text,
-    identity_id text,
-    event_id public_enum_8f5a39c8ee,
-    permissions_id text,
-    datetime timestamp(6),
-    updated_block_id text
+    id text NOT NULL PRIMARY KEY,
+    account_id text NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE,
+    identity_id text REFERENCES identities(id) ON UPDATE CASCADE,
+    event_id public_enum_8f5a39c8ee NOT NULL,
+    permissions_id text NOT NULL,
+    datetime timestamp(6) NOT NULL,
+    created_block_id text NOT NULL,
+    updated_block_id text NOT NULL,
+    created_at timestamp(6) NOT NULL,
+    updated_at timestamp(6) NOT NULL
 );
+
+CREATE INDEX account_history_account_id_index ON account_history (account_id);
+CREATE INDEX account_history_created_block_id_index ON account_history (created_block_id);
+CREATE INDEX account_history_updated_block_id_index ON account_history (updated_block_id);
+CREATE INDEX account_history_identity_id_index ON account_history (identity_id);
+CREATE INDEX account_history_permissions_id_index ON account_history (permissions_id);
 
 BEGIN;
 
@@ -40,11 +26,13 @@ BEGIN;
 -- create account history entries
 WITH event_data AS (
   SELECT
+    id,
     event_arg_0 as did,
     event_id,
-    block_id as updated_block_id,
-    created_at as updated_at
-  FROM events
+    block_id,
+    created_at,
+    updated_at
+  FROM events 
   WHERE event_id = 'PrimaryKeyUpdated'
   ORDER BY created_at ASC
 ), account_data AS (
@@ -54,14 +42,18 @@ WITH event_data AS (
   FROM accounts
   JOIN event_data ON accounts.identity_id = event_data.did
 )
-INSERT INTO account_history (account_id, identity_id, event_id, permissions_id, datetime, updated_block_id)
+INSERT INTO account_history (id, account_id, identity_id, event_id, permissions_id, datetime, created_block_id, updated_block_id, created_at, updated_at)
 SELECT
+  event_data.id,
   account_data.id,
   event_data.did,
   event_data.event_id,
   account_data.permissions_id,
+  event_data.created_at,
+  event_data.block_id,
+  event_data.block_id,
   event_data.updated_at,
-  event_data.updated_block_id
+  event_data.updated_at
 FROM account_data, event_data;
 
 -- select old account permissions and copy them to new account

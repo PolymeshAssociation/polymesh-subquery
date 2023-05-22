@@ -1,6 +1,5 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { v4 as uuid } from 'uuid';
 import { AccountHistoryProps } from 'polymesh-subql/types/models/AccountHistory';
 import {
   Account,
@@ -58,11 +57,11 @@ export async function mapIdentities({
   }
 
   if (eventId === EventIdEnum.PrimaryKeyUpdated) {
-    await handlePrimaryKeyUpdated(blockId, eventId, params, datetime);
+    await handlePrimaryKeyUpdated(blockId, eventId, params, datetime, event);
   }
 
   if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
-    await handleSecondaryKeyLeftIdentity(params, eventId, blockId, datetime);
+    await handleSecondaryKeyLeftIdentity(params, eventId, blockId, datetime, event);
   }
 }
 
@@ -71,18 +70,21 @@ const createHistoryEntry = async (
   identityId: string,
   address: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  event: SubstrateEvent
 ): Promise<void> => {
   const historyData: Omit<AccountHistoryProps, 'id'> = {
     eventId,
     accountId: address,
     identityId,
     permissionsId: address,
+    createdBlockId: blockId,
     updatedBlockId: blockId,
     datetime,
   };
 
-  const historyEntry = new AccountHistory(uuid());
+  const identifier = `${blockId}/${event.idx}`;
+  const historyEntry = new AccountHistory(identifier);
   Object.assign(historyEntry, historyData);
 
   await historyEntry.save();
@@ -401,7 +403,8 @@ const handlePrimaryKeyUpdated = async (
   blockId: string,
   eventId,
   params: Codec[],
-  datetime: Date
+  datetime: Date,
+  event: SubstrateEvent
 ): Promise<void> => {
   const [rawDid, , newKey] = params;
   const address = getTextValue(newKey);
@@ -443,7 +446,7 @@ const handlePrimaryKeyUpdated = async (
     // unlink the old account from the identity
     account.save(),
     Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime),
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, event),
   ]);
 };
 
@@ -451,7 +454,8 @@ const handleSecondaryKeyLeftIdentity = async (
   params: Codec[],
   eventId: EventIdEnum,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  event: SubstrateEvent
 ): Promise<void> => {
   const [, rawAccount] = params;
 
@@ -473,6 +477,6 @@ const handleSecondaryKeyLeftIdentity = async (
   await Promise.all([
     Permissions.remove(address),
     accountEntity.save(),
-    createHistoryEntry(eventId, did, address, blockId, datetime),
+    createHistoryEntry(eventId, did, address, blockId, datetime, event),
   ]);
 };

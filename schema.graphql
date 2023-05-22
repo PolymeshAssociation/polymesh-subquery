@@ -1262,6 +1262,7 @@ type AccountHistory @entity {
   eventId: EventIdEnum!
   permissions: Permissions!
   datetime: Date!
+  createdBlock: Block!
   updatedBlock: Block!
 }
 
