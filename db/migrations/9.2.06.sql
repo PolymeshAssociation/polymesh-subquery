@@ -52,7 +52,7 @@ SELECT
   event_data.created_at,
   event_data.block_id,
   event_data.block_id,
-  event_data.updated_at,
+  event_data.created_at,
   event_data.updated_at
 FROM account_data, event_data;
 
@@ -198,9 +198,13 @@ WHERE permissions.id = event_data.account_id;
 -- create history entity for the account that has left the identity
 WITH event_data AS (
   SELECT
+    id,
     event_arg_1 as account_id,
     block_id as updated_block_id,
-    created_at as updated_at
+    event_id,
+    block_id,
+    created_at,
+    updated_at
   FROM events
   WHERE event_id = 'SecondaryKeyLeftIdentity'
   ORDER BY created_at ASC
@@ -213,14 +217,18 @@ WITH event_data AS (
   FROM accounts
   JOIN event_data ON accounts.id = event_data.account_id
 )
-INSERT INTO account_history (account_id, identity_id, event_id, permissions_id, datetime, updated_block_id)
+INSERT INTO account_history (id, account_id, identity_id, event_id, permissions_id, datetime, created_block_id, updated_block_id, created_at, updated_at)
 SELECT
+  event_data.id,
   account_data.id,
   account_data.identity_id,
   'SecondaryKeyLeftIdentity',
   account_data.permissions_id,
-  event_data.updated_at,
-  event_data.updated_block_id
+  event_data.created_at,
+  event_data.updated_block_id,
+  event_data.updated_block_id,
+  event_data.created_at,
+  event_data.updated_at
 FROM account_data, event_data;
 
 -- unlink identity from the account that has left the identity
