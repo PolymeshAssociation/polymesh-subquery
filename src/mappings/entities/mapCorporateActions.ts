@@ -67,11 +67,11 @@ const handleBenefitClaimed = async (
   const targetId = getTextValue(rawClaimantDid);
   const { localId, assetId } = getCaIdValue(rawCaId);
   const amount = getBigIntValue(rawAmount);
-  const taxPercent = getBigIntValue(rawTax);
+  const tax = getBigIntValue(rawTax);
 
   const distribution = await Distribution.get(`${assetId}/${localId}`);
-  const tax = BigInt((amount * taxPercent) / BigInt(1000000));
-  distribution.taxes += tax;
+  const taxAmount = BigInt((amount * tax) / BigInt(1000000));
+  distribution.taxes += taxAmount;
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({
@@ -81,7 +81,7 @@ const handleBenefitClaimed = async (
     eventId,
     amount,
     tax,
-    amountAfterTax: amount - tax,
+    amountAfterTax: amount - taxAmount,
     reclaimed: false,
     datetime: event.block.timestamp,
     createdBlockId: blockId,
