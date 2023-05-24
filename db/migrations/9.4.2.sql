@@ -1,3 +1,4 @@
+-- update the distribution taxes based on tax populated in distribution_payments
 with data as (
   select 
     distribution_id, 
@@ -15,3 +16,11 @@ from
   data 
 where
   data.distribution_id = d.id;
+
+-- add amount_after_tax column to distribution_payments
+alter table distribution_payments add column if not exists amount_after_tax numeric;
+
+update
+  distribution_payments
+set
+  amount_after_tax = amount - round(amount * tax / 1000000);
