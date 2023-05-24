@@ -24,6 +24,9 @@ export async function mapCorporateActions({
     if (eventId === EventIdEnum.Reclaimed) {
       await handleReclaimed(blockId, eventId, params, event);
     }
+    if (eventId === EventIdEnum.Removed) {
+      await handleDistributionRemoved(params);
+    }
   }
 }
 
@@ -45,21 +48,30 @@ const handleDistributionCreated = async (blockId: string, params: Codec[]): Prom
   }).save();
 };
 
+const handleDistributionRemoved = async (params: Codec[]): Promise<void> => {
+  const [, rawCaId] = params;
+
+  const { localId, assetId } = getCaIdValue(rawCaId);
+
+  await Distribution.remove(`${assetId}/${localId}`);
+};
+
 const handleBenefitClaimed = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  const [rawEventDid, , rawCaId, , rawAmount, rawTax] = params;
+  const [, rawClaimantDid, rawCaId, , rawAmount, rawTax] = params;
 
-  const targetId = getTextValue(rawEventDid);
+  const targetId = getTextValue(rawClaimantDid);
   const { localId, assetId } = getCaIdValue(rawCaId);
   const amount = getBigIntValue(rawAmount);
-  const tax = getBigIntValue(rawTax);
+  const taxPercent = getBigIntValue(rawTax);
 
   const distribution = await Distribution.get(`${assetId}/${localId}`);
-  distribution.taxes += amount * tax;
+  const tax = BigInt((amount * taxPercent) / BigInt(1000000));
+  distribution.taxes += tax;
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({
