@@ -1625,6 +1625,7 @@ type DistributionPayment @entity {
   eventId: EventIdEnum!
   amount: BigInt!
   tax: BigInt!
+  amountAfterTax: BigInt!
   reclaimed: Boolean!
   datetime: Date!
   createdBlock: Block!
