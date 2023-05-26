@@ -213,8 +213,10 @@ const handleIssued = async (
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  const [, rawTicker, , rawAmount, rawFundingRound, rawTotalFundingAmount] = params;
+  const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
+    params;
 
+  const issuerDid = getTextValue(rawBeneficiaryDid);
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
@@ -224,9 +226,9 @@ const handleIssued = async (
   asset.totalSupply += issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
-  assetOwner.amount += issuedAmount;
-  assetOwner.updatedBlockId = blockId;
+  const assetIssuer = await getAssetHolder(ticker, issuerDid, blockId);
+  assetIssuer.amount += issuedAmount;
+  assetIssuer.updatedBlockId = blockId;
 
   const assetTransaction = AssetTransaction.create({
     id: `${blockId}/${event.idx}`,
@@ -241,7 +243,7 @@ const handleIssued = async (
     updatedBlockId: blockId,
   });
 
-  const promises = [asset.save(), assetOwner.save(), assetTransaction.save()];
+  const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
   if (fundingRound) {
     promises.push(
       Funding.create({
@@ -261,8 +263,9 @@ const handleIssued = async (
 };
 
 const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> => {
-  const [, rawTicker, , rawAmount] = params;
+  const [, rawTicker, rawBeneficiaryDid, rawAmount] = params;
 
+  const issuerDid = getTextValue(rawBeneficiaryDid);
   const ticker = serializeTicker(rawTicker);
   const issuedAmount = getBigIntValue(rawAmount);
 
@@ -270,11 +273,11 @@ const handleRedeemed = async (blockId: string, params: Codec[]): Promise<void> =
   asset.totalSupply -= issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetOwner = await getAssetHolder(ticker, asset.ownerId, blockId);
-  assetOwner.amount -= issuedAmount;
-  assetOwner.updatedBlockId = blockId;
+  const assetRedeemer = await getAssetHolder(ticker, issuerDid, blockId);
+  assetRedeemer.amount -= issuedAmount;
+  assetRedeemer.updatedBlockId = blockId;
 
-  const promises = [asset.save(), assetOwner.save()];
+  const promises = [asset.save(), assetRedeemer.save()];
 
   await Promise.all(promises);
 };
