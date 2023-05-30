@@ -25,9 +25,9 @@ fi
 
 envsubst <project.template.yaml> project.yaml
 
-npm run migrations
-
 (npm run sql || (sleep 3 && kill "$$")) &
+
+(npm run migrations || (sleep 3 && kill "$$")) &
 
 # Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}

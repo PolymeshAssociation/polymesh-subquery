@@ -48,3 +48,17 @@ export const getPostgresConnection = async (): Promise<Connection> => {
     }
   );
 };
+
+export const dbIsReady = (postgres: Connection): Promise<void> => {
+  return retry(
+    100,
+    1000,
+    async () => {
+      const query = postgres.createQueryBuilder().select('id').from('events', 'e').limit(1);
+      await query.getRawOne();
+    },
+    () => {
+      console.log('Database schema not ready, retrying in 1s');
+    }
+  );
+};

@@ -1,8 +1,12 @@
 import { schemaMigrations } from '../db/schemaMigrations';
+import { dbIsReady, getPostgresConnection } from '../db/utils';
 
 const main = async () => {
+  const postgres = await getPostgresConnection();
+
   try {
-    return await schemaMigrations();
+    await dbIsReady(postgres);
+    return await schemaMigrations(postgres);
   } catch (e) {
     console.log("Couldn't run schema migrations ", e);
   }
