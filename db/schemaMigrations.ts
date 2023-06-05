@@ -15,7 +15,7 @@ const getLastMigrationFromDB = (postgres: Connection) => {
 };
 
 export const getMigrationVersion = (fileName: string): number | null => {
-  const regex = /^V(\d+)_(?:.*).sql/; // Regex pattern to match the version number
+  const regex = /^(\d+)_(?:.*).sql/; // Regex pattern to match the version number
   const match = fileName.match(regex);
 
   if (match && match.length >= 2) {
