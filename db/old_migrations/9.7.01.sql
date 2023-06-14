@@ -107,4 +107,5 @@ where
         then event_arg_2::jsonb->>'did' != '0x0000000000000000000000000000000000000000000000000000000000000000' 
       else true 
     end
-order by b.block_id;
+order by b.block_id
+on conflict(id) do nothing;
