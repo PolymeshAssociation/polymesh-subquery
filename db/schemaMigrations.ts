@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'fs';
 import { Connection } from 'typeorm';
 import { version as latestVersion } from '../package.json';
-import { getPostgresConnection } from './utils';
 import { upsertVersionMetadata } from './sqVersions';
+import { getPostgresConnection } from './utils';
 
 const getLastMigrationFromDB = (postgres: Connection) => {
   return postgres

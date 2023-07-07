@@ -9,6 +9,7 @@ const main = async () => {
     return await schemaMigrations(postgres);
   } catch (e) {
     console.log("Couldn't run schema migrations ", e);
+    process.exit(1);
   }
 };
 
