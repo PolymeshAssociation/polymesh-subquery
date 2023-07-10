@@ -37,7 +37,8 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
 
   let lastMigration = 0;
   try {
-    ({ lastMigration } = await getLastMigrationFromDB(postgres));
+    const migrationDetails = await getLastMigrationFromDB(postgres);
+    lastMigration = migrationDetails?.lastMigration || 0;
   } catch (e) {
     console.log(`Error message: ${e.message}`);
   }
