@@ -359,6 +359,7 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
     to: meshPortfolioToPortfolio(toPortfolio),
     ticker: hexToString(ticker),
     amount: getBigIntValue(amount),
+    legType: LegTypeEnum.Fungible,
   }));
 };
 
