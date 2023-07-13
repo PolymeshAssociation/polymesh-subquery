@@ -59,6 +59,39 @@ export const createFunding = (
   }).save();
 };
 
+const createAssetTransaction = (
+  event: SubstrateEvent,
+  blockId: string,
+  details: Pick<
+    AssetTransaction,
+    'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound'
+  >
+) => {
+  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
+
+  const callToEventMappings = {
+    [CallIdEnum.issue]: EventIdEnum.Issued,
+    [CallIdEnum.redeem]: EventIdEnum.Redeemed,
+    [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
+    [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
+    [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.invest]: EventIdEnum.Invested,
+    default: EventIdEnum.Transfer,
+  };
+
+  return AssetTransaction.create({
+    id: `${blockId}/${event.idx}`,
+    ...details,
+    eventId: callToEventMappings[callId] || callToEventMappings['default'],
+    eventIdx: event.idx,
+    extrinsicIdx: event.extrinsic?.idx,
+    datetime: event.block.timestamp,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
 export const getAssetHolder = async (
   ticker: string,
   did: string,
@@ -366,33 +399,13 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
     promises.push(toHolder.save());
   }
 
-  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
-
-  const callToEventMappings = {
-    [CallIdEnum.issue]: EventIdEnum.Issued,
-    [CallIdEnum.redeem]: EventIdEnum.Redeemed,
-    [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
-    [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
-    [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
-    [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
-    [CallIdEnum.invest]: EventIdEnum.Invested,
-    default: EventIdEnum.Transfer,
-  };
-
   promises.push(
-    AssetTransaction.create({
-      id: `${blockId}/${event.idx}`,
+    createAssetTransaction(event, blockId, {
       assetId: ticker,
       fromPortfolioId,
       toPortfolioId,
       amount: transferAmount,
-      eventId: callToEventMappings[callId] || callToEventMappings['default'],
-      eventIdx: event.idx,
-      extrinsicIdx: event.extrinsic?.idx,
-      datetime: event.block.timestamp,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save()
+    })
   );
 
   await Promise.all(promises);
@@ -468,34 +481,14 @@ const handleAssetBalanceUpdated = async (
     promises.push(asset.save());
   }
 
-  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
-
-  const callToEventMappings = {
-    [CallIdEnum.issue]: EventIdEnum.Issued,
-    [CallIdEnum.redeem]: EventIdEnum.Redeemed,
-    [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
-    [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
-    [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
-    [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
-    [CallIdEnum.invest]: EventIdEnum.Invested,
-    default: EventIdEnum.Transfer,
-  };
-
   promises.push(
-    AssetTransaction.create({
-      id: `${blockId}/${event.idx}`,
+    createAssetTransaction(event, blockId, {
       assetId: ticker,
       fromPortfolioId,
       toPortfolioId,
       amount: transferAmount,
-      eventId: callToEventMappings[callId] || callToEventMappings['default'],
-      eventIdx: event.idx,
-      extrinsicIdx: event.extrinsic?.idx,
       fundingRound: fundingRoundName,
-      datetime: event.block.timestamp,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save()
+    })
   );
 
   await Promise.all(promises);
