@@ -39,6 +39,26 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
   return asset;
 };
 
+export const createFunding = (
+  blockId: string,
+  ticker: string,
+  event: SubstrateEvent,
+  fundingRound: string,
+  issuedAmount: bigint,
+  totalFundingAmount: bigint
+): Promise<void> => {
+  return Funding.create({
+    id: `${blockId}/${event.idx}`,
+    assetId: ticker,
+    fundingRound,
+    amount: issuedAmount,
+    totalFundingAmount,
+    datetime: event.block.timestamp,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
 export const getAssetHolder = async (
   ticker: string,
   did: string,
@@ -68,14 +88,8 @@ const handleAssetCreated = async (
   params: Codec[],
   event: SubstrateEvent
 ): Promise<void> => {
-  let rawTicker: Codec,
-    divisible: Codec,
-    rawType: Codec,
-    rawOwnerDid: Codec,
-    disableIu: Codec,
-    rawIdentifiers: Codec,
-    rawAssetName: Codec,
-    rawFundingRoundName: Codec;
+  const [, rawTicker, divisible, rawType, rawOwnerDid, ...rest] = params;
+  let disableIu: Codec, rawIdentifiers: Codec, rawAssetName: Codec, rawFundingRoundName: Codec;
 
   /**
    * Events from chain >= 6.0.0 doesn't have disable investor uniqueness value
@@ -84,28 +98,9 @@ const handleAssetCreated = async (
   let isUniquenessRequired = false;
 
   if (event.block.specVersion >= 6000000) {
-    [
-      ,
-      rawTicker,
-      divisible,
-      rawType,
-      rawOwnerDid,
-      rawAssetName,
-      rawIdentifiers,
-      rawFundingRoundName,
-    ] = params;
+    [rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
   } else {
-    [
-      ,
-      rawTicker,
-      divisible,
-      rawType,
-      rawOwnerDid,
-      disableIu,
-      rawAssetName,
-      rawIdentifiers,
-      rawFundingRoundName,
-    ] = params;
+    [disableIu, rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
     isUniquenessRequired = !getBooleanValue(disableIu);
   }
 
@@ -279,16 +274,7 @@ const handleIssued = async (
   const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
   if (fundingRound) {
     promises.push(
-      Funding.create({
-        id: `${blockId}/${event.idx}`,
-        assetId: ticker,
-        fundingRound,
-        amount: issuedAmount,
-        totalFundingAmount,
-        datetime: event.block.timestamp,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      }).save()
+      createFunding(blockId, ticker, event, fundingRound, issuedAmount, totalFundingAmount)
     );
   }
 
@@ -465,16 +451,7 @@ const handleAssetBalanceUpdated = async (
 
     if (fundingRoundName) {
       promises.push(
-        Funding.create({
-          id: `${blockId}/${event.idx}`,
-          assetId: ticker,
-          fundingRound: fundingRoundName,
-          amount: transferAmount,
-          totalFundingAmount: transferAmount,
-          datetime: event.block.timestamp,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
-        }).save()
+        createFunding(blockId, ticker, event, fundingRoundName, transferAmount, transferAmount)
       );
     }
 
