@@ -39,3 +39,18 @@ alter type public_enum_8f5a39c8ee add value if not exists 'DispatchedAs' after '
 alter type public_enum_8f5a39c8ee add value if not exists 'ItemCompleted' after 'DispatchedAs';
 alter type public_enum_8f5a39c8ee add value if not exists 'ItemFailed' after 'ItemCompleted';
 alter type public_enum_8f5a39c8ee add value if not exists 'RelayedTx' after 'ItemFailed';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (select 1 from pg_type where typname = 'public_enum_2792cc24ad') then
+        create type public_enum_2792cc24ad AS ENUM ('Fungible', 'NonFungible', 'OffChain');
+    END IF;
+END
+$$;
+
+alter table legs add column if not exists "leg_type" public_enum_2792cc24ad;
+
+update legs set leg_type = 'Fungible';
+
+alter table legs alter column leg_type set not null;
+alter table legs alter column amount drop not null;

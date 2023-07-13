@@ -1591,12 +1591,23 @@ enum InstructionStatusEnum {
 }
 
 """
+Represents all possible states of an Instruction
+"""
+enum LegTypeEnum {
+  Fungible
+  NonFungible
+  OffChain
+}
+
+"""
 Represents the movement of a single Asset in a trade, e.g. Alice will give Bob 1 USDS
 """
 type Leg @entity {
   id: ID! # instructionId/legIndex
   assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
-  amount: BigInt!
+  "`amount` can be null for non-fungible tokens"
+  amount: BigInt
+  legType: LegTypeEnum!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
   instruction: Instruction

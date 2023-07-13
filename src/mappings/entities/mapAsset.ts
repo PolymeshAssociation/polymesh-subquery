@@ -14,10 +14,13 @@ import {
 import {
   bytesToString,
   camelToSnakeCase,
+  coerceHexToString,
   emptyDid,
   getBigIntValue,
   getBooleanValue,
   getDocValue,
+  getFirstKeyFromJson,
+  getFirstValueFromJson,
   getNumberValue,
   getPortfolioValue,
   getSecurityIdentifiers,
@@ -63,19 +66,49 @@ export const getAssetHolder = async (
 const handleAssetCreated = async (
   blockId: string,
   params: Codec[],
-  eventIdx: number
+  event: SubstrateEvent
 ): Promise<void> => {
-  const [
-    rawOwnerDid,
-    rawTicker,
-    divisible,
-    rawType,
-    ,
-    disableIu,
-    rawAssetName,
-    rawIdentifiers,
-    rawFundingRoundName,
-  ] = params;
+  let rawTicker: Codec,
+    divisible: Codec,
+    rawType: Codec,
+    rawOwnerDid: Codec,
+    disableIu: Codec,
+    rawIdentifiers: Codec,
+    rawAssetName: Codec,
+    rawFundingRoundName: Codec;
+
+  /**
+   * Events from chain >= 6.0.0 doesn't have disable investor uniqueness value
+   * It defaults to false from 6.0.0
+   */
+  let isUniquenessRequired = false;
+
+  if (event.block.specVersion >= 6000000) {
+    [
+      ,
+      rawTicker,
+      divisible,
+      rawType,
+      rawOwnerDid,
+      rawAssetName,
+      rawIdentifiers,
+      rawFundingRoundName,
+    ] = params;
+  } else {
+    [
+      ,
+      rawTicker,
+      divisible,
+      rawType,
+      rawOwnerDid,
+      disableIu,
+      rawAssetName,
+      rawIdentifiers,
+      rawFundingRoundName,
+    ] = params;
+    isUniquenessRequired = !getBooleanValue(disableIu);
+  }
+
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
   const type = getTextValue(rawType);
@@ -120,13 +153,13 @@ const handleAssetCreated = async (
     fundingRound,
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
-    isUniquenessRequired: !getBooleanValue(disableIu),
+    isUniquenessRequired,
     identifiers,
     ownerId,
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
-    eventIdx,
+    eventIdx: event.idx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -379,6 +412,118 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
   await Promise.all(promises);
 };
 
+const handleAssetBalanceUpdated = async (
+  blockId: string,
+  params: Codec[],
+  event: SubstrateEvent
+) => {
+  const [, rawTicker, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
+
+  let fromDid: string, toDid: string;
+
+  let fromPortfolioNumber: number, toPortfolioNumber: number;
+
+  const ticker = serializeTicker(rawTicker);
+  const asset = await getAsset(ticker);
+
+  let fromPortfolioId: string;
+  let toPortfolioId: string;
+  let fundingRoundName: string;
+
+  const promises = [];
+
+  const transferAmount = getBigIntValue(rawAmount);
+
+  if (!rawFromPortfolio.isEmpty) {
+    ({ identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio));
+
+    fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
+
+    const fromHolder = await getAssetHolder(ticker, fromDid, blockId);
+    fromHolder.amount = fromHolder.amount - transferAmount;
+    fromHolder.updatedBlockId = blockId;
+    promises.push(fromHolder.save());
+  }
+
+  if (!rawToPortfolio.isEmpty) {
+    ({ identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio));
+    toPortfolioId = `${toDid}/${toPortfolioNumber}`;
+
+    const toHolder = await getAssetHolder(ticker, toDid, blockId);
+    toHolder.amount = toHolder.amount + transferAmount;
+    toHolder.updatedBlockId = blockId;
+    promises.push(toHolder.save());
+  }
+
+  const updateReason = getFirstKeyFromJson(rawUpdateReason);
+
+  const value = getFirstValueFromJson(rawUpdateReason);
+
+  if (updateReason === 'issued') {
+    const issuedReason = value as unknown as { fundingRoundName: string };
+    fundingRoundName = coerceHexToString(issuedReason.fundingRoundName);
+
+    if (fundingRoundName) {
+      promises.push(
+        Funding.create({
+          id: `${blockId}/${event.idx}`,
+          assetId: ticker,
+          fundingRound: fundingRoundName,
+          amount: transferAmount,
+          totalFundingAmount: transferAmount,
+          datetime: event.block.timestamp,
+          createdBlockId: blockId,
+          updatedBlockId: blockId,
+        }).save()
+      );
+    }
+
+    asset.totalSupply += transferAmount;
+    asset.updatedBlockId = blockId;
+    promises.push(asset.save());
+  } else if (updateReason === 'redeemed') {
+    asset.totalSupply -= transferAmount;
+    asset.updatedBlockId = blockId;
+    promises.push(asset.save());
+  } else if (updateReason === 'transferred') {
+    asset.totalTransfers += BigInt(1);
+    asset.updatedBlockId = blockId;
+    promises.push(asset.save());
+  }
+
+  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
+
+  const callToEventMappings = {
+    [CallIdEnum.issue]: EventIdEnum.Issued,
+    [CallIdEnum.redeem]: EventIdEnum.Redeemed,
+    [CallIdEnum.redeem_from_portfolio]: EventIdEnum.Redeemed,
+    [CallIdEnum.controller_transfer]: EventIdEnum.ControllerTransfer,
+    [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
+    [CallIdEnum.invest]: EventIdEnum.Invested,
+    default: EventIdEnum.Transfer,
+  };
+
+  promises.push(
+    AssetTransaction.create({
+      id: `${blockId}/${event.idx}`,
+      assetId: ticker,
+      fromPortfolioId,
+      toPortfolioId,
+      amount: transferAmount,
+      eventId: callToEventMappings[callId] || callToEventMappings['default'],
+      eventIdx: event.idx,
+      extrinsicIdx: event.extrinsic?.idx,
+      fundingRound: fundingRoundName,
+      datetime: event.block.timestamp,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save()
+  );
+
+  await Promise.all(promises);
+};
+
 const handleAssetUpdateEvents = async (
   blockId: string,
   eventId: EventIdEnum,
@@ -386,7 +531,7 @@ const handleAssetUpdateEvents = async (
   event: SubstrateEvent
 ): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleAssetCreated(blockId, params, event.idx);
+    await handleAssetCreated(blockId, params, event);
   }
   if (eventId === EventIdEnum.AssetRenamed) {
     await handleAssetRenamed(blockId, params);
@@ -435,6 +580,9 @@ export async function mapAsset({
   }
   if (eventId === EventIdEnum.Transfer) {
     await handleAssetTransfer(blockId, params, event);
+  }
+  if (eventId === EventIdEnum.AssetBalanceUpdated) {
+    await handleAssetBalanceUpdated(blockId, params, event);
   }
   await handleAssetUpdateEvents(blockId, eventId, params, event);
 
