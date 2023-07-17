@@ -15,6 +15,18 @@ module.exports = {
     '@semantic-release/release-notes-generator',
     '@semantic-release/changelog',
     [
+      '@semantic-release/npm',
+      {
+        npmPublish: false,
+      },
+    ],
+    [
+      '@semantic-release/git',
+      {
+        assets: ['package.json'],
+      },
+    ],
+    [
       '@semantic-release/github',
       {
         assets: ['CHANGELOG.md'],

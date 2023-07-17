@@ -5,7 +5,7 @@ import { env } from 'process';
  *
  * For all the `Systematic Issuers` and GC identities, we need to insert a row in `identities` and its corresponding default portfolio entry in `portfolios` table.
  */
-export const migrationQueries = (): string[] => {
+export const genesisMigrationQueries = (): string[] => {
   const genesisBlock = `INSERT INTO "public"."blocks" ("id", "block_id", "parent_id", "hash", "parent_hash", "state_root", "extrinsics_root", "count_extrinsics", "count_extrinsics_unsigned", "count_extrinsics_signed", "count_extrinsics_error", "count_extrinsics_success", "count_events", "datetime", "spec_version_id", "created_at", "updated_at") VALUES
   ('0', 0, 0, '${env.NETWORK_CHAIN_ID}', '', '', '', 0, 0, 0, 0, 0, 0, now(), '3000', now(), now()) ON CONFLICT(id) DO NOTHING;`;
 

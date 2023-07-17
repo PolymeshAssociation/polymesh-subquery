@@ -1186,6 +1186,7 @@ type Extrinsic @entity {
   extrinsicIdx: Int!
   extrinsicLength: Int!
   signed: Int!
+  "`signedbyAddress` is now deprecated in favour of `signed`"
   signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
   address: String
   moduleId: ModuleIdEnum!
@@ -1963,6 +1964,28 @@ type Asset @entity {
 }
 
 """
+Represents all the transactions related to an Asset
+"""
+type AssetTransaction @entity {
+  id: ID!
+  asset: Asset!
+  "`fromPortfolioId` will be null in transactions where the Asset was issued"
+  fromPortfolio: Portfolio
+  "`toPortfolioId` will be null in transactions where the Asset was redeemed"
+  toPortfolio: Portfolio
+  amount: BigInt!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  "`extrinsicIdx` will be null for scheduled transactions"
+  extrinsicIdx: Int
+  "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
+  fundingRound: String
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
 Represents an investment into an Asset
 """
 type Funding @entity {
@@ -1981,5 +2004,14 @@ Represents the deployed version of the node indexing the data
 """
 type SubqueryVersion @entity {
   id: ID!
+  version: String!
+}
+
+"""
+Represents the list of migrations executed
+"""
+type Migration @entity {
+  id: ID!
+  number: Int!
   version: String!
 }

@@ -18,6 +18,8 @@ import {
 import { Attributes } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
+export const emptyDid = '0x00'.padEnd(66, '0');
+
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
  * Values are mapped by the map parameter
