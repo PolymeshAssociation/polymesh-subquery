@@ -49,9 +49,9 @@ export const getPostgresConnection = async (): Promise<Connection> => {
   );
 };
 
-export const dbIsReady = (postgres: Connection): Promise<void> => {
+export const dbIsReady = (postgres: Connection, retryAttempts = 100): Promise<void> => {
   return retry(
-    100,
+    retryAttempts,
     1000,
     async () => {
       const query = postgres.createQueryBuilder().select('id').from('events', 'e').limit(1);

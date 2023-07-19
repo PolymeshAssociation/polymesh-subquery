@@ -11,14 +11,15 @@ import {
   Venue,
 } from '../../types';
 import {
+  LegDetails,
   bytesToString,
   getDateValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getLegsValue,
+  getSettlementLeg,
   getSignerAddress,
   getTextValue,
-  LegDetails,
 } from '../util';
 import { HandlerArgs } from './common';
 import { createPortfolioIfNotExists } from './mapPortfolio';
@@ -56,7 +57,7 @@ export const createLeg = async (
   instructionId: string,
   address: string,
   legIndex: number,
-  { ticker, amount, from, to }: LegDetails,
+  { ticker, amount, from, to, legType }: LegDetails,
   event: SubstrateEvent
 ): Promise<void> => {
   // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
@@ -71,6 +72,7 @@ export const createLeg = async (
     amount,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
+    legType,
     instructionId,
     addresses: [address],
     createdBlockId: blockId,
@@ -160,7 +162,17 @@ const handleInstructionCreated = async (
     rawOptMemo,
   ] = params;
 
-  const legs = getLegsValue(rawLegs);
+  let legs: LegDetails[];
+
+  /**
+   * Events from 6.0.0 chain were updated to support NFT and OffChain instructions
+   */
+  if (event.block.specVersion >= 6000000) {
+    legs = getSettlementLeg(rawLegs);
+  } else {
+    legs = getLegsValue(rawLegs);
+  }
+
   const instructionId = getTextValue(rawInstructionId);
   const memo = bytesToString(rawOptMemo);
 
