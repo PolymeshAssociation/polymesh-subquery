@@ -4,10 +4,13 @@ import { EventIdEnum, ModuleIdEnum, Portfolio, PortfolioMovement } from '../../t
 import {
   bytesToString,
   getBigIntValue,
+  getFirstKeyFromJson,
+  getFirstValueFromJson,
   getNumberValue,
   getPortfolioValue,
   getSignerAddress,
   getTextValue,
+  hexToString,
   serializeTicker,
 } from '../util';
 import { Attributes, HandlerArgs } from './common';
@@ -170,6 +173,43 @@ const handlePortfolioMovement = async (
   }).save();
 };
 
+const handleFundsMovedBetweenPortfolios = async (
+  blockId: string,
+  params: Codec[],
+  event: SubstrateEvent
+): Promise<void> => {
+  const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
+  const address = getSignerAddress(event);
+  const from = getPortfolioValue(rawFromPortfolio);
+  const to = getPortfolioValue(rawToPortfolio);
+  let ticker: string, amount: bigint;
+
+  const assetType = getFirstKeyFromJson(rawFundDescription);
+  const fundDescription = getFirstValueFromJson(rawFundDescription);
+  if (assetType === 'fungible') {
+    const description = fundDescription as unknown as { ticker: string; amount: number };
+    ticker = hexToString(description.ticker);
+    amount = BigInt(description.amount);
+  } else {
+    // @prashantasdeveloper handling of NFTs to be done separately
+    return;
+  }
+
+  const memo = bytesToString(rawMemo);
+
+  await PortfolioMovement.create({
+    id: `${blockId}/${event.idx}`,
+    fromId: `${from.identityId}/${from.number}`,
+    toId: `${to.identityId}/${to.number}`,
+    assetId: ticker,
+    amount,
+    address,
+    memo,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
 export async function mapPortfolio({
   blockId,
   eventId,
@@ -192,6 +232,9 @@ export async function mapPortfolio({
     }
     if (eventId === EventIdEnum.MovedBetweenPortfolios) {
       await handlePortfolioMovement(blockId, params, event);
+    }
+    if (eventId === EventIdEnum.FundsMovedBetweenPortfolios) {
+      await handleFundsMovedBetweenPortfolios(blockId, params, event);
     }
   }
 }
