@@ -12,7 +12,8 @@ const main = async (): Promise<void> => {
     await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
     console.log('Applied initial SQL');
 
-    await postgres.query((await genesisMigrationQueries()).join('\n'));
+    const migrationQueries = await genesisMigrationQueries();
+    await postgres.query(migrationQueries.join('\n'));
     console.log('Applied genesis migration SQL');
 
     await updateSQVersion(postgres);

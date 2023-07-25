@@ -38,12 +38,10 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
   logger.info(`Executing migration handlers for ${migrations.length} new migration(s)`);
 
   for (const migration of migrations) {
-    switch (migration.number) {
-      case 3:
-        await handlePolyxMigration(blockId, ss58Format);
-        break;
-      default:
-        logger.info(`No mapping handlers are associated for migration - ${migration.id}`);
+    if (migration.number === 3) {
+      await handlePolyxMigration(blockId, ss58Format);
+    } else {
+      logger.info(`No mapping handlers are associated for migration - ${migration.id}`);
     }
   }
 };
