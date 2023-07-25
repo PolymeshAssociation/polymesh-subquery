@@ -43,8 +43,8 @@ const getOldMigrationQueries = (): string[] => {
 const migrationInsert = (
   migrationNumber: number,
   id?: string
-) => `INSERT INTO "public"."migrations" ("id", "number", "version", "created_at", "updated_at")
-VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', now(), now())
+) => `INSERT INTO "public"."migrations" ("id", "number", "version", "executed", "created_at", "updated_at")
+VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', false, now(), now())
 ON CONFLICT(id) DO UPDATE SET "updated_at" = now();`;
 
 export const schemaMigrations = async (connection?: Connection): Promise<void> => {

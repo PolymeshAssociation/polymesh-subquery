@@ -1,5 +1,4 @@
 import { SubstrateEvent } from '@subql/types';
-import BigNumber from 'bignumber.js';
 import {
   Account,
   BalanceTypeEnum,
@@ -21,6 +20,7 @@ import {
   getTextValue,
 } from '../util';
 import { HandlerArgs } from './common';
+import BigNumber from 'bignumber.js';
 
 const getExtrinsicDetails = (
   blockId: string,
@@ -68,22 +68,32 @@ const getBasicDetails = async (args: HandlerArgs | Event) => {
 
 const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<void> => {
   let did, balance;
+  let specVersion: number;
   if (args instanceof Event) {
     const attributes = JSON.parse(args.attributesTxt);
     [{ value: did }, { value: balance }] = attributes;
+    ({ specVersionId: specVersion } = await Block.get(args.blockId));
   } else {
     const [rawIdentity, rawBalance] = args.params;
     did = getTextValue(rawIdentity);
     balance = getTextValue(rawBalance);
+    ({ specVersion } = args.event.block);
   }
 
   const identity = await Identity.get(did);
 
-  // treasury reimbursement is only 80% of the actual amount deducted
-  const reimbursementBalance = new BigNumber(balance || 0);
-  const amount = BigInt(
-    reimbursementBalance.multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
-  );
+  /**
+   * Till chain 5.4.1, treasury reimbursement was only 80% of the actual amount deducted
+   * Post that the split between author/treasury was removed
+   */
+  let amount: bigint;
+  if (specVersion < 5004001) {
+    amount = BigInt(
+      new BigNumber(balance || 0).multipliedBy(1.25).integerValue(BigNumber.ROUND_FLOOR).toString()
+    );
+  } else {
+    amount = BigInt(balance || 0);
+  }
   const details = await getBasicDetails(args);
 
   if (details.extrinsicId) {

@@ -2081,6 +2081,7 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
+  executed: Boolean! @index
 }
 
 """
