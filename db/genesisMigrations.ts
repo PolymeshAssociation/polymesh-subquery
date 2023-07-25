@@ -42,7 +42,7 @@ const getInserts = ({ did, accountId }: DidWithAccount): string[] => {
  *
  * For all the `Systematic Issuers` and GC identities, we need to insert a row in `identities` and its corresponding default portfolio entry in `portfolios` table.
  */
-export const migrationQueries = async (): Promise<string[]> => {
+export const genesisMigrationQueries = async (): Promise<string[]> => {
   const wsProvider = new WsProvider(env.NETWORK_ENDPOINT);
   const api = await ApiPromise.create({ provider: wsProvider });
   // get the chain information to extract SS58Format

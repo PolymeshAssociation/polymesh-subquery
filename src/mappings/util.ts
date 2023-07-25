@@ -8,6 +8,7 @@ import {
   Compliance,
   Distribution,
   FoundType,
+  LegTypeEnum,
   SecurityIdentifier,
   Sto,
   TransferComplianceExemption,
@@ -17,6 +18,8 @@ import {
 import { Portfolio } from '../types/models/Portfolio';
 import { Attributes } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
+
+export const emptyDid = '0x00'.padEnd(66, '0');
 
 /**
  * @returns a javascript object built using an `iterable` of keys and values.
@@ -350,6 +353,7 @@ export interface LegDetails {
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
+  legType: LegTypeEnum;
 }
 
 export const getLegsValue = (item: Codec): LegDetails[] => {
@@ -359,7 +363,29 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
     to: meshPortfolioToPortfolio(toPortfolio),
     ticker: hexToString(ticker),
     amount: getBigIntValue(amount),
+    legType: LegTypeEnum.Fungible,
   }));
+};
+
+export const getSettlementLeg = (item: Codec): LegDetails[] => {
+  const legs = JSON.parse(item.toString());
+  const legTypes = Object.keys(legs);
+  if (legTypes.includes('NonFungible') || legTypes.includes('OffChain')) {
+    return null;
+  }
+  return legs.map(leg => {
+    let legType = Object.keys(leg)[0];
+    const legValue = leg[legType];
+    let from, to, ticker, amount;
+    if (legType === 'fungible') {
+      from = meshPortfolioToPortfolio(legValue.sender);
+      to = meshPortfolioToPortfolio(legValue.receiver);
+      ticker = hexToString(legValue.ticker);
+      amount = extractBigInt(legValue, 'amount');
+      legType = LegTypeEnum.Fungible;
+    }
+    return { from, to, ticker, amount, legType };
+  });
 };
 
 export const getSignerAddress = (event: SubstrateEvent): string => {

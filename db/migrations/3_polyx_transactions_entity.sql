@@ -1,4 +1,3 @@
--- Create StoStatus enum
 DO $$
 BEGIN
     IF NOT EXISTS (select 1 from pg_type where typname = 'public_enum_5df0f1d22c') then

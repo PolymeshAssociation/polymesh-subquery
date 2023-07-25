@@ -1,11 +1,16 @@
 import { schemaMigrations } from '../db/schemaMigrations';
+import { dbIsReady, getPostgresConnection } from '../db/utils';
 
 const main = async () => {
+  const postgres = await getPostgresConnection();
+
   try {
-    return await schemaMigrations();
+    await dbIsReady(postgres, 1);
   } catch (e) {
-    console.log("Couldn't run schema migrations ", e);
+    console.log('No instance of running database found. Skipping migrations.');
+    return;
   }
+  await schemaMigrations(postgres);
 };
 
 main()
