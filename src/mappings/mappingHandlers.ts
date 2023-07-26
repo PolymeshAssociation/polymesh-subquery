@@ -31,7 +31,7 @@ import { mapSto } from './entities/mapSto';
 import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
-import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
+import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -41,12 +41,17 @@ import {
 } from './generatedColumns';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
+import migrationHandlers from './migrations/migrationHandlers';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
     const header = block.block.header;
     const blockId = header.number.toNumber();
+    const ss58Format = header.registry.chainSS58;
+
     let countExtrinsicsSuccess = 0;
+    await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
     for (const e of block.events) {
       if (e.event.method == 'ExtrinsicSuccess') {
@@ -186,6 +191,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       mapCorporateActions(handlerArgs),
       mapProposal(handlerArgs),
       mapTrustedClaimIssuer(handlerArgs),
+      mapPolyxTransaction(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({
