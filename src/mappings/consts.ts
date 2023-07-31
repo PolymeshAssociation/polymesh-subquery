@@ -39,3 +39,11 @@ export const systematicIssuers = {
     accountId: 'pm/rewrd',
   },
 };
+
+/**
+ * Maximum permissible blocks that should be processed for migrating older events into newer entities
+ *
+ * Generally, it takes about a minute to process 100000 blocks. So if this constant is set to a very high number,
+ * the `--timeout` option for the subquery container needs to be increased accordingly (based on number of blocks to be processed)
+ */
+export const MAX_PERMISSIBLE_BLOCKS = 1000000;

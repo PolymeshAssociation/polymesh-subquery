@@ -2082,6 +2082,7 @@ type Migration @entity {
   number: Int!
   version: String!
   executed: Boolean! @index
+  processedBlock: Int!
 }
 
 """
