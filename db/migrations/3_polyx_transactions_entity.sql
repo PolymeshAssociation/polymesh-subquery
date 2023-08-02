@@ -24,6 +24,7 @@ create table if not exists polyx_transactions
   event_id public_enum_8f5a39c8ee,
   memo text,
   extrinsic_id text,
+  event_idx numeric not null,
   "datetime" timestamp without time zone not null,
   created_block_id text not null,
   updated_block_id text not null,
