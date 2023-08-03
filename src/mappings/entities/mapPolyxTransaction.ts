@@ -119,28 +119,56 @@ const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<v
   }).save();
 };
 
-const handleTreasuryDisbursement = async (
-  args: HandlerArgs | Event,
-  ss58Format?: number
-): Promise<void> => {
+const processTreasuryDisbursementArgs = async (args: HandlerArgs | Event, ss58Format?: number) => {
   let identityId, toId, toAddress, amount;
   if (args instanceof Event) {
     const attributes = JSON.parse(args.attributesTxt);
-    const [{ value: did }, { value: toDid }, { value: toAddressHex }, { value: balance }] =
-      attributes;
+    let did, toDid, toAddressHex, balance;
+    /**
+     * Before spec version 500000, TreasuryDisbursement only had three params and there was not target account address in the event
+     */
+    if (args.specVersionId < 5000000) {
+      [{ value: did }, { value: toDid }, { value: balance }] = attributes;
+    } else {
+      [{ value: did }, { value: toDid }, { value: toAddressHex }, { value: balance }] = attributes;
+    }
     identityId = did;
     toId = toDid;
     amount = BigInt(balance);
-    toAddress = getAccountKey(toAddressHex, ss58Format);
+    if (toAddressHex) {
+      toAddress = getAccountKey(toAddressHex, ss58Format);
+    } else {
+      ({ primaryAccount: toAddress } = await Identity.get(toDid));
+    }
   } else {
-    const [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;
+    let rawFromIdentity, rawToDid, rawTo, rawBalance;
+    if (args.event.block.specVersion < 5000000) {
+      [rawFromIdentity, rawToDid, rawBalance] = args.params;
+    } else {
+      [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;
+    }
     identityId = getTextValue(rawFromIdentity);
     toId = getTextValue(rawToDid);
     toAddress = getTextValue(rawTo);
     amount = getBigIntValue(rawBalance);
+    if (!toAddress) {
+      ({ primaryAccount: toAddress } = await Identity.get(toId));
+    }
   }
+  return { identityId, toId, toAddress, amount };
+};
+
+const handleTreasuryDisbursement = async (
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> => {
+  const { identityId, toId, toAddress, amount } = await processTreasuryDisbursementArgs(
+    args,
+    ss58Format
+  );
 
   const details = await getBasicDetails(args);
+
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const transferPolyxTransaction = transactions.find(
