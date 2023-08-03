@@ -119,10 +119,7 @@ const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<v
   }).save();
 };
 
-const handleTreasuryDisbursement = async (
-  args: HandlerArgs | Event,
-  ss58Format?: number
-): Promise<void> => {
+const processTreasuryDisbursementArgs = async (args: HandlerArgs | Event, ss58Format?: number) => {
   let identityId, toId, toAddress, amount;
   if (args instanceof Event) {
     const attributes = JSON.parse(args.attributesTxt);
@@ -158,8 +155,20 @@ const handleTreasuryDisbursement = async (
       ({ primaryAccount: toAddress } = await Identity.get(toId));
     }
   }
+  return { identityId, toId, toAddress, amount };
+};
+
+const handleTreasuryDisbursement = async (
+  args: HandlerArgs | Event,
+  ss58Format?: number
+): Promise<void> => {
+  const { identityId, toId, toAddress, amount } = await processTreasuryDisbursementArgs(
+    args,
+    ss58Format
+  );
 
   const details = await getBasicDetails(args);
+
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const transferPolyxTransaction = transactions.find(
