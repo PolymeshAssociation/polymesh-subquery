@@ -3119,6 +3119,27 @@
   optionalDependencies:
     "@substrate/connect" "0.7.26"
 
+"@polkadot/typegen@^10.9.1":
+  version "10.9.1"
+  resolved "https://registry.yarnpkg.com/@polkadot/typegen/-/typegen-10.9.1.tgz#fe509b4f1a1f9094120daac819e9e0c378bca036"
+  integrity sha512-SbG9U8/POyY8QwQUp70qzTnYsRxc6Rrjt4wzIWsBKmzVRy0i19O23EXSUo+81ukOBiLZj551GAJwRa3YBpdR+A==
+  dependencies:
+    "@polkadot/api" "10.9.1"
+    "@polkadot/api-augment" "10.9.1"
+    "@polkadot/rpc-augment" "10.9.1"
+    "@polkadot/rpc-provider" "10.9.1"
+    "@polkadot/types" "10.9.1"
+    "@polkadot/types-augment" "10.9.1"
+    "@polkadot/types-codec" "10.9.1"
+    "@polkadot/types-create" "10.9.1"
+    "@polkadot/types-support" "10.9.1"
+    "@polkadot/util" "^12.3.1"
+    "@polkadot/util-crypto" "^12.3.1"
+    "@polkadot/x-ws" "^12.3.1"
+    handlebars "^4.7.7"
+    tslib "^2.5.3"
+    yargs "^17.7.2"
+
 "@polkadot/types-augment@10.7.1":
   version "10.7.1"
   resolved "https://registry.yarnpkg.com/@polkadot/types-augment/-/types-augment-10.7.1.tgz#6d46001c67647385ecfb44fa5944fd9e56a15a99"
@@ -3207,7 +3228,7 @@
     "@polkadot/util" "^12.2.1"
     tslib "^2.5.0"
 
-"@polkadot/types-support@10.9.1":
+"@polkadot/types-support@10.9.1", "@polkadot/types-support@^10.9.1":
   version "10.9.1"
   resolved "https://registry.yarnpkg.com/@polkadot/types-support/-/types-support-10.9.1.tgz#17a861aab8e5a225a4e20cefa2d16076ddd51baf"
   integrity sha512-XsieuLDsszvMZQlleacQBfx07i/JkwQV/UxH9q8Hz7Okmaz9pEVEW1h3ka2/cPuC7a4l32JhaORBUYshBZNdJg==
@@ -3807,7 +3828,7 @@
     rxjs "^7.5.2"
     yargs "^16.2.0"
 
-"@subql/testing@2.0.2", "@subql/testing@latest":
+"@subql/testing@2.0.2":
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/@subql/testing/-/testing-2.0.2.tgz#4c1774332c84ff98144676236361b5d2efbe2165"
   integrity sha512-hRnUIYpIaW66bHBI68m4PI56KDnu1JbdwwbRod94/O0rdJfq8pQnPz/0DZQepIpTjz3J1mMYOY9dhY6ACQKwmg==
@@ -15332,7 +15353,7 @@ yargs@^16.0.0, yargs@^16.2.0:
     y18n "^5.0.5"
     yargs-parser "^20.2.2"
 
-yargs@^17.0.0, yargs@^17.0.1, yargs@^17.3.1:
+yargs@^17.0.0, yargs@^17.0.1, yargs@^17.3.1, yargs@^17.7.2:
   version "17.7.2"
   resolved "https://registry.yarnpkg.com/yargs/-/yargs-17.7.2.tgz#991df39aca675a192b816e1e0363f9d75d2aa269"
   integrity sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==
