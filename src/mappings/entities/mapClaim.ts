@@ -119,7 +119,7 @@ const handleClaimAdded = async (
     await handleScopes(
       blockId,
       target,
-      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
+      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : undefined,
       scope
     );
   }

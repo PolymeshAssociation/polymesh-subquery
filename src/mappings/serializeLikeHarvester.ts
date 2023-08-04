@@ -84,7 +84,7 @@ export const serializeLikeHarvester = (
     if (e.callIndex instanceof Uint8Array) {
       hexCallIndex = u8aToHex(e.callIndex);
     } else {
-      hexCallIndex = e.getT('callIndex').toString();
+      hexCallIndex = e.getT<Codec>('callIndex').toString();
     }
     return {
       call_index: hexStripPrefix(hexCallIndex),

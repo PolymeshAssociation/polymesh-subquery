@@ -12,13 +12,6 @@
     "baseUrl": ".",
     "rootDir": "src",
     "target": "es2017",
-    "paths": {
-      // this is the package name we use (in the interface imports, --package for generators)
-      "polymesh-subql/*": ["src/*"],
-    }
   },
-  "include": [
-    "src/**/*",
-    "node_modules/@subql/types/dist/global.d.ts"
-  ]
+  "include": ["src/**/*", "node_modules/@subql/types/dist/global.d.ts"]
 }

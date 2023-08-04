@@ -22,6 +22,7 @@ import { mapCompliance } from './entities/mapCompliance';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
 import { mapIdentities } from './entities/mapIdentities';
+import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
 import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
 import { mapSettlement } from './entities/mapSettlement';
@@ -31,7 +32,7 @@ import { mapSto } from './entities/mapSto';
 import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
-import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
+import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -39,10 +40,9 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
-import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
-import { mapTrustedClaimIssuer } from './entities/mapTrustedClaimIssuer';
 import migrationHandlers from './migrations/migrationHandlers';
+import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
+import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {

@@ -10,7 +10,7 @@ import {
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../types';
-import { getTextValue } from '../util';
+import { MeshPortfolio, getTextValue, meshPortfolioToPortfolio } from '../util';
 import { HandlerArgs } from './common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
@@ -113,8 +113,8 @@ const handleDidCreated = async (
 ): Promise<void> => {
   const [rawDid, rawAddress] = params;
 
-  const did = getTextValue(rawDid);
-  const address = getTextValue(rawAddress);
+  const did = getTextValue(rawDid)!;
+  const address = getTextValue(rawAddress)!;
 
   let defaultPortfolio;
   const identity = await Identity.get(did);
@@ -154,9 +154,9 @@ const handleDidCreated = async (
 
   const permissions = Permissions.create({
     id: address,
-    assets: null,
-    portfolios: null,
-    transactions: null,
+    assets: undefined,
+    portfolios: undefined,
+    transactions: undefined,
     transactionGroups: [],
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -177,24 +177,24 @@ const handleDidCreated = async (
   await Promise.all([permissions, account, defaultPortfolio]);
 };
 
-const getPermissions = (
-  accountPermissions: Record<string, unknown>
-): {
-  assets: AssetPermissions | null;
-  portfolios: PortfolioPermissions | null;
-  transactions: TransactionPermissions | null;
+interface PermissionsLike {
+  assets: AssetPermissions | undefined;
+  portfolios: PortfolioPermissions | undefined;
+  transactions: TransactionPermissions | undefined;
   transactionGroups: string[];
-} => {
-  let assets: AssetPermissions,
-    portfolios: PortfolioPermissions,
-    transactions: TransactionPermissions,
+}
+
+const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
+  let assets: AssetPermissions | undefined = undefined,
+    portfolios: PortfolioPermissions | undefined = undefined,
+    transactions: TransactionPermissions | undefined = undefined,
     transactionGroups: string[] = [];
 
   let type: string;
   Object.keys(accountPermissions).forEach(key => {
     switch (key) {
       case 'asset': {
-        const assetPermissions = accountPermissions.asset;
+        const assetPermissions = accountPermissions.asset as Record<string, string[]>;
         type = Object.keys(assetPermissions)[0];
         assets = {
           type,
@@ -203,19 +203,22 @@ const getPermissions = (
         break;
       }
       case 'portfolio': {
-        const portfolioPermissions = accountPermissions.portfolio;
+        const portfolioPermissions = accountPermissions.portfolio as Record<
+          string,
+          MeshPortfolio[]
+        >;
         type = Object.keys(portfolioPermissions)[0];
         portfolios = {
           type,
-          values: portfolioPermissions[type]?.map(({ did, kind: { user: number } }) => ({
-            did,
-            number: number || null,
-          })),
+          values: portfolioPermissions[type]?.map(meshPortfolio => {
+            const { identityId: did, number } = meshPortfolioToPortfolio(meshPortfolio);
+            return { did, number };
+          }),
         };
         break;
       }
       case 'extrinsic': {
-        const transactionPermissions = accountPermissions.extrinsic;
+        const transactionPermissions = accountPermissions.extrinsic as Record<string, string[]>;
         type = Object.keys(transactionPermissions)[0];
         transactions = {
           type,
@@ -296,7 +299,7 @@ const handleSecondaryKeysFrozen = async (
   frozen: boolean
 ): Promise<void> => {
   const [rawDid] = params;
-  const identity = await getIdentity(getTextValue(rawDid));
+  const identity = await getIdentity(getTextValue(rawDid)!);
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -315,13 +318,14 @@ const handleSecondaryKeysAdded = async (
 ): Promise<void> => {
   const [rawDid, rawAccounts] = params;
 
-  const { id: identityId } = await getIdentity(getTextValue(rawDid));
+  const { id: identityId } = await getIdentity(getTextValue(rawDid)!);
 
   const accounts = JSON.parse(rawAccounts.toString());
 
-  const promises = [];
+  const promises: PromiseLike<unknown>[] = [];
 
-  accounts.forEach(({ permissions, ...rest }) => {
+  accounts.forEach((accountWithPermissions: any) => {
+    const { permissions, ...rest } = accountWithPermissions;
     let address;
     if ('key' in rest) {
       // for chain version >= 5.0.0

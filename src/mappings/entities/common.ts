@@ -4,7 +4,7 @@ import { EventIdEnum, ModuleIdEnum } from '../../types';
 
 export type Attributes<T> = Omit<
   T,
-  NonNullable<FunctionPropertyNames<T>> | 'id' | 'createdBlockId' | 'updatedBlockId'
+  NonNullable<FunctionPropertyNames<T>> | 'id' | 'createdBlockId' | 'updatedBlockId' | '_name'
 >;
 
 export interface HandlerArgs {
