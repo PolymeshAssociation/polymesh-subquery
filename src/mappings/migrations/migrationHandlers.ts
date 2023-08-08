@@ -49,6 +49,11 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
 
   logger.info(`Executing migration handlers for ${migrations.length} new migration(s)`);
 
+  if (migrations.length === 0) {
+    dataMigrationCompleted = true;
+    return;
+  }
+
   for (const migration of migrations) {
     const { processedBlock, number } = migration;
     let lastProcessedBlock = 0;
