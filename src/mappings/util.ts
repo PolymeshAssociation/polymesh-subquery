@@ -122,11 +122,11 @@ export const getAccountKey = (item: string, ss58Format?: number): string => {
 };
 
 export const getFirstKeyFromJson = (item: Codec): string => {
-  return Object.keys(JSON.parse(item.toString()))[0];
+  return Object.keys(item.toJSON())[0];
 };
 
 export const getFirstValueFromJson = (item: Codec): string => {
-  return JSON.parse(item.toString())[getFirstKeyFromJson(item)];
+  return item.toJSON()[getFirstKeyFromJson(item)];
 };
 
 export const getTextValue = (item: Codec): string => {
@@ -249,7 +249,7 @@ export const getComplianceValue = (
   const { id, ...data } = JSON.parse(compliance.toString());
   return {
     complianceId: Number(id),
-    data,
+    data: JSON.stringify(data),
   };
 };
 

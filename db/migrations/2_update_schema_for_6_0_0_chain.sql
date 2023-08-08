@@ -50,7 +50,7 @@ $$;
 
 alter table legs add column if not exists "leg_type" public_enum_2792cc24ad;
 
-update legs set leg_type = 'Fungible';
+update legs set leg_type = 'Fungible' where leg_type is null;
 
 alter table legs alter column leg_type set not null;
 alter table legs alter column amount drop not null;

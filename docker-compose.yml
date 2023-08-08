@@ -55,7 +55,8 @@ services:
       # - --timeout=3600 # Timeout for indexer sandbox to execute the mapping functions (in seconds)
       # - --local # This is now deprecated
       # - --force-clean # To remove all tables and schema before starting the app
-      - --workers=4 # Number of available CPU cores strictly limits the usage of worker threads. Read more here - https://academy.subquery.network/run_publish/references.html#w-workers
+      # - --workers=4 # Number of available CPU cores strictly limits the usage of worker threads. Read more here - https://academy.subquery.network/run_publish/references.html#w-workers
+      # - --log-level=debug
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
       interval: 3s

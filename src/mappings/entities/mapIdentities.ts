@@ -113,8 +113,8 @@ const handleDidCreated = async (
 ): Promise<void> => {
   const [rawDid, rawAddress] = params;
 
-  const did = getTextValue(rawDid)!;
-  const address = getTextValue(rawAddress)!;
+  const did = getTextValue(rawDid);
+  const address = getTextValue(rawAddress);
 
   let defaultPortfolio;
   const identity = await Identity.get(did);
@@ -299,7 +299,7 @@ const handleSecondaryKeysFrozen = async (
   frozen: boolean
 ): Promise<void> => {
   const [rawDid] = params;
-  const identity = await getIdentity(getTextValue(rawDid)!);
+  const identity = await getIdentity(getTextValue(rawDid));
 
   Object.assign(identity, {
     secondaryKeysFrozen: frozen,
@@ -318,7 +318,7 @@ const handleSecondaryKeysAdded = async (
 ): Promise<void> => {
   const [rawDid, rawAccounts] = params;
 
-  const { id: identityId } = await getIdentity(getTextValue(rawDid)!);
+  const { id: identityId } = await getIdentity(getTextValue(rawDid));
 
   const accounts = JSON.parse(rawAccounts.toString());
 
