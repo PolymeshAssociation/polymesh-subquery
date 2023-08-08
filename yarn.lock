@@ -3037,10 +3037,10 @@
     "@types/websocket" "^1.0.5"
     websocket "^1.0.34"
 
-"@polymeshassociation/polymesh-local@^5.2.0":
-  version "5.9.0"
-  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-local/-/polymesh-local-5.9.0.tgz#5fc740d6eb95037a69b831587acc0da9b9f6e239"
-  integrity sha512-JgZhma9dYc9b3eJ1Pk12U2inY4MoO7N7lT0TxdqYHZYq9fIoVm7ZFBCcBKF54cboTlUeGZ5ZcY1DBx4665mrgw==
+"@polymeshassociation/polymesh-local@^5.12.0":
+  version "5.12.0"
+  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-local/-/polymesh-local-5.12.0.tgz#78034ec15381ad044620869a4100030a6154beb5"
+  integrity sha512-n9EOLBVzWjIuis63Z3Fm4oM9e3VpFJv2F7yV+My8L/+YEaOd3oU5AhOV1pkjIFdN7CnsvpEiLrkmFYJACtM4WQ==
   dependencies:
     "@oclif/command" "^1"
     "@oclif/config" "^1"
@@ -3050,9 +3050,9 @@
     cli-ux "^5.6.3"
     docker-compose "0.23.13"
     inquirer "^8.2.0"
-    node-fetch "^2.6.1"
+    node-fetch "^2.6.9"
     rimraf "^3.0.2"
-    tar "^6.1.11"
+    tar "^6.1.13"
     tslib "^1"
 
 "@protobufjs/aspromise@^1.1.1", "@protobufjs/aspromise@^1.1.2":
@@ -9648,6 +9648,11 @@ minipass@^4.0.0:
   resolved "https://registry.yarnpkg.com/minipass/-/minipass-4.2.5.tgz#9e0e5256f1e3513f8c34691dd68549e85b2c8ceb"
   integrity sha512-+yQl7SX3bIT83Lhb4BVorMAHVuqsskxRdlmO9kTpyukp8vsm2Sn/fUOV9xlnG8/a5JsypJzap21lz/y3FBMJ8Q==
 
+minipass@^5.0.0:
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/minipass/-/minipass-5.0.0.tgz#3e9788ffb90b694a5d0ec94479a45b5d8738133d"
+  integrity sha512-3FnjYuehv9k6ovOEbyOswadCDPX1piCfhV8ncmYtHOjuPwylVWsghTLo7rabjC3Rx5xD4HDx8Wm1xnMF7S5qFQ==
+
 minizlib@^2.0.0, minizlib@^2.1.1, minizlib@^2.1.2:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/minizlib/-/minizlib-2.1.2.tgz#e90d3466ba209b932451508a11ce3d3632145931"
@@ -9899,6 +9904,13 @@ node-fetch@^2.6.1, node-fetch@^2.6.7:
   version "2.6.9"
   resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.9.tgz#7c7f744b5cc6eb5fd404e0c7a9fec630a55657e6"
   integrity sha512-DJm/CJkZkRjKKj4Zi4BsKVZh3ValV5IR5s7LVZnW+6YMh0W1BfNA8XSs6DLMGYlId5F3KnA70uu2qepcR08Qqg==
+  dependencies:
+    whatwg-url "^5.0.0"
+
+node-fetch@^2.6.9:
+  version "2.6.12"
+  resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.12.tgz#02eb8e22074018e3d5a83016649d04df0e348fba"
+  integrity sha512-C/fGU2E8ToujUivIO0H+tpQ6HWo4eEmchoPIoXtxCrVghxdKq+QOHqEZW7tuP3KlV3bC8FRMO5nMCC7Zm1VP6g==
   dependencies:
     whatwg-url "^5.0.0"
 
@@ -12464,6 +12476,18 @@ tar@^6.0.2, tar@^6.1.0, tar@^6.1.11, tar@^6.1.2:
     chownr "^2.0.0"
     fs-minipass "^2.0.0"
     minipass "^4.0.0"
+    minizlib "^2.1.1"
+    mkdirp "^1.0.3"
+    yallist "^4.0.0"
+
+tar@^6.1.13:
+  version "6.1.15"
+  resolved "https://registry.yarnpkg.com/tar/-/tar-6.1.15.tgz#c9738b0b98845a3b344d334b8fa3041aaba53a69"
+  integrity sha512-/zKt9UyngnxIT/EAGYuxaMYgOIJiP81ab9ZfkILq4oNLPFX50qyYmu7jRj9qeXoxmJHjGlbH0+cm2uy1WCs10A==
+  dependencies:
+    chownr "^2.0.0"
+    fs-minipass "^2.0.0"
+    minipass "^5.0.0"
     minizlib "^2.1.1"
     mkdirp "^1.0.3"
     yallist "^4.0.0"
