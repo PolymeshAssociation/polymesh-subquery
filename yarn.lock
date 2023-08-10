@@ -3037,10 +3037,10 @@
     "@types/websocket" "^1.0.5"
     websocket "^1.0.34"
 
-"@polymeshassociation/polymesh-local@^5.12.0":
-  version "5.12.0"
-  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-local/-/polymesh-local-5.12.0.tgz#78034ec15381ad044620869a4100030a6154beb5"
-  integrity sha512-n9EOLBVzWjIuis63Z3Fm4oM9e3VpFJv2F7yV+My8L/+YEaOd3oU5AhOV1pkjIFdN7CnsvpEiLrkmFYJACtM4WQ==
+"@polymeshassociation/polymesh-local@^5.12.1":
+  version "5.12.1"
+  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-local/-/polymesh-local-5.12.1.tgz#519f8cfa136f172820edc7084df2f0133c9e1aa3"
+  integrity sha512-bpHNLZwALMeAobZR3dWir3sAOFsJZDC5+zd75hajL2A2ibWZ3Miiaqg/PGIc4eofRhdrhRVXtuUgH+FNuadkDQ==
   dependencies:
     "@oclif/command" "^1"
     "@oclif/config" "^1"
