@@ -51,6 +51,7 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
 
   if (migrations.length === 0) {
     dataMigrationCompleted = true;
+    return;
   }
 
   for (const migration of migrations) {

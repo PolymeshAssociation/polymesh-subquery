@@ -29,6 +29,7 @@ import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
 import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
+import mapSubqueryVersion from './entities/mapSubqueryVersion';
 import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
@@ -51,6 +52,9 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     const ss58Format = header.registry.chainSS58;
 
     let countExtrinsicsSuccess = 0;
+
+    await mapSubqueryVersion().catch(e => logError(e));
+
     await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
     for (const e of block.events) {

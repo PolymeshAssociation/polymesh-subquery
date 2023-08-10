@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import { Connection } from 'typeorm';
 import { version as latestVersion } from '../package.json';
-import { upsertVersionMetadata } from './sqVersions';
 import { getPostgresConnection } from './utils';
 
 const getLastMigrationFromDB = (postgres: Connection) => {
@@ -84,7 +83,7 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
   }
 
   if (queries.length > 0) {
-    await postgres.query([...queries, upsertVersionMetadata].join('\n'));
+    await postgres.query([...queries].join('\n'));
     console.log(`Applied all migrations and updated the version to ${latestVersion}`);
   } else {
     console.log('Skipping schema migrations');
