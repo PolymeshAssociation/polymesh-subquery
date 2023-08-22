@@ -2095,4 +2095,39 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
+  executed: Boolean! @index
+  processedBlock: Int!
+}
+
+"""
+Represents possible all possible balance types
+"""
+enum BalanceTypeEnum {
+  Free
+  Reserved
+  Bonded
+  Unbonded
+  Locked
+}
+
+"""
+Represents transactions involving POLYX
+"""
+type PolyxTransaction @entity {
+  id: ID!
+  identityId: String
+  address: String
+  toId: String
+  toAddress: String
+  amount: BigInt!
+  type: BalanceTypeEnum!
+  moduleId: ModuleIdEnum
+  callId: CallIdEnum
+  eventId: EventIdEnum
+  memo: String
+  extrinsic: Extrinsic
+  datetime: Date!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }

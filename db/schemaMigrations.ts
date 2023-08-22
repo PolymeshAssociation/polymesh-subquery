@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import { Connection } from 'typeorm';
 import { version as latestVersion } from '../package.json';
-import { upsertVersionMetadata } from './sqVersions';
 import { getPostgresConnection } from './utils';
 
 const getLastMigrationFromDB = (postgres: Connection) => {
@@ -43,8 +42,8 @@ const getOldMigrationQueries = (): string[] => {
 const migrationInsert = (
   migrationNumber: number,
   id?: string
-) => `INSERT INTO "public"."migrations" ("id", "number", "version", "created_at", "updated_at")
-VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', now(), now())
+) => `INSERT INTO "public"."migrations" ("id", "number", "version", "executed", "processed_block", "created_at", "updated_at")
+VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', false, 0, now(), now())
 ON CONFLICT(id) DO UPDATE SET "updated_at" = now();`;
 
 export const schemaMigrations = async (connection?: Connection): Promise<void> => {
@@ -84,7 +83,7 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
   }
 
   if (queries.length > 0) {
-    await postgres.query([...queries, upsertVersionMetadata].join('\n'));
+    await postgres.query([...queries].join('\n'));
     console.log(`Applied all migrations and updated the version to ${latestVersion}`);
   } else {
     console.log('Skipping schema migrations');

@@ -161,7 +161,7 @@ Object {
         "permissionsId": "5CrPPidjxv1aaupnq8atgsVpXNUmnZaqfyzhPcBTmkXqqsSt",
       },
     ],
-    "totalCount": 43,
+    "totalCount": 59,
   },
 }
 `;
@@ -170,7 +170,7 @@ exports[`accounts should return just total count 1`] = `
 Object {
   "accounts": Object {
     "__typename": "AccountsConnection",
-    "totalCount": 43,
+    "totalCount": 59,
   },
 }
 `;
