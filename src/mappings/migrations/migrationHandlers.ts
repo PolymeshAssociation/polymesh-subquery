@@ -1,30 +1,40 @@
 import { Event, Migration } from '../../types';
 import { MAX_PERMISSIBLE_BLOCKS } from '../consts';
+import { mapIdentities } from '../entities/mapIdentities';
 import { mapPolyxTransaction } from '../entities/mapPolyxTransaction';
 
 let dataMigrationCompleted = false;
 
 /**
- * Adds data for older blocks using the `mapPolyxTransaction` handler.
- * This will only be executed migration version 3 is not yet changed to executed state.
+ * Adds data for older blocks using the various mapping handler.
+ * This will only be executed until the currentMigrationSequence has been completely migrated.
  */
-const handlePolyxMigration = async (
+const handleMigration = async (
+  currentMigrationSequence: number,
+  mappingString: string,
   migratedBlock: number,
   indexedBlock: number,
   ss58Format?: number
 ) => {
   let currentBlock = migratedBlock;
   while (currentBlock <= indexedBlock && currentBlock <= migratedBlock + MAX_PERMISSIBLE_BLOCKS) {
-    logger.debug(`Processing block - ${currentBlock} for mapping polyx transactions`);
+    logger.debug(`Processing block - ${currentBlock} for mapping ${mappingString}`);
     const events = await Event.getByBlockId(currentBlock.toString());
     if (events) {
       for (const event of events) {
-        await mapPolyxTransaction(event, ss58Format);
+        switch (currentMigrationSequence) {
+          case 3:
+            await mapPolyxTransaction(event, ss58Format);
+            break;
+          case 5:
+            await mapIdentities(event, ss58Format);
+            break;
+        }
       }
     }
     currentBlock++;
   }
-  logger.info(`Processed block - ${currentBlock} for mapping polyx transactions`);
+  logger.info(`Processed block - ${currentBlock} for mapping ${mappingString}`);
   return currentBlock;
 };
 
@@ -54,12 +64,23 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
     return;
   }
 
+  const messages = {
+    3: 'polyx transactions',
+    5: 'identities',
+  };
+
   for (const migration of migrations) {
     const { processedBlock, number } = migration;
     let lastProcessedBlock = 0;
 
-    if (number === 3) {
-      lastProcessedBlock = await handlePolyxMigration(processedBlock, blockId, ss58Format);
+    if (number === 3 || number === 5) {
+      lastProcessedBlock = await handleMigration(
+        number,
+        messages[number],
+        processedBlock,
+        blockId,
+        ss58Format
+      );
     } else {
       logger.info(`No mapping handlers are associated for migration - ${migration.id}`);
       migration.executed = true;
@@ -69,7 +90,6 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
 
     if (processedBlock >= blockId) {
       migration.executed = true;
-      dataMigrationCompleted = true;
     }
 
     await migration.save();

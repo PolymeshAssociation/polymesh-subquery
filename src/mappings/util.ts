@@ -2,21 +2,28 @@ import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { PolyxTransactionProps } from 'polymesh-subql/types/models/PolyxTransaction';
 import {
   AssetDocument,
+  Block,
+  CallIdEnum,
   ClaimTypeEnum,
   Compliance,
   Distribution,
+  Event,
+  EventIdEnum,
+  Extrinsic,
   FoundType,
   LegTypeEnum,
+  ModuleIdEnum,
+  Portfolio,
   SecurityIdentifier,
   Sto,
   TransferComplianceExemption,
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
-import { Portfolio } from '../types/models/Portfolio';
-import { Attributes } from './entities/common';
+import { Attributes, HandlerArgs } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
@@ -457,4 +464,60 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
   };
+};
+
+const getExtrinsicDetails = (
+  blockId: string,
+  event: SubstrateEvent
+): Pick<PolyxTransactionProps, 'callId' | 'extrinsicId'> => {
+  let callId: CallIdEnum;
+  let extrinsicId: string;
+  if (event.extrinsic) {
+    callId = camelToSnakeCase(event.extrinsic.extrinsic.method.method) as CallIdEnum;
+    extrinsicId = `${blockId}/${event.extrinsic.idx}`;
+  }
+  return { callId, extrinsicId };
+};
+
+type EventParams = {
+  id: string;
+  moduleId: ModuleIdEnum;
+  eventId: EventIdEnum;
+  callId?: CallIdEnum;
+  extrinsicId?: string;
+  datetime: Date;
+  eventIdx;
+  createdBlockId: string;
+  updatedBlockId: string;
+};
+
+export const getEventParams = async (args: HandlerArgs | Event): Promise<EventParams> => {
+  if (args instanceof Event) {
+    const { id, moduleId, eventId, blockId, eventIdx } = args;
+    const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
+    const block = await Block.get(blockId);
+    return {
+      id,
+      moduleId,
+      eventId,
+      callId: extrinsic?.callId,
+      extrinsicId: extrinsic?.id,
+      datetime: block?.datetime,
+      eventIdx,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  } else {
+    const { blockId, eventId, moduleId, event } = args;
+    return {
+      id: `${blockId}/${event.idx}`,
+      moduleId,
+      eventId,
+      ...getExtrinsicDetails(blockId, event),
+      datetime: event.block.timestamp,
+      eventIdx: event.idx,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  }
 };
