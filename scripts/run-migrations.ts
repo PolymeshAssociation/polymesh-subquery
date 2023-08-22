@@ -5,11 +5,12 @@ const main = async () => {
   const postgres = await getPostgresConnection();
 
   try {
-    await dbIsReady(postgres);
-    return await schemaMigrations(postgres);
+    await dbIsReady(postgres, 1);
   } catch (e) {
-    console.log("Couldn't run schema migrations ", e);
+    console.log('No instance of running database found. Skipping migrations.');
+    return;
   }
+  await schemaMigrations(postgres);
 };
 
 main()

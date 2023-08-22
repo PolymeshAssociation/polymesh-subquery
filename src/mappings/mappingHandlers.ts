@@ -22,12 +22,14 @@ import { mapCompliance } from './entities/mapCompliance';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
 import { mapIdentities } from './entities/mapIdentities';
+import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
 import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
 import { mapSettlement } from './entities/mapSettlement';
 import { mapStakingEvent } from './entities/mapStakingEvent';
 import { mapStatistics } from './entities/mapStatistics';
 import { mapSto } from './entities/mapSto';
+import mapSubqueryVersion from './entities/mapSubqueryVersion';
 import { mapTickerExternalAgent } from './entities/mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './entities/mapTickerExternalAgentHistory';
 import { mapTransferManager } from './entities/mapTransferManager';
@@ -39,14 +41,21 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
+import migrationHandlers from './migrations/migrationHandlers';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
-import { camelToSnakeCase, getSigner, logFoundType, logError } from './util';
+import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
     const header = block.block.header;
     const blockId = header.number.toNumber();
+    const ss58Format = header.registry.chainSS58;
+
     let countExtrinsicsSuccess = 0;
+
+    await mapSubqueryVersion().catch(e => logError(e));
+
+    await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
     for (const e of block.events) {
       if (e.event.method == 'ExtrinsicSuccess') {
@@ -186,6 +195,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       mapCorporateActions(handlerArgs),
       mapProposal(handlerArgs),
       mapTrustedClaimIssuer(handlerArgs),
+      mapPolyxTransaction(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({
