@@ -20,7 +20,7 @@ then
   grep -o '"result":"[^"]*' |
   grep -o '[^"]*$'
 )
-  echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $CHAIN_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
+  echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $NETWORK_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
 fi
 
 envsubst <project.template.yaml> project.yaml
