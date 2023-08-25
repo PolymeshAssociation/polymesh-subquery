@@ -1,4 +1,4 @@
-FROM onfinality/subql-node:latest
+FROM onfinality/subql-node:2.12.2
 RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false subquery
 RUN apk add --no-cache bash gettext
 

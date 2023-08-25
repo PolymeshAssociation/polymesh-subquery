@@ -7,7 +7,6 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "subql build",
-    "postinstall": "patch-package",
     "compare": "scripts/run-compare.sh",
     "sql": "ts-node scripts/run-sql.ts",
     "migrations": "ts-node scripts/run-migrations.ts",
@@ -36,7 +35,6 @@
   "dependencies": {
     "@polkadot/api": "^10",
     "bignumber.js": "^9.0.2",
-    "patch-package": "^8.0.0",
     "typeorm": "^0.2.34"
   },
   "devDependencies": {
@@ -53,9 +51,9 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^8.0.6",
     "@semantic-release/npm": "^9.0.2",
-    "@subql/cli": "latest",
-    "@subql/node": "latest",
-    "@subql/types": "latest",
+    "@subql/cli": "3.5.1",
+    "@subql/node": "2.12.2",
+    "@subql/types": "2.2.0",
     "@types/bn.js": "^4.11.6",
     "@types/jest": "^27.0.1",
     "@types/js-yaml": "^4.0.3",
