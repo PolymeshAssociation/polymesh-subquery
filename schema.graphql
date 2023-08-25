@@ -118,6 +118,8 @@ enum EventIdEnum {
   CddClaimsInvalidated
   SecondaryKeysFrozen
   SecondaryKeysUnfrozen
+  ChildDidCreated
+  ChildDidUnlinked
 
   ## cddserviceproviders ##
   # MemberAdded (already defined in UpgradeCommitteeMembership)
@@ -273,9 +275,13 @@ enum EventIdEnum {
   SudoAsDone
 
   ## asset ##
+  "`Transfer` has been deprecated from 6.0.0 chain version"
   Transfer
+  "`Issued` has been deprecated from 6.0.0 chain version"
   Issued
+  "`Redeemed` has been deprecated from 6.0.0 chain version"
   Redeemed
+  AssetBalanceUpdated
   AssetCreated
   IdentifiersUpdated
   DivisibilityChanged
@@ -292,6 +298,7 @@ enum EventIdEnum {
   DocumentAdded
   DocumentRemoved
   ExtensionRemoved
+  "`ClassicTickerClaimed` has been deprecated from 6.0.0 chain version"
   ClassicTickerClaimed
   ControllerTransfer
   CustomAssetTypeExists
@@ -331,6 +338,7 @@ enum EventIdEnum {
   DefaultTargetIdentitiesChanged
   DefaultWithholdingTaxChanged
   DidWithholdingTaxChanged
+  "`CAATransferred` has been deprecated from 6.0.0 chain version"
   CAATransferred
   CAInitiated
   CALinkedToDoc
@@ -373,11 +381,13 @@ enum EventIdEnum {
   PortfolioCreated
   PortfolioDeleted
   MovedBetweenPortfolios
+  "`FungibleTokensMovedBetweenPortfolios` has been deprecated from 6.0.0 chain version"
   FungibleTokensMovedBetweenPortfolios
   NFTsMovedBetweenPortfolios
   PortfolioRenamed
   UserPortfolios
   PortfolioCustodianChanged
+  FundsMovedBetweenPortfolios
 
   ## protocolfee ##
   FeeSet
@@ -400,13 +410,16 @@ enum EventIdEnum {
   InstructionAuthorized @deprecated
   InstructionUnauthorized @deprecated
   InstructionCreated
+  "`InstructionV2Created` has been deprecated from 6.0.0 chain version"
   InstructionV2Created
   InstructionAffirmed
   AffirmationWithdrawn
   FailedToExecuteInstruction
   InstructionRejected
   ReceiptClaimed
+  "`ReceiptValidityChanged` has been deprecated from 6.0.0 chain version"
   ReceiptValidityChanged
+  "`ReceiptUnclaimed` has been deprecated from 6.0.0 chain version"
   ReceiptUnclaimed
   VenueFiltering
   VenuesAllowed
@@ -449,6 +462,13 @@ enum EventIdEnum {
   BatchInterrupted
   BatchOptimisticFailed
   BatchCompleted
+  BatchCompletedOld
+  BatchCompletedWithErrors
+  BatchInterruptedOld
+  DispatchedAs
+  ItemCompleted
+  ItemFailed
+  RelayedTx
 
   ## base ##
   UnexpectedError
@@ -492,9 +512,12 @@ enum EventIdEnum {
   CddStatus
 
   ## nft ##
+  "`IssuedNFT` has been deprecated from 6.0.0 chain version"
   IssuedNFT
   NftCollectionCreated
+  "`RedeemedNFT` has been deprecated from 6.0.0 chain version"
   RedeemedNFT
+  NFTPortfolioUpdated
 
   ## deprecated ##
   Approval @deprecated
@@ -583,6 +606,7 @@ enum CallIdEnum {
   kill_storage
   kill_prefix
   remark_with_event
+  "`placeholder_fill_block` has been deprecated from 6.0.0 chain version"
   placeholder_fill_block
 
   ## babe ##
@@ -601,6 +625,7 @@ enum CallIdEnum {
   freeze
 
   ## authorship ##
+  "`set_uncles` has been deprecated from 6.0.0 chain version"
   set_uncles
 
   ## balances ##
@@ -617,6 +642,7 @@ enum CallIdEnum {
   cdd_register_did
   cdd_register_did_with_cdd
   invalidate_cdd_claims
+  "`remove_secondary_keys_old` has been deprecated from 6.0.0 chain version"
   remove_secondary_keys_old
   accept_primary_key
   change_cdd_requirement_for_mk_rotation
@@ -624,7 +650,9 @@ enum CallIdEnum {
   leave_identity_as_key
   add_claim
   revoke_claim
+  "`set_permission_to_signer` has been deprecated from 6.0.0 chain version"
   set_permission_to_signer
+  "`placeholder_legacy_set_permission_to_signer` has been deprecated from 6.0.0 chain version"
   placeholder_legacy_set_permission_to_signer
   freeze_secondary_keys
   unfreeze_secondary_keys
@@ -641,6 +669,9 @@ enum CallIdEnum {
   set_secondary_key_permissions
   remove_secondary_keys
   register_custom_claim_type
+  create_child_identities
+  create_child_identity
+  unlink_child_identity
 
   ## cddserviceproviders ##
   set_active_members_limit
@@ -716,9 +747,11 @@ enum CallIdEnum {
   add_multisig_signers_via_creator
   remove_multisig_signers_via_creator
   change_sigs_required
+  change_sigs_required_via_creator
   make_multisig_secondary
   make_multisig_primary
   execute_scheduled_proposal
+  remove_creator_controls
 
   ## bridge ##
   change_controller
@@ -813,15 +846,19 @@ enum CallIdEnum {
   redeem
   redeem_from_portfolio
   make_divisible
+  pre_approve_ticker
   add_documents
   remove_documents
   set_funding_round
   update_identifiers
+  "`claim_classic_ticker` has been deprecated from 6.0.0 chain version"
   claim_classic_ticker
+  "`reserve_classic_ticker` has been deprecated from 6.0.0 chain version"
   reserve_classic_ticker
   controller_transfer
   register_custom_asset_type
   create_asset_with_custom_type
+  exempt_ticker_affirmation
   set_asset_metadata
   set_asset_metadata_details
   register_and_set_local_asset_metadata
@@ -829,6 +866,8 @@ enum CallIdEnum {
   register_asset_metadata_global_type
   remove_local_metadata_key
   remove_metadata_value
+  remove_ticker_affirmation_exemption
+  remove_ticker_pre_approval
 
   ## capitaldistribution ##
   distribute
@@ -902,6 +941,8 @@ enum CallIdEnum {
   rename_portfolio
   quit_portfolio_custody
   accept_portfolio_custody
+  pre_approve_portfolio
+  remove_portfolio_pre_approval
 
   ## protocolfee ##
   change_coefficient
@@ -928,8 +969,10 @@ enum CallIdEnum {
   affirm_instruction
   affirm_instruction_v2
   withdraw_affirmation
+  "`withdraw_affirmation_v2` has been deprecated from 6.0.0 chain version"
   withdraw_affirmation_v2
   reject_instruction
+  "`reject_instruction_v2` has been deprecated from 6.0.0 chain version"
   reject_instruction_v2
   affirm_with_receipts
   claim_receipt
@@ -945,6 +988,14 @@ enum CallIdEnum {
   execute_scheduled_instruction_v2
   reschedule_instruction
   update_venue_signers
+  placeholder_add_instruction
+  placeholder_add_and_affirm_instruction
+  placeholder_affirm_instruction
+  placeholder_withdraw_affirmation
+  placeholder_reject_instruction
+  placeholder_add_instruction_with_memo
+  placeholder_add_and_affirm_instruction_with_memo
+  execute_scheduled_instruction_v3
 
   ## statistics ##
   set_active_asset_stats
@@ -969,6 +1020,11 @@ enum CallIdEnum {
   batch_atomic
   batch_optimistic
   relay_tx
+  batch_all
+  dispatch_as
+  force_batch
+  with_weight
+  batch_old
 
   ## base ##
 
@@ -1535,12 +1591,23 @@ enum InstructionStatusEnum {
 }
 
 """
+Represents all possible states of an Instruction
+"""
+enum LegTypeEnum {
+  Fungible
+  NonFungible
+  OffChain
+}
+
+"""
 Represents the movement of a single Asset in a trade, e.g. Alice will give Bob 1 USDS
 """
 type Leg @entity {
   id: ID! # instructionId/legIndex
   assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
-  amount: BigInt!
+  "`amount` can be null for non-fungible tokens"
+  amount: BigInt
+  legType: LegTypeEnum!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
   instruction: Instruction
@@ -2014,4 +2081,39 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
+  executed: Boolean! @index
+  processedBlock: Int!
+}
+
+"""
+Represents possible all possible balance types
+"""
+enum BalanceTypeEnum {
+  Free
+  Reserved
+  Bonded
+  Unbonded
+  Locked
+}
+
+"""
+Represents transactions involving POLYX
+"""
+type PolyxTransaction @entity {
+  id: ID!
+  identityId: String
+  address: String
+  toId: String
+  toAddress: String
+  amount: BigInt!
+  type: BalanceTypeEnum!
+  moduleId: ModuleIdEnum
+  callId: CallIdEnum
+  eventId: EventIdEnum
+  memo: String
+  extrinsic: Extrinsic
+  datetime: Date!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
 }

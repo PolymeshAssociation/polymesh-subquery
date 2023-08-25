@@ -1,48 +1,105 @@
+import { ApiPromise, WsProvider } from '@polkadot/api';
+import { Option } from '@polkadot/types-codec';
+import { Codec } from '@polkadot/types-codec/types';
 import { env } from 'process';
+import { getAccountId, systematicIssuers } from '../src/mappings/consts';
+
+type DidWithAccount = { did: string; accountId: string };
+// Insert for genesis block id
+const genesisBlock = `INSERT INTO "public"."blocks" ("id", "block_id", "parent_id", "hash", "parent_hash", "state_root", "extrinsics_root", "count_extrinsics", "count_extrinsics_unsigned", "count_extrinsics_signed", "count_extrinsics_error", "count_extrinsics_success", "count_events", "datetime", "spec_version_id", "created_at", "updated_at") VALUES
+  ('0', 0, 0, '${env.NETWORK_CHAIN_ID}', '', '', '', 0, 0, 0, 0, 0, 0, now(), '3000', now(), now()) ON CONFLICT(id) DO NOTHING;`;
+
+const getAccounts = ({ did, accountId }: DidWithAccount): string[] => {
+  const permissionsInsert = `INSERT INTO "public"."permissions" ("id", "assets", "portfolios", "transactions", "transaction_groups", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
+    ('${accountId}', null, null, null, '[]', '0', '0', now(), now(), now()) ON CONFLICT(id) DO NOTHING;`;
+  const accountInsert = `INSERT INTO "public"."accounts"("id", "identity_id", "permissions_id", "event_id", "address", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES 
+    ('${accountId}', '${did}', '${accountId}', 'DidCreated', '${accountId}', '0', '0', now(), now(), now()) ON CONFLICT(id) DO NOTHING;`;
+
+  return [permissionsInsert, accountInsert];
+};
+
+/**
+ * Get `identities` and `portfolios` inserts for a specific DID
+ */
+const getInserts = ({ did, accountId }: DidWithAccount): string[] => {
+  const insertQueries = [
+    `INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
+('${did}', '${did}', '${accountId}', 'f', 'DidCreated', 0, 0, now(), now(), now()) ON CONFLICT(id) DO UPDATE SET
+"primary_account" = excluded.primary_account;`,
+    `INSERT INTO "public"."portfolios" ("id", "identity_id", "number", "name", "custodian_id", "event_idx", "created_block_id", "updated_block_id", "created_at", "updated_at") VALUES
+('${did}/0', '${did}', 0, NULL, NULL, 1, '0', '0', now(), now()) ON CONFLICT(id) DO NOTHING;`,
+  ];
+
+  if (accountId) {
+    insertQueries.push(...getAccounts({ did, accountId }));
+  }
+
+  return insertQueries;
+};
 
 /*
  * This function returns SQL statements to be inserted before processing of any blocks.
  *
  * For all the `Systematic Issuers` and GC identities, we need to insert a row in `identities` and its corresponding default portfolio entry in `portfolios` table.
  */
-export const genesisMigrationQueries = (): string[] => {
-  const genesisBlock = `INSERT INTO "public"."blocks" ("id", "block_id", "parent_id", "hash", "parent_hash", "state_root", "extrinsics_root", "count_extrinsics", "count_extrinsics_unsigned", "count_extrinsics_signed", "count_extrinsics_error", "count_extrinsics_success", "count_events", "datetime", "spec_version_id", "created_at", "updated_at") VALUES
-  ('0', 0, 0, '${env.NETWORK_CHAIN_ID}', '', '', '', 0, 0, 0, 0, 0, 0, now(), '3000', now(), now()) ON CONFLICT(id) DO NOTHING;`;
+export const genesisMigrationQueries = async (): Promise<string[]> => {
+  const wsProvider = new WsProvider(env.NETWORK_ENDPOINT);
+  const api = await ApiPromise.create({ provider: wsProvider });
+  // get the chain information to extract SS58Format
+  const chainInfo = await api.registry.getChainProperties();
 
-  // List of all the systematic issuers can be found [here](https://github.com/PolymeshAssociation/Polymesh/blob/d45fd1a161990310242f21230ac8a1a5d15498eb/pallets/common/src/constants.rs#L23)
-  const systematicIssuers = [
-    '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000', // Governance Committee
-    '0x73797374656d3a637573746f6d65725f6475655f64696c6967656e6365000000', // CDD Providers
-    '0x73797374656d3a74726561737572795f6d6f64756c655f646964000000000000', // Treasury
-    '0x73797374656d3a626c6f636b5f7265776172645f726573657276655f64696400', // Block Reward Reserve
-    '0x73797374656d3a736574746c656d656e745f6d6f64756c655f64696400000000', // Settlement Module
-    '0x73797374656d3a706f6c796d6174685f636c61737369635f6d69670000000000', // Classic Migration
-    '0x73797374656d3a666961745f7469636b6572735f7265736572766174696f6e00', // FIAT Tickers Reservation
-    '0x73797374656d3a726577617264735f6d6f64756c655f64696400000000000000', // Rewards
-  ];
+  const ss58Format = chainInfo?.ss58Format.unwrapOrDefault().toNumber();
 
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
-  const gcIdentities = Array(33)
+  const gcDids = Array(33)
     .fill('')
     .map((_, index) => {
       const twoDigitNumber = index.toString(16).padStart(2, '0');
       return `0x${twoDigitNumber}`.padEnd(66, '0');
     });
+  const rawGcAccountIds = await api.query.identity.didRecords.multi(gcDids);
 
-  /**
-   * Get `identities` and `portfolios` inserts for a specific DID
-   */
-  const getInserts = (did: string): string[] => [
-    `INSERT INTO "public"."identities" ("id", "did", "primary_account", "secondary_keys_frozen", "event_id", "created_block_id", "updated_block_id", "datetime", "created_at", "updated_at") VALUES
-('${did}', '${did}', 'primaryAccount', 'f', 'DidCreated', 0, 0, now(), now(), now()) ON CONFLICT(id) DO NOTHING;`,
+  const gcIdentities = rawGcAccountIds.map((account, index) => {
+    const rawAccount = account as Option<Codec>;
+    return {
+      did: gcDids[index],
+      accountId: rawAccount.unwrapOrDefault().toJSON()?.['primaryKey'],
+    };
+  });
 
-    `INSERT INTO "public"."portfolios" ("id", "identity_id", "number", "name", "custodian_id", "event_idx", "created_block_id", "updated_block_id", "created_at", "updated_at") VALUES
-('${did}/0', '${did}', 0, NULL, NULL, 1, '0', '0', now(), now()) ON CONFLICT(id) DO NOTHING;`,
-  ];
+  const accountPromises = await Promise.all(
+    gcIdentities
+      .filter(({ accountId }) => accountId !== null)
+      .map(({ did }) => api.query.identity.didKeys.entries(did))
+  );
 
-  const identityAndPortfolioInserts = [...systematicIssuers, ...gcIdentities]
+  const otherAccounts = accountPromises.reduce((result: string[], accountEntry) => {
+    const accounts: string[] = accountEntry
+      .map(
+        ([
+          {
+            args: [rawDid, rawAccountId],
+          },
+        ]) =>
+          getAccounts({
+            did: rawDid.toString(),
+            accountId: rawAccountId.toString(),
+          })
+      )
+      .flat();
+    return [...result, ...accounts];
+  }, []);
+
+  const systematicIssuerIdentities = Object.values(systematicIssuers).map(({ did, accountId }) => ({
+    did,
+    accountId: getAccountId(accountId, ss58Format),
+  }));
+
+  const identityAndPortfolioInserts = [...systematicIssuerIdentities, ...gcIdentities]
     .map(getInserts)
     .flat();
 
-  return [genesisBlock, ...identityAndPortfolioInserts];
+  await api.disconnect();
+
+  return [genesisBlock, ...identityAndPortfolioInserts, ...otherAccounts];
 };

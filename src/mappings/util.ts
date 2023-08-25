@@ -1,20 +1,21 @@
-import { decodeAddress } from '@polkadot/keyring';
+import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { Portfolio } from 'polymesh-subql/types/models/Portfolio';
 import {
   AssetDocument,
   ClaimTypeEnum,
   Compliance,
   Distribution,
   FoundType,
+  LegTypeEnum,
   SecurityIdentifier,
   Sto,
   TransferComplianceExemption,
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
+import { Portfolio } from '../types/models/Portfolio';
 import { Attributes } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
@@ -114,6 +115,10 @@ export const serializeAccount = (item: Codec): string | null => {
     return null;
   }
   return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
+};
+
+export const getAccountKey = (item: string, ss58Format?: number): string => {
+  return encodeAddress(item.toString(), ss58Format);
 };
 
 export const getFirstKeyFromJson = (item: Codec): string => {
@@ -348,6 +353,7 @@ export interface LegDetails {
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
+  legType: LegTypeEnum;
 }
 
 export const getLegsValue = (item: Codec): LegDetails[] => {
@@ -357,7 +363,29 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
     to: meshPortfolioToPortfolio(toPortfolio),
     ticker: hexToString(ticker),
     amount: getBigIntValue(amount),
+    legType: LegTypeEnum.Fungible,
   }));
+};
+
+export const getSettlementLeg = (item: Codec): LegDetails[] => {
+  const legs = JSON.parse(item.toString());
+  const legTypes = Object.keys(legs);
+  if (legTypes.includes('NonFungible') || legTypes.includes('OffChain')) {
+    return null;
+  }
+  return legs.map(leg => {
+    let legType = Object.keys(leg)[0];
+    const legValue = leg[legType];
+    let from, to, ticker, amount;
+    if (legType === 'fungible') {
+      from = meshPortfolioToPortfolio(legValue.sender);
+      to = meshPortfolioToPortfolio(legValue.receiver);
+      ticker = hexToString(legValue.ticker);
+      amount = extractBigInt(legValue, 'amount');
+      legType = LegTypeEnum.Fungible;
+    }
+    return { from, to, ticker, amount, legType };
+  });
 };
 
 export const getSignerAddress = (event: SubstrateEvent): string => {

@@ -20,14 +20,14 @@ then
   grep -o '"result":"[^"]*' |
   grep -o '[^"]*$'
 )
-  echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $CHAIN_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
+  echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $NETWORK_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
 fi
 
 envsubst <project.template.yaml> project.yaml
 
 (npm run sql || (sleep 3 && kill "$$")) &
 
-(npm run migrations || (sleep 3 && kill "$$")) &
+npm run migrations
 
 # Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}
