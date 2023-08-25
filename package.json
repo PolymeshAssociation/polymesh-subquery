@@ -1,6 +1,6 @@
 {
   "name": "polymesh-subquery",
-  "version": "9.7.0-alpha.11",
+  "version": "9.8.0",
   "author": "Polymesh Association",
   "license": "Apache-2.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
@@ -48,6 +48,7 @@
     "@polkadot/typegen": "^10.9.1",
     "@polkadot/types-support": "^10.9.1",
     "@polymeshassociation/polymesh-local": "^5.12.1",
+    "@polymeshassociation/polymesh-types": "^5.5.3",
     "@semantic-release/changelog": "^6.0.1",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^8.0.6",
