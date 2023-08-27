@@ -83,7 +83,10 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
   }
 
   if (queries.length > 0) {
-    await postgres.query([...queries].join('\n'));
+    const assembleQueries = (q: string) =>
+      q.replace(/public_enum_([a-z0-9]+)/g, '"$1"').replace(/'"([a-z0-9]+)"'/g, "'$1'");
+
+    await postgres.query([...queries.map(assembleQueries)].join('\n'));
     console.log(`Applied all migrations and updated the version to ${latestVersion}`);
   } else {
     console.log('Skipping schema migrations');

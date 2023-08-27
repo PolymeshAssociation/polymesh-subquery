@@ -236,7 +236,7 @@ export const getComplianceValues = (
 
   return compliances.map(({ id, ...data }) => ({
     complianceId: Number(id),
-    data,
+    data: JSON.stringify(data),
   }));
 };
 
