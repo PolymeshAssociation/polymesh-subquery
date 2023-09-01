@@ -472,9 +472,17 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
 
 export const getProposerValue = (item: Codec): Proposer => {
   const proposer = JSON.parse(item.toString());
-  const type = Object.keys(proposer)[0];
+  let type, value;
+  if ('committee' in proposer) {
+    type = 'Committee';
+    value = capitalizeFirstLetter(Object.keys(proposer.committee)[0]);
+  }
+  if ('community' in proposer) {
+    type = 'Community';
+    value = getAccountKey(proposer.community, item.registry.chainSS58);
+  }
   return {
-    type: capitalizeFirstLetter(type),
-    value: capitalizeFirstLetter(Object.keys(proposer[type])[0]),
+    type,
+    value,
   };
 };
