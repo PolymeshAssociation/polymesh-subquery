@@ -1733,11 +1733,19 @@ enum SnapshotEnum {
 }
 
 """
+Represents where this claim may apply
+"""
+type Proposer @jsonField {
+  type: String!
+  value: String!
+}
+
+"""
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
   id: ID!
-  proposer: String! @index(unique: false)
+  proposer: Proposer!
   state: ProposalStateEnum!
   owner: Identity!
   balance: BigInt!
@@ -2081,7 +2089,7 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
-  executed: Boolean! @index
+  executed: Boolean! @index(unique: false)
   processedBlock: Int!
 }
 

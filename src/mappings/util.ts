@@ -10,6 +10,7 @@ import {
   FoundType,
   LegTypeEnum,
   Portfolio,
+  Proposer,
   SecurityIdentifier,
   Sto,
   TransferComplianceExemption,
@@ -466,5 +467,14 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
     raisingAssetId: hexToString(extractString(rest, 'raising_asset')),
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
+  };
+};
+
+export const getProposerValue = (item: Codec): Proposer => {
+  const proposer = JSON.parse(item.toString());
+  const type = Object.keys(proposer)[0];
+  return {
+    type: capitalizeFirstLetter(type),
+    value: capitalizeFirstLetter(Object.keys(proposer[type])[0]),
   };
 };
