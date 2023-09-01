@@ -24,21 +24,6 @@ export const getMigrationVersion = (fileName: string): number | null => {
   return null; // Return null if the version number is not found or invalid
 };
 
-const getOldMigrationQueries = (): string[] => {
-  console.log('Collecting all old migrations');
-
-  const queries: string[] = [];
-  const oldMigrations = readdirSync('../db/old_migrations');
-
-  for (const oldMigration of oldMigrations) {
-    queries.push(readFileSync(`../db/old_migrations/${oldMigration}`, 'utf-8'));
-    queries.push(
-      migrationInsert(0, `0/${oldMigration.substring(0, oldMigration.indexOf('.sql'))}`)
-    );
-  }
-  return queries;
-};
-
 const migrationInsert = (
   migrationNumber: number,
   id?: string
@@ -57,15 +42,7 @@ export const schemaMigrations = async (connection?: Connection): Promise<void> =
     console.log(`Error message: ${e.message}`);
   }
 
-  let queries: string[] = [];
-
-  if (lastMigration === 0) {
-    /**
-     * This will make sure if anyone running an older version has an unexecuted migration,
-     * all of those will also get executed.
-     */
-    queries = getOldMigrationQueries();
-  }
+  const queries: string[] = [];
 
   const migrations = readdirSync('../db/migrations');
 
