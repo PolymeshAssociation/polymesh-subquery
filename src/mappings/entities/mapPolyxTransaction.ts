@@ -1,70 +1,22 @@
-import { SubstrateEvent } from '@subql/types';
+import BigNumber from 'bignumber.js';
 import {
   Account,
   BalanceTypeEnum,
   Block,
-  CallIdEnum,
   Event,
   EventIdEnum,
-  Extrinsic,
   Identity,
   ModuleIdEnum,
   PolyxTransaction,
 } from '../../types';
-import { PolyxTransactionProps } from '../../types/models/PolyxTransaction';
 import {
   bytesToString,
-  camelToSnakeCase,
   getAccountKey,
   getBigIntValue,
+  getEventParams,
   getTextValue,
 } from '../util';
 import { HandlerArgs } from './common';
-import BigNumber from 'bignumber.js';
-
-const getExtrinsicDetails = (
-  blockId: string,
-  event: SubstrateEvent
-): Pick<PolyxTransactionProps, 'callId' | 'extrinsicId'> => {
-  let callId: CallIdEnum;
-  let extrinsicId: string;
-  if (event.extrinsic) {
-    callId = camelToSnakeCase(event.extrinsic.extrinsic.method.method) as CallIdEnum;
-    extrinsicId = `${blockId}/${event.extrinsic.idx}`;
-  }
-  return { callId, extrinsicId };
-};
-
-const getBasicDetails = async (args: HandlerArgs | Event) => {
-  if (args instanceof Event) {
-    const { id, moduleId, eventId, blockId, eventIdx } = args;
-    const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
-    const block = await Block.get(blockId);
-    return {
-      id,
-      moduleId,
-      eventId,
-      callId: extrinsic?.callId,
-      extrinsicId: extrinsic?.id,
-      datetime: block?.datetime,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    };
-  } else {
-    const { blockId, eventId, moduleId, event } = args;
-    return {
-      id: `${blockId}/${event.idx}`,
-      moduleId,
-      eventId,
-      ...getExtrinsicDetails(blockId, event),
-      datetime: event.block.timestamp,
-      eventIdx: event.idx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    };
-  }
-};
 
 const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<void> => {
   let did, balance;
@@ -94,7 +46,7 @@ const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<v
   } else {
     amount = BigInt(balance || 0);
   }
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
 
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
@@ -167,7 +119,7 @@ const handleTreasuryDisbursement = async (
     ss58Format
   );
 
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
 
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
@@ -237,7 +189,7 @@ const handleBalanceTransfer = async (
     memo = bytesToString(rawMemo);
   }
 
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
 
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
@@ -292,7 +244,7 @@ const handleTransactionFeePaid = async (
     amount = getBigIntValue(rawActualFee);
   }
 
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
   if (details.extrinsicId) {
     const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
     const reimbursementTransaction = transactions
@@ -344,7 +296,7 @@ const handleBalanceAdded = async (
     amount = getBigIntValue(rawBalance);
   }
 
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
   const account = await Account.get(toAddress);
 
   await PolyxTransaction.create({
@@ -377,7 +329,7 @@ const handleBalanceCharged = async (
   const account = await Account.get(address);
 
   await PolyxTransaction.create({
-    ...(await getBasicDetails(args)),
+    ...(await getEventParams(args)),
     address,
     identityId: account?.identityId,
     amount,
@@ -406,7 +358,7 @@ const handleBalanceReceived = async (
   }
 
   await PolyxTransaction.create({
-    ...(await getBasicDetails(args)),
+    ...(await getEventParams(args)),
     toId,
     toAddress,
     amount,
@@ -435,7 +387,7 @@ const handleBalanceSpent = async (
   }
 
   await PolyxTransaction.create({
-    ...(await getBasicDetails(args)),
+    ...(await getEventParams(args)),
     identityId,
     address,
     amount,
@@ -462,7 +414,7 @@ const handleBalanceSet = async (args: HandlerArgs | Event, ss58Format?: number):
     reservedAmount = getBigIntValue(rawReservedBalance);
   }
 
-  const details = await getBasicDetails(args);
+  const details = await getEventParams(args);
 
   // add the newly set free balance
   await PolyxTransaction.create({
