@@ -55,7 +55,7 @@
     "@subql/node": "2.12.2",
     "@subql/types": "2.2.0",
     "@types/bn.js": "^4.11.6",
-    "@types/jest": "^27.0.1",
+    "@types/jest": "^29.5.4",
     "@types/js-yaml": "^4.0.3",
     "@types/node": "^18.15.11",
     "@typescript-eslint/eslint-plugin": "^4.29.2",

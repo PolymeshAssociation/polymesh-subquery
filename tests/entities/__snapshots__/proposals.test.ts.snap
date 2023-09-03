@@ -26,7 +26,10 @@ Object {
     "description": "second",
     "id": "1",
     "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
-    "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+    "proposer": Object {
+      "type": "Community",
+      "value": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+    },
     "state": "Executed",
     "url": "google.com",
     "votes": Object {
@@ -61,7 +64,10 @@ Object {
           "totalCount": 0,
         },
         "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
-        "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        "proposer": Object {
+          "type": "Community",
+          "value": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        },
         "state": "Rejected",
         "totalAyeWeight": "0",
         "totalNayWeight": "0",
@@ -82,7 +88,10 @@ Object {
           "totalCount": 0,
         },
         "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
-        "proposer": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        "proposer": Object {
+          "type": "Community",
+          "value": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        },
         "state": "Executed",
         "totalAyeWeight": "10",
         "totalNayWeight": "0",
