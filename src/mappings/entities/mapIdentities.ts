@@ -8,6 +8,7 @@ import {
   Identity,
   ModuleIdEnum,
   Permissions,
+  PermissionsJson,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../types';
@@ -66,18 +67,19 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
 
 const createHistoryEntry = async (
   eventId: EventIdEnum,
-  identityId: string,
+  identity: string,
   address: string,
   blockId: string,
   datetime: Date,
-  eventIdx: number
+  eventIdx: number,
+  permissions?: PermissionsJson
 ): Promise<void> =>
   AccountHistory.create({
     id: `${blockId}/${eventIdx}`,
     eventId,
-    accountId: address,
-    identityId,
-    permissionsId: address,
+    account: address,
+    identity,
+    permissions,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     datetime,
@@ -480,16 +482,27 @@ const handlePrimaryKeyUpdated = async (
     eventId,
   });
 
-  account.identityId = null;
+  // remove the identity mapping from account and set permissions to null
+  Object.assign(account, {
+    identityId: undefined,
+    permissionsId: undefined,
+    eventId,
+    updatedBlockId: blockId,
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, ...oldPermissions } = permissions;
+  const { assets, portfolios, transactionGroups, transactions } = permissions;
 
   await Promise.all([
-    identity.save(),
     Permissions.create({
       id: address,
-      ...oldPermissions,
+      assets,
+      portfolios,
+      transactionGroups,
+      transactions,
+      datetime,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
     }).save(),
     Account.create({
       id: address,
@@ -501,10 +514,16 @@ const handlePrimaryKeyUpdated = async (
       updatedBlockId: blockId,
       datetime,
     }).save(),
+    identity.save(),
     // unlink the old account from the identity
     account.save(),
     Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx),
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx, {
+      assets,
+      portfolios,
+      transactionGroups,
+      transactions,
+    }),
   ]);
 };
 
@@ -535,11 +554,17 @@ const handleSecondaryKeyLeftIdentity = async (
 
   const accountEntity = await Account.get(address);
   const did = accountEntity.identityId;
-  accountEntity.identityId = null;
+
+  Object.assign(accountEntity, {
+    identityId: undefined,
+    permissionsId: undefined,
+    eventId,
+    updatedBlockId: blockId,
+  });
 
   await Promise.all([
-    Permissions.remove(address),
     accountEntity.save(),
+    Permissions.remove(address),
     createHistoryEntry(eventId, did, address, blockId, datetime, eventIdx),
   ]);
 };

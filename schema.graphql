@@ -1301,22 +1301,32 @@ type Account @entity {
   id: ID!
   address: String! @index(unique: true)
   identity: Identity
+  permissions: Permissions
   eventId: EventIdEnum!
-  permissions: Permissions!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
 }
 
 """
-Represents historical data of identites assigned to an account
+Represents permissions to be saved in account history
+"""
+type PermissionsJson @jsonField {
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+}
+
+"""
+Represents historical data of identities assigned to an account
 """
 type AccountHistory @entity {
   id: ID!
-  account: Account!
-  identity: Identity!
+  account: String!
+  identity: String!
   eventId: EventIdEnum!
-  permissions: Permissions!
+  permissions: PermissionsJson!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
