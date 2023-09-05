@@ -1326,7 +1326,7 @@ type AccountHistory @entity {
   account: String!
   identity: String!
   eventId: EventIdEnum!
-  permissions: PermissionsJson!
+  permissions: PermissionsJson
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!

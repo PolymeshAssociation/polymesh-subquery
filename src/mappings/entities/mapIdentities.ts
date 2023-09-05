@@ -540,16 +540,7 @@ const handleSecondaryKeyLeftIdentity = async (
     address = getAccountKey(addressHex, ss58Format);
   } else {
     const [, rawAccount] = args.params;
-
-    const account = JSON.parse(rawAccount.toString()) as MeshAccount;
-
-    if (typeof account === 'string') {
-      // for chain version >= 5.0.0
-      address = account;
-    } else {
-      // for chain version < 5.0.0
-      ({ account: address } = account);
-    }
+    address = getTextValue(rawAccount);
   }
 
   const accountEntity = await Account.get(address);
