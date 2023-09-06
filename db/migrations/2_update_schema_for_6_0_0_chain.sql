@@ -1,3 +1,11 @@
+alter table migrations add column if not exists executed boolean;
+update migrations set executed = false where executed is null;
+alter table migrations alter column executed set not null;
+
+alter table migrations add column if not exists processed_block integer;
+update migrations set processed_block = 0 where processed_block is null;
+alter table migrations alter column processed_block set not null;
+
 alter type public_enum_0bf3c7d4ef add value if not exists 'exempt_ticker_affirmation' after 'create_asset_with_custom_type';
 alter type public_enum_0bf3c7d4ef add value if not exists 'pre_approve_ticker' after 'make_divisible';
 alter type public_enum_0bf3c7d4ef add value if not exists 'remove_ticker_affirmation_exemption' after 'remove_metadata_value';
