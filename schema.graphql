@@ -1301,22 +1301,32 @@ type Account @entity {
   id: ID!
   address: String! @index(unique: true)
   identity: Identity
+  permissions: Permissions
   eventId: EventIdEnum!
-  permissions: Permissions!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
 }
 
 """
-Represents historical data of identites assigned to an account
+Represents permissions to be saved in account history
+"""
+type PermissionsJson @jsonField {
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+}
+
+"""
+Represents historical data of identities assigned to an account
 """
 type AccountHistory @entity {
   id: ID!
-  account: Account!
-  identity: Identity!
+  account: String!
+  identity: String!
   eventId: EventIdEnum!
-  permissions: Permissions!
+  permissions: PermissionsJson
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -1747,11 +1757,19 @@ enum SnapshotEnum {
 }
 
 """
+Represents where this claim may apply
+"""
+type Proposer @jsonField {
+  type: String!
+  value: String!
+}
+
+"""
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
   id: ID!
-  proposer: String! @index(unique: false)
+  proposer: Proposer!
   state: ProposalStateEnum!
   owner: Identity!
   balance: BigInt!
@@ -2095,7 +2113,7 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
-  executed: Boolean! @index
+  executed: Boolean! @index(unique: false)
   processedBlock: Int!
 }
 

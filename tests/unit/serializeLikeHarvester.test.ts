@@ -408,9 +408,9 @@ describe('serializeLikeHarvester', () => {
           },
         },
         { name: 'new_free', value: 0 },
-        { name: 'new_reserved', value: 0 },
+        { name: 'old_reserved', value: 0 },
       ],
-      call_function: 'set_balance',
+      call_function: 'set_balance_deprecated',
       call_index: '0601',
       call_module: 'Balances',
     });

@@ -17,6 +17,7 @@ import {
   LegTypeEnum,
   ModuleIdEnum,
   Portfolio,
+  Proposer,
   SecurityIdentifier,
   Sto,
   TransferComplianceExemption,
@@ -56,7 +57,7 @@ export const snakeToCamelCase = (value: string): string =>
 
 export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string): string => s?.replace(/\0/g, '') || '';
+export const removeNullChars = (s?: string): string => s?.replace(/\0/g, '') || '';
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
@@ -115,11 +116,11 @@ export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
 
-export const serializeAccount = (item: Codec): string | null => {
+export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
 
   if (s.trim().length === 0) {
-    return null;
+    return undefined;
   }
   return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
 };
@@ -137,7 +138,7 @@ export const getFirstValueFromJson = (item: Codec): string => {
 };
 
 export const getTextValue = (item: Codec): string => {
-  return item?.toString().trim().length > 0 ? item.toString().trim() : null;
+  return item?.toString().trim().length > 0 ? item.toString().trim() : undefined;
 };
 
 export const getNumberValue = (item: Codec): number => {
@@ -145,7 +146,7 @@ export const getNumberValue = (item: Codec): number => {
 };
 
 export const getDateValue = (item: Codec): Date => {
-  return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : null;
+  return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : undefined;
 };
 
 export const getBigIntValue = (item: Codec): bigint => {
@@ -153,7 +154,7 @@ export const getBigIntValue = (item: Codec): bigint => {
 };
 
 export const getBooleanValue = (item: Codec): boolean => {
-  return JSON.parse(getTextValue(item));
+  return JSON.parse(getTextValue(item) || 'false');
 };
 
 export const hexToString = (input: string): string => {
@@ -241,7 +242,10 @@ export const getComplianceValues = (
 ): Pick<Compliance, 'complianceId' | 'data'>[] => {
   const compliances = JSON.parse(requirements.toString());
 
-  return compliances.map(({ id, ...data }) => ({ complianceId: Number(id), data }));
+  return compliances.map(({ id, ...data }) => ({
+    complianceId: Number(id),
+    data: JSON.stringify(data),
+  }));
 };
 
 /**
@@ -253,7 +257,7 @@ export const getComplianceValue = (
   const { id, ...data } = JSON.parse(compliance.toString());
   return {
     complianceId: Number(id),
-    data,
+    data: JSON.stringify(data),
   };
 };
 
@@ -295,7 +299,7 @@ export const getExemptKeyValue = (
   if (!claimTypeValue || typeof claimTypeValue === 'string') {
     claimType = claimTypeValue;
   } else {
-    // from 5.1.0 chain version, Custom(CustomClaimTypeId) was added to the ClaimTypeEnum, polkadot now reads values as {"accredited": null}
+    // from 5.1.0 chain version, Custom(CustomClaimTypeId) was added to the ClaimTypeEnum, polkadot now reads values as {"accredited": undefined}
     claimType = capitalizeFirstLetter(Object.keys(claimTypeValue)[0]) as ClaimTypeEnum;
   }
 
@@ -322,20 +326,27 @@ export function addIfNotIncludes<T>(arr: T[], item: T): void {
   }
 }
 
-interface MeshPortfolio {
+export interface MeshPortfolio {
   did: string;
-  kind: {
-    user: number;
-  };
+  kind:
+    | {
+        user: number;
+      }
+    | { default: null };
 }
 
-const meshPortfolioToPortfolio = ({
-  did,
-  kind: { user: number },
-}: MeshPortfolio): Pick<Portfolio, 'identityId' | 'number'> => ({
-  identityId: did,
-  number: number || 0,
-});
+export const meshPortfolioToPortfolio = (
+  meshPortfolio: MeshPortfolio
+): Pick<Portfolio, 'identityId' | 'number'> => {
+  let number = 0;
+  if ('user' in meshPortfolio.kind) {
+    number = meshPortfolio.kind.user;
+  }
+  return {
+    identityId: meshPortfolio.did,
+    number: number || 0,
+  };
+};
 
 export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
   const meshPortfolio = JSON.parse(item.toString());
@@ -378,7 +389,7 @@ export const getSettlementLeg = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
   const legTypes = Object.keys(legs);
   if (legTypes.includes('NonFungible') || legTypes.includes('OffChain')) {
-    return null;
+    return undefined;
   }
   return legs.map(leg => {
     let legType = Object.keys(leg)[0];
@@ -520,4 +531,21 @@ export const getEventParams = async (args: HandlerArgs | Event): Promise<EventPa
       updatedBlockId: blockId,
     };
   }
+};
+
+export const getProposerValue = (item: Codec): Proposer => {
+  const proposer = JSON.parse(item.toString());
+  let type, value;
+  if ('committee' in proposer) {
+    type = 'Committee';
+    value = capitalizeFirstLetter(Object.keys(proposer.committee)[0]);
+  }
+  if ('community' in proposer) {
+    type = 'Community';
+    value = getAccountKey(proposer.community, item.registry.chainSS58);
+  }
+  return {
+    type,
+    value,
+  };
 };

@@ -8,10 +8,17 @@ import {
   Identity,
   ModuleIdEnum,
   Permissions,
+  PermissionsJson,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../types';
-import { getAccountKey, getEventParams, getTextValue } from '../util';
+import {
+  MeshPortfolio,
+  getAccountKey,
+  getEventParams,
+  getTextValue,
+  meshPortfolioToPortfolio,
+} from '../util';
 import { HandlerArgs } from './common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
@@ -60,18 +67,19 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
 
 const createHistoryEntry = async (
   eventId: EventIdEnum,
-  identityId: string,
+  identity: string,
   address: string,
   blockId: string,
   datetime: Date,
-  eventIdx: number
+  eventIdx: number,
+  permissions?: PermissionsJson
 ): Promise<void> =>
   AccountHistory.create({
     id: `${blockId}/${eventIdx}`,
     eventId,
-    accountId: address,
-    identityId,
-    permissionsId: address,
+    account: address,
+    identity,
+    permissions,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     datetime,
@@ -184,9 +192,9 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
 
   const permissions = Permissions.create({
     id: address,
-    assets: null,
-    portfolios: null,
-    transactions: null,
+    assets: undefined,
+    portfolios: undefined,
+    transactions: undefined,
     transactionGroups: [],
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -207,24 +215,24 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
   await Promise.all([permissions, account, defaultPortfolio]);
 };
 
-const getPermissions = (
-  accountPermissions: Record<string, unknown>
-): {
-  assets: AssetPermissions | null;
-  portfolios: PortfolioPermissions | null;
-  transactions: TransactionPermissions | null;
+interface PermissionsLike {
+  assets: AssetPermissions | undefined;
+  portfolios: PortfolioPermissions | undefined;
+  transactions: TransactionPermissions | undefined;
   transactionGroups: string[];
-} => {
-  let assets: AssetPermissions,
-    portfolios: PortfolioPermissions,
-    transactions: TransactionPermissions,
+}
+
+const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
+  let assets: AssetPermissions | undefined = undefined,
+    portfolios: PortfolioPermissions | undefined = undefined,
+    transactions: TransactionPermissions | undefined = undefined,
     transactionGroups: string[] = [];
 
   let type: string;
   Object.keys(accountPermissions).forEach(key => {
     switch (key) {
       case 'asset': {
-        const assetPermissions = accountPermissions.asset;
+        const assetPermissions = accountPermissions.asset as Record<string, string[]>;
         type = Object.keys(assetPermissions)[0];
         assets = {
           type,
@@ -233,19 +241,22 @@ const getPermissions = (
         break;
       }
       case 'portfolio': {
-        const portfolioPermissions = accountPermissions.portfolio;
+        const portfolioPermissions = accountPermissions.portfolio as Record<
+          string,
+          MeshPortfolio[]
+        >;
         type = Object.keys(portfolioPermissions)[0];
         portfolios = {
           type,
-          values: portfolioPermissions[type]?.map(({ did, kind: { user: number } }) => ({
-            did,
-            number: number || null,
-          })),
+          values: portfolioPermissions[type]?.map(meshPortfolio => {
+            const { identityId: did, number } = meshPortfolioToPortfolio(meshPortfolio);
+            return { did, number };
+          }),
         };
         break;
       }
       case 'extrinsic': {
-        const transactionPermissions = accountPermissions.extrinsic;
+        const transactionPermissions = accountPermissions.extrinsic as Record<string, string[]>;
         type = Object.keys(transactionPermissions)[0];
         transactions = {
           type,
@@ -390,7 +401,8 @@ const handleSecondaryKeysAdded = async (
 
   const { id: identityId } = await getIdentity(did);
 
-  accounts.forEach(({ permissions, ...rest }) => {
+  accounts.forEach((accountWithPermissions: any) => {
+    const { permissions, ...rest } = accountWithPermissions;
     let address;
     if ('key' in rest) {
       // for chain version >= 5.0.0
@@ -470,18 +482,28 @@ const handlePrimaryKeyUpdated = async (
     eventId,
   });
 
-  const newPermissions = new Permissions(address);
-  account.identityId = null;
-  permissions.id = address;
+  // remove the identity mapping from account and set permissions to null
+  Object.assign(account, {
+    identityId: undefined,
+    permissionsId: undefined,
+    eventId,
+    updatedBlockId: blockId,
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, ...oldPermissions } = permissions;
-
-  Object.assign(newPermissions, oldPermissions);
+  const { assets, portfolios, transactionGroups, transactions } = permissions;
 
   await Promise.all([
-    identity.save(),
-    newPermissions.save(),
+    Permissions.create({
+      id: address,
+      assets,
+      portfolios,
+      transactionGroups,
+      transactions,
+      datetime,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save(),
     Account.create({
       id: address,
       address,
@@ -492,10 +514,16 @@ const handlePrimaryKeyUpdated = async (
       updatedBlockId: blockId,
       datetime,
     }).save(),
+    identity.save(),
     // unlink the old account from the identity
     account.save(),
     Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx),
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx, {
+      assets,
+      portfolios,
+      transactionGroups,
+      transactions,
+    }),
   ]);
 };
 
@@ -512,25 +540,22 @@ const handleSecondaryKeyLeftIdentity = async (
     address = getAccountKey(addressHex, ss58Format);
   } else {
     const [, rawAccount] = args.params;
-
-    const account = JSON.parse(rawAccount.toString()) as MeshAccount;
-
-    if (typeof account === 'string') {
-      // for chain version >= 5.0.0
-      address = account;
-    } else {
-      // for chain version < 5.0.0
-      ({ account: address } = account);
-    }
+    address = getTextValue(rawAccount);
   }
 
   const accountEntity = await Account.get(address);
   const did = accountEntity.identityId;
-  accountEntity.identityId = null;
+
+  Object.assign(accountEntity, {
+    identityId: undefined,
+    permissionsId: undefined,
+    eventId,
+    updatedBlockId: blockId,
+  });
 
   await Promise.all([
-    Permissions.remove(address),
     accountEntity.save(),
+    Permissions.remove(address),
     createHistoryEntry(eventId, did, address, blockId, datetime, eventIdx),
   ]);
 };
