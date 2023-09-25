@@ -3,6 +3,7 @@ import {
   Account,
   AccountHistory,
   AssetPermissions,
+  ChildIdentity,
   Event,
   EventIdEnum,
   Identity,
@@ -34,6 +35,14 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
 
   if (eventId === EventIdEnum.DidCreated) {
     await handleDidCreated(args, ss58Format);
+  }
+
+  if (eventId === EventIdEnum.ChildDidCreated) {
+    await handleChildDidCreated(args);
+  }
+
+  if (eventId === EventIdEnum.ChildDidUnlinked) {
+    await handleChildDidUnlinked(args);
   }
 
   if (eventId === EventIdEnum.SecondaryKeysAdded) {
@@ -213,6 +222,45 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
   }).save();
 
   await Promise.all([permissions, account, defaultPortfolio]);
+};
+
+const handleChildDidCreated = async (args: HandlerArgs | Event): Promise<void> => {
+  const { createdBlockId, updatedBlockId } = await getEventParams(args);
+
+  let childDid: string, parentDid: string;
+
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    [{ value: parentDid }, { value: childDid }] = attributes;
+  } else {
+    const [rawParentDid, rawChildDid] = args.params;
+
+    parentDid = getTextValue(rawParentDid);
+    childDid = getTextValue(rawChildDid);
+  }
+
+  await ChildIdentity.create({
+    id: childDid,
+    parentId: parentDid,
+    childId: childDid,
+    createdBlockId,
+    updatedBlockId,
+  }).save();
+};
+
+const handleChildDidUnlinked = async (args: HandlerArgs | Event): Promise<void> => {
+  let childDid: string;
+
+  if (args instanceof Event) {
+    const attributes = JSON.parse(args.attributesTxt);
+    [, , { value: childDid }] = attributes;
+  } else {
+    const [, , rawChildDid] = args.params;
+
+    childDid = getTextValue(rawChildDid);
+  }
+
+  await ChildIdentity.remove(childDid);
 };
 
 interface PermissionsLike {
