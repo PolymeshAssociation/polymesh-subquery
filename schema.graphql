@@ -1792,6 +1792,7 @@ enum ClaimTypeEnum {
   Affiliate
   BuyLockup
   SellLockup
+  Custom
   CustomerDueDiligence
   KnowYourCustomer
   Jurisdiction
@@ -1852,6 +1853,7 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
+  customClaimTypeId: BigInt
   revokeDate: BigInt
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
