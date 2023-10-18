@@ -20,6 +20,7 @@ interface ClaimParams {
   lastUpdateDate: bigint;
   cddId: string;
   jurisdiction: string;
+  customClaimTypeId: bigint | undefined;
 }
 
 interface Scope {
@@ -42,6 +43,13 @@ export async function mapClaim(
     }
 
     if (eventId === EventIdEnum.ClaimRevoked) {
+      console.log(
+        JSON.stringify(
+          { args: { blockId, eventId, moduleId, params, event }, claimParams },
+          null,
+          2
+        )
+      );
       await handleClaimRevoked(target, claimParams);
     }
 
@@ -57,9 +65,15 @@ const getId = (
   claimType: string,
   scope: Scope,
   jurisdiction: string,
-  cddId: string
+  cddId: string,
+  customClaimTypeId: bigint | undefined
 ): string => {
   const idAttributes = [target, claimType];
+
+  if (customClaimTypeId) {
+    idAttributes.push(customClaimTypeId.toString());
+  }
+
   if (scope) {
     // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
     idAttributes.push(scope.type);
@@ -73,6 +87,7 @@ const getId = (
     // Only applicable in case of CustomerDueDiligence claim type
     idAttributes.push(cddId);
   }
+
   return idAttributes.join('/');
 };
 
@@ -88,6 +103,7 @@ const handleClaimAdded = async (
     cddId,
     lastUpdateDate,
     jurisdiction,
+    customClaimTypeId,
   }: ClaimParams,
   target: string
 ): Promise<void> => {
@@ -99,7 +115,7 @@ const handleClaimAdded = async (
   await createIdentityIfNotExists(target, blockId, event);
 
   await Claim.create({
-    id: getId(target, claimType, scope, jurisdiction, cddId),
+    id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
     eventIdx: event.idx,
     targetId: target,
     issuerId: claimIssuer,
@@ -113,6 +129,7 @@ const handleClaimAdded = async (
     filterExpiry,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    customClaimTypeId,
   }).save();
 
   if (scope) {
@@ -127,11 +144,11 @@ const handleClaimAdded = async (
 
 const handleClaimRevoked = async (
   target: string,
-  { claimScope, claimType, issuanceDate, cddId, jurisdiction }: ClaimParams
+  { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId }: ClaimParams
 ) => {
   const scope = JSON.parse(claimScope) as Scope;
 
-  const id = getId(target, claimType, scope, jurisdiction, cddId);
+  const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
   const claim = await Claim.get(id);
 
