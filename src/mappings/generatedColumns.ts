@@ -75,6 +75,12 @@ export const extractClaimScope = (
       const value = scope?.[type] || null;
       return { type, value };
     }
+    case ClaimTypeEnum.Custom: {
+      const scope = args[1]?.value?.claim?.Custom?.col2;
+      const type = Object.keys(scope || {})?.[0] || null;
+      const value = scope?.[type] || null;
+      return { type, value };
+    }
     default: {
       const scope = args[1]?.value?.claim?.[claimType];
       const type = Object.keys(scope || {})?.[0] || null;
@@ -94,10 +100,14 @@ export const extractClaimInfo = (args: any[]) => {
 
   let cddId: any;
   let jurisdiction: any;
+  let customClaimTypeId: bigint;
+
   if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
     cddId = JSONStringifyExceptStringAndNull(claim.CustomerDueDiligence);
   } else if (claimType === ClaimTypeEnum.Jurisdiction) {
     jurisdiction = JSONStringifyExceptStringAndNull(claim.Jurisdiction?.col1);
+  } else if (claimType === ClaimTypeEnum.Custom) {
+    customClaimTypeId = extractBigInt(claim.Custom, 'col1');
   }
 
   return {
@@ -109,6 +119,7 @@ export const extractClaimInfo = (args: any[]) => {
     lastUpdateDate: JSONStringifyExceptStringAndNull(extractString(claimValue, 'last_update_date')),
     cddId,
     jurisdiction,
+    customClaimTypeId,
   };
 };
 

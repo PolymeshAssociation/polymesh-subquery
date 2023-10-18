@@ -211,6 +211,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       lastUpdateDate,
       cddId,
       jurisdiction,
+      customClaimTypeId,
     } = extractClaimInfo(harvesterLikeArgs);
 
     handlerPromises.push(
@@ -223,6 +224,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
         lastUpdateDate,
         cddId,
         jurisdiction,
+        customClaimTypeId,
       })
     );
 
