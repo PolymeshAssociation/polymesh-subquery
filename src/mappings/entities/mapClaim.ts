@@ -43,13 +43,6 @@ export async function mapClaim(
     }
 
     if (eventId === EventIdEnum.ClaimRevoked) {
-      console.log(
-        JSON.stringify(
-          { args: { blockId, eventId, moduleId, params, event }, claimParams },
-          null,
-          2
-        )
-      );
       await handleClaimRevoked(target, claimParams);
     }
 

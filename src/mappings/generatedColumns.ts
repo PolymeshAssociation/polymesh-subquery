@@ -93,19 +93,6 @@ export const extractClaimScope = (
   }
 };
 
-const data = {
-  claimIssuer: '0x0100000000000000000000000000000000000000000000000000000000000000',
-  issuanceDate: 1697477262002,
-  lastUpdateDate: 1697477262002,
-  expiry: null,
-  claim: {
-    Custom: {
-      col1: 1,
-      col2: { Identity: '0x0100000000000000000000000000000000000000000000000000000000000000' },
-    },
-  },
-};
-
 export const extractClaimInfo = (args: any[]) => {
   const claimValue = args?.[1]?.value || {};
   const claim = claimValue.claim || {};
