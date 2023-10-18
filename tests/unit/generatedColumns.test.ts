@@ -38,6 +38,7 @@ test('extractClaimInfo', () => {
     issuanceDate: undefined,
     cddId: undefined,
     jurisdiction: undefined,
+    customClaimTypeId: undefined,
   });
 
   expect(
@@ -62,6 +63,7 @@ test('extractClaimInfo', () => {
     issuanceDate: '12345',
     cddId: '0x000001',
     jurisdiction: undefined,
+    customClaimTypeId: undefined,
   });
 
   expect(
@@ -88,6 +90,7 @@ test('extractClaimInfo', () => {
     issuanceDate: '12345',
     cddId: undefined,
     jurisdiction: undefined,
+    customClaimTypeId: undefined,
   });
 
   expect(
@@ -117,6 +120,7 @@ test('extractClaimInfo', () => {
     issuanceDate: '12345',
     cddId: undefined,
     jurisdiction: 'IN',
+    customClaimTypeId: undefined,
   });
 
   expect(
@@ -143,6 +147,7 @@ test('extractClaimInfo', () => {
     issuanceDate: '0',
     cddId: undefined,
     jurisdiction: undefined,
+    customClaimTypeId: undefined,
   });
 
   expect(
@@ -169,6 +174,40 @@ test('extractClaimInfo', () => {
     issuanceDate: '0',
     cddId: undefined,
     jurisdiction: undefined,
+    customClaimTypeId: undefined,
+  });
+
+  expect(
+    extractClaimInfo([
+      { value: 'hello' },
+      {
+        value: {
+          claim: {
+            Custom: {
+              col1: 1,
+              col2: {
+                Identity: '0x0100000000000000000000000000000000000000000000000000000000000000',
+              },
+            },
+          },
+          claimIssuer: 'me',
+          expiry: 400,
+          lastUpdateDate: 12345,
+          issuanceDate: 0,
+        },
+      },
+    ])
+  ).toStrictEqual({
+    claimExpiry: '400',
+    claimIssuer: 'me',
+    claimScope:
+      '{"type":"Identity","value":"0x0100000000000000000000000000000000000000000000000000000000000000"}',
+    claimType: 'Custom',
+    lastUpdateDate: '12345',
+    issuanceDate: '0',
+    cddId: undefined,
+    jurisdiction: undefined,
+    customClaimTypeId: 1,
   });
 });
 
