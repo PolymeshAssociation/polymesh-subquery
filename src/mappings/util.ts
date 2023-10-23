@@ -141,17 +141,26 @@ export const getTextValue = (item: Codec): string => {
   return item?.toString().trim().length > 0 ? item.toString().trim() : undefined;
 };
 
+export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
+  const customType = await api.query.asset.customTypes(rawCustomId);
+  return hexToString(customType.toString());
+};
+
 export const getAssetType = async (item: Codec): Promise<string> => {
-  if ((item as any).isNonFungible) {
-    const nftType = (item as any).asNonFungible;
+  const anyItem: any = item;
+
+  if (anyItem.isNonFungible) {
+    const nftType = anyItem.asNonFungible;
     if (nftType.type === 'Custom') {
-      const rawCustomId = nftType.asCustom;
-      const customType = await api.query.asset.customTypes(rawCustomId);
-      return hexToString(customType.toString());
+      return getCustomType(nftType.asCustom);
     }
 
     return nftType.type;
   } else {
+    if (anyItem.isCustom) {
+      return getCustomType(anyItem.asCustom);
+    }
+
     return getTextValue(item);
   }
 };
