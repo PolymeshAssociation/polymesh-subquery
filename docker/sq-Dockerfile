@@ -1,7 +1,7 @@
 FROM onfinality/subql-node:v2.12.2
 
 RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false subquery
-RUN apk add --no-cache bash gettext
+RUN apk add --no-cache bash gettext python3 pythonispython3 make gcc g++ musl-dev
 
 # Dependencies
 WORKDIR /app

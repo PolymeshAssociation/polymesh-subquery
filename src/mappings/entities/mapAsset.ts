@@ -16,6 +16,7 @@ import {
   camelToSnakeCase,
   coerceHexToString,
   emptyDid,
+  getAssetType,
   getBigIntValue,
   getBooleanValue,
   getDocValue,
@@ -27,17 +28,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { HandlerArgs } from './common';
-
-export const getAsset = async (ticker: string): Promise<Asset> => {
-  const asset = await Asset.getByTicker(ticker);
-
-  if (!asset) {
-    throw new Error(`Asset with ticker ${ticker} was not found.`);
-  }
-
-  return asset;
-};
+import { HandlerArgs, getAsset } from './common';
 
 export const createFunding = (
   blockId: string,
@@ -59,14 +50,14 @@ export const createFunding = (
   }).save();
 };
 
-const createAssetTransaction = (
+export const createAssetTransaction = (
   event: SubstrateEvent,
   blockId: string,
   details: Pick<
     AssetTransaction,
-    'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound'
+    'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound' | 'nftIds'
   >
-) => {
+): Promise<void> => {
   const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
 
   const callToEventMappings = {
@@ -77,6 +68,8 @@ const createAssetTransaction = (
     [CallIdEnum.push_benefit]: EventIdEnum.BenefitClaimed,
     [CallIdEnum.claim]: EventIdEnum.BenefitClaimed,
     [CallIdEnum.invest]: EventIdEnum.Invested,
+    [CallIdEnum.issue_nft]: EventIdEnum.IssuedNFT,
+    [CallIdEnum.redeem_nft]: EventIdEnum.RedeemedNFT,
     default: EventIdEnum.Transfer,
   };
 
@@ -139,7 +132,7 @@ const handleAssetCreated = async (
 
   const ownerId = getTextValue(rawOwnerDid);
   const ticker = serializeTicker(rawTicker);
-  const type = getTextValue(rawType);
+  const assetType = await getAssetType(rawType);
   /**
    * Name isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
@@ -177,7 +170,8 @@ const handleAssetCreated = async (
     id: ticker,
     ticker,
     name,
-    type,
+    type: assetType,
+    isNftCollection: false, // collection creation will emit a separate event
     fundingRound,
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
@@ -211,6 +205,7 @@ const handleFundingRoundSet = async (blockId: string, params: Codec[]): Promise<
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
+
   asset.fundingRound = bytesToString(rawFundingRound);
   asset.updatedBlockId = blockId;
 
@@ -555,6 +550,5 @@ export async function mapAsset({
     await handleAssetBalanceUpdated(blockId, params, event);
   }
   await handleAssetUpdateEvents(blockId, eventId, params, event);
-
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }

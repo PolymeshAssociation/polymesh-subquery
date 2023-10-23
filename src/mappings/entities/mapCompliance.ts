@@ -1,8 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { Compliance, EventIdEnum, ModuleIdEnum } from '../../types';
 import { getComplianceValue, getComplianceValues, getNumberValue, serializeTicker } from '../util';
-import { HandlerArgs } from './common';
-import { getAsset } from './mapAsset';
+import { HandlerArgs, getAsset } from './common';
 
 const handleAssetComplianceState = async (blockId: string, params: Codec[], isPaused: boolean) => {
   const [, rawTicker] = params;
