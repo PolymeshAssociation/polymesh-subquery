@@ -1304,9 +1304,33 @@ Before an Account can sign most Extrinsics it must first be attached to an Ident
 type Account @entity {
   id: ID!
   address: String! @index(unique: true)
-  identity: Identity!
+  identity: Identity
+  permissions: Permissions
   eventId: EventIdEnum!
-  permissions: Permissions!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents permissions to be saved in account history
+"""
+type PermissionsJson @jsonField {
+  assets: AssetPermissions
+  portfolios: PortfolioPermissions
+  transactions: TransactionPermissions
+  transactionGroups: [String]!
+}
+
+"""
+Represents historical data of identities assigned to an account
+"""
+type AccountHistory @entity {
+  id: ID!
+  account: String!
+  identity: String!
+  eventId: EventIdEnum!
+  permissions: PermissionsJson
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -1329,6 +1353,7 @@ type Identity @entity {
   updatedBlock: Block!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
+  children: [ChildIdentity!]! @derivedFrom(field: "parent")
 }
 
 """
@@ -1737,11 +1762,19 @@ enum SnapshotEnum {
 }
 
 """
+Represents where this claim may apply
+"""
+type Proposer @jsonField {
+  type: String!
+  value: String!
+}
+
+"""
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
   id: ID!
-  proposer: String! @index(unique: false)
+  proposer: Proposer!
   state: ProposalStateEnum!
   owner: Identity!
   balance: BigInt!
@@ -1763,6 +1796,7 @@ enum ClaimTypeEnum {
   Affiliate
   BuyLockup
   SellLockup
+  Custom
   CustomerDueDiligence
   KnowYourCustomer
   Jurisdiction
@@ -1823,6 +1857,7 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
+  customClaimTypeId: BigInt
   revokeDate: BigInt
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
@@ -2085,7 +2120,7 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
-  executed: Boolean! @index
+  executed: Boolean! @index(unique: false)
   processedBlock: Int!
 }
 
@@ -2118,6 +2153,17 @@ type PolyxTransaction @entity {
   extrinsic: Extrinsic
   datetime: Date!
   eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents the parent child mapping for an Identity
+"""
+type ChildIdentity @entity {
+  id: ID!
+  child: Identity!
+  parent: Identity!
   createdBlock: Block!
   updatedBlock: Block!
 }

@@ -51,7 +51,7 @@ export async function mapAuthorization({
         toId: getTextValue(params[1]),
         toKey: serializeAccount(params[2]),
         type: capitalizeFirstLetter(getFirstKeyFromJson(params[4])) as AuthTypeEnum,
-        data: getFirstValueFromJson(params[4]),
+        data: JSON.stringify(getFirstValueFromJson(params[4])),
         expiry: getDateValue(params[5]),
         status: AuthorizationStatusEnum.Pending,
         createdBlockId: blockId,
