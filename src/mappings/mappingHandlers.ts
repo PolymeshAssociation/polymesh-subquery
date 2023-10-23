@@ -44,6 +44,7 @@ import {
 import migrationHandlers from './migrations/migrationHandlers';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
+import { mapMultiSig } from './entities/mapMultiSig';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
@@ -196,6 +197,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       mapProposal(handlerArgs),
       mapTrustedClaimIssuer(handlerArgs),
       mapPolyxTransaction(handlerArgs),
+      mapMultiSig(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({

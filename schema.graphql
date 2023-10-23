@@ -2163,3 +2163,97 @@ type ChildIdentity @entity {
   createdBlock: Block!
   updatedBlock: Block!
 }
+
+"""
+Represents signer types
+"""
+enum SignerTypeEnum {
+  Account
+  Identity
+}
+
+"""
+Represents a MultiSig
+"""
+type MultiSig @entity {
+  id: ID!
+  address: String!
+  creator: Identity!
+  creatorAccount: Account!
+  signers: [MultiSigSigner!]! @derivedFrom(field: "multisig")
+  signaturesRequired: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents MultiSig signer status
+"""
+enum MultiSigSignerStatusEnum {
+  Authorized ## when a signer is added
+  Approved ## when authorization is accepted by the signer
+  Removed ## when signer has been removed
+}
+
+"""
+Represents a MultiSig signer
+"""
+type MultiSigSigner @entity {
+  id: ID!
+  multisig: MultiSig!
+  signerType: SignerTypeEnum!
+  signerValue: String!
+  status: MultiSigSignerStatusEnum!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents the list of proposal status
+"""
+enum MultiSigProposalStatusEnum {
+  Active
+  Success
+  Failed
+  Rejected
+}
+
+"""
+Represents a MultiSig proposal
+"""
+type MultiSigProposal @entity {
+  id: ID!
+  multisig: MultiSig!
+  proposalId: Int!
+  status: MultiSigProposalStatusEnum
+  approvalCount: Int!
+  rejectionCount: Int!
+  datetime: Date!
+  eventIdx: Int!
+  extrinsicIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents action performed on MultiSig proposal
+"""
+enum MultiSigProposalVoteActionEnum {
+  Approved
+  Rejected
+}
+
+"""
+Represents a MultiSig proposal vote
+"""
+type MultiSigProposalVote @entity {
+  id: ID!
+  proposal: MultiSigProposal!
+  signer: MultiSigSigner!
+  action: MultiSigProposalVoteActionEnum
+  datetime: Date!
+  eventIdx: Int!
+  extrinsicIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
