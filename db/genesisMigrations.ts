@@ -73,6 +73,7 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
       .map(({ did }) => api.query.identity.didKeys.entries(did))
   );
 
+  let allAccounts: DidWithAccount[] = [];
   const otherAccounts = accountPromises.reduce((result: string[], accountEntry) => {
     const accounts: string[] = accountEntry
       .map(
@@ -80,11 +81,14 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
           {
             args: [rawDid, rawAccountId],
           },
-        ]) =>
-          getAccounts({
+        ]) => {
+          const accountInfo = {
             did: rawDid.toString(),
             accountId: rawAccountId.toString(),
-          })
+          };
+          allAccounts.push(accountInfo);
+          return getAccounts(accountInfo);
+        }
       )
       .flat();
     return [...result, ...accounts];
@@ -99,7 +103,49 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
     .map(getInserts)
     .flat();
 
+  allAccounts = allAccounts.concat([...systematicIssuerIdentities, ...gcIdentities]);
+
+  const multiSigEntries = await api.query.multiSig.multiSigToIdentity.entries();
+
+  const multiSigInserts: string[] = [];
+  for (const multiSigEntry of multiSigEntries) {
+    const [
+      {
+        args: [rawAddress],
+      },
+      rawCreator,
+    ] = multiSigEntry;
+    const creator = rawCreator.toString();
+    const multiSigAddress = rawAddress.toString();
+
+    const creatorAccount = allAccounts.find(({ did }) => did === creator)?.accountId;
+
+    const [signaturesRequired, signerEntries] = await Promise.all([
+      api.query.multiSig.multiSigSignsRequired(multiSigAddress),
+      api.query.multiSig.multiSigSigners.entries(multiSigAddress),
+    ]);
+
+    multiSigInserts.push(`INSERT INTO "public"."multi_sigs" ("id", "address", "creator_id", "creator_account_id", "signatures_required", "created_block_id", "updated_block_id", "created_at", "updated_at") VALUES
+('${multiSigAddress}', '${multiSigAddress}', '${creator}', '${creatorAccount}', ${signaturesRequired.toString()}, '0', '0', now(), now()) ON CONFLICT(id) DO NOTHING;;`);
+
+    signerEntries.forEach(
+      ([
+        {
+          args: [, rawSigner],
+        },
+      ]) => {
+        const signer = JSON.parse(rawSigner.toString());
+
+        const signerTypeString = Object.keys(signer)[0];
+        const signerType = signerTypeString[0].toUpperCase() + signerTypeString.slice(1);
+        const signerValue = signer[signerTypeString];
+        multiSigInserts.push(`INSERT INTO "public"."multi_sig_signers" ("id", "multisig_id", "signer_type", "signer_value", "status", "created_block_id", "updated_block_id", "created_at", "updated_at") VALUES
+    ('${multiSigAddress}/${signerType}/${signerValue}', '${multiSigAddress}', '${signerType}', '${signerValue}', 'Approved', '0', '0', now(), now()) ON CONFLICT(id) DO NOTHING;`);
+      }
+    );
+  }
+
   await api.disconnect();
 
-  return [genesisBlock, ...identityAndPortfolioInserts, ...otherAccounts];
+  return [genesisBlock, ...identityAndPortfolioInserts, ...otherAccounts, ...multiSigInserts];
 };
