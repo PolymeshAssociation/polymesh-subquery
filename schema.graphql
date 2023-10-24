@@ -1597,7 +1597,7 @@ type PortfolioMovement @entity {
   asset: Asset!
   "the number of fungible tokens transferred. Defined if type == Fungible"
   amount: BigInt
-  "the number of fungible tokens transferred. Defined if type == NonFungible"
+  "the IDs of non-fungible tokens transferred. Defined if type == NonFungible"
   nftIds: [BigInt]
   memo: String
   address: String!
@@ -2099,7 +2099,9 @@ type AssetTransaction @entity {
   fromPortfolio: Portfolio
   "`toPortfolioId` will be null in transactions where the Asset was redeemed"
   toPortfolio: Portfolio
+  "`amount` is the number of fungible tokens involved in this transaction"
   amount: BigInt
+  "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
   nftIds: [BigInt]
   eventId: EventIdEnum!
   eventIdx: Int!
