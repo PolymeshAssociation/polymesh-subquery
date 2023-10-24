@@ -2227,6 +2227,8 @@ type MultiSigProposal @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
   proposalId: Int! @index(unique: false)
+  creator: Identity!
+  creatorAccount: String!
   status: MultiSigProposalStatusEnum
   approvalCount: Int!
   rejectionCount: Int!

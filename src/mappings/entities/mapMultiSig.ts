@@ -112,15 +112,19 @@ const handleMultiSigProposalAdded = async (
   params: Codec[],
   event: SubstrateEvent
 ) => {
-  const [, rawMultiSigAddress, rawProposalId] = params;
+  const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
+  const creatorId = getTextValue(rawDid);
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
+  const creatorAccount = event.extrinsic.extrinsic.signer.toString();
 
   await MultiSigProposal.create({
     id: `${multisigId}/${proposalId}`,
     multisigId,
     proposalId,
+    creatorId,
+    creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
     eventIdx: event.idx,
