@@ -53,7 +53,6 @@ const getMultiSigSignerDetails = (params: Codec[]): Omit<Attributes<MultiSigSign
 
   const multisigId = getTextValue(rawMultiSigAddress);
   const signer = getMultiSigSigner(rawSigner);
-  logger.info(JSON.stringify(signer));
 
   return {
     multisigId,
@@ -84,7 +83,6 @@ const handleMultiSigSignerStatus = async (
 
   const multiSigSigner = await MultiSigSigner.get(`${multisigId}/${signerType}/${signerValue}`);
 
-  logger.info(JSON.stringify(multiSigSigner));
   Object.assign(multiSigSigner, {
     status,
     updatedBlockId: blockId,

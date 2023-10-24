@@ -50,6 +50,8 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
 
   const ss58Format = chainInfo?.ss58Format.unwrapOrDefault().toNumber();
 
+  const apiAt = await api.at(api.genesisHash);
+
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
   const gcDids = Array(33)
     .fill('')
@@ -57,7 +59,7 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
       const twoDigitNumber = index.toString(16).padStart(2, '0');
       return `0x${twoDigitNumber}`.padEnd(66, '0');
     });
-  const rawGcAccountIds = await api.query.identity.didRecords.multi(gcDids);
+  const rawGcAccountIds = await apiAt.query.identity.didRecords.multi(gcDids);
 
   const gcIdentities = rawGcAccountIds.map((account, index) => {
     const rawAccount = account as Option<Codec>;
@@ -70,7 +72,7 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
   const accountPromises = await Promise.all(
     gcIdentities
       .filter(({ accountId }) => accountId !== null)
-      .map(({ did }) => api.query.identity.didKeys.entries(did))
+      .map(({ did }) => apiAt.query.identity.didKeys.entries(did))
   );
 
   let allAccounts: DidWithAccount[] = [];
@@ -105,7 +107,7 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
 
   allAccounts = allAccounts.concat([...systematicIssuerIdentities, ...gcIdentities]);
 
-  const multiSigEntries = await api.query.multiSig.multiSigToIdentity.entries();
+  const multiSigEntries = await apiAt.query.multiSig.multiSigToIdentity.entries();
 
   const multiSigInserts: string[] = [];
   for (const multiSigEntry of multiSigEntries) {
@@ -121,8 +123,8 @@ export const genesisMigrationQueries = async (): Promise<string[]> => {
     const creatorAccount = allAccounts.find(({ did }) => did === creator)?.accountId;
 
     const [signaturesRequired, signerEntries] = await Promise.all([
-      api.query.multiSig.multiSigSignsRequired(multiSigAddress),
-      api.query.multiSig.multiSigSigners.entries(multiSigAddress),
+      apiAt.query.multiSig.multiSigSignsRequired(multiSigAddress),
+      apiAt.query.multiSig.multiSigSigners.entries(multiSigAddress),
     ]);
 
     multiSigInserts.push(`INSERT INTO "public"."multi_sigs" ("id", "address", "creator_id", "creator_account_id", "signatures_required", "created_block_id", "updated_block_id", "created_at", "updated_at") VALUES
