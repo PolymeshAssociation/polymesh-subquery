@@ -2177,10 +2177,11 @@ Represents a MultiSig
 """
 type MultiSig @entity {
   id: ID!
-  address: String!
+  address: String! @index(unique: true)
   creator: Identity!
   creatorAccount: Account!
-  signers: [MultiSigSigner!]! @derivedFrom(field: "multisig")
+  signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
+  proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
   signaturesRequired: Int!
   createdBlock: Block!
   updatedBlock: Block!
@@ -2200,10 +2201,11 @@ Represents a MultiSig signer
 """
 type MultiSigSigner @entity {
   id: ID!
-  multisig: MultiSig!
+  multisig: MultiSig! @index(unique: false)
   signerType: SignerTypeEnum!
   signerValue: String!
   status: MultiSigSignerStatusEnum!
+  votes: [MultiSigProposalVote]! @derivedFrom(field: "signer")
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2223,14 +2225,15 @@ Represents a MultiSig proposal
 """
 type MultiSigProposal @entity {
   id: ID!
-  multisig: MultiSig!
-  proposalId: Int!
+  multisig: MultiSig! @index(unique: false)
+  proposalId: Int! @index(unique: false)
   status: MultiSigProposalStatusEnum
   approvalCount: Int!
   rejectionCount: Int!
   datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int!
+  votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2248,8 +2251,8 @@ Represents a MultiSig proposal vote
 """
 type MultiSigProposalVote @entity {
   id: ID!
-  proposal: MultiSigProposal!
-  signer: MultiSigSigner!
+  proposal: MultiSigProposal! @index(unique: false)
+  signer: MultiSigSigner! @index(unique: false)
   action: MultiSigProposalVoteActionEnum
   datetime: Date!
   eventIdx: Int!
