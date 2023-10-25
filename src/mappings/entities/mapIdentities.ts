@@ -20,7 +20,7 @@ import {
   getTextValue,
   meshPortfolioToPortfolio,
 } from '../util';
-import { HandlerArgs } from './common';
+import { Attributes, HandlerArgs } from './common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
 /**
@@ -108,6 +108,33 @@ const getIdentity = async (did: string): Promise<Identity> => {
   return identity;
 };
 
+export const createPermissions = async (
+  args: Attributes<Permissions>,
+  address: string,
+  blockId: string
+): Promise<void> =>
+  Permissions.create({
+    id: address,
+    ...args,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+
+export const createAccount = async (args: Attributes<Account>, blockId: string): Promise<void> =>
+  Account.create({
+    id: args.address,
+    ...args,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+
+export const createIdentity = async (args: Attributes<Identity>, blockId: string): Promise<void> =>
+  Identity.create({
+    id: args.did,
+    ...args,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
 /**
  * Creates an Identity if already not present. It also creates default Portfolio for that Identity
  *
@@ -119,20 +146,18 @@ export const createIdentityIfNotExists = async (
   blockId: string,
   event: SubstrateEvent
 ): Promise<void> => {
-  let identity = await Identity.get(did);
+  const identity = await Identity.get(did);
   if (!identity) {
-    identity = Identity.create({
-      id: did,
-      did,
-      primaryAccount: '',
-      eventId: event.event.method as EventIdEnum,
-      secondaryKeysFrozen: false,
-      datetime: event.block.timestamp,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    });
-
-    await identity.save();
+    await createIdentity(
+      {
+        did,
+        primaryAccount: '',
+        eventId: event.event.method as EventIdEnum,
+        secondaryKeysFrozen: false,
+        datetime: event.block.timestamp,
+      },
+      blockId
+    );
 
     await createPortfolio(
       {
@@ -178,16 +203,16 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
     portfolio.updatedBlockId = blockId;
     defaultPortfolio = portfolio.save();
   } else {
-    await Identity.create({
-      id: did,
-      did,
-      primaryAccount: address,
-      secondaryKeysFrozen: false,
-      eventId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-      datetime,
-    }).save();
+    await createIdentity(
+      {
+        did,
+        primaryAccount: address,
+        secondaryKeysFrozen: false,
+        eventId,
+        datetime,
+      },
+      blockId
+    );
 
     defaultPortfolio = createPortfolio(
       {
@@ -199,27 +224,25 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
     );
   }
 
-  const permissions = Permissions.create({
-    id: address,
-    assets: undefined,
-    portfolios: undefined,
-    transactions: undefined,
-    transactionGroups: [],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    datetime,
-  }).save();
-
-  const account = Account.create({
-    id: address,
-    identityId: did,
-    permissionsId: address,
-    eventId,
+  const permissions = createPermissions(
+    {
+      datetime,
+      transactionGroups: [],
+    },
     address,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    datetime,
-  }).save();
+    blockId
+  );
+
+  const account = createAccount(
+    {
+      identityId: did,
+      permissionsId: address,
+      eventId,
+      address,
+      datetime,
+    },
+    blockId
+  );
 
   await Promise.all([permissions, account, defaultPortfolio]);
 };
@@ -468,29 +491,30 @@ const handleSecondaryKeysAdded = async (
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(
-      Permissions.create({
-        id: address,
-        assets,
-        portfolios,
-        transactions,
-        transactionGroups,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-        datetime,
-      }).save()
+      createPermissions(
+        {
+          assets,
+          portfolios,
+          transactions,
+          transactionGroups,
+          datetime,
+        },
+        address,
+        blockId
+      )
     );
 
     promises.push(
-      Account.create({
-        id: address,
-        address,
-        identityId,
-        permissionsId: address,
-        eventId,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-        datetime,
-      }).save()
+      createAccount(
+        {
+          address,
+          identityId,
+          permissionsId: address,
+          eventId,
+          datetime,
+        },
+        blockId
+      )
     );
   });
 
@@ -542,26 +566,27 @@ const handlePrimaryKeyUpdated = async (
   const { assets, portfolios, transactionGroups, transactions } = permissions;
 
   await Promise.all([
-    Permissions.create({
-      id: address,
-      assets,
-      portfolios,
-      transactionGroups,
-      transactions,
-      datetime,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save(),
-    Account.create({
-      id: address,
+    createPermissions(
+      {
+        assets,
+        portfolios,
+        transactions,
+        transactionGroups,
+        datetime,
+      },
       address,
-      identityId: identity.id,
-      permissionsId: address,
-      eventId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-      datetime,
-    }).save(),
+      blockId
+    ),
+    createAccount(
+      {
+        address,
+        identityId: identity.id,
+        permissionsId: address,
+        eventId,
+        datetime,
+      },
+      blockId
+    ),
     identity.save(),
     // unlink the old account from the identity
     account.save(),

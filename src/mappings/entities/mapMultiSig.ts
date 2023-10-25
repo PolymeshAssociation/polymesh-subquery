@@ -11,8 +11,42 @@ import {
   MultiSigSignerStatusEnum,
 } from '../../types';
 import { getMultiSigSigner, getMultiSigSigners, getNumberValue, getTextValue } from '../util';
-import { MultiSigProposalVoteActionEnum } from './../../types/enums';
+import { MultiSigProposalVoteActionEnum, SignerTypeEnum } from './../../types/enums';
 import { Attributes, HandlerArgs } from './common';
+
+export const createMultiSig = (
+  address: string,
+  creatorId: string,
+  creatorAccountId: string,
+  signaturesRequired: number,
+  blockId: string
+): Promise<void> =>
+  MultiSig.create({
+    id: `${address}`,
+    address,
+    creatorId,
+    creatorAccountId,
+    signaturesRequired,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+
+export const createMultiSigSigner = (
+  multiSigAddress: string,
+  signerType: SignerTypeEnum,
+  signerValue: string,
+  status: MultiSigSignerStatusEnum,
+  blockId: string
+): Promise<void> =>
+  MultiSigSigner.create({
+    id: `${multiSigAddress}/${signerType}/${signerValue}`,
+    multisigId: multiSigAddress,
+    signerType,
+    signerValue,
+    status,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
 
 const handleMultiSigCreated = async (blockId: string, params: Codec[]) => {
   const [rawDid, rawMultiSigAddress, rawCreator, rawSigners, rawSignaturesRequired] = params;
@@ -23,15 +57,13 @@ const handleMultiSigCreated = async (blockId: string, params: Codec[]) => {
   const signers = getMultiSigSigners(rawSigners);
   const signaturesRequired = getNumberValue(rawSignaturesRequired);
 
-  const multiSigPromise = MultiSig.create({
-    id: `${multiSigAddress}`,
-    address: multiSigAddress,
-    creatorId: creator,
+  const multiSigPromise = createMultiSig(
+    multiSigAddress,
+    creator,
     creatorAccountId,
     signaturesRequired,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+    blockId
+  );
 
   const signerPromises = signers.map(({ signerType, signerValue }) =>
     MultiSigSigner.create({

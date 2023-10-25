@@ -43,6 +43,7 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
+import genesisHandler from './migrations/genesisHandler';
 import migrationHandlers from './migrations/migrationHandlers';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
@@ -56,6 +57,10 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     let countExtrinsicsSuccess = 0;
 
     await mapSubqueryVersion().catch(e => logError(e));
+
+    if (blockId === 1) {
+      await genesisHandler().catch(e => logError(e));
+    }
 
     await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
