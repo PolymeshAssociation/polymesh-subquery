@@ -1,5 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { FunctionPropertyNames, SubstrateEvent } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
+import { FunctionPropertyNames } from '@subql/types-core';
 import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 
 export type Attributes<T> = Omit<
