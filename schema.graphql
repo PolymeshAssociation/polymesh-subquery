@@ -1652,7 +1652,7 @@ type Leg @entity {
   to: Portfolio! @index(unique: false)
   instruction: Instruction
   settlement: Settlement
-  addresses: [String!]! @index(unique: false)
+  addresses: [String!]!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2147,7 +2147,7 @@ type Migration @entity {
   id: ID!
   number: Int!
   version: String!
-  executed: Boolean! @index(unique: false)
+  executed: Int! @index(unique: false)
   processedBlock: Int!
 }
 
