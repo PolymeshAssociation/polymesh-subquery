@@ -22,6 +22,8 @@ import { mapCompliance } from './entities/mapCompliance';
 import { mapCorporateActions } from './entities/mapCorporateActions';
 import { mapExternalAgentAction } from './entities/mapExternalAgentAction';
 import { mapIdentities } from './entities/mapIdentities';
+import { mapMultiSig } from './entities/mapMultiSig';
+import { mapNft } from './entities/mapNfts';
 import { mapPolyxTransaction } from './entities/mapPolyxTransaction';
 import { mapPortfolio } from './entities/mapPortfolio';
 import { mapProposal } from './entities/mapProposal';
@@ -41,10 +43,10 @@ import {
   extractOfferingAsset,
   extractTransferTo,
 } from './generatedColumns';
+import genesisHandler from './migrations/genesisHandler';
 import migrationHandlers from './migrations/migrationHandlers';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
-import { mapNft } from './entities/mapNfts';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
@@ -55,6 +57,10 @@ export async function handleBlock(block: SubstrateBlock): Promise<void> {
     let countExtrinsicsSuccess = 0;
 
     await mapSubqueryVersion().catch(e => logError(e));
+
+    if (blockId === 1) {
+      await genesisHandler().catch(e => logError(e));
+    }
 
     await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
@@ -198,6 +204,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
       mapProposal(handlerArgs),
       mapTrustedClaimIssuer(handlerArgs),
       mapPolyxTransaction(handlerArgs),
+      mapMultiSig(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({

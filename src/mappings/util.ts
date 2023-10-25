@@ -16,9 +16,11 @@ import {
   FoundType,
   LegTypeEnum,
   ModuleIdEnum,
+  MultiSigSigner,
   Portfolio,
   Proposer,
   SecurityIdentifier,
+  SignerTypeEnum,
   Sto,
   TransferComplianceExemption,
   TransferManager,
@@ -586,4 +588,32 @@ export const getNftId = (nft: Codec): { ticker: string; ids: number[] } => {
   const ticker = hexToString(hexTicker);
 
   return { ticker, ids };
+};
+
+export const getMultiSigSigners = (
+  item: Codec
+): Pick<Attributes<MultiSigSigner>, 'signerType' | 'signerValue'>[] => {
+  const signers = JSON.parse(item.toString());
+
+  return signers.map(signer => {
+    const signerType = Object.keys(signer)[0];
+    const signerValue = signer[signerType];
+    return {
+      signerType: capitalizeFirstLetter(signerType) as SignerTypeEnum,
+      signerValue,
+    };
+  });
+};
+
+export const getMultiSigSigner = (
+  item: Codec
+): Pick<Attributes<MultiSigSigner>, 'signerType' | 'signerValue'> => {
+  const signer = JSON.parse(item.toString());
+
+  const signerType = Object.keys(signer)[0];
+  const signerValue = signer[signerType];
+  return {
+    signerType: capitalizeFirstLetter(signerType) as SignerTypeEnum,
+    signerValue,
+  };
 };

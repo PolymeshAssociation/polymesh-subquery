@@ -44,7 +44,10 @@ export const extractValue = <T>(obj: unknown, key: string): T => {
     if (Object.keys(obj).includes(key)) {
       return obj[key] as T;
     }
-    return obj[snakeToCamelCase(key)] as T;
+    const camelCaseKey = snakeToCamelCase(key);
+    if (Object.keys(obj).includes(camelCaseKey)) {
+      return obj[camelCaseKey] as T;
+    }
   }
   return undefined;
 };
