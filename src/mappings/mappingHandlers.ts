@@ -44,6 +44,7 @@ import {
 import migrationHandlers from './migrations/migrationHandlers';
 import { serializeCallArgsLikeHarvester, serializeLikeHarvester } from './serializeLikeHarvester';
 import { camelToSnakeCase, getSigner, logError, logFoundType } from './util';
+import { mapNft } from './entities/mapNfts';
 
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
   try {
@@ -180,6 +181,7 @@ export async function handleEvent(event: SubstrateEvent): Promise<void> {
     const handlerPromises = [
       mapIdentities(handlerArgs),
       mapAsset(handlerArgs),
+      mapNft(handlerArgs),
       mapCompliance(handlerArgs),
       mapTransferManager(handlerArgs),
       mapStatistics(handlerArgs),
