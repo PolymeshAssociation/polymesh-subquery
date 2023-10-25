@@ -1,6 +1,12 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { EventIdEnum, ModuleIdEnum, Portfolio, PortfolioMovement } from '../../types';
+import {
+  EventIdEnum,
+  ModuleIdEnum,
+  Portfolio,
+  PortfolioMovement,
+  PortfolioMovementTypeEnum,
+} from '../../types';
 import {
   bytesToString,
   getBigIntValue,
@@ -153,6 +159,7 @@ const handlePortfolioMovement = async (
   event: SubstrateEvent
 ): Promise<void> => {
   const [, rawFromPortfolio, rawToPortfolio, rawTicker, rawAmount, rawMemo] = params;
+
   const address = getSignerAddress(event);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
@@ -164,6 +171,7 @@ const handlePortfolioMovement = async (
     id: `${blockId}/${event.idx}`,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
+    type: PortfolioMovementTypeEnum.Fungible,
     assetId: ticker,
     amount,
     address,
@@ -182,7 +190,8 @@ const handleFundsMovedBetweenPortfolios = async (
   const address = getSignerAddress(event);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
-  let ticker: string, amount: bigint;
+  let ticker: string, amount: bigint, nftIds: bigint[];
+  let type: PortfolioMovementTypeEnum;
 
   const assetType = getFirstKeyFromJson(rawFundDescription);
   const fundDescription = getFirstValueFromJson(rawFundDescription);
@@ -190,9 +199,12 @@ const handleFundsMovedBetweenPortfolios = async (
     const description = fundDescription as unknown as { ticker: string; amount: number };
     ticker = hexToString(description.ticker);
     amount = BigInt(description.amount);
-  } else {
-    // @prashantasdeveloper handling of NFTs to be done separately
-    return;
+    type = PortfolioMovementTypeEnum.Fungible;
+  } else if (assetType === 'nonFungible') {
+    const description = fundDescription as unknown as { ticker: string; ids: number[] };
+    nftIds = description.ids.map(id => BigInt(id));
+    ticker = hexToString(description.ticker);
+    type = PortfolioMovementTypeEnum.NonFungible;
   }
 
   const memo = bytesToString(rawMemo);
@@ -201,15 +213,16 @@ const handleFundsMovedBetweenPortfolios = async (
     id: `${blockId}/${event.idx}`,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
+    type,
     assetId: ticker,
     amount,
+    nftIds,
     address,
     memo,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
 };
-
 export async function mapPortfolio({
   blockId,
   eventId,

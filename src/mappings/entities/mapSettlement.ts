@@ -57,7 +57,7 @@ export const createLeg = async (
   instructionId: string,
   address: string,
   legIndex: number,
-  { ticker, amount, from, to, legType }: LegDetails,
+  { ticker, amount, nftIds, from, to, legType }: LegDetails,
   event: SubstrateEvent
 ): Promise<void> => {
   // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
@@ -70,6 +70,7 @@ export const createLeg = async (
     id: `${instructionId}/${legIndex}`,
     assetId: ticker,
     amount,
+    nftIds,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     legType,

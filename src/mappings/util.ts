@@ -143,6 +143,30 @@ export const getTextValue = (item: Codec): string => {
   return item?.toString().trim().length > 0 ? item.toString().trim() : undefined;
 };
 
+export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
+  const customType = await api.query.asset.customTypes(rawCustomId);
+  return hexToString(customType.toString());
+};
+
+export const getAssetType = async (item: Codec): Promise<string> => {
+  const anyItem: any = item;
+
+  if (anyItem.isNonFungible) {
+    const nftType = anyItem.asNonFungible;
+    if (nftType.type === 'Custom') {
+      return getCustomType(nftType.asCustom);
+    }
+
+    return nftType.type;
+  } else {
+    if (anyItem.isCustom) {
+      return getCustomType(anyItem.asCustom);
+    }
+
+    return getTextValue(item);
+  }
+};
+
 export const getNumberValue = (item: Codec): number => {
   return Number(getTextValue(item));
 };
@@ -373,6 +397,7 @@ export interface LegDetails {
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
+  nftIds: bigint[];
   legType: LegTypeEnum;
 }
 
@@ -389,22 +414,27 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
 
 export const getSettlementLeg = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
+
   const legTypes = Object.keys(legs);
-  if (legTypes.includes('NonFungible') || legTypes.includes('OffChain')) {
+  if (legTypes.includes('OffChain')) {
     return undefined;
   }
   return legs.map(leg => {
     let legType = Object.keys(leg)[0];
     const legValue = leg[legType];
-    let from, to, ticker, amount;
+    let amount, nftIds;
+
+    const from = meshPortfolioToPortfolio(legValue.sender);
+    const to = meshPortfolioToPortfolio(legValue.receiver);
+    const ticker = hexToString(legValue.ticker);
     if (legType === 'fungible') {
-      from = meshPortfolioToPortfolio(legValue.sender);
-      to = meshPortfolioToPortfolio(legValue.receiver);
-      ticker = hexToString(legValue.ticker);
       amount = extractBigInt(legValue, 'amount');
       legType = LegTypeEnum.Fungible;
+    } else if (legType === 'nonFungible') {
+      nftIds = leg.nonFungible.nfts.ids;
+      legType = LegTypeEnum.NonFungible;
     }
-    return { from, to, ticker, amount, legType };
+    return { from, to, ticker, amount, legType, nftIds };
   });
 };
 
@@ -550,6 +580,14 @@ export const getProposerValue = (item: Codec): Proposer => {
     type,
     value,
   };
+};
+
+export const getNftId = (nft: Codec): { ticker: string; ids: number[] } => {
+  const { ticker: hexTicker, ids } = nft.toJSON() as any;
+
+  const ticker = hexToString(hexTicker);
+
+  return { ticker, ids };
 };
 
 export const getMultiSigSigners = (

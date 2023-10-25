@@ -996,6 +996,10 @@ enum CallIdEnum {
   placeholder_add_instruction_with_memo
   placeholder_add_and_affirm_instruction_with_memo
   execute_scheduled_instruction_v3
+  affirm_with_receipts_with_count
+  affirm_instruction_with_count
+  reject_instruction_with_count
+  withdraw_affirmation_with_count
 
   ## statistics ##
   set_active_asset_stats
@@ -1348,6 +1352,7 @@ type Identity @entity {
   createdBlock: Block!
   updatedBlock: Block!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
+  heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   children: [ChildIdentity!]! @derivedFrom(field: "parent")
 }
@@ -1578,8 +1583,13 @@ type Portfolio @entity {
   updatedBlock: Block!
 }
 
+enum PortfolioMovementTypeEnum {
+  Fungible
+  NonFungible
+}
+
 """
-Represents a transfer of Assets between a single identities portfolios.
+Represents a transfer of fungible assets between a single identities portfolios.
 
 Note: transfers between identities are known as `Settlements`
 """
@@ -1587,8 +1597,12 @@ type PortfolioMovement @entity {
   id: ID!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
+  type: PortfolioMovementTypeEnum!
   asset: Asset!
-  amount: BigInt!
+  "the number of fungible tokens transferred. Defined if type == Fungible"
+  amount: BigInt
+  "the IDs of non-fungible tokens transferred. Defined if type == NonFungible"
+  nftIds: [BigInt]
   memo: String
   address: String!
   createdBlock: Block!
@@ -1632,6 +1646,7 @@ type Leg @entity {
   assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
   "`amount` can be null for non-fungible tokens"
   amount: BigInt
+  nftIds: [BigInt]
   legType: LegTypeEnum!
   from: Portfolio! @index(unique: false)
   to: Portfolio! @index(unique: false)
@@ -2013,6 +2028,18 @@ type AssetHolder @entity {
 }
 
 """
+Represents what NFTs of a collection an Identity owns
+"""
+type NftHolder @entity {
+  id: ID! #ticker/did
+  identity: Identity! @index(unique: false)
+  asset: Asset! @index(unique: false)
+  nftIds: [Int]
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
 Represents a hash of a document
 """
 type ContentHash @jsonField {
@@ -2045,6 +2072,7 @@ type Asset @entity {
   id: ID! # ticker
   ticker: String! @index(unique: true)
   name: String @index(unique: false)
+  isNftCollection: Boolean!
   type: String @index(unique: false)
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
@@ -2075,7 +2103,10 @@ type AssetTransaction @entity {
   fromPortfolio: Portfolio
   "`toPortfolioId` will be null in transactions where the Asset was redeemed"
   toPortfolio: Portfolio
-  amount: BigInt!
+  "`amount` is the number of fungible tokens involved in this transaction"
+  amount: BigInt
+  "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
+  nftIds: [BigInt]
   eventId: EventIdEnum!
   eventIdx: Int!
   "`extrinsicIdx` will be null for scheduled transactions"
