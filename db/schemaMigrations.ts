@@ -28,7 +28,7 @@ const migrationInsert = (
   migrationNumber: number,
   id?: string
 ) => `INSERT INTO "public"."migrations" ("id", "number", "version", "executed", "processed_block", "created_at", "updated_at")
-VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', false, 0, now(), now())
+VALUES ('${id || migrationNumber}', ${migrationNumber}, '${latestVersion}', 0, 0, now(), now())
 ON CONFLICT(id) DO UPDATE SET "updated_at" = now();`;
 
 export const schemaMigrations = async (connection?: Connection): Promise<void> => {

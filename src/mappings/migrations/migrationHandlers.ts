@@ -55,7 +55,7 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
     return;
   }
 
-  const migrations = await Migration.getByExecuted(false);
+  const migrations = await Migration.getByFields([['executed', '=', '0']]);
 
   if (migrations.length === 0) {
     dataMigrationCompleted = true;
@@ -81,13 +81,13 @@ export default async (blockId: number, ss58Format?: number): Promise<void> => {
       );
     } else {
       logger.info(`No mapping handlers are associated for migration - ${migration.id}`);
-      migration.executed = true;
+      migration.executed = 1;
     }
 
     migration.processedBlock = lastProcessedBlock;
 
     if (processedBlock >= blockId) {
-      migration.executed = true;
+      migration.executed = 1;
     }
 
     await migration.save();
