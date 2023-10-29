@@ -7,12 +7,6 @@ _term() {
 }
 trap _term SIGTERM
 
-if [[ -n "$NO_NATIVE_GRAPHQL_DATA" ]]
-then
-  export EVENT_HANDLER='handleToolingEvent'
-else
-  export EVENT_HANDLER='handleEvent'
-fi
 # If NETWORK_CHAIN_ID is not set and we have an http endpoint to use, then curl the chain to fetch it (might need to retry)
 if [[ -n $NETWORK_HTTP_ENDPOINT ]] && [[ -z $NETWORK_CHAIN_ID ]]
 then

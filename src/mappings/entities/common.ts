@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { FunctionPropertyNames } from '@subql/types-core';
 import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 
@@ -10,10 +10,14 @@ export type Attributes<T> = Omit<
 
 export interface HandlerArgs {
   blockId: string;
-  eventId: EventIdEnum;
   moduleId: ModuleIdEnum;
+  eventId: EventIdEnum;
+  eventIdx: number;
   params: Codec[];
-  event: SubstrateEvent;
+
+  block: SubstrateBlock;
+
+  extrinsic?: SubstrateExtrinsic;
 }
 
 export const getAsset = async (ticker: string): Promise<Asset> => {

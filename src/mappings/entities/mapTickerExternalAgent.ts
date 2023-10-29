@@ -7,7 +7,8 @@ export async function mapTickerExternalAgent({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.externalagents && eventId === EventIdEnum.AgentAdded) {
     const callerId = getTextValue(params[0]);
@@ -17,8 +18,8 @@ export async function mapTickerExternalAgent({
       id: `${ticker}/${callerId}`,
       assetId: ticker,
       callerId,
-      eventIdx: event.idx,
-      datetime: event.block.timestamp,
+      eventIdx,
+      datetime: block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

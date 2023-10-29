@@ -1,8 +1,7 @@
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { PolyxTransactionProps } from 'polymesh-subql/types/models/PolyxTransaction';
+import { SubstrateExtrinsic } from '@subql/types';
 import {
   AssetDocument,
   Block,
@@ -26,6 +25,7 @@ import {
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
+import { PolyxTransactionProps } from '../types/models/PolyxTransaction';
 import { Attributes, HandlerArgs } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
@@ -438,10 +438,10 @@ export const getSettlementLeg = (item: Codec): LegDetails[] => {
   });
 };
 
-export const getSignerAddress = (event: SubstrateEvent): string => {
+export const getSignerAddress = (extrinsic: SubstrateExtrinsic): string => {
   let signer: string;
-  if (event.extrinsic) {
-    signer = getSigner(event.extrinsic);
+  if (extrinsic) {
+    signer = getSigner(extrinsic);
   }
   return signer;
 };
@@ -511,13 +511,13 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
 
 const getExtrinsicDetails = (
   blockId: string,
-  event: SubstrateEvent
+  extrinsic?: SubstrateExtrinsic
 ): Pick<PolyxTransactionProps, 'callId' | 'extrinsicId'> => {
   let callId: CallIdEnum;
   let extrinsicId: string;
-  if (event.extrinsic) {
-    callId = camelToSnakeCase(event.extrinsic.extrinsic.method.method) as CallIdEnum;
-    extrinsicId = `${blockId}/${event.extrinsic.idx}`;
+  if (extrinsic) {
+    callId = camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum;
+    extrinsicId = `${blockId}/${extrinsic.idx}`;
   }
   return { callId, extrinsicId };
 };
@@ -551,14 +551,21 @@ export const getEventParams = async (args: HandlerArgs | Event): Promise<EventPa
       updatedBlockId: blockId,
     };
   } else {
-    const { blockId, eventId, moduleId, event } = args;
+    const {
+      blockId,
+      eventId,
+      moduleId,
+      eventIdx,
+      block: { timestamp: datetime },
+      extrinsic,
+    } = args;
     return {
-      id: `${blockId}/${event.idx}`,
+      id: `${blockId}/${eventIdx}`,
       moduleId,
       eventId,
-      ...getExtrinsicDetails(blockId, event),
-      datetime: event.block.timestamp,
-      eventIdx: event.idx,
+      ...getExtrinsicDetails(blockId, extrinsic),
+      datetime,
+      eventIdx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     };

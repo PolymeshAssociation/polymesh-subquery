@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import { Distribution, DistributionPayment, EventIdEnum, ModuleIdEnum } from '../../types';
 import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
 import { HandlerArgs } from './common';
@@ -12,17 +12,18 @@ export async function mapCorporateActions({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.capitaldistribution) {
     if (eventId === EventIdEnum.Created) {
       await handleDistributionCreated(blockId, params);
     }
     if (eventId === EventIdEnum.BenefitClaimed) {
-      await handleBenefitClaimed(blockId, eventId, params, event);
+      await handleBenefitClaimed(blockId, eventId, params, eventIdx, block);
     }
     if (eventId === EventIdEnum.Reclaimed) {
-      await handleReclaimed(blockId, eventId, params, event);
+      await handleReclaimed(blockId, eventId, params, eventIdx, block);
     }
     if (eventId === EventIdEnum.Removed) {
       await handleDistributionRemoved(params);
@@ -60,7 +61,8 @@ const handleBenefitClaimed = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const [, rawClaimantDid, rawCaId, , rawAmount, rawTax] = params;
 
@@ -75,7 +77,7 @@ const handleBenefitClaimed = async (
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
@@ -83,7 +85,7 @@ const handleBenefitClaimed = async (
     tax,
     amountAfterTax: amount - taxAmount,
     reclaimed: false,
-    datetime: event.block.timestamp,
+    datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
@@ -95,7 +97,8 @@ const handleReclaimed = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const [rawEventDid, rawCaId, rawAmount] = params;
 
@@ -104,7 +107,7 @@ const handleReclaimed = async (
   const amount = getBigIntValue(rawAmount);
 
   await DistributionPayment.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
@@ -112,7 +115,7 @@ const handleReclaimed = async (
     tax: BigInt(0),
     amountAfterTax: amount,
     reclaimed: true,
-    datetime: event.block.timestamp,
+    datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();

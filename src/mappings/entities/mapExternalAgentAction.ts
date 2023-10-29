@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../types';
 import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
@@ -12,13 +12,14 @@ export async function mapExternalAgentAction({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
-  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params, event);
+  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params, extrinsic);
   if (ticker) {
     await TickerExternalAgentAction.create({
-      id: `${blockId}/${event.idx}`,
-      eventIdx: event.idx,
+      id: `${blockId}/${eventIdx}`,
+      eventIdx,
       assetId: ticker,
       palletName: moduleId,
       eventId,
@@ -38,7 +39,7 @@ type StandardEntry = {
   paramIndex: number;
   options: EntryOptions;
 };
-type TickerFromParams = (params: Codec[], event: SubstrateEvent) => Promise<string>;
+type TickerFromParams = (params: Codec[], extrinsic?: SubstrateExtrinsic) => Promise<string>;
 type SpecialEntry = {
   type: 'special';
   tickerFromParams: TickerFromParams;
@@ -75,7 +76,7 @@ class ExternalAgentEventsManager {
     eventId: EventIdEnum,
     blockId: string,
     params: Codec[],
-    event: SubstrateEvent
+    extrinsic?: SubstrateExtrinsic
   ): Promise<string | undefined> {
     const entries = this.entries.get(moduleId)?.get(eventId);
 
@@ -93,7 +94,7 @@ class ExternalAgentEventsManager {
       if (entry.type === 'standard') {
         return serializeTicker(params[entry.paramIndex]);
       } else {
-        return entry.tickerFromParams(params, event);
+        return entry.tickerFromParams(params, extrinsic);
       }
     }
     return undefined;
@@ -237,7 +238,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (_, event) => serializeTicker(event.extrinsic.extrinsic.args[0])
+        async (_, extrinsic) => serializeTicker(extrinsic?.extrinsic.args[0])
       );
     return eventsManager;
   }

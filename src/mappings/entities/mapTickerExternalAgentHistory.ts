@@ -1,4 +1,4 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
@@ -14,9 +14,9 @@ export async function mapTickerExternalAgentHistory({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
 }: HandlerArgs): Promise<void> {
-  const eventIdx = event.idx;
   if (moduleId !== ModuleIdEnum.externalagents) {
     return;
   }
@@ -52,7 +52,7 @@ export async function mapTickerExternalAgentHistory({
           assetId: ticker,
           identityId: member.member,
           eventIdx,
-          datetime: event.block.timestamp,
+          datetime: block.timestamp,
           type: 'AgentPermissionsChanged',
           permissions,
           createdBlockId: blockId,
@@ -70,7 +70,7 @@ export async function mapTickerExternalAgentHistory({
     const ticker = serializeTicker(params[1]);
 
     const promises = [
-      addTickerExternalAgentHistory(ticker, group, blockId, eventIdx, did, event, 'AgentAdded'),
+      addTickerExternalAgentHistory(ticker, group, blockId, eventIdx, did, block, 'AgentAdded'),
     ];
 
     // Only keep track of membership for custom agent groups.
@@ -94,7 +94,7 @@ export async function mapTickerExternalAgentHistory({
         blockId,
         eventIdx,
         did,
-        event,
+        block,
         'AgentPermissionsChanged'
       ),
     ];
@@ -118,7 +118,7 @@ export async function mapTickerExternalAgentHistory({
         assetId: ticker,
         identityId: did,
         eventIdx,
-        datetime: event.block.timestamp,
+        datetime: block.timestamp,
         type: 'AgentRemoved',
         createdBlockId: blockId,
         updatedBlockId: blockId,
@@ -135,7 +135,7 @@ const addTickerExternalAgentHistory = async (
   blockId: string,
   eventIdx: number,
   did: string,
-  event: SubstrateEvent,
+  block: SubstrateBlock,
   type: 'AgentAdded' | 'AgentPermissionsChanged'
 ): Promise<void> => {
   const permissions = await permissionsFromAgentGroup(ticker, group, async n => {
@@ -147,7 +147,7 @@ const addTickerExternalAgentHistory = async (
     assetId: ticker,
     identityId: did,
     eventIdx,
-    datetime: event.block.timestamp,
+    datetime: block.timestamp,
     type,
     permissions,
     createdBlockId: blockId,

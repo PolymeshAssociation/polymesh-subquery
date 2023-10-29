@@ -30,7 +30,8 @@ export async function mapAuthorization({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.identity && isAuthorizationEvent(eventId)) {
     if (authorizationEventStatusMapping.has(eventId)) {
@@ -43,7 +44,7 @@ export async function mapAuthorization({
       const fromId = getTextValue(params[0]);
 
       // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
-      await createIdentityIfNotExists(fromId, blockId, event);
+      await createIdentityIfNotExists(fromId, blockId, eventId, eventIdx, block);
 
       await Authorization.create({
         id: getTextValue(params[3]),

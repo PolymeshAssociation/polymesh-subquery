@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import {
   EventIdEnum,
   ModuleIdEnum,
@@ -58,9 +58,11 @@ export const createPortfolio = (
 export const createPortfolioIfNotExists = async (
   { identityId, number }: Pick<Portfolio, 'identityId' | 'number'>,
   blockId: string,
-  event: SubstrateEvent
+  eventId: EventIdEnum,
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
-  await createIdentityIfNotExists(identityId, blockId, event);
+  await createIdentityIfNotExists(identityId, blockId, eventId, eventIdx, block);
 
   const portfolio = await Portfolio.get(`${identityId}/${number}`);
   if (!portfolio) {
@@ -69,7 +71,7 @@ export const createPortfolioIfNotExists = async (
         identityId,
         number,
         name: '',
-        eventIdx: event.idx,
+        eventIdx,
       },
       blockId
     );
@@ -156,11 +158,12 @@ const handlePortfolioCustodianChanged = async (blockId: string, params: Codec[])
 const handlePortfolioMovement = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const [, rawFromPortfolio, rawToPortfolio, rawTicker, rawAmount, rawMemo] = params;
 
-  const address = getSignerAddress(event);
+  const address = getSignerAddress(extrinsic);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
   const ticker = serializeTicker(rawTicker);
@@ -168,7 +171,7 @@ const handlePortfolioMovement = async (
   const memo = bytesToString(rawMemo);
 
   await PortfolioMovement.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     type: PortfolioMovementTypeEnum.Fungible,
@@ -184,10 +187,11 @@ const handlePortfolioMovement = async (
 const handleFundsMovedBetweenPortfolios = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
-  const address = getSignerAddress(event);
+  const address = getSignerAddress(extrinsic);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
   let ticker: string, amount: bigint, nftIds: bigint[];
@@ -210,7 +214,7 @@ const handleFundsMovedBetweenPortfolios = async (
   const memo = bytesToString(rawMemo);
 
   await PortfolioMovement.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     type,
@@ -223,16 +227,19 @@ const handleFundsMovedBetweenPortfolios = async (
     updatedBlockId: blockId,
   }).save();
 };
+
 export async function mapPortfolio({
   blockId,
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.portfolio) {
     if (eventId === EventIdEnum.PortfolioCreated) {
-      await handlePortfolioCreated(blockId, params, event.idx);
+      await handlePortfolioCreated(blockId, params, eventIdx);
     }
     if (eventId === EventIdEnum.PortfolioRenamed) {
       await handlePortfolioRenamed(blockId, params);
@@ -241,13 +248,13 @@ export async function mapPortfolio({
       await handlePortfolioCustodianChanged(blockId, params);
     }
     if (eventId === EventIdEnum.PortfolioDeleted) {
-      await handlePortfolioDeleted(blockId, params, event.block.timestamp);
+      await handlePortfolioDeleted(blockId, params, block.timestamp);
     }
     if (eventId === EventIdEnum.MovedBetweenPortfolios) {
-      await handlePortfolioMovement(blockId, params, event);
+      await handlePortfolioMovement(blockId, params, eventIdx, extrinsic);
     }
     if (eventId === EventIdEnum.FundsMovedBetweenPortfolios) {
-      await handleFundsMovedBetweenPortfolios(blockId, params, event);
+      await handleFundsMovedBetweenPortfolios(blockId, params, eventIdx, extrinsic);
     }
   }
 }
