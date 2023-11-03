@@ -1178,31 +1178,6 @@ enum CallIdEnum {
   set_proposal_duration @deprecated
 }
 
-"""
-Information of a chain state transition on. For most use cases a more specific entity should be queried
-"""
-type Event @entity {
-  id: ID!
-  block: Block!
-  eventIdx: Int!
-  extrinsicIdx: Int
-  specVersionId: Int!
-  moduleId: ModuleIdEnum!
-  eventId: EventIdEnum!
-  attributesTxt: String!
-  eventArg_0: String
-  eventArg_1: String
-  eventArg_2: String
-  eventArg_3: String
-  claimType: String
-  claimScope: String
-  claimIssuer: String
-  claimExpiry: String
-  corporateActionTicker: String
-  fundraiserOfferingAsset: String
-  transferTo: String
-}
-
 type Debug @entity {
   id: ID!
   line: String
@@ -1219,7 +1194,7 @@ A set of transactions that were executed together. Includes a reference to its p
 """
 type Block @entity {
   id: ID!
-  blockId: Int! @index(unique: false)
+  blockId: Int! @index(unique: true)
   parentId: Int!
   hash: String! # a hash value
   parentHash: String!
@@ -1233,6 +1208,8 @@ type Block @entity {
   countEvents: Int!
   datetime: Date!
   specVersionId: Int!
+  events: [Event] @derivedFrom(field: "block")
+  extrinsics: [Extrinsic] @derivedFrom(field: "block")
 }
 
 """
@@ -1256,6 +1233,32 @@ type Extrinsic @entity {
   nonce: Int
   extrinsicHash: String @index(unique: false)
   specVersionId: Int!
+}
+
+"""
+Information of a chain state transition on. For most use cases a more specific entity should be queried
+"""
+type Event @entity {
+  id: ID!
+  block: Block!
+  eventIdx: Int!
+  extrinsicIdx: Int
+  specVersionId: Int!
+  moduleId: ModuleIdEnum!
+  eventId: EventIdEnum!
+  attributesTxt: String!
+  eventArg_0: String
+  eventArg_1: String
+  eventArg_2: String
+  eventArg_3: String
+  claimType: String
+  claimScope: String
+  claimIssuer: String
+  claimExpiry: String
+  corporateActionTicker: String
+  fundraiserOfferingAsset: String
+  transferTo: String
+  extrinsic: Extrinsic
 }
 
 """

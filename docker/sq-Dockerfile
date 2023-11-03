@@ -1,4 +1,4 @@
-FROM onfinality/subql-node:v3.1.1
+FROM onfinality/subql-node:v3.2.0
 
 RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false subquery
 RUN apk add --no-cache bash gettext python3 pythonispython3 make gcc g++ musl-dev

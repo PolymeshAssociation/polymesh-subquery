@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import {
   EventIdEnum,
   ModuleIdEnum,
@@ -142,14 +142,16 @@ const handleMultiSigSignaturesRequiredChanged = async (blockId: string, params: 
 const handleMultiSigProposalAdded = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock,
+  extrinsic: SubstrateExtrinsic
 ) => {
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
   const creatorId = getTextValue(rawDid);
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
-  const creatorAccount = event.extrinsic.extrinsic.signer.toString();
+  const creatorAccount = extrinsic?.extrinsic.signer.toString();
 
   await MultiSigProposal.create({
     id: `${multisigId}/${proposalId}`,
@@ -159,9 +161,9 @@ const handleMultiSigProposalAdded = async (
     creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
-    eventIdx: event.idx,
-    extrinsicIdx: event.extrinsic?.idx,
-    datetime: event.block.timestamp,
+    eventIdx,
+    extrinsicIdx: extrinsic?.idx,
+    datetime: block.timestamp,
     status: MultiSigProposalStatusEnum.Active,
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -191,8 +193,10 @@ const handleMultiSigProposalStatus = async (
 const handleMultiSigProposalVoteAction = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent,
-  action: MultiSigProposalVoteActionEnum
+  eventIdx: number,
+  block: SubstrateBlock,
+  action: MultiSigProposalVoteActionEnum,
+  extrinsic?: SubstrateExtrinsic
 ) => {
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
@@ -210,13 +214,13 @@ const handleMultiSigProposalVoteAction = async (
 
   await Promise.all([
     MultiSigProposalVote.create({
-      id: `${blockId}/${event.idx}`,
+      id: `${blockId}/${eventIdx}`,
       proposalId: `${multisigId}/${proposalId}`,
       signerId: `${multisigId}/${signerType}/${signerValue}`,
       action,
-      datetime: event.block.timestamp,
-      eventIdx: event.idx,
-      extrinsicIdx: event.extrinsic.idx,
+      datetime: block.timestamp,
+      eventIdx,
+      extrinsicIdx: extrinsic?.idx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save(),
@@ -232,7 +236,9 @@ export async function mapMultiSig({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.multisig) {
     return;
@@ -251,7 +257,7 @@ export async function mapMultiSig({
       return handleMultiSigSignerStatus(blockId, params, MultiSigSignerStatusEnum.Removed);
 
     case EventIdEnum.ProposalAdded:
-      return handleMultiSigProposalAdded(blockId, params, event);
+      return handleMultiSigProposalAdded(blockId, params, eventIdx, block, extrinsic);
     case EventIdEnum.ProposalRejected:
       return handleMultiSigProposalStatus(blockId, params, MultiSigProposalStatusEnum.Rejected);
     case EventIdEnum.ProposalExecuted:
@@ -260,15 +266,19 @@ export async function mapMultiSig({
       return handleMultiSigProposalVoteAction(
         blockId,
         params,
-        event,
-        MultiSigProposalVoteActionEnum.Approved
+        eventIdx,
+        block,
+        MultiSigProposalVoteActionEnum.Approved,
+        extrinsic
       );
     case EventIdEnum.ProposalRejectionVote:
       return handleMultiSigProposalVoteAction(
         blockId,
         params,
-        event,
-        MultiSigProposalVoteActionEnum.Rejected
+        eventIdx,
+        block,
+        MultiSigProposalVoteActionEnum.Rejected,
+        extrinsic
       );
   }
 }

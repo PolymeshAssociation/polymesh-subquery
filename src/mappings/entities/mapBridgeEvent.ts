@@ -11,7 +11,8 @@ export async function mapBridgeEvent({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block: { timestamp: datetime },
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.bridge && eventId === EventIdEnum.Bridged) {
     const [rawDid, rawBridgeDetails] = params;
@@ -19,13 +20,13 @@ export async function mapBridgeEvent({
     const { recipient, amount, ...rest } = JSON.parse(rawBridgeDetails.toString());
 
     await BridgeEvent.create({
-      id: `${blockId}/${event.idx}`,
+      id: `${blockId}/${eventIdx}`,
       identityId: getTextValue(rawDid),
       recipient,
       amount: BigInt(amount) / BigInt(1000000),
       txHash: extractString(rest, 'tx_hash'),
-      eventIdx: event.idx,
-      datetime: event.block.timestamp,
+      eventIdx,
+      datetime,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

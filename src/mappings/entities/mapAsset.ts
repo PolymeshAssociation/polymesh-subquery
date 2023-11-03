@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import {
   Asset,
   AssetDocument,
@@ -33,32 +33,35 @@ import { HandlerArgs, getAsset } from './common';
 export const createFunding = (
   blockId: string,
   ticker: string,
-  event: SubstrateEvent,
+  eventIdx: number,
+  datetime: Date,
   fundingRound: string,
   issuedAmount: bigint,
   totalFundingAmount: bigint
 ): Promise<void> => {
   return Funding.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     assetId: ticker,
     fundingRound,
     amount: issuedAmount,
     totalFundingAmount,
-    datetime: event.block.timestamp,
+    datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
 };
 
 export const createAssetTransaction = (
-  event: SubstrateEvent,
   blockId: string,
+  eventIdx: number,
+  datetime: Date,
   details: Pick<
     AssetTransaction,
     'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound' | 'nftIds'
-  >
+  >,
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
-  const callId = camelToSnakeCase(event.extrinsic?.extrinsic.method.method || 'default');
+  const callId = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
 
   const callToEventMappings = {
     [CallIdEnum.issue]: EventIdEnum.Issued,
@@ -74,12 +77,12 @@ export const createAssetTransaction = (
   };
 
   return AssetTransaction.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     ...details,
     eventId: callToEventMappings[callId] || callToEventMappings['default'],
-    eventIdx: event.idx,
-    extrinsicIdx: event.extrinsic?.idx,
-    datetime: event.block.timestamp,
+    eventIdx,
+    extrinsicIdx: extrinsic?.idx,
+    datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -112,7 +115,8 @@ export const getAssetHolder = async (
 const handleAssetCreated = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const [, rawTicker, divisible, rawType, rawOwnerDid, ...rest] = params;
   let disableIu: Codec, rawIdentifiers: Codec, rawAssetName: Codec, rawFundingRoundName: Codec;
@@ -123,7 +127,7 @@ const handleAssetCreated = async (
    */
   let isUniquenessRequired = false;
 
-  if (event.block.specVersion >= 6000000) {
+  if (block.specVersion >= 6000000) {
     [rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
   } else {
     [disableIu, rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
@@ -181,7 +185,7 @@ const handleAssetCreated = async (
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
-    eventIdx: event.idx,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -264,11 +268,7 @@ const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Prom
   await asset.save();
 };
 
-const handleIssued = async (
-  blockId: string,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> => {
+const handleIssued = async ({ blockId, params, eventIdx, block }: HandlerArgs): Promise<void> => {
   const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
     params;
 
@@ -287,14 +287,14 @@ const handleIssued = async (
   assetIssuer.updatedBlockId = blockId;
 
   const assetTransaction = AssetTransaction.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     assetId: ticker,
     toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
     eventId: EventIdEnum.Issued,
-    eventIdx: event.idx,
+    eventIdx,
     amount: issuedAmount,
     fundingRound,
-    datetime: event.block.timestamp,
+    datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   });
@@ -302,7 +302,15 @@ const handleIssued = async (
   const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
   if (fundingRound) {
     promises.push(
-      createFunding(blockId, ticker, event, fundingRound, issuedAmount, totalFundingAmount)
+      createFunding(
+        blockId,
+        ticker,
+        eventIdx,
+        block.timestamp,
+        fundingRound,
+        issuedAmount,
+        totalFundingAmount
+      )
     );
   }
 
@@ -353,7 +361,13 @@ const handleAssetOwnershipTransferred = async (blockId: string, params: Codec[])
   await asset.save();
 };
 
-const handleAssetTransfer = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
+const handleAssetTransfer = async ({
+  blockId,
+  params,
+  eventIdx,
+  block,
+  extrinsic,
+}: HandlerArgs) => {
   const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
@@ -395,22 +409,30 @@ const handleAssetTransfer = async (blockId: string, params: Codec[], event: Subs
   }
 
   promises.push(
-    createAssetTransaction(event, blockId, {
-      assetId: ticker,
-      fromPortfolioId,
-      toPortfolioId,
-      amount: transferAmount,
-    })
+    createAssetTransaction(
+      blockId,
+      eventIdx,
+      block.timestamp,
+      {
+        assetId: ticker,
+        fromPortfolioId,
+        toPortfolioId,
+        amount: transferAmount,
+      },
+      extrinsic
+    )
   );
 
   await Promise.all(promises);
 };
 
-const handleAssetBalanceUpdated = async (
-  blockId: string,
-  params: Codec[],
-  event: SubstrateEvent
-) => {
+const handleAssetBalanceUpdated = async ({
+  blockId,
+  params,
+  eventIdx,
+  block,
+  extrinsic,
+}: HandlerArgs) => {
   const [, rawTicker, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid: string, toDid: string;
@@ -459,7 +481,15 @@ const handleAssetBalanceUpdated = async (
 
     if (fundingRoundName) {
       promises.push(
-        createFunding(blockId, ticker, event, fundingRoundName, transferAmount, transferAmount)
+        createFunding(
+          blockId,
+          ticker,
+          eventIdx,
+          block.timestamp,
+          fundingRoundName,
+          transferAmount,
+          transferAmount
+        )
       );
     }
 
@@ -477,26 +507,33 @@ const handleAssetBalanceUpdated = async (
   }
 
   promises.push(
-    createAssetTransaction(event, blockId, {
-      assetId: ticker,
-      fromPortfolioId,
-      toPortfolioId,
-      amount: transferAmount,
-      fundingRound: fundingRoundName,
-    })
+    createAssetTransaction(
+      blockId,
+      eventIdx,
+      block.timestamp,
+      {
+        assetId: ticker,
+        fromPortfolioId,
+        toPortfolioId,
+        amount: transferAmount,
+        fundingRound: fundingRoundName,
+      },
+      extrinsic
+    )
   );
 
   await Promise.all(promises);
 };
 
-const handleAssetUpdateEvents = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> => {
+const handleAssetUpdateEvents = async ({
+  eventId,
+  blockId,
+  params,
+  eventIdx,
+  block,
+}: HandlerArgs): Promise<void> => {
   if (eventId === EventIdEnum.AssetCreated) {
-    await handleAssetCreated(blockId, params, event);
+    await handleAssetCreated(blockId, params, eventIdx, block);
   }
   if (eventId === EventIdEnum.AssetRenamed) {
     await handleAssetRenamed(blockId, params);
@@ -518,13 +555,8 @@ const handleAssetUpdateEvents = async (
   }
 };
 
-export async function mapAsset({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  event,
-}: HandlerArgs): Promise<void> {
+export async function mapAsset(args: HandlerArgs): Promise<void> {
+  const { blockId, eventId, moduleId, params } = args;
   if (moduleId !== ModuleIdEnum.asset) {
     return;
   }
@@ -535,7 +567,7 @@ export async function mapAsset({
     await handleDocumentRemoved(params);
   }
   if (eventId === EventIdEnum.Issued) {
-    await handleIssued(blockId, params, event);
+    await handleIssued(args);
   }
   if (eventId === EventIdEnum.Redeemed) {
     await handleRedeemed(blockId, params);
@@ -544,11 +576,11 @@ export async function mapAsset({
     await handleAssetOwnershipTransferred(blockId, params);
   }
   if (eventId === EventIdEnum.Transfer) {
-    await handleAssetTransfer(blockId, params, event);
+    await handleAssetTransfer(args);
   }
   if (eventId === EventIdEnum.AssetBalanceUpdated) {
-    await handleAssetBalanceUpdated(blockId, params, event);
+    await handleAssetBalanceUpdated(args);
   }
-  await handleAssetUpdateEvents(blockId, eventId, params, event);
+  await handleAssetUpdateEvents(args);
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }

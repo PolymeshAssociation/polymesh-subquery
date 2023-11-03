@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, NftHolder } from '../../types';
 import {
   getFirstKeyFromJson,
@@ -9,7 +10,6 @@ import {
 } from '../util';
 import { HandlerArgs, getAsset } from './common';
 import { createAssetTransaction } from './mapAsset';
-import { SubstrateEvent } from '@subql/types';
 
 export const getNftHolder = async (
   ticker: string,
@@ -48,7 +48,8 @@ const handleNftCollectionCreated = async (blockId: string, params: Codec[]): Pro
 const handleNftPortfolioUpdates = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
@@ -102,7 +103,7 @@ const handleNftPortfolioUpdates = async (
   }
 
   promises.push(
-    createAssetTransaction(event, blockId, {
+    createAssetTransaction(blockId, eventIdx, block.timestamp, {
       assetId: ticker,
       fromPortfolioId,
       toPortfolioId,
@@ -119,7 +120,8 @@ export async function mapNft({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.nft) {
     return;
@@ -130,6 +132,6 @@ export async function mapNft({
   }
 
   if (eventId === EventIdEnum.NFTPortfolioUpdated) {
-    await handleNftPortfolioUpdates(blockId, params, event);
+    await handleNftPortfolioUpdates(blockId, params, eventIdx, block);
   }
 }

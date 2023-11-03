@@ -29,7 +29,7 @@ const handleTreasuryReimbursement = async (args: HandlerArgs | Event): Promise<v
     const [rawIdentity, rawBalance] = args.params;
     did = getTextValue(rawIdentity);
     balance = getTextValue(rawBalance);
-    ({ specVersion } = args.event.block);
+    ({ specVersion } = args.block);
   }
 
   const identity = await Identity.get(did);
@@ -94,7 +94,7 @@ const processTreasuryDisbursementArgs = async (args: HandlerArgs | Event, ss58Fo
     }
   } else {
     let rawFromIdentity, rawToDid, rawTo, rawBalance;
-    if (args.event.block.specVersion < 5000000) {
+    if (args.block.specVersion < 5000000) {
       [rawFromIdentity, rawToDid, rawBalance] = args.params;
     } else {
       [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;

@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import {
   Asset,
   ClaimTypeEnum,
@@ -14,8 +14,8 @@ import {
 } from '../../types';
 import {
   capitalizeFirstLetter,
-  getExemptionsValue,
   getExemptKeyValue,
+  getExemptionsValue,
   getTransferManagerValue,
   hexToString,
   serializeTicker,
@@ -361,11 +361,11 @@ const handleTransferManagerExemptionsRemoved = async (blockId: string, params: C
   await Promise.all(promises);
 };
 
-const handleAssetIssued = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
+const handleAssetIssued = async (blockId: string, params: Codec[], block: SubstrateBlock) => {
   const [, rawTicker] = params;
 
   const assetId = serializeTicker(rawTicker);
-  const { specVersion } = event.block;
+  const { specVersion } = block;
   if (specVersion < transferRestrictionSpecVersion) {
     await upsertStatType(
       { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
@@ -374,11 +374,11 @@ const handleAssetIssued = async (blockId: string, params: Codec[], event: Substr
   }
 };
 
-const handleAssetRedeemed = async (blockId: string, params: Codec[], event: SubstrateEvent) => {
+const handleAssetRedeemed = async (blockId: string, params: Codec[], block: SubstrateBlock) => {
   const [, rawTicker] = params;
   const ticker = serializeTicker(rawTicker);
 
-  const specVersion = event.block.specVersion;
+  const specVersion = block.specVersion;
   if (specVersion < transferRestrictionSpecVersion) {
     const asset = await Asset.getByTicker(ticker);
     if (asset.totalSupply === BigInt(0)) {
@@ -392,7 +392,7 @@ export async function mapStatistics({
   eventId,
   moduleId,
   params,
-  event,
+  block,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.statistics) {
     if (eventId === EventIdEnum.StatTypesAdded) {
@@ -427,11 +427,11 @@ export async function mapStatistics({
 
   if (moduleId === ModuleIdEnum.asset) {
     if (eventId === EventIdEnum.Issued) {
-      await handleAssetIssued(blockId, params, event);
+      await handleAssetIssued(blockId, params, block);
     }
 
     if (eventId === EventIdEnum.Redeemed) {
-      await handleAssetRedeemed(blockId, params, event);
+      await handleAssetRedeemed(blockId, params, block);
     }
   }
 }

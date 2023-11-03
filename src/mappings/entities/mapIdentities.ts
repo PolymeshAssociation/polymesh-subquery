@@ -1,4 +1,4 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import {
   Account,
   AccountHistory,
@@ -144,7 +144,9 @@ export const createIdentity = async (args: Attributes<Identity>, blockId: string
 export const createIdentityIfNotExists = async (
   did: string,
   blockId: string,
-  event: SubstrateEvent
+  eventId: EventIdEnum,
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const identity = await Identity.get(did);
   if (!identity) {
@@ -152,9 +154,9 @@ export const createIdentityIfNotExists = async (
       {
         did,
         primaryAccount: '',
-        eventId: event.event.method as EventIdEnum,
+        eventId,
         secondaryKeysFrozen: false,
-        datetime: event.block.timestamp,
+        datetime: block.timestamp,
       },
       blockId
     );
@@ -163,7 +165,7 @@ export const createIdentityIfNotExists = async (
       {
         identityId: did,
         number: 0,
-        eventIdx: event.idx,
+        eventIdx,
       },
       blockId
     );

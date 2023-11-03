@@ -1,9 +1,9 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import {
   Claim,
   ClaimScope,
-  ClaimTypeEnum,
   ClaimScopeTypeEnum,
+  ClaimTypeEnum,
   EventIdEnum,
   ModuleIdEnum,
 } from '../../types';
@@ -32,14 +32,14 @@ interface Scope {
  * Subscribes to the Claim events
  */
 export async function mapClaim(
-  { blockId, eventId, moduleId, params, event }: HandlerArgs,
+  { blockId, eventId, moduleId, params, eventIdx, block }: HandlerArgs,
   claimParams: ClaimParams
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.identity) {
     const target = getTextValue(params[0]);
 
     if (eventId === EventIdEnum.ClaimAdded) {
-      await handleClaimAdded(blockId, event, claimParams, target);
+      await handleClaimAdded(blockId, eventIdx, block, claimParams, target);
     }
 
     if (eventId === EventIdEnum.ClaimRevoked) {
@@ -86,7 +86,8 @@ const getId = (
 
 const handleClaimAdded = async (
   blockId: string,
-  event: SubstrateEvent,
+  eventIdx: number,
+  block: SubstrateBlock,
   {
     claimScope,
     claimExpiry,
@@ -105,11 +106,11 @@ const handleClaimAdded = async (
   const filterExpiry = claimExpiry || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
-  await createIdentityIfNotExists(target, blockId, event);
+  await createIdentityIfNotExists(target, blockId, EventIdEnum.ClaimAdded, eventIdx, block);
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
-    eventIdx: event.idx,
+    eventIdx,
     targetId: target,
     issuerId: claimIssuer,
     issuanceDate,
