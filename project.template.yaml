@@ -4,7 +4,7 @@ version: 8.4.0
 runner:
   node:
     name: '@subql/node'
-    version: '>=1.0.0'
+    version: '*'
   query:
     name: '@subql/query'
     version: '*'
@@ -16,7 +16,7 @@ network:
   chainId: '${NETWORK_CHAIN_ID}'
   endpoint: '${NETWORK_ENDPOINT}'
   chaintypes:
-    file: ./dist/chainTypes/index.js
+    file: ./dist/chainTypes.js
 dataSources:
   - kind: substrate/Runtime
     startBlock: ${START_BLOCK}
@@ -25,7 +25,3 @@ dataSources:
       handlers:
         - handler: handleBlock
           kind: substrate/BlockHandler
-        - handler: handleCall
-          kind: substrate/CallHandler
-        - handler: ${EVENT_HANDLER}
-          kind: substrate/EventHandler

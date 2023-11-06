@@ -1,22 +1,32 @@
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateExtrinsic } from '@subql/types';
 import {
   AssetDocument,
+  Block,
+  CallIdEnum,
   ClaimTypeEnum,
   Compliance,
   Distribution,
+  Event,
+  EventIdEnum,
+  Extrinsic,
   FoundType,
   LegTypeEnum,
+  ModuleIdEnum,
+  MultiSigSigner,
+  Portfolio,
+  Proposer,
   SecurityIdentifier,
+  SignerTypeEnum,
   Sto,
   TransferComplianceExemption,
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
-import { Portfolio } from '../types/models/Portfolio';
-import { Attributes } from './entities/common';
+import { PolyxTransactionProps } from '../types/models/PolyxTransaction';
+import { Attributes, HandlerArgs } from './entities/common';
 import { extractBigInt, extractNumber, extractString, extractValue } from './generatedColumns';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
@@ -49,7 +59,7 @@ export const snakeToCamelCase = (value: string): string =>
 
 export const capitalizeFirstLetter = (str: string): string => str[0].toUpperCase() + str.slice(1);
 
-export const removeNullChars = (s: string): string => s?.replace(/\0/g, '') || '';
+export const removeNullChars = (s?: string): string => s?.replace(/\0/g, '') || '';
 
 /**
  * @returns the index of the first top level comma in `text` which is a string with nested () and <>.
@@ -108,11 +118,11 @@ export const serializeTicker = (item: Codec): string => {
   return removeNullChars(u8aToString(item.toU8a()));
 };
 
-export const serializeAccount = (item: Codec): string | null => {
+export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
 
   if (s.trim().length === 0) {
-    return null;
+    return undefined;
   }
   return u8aToHex(decodeAddress(item.toString(), false, item.registry.chainSS58));
 };
@@ -130,7 +140,31 @@ export const getFirstValueFromJson = (item: Codec): string => {
 };
 
 export const getTextValue = (item: Codec): string => {
-  return item?.toString().trim().length > 0 ? item.toString().trim() : null;
+  return item?.toString().trim().length > 0 ? item.toString().trim() : undefined;
+};
+
+export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
+  const customType = await api.query.asset.customTypes(rawCustomId);
+  return hexToString(customType.toString());
+};
+
+export const getAssetType = async (item: Codec): Promise<string> => {
+  const anyItem: any = item;
+
+  if (anyItem.isNonFungible) {
+    const nftType = anyItem.asNonFungible;
+    if (nftType.type === 'Custom') {
+      return getCustomType(nftType.asCustom);
+    }
+
+    return nftType.type;
+  } else {
+    if (anyItem.isCustom) {
+      return getCustomType(anyItem.asCustom);
+    }
+
+    return getTextValue(item);
+  }
 };
 
 export const getNumberValue = (item: Codec): number => {
@@ -138,7 +172,7 @@ export const getNumberValue = (item: Codec): number => {
 };
 
 export const getDateValue = (item: Codec): Date => {
-  return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : null;
+  return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : undefined;
 };
 
 export const getBigIntValue = (item: Codec): bigint => {
@@ -146,7 +180,7 @@ export const getBigIntValue = (item: Codec): bigint => {
 };
 
 export const getBooleanValue = (item: Codec): boolean => {
-  return JSON.parse(getTextValue(item));
+  return JSON.parse(getTextValue(item) || 'false');
 };
 
 export const hexToString = (input: string): string => {
@@ -234,7 +268,10 @@ export const getComplianceValues = (
 ): Pick<Compliance, 'complianceId' | 'data'>[] => {
   const compliances = JSON.parse(requirements.toString());
 
-  return compliances.map(({ id, ...data }) => ({ complianceId: Number(id), data }));
+  return compliances.map(({ id, ...data }) => ({
+    complianceId: Number(id),
+    data: JSON.stringify(data),
+  }));
 };
 
 /**
@@ -246,7 +283,7 @@ export const getComplianceValue = (
   const { id, ...data } = JSON.parse(compliance.toString());
   return {
     complianceId: Number(id),
-    data,
+    data: JSON.stringify(data),
   };
 };
 
@@ -288,7 +325,7 @@ export const getExemptKeyValue = (
   if (!claimTypeValue || typeof claimTypeValue === 'string') {
     claimType = claimTypeValue;
   } else {
-    // from 5.1.0 chain version, Custom(CustomClaimTypeId) was added to the ClaimTypeEnum, polkadot now reads values as {"accredited": null}
+    // from 5.1.0 chain version, Custom(CustomClaimTypeId) was added to the ClaimTypeEnum, polkadot now reads values as {"accredited": undefined}
     claimType = capitalizeFirstLetter(Object.keys(claimTypeValue)[0]) as ClaimTypeEnum;
   }
 
@@ -315,20 +352,27 @@ export function addIfNotIncludes<T>(arr: T[], item: T): void {
   }
 }
 
-interface MeshPortfolio {
+export interface MeshPortfolio {
   did: string;
-  kind: {
-    user: number;
-  };
+  kind:
+    | {
+        user: number;
+      }
+    | { default: null };
 }
 
-const meshPortfolioToPortfolio = ({
-  did,
-  kind: { user: number },
-}: MeshPortfolio): Pick<Portfolio, 'identityId' | 'number'> => ({
-  identityId: did,
-  number: number || 0,
-});
+export const meshPortfolioToPortfolio = (
+  meshPortfolio: MeshPortfolio
+): Pick<Portfolio, 'identityId' | 'number'> => {
+  let number = 0;
+  if ('user' in meshPortfolio.kind) {
+    number = meshPortfolio.kind.user;
+  }
+  return {
+    identityId: meshPortfolio.did,
+    number: number || 0,
+  };
+};
 
 export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
   const meshPortfolio = JSON.parse(item.toString());
@@ -353,6 +397,7 @@ export interface LegDetails {
   to: Pick<Portfolio, 'identityId' | 'number'>;
   ticker: string;
   amount: bigint;
+  nftIds: bigint[];
   legType: LegTypeEnum;
 }
 
@@ -369,29 +414,34 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
 
 export const getSettlementLeg = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
+
   const legTypes = Object.keys(legs);
-  if (legTypes.includes('NonFungible') || legTypes.includes('OffChain')) {
-    return null;
+  if (legTypes.includes('OffChain')) {
+    return undefined;
   }
   return legs.map(leg => {
     let legType = Object.keys(leg)[0];
     const legValue = leg[legType];
-    let from, to, ticker, amount;
+    let amount, nftIds;
+
+    const from = meshPortfolioToPortfolio(legValue.sender);
+    const to = meshPortfolioToPortfolio(legValue.receiver);
+    const ticker = hexToString(legValue.ticker);
     if (legType === 'fungible') {
-      from = meshPortfolioToPortfolio(legValue.sender);
-      to = meshPortfolioToPortfolio(legValue.receiver);
-      ticker = hexToString(legValue.ticker);
       amount = extractBigInt(legValue, 'amount');
       legType = LegTypeEnum.Fungible;
+    } else if (legType === 'nonFungible') {
+      nftIds = leg.nonFungible.nfts.ids;
+      legType = LegTypeEnum.NonFungible;
     }
-    return { from, to, ticker, amount, legType };
+    return { from, to, ticker, amount, legType, nftIds };
   });
 };
 
-export const getSignerAddress = (event: SubstrateEvent): string => {
+export const getSignerAddress = (extrinsic: SubstrateExtrinsic): string => {
   let signer: string;
-  if (event.extrinsic) {
-    signer = getSigner(event.extrinsic);
+  if (extrinsic) {
+    signer = getSigner(extrinsic);
   }
   return signer;
 };
@@ -456,5 +506,121 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
     raisingAssetId: hexToString(extractString(rest, 'raising_asset')),
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
+  };
+};
+
+const getExtrinsicDetails = (
+  blockId: string,
+  extrinsic?: SubstrateExtrinsic
+): Pick<PolyxTransactionProps, 'callId' | 'extrinsicId'> => {
+  let callId: CallIdEnum;
+  let extrinsicId: string;
+  if (extrinsic) {
+    callId = camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum;
+    extrinsicId = `${blockId}/${extrinsic.idx}`;
+  }
+  return { callId, extrinsicId };
+};
+
+type EventParams = {
+  id: string;
+  moduleId: ModuleIdEnum;
+  eventId: EventIdEnum;
+  callId?: CallIdEnum;
+  extrinsicId?: string;
+  datetime: Date;
+  eventIdx;
+  createdBlockId: string;
+  updatedBlockId: string;
+};
+
+export const getEventParams = async (args: HandlerArgs | Event): Promise<EventParams> => {
+  if (args instanceof Event) {
+    const { id, moduleId, eventId, blockId, eventIdx } = args;
+    const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
+    const block = await Block.get(blockId);
+    return {
+      id,
+      moduleId,
+      eventId,
+      callId: extrinsic?.callId,
+      extrinsicId: extrinsic?.id,
+      datetime: block?.datetime,
+      eventIdx,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  } else {
+    const {
+      blockId,
+      eventId,
+      moduleId,
+      eventIdx,
+      block: { timestamp: datetime },
+      extrinsic,
+    } = args;
+    return {
+      id: `${blockId}/${eventIdx}`,
+      moduleId,
+      eventId,
+      ...getExtrinsicDetails(blockId, extrinsic),
+      datetime,
+      eventIdx,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    };
+  }
+};
+
+export const getProposerValue = (item: Codec): Proposer => {
+  const proposer = JSON.parse(item.toString());
+  let type, value;
+  if ('committee' in proposer) {
+    type = 'Committee';
+    value = capitalizeFirstLetter(Object.keys(proposer.committee)[0]);
+  }
+  if ('community' in proposer) {
+    type = 'Community';
+    value = getAccountKey(proposer.community, item.registry.chainSS58);
+  }
+  return {
+    type,
+    value,
+  };
+};
+
+export const getNftId = (nft: Codec): { ticker: string; ids: number[] } => {
+  const { ticker: hexTicker, ids } = nft.toJSON() as any;
+
+  const ticker = hexToString(hexTicker);
+
+  return { ticker, ids };
+};
+
+export const getMultiSigSigners = (
+  item: Codec
+): Pick<Attributes<MultiSigSigner>, 'signerType' | 'signerValue'>[] => {
+  const signers = JSON.parse(item.toString());
+
+  return signers.map(signer => {
+    const signerType = Object.keys(signer)[0];
+    const signerValue = signer[signerType];
+    return {
+      signerType: capitalizeFirstLetter(signerType) as SignerTypeEnum,
+      signerValue,
+    };
+  });
+};
+
+export const getMultiSigSigner = (
+  item: Codec
+): Pick<Attributes<MultiSigSigner>, 'signerType' | 'signerValue'> => {
+  const signer = JSON.parse(item.toString());
+
+  const signerType = Object.keys(signer)[0];
+  const signerValue = signer[signerType];
+  return {
+    signerType: capitalizeFirstLetter(signerType) as SignerTypeEnum,
+    signerValue,
   };
 };

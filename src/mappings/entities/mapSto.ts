@@ -1,14 +1,14 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, Investment, ModuleIdEnum, Sto, StoStatus } from '../../types';
 import {
+  coerceHexToString,
+  getBigIntValue,
+  getDateValue,
   getFundraiserDetails,
   getNumberValue,
-  coerceHexToString,
   getTextValue,
   serializeTicker,
-  getDateValue,
-  getBigIntValue,
 } from '../util';
 import { HandlerArgs } from './common';
 
@@ -31,11 +31,12 @@ const handleFundraiserCreated = async (blockId: string, params: Codec[]) => {
 const handleFundraiserStatus = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent,
+  block: SubstrateBlock,
+  extrinsic: SubstrateExtrinsic,
   status: StoStatus
 ) => {
   const [, rawStoId] = params;
-  const offeringAssetId = serializeTicker(event.extrinsic.extrinsic.args[0]);
+  const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
@@ -47,7 +48,7 @@ const handleFundraiserStatus = async (
   sto.status = status;
   if (status === StoStatus.Closed) {
     // if sto is closed before the configured end time, status should be set as `ClosedEarly`
-    if (sto.end && event.block.timestamp < sto.end) {
+    if (sto.end && block.timestamp < sto.end) {
       sto.status = StoStatus.ClosedEarly;
     }
   }
@@ -58,10 +59,10 @@ const handleFundraiserStatus = async (
 const handleFundraiserWindowModified = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  extrinsic: SubstrateExtrinsic
 ) => {
   const [, rawStoId, , , rawStart, rawEnd] = params;
-  const offeringAssetId = serializeTicker(event.extrinsic.extrinsic.args[0]);
+  const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
@@ -77,7 +78,8 @@ const handleFundraiserWindowModified = async (
 const handleInvested = async (
   blockId: string,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  block: SubstrateBlock
 ): Promise<void> => {
   const [
     rawInvestor,
@@ -89,14 +91,14 @@ const handleInvested = async (
   ] = params;
 
   await Investment.create({
-    id: `${blockId}/${event.idx}`,
+    id: `${blockId}/${eventIdx}`,
     investorId: getTextValue(rawInvestor),
     stoId: getNumberValue(rawStoId),
     offeringToken: serializeTicker(rawOfferingToken),
     raiseToken: serializeTicker(rawRaiseToken),
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
     raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
-    datetime: event.block.timestamp,
+    datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -110,7 +112,9 @@ export async function mapSto({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.sto) {
     return;
@@ -121,22 +125,22 @@ export async function mapSto({
   }
 
   if (eventId === EventIdEnum.FundraiserFrozen) {
-    await handleFundraiserStatus(blockId, params, event, StoStatus.Frozen);
+    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Frozen);
   }
 
   if (eventId === EventIdEnum.FundraiserUnfrozen) {
-    await handleFundraiserStatus(blockId, params, event, StoStatus.Live);
+    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Live);
   }
 
   if (eventId === EventIdEnum.FundraiserClosed) {
-    await handleFundraiserStatus(blockId, params, event, StoStatus.Closed);
+    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Closed);
   }
 
   if (eventId === EventIdEnum.FundraiserWindowModified) {
-    await handleFundraiserWindowModified(blockId, params, event);
+    await handleFundraiserWindowModified(blockId, params, extrinsic);
   }
 
   if (eventId === EventIdEnum.Invested) {
-    await handleInvested(blockId, params, event);
+    await handleInvested(blockId, params, eventIdx, block);
   }
 }

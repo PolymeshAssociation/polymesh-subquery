@@ -1,9 +1,9 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import {
   Claim,
   ClaimScope,
-  ClaimTypeEnum,
   ClaimScopeTypeEnum,
+  ClaimTypeEnum,
   EventIdEnum,
   ModuleIdEnum,
 } from '../../types';
@@ -20,6 +20,7 @@ interface ClaimParams {
   lastUpdateDate: bigint;
   cddId: string;
   jurisdiction: string;
+  customClaimTypeId: bigint | undefined;
 }
 
 interface Scope {
@@ -31,14 +32,14 @@ interface Scope {
  * Subscribes to the Claim events
  */
 export async function mapClaim(
-  { blockId, eventId, moduleId, params, event }: HandlerArgs,
+  { blockId, eventId, moduleId, params, eventIdx, block }: HandlerArgs,
   claimParams: ClaimParams
 ): Promise<void> {
   if (moduleId === ModuleIdEnum.identity) {
     const target = getTextValue(params[0]);
 
     if (eventId === EventIdEnum.ClaimAdded) {
-      await handleClaimAdded(blockId, event, claimParams, target);
+      await handleClaimAdded(blockId, eventIdx, block, claimParams, target);
     }
 
     if (eventId === EventIdEnum.ClaimRevoked) {
@@ -57,9 +58,15 @@ const getId = (
   claimType: string,
   scope: Scope,
   jurisdiction: string,
-  cddId: string
+  cddId: string,
+  customClaimTypeId: bigint | undefined
 ): string => {
   const idAttributes = [target, claimType];
+
+  if (customClaimTypeId) {
+    idAttributes.push(customClaimTypeId.toString());
+  }
+
   if (scope) {
     // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
     idAttributes.push(scope.type);
@@ -73,12 +80,14 @@ const getId = (
     // Only applicable in case of CustomerDueDiligence claim type
     idAttributes.push(cddId);
   }
+
   return idAttributes.join('/');
 };
 
 const handleClaimAdded = async (
   blockId: string,
-  event: SubstrateEvent,
+  eventIdx: number,
+  block: SubstrateBlock,
   {
     claimScope,
     claimExpiry,
@@ -88,6 +97,7 @@ const handleClaimAdded = async (
     cddId,
     lastUpdateDate,
     jurisdiction,
+    customClaimTypeId,
   }: ClaimParams,
   target: string
 ): Promise<void> => {
@@ -96,11 +106,11 @@ const handleClaimAdded = async (
   const filterExpiry = claimExpiry || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
-  await createIdentityIfNotExists(target, blockId, event);
+  await createIdentityIfNotExists(target, blockId, EventIdEnum.ClaimAdded, eventIdx, block);
 
   await Claim.create({
-    id: getId(target, claimType, scope, jurisdiction, cddId),
-    eventIdx: event.idx,
+    id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
+    eventIdx,
     targetId: target,
     issuerId: claimIssuer,
     issuanceDate,
@@ -113,13 +123,14 @@ const handleClaimAdded = async (
     filterExpiry,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    customClaimTypeId,
   }).save();
 
   if (scope) {
     await handleScopes(
       blockId,
       target,
-      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : null,
+      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : undefined,
       scope
     );
   }
@@ -127,11 +138,11 @@ const handleClaimAdded = async (
 
 const handleClaimRevoked = async (
   target: string,
-  { claimScope, claimType, issuanceDate, cddId, jurisdiction }: ClaimParams
+  { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId }: ClaimParams
 ) => {
   const scope = JSON.parse(claimScope) as Scope;
 
-  const id = getId(target, claimType, scope, jurisdiction, cddId);
+  const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
   const claim = await Claim.get(id);
 

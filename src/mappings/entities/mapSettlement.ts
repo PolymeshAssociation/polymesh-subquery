@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateExtrinsic } from '@subql/types';
 import {
   EventIdEnum,
   Instruction,
@@ -10,6 +10,7 @@ import {
   SettlementResultEnum,
   Venue,
 } from '../../types';
+import { HandlerArgs } from '../entities/common';
 import {
   LegDetails,
   bytesToString,
@@ -21,7 +22,6 @@ import {
   getSignerAddress,
   getTextValue,
 } from '../util';
-import { HandlerArgs } from './common';
 import { createPortfolioIfNotExists } from './mapPortfolio';
 
 const updateEvents: EventIdEnum[] = [
@@ -57,19 +57,20 @@ export const createLeg = async (
   instructionId: string,
   address: string,
   legIndex: number,
-  { ticker, amount, from, to, legType }: LegDetails,
-  event: SubstrateEvent
+  { ticker, amount, nftIds, from, to, legType }: LegDetails,
+  { eventIdx, eventId, block }: HandlerArgs
 ): Promise<void> => {
   // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
   await Promise.all([
-    createPortfolioIfNotExists(from, blockId, event),
-    createPortfolioIfNotExists(to, blockId, event),
+    createPortfolioIfNotExists(from, blockId, eventId, eventIdx, block),
+    createPortfolioIfNotExists(to, blockId, eventId, eventIdx, block),
   ]);
 
   return Leg.create({
     id: `${instructionId}/${legIndex}`,
     assetId: ticker,
     amount,
+    nftIds,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     legType,
@@ -143,13 +144,9 @@ const handleVenueTypeUpdated = async (blockId: string, params: Codec[]): Promise
   await venue.save();
 };
 
-const handleInstructionCreated = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  event: SubstrateEvent
-): Promise<void> => {
-  const address = getSignerAddress(event);
+const handleInstructionCreated = async (args: HandlerArgs): Promise<void> => {
+  const { blockId, eventId, eventIdx, params, block, extrinsic } = args;
+  const address = getSignerAddress(extrinsic);
 
   const [
     ,
@@ -167,7 +164,7 @@ const handleInstructionCreated = async (
   /**
    * Events from 6.0.0 chain were updated to support NFT and OffChain instructions
    */
-  if (event.block.specVersion >= 6000000) {
+  if (block.specVersion >= 6000000) {
     legs = getSettlementLeg(rawLegs);
   } else {
     legs = getLegsValue(rawLegs);
@@ -179,7 +176,7 @@ const handleInstructionCreated = async (
   const instruction = Instruction.create({
     id: instructionId,
     eventId,
-    eventIdx: event.idx,
+    eventIdx,
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(rawVenueId),
     settlementType: getFirstKeyFromJson(rawSettlementType),
@@ -194,7 +191,7 @@ const handleInstructionCreated = async (
 
   await Promise.all(
     legs.map((legDetails, index) =>
-      createLeg(blockId, instructionId, address, index, legDetails, event)
+      createLeg(blockId, instructionId, address, index, legDetails, args)
     )
   );
 };
@@ -213,9 +210,9 @@ const handleInstructionUpdate = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
-  event: SubstrateEvent
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
-  const address = getSignerAddress(event);
+  const address = getSignerAddress(extrinsic);
 
   const [, , rawInstructionId] = params;
 
@@ -231,11 +228,12 @@ const handleInstructionFinalizedEvent = async (
   blockId: string,
   eventId: EventIdEnum,
   params: Codec[],
-  event: SubstrateEvent
+  eventIdx: number,
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const [, rawInstructionId] = params;
 
-  const address = getSignerAddress(event);
+  const address = getSignerAddress(extrinsic);
   const instructionId = getTextValue(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
@@ -243,7 +241,7 @@ const handleInstructionFinalizedEvent = async (
   instruction.eventId = eventId;
   instruction.updatedBlockId = blockId;
 
-  const settlementId = `${blockId}/${event.idx}`;
+  const settlementId = `${blockId}/${eventIdx}`;
 
   const settlement = Settlement.create({
     id: settlementId,
@@ -275,13 +273,8 @@ const handleFailedToExecuteInstruction = async (
   await instruction.save();
 };
 
-export async function mapSettlement({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  event,
-}: HandlerArgs): Promise<void> {
+export async function mapSettlement(args: HandlerArgs): Promise<void> {
+  const { blockId, eventId, moduleId, params, eventIdx, extrinsic } = args;
   if (moduleId === ModuleIdEnum.settlement) {
     if (eventId === EventIdEnum.VenueCreated) {
       await handleVenueCreated(blockId, params);
@@ -296,15 +289,15 @@ export async function mapSettlement({
     }
 
     if (eventId === EventIdEnum.InstructionCreated) {
-      await handleInstructionCreated(blockId, eventId, params, event);
+      await handleInstructionCreated(args);
     }
 
     if (updateEvents.includes(eventId)) {
-      await handleInstructionUpdate(blockId, eventId, params, event);
+      await handleInstructionUpdate(blockId, eventId, params, extrinsic);
     }
 
     if (finalizedEvents.includes(eventId)) {
-      await handleInstructionFinalizedEvent(blockId, eventId, params, event);
+      await handleInstructionFinalizedEvent(blockId, eventId, params, eventIdx, extrinsic);
     }
 
     if (eventId === EventIdEnum.FailedToExecuteInstruction) {

@@ -50,13 +50,14 @@ services:
       # NETWORK_CHAIN_ID: '0x6fbd74e5e1d0a61d52ccfe9d4adaed16dd3a7caa37c6bc4d0c2fa12e8b2f4063'
     command:
       - -f=/app # Path of the project
-      - --batch-size=100 # Batch size of blocks to fetch in one round
+      - --batch-size=50 # Batch size of blocks to fetch in one round
       # - --scale-batch-size # scale batch size based on memory usage. To know more about the process - https://github.com/subquery/subql/blob/c9bc9733deef726f78fa48387e74e52f8d6ca8d2/packages/node/src/indexer/fetch.service.ts#L88
       # - --timeout=3600 # Timeout for indexer sandbox to execute the mapping functions (in seconds)
       # - --local # This is now deprecated
       # - --force-clean # To remove all tables and schema before starting the app
       # - --workers=4 # Number of available CPU cores strictly limits the usage of worker threads. Read more here - https://academy.subquery.network/run_publish/references.html#w-workers
       # - --log-level=debug
+      - --store-flush-interval=0 ## this is only needed for tests to run without any cache. Comment this out if using for production instance
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
       interval: 3s
@@ -65,7 +66,7 @@ services:
       start_period: 30s
 
   graphql-engine:
-    image: onfinality/subql-query:v1.0.0
+    image: onfinality/subql-query:v2.5.0
     ports:
       - 3001:3000
     depends_on:

@@ -27,7 +27,9 @@ export async function mapStakingEvent({
   eventId,
   moduleId,
   params,
-  event,
+  eventIdx,
+  block,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
   if (moduleId === ModuleIdEnum.staking && isStakingEventType(eventId)) {
     let amount: bigint;
@@ -54,14 +56,14 @@ export async function mapStakingEvent({
     }
 
     await StakingEvent.create({
-      id: `${blockId}/${event.idx}`,
+      id: `${blockId}/${eventIdx}`,
       eventId,
       identityId,
       stashAccount,
       amount,
       nominatedValidators,
-      transactionId: hexAddPrefix(event.extrinsic?.extrinsic.hash.toJSON()),
-      datetime: event.block.timestamp,
+      transactionId: hexAddPrefix(extrinsic?.extrinsic.hash.toJSON()),
+      datetime: block.timestamp,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

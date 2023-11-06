@@ -4,7 +4,7 @@ import {
   bytesToString,
   getBigIntValue,
   getBooleanValue,
-  getFirstValueFromJson,
+  getProposerValue,
   getTextValue,
   serializeAccount,
 } from '../util';
@@ -15,7 +15,7 @@ const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<
 
   await Proposal.create({
     id: getTextValue(rawPipId),
-    proposer: getFirstValueFromJson(rawProposer),
+    proposer: getProposerValue(rawProposer),
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
     balance: getBigIntValue(rawBalance),

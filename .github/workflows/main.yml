@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '14.x'
+          node-version: '18.x'
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile
@@ -22,14 +22,10 @@ jobs:
         run: envsubst < project.template.yaml > project.yaml
         env:
           START_BLOCK: 1
-          CALL_HANDLER: 'handleCall'
-          EVENT_HANDLER: 'handleEvent'
           NETWORK_ENDPOINT: 'ws://host.docker.internal:9944'
           NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
       - name: gen types
         run: yarn codegen
-      - name: validate subquery project
-        run: yarn validate
       - name: build src
         run: yarn build
       - name: lint
@@ -44,7 +40,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: '14.x'
+          node-version: '18.x'
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile

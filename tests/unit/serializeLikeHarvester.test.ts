@@ -1,3 +1,8 @@
+import { Bytes, GenericCall, TypeRegistry, createClass } from '@polkadot/types';
+import rpcMetadata from '@polkadot/types-support/metadata/static-substrate';
+import { Metadata } from '@polkadot/types/metadata';
+import { stringToU8a } from '@polkadot/util';
+import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
 import {
   extractArrayType,
@@ -19,11 +24,6 @@ import {
   parseType,
   serializeLikeHarvester,
 } from '../../src/mappings/serializeLikeHarvester';
-import { Bytes, GenericCall, createClass, TypeRegistry } from '@polkadot/types';
-import { Metadata } from '@polkadot/types/metadata';
-import '@subql/types/dist/global';
-import { stringToU8a } from '@polkadot/util';
-import rpcMetadata from '@polkadot/types-support/metadata/static-substrate';
 
 const registry = new TypeRegistry();
 describe('parseType', () => {
@@ -408,9 +408,9 @@ describe('serializeLikeHarvester', () => {
           },
         },
         { name: 'new_free', value: 0 },
-        { name: 'new_reserved', value: 0 },
+        { name: 'old_reserved', value: 0 },
       ],
-      call_function: 'set_balance',
+      call_function: 'set_balance_deprecated',
       call_index: '0601',
       call_module: 'Balances',
     });
