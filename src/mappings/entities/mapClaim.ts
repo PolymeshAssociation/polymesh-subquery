@@ -10,6 +10,7 @@ import {
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
+import { createCustomClaimTypeIfNotExists } from './mapCustomClaimType';
 
 interface ClaimParams {
   claimExpiry: bigint | undefined;
@@ -20,7 +21,7 @@ interface ClaimParams {
   lastUpdateDate: bigint;
   cddId: string;
   jurisdiction: string;
-  customClaimTypeId: bigint | undefined;
+  customClaimTypeId: string | undefined;
 }
 
 interface Scope {
@@ -59,12 +60,12 @@ const getId = (
   scope: Scope,
   jurisdiction: string,
   cddId: string,
-  customClaimTypeId: bigint | undefined
+  customClaimTypeId: string | undefined
 ): string => {
   const idAttributes = [target, claimType];
 
   if (customClaimTypeId) {
-    idAttributes.push(customClaimTypeId.toString());
+    idAttributes.push(customClaimTypeId);
   }
 
   if (scope) {
@@ -107,6 +108,15 @@ const handleClaimAdded = async (
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(target, blockId, EventIdEnum.ClaimAdded, eventIdx, block);
+
+  if (customClaimTypeId) {
+    await createCustomClaimTypeIfNotExists(
+      {
+        id: customClaimTypeId,
+      },
+      blockId
+    );
+  }
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
