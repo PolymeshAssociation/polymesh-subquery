@@ -10,12 +10,12 @@ const pallets: string[] = [
   'identity',
   'bridge',
   'complianceManager',
-  'corporateaction',
+  'corporateAction',
   'capitalDistribution',
   'externalAgents',
   'corporateBallot',
   'checkpoint',
-  'multisig',
+  'multiSig',
   'nft',
   'portfolio',
   'pips',
@@ -73,7 +73,6 @@ const project: SubstrateProject = {
   dataSources: [
     {
       kind: SubstrateDatasourceKind.Runtime,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       startBlock: 1,
       endBlock: 1,
       mapping: {

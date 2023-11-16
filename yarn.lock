@@ -8084,13 +8084,6 @@ docker-compose@0.23.13:
   dependencies:
     yaml "^1.10.2"
 
-docker-compose@^0.24.3:
-  version "0.24.3"
-  resolved "https://registry.yarnpkg.com/docker-compose/-/docker-compose-0.24.3.tgz#298d7bb4aaf37b3b45d0e4ef55c7f58ccc39cca9"
-  integrity sha512-x3/QN3AIOMe7j2c8f/jcycizMft7dl8MluoB9OGPAYCyKHHiPUFqI9GjCcsU0kYy24vYKMCcfR6+5ZaEyQlrxg==
-  dependencies:
-    yaml "^2.2.2"
-
 doctrine@^2.1.0:
   version "2.1.0"
   resolved "https://registry.yarnpkg.com/doctrine/-/doctrine-2.1.0.tgz#5cd01fc101621b42c4cd7f5d1a66243716d3f39d"

@@ -34,7 +34,6 @@
   "dependencies": {
     "@polkadot/api": "^10",
     "bignumber.js": "^9.0.2",
-    "docker-compose": "^0.24.3",
     "typeorm": "^0.2.34"
   },
   "devDependencies": {
