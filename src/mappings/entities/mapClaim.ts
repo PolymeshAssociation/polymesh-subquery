@@ -10,7 +10,6 @@ import {
 import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
 import { HandlerArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
-import { createCustomClaimTypeIfNotExists } from './mapCustomClaimType';
 
 interface ClaimParams {
   claimExpiry: bigint | undefined;
@@ -108,15 +107,6 @@ const handleClaimAdded = async (
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(target, blockId, EventIdEnum.ClaimAdded, eventIdx, block);
-
-  if (customClaimTypeId) {
-    await createCustomClaimTypeIfNotExists(
-      {
-        id: customClaimTypeId,
-      },
-      blockId
-    );
-  }
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
