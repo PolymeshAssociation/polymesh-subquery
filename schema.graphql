@@ -1528,7 +1528,7 @@ Represents a change in the status of an external agent.
 "AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
 """
 type TickerExternalAgentHistory @entity {
-  id: ID! #block_di/event_idx/did
+  id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
   datetime: Date!

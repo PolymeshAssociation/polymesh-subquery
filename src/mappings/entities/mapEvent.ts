@@ -1,6 +1,5 @@
 import { GenericEvent } from '@polkadot/types/generic';
-import { EventRecord } from '@polkadot/types/interfaces';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { ClaimTypeEnum, Event, EventIdEnum, ModuleIdEnum } from '../../types';
 import {
   extractClaimInfo,
@@ -35,7 +34,7 @@ import { mapTransferManager } from './mapTransferManager';
 import { mapTrustedClaimIssuer } from './mapTrustedClaimIssuer';
 
 export function handleToolingEvent(
-  event: EventRecord,
+  event: SubstrateEvent,
   eventIdx: number,
   block: SubstrateBlock,
   extrinsic?: SubstrateExtrinsic
@@ -89,8 +88,8 @@ export function handleToolingEvent(
 }
 
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
-export async function handleEvent(
-  event: EventRecord,
+export async function createEvent(
+  event: SubstrateEvent,
   eventIdx: number,
   block: SubstrateBlock,
   extrinsic?: SubstrateExtrinsic

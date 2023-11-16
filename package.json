@@ -34,6 +34,7 @@
   "dependencies": {
     "@polkadot/api": "^10",
     "bignumber.js": "^9.0.2",
+    "docker-compose": "^0.24.3",
     "typeorm": "^0.2.34"
   },
   "devDependencies": {
@@ -50,7 +51,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^8.0.6",
     "@semantic-release/npm": "^9.0.2",
-    "@subql/cli": "4.2.0",
+    "@subql/cli": "4.2.1",
     "@subql/node": "3.2.0",
     "@subql/types": "3.3.0",
     "@subql/types-core": "^0.3.0",

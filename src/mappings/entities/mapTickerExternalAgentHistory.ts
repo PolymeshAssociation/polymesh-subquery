@@ -107,7 +107,7 @@ export async function mapTickerExternalAgentHistory({
     return;
   }
 
-  if (moduleId === ModuleIdEnum.externalagents && eventId === EventIdEnum.AgentRemoved) {
+  if (eventId === EventIdEnum.AgentRemoved) {
     const did = params[2].toString();
     const ticker = serializeTicker(params[1]);
 
