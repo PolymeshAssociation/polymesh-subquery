@@ -208,7 +208,7 @@ test('extractClaimInfo', () => {
     issuanceDate: '0',
     cddId: undefined,
     jurisdiction: undefined,
-    customClaimTypeId: 1,
+    customClaimTypeId: '1',
   });
 });
 

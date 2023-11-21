@@ -103,14 +103,14 @@ export const extractClaimInfo = (args: any[]) => {
 
   let cddId: any;
   let jurisdiction: any;
-  let customClaimTypeId: bigint;
+  let customClaimTypeId: string;
 
   if (claimType === ClaimTypeEnum.CustomerDueDiligence) {
     cddId = JSONStringifyExceptStringAndNull(claim.CustomerDueDiligence);
   } else if (claimType === ClaimTypeEnum.Jurisdiction) {
     jurisdiction = JSONStringifyExceptStringAndNull(claim.Jurisdiction?.col1);
   } else if (claimType === ClaimTypeEnum.Custom) {
-    customClaimTypeId = extractBigInt(claim.Custom, 'col1');
+    customClaimTypeId = extractBigInt(claim.Custom, 'col1').toString();
   }
 
   return {

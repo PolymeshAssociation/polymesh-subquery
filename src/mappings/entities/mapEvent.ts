@@ -33,6 +33,7 @@ import { mapTickerExternalAgent } from './mapTickerExternalAgent';
 import { mapTickerExternalAgentHistory } from './mapTickerExternalAgentHistory';
 import { mapTransferManager } from './mapTransferManager';
 import { mapTrustedClaimIssuer } from './mapTrustedClaimIssuer';
+import { mapCustomClaimType } from './mapCustomClaimType';
 
 export function handleToolingEvent(
   event: EventRecord,
@@ -134,6 +135,7 @@ export async function handleEvent(
       mapTrustedClaimIssuer(handlerArgs),
       mapPolyxTransaction(handlerArgs),
       mapMultiSig(handlerArgs),
+      mapCustomClaimType(handlerArgs),
     ];
 
     const harvesterLikeArgs = args.map((arg, i) => ({
