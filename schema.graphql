@@ -1871,7 +1871,7 @@ type Claim @entity {
   jurisdiction: String
   scope: Scope
   cddId: String
-  customClaimTypeId: BigInt
+  customClaimType: CustomClaimType
   revokeDate: BigInt
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
@@ -2293,6 +2293,17 @@ type MultiSigProposalVote @entity {
   datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents the registered CustomClaimType
+"""
+type CustomClaimType @entity {
+  id: ID!
+  identity: Identity
+  name: String!
   createdBlock: Block!
   updatedBlock: Block!
 }
