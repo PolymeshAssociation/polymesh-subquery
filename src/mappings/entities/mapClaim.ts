@@ -20,7 +20,7 @@ interface ClaimParams {
   lastUpdateDate: bigint;
   cddId: string;
   jurisdiction: string;
-  customClaimTypeId: bigint | undefined;
+  customClaimTypeId: string | undefined;
 }
 
 interface Scope {
@@ -59,12 +59,12 @@ const getId = (
   scope: Scope,
   jurisdiction: string,
   cddId: string,
-  customClaimTypeId: bigint | undefined
+  customClaimTypeId: string | undefined
 ): string => {
   const idAttributes = [target, claimType];
 
   if (customClaimTypeId) {
-    idAttributes.push(customClaimTypeId.toString());
+    idAttributes.push(customClaimTypeId);
   }
 
   if (scope) {
