@@ -50,7 +50,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^8.0.6",
     "@semantic-release/npm": "^9.0.2",
-    "@subql/cli": "4.2.0",
+    "@subql/cli": "4.2.1",
     "@subql/node": "3.2.0",
     "@subql/types": "3.3.0",
     "@subql/types-core": "^0.3.0",
