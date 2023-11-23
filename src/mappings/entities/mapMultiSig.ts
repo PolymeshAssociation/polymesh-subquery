@@ -269,9 +269,8 @@ export const handleMultiSigProposalDeleted = async (blockId: string): Promise<vo
         updatedBlockId: blockId,
       });
     });
+    await store.bulkUpdate('MultiSigProposal', activeProposals);
   }
-
-  await store.bulkUpdate('MultiSigProposal', activeProposals, ['status', 'updatedBlockId']);
 };
 
 /**
