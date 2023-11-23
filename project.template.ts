@@ -5,7 +5,7 @@ import {
   SubstrateProject,
 } from '@subql/types';
 
-const pallets: string[] = [
+const pallets: (string | [string, string])[] = [
   'asset',
   'identity',
   'bridge',
@@ -27,15 +27,29 @@ const pallets: string[] = [
   'treasury',
   'balances',
   'protocolFee',
+  ['system', 'CodeUpdated'],
 ];
 
-const handlers: SubstrateEventHandler[] = pallets.map(module => ({
-  kind: SubstrateHandlerKind.Event,
-  handler: 'handleEvent',
-  filter: {
-    module,
-  },
-}));
+const handlers: SubstrateEventHandler[] = pallets.map(item => {
+  if (typeof item === 'string') {
+    return {
+      kind: SubstrateHandlerKind.Event,
+      handler: 'handleEvent',
+      filter: {
+        module: item,
+      },
+    };
+  }
+  const [module, method] = item;
+  return {
+    kind: SubstrateHandlerKind.Event,
+    handler: 'handleEvent',
+    filter: {
+      module,
+      method,
+    },
+  };
+});
 
 const project: SubstrateProject = {
   specVersion: '1.0.0',
@@ -87,7 +101,7 @@ const project: SubstrateProject = {
     },
     {
       kind: SubstrateDatasourceKind.Runtime,
-      startBlock: Number('$START_BLOCK'),
+      startBlock: Number('$START_BLOCK' || 1),
       mapping: {
         file: './dist/index.js',
         handlers,

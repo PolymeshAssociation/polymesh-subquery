@@ -6,6 +6,7 @@ import genesisHandler from './migrations/genesisHandler';
 import migrationHandlers from './migrations/migrationHandlers';
 import { logError } from './util';
 import { createEvent } from './entities/mapEvent';
+import mapChainUpgrade from './entities/mapChainUpgrade';
 
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
   const header = substrateEvent.block.block.header;
@@ -28,6 +29,11 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
    * In case some data needs to be migrated for newly added entities/attributes to any entity, this can be used
    */
   await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
+
+  /**
+   * In case of major chain upgrade, we need to process some entities
+   */
+  await mapChainUpgrade(substrateEvent).catch(e => logError(e));
 
   const promises = [];
   const block = await mapBlock(substrateEvent.block);

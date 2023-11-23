@@ -2265,6 +2265,7 @@ enum MultiSigProposalStatusEnum {
   Success
   Failed
   Rejected
+  Deleted
 }
 
 """
