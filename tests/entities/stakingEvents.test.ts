@@ -34,9 +34,7 @@ describe('stakingEvents', () => {
         query {
           stakingEvents(
             filter: {
-              stashAccount: {
-                equalTo: "0x301ae89b2d71df51a78bfa5700385a7612bd34cf0a482407eccdafc17ef75121"
-              }
+              stashAccount: { equalTo: "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH" }
             }
             first: 10
           ) {

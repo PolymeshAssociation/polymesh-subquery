@@ -508,6 +508,8 @@ enum EventIdEnum {
   DelegateCalled
 
   ## polymeshcontracts ##
+  ApiHashUpdated
+  SCRuntimeCall
 
   ## preimage ##
   Noted
@@ -1081,6 +1083,7 @@ enum CallIdEnum {
   create_custody_portfolio
   instantiate_with_code_as_primary_key
   instantiate_with_hash_as_primary_key
+  upgrade_api
 
   ## preimage ##
   note_preimage
@@ -1541,7 +1544,7 @@ Represents a change in the status of an external agent.
 "AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
 """
 type TickerExternalAgentHistory @entity {
-  id: ID! #block_di/event_idx/did
+  id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
   datetime: Date!
@@ -2265,6 +2268,7 @@ enum MultiSigProposalStatusEnum {
   Success
   Failed
   Rejected
+  Deleted
 }
 
 """
@@ -2276,7 +2280,7 @@ type MultiSigProposal @entity {
   proposalId: Int! @index(unique: false)
   creator: Identity!
   creatorAccount: String!
-  status: MultiSigProposalStatusEnum
+  status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!
   datetime: Date!

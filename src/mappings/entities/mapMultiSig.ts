@@ -10,7 +10,13 @@ import {
   MultiSigSigner,
   MultiSigSignerStatusEnum,
 } from '../../types';
-import { getMultiSigSigner, getMultiSigSigners, getNumberValue, getTextValue } from '../util';
+import {
+  getBooleanValue,
+  getMultiSigSigner,
+  getMultiSigSigners,
+  getNumberValue,
+  getTextValue,
+} from '../util';
 import { MultiSigProposalVoteActionEnum, SignerTypeEnum } from './../../types/enums';
 import { Attributes, HandlerArgs } from './common';
 
@@ -171,12 +177,11 @@ const handleMultiSigProposalAdded = async (
 };
 
 const handleMultiSigProposalStatus = async (
-  blockId: string,
-  params: Codec[],
-  status: MultiSigProposalStatusEnum
-) => {
-  const [, rawMultiSigAddress, rawProposalId] = params;
-
+  rawMultiSigAddress: Codec,
+  rawProposalId: Codec,
+  status: MultiSigProposalStatusEnum,
+  blockId: string
+): Promise<void> => {
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
 
@@ -188,6 +193,30 @@ const handleMultiSigProposalStatus = async (
   });
 
   await proposal.save();
+};
+
+const handleMultiSigProposalRejected = async (blockId: string, params: Codec[]) => {
+  const [, rawMultiSigAddress, rawProposalId] = params;
+
+  await handleMultiSigProposalStatus(
+    rawMultiSigAddress,
+    rawProposalId,
+    MultiSigProposalStatusEnum.Rejected,
+    blockId
+  );
+};
+
+const handleMultiSigProposalExecuted = async (blockId: string, params: Codec[]) => {
+  const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
+
+  const success = getBooleanValue(rawSuccess);
+
+  let status = MultiSigProposalStatusEnum.Success;
+  if (!success) {
+    status = MultiSigProposalStatusEnum.Failed;
+  }
+
+  await handleMultiSigProposalStatus(rawMultiSigAddress, rawProposalId, status, blockId);
 };
 
 const handleMultiSigProposalVoteAction = async (
@@ -228,6 +257,22 @@ const handleMultiSigProposalVoteAction = async (
   ]);
 };
 
+export const handleMultiSigProposalDeleted = async (blockId: string): Promise<void> => {
+  const activeProposals = await store.getByFields<MultiSigProposal>('MultiSigProposal', [
+    ['status', '=', MultiSigProposalStatusEnum.Active],
+  ]);
+
+  if (activeProposals.length) {
+    activeProposals.forEach(proposal => {
+      Object.assign(proposal, {
+        status: MultiSigProposalStatusEnum.Deleted,
+        updatedBlockId: blockId,
+      });
+    });
+    await store.bulkUpdate('MultiSigProposal', activeProposals);
+  }
+};
+
 /**
  * Subscribes to events related to MultiSigs
  */
@@ -259,9 +304,9 @@ export async function mapMultiSig({
     case EventIdEnum.ProposalAdded:
       return handleMultiSigProposalAdded(blockId, params, eventIdx, block, extrinsic);
     case EventIdEnum.ProposalRejected:
-      return handleMultiSigProposalStatus(blockId, params, MultiSigProposalStatusEnum.Rejected);
+      return handleMultiSigProposalRejected(blockId, params);
     case EventIdEnum.ProposalExecuted:
-      return handleMultiSigProposalStatus(blockId, params, MultiSigProposalStatusEnum.Success);
+      return handleMultiSigProposalExecuted(blockId, params);
     case EventIdEnum.ProposalApproved:
       return handleMultiSigProposalVoteAction(
         blockId,

@@ -24,6 +24,7 @@
     "Compliancemanager",
     "Corporateaction",
     "Corporateballot",
+    "Datasource",
     "datetime",
     "Dids",
     "envsubst",

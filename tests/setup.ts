@@ -41,6 +41,7 @@ const snapShotArgs = [
 ];
 
 export default async (): Promise<void> => {
+  // eslint-disable-next-line no-useless-catch
   try {
     console.log('\nStarting test environment, might take a minute or two...');
     await Promise.all([
@@ -52,7 +53,7 @@ export default async (): Promise<void> => {
     console.log('Test environment started, waiting for subquery to catch up');
     await sleep(20000);
 
-    const latestBlock = await fetchLatestBlock();
+    const latestBlock = 400;
 
     await retry(200, 2000, async () => {
       const { errors, data } = await query({
@@ -69,7 +70,7 @@ export default async (): Promise<void> => {
       if (errors) {
         throw errors;
       }
-      if (!(data.blocks.nodes[0].blockId > latestBlock)) {
+      if (data.blocks.nodes[0].blockId < latestBlock) {
         console.log(`Last processed block: ${data.blocks.nodes[0].blockId}/${latestBlock}`);
         throw new Error('Subquery not caught up');
       }

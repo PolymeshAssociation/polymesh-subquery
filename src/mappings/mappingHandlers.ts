@@ -1,99 +1,55 @@
-import { EventRecord } from '@polkadot/types/interfaces';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { CallIdEnum, Event, EventIdEnum, Extrinsic } from '../types';
-import { ModuleIdEnum } from './../types/enums';
+import { SubstrateEvent } from '@subql/types';
 import { mapBlock } from './entities/mapBlock';
-import { handleEvent } from './entities/mapEvent';
-import { createExtrinsic, wrapExtrinsics } from './entities/mapExtrinsic';
-import { camelToSnakeCase, logError } from './util';
+import mapChainUpgrade from './entities/mapChainUpgrade';
+import { createEvent } from './entities/mapEvent';
+import { createExtrinsic } from './entities/mapExtrinsic';
+import mapSubqueryVersion from './entities/mapSubqueryVersion';
+import genesisHandler from './migrations/genesisHandler';
+import { logError } from './util';
 
-export async function handleBlock(substrateBlock: SubstrateBlock): Promise<void> {
-  const blockId = substrateBlock.block.header.number.toNumber();
-  try {
-    const block = await mapBlock(substrateBlock);
+export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
+  const header = substrateEvent.block.block.header;
+  const blockId = header.number.toNumber();
 
-    await block.save();
+  /**
+   * This handles the insertion of new SQ version on every restart
+   */
+  await mapSubqueryVersion().catch(e => logError(e));
 
-    const wrappedExtrinsics = wrapExtrinsics(substrateBlock);
-
-    const { events, countExtrinsicsSuccess } = await getEvents(substrateBlock, wrappedExtrinsics);
-
-    const { extrinsics, countExtrinsicsSigned, countExtrinsicsUnsigned } =
-      getExtrinsics(wrappedExtrinsics);
-
-    Object.assign(block, {
-      countExtrinsicsSigned,
-      countExtrinsicsSuccess,
-      countExtrinsicsUnsigned,
-    });
-
-    await Promise.all([
-      store.bulkCreate('Extrinsic', extrinsics),
-      store.bulkCreate('Event', events),
-      block.save(),
-    ]);
-    logger.debug(`Processed block - ${block.id} for all events and extrinsics`);
-  } catch (error) {
-    logError(`Received an error while processing block ${blockId}: ${error.toString()}`);
-    throw error;
+  /**
+   * This manages the insertion of all the genesis block data on processing block #1
+   */
+  if (blockId === 1) {
+    await genesisHandler().catch(e => logError(e));
   }
-}
 
-async function getEvents(
-  substrateBlock: SubstrateBlock,
-  wrappedExtrinsics
-): Promise<{
-  events: Event[];
-  countExtrinsicsSuccess: number;
-}> {
-  let countExtrinsicsSuccess = 0;
-  const events: Event[] = [];
-  for (const [i, event] of substrateBlock.events.entries()) {
-    if (
-      event.event.section.toLowerCase() === ModuleIdEnum.system &&
-      event.event.method === EventIdEnum.ExtrinsicSuccess
-    ) {
-      countExtrinsicsSuccess++;
-    } else {
-      let extrinsic: SubstrateExtrinsic;
-      if (event.phase.isApplyExtrinsic) {
-        extrinsic = wrappedExtrinsics.find(({ idx }) => event.phase.asApplyExtrinsic.eqn(idx));
-      }
-      const dbEvent = await handleEvent(event as EventRecord, i, substrateBlock, extrinsic);
-      events.push(dbEvent);
-    }
-  }
-  return {
-    events,
-    countExtrinsicsSuccess,
-  };
-}
+  // /**
+  //  * In case some data needs to be migrated for newly added entities/attributes to any entity, this can be used
+  //  */
+  // const ss58Format = header.registry.chainSS58;
+  // await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
-function getExtrinsics(wrappedExtrinsics): {
-  extrinsics: Extrinsic[];
-  countExtrinsicsSigned: number;
-  countExtrinsicsUnsigned: number;
-} {
-  let countExtrinsicsUnsigned = 0;
-  let countExtrinsicsSigned = 0;
-  const extrinsics: Extrinsic[] = [];
-  for (const ext of wrappedExtrinsics) {
-    if (ext.extrinsic.isSigned) {
-      countExtrinsicsSigned++;
-    } else {
-      countExtrinsicsUnsigned++;
-    }
-    if (
-      ext.extrinsic.method.section.toLowerCase() !== ModuleIdEnum.timestamp ||
-      camelToSnakeCase(ext.extrinsic.method.method) !== CallIdEnum.set
-    ) {
-      // skip all timestamp.set extrinsics
-      extrinsics.push(createExtrinsic(ext));
-    }
+  /**
+   * In case of major chain upgrade, we need to process some entities
+   */
+  await mapChainUpgrade(substrateEvent).catch(e => logError(e));
+
+  const promises = [];
+  const block = await mapBlock(substrateEvent.block);
+  promises.push(block.save());
+
+  if (substrateEvent.extrinsic) {
+    const extrinsic = createExtrinsic(substrateEvent.extrinsic);
+    promises.push(extrinsic.save());
   }
-  return {
-    extrinsics,
-    countExtrinsicsSigned,
-    countExtrinsicsUnsigned,
-  };
+
+  const event = await createEvent(
+    substrateEvent,
+    substrateEvent.idx,
+    substrateEvent.block,
+    substrateEvent.extrinsic
+  );
+  promises.push(event.save());
+
+  await Promise.all(promises);
 }

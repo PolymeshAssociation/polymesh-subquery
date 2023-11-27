@@ -19,7 +19,7 @@ jobs:
       - name: install dependencies
         run: yarn --frozen-lockfile
       - name: make project.yaml
-        run: envsubst < project.template.yaml > project.yaml
+        run: envsubst < project.template.ts > project.ts
         env:
           START_BLOCK: 1
           NETWORK_ENDPOINT: 'ws://host.docker.internal:9944'
