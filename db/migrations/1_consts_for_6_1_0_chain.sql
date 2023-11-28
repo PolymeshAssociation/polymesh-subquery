@@ -3,7 +3,7 @@ alter type "0bf3c7d4ef" add value if not exists 'revoke_create_portfolios_permis
 alter type "0bf3c7d4ef" add value if not exists 'create_custody_portfolio' after 'revoke_create_portfolios_permission';
 alter type "0bf3c7d4ef" add value if not exists 'instantiate_with_code_as_primary_key' after 'create_custody_portfolio';
 alter type "0bf3c7d4ef" add value if not exists 'instantiate_with_hash_as_primary_key' after 'instantiate_with_code_as_primary_key';
-alter type "0bf3c7d4ef" add value if not exists 'upgrade_api' after 'instantiate_with_code_as_primary_key';
+alter type "0bf3c7d4ef" add value if not exists 'upgrade_api' after 'instantiate_with_hash_as_primary_key';
 
 alter type "8f5a39c8ee" add value if not exists 'RemoveAssetAffirmationExemption' after 'VenueSignersUpdated';
 alter type "8f5a39c8ee" add value if not exists 'AssetAffirmationExemption' after 'RemoveAssetAffirmationExemption';
