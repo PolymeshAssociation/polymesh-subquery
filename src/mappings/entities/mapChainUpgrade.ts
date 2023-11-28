@@ -1,8 +1,8 @@
 import { SubstrateEvent } from '@subql/types';
 import { handleMultiSigProposalDeleted } from './mapMultiSig';
 
-let transactionVersion = 0;
-let oldSpecVersion = 3000;
+let transactionVersion: number;
+let oldSpecVersion: number;
 
 /**
  * This method helps handling some entity data on chain upgrades

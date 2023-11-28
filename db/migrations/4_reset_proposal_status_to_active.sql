@@ -1,0 +1,1 @@
+update multi_sig_proposals set status = 'Active' where status = 'Deleted';
