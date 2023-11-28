@@ -271,6 +271,7 @@ const project: SubstrateProject = {
      * https://documentation.onfinality.io/support/the-enhanced-api-service
      */
     endpoint: ['$NETWORK_ENDPOINT'],
+    dictionary: '$NETWORK_DICTIONARY',
     chaintypes: {
       file: './dist/chainTypes.js',
     },
