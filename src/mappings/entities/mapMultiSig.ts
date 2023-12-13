@@ -262,14 +262,28 @@ export const handleMultiSigProposalDeleted = async (blockId: string): Promise<vo
     ['status', '=', MultiSigProposalStatusEnum.Active],
   ]);
 
-  if (activeProposals.length) {
-    activeProposals.forEach(proposal => {
+  const queryMultiParams = activeProposals.map(proposal => [
+    api.query.multiSig.proposalDetail,
+    [proposal.multisigId, proposal.proposalId],
+  ]);
+
+  const proposalDetails = await api.queryMulti(queryMultiParams as any);
+
+  const deletedProposals = [];
+  proposalDetails.forEach((proposal, index) => {
+    if (proposal.isEmpty) {
+      deletedProposals.push(activeProposals[index]);
+    }
+  });
+
+  if (deletedProposals.length) {
+    deletedProposals.forEach(proposal => {
       Object.assign(proposal, {
         status: MultiSigProposalStatusEnum.Deleted,
         updatedBlockId: blockId,
       });
     });
-    await store.bulkUpdate('MultiSigProposal', activeProposals);
+    await store.bulkUpdate('MultiSigProposal', deletedProposals);
   }
 };
 
