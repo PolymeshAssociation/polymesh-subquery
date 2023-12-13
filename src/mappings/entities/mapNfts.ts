@@ -1,14 +1,17 @@
+import { Option, u64, U8aFixed } from '@polkadot/types-codec';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, NftHolder } from '../../types';
 import {
+  bytesToString,
   getFirstKeyFromJson,
+  getFirstValueFromJson,
   getNftId,
   getPortfolioValue,
   getTextValue,
   serializeTicker,
 } from '../util';
-import { HandlerArgs, getAsset } from './common';
+import { getAsset, HandlerArgs } from './common';
 import { createAssetTransaction } from './mapAsset';
 
 export const getNftHolder = async (
@@ -70,11 +73,15 @@ const handleNftPortfolioUpdates = async (
 
   const did = getTextValue(rawId);
   const reason = getFirstKeyFromJson(rawUpdateReason);
+  const value = getFirstValueFromJson(rawUpdateReason);
 
   const { ticker, ids } = getNftId(rawNftId);
 
   const asset = await getAsset(ticker);
   asset.updatedBlockId = blockId;
+
+  let instructionId: string;
+  let instructionMemo: string;
 
   if (reason === 'issued') {
     asset.totalSupply += BigInt(ids.length);
@@ -93,6 +100,14 @@ const handleNftPortfolioUpdates = async (
     promises.push(fromHolder.save(), toHolder.save());
 
     asset.totalTransfers += BigInt(1);
+
+    const details = value as unknown as {
+      readonly instructionId: Option<u64>;
+      readonly instructionMemo: Option<U8aFixed>;
+    };
+
+    instructionId = getTextValue(details.instructionId);
+    instructionMemo = bytesToString(details.instructionMemo);
   } else if (reason === 'redeemed') {
     asset.totalSupply -= BigInt(ids.length);
 
@@ -108,6 +123,8 @@ const handleNftPortfolioUpdates = async (
       fromPortfolioId,
       toPortfolioId,
       nftIds: ids.map(id => BigInt(id)),
+      instructionId,
+      instructionMemo,
     })
   );
   promises.push(asset.save());
