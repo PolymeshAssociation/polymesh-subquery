@@ -1,3 +1,4 @@
+import { Option, u64, U8aFixed } from '@polkadot/types-codec';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import {
@@ -28,7 +29,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { HandlerArgs, getAsset } from './common';
+import { getAsset, HandlerArgs } from './common';
 
 export const createFunding = (
   blockId: string,
@@ -57,7 +58,14 @@ export const createAssetTransaction = (
   datetime: Date,
   details: Pick<
     AssetTransaction,
-    'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound' | 'nftIds'
+    | 'assetId'
+    | 'toPortfolioId'
+    | 'fromPortfolioId'
+    | 'amount'
+    | 'fundingRound'
+    | 'nftIds'
+    | 'instructionId'
+    | 'instructionMemo'
   >,
   extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
@@ -388,6 +396,8 @@ const handleAssetTransfer = async ({
     toPortfolioId = null;
   }
 
+  let instructionId: string;
+
   if (fromPortfolioId && toPortfolioId) {
     const asset = await getAsset(ticker);
     asset.totalTransfers += BigInt(1);
@@ -406,6 +416,14 @@ const handleAssetTransfer = async ({
     toHolder.amount = toHolder.amount + transferAmount;
     toHolder.updatedBlockId = blockId;
     promises.push(toHolder.save());
+
+    // For old `Transfer` events, `InstructionExecuted` event was separately emitted in the same block
+    const instructionExecutedEvent = block.events.find(
+      ({ event }) => event.method === 'InstructionExecuted'
+    );
+    if (instructionExecutedEvent) {
+      instructionId = getTextValue(instructionExecutedEvent.event.data[1]);
+    }
   }
 
   promises.push(
@@ -418,6 +436,7 @@ const handleAssetTransfer = async ({
         fromPortfolioId,
         toPortfolioId,
         amount: transferAmount,
+        instructionId,
       },
       extrinsic
     )
@@ -445,6 +464,8 @@ const handleAssetBalanceUpdated = async ({
   let fromPortfolioId: string;
   let toPortfolioId: string;
   let fundingRoundName: string;
+  let instructionId: string;
+  let instructionMemo: string;
 
   const promises = [];
 
@@ -501,6 +522,14 @@ const handleAssetBalanceUpdated = async ({
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
   } else if (updateReason === 'transferred') {
+    const details = value as unknown as {
+      readonly instructionId: Option<u64>;
+      readonly instructionMemo: Option<U8aFixed>;
+    };
+
+    instructionId = getTextValue(details.instructionId);
+    instructionMemo = bytesToString(details.instructionMemo);
+
     asset.totalTransfers += BigInt(1);
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
@@ -517,6 +546,8 @@ const handleAssetBalanceUpdated = async ({
         toPortfolioId,
         amount: transferAmount,
         fundingRound: fundingRoundName,
+        instructionId,
+        instructionMemo,
       },
       extrinsic
     )
