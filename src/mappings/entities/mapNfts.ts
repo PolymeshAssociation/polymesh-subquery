@@ -1,6 +1,6 @@
 import { Option, u64, U8aFixed } from '@polkadot/types-codec';
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, NftHolder } from '../../types';
 import {
   bytesToString,
@@ -52,7 +52,8 @@ const handleNftPortfolioUpdates = async (
   blockId: string,
   params: Codec[],
   eventIdx: number,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
@@ -83,13 +84,16 @@ const handleNftPortfolioUpdates = async (
   let instructionId: string;
   let instructionMemo: string;
 
+  let eventId: EventIdEnum;
   if (reason === 'issued') {
+    eventId = EventIdEnum.IssuedNFT;
     asset.totalSupply += BigInt(ids.length);
 
     const nftHolder = await getNftHolder(ticker, did, blockId);
     nftHolder.nftIds.push(...ids);
     promises.push(nftHolder.save());
   } else if (reason === 'transferred') {
+    eventId = EventIdEnum.Transfer;
     const [fromHolder, toHolder] = await Promise.all([
       getNftHolder(ticker, fromDid, blockId),
       getNftHolder(ticker, toDid, blockId),
@@ -109,6 +113,7 @@ const handleNftPortfolioUpdates = async (
     instructionId = getTextValue(details.instructionId);
     instructionMemo = bytesToString(details.instructionMemo);
   } else if (reason === 'redeemed') {
+    eventId = EventIdEnum.RedeemedNFT;
     asset.totalSupply -= BigInt(ids.length);
 
     const nftHolder = await getNftHolder(ticker, did, blockId);
@@ -118,14 +123,21 @@ const handleNftPortfolioUpdates = async (
   }
 
   promises.push(
-    createAssetTransaction(blockId, eventIdx, block.timestamp, {
-      assetId: ticker,
-      fromPortfolioId,
-      toPortfolioId,
-      nftIds: ids.map(id => BigInt(id)),
-      instructionId,
-      instructionMemo,
-    })
+    createAssetTransaction(
+      blockId,
+      eventIdx,
+      block.timestamp,
+      {
+        assetId: ticker,
+        fromPortfolioId,
+        toPortfolioId,
+        nftIds: ids.map(id => BigInt(id)),
+        instructionId,
+        instructionMemo,
+      },
+      eventId,
+      extrinsic
+    )
   );
   promises.push(asset.save());
 
@@ -139,6 +151,7 @@ export async function mapNft({
   params,
   eventIdx,
   block,
+  extrinsic,
 }: HandlerArgs): Promise<void> {
   if (moduleId !== ModuleIdEnum.nft) {
     return;
@@ -149,6 +162,6 @@ export async function mapNft({
   }
 
   if (eventId === EventIdEnum.NFTPortfolioUpdated) {
-    await handleNftPortfolioUpdates(blockId, params, eventIdx, block);
+    await handleNftPortfolioUpdates(blockId, params, eventIdx, block, extrinsic);
   }
 }

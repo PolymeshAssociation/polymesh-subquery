@@ -67,6 +67,7 @@ export const createAssetTransaction = (
     | 'instructionId'
     | 'instructionMemo'
   >,
+  eventId?: EventIdEnum,
   extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const callId = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
@@ -87,7 +88,8 @@ export const createAssetTransaction = (
   return AssetTransaction.create({
     id: `${blockId}/${eventIdx}`,
     ...details,
-    eventId: callToEventMappings[callId] || callToEventMappings['default'],
+    // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
+    eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime,
@@ -438,6 +440,7 @@ const handleAssetTransfer = async ({
         amount: transferAmount,
         instructionId,
       },
+      EventIdEnum.Transfer,
       extrinsic
     )
   );
@@ -496,7 +499,9 @@ const handleAssetBalanceUpdated = async ({
 
   const value = getFirstValueFromJson(rawUpdateReason);
 
+  let eventId: EventIdEnum;
   if (updateReason === 'issued') {
+    eventId = EventIdEnum.Issued;
     const issuedReason = value as unknown as { fundingRoundName: string };
     fundingRoundName = coerceHexToString(issuedReason.fundingRoundName);
 
@@ -518,6 +523,7 @@ const handleAssetBalanceUpdated = async ({
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
   } else if (updateReason === 'redeemed') {
+    eventId = EventIdEnum.Redeemed;
     asset.totalSupply -= transferAmount;
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
@@ -529,6 +535,11 @@ const handleAssetBalanceUpdated = async ({
 
     instructionId = getTextValue(details.instructionId);
     instructionMemo = bytesToString(details.instructionMemo);
+
+    eventId = EventIdEnum.Transfer;
+    if (!instructionId) {
+      eventId = block.events[eventIdx + 1]?.event?.method as EventIdEnum;
+    }
 
     asset.totalTransfers += BigInt(1);
     asset.updatedBlockId = blockId;
@@ -549,6 +560,7 @@ const handleAssetBalanceUpdated = async ({
         instructionId,
         instructionMemo,
       },
+      eventId,
       extrinsic
     )
   );
