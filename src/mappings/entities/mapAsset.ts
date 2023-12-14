@@ -88,6 +88,7 @@ export const createAssetTransaction = (
   return AssetTransaction.create({
     id: `${blockId}/${eventIdx}`,
     ...details,
+    // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
