@@ -50,7 +50,7 @@ with update_data as (
 from 
 asset_transactions txs
 inner join events e on e.block_id = txs.created_block_id and e.event_idx = txs.event_idx
-and e.event_id in ('AssetBalanceUpdated', 'NFTPortfolioUpdated')
+and e.event_id = 'AssetBalanceUpdated'
 where txs.event_id = 'Transfer'
 )
 update 
