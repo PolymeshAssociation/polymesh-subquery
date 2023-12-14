@@ -565,7 +565,9 @@ const handlePrimaryKeyUpdated = async (
   });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { assets, portfolios, transactionGroups, transactions } = permissions;
+  const { assets, portfolios, transactionGroups, transactions } = permissions || {
+    transactionGroups: [],
+  };
 
   await Promise.all([
     createPermissions(
