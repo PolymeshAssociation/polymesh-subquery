@@ -33,6 +33,7 @@ The behavior of the dev image can be controlled by setting ENV variables. The de
 
 - `NETWORK_ENDPOINT` - the wss endpoint of the blockchain to be indexed
 - `NETWORK_CHAIN_ID` - The genesis hash of the chain. This value can be retrieved by going to the explorer and looking for the block hash of block 0. e.g. [for mainnet](https://mainnet-app.polymesh.network/#/explorer/query/0)
+- `NETWORK_DICTIONARY` - The GraphQL endpoint of SubQuery Dictionary Project that pre-indexes events on chain to dramatically improve indexing of this SubQuery Project (sometimes up to 10x faster). The dictionary has already pre-scanned over the network, and has records of the module and method for every event/extrinsic on each block. If you don't have dictionary setup you can see examples of how to create a dictionary in the [dictionary repository](https://github.com/subquery/subql-dictionary). Polymesh dictionary can be referenced from [here](https://github.com/PolymeshAssociation/subql-dictionary).
 - `START_BLOCK` - block from which indexing should start. Generally this should be set to 1, but other values can be useful for debugging.
 
 More advanced options are:
