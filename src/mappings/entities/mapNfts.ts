@@ -92,8 +92,15 @@ const handleNftPortfolioUpdates = async (
     const nftHolder = await getNftHolder(ticker, did, blockId);
     nftHolder.nftIds.push(...ids);
     promises.push(nftHolder.save());
-  } else if (reason === 'transferred') {
-    eventId = EventIdEnum.Transfer;
+  } else if (reason === 'redeemed') {
+    eventId = EventIdEnum.RedeemedNFT;
+    asset.totalSupply -= BigInt(ids.length);
+
+    const nftHolder = await getNftHolder(ticker, did, blockId);
+    nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
+    nftHolder.updatedBlockId = blockId;
+    promises.push(nftHolder.save());
+  } else if (reason === 'transferred' || reason === 'controllerTransfer') {
     const [fromHolder, toHolder] = await Promise.all([
       getNftHolder(ticker, fromDid, blockId),
       getNftHolder(ticker, toDid, blockId),
@@ -105,21 +112,18 @@ const handleNftPortfolioUpdates = async (
 
     asset.totalTransfers += BigInt(1);
 
-    const details = value as unknown as {
-      readonly instructionId: Option<u64>;
-      readonly instructionMemo: Option<U8aFixed>;
-    };
+    if (reason === 'transferred') {
+      eventId = EventIdEnum.Transfer;
+      const details = value as unknown as {
+        readonly instructionId: Option<u64>;
+        readonly instructionMemo: Option<U8aFixed>;
+      };
 
-    instructionId = getTextValue(details.instructionId);
-    instructionMemo = bytesToString(details.instructionMemo);
-  } else if (reason === 'redeemed') {
-    eventId = EventIdEnum.RedeemedNFT;
-    asset.totalSupply -= BigInt(ids.length);
-
-    const nftHolder = await getNftHolder(ticker, did, blockId);
-    nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
-    nftHolder.updatedBlockId = blockId;
-    promises.push(nftHolder.save());
+      instructionId = getTextValue(details.instructionId);
+      instructionMemo = bytesToString(details.instructionMemo);
+    } else {
+      eventId = EventIdEnum.ControllerTransfer;
+    }
   }
 
   promises.push(

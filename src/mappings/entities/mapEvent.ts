@@ -65,6 +65,11 @@ export function handleToolingEvent(
 
   const { claimExpiry, claimIssuer, claimScope, claimType } = extractClaimInfo(harvesterLikeArgs);
 
+  let extrinsicId: string;
+  if (extrinsic) {
+    extrinsicId = `${blockId}/${extrinsic?.idx}`;
+  }
+
   return Event.create({
     id: `${blockId}/${eventIdx}`,
     blockId,
@@ -85,6 +90,7 @@ export function handleToolingEvent(
     corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
     fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
     transferTo: extractTransferTo(harvesterLikeArgs),
+    extrinsicId,
   });
 }
 
