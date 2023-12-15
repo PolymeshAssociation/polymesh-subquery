@@ -1035,6 +1035,7 @@ enum CallIdEnum {
   batch_optimistic
   relay_tx
   batch_all
+  as_derivative
   dispatch_as
   force_batch
   with_weight
@@ -2132,6 +2133,10 @@ type AssetTransaction @entity {
   extrinsicIdx: Int
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
   fundingRound: String
+  "`instruction` will only be present for the cases where Assets are transferred once instruction is executed"
+  instruction: Instruction
+  "`instructionMemo` will only be present for the cases where memo is provided for the instruction which got executed"
+  instructionMemo: String
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!

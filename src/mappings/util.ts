@@ -479,7 +479,10 @@ export const bytesToString = (item: Codec): string => {
   if (isHex(value)) {
     return hexToString(value);
   }
-  return removeNullChars(value);
+  if (value) {
+    return removeNullChars(value);
+  }
+  return undefined;
 };
 
 export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId' | 'name'> => {

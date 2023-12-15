@@ -1,3 +1,4 @@
+import { Option, u64, U8aFixed } from '@polkadot/types-codec';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import {
@@ -28,7 +29,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { HandlerArgs, getAsset } from './common';
+import { getAsset, HandlerArgs } from './common';
 
 export const createFunding = (
   blockId: string,
@@ -57,8 +58,16 @@ export const createAssetTransaction = (
   datetime: Date,
   details: Pick<
     AssetTransaction,
-    'assetId' | 'toPortfolioId' | 'fromPortfolioId' | 'amount' | 'fundingRound' | 'nftIds'
+    | 'assetId'
+    | 'toPortfolioId'
+    | 'fromPortfolioId'
+    | 'amount'
+    | 'fundingRound'
+    | 'nftIds'
+    | 'instructionId'
+    | 'instructionMemo'
   >,
+  eventId?: EventIdEnum,
   extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
   const callId = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
@@ -79,7 +88,8 @@ export const createAssetTransaction = (
   return AssetTransaction.create({
     id: `${blockId}/${eventIdx}`,
     ...details,
-    eventId: callToEventMappings[callId] || callToEventMappings['default'],
+    // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
+    eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime,
@@ -268,7 +278,13 @@ const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Prom
   await asset.save();
 };
 
-const handleIssued = async ({ blockId, params, eventIdx, block }: HandlerArgs): Promise<void> => {
+const handleIssued = async ({
+  blockId,
+  params,
+  eventIdx,
+  block,
+  extrinsic,
+}: HandlerArgs): Promise<void> => {
   const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
     params;
 
@@ -294,6 +310,7 @@ const handleIssued = async ({ blockId, params, eventIdx, block }: HandlerArgs): 
     eventIdx,
     amount: issuedAmount,
     fundingRound,
+    extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -388,6 +405,8 @@ const handleAssetTransfer = async ({
     toPortfolioId = null;
   }
 
+  let instructionId: string;
+
   if (fromPortfolioId && toPortfolioId) {
     const asset = await getAsset(ticker);
     asset.totalTransfers += BigInt(1);
@@ -406,6 +425,14 @@ const handleAssetTransfer = async ({
     toHolder.amount = toHolder.amount + transferAmount;
     toHolder.updatedBlockId = blockId;
     promises.push(toHolder.save());
+
+    // For old `Transfer` events, `InstructionExecuted` event was separately emitted in the same block
+    const instructionExecutedEvent = block.events.find(
+      ({ event }) => event.method === 'InstructionExecuted'
+    );
+    if (instructionExecutedEvent) {
+      instructionId = getTextValue(instructionExecutedEvent.event.data[1]);
+    }
   }
 
   promises.push(
@@ -418,7 +445,9 @@ const handleAssetTransfer = async ({
         fromPortfolioId,
         toPortfolioId,
         amount: transferAmount,
+        instructionId,
       },
+      EventIdEnum.Transfer,
       extrinsic
     )
   );
@@ -445,6 +474,8 @@ const handleAssetBalanceUpdated = async ({
   let fromPortfolioId: string;
   let toPortfolioId: string;
   let fundingRoundName: string;
+  let instructionId: string;
+  let instructionMemo: string;
 
   const promises = [];
 
@@ -475,7 +506,9 @@ const handleAssetBalanceUpdated = async ({
 
   const value = getFirstValueFromJson(rawUpdateReason);
 
+  let eventId: EventIdEnum;
   if (updateReason === 'issued') {
+    eventId = EventIdEnum.Issued;
     const issuedReason = value as unknown as { fundingRoundName: string };
     fundingRoundName = coerceHexToString(issuedReason.fundingRoundName);
 
@@ -497,10 +530,24 @@ const handleAssetBalanceUpdated = async ({
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
   } else if (updateReason === 'redeemed') {
+    eventId = EventIdEnum.Redeemed;
     asset.totalSupply -= transferAmount;
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
   } else if (updateReason === 'transferred') {
+    const details = value as unknown as {
+      readonly instructionId: Option<u64>;
+      readonly instructionMemo: Option<U8aFixed>;
+    };
+
+    instructionId = getTextValue(details.instructionId);
+    instructionMemo = bytesToString(details.instructionMemo);
+
+    eventId = EventIdEnum.Transfer;
+    if (!instructionId) {
+      eventId = block.events[eventIdx + 1]?.event?.method as EventIdEnum;
+    }
+
     asset.totalTransfers += BigInt(1);
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
@@ -517,7 +564,10 @@ const handleAssetBalanceUpdated = async ({
         toPortfolioId,
         amount: transferAmount,
         fundingRound: fundingRoundName,
+        instructionId,
+        instructionMemo,
       },
+      eventId,
       extrinsic
     )
   );

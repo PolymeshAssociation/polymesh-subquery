@@ -10,6 +10,8 @@ When schema changes involve adding new values to an existing enum, SQ may encoun
 
 ```
 alter type "0bf3c7d4ef" add value if not exists 'exempt_ticker_affirmation' after 'create_asset_with_custom_type';
+
+alter type "8f5a39c8ee" add value if not exists 'RemoveAssetAffirmationExemption' after 'VenueSignersUpdated';
 ```
 
 If an entirely new enum is introduced to the schema, it should be added as follows:
