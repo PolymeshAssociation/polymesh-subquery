@@ -278,7 +278,13 @@ const handleDivisibilityChanged = async (blockId: string, params: Codec[]): Prom
   await asset.save();
 };
 
-const handleIssued = async ({ blockId, params, eventIdx, block }: HandlerArgs): Promise<void> => {
+const handleIssued = async ({
+  blockId,
+  params,
+  eventIdx,
+  block,
+  extrinsic,
+}: HandlerArgs): Promise<void> => {
   const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
     params;
 
@@ -304,6 +310,7 @@ const handleIssued = async ({ blockId, params, eventIdx, block }: HandlerArgs): 
     eventIdx,
     amount: issuedAmount,
     fundingRound,
+    extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
