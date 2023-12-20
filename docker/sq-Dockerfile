@@ -6,6 +6,8 @@ RUN apk add --no-cache bash gettext python3 pythonispython3 make gcc g++ musl-de
 # arm64 dependencies
 RUN apk add --no-cache python3 pythonispython3 make gcc g++ musl-dev
 
+RUN npm i -g node-gyp
+
 # Dependencies
 WORKDIR /app
 COPY package.json /app
