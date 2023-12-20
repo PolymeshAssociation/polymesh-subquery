@@ -1,73 +1,92 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
+def withSecretEnv(List<Map> varAndPasswordList, Closure closure) {
+    wrap([$class: 'MaskPasswordsBuildWrapper', varPasswordPairs: varAndPasswordList]) {
+        withEnv(varAndPasswordList.collect { "${it.var}=${it.password}" }) {
+            closure()
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
 node {
 
-    properties([
-        [$class: 'BuildDiscarderProperty',
-         strategy: [$class: 'LogRotator',
-                    artifactDaysToKeepStr: '7',
-                    artifactNumToKeepStr: '7',
-                    daysToKeepStr: '7',
-                    numToKeepStr: '7']],
-    ])
+    env.PROJECT_NAME = 'polymesh-subquery'
+    env.GIT_REPO     = "ssh://git@ssh.gitea.polymesh.dev:4444/Deployment/${PROJECT_NAME}.git"
 
-    WORKSPACE_PATH = "${JENKINS_HOME}/workspace/${JOB_NAME}/${BUILD_NUMBER}"
+    properties([[$class: 'BuildDiscarderProperty',
+                 strategy: [$class: 'LogRotator',
+                            numToKeepStr: '7',
+                            daysToKeepStr: '7',
+                            artifactNumToKeepStr: '7',
+                            artifactDaysToKeepStr: '7']]])
 
-    dir(WORKSPACE_PATH) {
+    if (env.CHANGE_BRANCH) {
+        env.GIT_BRANCH = env.CHANGE_BRANCH // Job was started from a pull request
+    } else {
+        env.GIT_BRANCH = env.BRANCH_NAME
+    }
 
-        IS_PULL_REQUEST = true
+    dir("${JENKINS_HOME}/workspace/${JOB_NAME}/${BUILD_NUMBER}") {
 
-        if (env.CHANGE_BRANCH) {
-            echo "Job was started from a pull request"
-        } else {
-            IS_PULL_REQUEST = false
-            echo "Job was started from a branch"
+        withCredentials([
+            usernamePassword(credentialsId: 'vault_approle',
+                             usernameVariable: 'VAULT_ROLE_ID',
+                             passwordVariable: 'VAULT_SECRET_ID'),
+        ]) {
+
+            env.VAULT_ADDR   = 'https://127.0.0.1:8200/'
+            env.VAULT_CACERT = '/etc/ssl/certs/vault.tls.chain.pem'
+
+            withSecretEnv([[var: 'VAULT_TOKEN',
+                            password: sh (returnStdout: true,
+                                          label: 'Login To Vault',
+                                          script: '''\
+                                                  vault write -field=token \
+                                                              -format=table \
+                                                              auth/approle/login \
+                                                              role_id="$VAULT_ROLE_ID" \
+                                                              secret_id="$VAULT_SECRET_ID"
+                                                  '''.stripIndent()).trim()]]) {
+                stage('Clone Repo') {
+                    sh (label: 'Clone Repo',
+                        script: '/usr/local/bin/gitea-clone-repo.sh')
+                }
+            }
         }
 
-        SCM_CHECKOUT_BRANCHES = [
+        dir("${PROJECT_NAME}") {
 
-        ]
-        SCM_CHECKOUT_EXTENSIONS = [
-            [$class: 'UserIdentity',
-              name: 'Jenkins',
-              email: 'sre@polymesh.network'],
-        ]
+            env.AWS_ACCOUNT_NUMBER = env.AWS_ACCOUNT_NUMBER_DATACENTER_PRIMARY
+            env.AWS_REGION         = env.AWS_REGION_DATACENTER_PRIMARY
+            env.AWS_DEFAULT_REGION = env.AWS_REGION
+            env.CONTAINER_REGISTRY = "${env.AWS_ACCOUNT_NUMBER}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+            env.GIT_COMMIT         = sh (returnStdout: true,
+                                         label: 'Read Git Commit',
+                                         script: 'git rev-parse HEAD').trim()
 
-        if (IS_PULL_REQUEST) {
-            SCM_CHECKOUT_BRANCHES.push([name: "*/${env.CHANGE_BRANCH}"])
-            //SCM_CHECKOUT_EXTENSIONS.push([$class: 'PreBuildMerge',
-            //                               options: [mergeRemote: 'origin',
-            //                                         mergeTarget: env.CHANGE_TARGET]])
-        } else {
-            SCM_CHECKOUT_BRANCHES.push([name: "*/${env.BRANCH_NAME}"])
+            echo "GIT_COMMIT: ${env.GIT_COMMIT}"
+
+            stage('Build') {
+                sh (label: 'Build',
+                    script: '''#!/bin/bash
+                            docker build -f docker/sq-Dockerfile -t "${CONTAINER_REGISTRY}/polymesh/${PROJECT_NAME}:${GIT_COMMIT}" .
+                            ''')
+            }
+
+            stage('Push') {
+                sh (label: 'Push',
+                    script: '''#!/bin/bash
+
+                            aws ecr get-login-password | \
+                                docker login "$CONTAINER_REGISTRY" --username AWS --password-stdin
+
+                            docker push "${CONTAINER_REGISTRY}/polymesh/${PROJECT_NAME}:${GIT_COMMIT}" || true
+                            ''')
+            }
+
         }
-
-        echo "Performing repo checkout"
-
-        scm_variables = checkout([$class: 'GitSCM',
-                                  branches: SCM_CHECKOUT_BRANCHES,
-                                  extensions: SCM_CHECKOUT_EXTENSIONS,
-                                  userRemoteConfigs: [[url: 'https://github.com/PolymeshAssociation/polymesh-subquery.git',
-                                                       credentialsId: 'github_username_personal_access_token']]])
-
-        env.GIT_COMMIT = scm_variables.get('GIT_COMMIT')
-        echo "GIT_COMMIT: ${env.GIT_COMMIT}"
-
-        stage('Build') {
-            sh (label: 'Run `./deploy/build.sh`',
-                script: './deploy/build.sh')
-        }
-
-        //stage('Test') {
-        //    sh (label: 'Run `./deploy/test.sh`',
-        //        script: './deploy/test.sh')
-        //}
-
-        stage('Push') {
-            sh (label: 'Run `./deploy/push.sh`',
-                script: './deploy/push.sh')
-        }
-
     }
 }
 
