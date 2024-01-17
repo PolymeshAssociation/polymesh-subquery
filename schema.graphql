@@ -53,6 +53,7 @@ enum ModuleIdEnum {
   preimage
   testutils
   nft
+  confidentialasset
 
   ## deprecated ##
   confidential @deprecated
@@ -528,6 +529,17 @@ enum EventIdEnum {
   "`RedeemedNFT` has been deprecated from 6.0.0 chain version"
   RedeemedNFT
   NFTPortfolioUpdated
+
+  ## confidential assets ##
+  AccountCreated
+  ConfidentialAssetCreated
+  AccountDeposit
+  TransactionCreated
+  TransactionAffirmed
+  AccountWithdraw
+  TransactionRejected
+  TransactionExecuted
+  AccountDepositIncoming
 
   ## deprecated ##
   Approval @deprecated
@@ -2326,6 +2338,123 @@ type CustomClaimType @entity {
   id: ID!
   identity: Identity
   name: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialAccount @entity {
+  id: ID!
+  account: String!
+  creator: Identity!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialAsset @entity {
+  id: ID!
+  assetId: String!
+  ticker: String
+  data: String
+  creator: Identity!
+  auditors: [String!]
+  mediators: [String!]
+  totalSupply: BigInt!
+  venueFiltering: Boolean!
+  allowedVenues: [ConfidentialVenue!]
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialVenue @entity {
+  id: ID!
+  venueId: Int!
+  creator: Identity!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialAssetHolder @entity {
+  id: ID!
+  account: ConfidentialAccount!
+  asset: ConfidentialAsset!
+  amount: String
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialAssetTransaction @entity {
+  id: ID!
+  asset: ConfidentialAsset!
+  from: ConfidentialAccount
+  to: ConfidentialAccount
+  amount: String!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  extrinsicIdx: Int
+  transaction: ConfidentialTransaction
+  memo: String
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum TransactionStatusEnum {
+  Pending
+  Failed
+  Success
+}
+
+type ConfidentialTransaction @entity {
+  id: ID!
+  venue: Venue! @index(unique: false)
+  status: TransactionStatusEnum!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  legs: [ConfidentialLeg!]! @derivedFrom(field: "transaction")
+  affirmations: [ConfidentialTransactionAffirmation] @derivedFrom(field: "transaction")
+  memo: String
+  pendingAffirmations: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type ConfidentialLeg @entity {
+  id: ID!
+  transaction: ConfidentialTransaction!
+  sender: ConfidentialAccount!
+  receiver: ConfidentialAccount!
+  mediators: [String!]
+  auditors: [String!]
+  assetId: String
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum AffirmingPartyEnum {
+  Sender
+  Receiver
+  Mediator
+}
+
+enum AffirmStatusEnum {
+  Affirmed
+  Rejected
+}
+
+type Proof @entity {
+  id: ID!
+  assetId: String!
+  proof: String!
+}
+
+type ConfidentialTransactionAffirmation @entity {
+  id: ID!
+  transaction: ConfidentialTransaction
+  leg: Int
+  account: ConfidentialAccount
+  type: AffirmingPartyEnum
+  status: AffirmStatusEnum
+  proofs: [Proof]
   createdBlock: Block!
   updatedBlock: Block!
 }
