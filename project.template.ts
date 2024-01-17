@@ -237,6 +237,22 @@ const filters = {
   ],
   protocolFee: ['FeeCharged'],
   system: ['CodeUpdated'],
+  confidentialAsset: [
+    'AccountCreated',
+    'AccountDeposit',
+    'AccountDepositIncoming',
+    'AccountWithdraw',
+    'ConfidentialAssetCreated',
+    'Issued',
+    'TransactionAffirmed',
+    'TransactionCreated',
+    'TransactionExecuted',
+    'TransactionRejected',
+    'VenueCreated',
+    'VenueFiltering',
+    'VenuesAllowed',
+    'VenuesBlocked',
+  ],
 };
 
 const handlers: SubstrateEventHandler[] = Object.keys(filters)
