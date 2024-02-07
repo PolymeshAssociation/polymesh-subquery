@@ -309,6 +309,8 @@ enum EventIdEnum {
   RegisterAssetMetadataGlobalType
   MetadataValueDeleted
   LocalMetadataKeyDeleted
+  SetAssetMediators
+  AssetMediatorsRemoved
 
   ## capitaldistribution ##
   Created
@@ -440,6 +442,8 @@ enum EventIdEnum {
   PreApprovedPortfolio
   RevokePreApprovedPortfolio
   InstructionAutomaticallyAffirmed
+  MediatorAffirmationReceived
+  MediatorAffirmationWithdrawn
 
   ## statistics ##
   TransferManagerAdded @deprecated
@@ -878,6 +882,8 @@ enum CallIdEnum {
   remove_metadata_value
   remove_ticker_affirmation_exemption
   remove_ticker_pre_approval
+  add_mandatory_mediators
+  remove_mandatory_mediators
 
   ## capitaldistribution ##
   distribute
@@ -1010,6 +1016,11 @@ enum CallIdEnum {
   affirm_instruction_with_count
   reject_instruction_with_count
   withdraw_affirmation_with_count
+  add_instruction_with_mediators
+  affirm_instruction_as_mediator
+  withdraw_affirmation_as_mediator
+  reject_instruction_as_mediator
+  add_and_affirm_with_mediators
 
   ## statistics ##
   set_active_asset_stats
