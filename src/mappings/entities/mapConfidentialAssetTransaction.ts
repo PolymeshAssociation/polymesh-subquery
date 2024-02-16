@@ -50,6 +50,7 @@ const handleConfidentialTransaction = async ({
       accountId,
       assetId,
       amount: balance,
+      eventIdx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     }).save();

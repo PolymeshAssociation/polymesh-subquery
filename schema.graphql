@@ -2391,6 +2391,7 @@ type ConfidentialAccount @entity {
   id: ID!
   account: String!
   creator: Identity!
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2402,6 +2403,7 @@ type ConfidentialVenue @entity {
   id: ID!
   venueId: Int!
   creator: Identity!
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2420,6 +2422,7 @@ type ConfidentialAsset @entity {
   totalSupply: BigInt!
   allowedVenues: [Int!]
   venueFiltering: Boolean!
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2435,6 +2438,7 @@ type ConfidentialAssetHolder @entity {
   the encrypted amount
   """
   amount: String
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2451,6 +2455,7 @@ type ConfidentialTransactionAffirmation @entity {
   type: AffirmingPartyEnum!
   status: AffirmStatusEnum!
   proofs: [SenderProof!]
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
