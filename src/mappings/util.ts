@@ -627,3 +627,9 @@ export const getMultiSigSigner = (
     signerValue,
   };
 };
+
+export const getStringArrayValue = (item: Codec): string[] => {
+  const set = JSON.parse(item.toString());
+
+  return set;
+};

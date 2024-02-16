@@ -5,6 +5,7 @@ import {
   Asset,
   AssetDocument,
   AssetHolder,
+  AssetMandatoryMediator,
   AssetTransaction,
   CallIdEnum,
   EventIdEnum,
@@ -23,6 +24,7 @@ import {
   getDocValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
+  getStringArrayValue,
   getNumberValue,
   getPortfolioValue,
   getSecurityIdentifiers,
@@ -575,6 +577,34 @@ const handleAssetBalanceUpdated = async ({
   await Promise.all(promises);
 };
 
+const handleAssetMediatorsAdded = async ({ blockId, params }: HandlerArgs) => {
+  const addedById = getTextValue(params[0]);
+  const ticker = serializeTicker(params[1]);
+  const mediators = getStringArrayValue(params[2]);
+
+  const createPromises = mediators.map(mediator =>
+    AssetMandatoryMediator.create({
+      id: `${ticker}/${mediator}`,
+      identityId: mediator,
+      assetId: ticker,
+      addedById,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save()
+  );
+
+  await Promise.all(createPromises);
+};
+
+const handleAssetMediatorsRemoved = async ({ params }: HandlerArgs) => {
+  const ticker = serializeTicker(params[1]);
+  const mediators = getStringArrayValue(params[2]);
+
+  await Promise.all(
+    mediators.map(mediator => AssetMandatoryMediator.remove(`${ticker}/${mediator}`))
+  );
+};
+
 const handleAssetUpdateEvents = async ({
   eventId,
   blockId,
@@ -631,6 +661,13 @@ export async function mapAsset(args: HandlerArgs): Promise<void> {
   if (eventId === EventIdEnum.AssetBalanceUpdated) {
     await handleAssetBalanceUpdated(args);
   }
+  if (eventId === EventIdEnum.AssetMediatorsAdded) {
+    await handleAssetMediatorsAdded(args);
+  }
+  if (eventId === EventIdEnum.AssetMediatorsRemoved) {
+    await handleAssetMediatorsRemoved(args);
+  }
+
   await handleAssetUpdateEvents(args);
   // Unhandled asset events - CustomAssetTypeRegistered, CustomAssetTypeRegistered, ExtensionRemoved, IsIssueable, TickerRegistered, TickerTransferred, TransferWithData
 }
