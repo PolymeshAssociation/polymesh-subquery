@@ -154,6 +154,7 @@ const getAffirmationTypeAndProofs = (party: Codec): AffirmationsAndAffirmationTy
 
 const handleConfidentialTransactionAffirmed = async (
   blockId: string,
+  eventIdx: number,
   params: Codec[]
 ): Promise<void> => {
   const [rawDid, rawTransactionId, rawLegId, rawType, rawPendingAffirmations] = params;
@@ -168,12 +169,13 @@ const handleConfidentialTransactionAffirmed = async (
     id: `${transactionId}/${type}/${did}`,
     transactionId,
     legId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     identityId: did,
     type,
     status: AffirmStatusEnum.Affirmed,
     proofs,
+    eventIdx,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
   });
 
   const transaction = await ConfidentialTransaction.get(transactionId);
@@ -186,7 +188,7 @@ const handleConfidentialTransactionAffirmed = async (
 };
 
 export const mapConfidentialTransaction = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, moduleId, eventId, params } = args;
+  const { blockId, moduleId, eventId, eventIdx, params } = args;
 
   if (moduleId !== ModuleIdEnum.confidentialasset) {
     return;
@@ -197,7 +199,7 @@ export const mapConfidentialTransaction = async (args: HandlerArgs): Promise<voi
   }
 
   if (eventId === EventIdEnum.TransactionAffirmed) {
-    await handleConfidentialTransactionAffirmed(blockId, params);
+    await handleConfidentialTransactionAffirmed(blockId, eventIdx, params);
   }
 
   if (eventId === EventIdEnum.TransactionRejected || eventId === EventIdEnum.TransactionExecuted) {
