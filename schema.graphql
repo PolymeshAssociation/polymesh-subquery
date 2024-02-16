@@ -309,7 +309,8 @@ enum EventIdEnum {
   RegisterAssetMetadataGlobalType
   MetadataValueDeleted
   LocalMetadataKeyDeleted
-  SetAssetMediators
+  AssetMediatorsAdded
+  SetAssetMediators # This can be removed, `AssetMediatorsAdded` is emitted instead
   AssetMediatorsRemoved
 
   ## capitaldistribution ##
@@ -2119,6 +2120,7 @@ type Asset @entity {
   compliance: [Compliance]! @derivedFrom(field: "asset")
   transferManagers: [TransferManager]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
+  mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
@@ -2163,6 +2165,15 @@ type Funding @entity {
   amount: BigInt!
   totalFundingAmount: BigInt!
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type AssetMandatoryMediator @entity {
+  id: ID! # /ticker/did
+  asset: Asset!
+  identityId: String! # The chain doesn't validate existence of the DID
+  addedBy: Identity!
   createdBlock: Block!
   updatedBlock: Block!
 }
