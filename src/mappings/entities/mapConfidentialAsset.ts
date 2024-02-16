@@ -14,7 +14,11 @@ export const getAuditorsAndMediators = (
   };
 };
 
-const handleConfidentialAssetCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleConfidentialAssetCreated = async (
+  blockId: string,
+  eventIdx: number,
+  params: Codec[]
+): Promise<void> => {
   const [rawCreator, rawAssetId, rawAuditorsMediators] = params;
 
   const creatorId = getTextValue(rawCreator);
@@ -29,6 +33,7 @@ const handleConfidentialAssetCreated = async (blockId: string, params: Codec[]):
     mediators,
     totalSupply: BigInt(0),
     venueFiltering: false,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -50,7 +55,11 @@ const handleConfidentialAssetIssued = async (blockId: string, params: Codec[]): 
   }
 };
 
-const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleVenueCreated = async (
+  blockId: string,
+  eventIdx: number,
+  params: Codec[]
+): Promise<void> => {
   const [rawCreator, rawVenueId] = params;
 
   const creatorId = getTextValue(rawCreator);
@@ -60,6 +69,7 @@ const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<voi
     id: `${venueId}`,
     venueId,
     creatorId,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -114,14 +124,14 @@ const handleVenueFiltering = async (blockId: string, params: Codec[]): Promise<v
 };
 
 export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, moduleId, eventId, params } = args;
+  const { blockId, moduleId, eventId, eventIdx, params } = args;
 
   if (moduleId !== ModuleIdEnum.confidentialasset) {
     return;
   }
 
   if (eventId === EventIdEnum.ConfidentialAssetCreated) {
-    await handleConfidentialAssetCreated(blockId, params);
+    await handleConfidentialAssetCreated(blockId, eventIdx, params);
   }
 
   if (eventId === EventIdEnum.Issued) {
@@ -141,6 +151,6 @@ export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => 
   }
 
   if (eventId === EventIdEnum.VenueCreated) {
-    await handleVenueCreated(blockId, params);
+    await handleVenueCreated(blockId, eventIdx, params);
   }
 };

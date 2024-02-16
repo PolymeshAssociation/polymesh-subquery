@@ -3,7 +3,7 @@ import { getTextValue } from '../util';
 import { HandlerArgs } from './common';
 
 export const mapConfidentialAccountCreated = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, moduleId, eventId, params } = args;
+  const { blockId, moduleId, eventId, params, eventIdx } = args;
 
   if (moduleId !== ModuleIdEnum.confidentialasset || eventId !== EventIdEnum.AccountCreated) {
     return;
@@ -18,6 +18,7 @@ export const mapConfidentialAccountCreated = async (args: HandlerArgs): Promise<
     id: account,
     account,
     creatorId: creator,
+    eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
