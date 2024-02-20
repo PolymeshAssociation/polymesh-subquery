@@ -5,6 +5,7 @@ import {
   Instruction,
   InstructionStatusEnum,
   Leg,
+  MeditatorAffirmation,
   ModuleIdEnum,
   Settlement,
   SettlementResultEnum,
@@ -231,7 +232,7 @@ const handleInstructionFinalizedEvent = async (
   eventIdx: number,
   extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
-  const [, rawInstructionId] = params;
+  const [rawIdentityId, rawInstructionId] = params;
 
   const address = getSignerAddress(extrinsic);
   const instructionId = getTextValue(rawInstructionId);
@@ -250,11 +251,27 @@ const handleInstructionFinalizedEvent = async (
     updatedBlockId: blockId,
   });
 
-  await Promise.all([
+  const promises = [
     settlement.save(),
     instruction.save(),
     ...(await updateLegs(blockId, address, instructionId, settlementId)),
-  ]);
+  ];
+
+  // incase the rejector was a mediator who previously affirmed their affirmation should be removed
+  if (eventId === EventIdEnum.InstructionRejected) {
+    const clearMediatorAffirmation = async () => {
+      const identityId = getTextValue(rawIdentityId);
+      const id = `${identityId}/${instructionId}`;
+      const affirmedMediator = await MeditatorAffirmation.get(id);
+      if (affirmedMediator) {
+        await MeditatorAffirmation.remove(id);
+      }
+    };
+
+    promises.push(clearMediatorAffirmation());
+  }
+
+  await Promise.all(promises);
 };
 
 const handleFailedToExecuteInstruction = async (
@@ -271,6 +288,31 @@ const handleFailedToExecuteInstruction = async (
   instruction.updatedBlockId = blockId;
 
   await instruction.save();
+};
+
+const handleMediatorAffirmation = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [rawIdentityId, rawInstructionId, expiryOpt] = params;
+
+  const identityId = getTextValue(rawIdentityId);
+  const instructionId = getTextValue(rawInstructionId);
+  const expiry = getDateValue(expiryOpt);
+
+  await MeditatorAffirmation.create({
+    id: `${identityId}/${instructionId}`,
+    identityId,
+    instructionId,
+    expiry,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
+const handleMediatorWithdrawn = async (params: Codec[]): Promise<void> => {
+  const [rawIdentityId, rawInstructionId] = params;
+  const identityId = getTextValue(rawIdentityId);
+  const instructionId = getTextValue(rawInstructionId);
+
+  await MeditatorAffirmation.remove(`${identityId}/${instructionId}`);
 };
 
 export async function mapSettlement(args: HandlerArgs): Promise<void> {
@@ -290,6 +332,14 @@ export async function mapSettlement(args: HandlerArgs): Promise<void> {
 
     if (eventId === EventIdEnum.InstructionCreated) {
       await handleInstructionCreated(args);
+    }
+
+    if (eventId === EventIdEnum.MediatorAffirmationReceived) {
+      await handleMediatorAffirmation(blockId, params);
+    }
+
+    if (eventId === EventIdEnum.MediatorAffirmationWithdrawn) {
+      await handleMediatorWithdrawn(params);
     }
 
     if (updateEvents.includes(eventId)) {

@@ -2351,3 +2351,18 @@ type CustomClaimType @entity {
   createdBlock: Block!
   updatedBlock: Block!
 }
+
+"""
+Represents a mediator's approval for an instruction
+"""
+type MeditatorAffirmation @entity {
+  id: ID! # did/instruction ID
+  identity: Identity!
+  instruction: Instruction!
+  """
+  If expiry is present the time should be check top ensure the affirmation is still valid
+  """
+  expiry: Date
+  createdBlock: Block!
+  updatedBlock: Block!
+}
