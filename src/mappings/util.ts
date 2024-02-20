@@ -171,7 +171,7 @@ export const getNumberValue = (item: Codec): number => {
   return Number(getTextValue(item));
 };
 
-export const getDateValue = (item: Codec): Date => {
+export const getDateValue = (item: Codec): Date | undefined => {
   return item?.toString().trim().length > 0 ? new Date(Number(item.toString())) : undefined;
 };
 
