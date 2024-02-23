@@ -532,7 +532,7 @@ enum EventIdEnum {
 
   ## confidential assets ##
   AccountCreated
-  ConfidentialAssetCreated
+  # ConfidentialAssetCreated -> uses existing AssetCreated
   AccountDeposit
   TransactionCreated
   TransactionAffirmed
@@ -540,6 +540,11 @@ enum EventIdEnum {
   TransactionRejected
   TransactionExecuted
   AccountDepositIncoming
+  AccountAssetFrozen
+  AccountAssetUnfrozen
+  # AssetFrozen -> defined before
+  # AssetUnfrozen -> defined before
+  Burned
 
   ## deprecated ##
   Approval @deprecated
@@ -1117,8 +1122,10 @@ enum CallIdEnum {
 
   ## confidential assets ##
   add_mediator_account
-  create_confidential_asset
-  mint_confidential_asset
+  # create_confidential_asset
+  # create_asset -> removing as defined before
+  # mint_confidential_asset -> mint
+  mint
   add_transaction
   sender_affirm_transaction
   receiver_affirm_transaction
@@ -1130,7 +1137,11 @@ enum CallIdEnum {
   affirm_transactions
   execute_transaction
   apply_incoming_balance
+  apply_incoming_balances
+  burn
   reject_transaction
+  set_account_asset_frozen
+  set_asset_frozen
 
   ## deprecated ##
   accept_authorization @deprecated
@@ -2422,6 +2433,7 @@ type ConfidentialAsset @entity {
   totalSupply: BigInt!
   allowedVenues: [Int!]
   venueFiltering: Boolean!
+  isFrozen: Boolean
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
@@ -2452,7 +2464,7 @@ type ConfidentialTransactionAffirmation @entity {
   legId: Int!
   account: ConfidentialAccount
   identity: Identity!
-  type: AffirmingPartyEnum!
+  party: AffirmingPartyEnum!
   status: AffirmStatusEnum!
   proofs: [SenderProof!]
   eventIdx: Int!

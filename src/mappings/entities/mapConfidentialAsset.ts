@@ -19,7 +19,7 @@ const handleConfidentialAssetCreated = async (
   eventIdx: number,
   params: Codec[]
 ): Promise<void> => {
-  const [rawCreator, rawAssetId, rawAuditorsMediators] = params;
+  const [rawCreator, rawAssetId, , rawAuditorsMediators] = params;
 
   const creatorId = getTextValue(rawCreator);
   const assetId = getTextValue(rawAssetId);
@@ -39,7 +39,10 @@ const handleConfidentialAssetCreated = async (
   }).save();
 };
 
-const handleConfidentialAssetIssued = async (blockId: string, params: Codec[]): Promise<void> => {
+const handleConfidentialAssetIssuedOrBurned = async (
+  blockId: string,
+  params: Codec[]
+): Promise<void> => {
   const [, rawAssetId, , rawTotalSupply] = params;
 
   const assetId = getTextValue(rawAssetId);
@@ -123,6 +126,25 @@ const handleVenueFiltering = async (blockId: string, params: Codec[]): Promise<v
   }
 };
 
+const handleAssetFrozenUnfrozen = async (
+  blockId: string,
+  eventId: EventIdEnum,
+  params: Codec[]
+): Promise<void> => {
+  const [, rawAssetId] = params;
+
+  const assetId = getTextValue(rawAssetId);
+
+  const asset = await ConfidentialAsset.get(assetId);
+
+  if (asset) {
+    asset.isFrozen = eventId === EventIdEnum.AssetFrozen;
+    asset.updatedBlockId = blockId;
+
+    await asset.save();
+  }
+};
+
 export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => {
   const { blockId, moduleId, eventId, eventIdx, params } = args;
 
@@ -130,12 +152,12 @@ export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => 
     return;
   }
 
-  if (eventId === EventIdEnum.ConfidentialAssetCreated) {
+  if (eventId === EventIdEnum.AssetCreated) {
     await handleConfidentialAssetCreated(blockId, eventIdx, params);
   }
 
-  if (eventId === EventIdEnum.Issued) {
-    await handleConfidentialAssetIssued(blockId, params);
+  if (eventId === EventIdEnum.Issued || eventId === EventIdEnum.Burned) {
+    await handleConfidentialAssetIssuedOrBurned(blockId, params);
   }
 
   if (eventId === EventIdEnum.VenueFiltering) {
@@ -152,5 +174,9 @@ export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => 
 
   if (eventId === EventIdEnum.VenueCreated) {
     await handleVenueCreated(blockId, eventIdx, params);
+  }
+
+  if (eventId === EventIdEnum.AssetFrozen || eventId === EventIdEnum.Unfrozen) {
+    handleAssetFrozenUnfrozen(blockId, eventId, params);
   }
 };
