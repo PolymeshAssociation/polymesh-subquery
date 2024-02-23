@@ -111,34 +111,34 @@ const handleConfidentialTransactionExecutedOrRejected = async (
 };
 
 type AffirmationsAndAffirmationType = {
-  type: AffirmingPartyEnum;
+  party: AffirmingPartyEnum;
   proofs?: SenderProof[];
 };
 
-const getAffirmationTypeAndProofs = (party: Codec): AffirmationsAndAffirmationType => {
-  const partyObject = party.toJSON();
+const getAffirmationTypeAndProofs = (rawParty: Codec): AffirmationsAndAffirmationType => {
+  const partyObject = rawParty.toJSON();
 
   const [typeString] = Object.keys(partyObject);
 
-  let type: AffirmingPartyEnum;
+  let party: AffirmingPartyEnum;
 
   if (typeString.toLocaleLowerCase() === 'mediator') {
-    type = AffirmingPartyEnum.Mediator;
+    party = AffirmingPartyEnum.Mediator;
   }
   if (typeString.toLocaleLowerCase() === 'receiver') {
-    type = AffirmingPartyEnum.Receiver;
+    party = AffirmingPartyEnum.Receiver;
   }
   if (typeString.toLocaleLowerCase() === 'sender') {
-    type = AffirmingPartyEnum.Sender;
+    party = AffirmingPartyEnum.Sender;
   }
 
-  if (!type) {
-    throw new Error('Could not extract type from affirmation');
+  if (!party) {
+    throw new Error('Could not extract party from affirmation');
   }
 
   let proofs: SenderProof[];
 
-  if (type === AffirmingPartyEnum.Sender) {
+  if (party === AffirmingPartyEnum.Sender) {
     const proofsObject = partyObject[typeString].proofs;
 
     proofs = Object.keys(proofsObject).map(assetId => {
@@ -149,7 +149,7 @@ const getAffirmationTypeAndProofs = (party: Codec): AffirmationsAndAffirmationTy
     });
   }
 
-  return { type, proofs };
+  return { party, proofs };
 };
 
 const handleConfidentialTransactionAffirmed = async (
@@ -157,20 +157,20 @@ const handleConfidentialTransactionAffirmed = async (
   eventIdx: number,
   params: Codec[]
 ): Promise<void> => {
-  const [rawDid, rawTransactionId, rawLegId, rawType, rawPendingAffirmations] = params;
+  const [rawDid, rawTransactionId, rawLegId, rawParty, rawPendingAffirmations] = params;
 
   const did = getTextValue(rawDid);
   const transactionId = getTextValue(rawTransactionId);
   const legId = getNumberValue(rawLegId);
-  const { type, proofs } = getAffirmationTypeAndProofs(rawType);
+  const { party, proofs } = getAffirmationTypeAndProofs(rawParty);
   const pendingAffirmations = getNumberValue(rawPendingAffirmations);
 
   const affirmation = ConfidentialTransactionAffirmation.create({
-    id: `${transactionId}/${type}/${did}`,
+    id: `${transactionId}/${party}/${did}`,
     transactionId,
     legId,
     identityId: did,
-    type,
+    party,
     status: AffirmStatusEnum.Affirmed,
     proofs,
     eventIdx,
