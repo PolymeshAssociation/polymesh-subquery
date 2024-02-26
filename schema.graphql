@@ -445,6 +445,7 @@ enum EventIdEnum {
   InstructionAutomaticallyAffirmed
   MediatorAffirmationReceived
   MediatorAffirmationWithdrawn
+  InstructionMediators
 
   ## statistics ##
   TransferManagerAdded @deprecated
