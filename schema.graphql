@@ -2440,6 +2440,7 @@ type ConfidentialAccount @entity {
   account: String!
   creator: Identity!
   eventIdx: Int!
+  frozenForAsset: [String!]!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2470,7 +2471,7 @@ type ConfidentialAsset @entity {
   totalSupply: BigInt!
   allowedVenues: [Int!]
   venueFiltering: Boolean!
-  isFrozen: Boolean
+  isFrozen: Boolean!
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
