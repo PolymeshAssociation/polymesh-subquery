@@ -33,6 +33,7 @@ const handleConfidentialAssetCreated = async (
     mediators,
     totalSupply: BigInt(0),
     venueFiltering: false,
+    isFrozen: false,
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
