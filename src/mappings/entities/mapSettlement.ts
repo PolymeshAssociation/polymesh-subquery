@@ -5,6 +5,7 @@ import {
   Instruction,
   InstructionStatusEnum,
   Leg,
+  MediatorAffirmationStatus,
   MeditatorAffirmation,
   ModuleIdEnum,
   Settlement,
@@ -21,6 +22,7 @@ import {
   getLegsValue,
   getSettlementLeg,
   getSignerAddress,
+  getStringArrayValue,
   getTextValue,
 } from '../util';
 import { createPortfolioIfNotExists } from './mapPortfolio';
@@ -262,9 +264,11 @@ const handleInstructionFinalizedEvent = async (
     const clearMediatorAffirmation = async () => {
       const identityId = getTextValue(rawIdentityId);
       const id = `${identityId}/${instructionId}`;
-      const affirmedMediator = await MeditatorAffirmation.get(id);
-      if (affirmedMediator) {
-        await MeditatorAffirmation.remove(id);
+      const mediatorAffirmation = await MeditatorAffirmation.get(id);
+      if (mediatorAffirmation) {
+        mediatorAffirmation.status = MediatorAffirmationStatus.Rejected;
+        mediatorAffirmation.updatedBlockId = blockId;
+        await mediatorAffirmation.save();
       }
     };
 
@@ -297,22 +301,46 @@ const handleMediatorAffirmation = async (blockId: string, params: Codec[]): Prom
   const instructionId = getTextValue(rawInstructionId);
   const expiry = getDateValue(expiryOpt);
 
-  await MeditatorAffirmation.create({
-    id: `${identityId}/${instructionId}`,
-    identityId,
-    instructionId,
-    expiry,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  const affirmation = await MeditatorAffirmation.get(`${identityId}/${instructionId}`);
+
+  affirmation.status = MediatorAffirmationStatus.Affirmed;
+  affirmation.expiry = expiry;
+  affirmation.updatedBlockId = blockId;
+
+  await affirmation.save();
 };
 
-const handleMediatorWithdrawn = async (params: Codec[]): Promise<void> => {
+const handleMediatorWithdrawn = async (blockId: string, params: Codec[]): Promise<void> => {
   const [rawIdentityId, rawInstructionId] = params;
   const identityId = getTextValue(rawIdentityId);
   const instructionId = getTextValue(rawInstructionId);
 
-  await MeditatorAffirmation.remove(`${identityId}/${instructionId}`);
+  const affirmation = await MeditatorAffirmation.get(`${identityId}/${instructionId}`);
+
+  affirmation.status = MediatorAffirmationStatus.Pending;
+  affirmation.expiry = undefined;
+  affirmation.updatedBlockId = blockId;
+
+  await affirmation.save();
+};
+
+const handleInstructionMediators = async (blockId: string, params: Codec[]): Promise<void> => {
+  const [rawInstructionId, rawIdentityIds] = params;
+  const instructionId = getTextValue(rawInstructionId);
+  const identityIds = getStringArrayValue(rawIdentityIds);
+
+  const promises = identityIds.map(identityId => {
+    return MeditatorAffirmation.create({
+      id: `${identityId}/${instructionId}`,
+      identityId,
+      instructionId,
+      status: MediatorAffirmationStatus.Pending,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save();
+  });
+
+  await Promise.all(promises);
 };
 
 export async function mapSettlement(args: HandlerArgs): Promise<void> {
@@ -339,7 +367,11 @@ export async function mapSettlement(args: HandlerArgs): Promise<void> {
     }
 
     if (eventId === EventIdEnum.MediatorAffirmationWithdrawn) {
-      await handleMediatorWithdrawn(params);
+      await handleMediatorWithdrawn(blockId, params);
+    }
+
+    if (eventId === EventIdEnum.InstructionMediators) {
+      await handleInstructionMediators(blockId, params);
     }
 
     if (updateEvents.includes(eventId)) {

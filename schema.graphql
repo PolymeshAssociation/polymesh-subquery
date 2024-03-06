@@ -2394,12 +2394,22 @@ type CustomClaimType @entity {
 }
 
 """
+Represents the state of an instruction mediator's affirmation
+"""
+enum MediatorAffirmationStatus {
+  Pending
+  Affirmed
+  Rejected
+}
+
+"""
 Represents a mediator's approval for an instruction
 """
 type MeditatorAffirmation @entity {
   id: ID! # did/instruction ID
   identity: Identity!
   instruction: Instruction!
+  status: MediatorAffirmationStatus!
   """
   If expiry is present the time should be check top ensure the affirmation is still valid
   """
