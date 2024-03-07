@@ -1,1 +1,0 @@
-alter type "8f5a39c8ee" add value if not exists 'InstructionMediators' after 'MediatorAffirmationWithdrawn';
