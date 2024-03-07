@@ -4358,10 +4358,10 @@
     tar "^6.1.13"
     tslib "^1"
 
-"@polymeshassociation/polymesh-types@^5.5.3":
-  version "5.5.3"
-  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-types/-/polymesh-types-5.5.3.tgz#9e3dd813f13e081252e4f8c249fa0aad5ac569b5"
-  integrity sha512-OW+i6Ms70yjHrDSKkDeqnH1zDLFEshqVko9FrP4TUtHKPdhNgdVo2hDvj3hpKyVaFlXy9KFawxGF7rK2i7QRlA==
+"@polymeshassociation/polymesh-types@^5.9.0":
+  version "5.9.0"
+  resolved "https://registry.yarnpkg.com/@polymeshassociation/polymesh-types/-/polymesh-types-5.9.0.tgz#26d16613959909198e5233db35e57e8cdf55e6c4"
+  integrity sha512-kSJJAeC0mGiZpKWoYLu3TouzX9mgamb/Sp9AAlLjV8qncvmCZjVG4Yb+6TT7GC/79qjoegFzrIBf7euo0/AMiw==
 
 "@protobuf-ts/grpc-transport@^2.8.2":
   version "2.9.1"
