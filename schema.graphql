@@ -53,6 +53,7 @@ enum ModuleIdEnum {
   preimage
   testutils
   nft
+  confidentialasset
 
   ## deprecated ##
   confidential @deprecated
@@ -534,6 +535,22 @@ enum EventIdEnum {
   "`RedeemedNFT` has been deprecated from 6.0.0 chain version"
   RedeemedNFT
   NFTPortfolioUpdated
+
+  ## confidential assets ##
+  AccountCreated
+  # ConfidentialAssetCreated -> uses existing AssetCreated
+  AccountDeposit
+  TransactionCreated
+  TransactionAffirmed
+  AccountWithdraw
+  TransactionRejected
+  TransactionExecuted
+  AccountDepositIncoming
+  AccountAssetFrozen
+  AccountAssetUnfrozen
+  # AssetFrozen -> defined before
+  # AssetUnfrozen -> defined before
+  Burned
 
   ## deprecated ##
   Approval @deprecated
@@ -1115,6 +1132,29 @@ enum CallIdEnum {
   create_nft_collection
   issue_nft
   redeem_nft
+
+  ## confidential assets ##
+  add_mediator_account
+  # create_confidential_asset
+  # create_asset -> removing as defined before
+  # mint_confidential_asset -> mint
+  mint
+  add_transaction
+  sender_affirm_transaction
+  receiver_affirm_transaction
+  mediator_affirm_transaction
+  sender_unaffirm_transaction
+  receiver_unaffirm_transaction
+  mediator_unaffirm_transaction
+  create_account
+  affirm_transactions
+  execute_transaction
+  apply_incoming_balance
+  apply_incoming_balances
+  burn
+  reject_transaction
+  set_account_asset_frozen
+  set_asset_frozen
 
   ## deprecated ##
   accept_authorization @deprecated
@@ -2354,16 +2394,184 @@ type CustomClaimType @entity {
 }
 
 """
+Represents the state of an instruction mediator's affirmation
+"""
+enum MediatorAffirmationStatus {
+  Pending
+  Affirmed
+  Rejected
+}
+
+"""
 Represents a mediator's approval for an instruction
 """
 type MeditatorAffirmation @entity {
   id: ID! # did/instruction ID
   identity: Identity!
   instruction: Instruction!
+  status: MediatorAffirmationStatus!
   """
   If expiry is present the time should be check top ensure the affirmation is still valid
   """
   expiry: Date
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum AffirmingPartyEnum {
+  Sender
+  Receiver
+  Mediator
+}
+
+enum AffirmStatusEnum {
+  Affirmed
+  Rejected
+}
+
+enum ConfidentialTransactionStatusEnum {
+  Created
+  Executed
+  Rejected
+}
+
+"""
+Represents the proof of a transaction affirmation
+"""
+type SenderProof @jsonField {
+  assetId: String!
+  proof: String!
+}
+
+"""
+Represents a confidential account
+"""
+type ConfidentialAccount @entity {
+  id: ID!
+  account: String!
+  creator: Identity!
+  eventIdx: Int!
+  frozenForAsset: [String!]!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential venue
+"""
+type ConfidentialVenue @entity {
+  id: ID!
+  venueId: Int!
+  creator: Identity!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential asset
+"""
+type ConfidentialAsset @entity {
+  id: ID!
+  assetId: String!
+  ticker: String
+  data: String
+  creator: Identity!
+  auditors: [String!]
+  mediators: [String!]
+  totalSupply: BigInt!
+  allowedVenues: [Int!]
+  venueFiltering: Boolean!
+  isFrozen: Boolean!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential asset holder
+"""
+type ConfidentialAssetHolder @entity {
+  id: ID!
+  account: ConfidentialAccount!
+  asset: ConfidentialAsset!
+  """
+  the encrypted amount
+  """
+  amount: String
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential asset transaction affirmation
+"""
+type ConfidentialTransactionAffirmation @entity {
+  id: ID!
+  transaction: ConfidentialTransaction!
+  legId: Int!
+  account: ConfidentialAccount
+  identity: Identity!
+  party: AffirmingPartyEnum!
+  status: AffirmStatusEnum!
+  proofs: [SenderProof!]
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+type AssetAuditorGroup @jsonField {
+  assetId: String!
+  auditors: [String!]
+}
+
+"""
+Represents a leg of a confidential asset transaction
+"""
+type ConfidentialLeg @entity {
+  id: ID!
+  transaction: ConfidentialTransaction!
+  sender: ConfidentialAccount!
+  receiver: ConfidentialAccount!
+  mediators: [String!]!
+  assetAuditors: [AssetAuditorGroup!]!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential transaction
+"""
+type ConfidentialTransaction @entity {
+  id: ID!
+  venue: ConfidentialVenue! @index(unique: false)
+  status: ConfidentialTransactionStatusEnum!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  legs: [ConfidentialLeg!]! @derivedFrom(field: "transaction")
+  affirmations: [ConfidentialTransactionAffirmation!]! @derivedFrom(field: "transaction")
+  memo: String
+  pendingAffirmations: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a confidential asset transaction history entry
+"""
+type ConfidentialAssetHistory @entity {
+  id: ID!
+  asset: ConfidentialAsset!
+  from: ConfidentialAccount
+  to: ConfidentialAccount
+  amount: String!
+  eventId: EventIdEnum!
+  eventIdx: Int!
+  extrinsicIdx: Int
+  transaction: ConfidentialTransaction
+  memo: String
+  datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
 }
