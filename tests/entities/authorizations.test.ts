@@ -7,7 +7,7 @@ describe('authorizations', () => {
     const q = {
       query: gql`
         query {
-          authorizations(first: 100) {
+          authorizations(first: 100, orderBy: CREATED_AT_ASC) {
             nodes {
               authId: id
               type

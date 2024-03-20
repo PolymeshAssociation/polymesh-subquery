@@ -7,7 +7,11 @@ describe('fundings', () => {
     const q = {
       query: gql`
         query {
-          fundings(filter: { assetId: { equalTo: "8TICKER" } }, first: 10) {
+          fundings(
+            filter: { assetId: { equalTo: "8TICKER" } }
+            first: 10
+            orderBy: CREATED_AT_ASC
+          ) {
             totalCount
             nodes {
               createdBlockId

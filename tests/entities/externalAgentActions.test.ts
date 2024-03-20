@@ -11,7 +11,10 @@ describe('tickerExternalAgentActions', () => {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(filter: { assetId: { equalTo: $ticker } }) {
+          tickerExternalAgentActions(
+            filter: { assetId: { equalTo: $ticker } }
+            orderBy: CREATED_AT_ASC
+          ) {
             totalCount
             nodes {
               palletName
@@ -35,6 +38,7 @@ describe('tickerExternalAgentActions', () => {
         query q($ticker: String!) {
           tickerExternalAgentActions(
             filter: { assetId: { equalTo: $ticker }, eventId: { equalTo: FundraiserFrozen } }
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               palletName
@@ -58,6 +62,7 @@ describe('tickerExternalAgentActions', () => {
         query q($ticker: String!) {
           tickerExternalAgentActions(
             filter: { assetId: { equalTo: $ticker }, palletName: { equalTo: "compliancemanager" } }
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               palletName

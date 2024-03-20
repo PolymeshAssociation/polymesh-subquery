@@ -9,6 +9,7 @@ describe('assets', () => {
         query {
           assets(
             filter: { ticker: { in: ["4TICKER", "15TICKER", "7TICKER", "8TICKER", "11BTICKER1"] } }
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               nodeId

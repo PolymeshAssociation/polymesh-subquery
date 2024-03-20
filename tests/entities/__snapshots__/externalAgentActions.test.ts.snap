@@ -8,8 +8,44 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "IdentifiersUpdated",
-        "palletName": "asset",
+        "eventId": "GroupPermissionsUpdated",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "GroupCreated",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "GroupCreated",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "AgentRemoved",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "GroupPermissionsUpdated",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "AgentAdded",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "ComplianceRequirementCreated",
+        "palletName": "compliancemanager",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
@@ -26,50 +62,14 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "GroupCreated",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "GroupPermissionsUpdated",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "ComplianceRequirementCreated",
-        "palletName": "compliancemanager",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventId": "AgentRemoved",
         "palletName": "externalagents",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "AgentAdded",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "AgentRemoved",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "GroupCreated",
-        "palletName": "externalagents",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "GroupPermissionsUpdated",
-        "palletName": "externalagents",
+        "eventId": "IdentifiersUpdated",
+        "palletName": "asset",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
@@ -122,12 +122,6 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "IdentifiersUpdated",
-        "palletName": "asset",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventId": "AgentAdded",
         "palletName": "externalagents",
       },
@@ -140,13 +134,19 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "eventId": "GroupCreated",
-        "palletName": "externalagents",
+        "eventId": "IdentifiersUpdated",
+        "palletName": "asset",
       },
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
         "eventId": "GroupPermissionsUpdated",
+        "palletName": "externalagents",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "eventId": "GroupCreated",
         "palletName": "externalagents",
       },
       Object {
@@ -206,19 +206,13 @@ Object {
       Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
-        "eventId": "FundraiserCreated",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
-        "eventId": "FundraiserFrozen",
-        "palletName": "sto",
-      },
-      Object {
-        "__typename": "TickerExternalAgentAction",
-        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserUnfrozen",
+        "palletName": "sto",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
+        "eventId": "FundraiserCreated",
         "palletName": "sto",
       },
       Object {
@@ -231,6 +225,12 @@ Object {
         "__typename": "TickerExternalAgentAction",
         "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
         "eventId": "FundraiserClosed",
+        "palletName": "sto",
+      },
+      Object {
+        "__typename": "TickerExternalAgentAction",
+        "callerId": "0xbd8b5c568e457823d3d3f18d2d1cc1ed79a086124760e9df41a4c66e96de9b42",
+        "eventId": "FundraiserFrozen",
         "palletName": "sto",
       },
     ],

@@ -39,6 +39,7 @@ describe('claimScopes', () => {
               equalTo: "${ticker}"
             }
           }
+          orderBy: CREATED_AT_ASC
         ) {
           nodes {
             scope
@@ -95,7 +96,7 @@ describe('claims', () => {
     const q = {
       query: gql`
         query {
-          claims(first: 10) {
+          claims(first: 10, orderBy: CREATED_AT_ASC) {
             totalCount
             nodes {
               targetId
@@ -139,7 +140,7 @@ describe('claims', () => {
             issuerId: {
               equalTo: "${trustedClaimIssuer}"
             }
-          }) {
+          }, orderBy: CREATED_AT_ASC) {
             totalCount
             nodes {
               targetId

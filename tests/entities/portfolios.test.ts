@@ -14,7 +14,7 @@ describe('portfolios', () => {
               identityId: {
                 equalTo: "${identityId}"
               }
-            }
+            }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
               nodeId
@@ -48,6 +48,7 @@ describe('portfolios', () => {
               }
               number: { greaterThan: 0 }
             }
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               nodeId

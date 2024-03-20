@@ -9,116 +9,6 @@ Object {
         "__typename": "Asset",
         "compliance": Object {
           "__typename": "CompliancesConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "Compliance",
-              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
-              "id": 1,
-            },
-          ],
-        },
-        "documents": Object {
-          "__typename": "AssetDocumentsConnection",
-          "nodes": Array [],
-        },
-        "fundingRound": null,
-        "holders": Object {
-          "__typename": "AssetHoldersConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "999600",
-              "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
-            },
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100",
-              "did": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
-            },
-          ],
-        },
-        "id": "11BTICKER1",
-        "identifiers": Array [],
-        "isCompliancePaused": false,
-        "isDivisible": true,
-        "isFrozen": false,
-        "isUniquenessRequired": false,
-        "name": "11BTICKER1",
-        "nodeId": "WyJhc3NldHMiLCIxMUJUSUNLRVIxIl0=",
-        "ownerDid": "0x0500000000000000000000000000000000000000000000000000000000000000",
-        "ticker": "11BTICKER1",
-        "totalSupply": "1000000",
-        "totalTransfers": "4",
-        "transferManagers": Object {
-          "__typename": "TransferManagersConnection",
-          "nodes": Array [],
-        },
-        "type": "EquityCommon",
-      },
-      Object {
-        "__typename": "Asset",
-        "compliance": Object {
-          "__typename": "CompliancesConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "Compliance",
-              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
-              "id": 1,
-            },
-          ],
-        },
-        "documents": Object {
-          "__typename": "AssetDocumentsConnection",
-          "nodes": Array [],
-        },
-        "fundingRound": null,
-        "holders": Object {
-          "__typename": "AssetHoldersConnection",
-          "nodes": Array [
-            Object {
-              "__typename": "AssetHolder",
-              "amount": "100000",
-              "did": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
-            },
-          ],
-        },
-        "id": "15TICKER",
-        "identifiers": Array [],
-        "isCompliancePaused": false,
-        "isDivisible": true,
-        "isFrozen": false,
-        "isUniquenessRequired": false,
-        "name": "15TICKER",
-        "nodeId": "WyJhc3NldHMiLCIxNVRJQ0tFUiJd",
-        "ownerDid": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
-        "ticker": "15TICKER",
-        "totalSupply": "100000",
-        "totalTransfers": "0",
-        "transferManagers": Object {
-          "__typename": "TransferManagersConnection",
-          "nodes": Array [],
-        },
-        "type": "EquityCommon",
-      },
-      Object {
-        "__typename": "Asset",
-        "compliance": Object {
-          "__typename": "CompliancesConnection",
           "nodes": Array [],
         },
         "documents": Object {
@@ -156,7 +46,7 @@ Object {
         "isFrozen": false,
         "isUniquenessRequired": false,
         "name": "4TICKER",
-        "nodeId": "WyJhc3NldHMiLCI0VElDS0VSIl0=",
+        "nodeId": "WyJhc3NldHMiLCIxNjc4NmY1NS0yYjUxLTQ1OTAtOWVjOC05MmU3OGIyNzI0Y2UiXQ==",
         "ownerDid": "0xa9755a2d863adf7981d60f816884783bb2b71788efdfae845fc2830c36500551",
         "ticker": "4TICKER",
         "totalSupply": "1000000",
@@ -201,7 +91,7 @@ Object {
         "isFrozen": false,
         "isUniquenessRequired": false,
         "name": "7TICKER",
-        "nodeId": "WyJhc3NldHMiLCI3VElDS0VSIl0=",
+        "nodeId": "WyJhc3NldHMiLCIxNzg2OTcyNy03ZjZjLTRmZjEtODI4Yy05OWIxOTUyOWYwOTQiXQ==",
         "ownerDid": "0x5c7834d42ff31e9df992016d5983301d8376494a61d464c66fd03bb4b02471e0",
         "ticker": "7TICKER",
         "totalSupply": "1000000",
@@ -246,10 +136,120 @@ Object {
         "isFrozen": false,
         "isUniquenessRequired": false,
         "name": "8TICKER",
-        "nodeId": "WyJhc3NldHMiLCI4VElDS0VSIl0=",
+        "nodeId": "WyJhc3NldHMiLCJhMTAzOGE2OS02OTBjLTQyMjctYTYzZS05ZTViY2ZkZTIwOGYiXQ==",
         "ownerDid": "0xb92252cbcfe17dc4dfaec11ec63930a028d5d7cd106bacf54e1603d27c59df70",
         "ticker": "8TICKER",
         "totalSupply": "1000100",
+        "totalTransfers": "0",
+        "transferManagers": Object {
+          "__typename": "TransferManagersConnection",
+          "nodes": Array [],
+        },
+        "type": "EquityCommon",
+      },
+      Object {
+        "__typename": "Asset",
+        "compliance": Object {
+          "__typename": "CompliancesConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Compliance",
+              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
+              "id": 1,
+            },
+          ],
+        },
+        "documents": Object {
+          "__typename": "AssetDocumentsConnection",
+          "nodes": Array [],
+        },
+        "fundingRound": null,
+        "holders": Object {
+          "__typename": "AssetHoldersConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "100",
+              "did": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
+            },
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "100",
+              "did": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
+            },
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "100",
+              "did": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
+            },
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "100",
+              "did": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
+            },
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "999600",
+              "did": "0x0500000000000000000000000000000000000000000000000000000000000000",
+            },
+          ],
+        },
+        "id": "11BTICKER1",
+        "identifiers": Array [],
+        "isCompliancePaused": false,
+        "isDivisible": true,
+        "isFrozen": false,
+        "isUniquenessRequired": false,
+        "name": "11BTICKER1",
+        "nodeId": "WyJhc3NldHMiLCJiOTI5YWJlYS1hM2Q0LTRhMzUtOTEyNS0zYmUwYTEzOGE5YzIiXQ==",
+        "ownerDid": "0x0500000000000000000000000000000000000000000000000000000000000000",
+        "ticker": "11BTICKER1",
+        "totalSupply": "1000000",
+        "totalTransfers": "4",
+        "transferManagers": Object {
+          "__typename": "TransferManagersConnection",
+          "nodes": Array [],
+        },
+        "type": "EquityCommon",
+      },
+      Object {
+        "__typename": "Asset",
+        "compliance": Object {
+          "__typename": "CompliancesConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "Compliance",
+              "data": "{\\"senderConditions\\":[],\\"receiverConditions\\":[]}",
+              "id": 1,
+            },
+          ],
+        },
+        "documents": Object {
+          "__typename": "AssetDocumentsConnection",
+          "nodes": Array [],
+        },
+        "fundingRound": null,
+        "holders": Object {
+          "__typename": "AssetHoldersConnection",
+          "nodes": Array [
+            Object {
+              "__typename": "AssetHolder",
+              "amount": "100000",
+              "did": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
+            },
+          ],
+        },
+        "id": "15TICKER",
+        "identifiers": Array [],
+        "isCompliancePaused": false,
+        "isDivisible": true,
+        "isFrozen": false,
+        "isUniquenessRequired": false,
+        "name": "15TICKER",
+        "nodeId": "WyJhc3NldHMiLCI0OGQwZjU0Mi03OWIyLTQ3ODctYjRiNC04MmIxODAwMGMzOTgiXQ==",
+        "ownerDid": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
+        "ticker": "15TICKER",
+        "totalSupply": "100000",
         "totalTransfers": "0",
         "transferManagers": Object {
           "__typename": "TransferManagersConnection",

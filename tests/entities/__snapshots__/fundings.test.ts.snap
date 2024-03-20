@@ -7,19 +7,19 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Funding",
-        "amount": "1000000",
-        "createdBlockId": "170",
-        "fundingRound": "first",
-        "ticker": "8TICKER",
-        "totalFundingAmount": "1000000",
-      },
-      Object {
-        "__typename": "Funding",
         "amount": "100",
         "createdBlockId": "173",
         "fundingRound": "first",
         "ticker": "8TICKER",
         "totalFundingAmount": "1000100",
+      },
+      Object {
+        "__typename": "Funding",
+        "amount": "1000000",
+        "createdBlockId": "170",
+        "fundingRound": "first",
+        "ticker": "8TICKER",
+        "totalFundingAmount": "1000000",
       },
     ],
     "totalCount": 2,
