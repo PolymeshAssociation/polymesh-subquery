@@ -36,6 +36,8 @@ const filters = {
     'TickerTransferred',
     'Transfer',
     'TransferWithData',
+    'PreApprovedAsset',
+    'RemovePreApprovedAsset',
   ],
   identity: [
     'AssetDidRegistered',

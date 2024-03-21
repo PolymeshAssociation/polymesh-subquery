@@ -2583,3 +2583,14 @@ type ConfidentialAssetHistory @entity {
   createdBlock: Block!
   updatedBlock: Block!
 }
+
+"""
+Represent asset pre-approvals from an Identity. These entries will not require an affirmation when the identity is receiving them
+"""
+type AssetPreApproval @entity {
+  id: ID!
+  asset: Asset! @index(unique: false)
+  identity: Identity! @index(unique: false)
+  createdBlock: Block!
+  updatedBlock: Block!
+}
