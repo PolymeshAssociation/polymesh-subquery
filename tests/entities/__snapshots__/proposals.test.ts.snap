@@ -55,30 +55,6 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Proposal",
-        "balance": "9000000000",
-        "description": "first",
-        "id": "0",
-        "lastStateUpdatedAt": "214",
-        "nay": Object {
-          "__typename": "ProposalVotesConnection",
-          "totalCount": 0,
-        },
-        "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
-        "proposer": Object {
-          "type": "Community",
-          "value": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
-        },
-        "state": "Rejected",
-        "totalAyeWeight": "0",
-        "totalNayWeight": "0",
-        "url": "google.com",
-        "yay": Object {
-          "__typename": "ProposalVotesConnection",
-          "totalCount": 0,
-        },
-      },
-      Object {
-        "__typename": "Proposal",
         "balance": "10000000000",
         "description": "second",
         "id": "1",
@@ -99,6 +75,30 @@ Object {
         "yay": Object {
           "__typename": "ProposalVotesConnection",
           "totalCount": 1,
+        },
+      },
+      Object {
+        "__typename": "Proposal",
+        "balance": "9000000000",
+        "description": "first",
+        "id": "0",
+        "lastStateUpdatedAt": "214",
+        "nay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 0,
+        },
+        "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
+        "proposer": Object {
+          "type": "Community",
+          "value": "5CXYpJxGyMKcJX7qjVXjJcA8w9UbsonRcLn32h6riHtMEB1b",
+        },
+        "state": "Rejected",
+        "totalAyeWeight": "0",
+        "totalNayWeight": "0",
+        "url": "google.com",
+        "yay": Object {
+          "__typename": "ProposalVotesConnection",
+          "totalCount": 0,
         },
       },
     ],

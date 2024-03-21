@@ -33,7 +33,6 @@ describe('portfolioMovements', () => {
             }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
-              nodeId
               id
               fromId
               toId
@@ -65,7 +64,6 @@ describe('portfolioMovements', () => {
             }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
-              nodeId
               id
               fromId
               toId

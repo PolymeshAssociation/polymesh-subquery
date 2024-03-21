@@ -17,7 +17,6 @@ describe('portfolios', () => {
             }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
-              nodeId
               id
               identityId
               number
@@ -51,7 +50,6 @@ describe('portfolios', () => {
             orderBy: CREATED_AT_ASC
           ) {
             nodes {
-              nodeId
               id
               identityId
               number

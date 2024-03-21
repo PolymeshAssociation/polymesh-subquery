@@ -60,7 +60,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
+                "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
                 "number": 0,
               },
             },
@@ -104,6 +104,28 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
+                "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
+                "number": 0,
+              },
+            },
+            Object {
+              "__typename": "Leg",
+              "addresses": Array [
+                "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+                "88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
+                "6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
+                "fc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
+                "3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
+              ],
+              "amount": "100",
+              "assetId": "11BTICKER1",
+              "from": Object {
+                "__typename": "Portfolio",
+                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
+                "number": 0,
+              },
+              "to": Object {
+                "__typename": "Portfolio",
                 "identityId": "0x5e356043d083040537b74f6d3516c045ca2f5635f2f1962e0a1ab0ce81806b60",
                 "number": 0,
               },
@@ -126,29 +148,7 @@ Object {
               },
               "to": Object {
                 "__typename": "Portfolio",
-                "identityId": "0x08c278a1fda1c376118a5a018ed968b73093f43862e69fb70a43420e23dcd811",
-                "number": 0,
-              },
-            },
-            Object {
-              "__typename": "Leg",
-              "addresses": Array [
-                "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
-                "88d7277a36fd54d21036137521b95f32d889c4d2c04a6da01a005897870feb72",
-                "6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e",
-                "fc804196cdde207010e2c71153bc54699b87b668c6ecdff9f7040992e7c5b461",
-                "3eace1ba3427aba41c91ae03a47fbc9cba9acc3555e5348a2446a0392996d049",
-              ],
-              "amount": "100",
-              "assetId": "11BTICKER1",
-              "from": Object {
-                "__typename": "Portfolio",
-                "identityId": "0x0500000000000000000000000000000000000000000000000000000000000000",
-                "number": 0,
-              },
-              "to": Object {
-                "__typename": "Portfolio",
-                "identityId": "0xea4516967d37fa2e8d1e63e08ed358798518caa6a5dad8c7b236fe9446061dc3",
+                "identityId": "0x40b9ecbf803281095439a8f6a74613e2f221b0a01ebec6ad2f109ed2ea895fbb",
                 "number": 0,
               },
             },

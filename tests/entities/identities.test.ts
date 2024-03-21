@@ -40,7 +40,7 @@ describe('accounts', () => {
     const result = await query({
       query: gql`
         query {
-          accounts(first: 10, orderBy: CREATED_AT_ASC) {
+          accounts(first: 10, orderBy: [CREATED_AT_ASC, IDENTITY_ID_ASC]) {
             totalCount
             nodes {
               address
@@ -110,7 +110,6 @@ describe('permissions', () => {
       query {
         permissions(filter: { id: { equalTo: "${address}"}}, orderBy: CREATED_AT_ASC) {
           nodes {
-            nodeId
             id
             assets
             portfolios

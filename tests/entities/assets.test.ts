@@ -12,7 +12,6 @@ describe('assets', () => {
             orderBy: CREATED_AT_ASC
           ) {
             nodes {
-              nodeId
               id
               ticker
               name
