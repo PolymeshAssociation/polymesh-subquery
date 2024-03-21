@@ -6,6 +6,7 @@ import {
   AssetDocument,
   AssetHolder,
   AssetMandatoryMediator,
+  AssetPreApproval,
   AssetTransaction,
   CallIdEnum,
   EventIdEnum,
@@ -605,6 +606,29 @@ const handleAssetMediatorsRemoved = async ({ params }: HandlerArgs) => {
   );
 };
 
+const handlePreApprovedAsset = async ({ params, blockId }: HandlerArgs) => {
+  const identityId = getTextValue(params[0]);
+  const assetId = serializeTicker(params[1]);
+
+  logger.info(identityId);
+  logger.info(assetId);
+
+  await AssetPreApproval.create({
+    id: `${assetId}/${identityId}`,
+    assetId,
+    identityId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
+const handleRemovePreApprovedAsset = async ({ params }: HandlerArgs) => {
+  const identityId = getTextValue(params[0]);
+  const assetId = serializeTicker(params[1]);
+
+  await AssetPreApproval.remove(`${assetId}/${identityId}`);
+};
+
 const handleAssetUpdateEvents = async ({
   eventId,
   blockId,
@@ -666,6 +690,12 @@ export async function mapAsset(args: HandlerArgs): Promise<void> {
   }
   if (eventId === EventIdEnum.AssetMediatorsRemoved) {
     await handleAssetMediatorsRemoved(args);
+  }
+  if (eventId === EventIdEnum.PreApprovedAsset) {
+    await handlePreApprovedAsset(args);
+  }
+  if (eventId === EventIdEnum.RemovePreApprovedAsset) {
+    await handleRemovePreApprovedAsset(args);
   }
 
   await handleAssetUpdateEvents(args);
