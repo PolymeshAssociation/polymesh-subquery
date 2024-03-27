@@ -7,15 +7,6 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "StakingEvent",
-        "amount": "1000000",
-        "datetime": "2022-11-08T19:03:19.501",
-        "eventId": "Bonded",
-        "identityId": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
-        "nominatedValidators": null,
-        "stashAccount": "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH",
-      },
-      Object {
-        "__typename": "StakingEvent",
         "amount": null,
         "datetime": "2022-11-08T19:03:20",
         "eventId": "Nominated",
@@ -23,6 +14,15 @@ Object {
         "nominatedValidators": Array [
           "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
         ],
+        "stashAccount": "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH",
+      },
+      Object {
+        "__typename": "StakingEvent",
+        "amount": "1000000",
+        "datetime": "2022-11-08T19:03:19.501",
+        "eventId": "Bonded",
+        "identityId": "0x43b62e2ea8713eb6f766beed4651f41ad52b607e7c6214bd6cb444952e9c3a6f",
+        "nominatedValidators": null,
         "stashAccount": "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH",
       },
       Object {

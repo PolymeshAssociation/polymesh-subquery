@@ -7,7 +7,7 @@ describe('instructions', () => {
     const q = {
       query: gql`
         query {
-          instructions(first: 10) {
+          instructions(first: 10, orderBy: CREATED_AT_ASC) {
             totalCount
             nodes {
               createdBlockId

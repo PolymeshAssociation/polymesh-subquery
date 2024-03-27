@@ -40,7 +40,7 @@ describe('accounts', () => {
     const result = await query({
       query: gql`
         query {
-          accounts(first: 10) {
+          accounts(first: 10, orderBy: [CREATED_AT_ASC, IDENTITY_ID_ASC]) {
             totalCount
             nodes {
               address
@@ -69,7 +69,7 @@ describe('accounts', () => {
               identityId: {
                 equalTo: "${identityId}"
               }
-            }
+            }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
               id
@@ -108,9 +108,8 @@ describe('permissions', () => {
     const res = await query({
       query: gql`
       query {
-        permissions(filter: { id: { equalTo: "${address}"}}) {
+        permissions(filter: { id: { equalTo: "${address}"}}, orderBy: CREATED_AT_ASC) {
           nodes {
-            nodeId
             id
             assets
             portfolios
@@ -141,7 +140,7 @@ describe('identities', () => {
             did: {
               equalTo: "${identityId}"
             }
-          }
+          }, orderBy: CREATED_AT_ASC
         ) {
           nodes {
             did
@@ -184,7 +183,7 @@ describe('identities', () => {
     const result = await query({
       query: gql`
         query {
-          identities(filter: { secondaryKeysFrozen: { equalTo: true } }) {
+          identities(filter: { secondaryKeysFrozen: { equalTo: true } }, orderBy: CREATED_AT_ASC) {
             nodes {
               did
             }

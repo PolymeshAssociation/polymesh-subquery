@@ -8,7 +8,7 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          settlements(first: 10) {
+          settlements(first: 10, orderBy: CREATED_AT_ASC) {
             totalCount
             nodes {
               createdBlockId
@@ -49,7 +49,7 @@ describe('settlements', () => {
               fromId: {
                 startsWith: "${eveDid}"
               }
-            }
+            }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
               settlement {
@@ -88,7 +88,7 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          legs(filter: { assetId: { equalTo: "11BTICKER1" } }) {
+          legs(filter: { assetId: { equalTo: "11BTICKER1" } }, orderBy: CREATED_AT_ASC) {
             nodes {
               settlement {
                 id
@@ -132,6 +132,7 @@ describe('settlements', () => {
                 contains: ["0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e"]
               }
             }
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               settlement {

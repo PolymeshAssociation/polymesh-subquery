@@ -8,7 +8,11 @@ describe('stakingEvents', () => {
     const q = {
       query: gql`
         query {
-          stakingEvents(filter: { eventId: { equalTo: Nominated } }, first: 10) {
+          stakingEvents(
+            filter: { eventId: { equalTo: Nominated } }
+            first: 10
+            orderBy: CREATED_AT_ASC
+          ) {
             nodes {
               eventId
               datetime
@@ -37,6 +41,7 @@ describe('stakingEvents', () => {
               stashAccount: { equalTo: "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH" }
             }
             first: 10
+            orderBy: CREATED_AT_ASC
           ) {
             nodes {
               eventId

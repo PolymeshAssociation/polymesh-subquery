@@ -8,7 +8,7 @@ describe('assetHolders', () => {
     const q = {
       query: gql`
         query {
-          assetHolders(filter: { assetId: { equalTo: "11BTICKER1" } }) {
+          assetHolders(filter: { assetId: { equalTo: "11BTICKER1" } }, orderBy: CREATED_AT_ASC) {
             nodes {
               id
               did: identityId
@@ -35,7 +35,7 @@ describe('assetHolders', () => {
               identityId: {
                 equalTo: "${eveDid}"
               }
-            }
+            }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
               ticker: assetId
@@ -62,7 +62,7 @@ describe('assetHolders', () => {
                 equalTo: "${eveDid}"
               }
               assetId: { equalTo: "11BTICKER1" }
-            }
+            }, orderBy: CREATED_AT_ASC
           ) {
             nodes {
               amount
