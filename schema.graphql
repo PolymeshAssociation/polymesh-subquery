@@ -1777,6 +1777,15 @@ type Instruction @entity {
 }
 
 """
+Represents a relationship between Identities and Instructions they are involved in
+"""
+type IdentityInstructions @entity {
+  id: ID!
+  instruction: Instruction
+  identity: Identity
+}
+
+"""
 Represents a distribution to the owners of an Asset. e.g. dividend payment
 """
 type Distribution @entity {
