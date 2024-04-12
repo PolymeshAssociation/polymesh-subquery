@@ -44,7 +44,7 @@
     "@commitlint/config-conventional": "13.1.0",
     "@polkadot/typegen": "^10.9.1",
     "@polkadot/types-support": "^10.9.1",
-    "@polymeshassociation/polymesh-local": "^5.12.1",
+    "@polymeshassociation/polymesh-local": "^5.12.2",
     "@polymeshassociation/polymesh-types": "^5.9.0",
     "@semantic-release/changelog": "^6.0.1",
     "@semantic-release/git": "^10.0.1",
