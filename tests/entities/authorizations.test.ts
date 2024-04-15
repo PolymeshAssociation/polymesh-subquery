@@ -7,7 +7,7 @@ describe('authorizations', () => {
     const q = {
       query: gql`
         query {
-          authorizations(first: 100) {
+          authorizations(first: 100, orderBy: ID_ASC) {
             nodes {
               authId: id
               type
@@ -35,7 +35,11 @@ describe('authorizations', () => {
     const q = {
       query: gql`
         query {
-          authorizations(first: 100, filter: { type: { in: [BecomeAgent, AddMultiSigSigner] } }) {
+          authorizations(
+            first: 100
+            filter: { type: { in: [BecomeAgent, AddMultiSigSigner] } }
+            orderBy: ID_ASC
+          ) {
             nodes {
               authId: id
               type

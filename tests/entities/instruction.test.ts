@@ -7,14 +7,14 @@ describe('instructions', () => {
     const q = {
       query: gql`
         query {
-          instructions(first: 10) {
+          instructions(first: 10, orderBy: ID_ASC) {
             totalCount
             nodes {
               createdBlockId
               status
               venueId
               settlementType
-              legs {
+              legs(orderBy: ID_ASC) {
                 nodes {
                   from {
                     identityId

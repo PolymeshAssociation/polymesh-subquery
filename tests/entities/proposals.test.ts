@@ -7,7 +7,7 @@ describe('proposals', () => {
     const q = {
       query: gql`
         query {
-          proposals {
+          proposals(orderBy: ID_ASC) {
             totalCount
             nodes {
               id
