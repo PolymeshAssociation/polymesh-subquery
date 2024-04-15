@@ -33,7 +33,6 @@ describe('portfolioMovements', () => {
             }
           ) {
             nodes {
-              nodeId
               id
               fromId
               toId
@@ -65,7 +64,6 @@ describe('portfolioMovements', () => {
             }
           ) {
             nodes {
-              nodeId
               id
               fromId
               toId

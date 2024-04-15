@@ -17,7 +17,6 @@ describe('portfolios', () => {
             }
           ) {
             nodes {
-              nodeId
               id
               identityId
               number
@@ -50,7 +49,6 @@ describe('portfolios', () => {
             }
           ) {
             nodes {
-              nodeId
               id
               identityId
               number
