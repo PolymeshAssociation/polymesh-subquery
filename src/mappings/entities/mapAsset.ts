@@ -159,7 +159,8 @@ const handleAssetCreated = async (
    *   - For chain < 5.0.0, asset.assetNames provides name of the ticker in plain text. In case
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
-  const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
+  const rawName =
+    rawAssetName ?? ((await api.query.asset.assetNames(rawTicker)) as unknown as Codec);
   const name = bytesToString(rawName);
 
   /**
@@ -168,7 +169,8 @@ const handleAssetCreated = async (
    */
   let fundingRound: string = null;
 
-  const rawFundingRound = rawFundingRoundName ?? (await api.query.asset.fundingRound(rawTicker));
+  const rawFundingRound =
+    rawFundingRoundName ?? ((await api.query.asset.fundingRound(rawTicker)) as unknown as Codec);
   if (!rawFundingRound.isEmpty) {
     fundingRound = bytesToString(rawFundingRound);
   }

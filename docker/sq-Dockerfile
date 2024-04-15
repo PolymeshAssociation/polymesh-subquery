@@ -1,23 +1,47 @@
-FROM onfinality/subql-node:v3.2.0
+# # Stage 1: Build Stage
+FROM node:lts-alpine3.17 AS builder
 
-RUN addgroup subquery && adduser --uid 1001 -G subquery -D --shell /bin/false subquery
-RUN apk add --no-cache bash gettext python3 pythonispython3 make gcc g++ musl-dev
+# # Install build dependencies
+RUN apk add --no-cache \
+  bash \
+  gettext \
+  python3 \
+  make \
+  cmake \
+  g++ \
+  jq
 
-# arm64 dependencies
-RUN apk add --no-cache python3 pythonispython3 make gcc g++ musl-dev
+# # Set working directory
+WORKDIR /app/builder
 
-RUN npm i -g node-gyp
+# # Copy the rest of the application code
+COPY . .
 
-# Dependencies
+# # Build the application
+RUN yarn --frozen-lockfile \
+  && envsubst < project.template.ts > project.ts \
+  && yarn codegen \
+  && yarn build \
+  && yarn remove $(cat package.json | jq -r '.devDependencies | keys | join(" ")') \
+  && rm -rf /root/.npm /root/.cache
+
+# # Stage 2: Production Stage
+FROM onfinality/subql-node:v3.2.0 AS production
+
 WORKDIR /app
-COPY package.json /app
-COPY yarn.lock /app
-RUN yarn --frozen-lockfile && chown -R subquery /app
 
-ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker/docker-entrypoint.sh" ]
+# # Add a non-root user
+RUN addgroup subquery && \
+    adduser --uid 1001 -G subquery -D --shell /bin/false subquery
 
-# End of cache
-COPY . /app
+# # # Copy only necessary files from the build stage
+COPY --from=builder --chown=subquery:subquery /app/builder/ ./
 
-RUN envsubst < project.template.ts > project.ts && yarn && yarn codegen && yarn build && rm project.yaml && chown -R subquery $(ls /app |grep -v 'node_modules')
+# Install bash to run the entrypoint script
+RUN apk add --no-cache gettext bash
+
+# Switch to the non-root user
 USER subquery
+
+# Change ownership to non-root user
+ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker/docker-entrypoint.sh" ]
