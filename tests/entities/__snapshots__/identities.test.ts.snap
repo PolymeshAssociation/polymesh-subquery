@@ -255,7 +255,6 @@ Object {
         "createdBlockId": "311",
         "datetime": "2022-11-08T19:02:53.001",
         "id": "5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv",
-        "nodeId": "WyJwZXJtaXNzaW9ucyIsIjVFWXhMdUZkYkQ5OWpuMkJzWjNmMXJNb2EzcmFEQjhUQW5UTFgzVk1YaFFvSnlydiJd",
         "portfolios": Object {
           "type": "these",
           "values": Array [],

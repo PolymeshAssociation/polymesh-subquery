@@ -9,9 +9,9 @@ describe('assets', () => {
         query {
           assets(
             filter: { ticker: { in: ["4TICKER", "15TICKER", "7TICKER", "8TICKER", "11BTICKER1"] } }
+            orderBy: ID_ASC
           ) {
             nodes {
-              nodeId
               id
               ticker
               name
@@ -25,26 +25,26 @@ describe('assets', () => {
               totalSupply
               totalTransfers
               isCompliancePaused
-              transferManagers {
+              transferManagers(orderBy: ID_ASC) {
                 nodes {
                   type
                   value
                   exemptedEntities
                 }
               }
-              compliance {
+              compliance(orderBy: ID_ASC) {
                 nodes {
                   id: complianceId
                   data
                 }
               }
-              holders {
+              holders(orderBy: ID_ASC) {
                 nodes {
                   did: identityId
                   amount
                 }
               }
-              documents {
+              documents(orderBy: ID_ASC) {
                 nodes {
                   id: documentId
                   name
