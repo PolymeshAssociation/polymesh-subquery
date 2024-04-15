@@ -29,9 +29,9 @@ npm run migrations
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}
 
 node --max-old-space-size=$NODE_SPACE \
-	/usr/local/lib/node_modules/@subql/node/bin/run $@ \
-	--disable-historical=true \
+	/usr/local/lib/node_modules/@subql/node/bin/run \
+	--disable-historical=false \
 	--timestamp-field \
-	--db-schema=public
+	--db-schema=public $@
 child=$!
 wait "$child"
