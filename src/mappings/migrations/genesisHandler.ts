@@ -208,7 +208,7 @@ export default async (): Promise<void> => {
   logger.info('Running genesis handler');
 
   const timestamp = await api.query.timestamp.now();
-  const datetime = new Date(timestamp.toNumber());
+  const datetime = new Date(+timestamp.toString());
 
   await Promise.all([insertGenesisBlock(datetime), handleGenesisDids(datetime), handleMultiSigs()]);
 
