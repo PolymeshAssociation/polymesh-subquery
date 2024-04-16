@@ -136,10 +136,13 @@ const handleAssetCreated = async (
   /**
    * Events from chain >= 6.0.0 doesn't have disable investor uniqueness value
    * It defaults to false from 6.0.0
+   *
+   * NOTE - for Polymesh Private SDK the spec version starts again from 1.0.0
    */
   let isUniquenessRequired = false;
 
-  if (block.specVersion >= 6000000) {
+  const specName = api.runtimeVersion.specName.toString();
+  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
     [rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
   } else {
     [disableIu, rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
