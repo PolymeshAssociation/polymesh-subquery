@@ -15,6 +15,7 @@ describe('portfolios', () => {
                 equalTo: "${identityId}"
               }
             }
+            orderBy: ID_ASC
           ) {
             nodes {
               id
@@ -47,6 +48,7 @@ describe('portfolios', () => {
               }
               number: { greaterThan: 0 }
             }
+            orderBy: ID_ASC
           ) {
             nodes {
               id

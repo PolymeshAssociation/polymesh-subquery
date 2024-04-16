@@ -192,7 +192,7 @@ Object {
 }
 `;
 
-exports[`authorizations should return authorisations filtered by authorization type 1`] = `
+exports[`authorizations should return authorizations filtered by authorization type 1`] = `
 Object {
   "authorizations": Object {
     "__typename": "AuthorizationsConnection",

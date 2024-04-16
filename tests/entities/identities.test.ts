@@ -70,6 +70,7 @@ describe('accounts', () => {
                 equalTo: "${identityId}"
               }
             }
+            orderBy: ID_ASC
           ) {
             nodes {
               id
@@ -183,7 +184,7 @@ describe('identities', () => {
     const result = await query({
       query: gql`
         query {
-          identities(filter: { secondaryKeysFrozen: { equalTo: true } }) {
+          identities(filter: { secondaryKeysFrozen: { equalTo: true } }, orderBy: ID_ASC) {
             nodes {
               did
             }

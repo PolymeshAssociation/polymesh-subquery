@@ -139,7 +139,7 @@ describe('claims', () => {
             issuerId: {
               equalTo: "${trustedClaimIssuer}"
             }
-          }) {
+          }, orderBy: ID_ASC) {
             totalCount
             nodes {
               targetId
