@@ -7,7 +7,7 @@ describe('assetDocuments', () => {
     const q = {
       query: gql`
         query {
-          assetDocuments(filter: { assetId: { equalTo: "4TICKER" } }) {
+          assetDocuments(filter: { assetId: { equalTo: "4TICKER" } }, orderBy: ID_ASC) {
             nodes {
               id: documentId
               ticker: assetId

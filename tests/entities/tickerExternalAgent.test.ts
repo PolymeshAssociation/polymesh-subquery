@@ -46,7 +46,7 @@ describe('tickerExternalAgent', () => {
               callerId: {
                 equalTo: "${bobDid}"
               }
-            }
+            }, orderBy: ID_ASC
           ) {
             nodes {
               datetime
@@ -70,6 +70,7 @@ describe('tickerExternalAgent', () => {
         query q($ticker: String!) {
           tickerExternalAgents(
             filter: { assetId: { equalTo: $ticker }, callerId: { equalTo: "bogus" } }
+            orderBy: ID_ASC
           ) {
             nodes {
               datetime

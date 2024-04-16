@@ -9,7 +9,7 @@ describe('portfolioMovements', () => {
     const q = {
       query: gql`
         query {
-          portfolioMovements(first: 1, orderBy: CREATED_BLOCK_ID_ASC) {
+          portfolioMovements(first: 1, orderBy: ID_ASC) {
             nodes {
               fromId
             }
@@ -30,7 +30,7 @@ describe('portfolioMovements', () => {
               fromId: {
                 equalTo: "${fromId}"
               }
-            }
+            }, orderBy: ID_ASC
           ) {
             nodes {
               id
@@ -61,7 +61,7 @@ describe('portfolioMovements', () => {
               fromId: {
                 startsWith: "${fromDid}"
               }
-            }
+            }, orderBy: ID_ASC
           ) {
             nodes {
               id
