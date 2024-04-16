@@ -31,7 +31,7 @@ describe('authorizations', () => {
 
     expect(subquery?.data).toMatchSnapshot();
   });
-  it('should return authorisations filtered by authorization type', async () => {
+  it('should return authorizations filtered by authorization type', async () => {
     const q = {
       query: gql`
         query {

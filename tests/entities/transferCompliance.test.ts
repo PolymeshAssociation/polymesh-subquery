@@ -7,7 +7,11 @@ describe('transferCompliances', () => {
     const q = {
       query: gql`
         query {
-          transferCompliances(first: 10, filter: { assetId: { equalTo: "15TICKER" } }) {
+          transferCompliances(
+            first: 10
+            filter: { assetId: { equalTo: "15TICKER" } }
+            orderBy: ID_ASC
+          ) {
             nodes {
               id
               ticker: assetId

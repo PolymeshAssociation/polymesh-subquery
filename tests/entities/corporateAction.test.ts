@@ -8,7 +8,10 @@ describe('distributions', () => {
       variables: { ticker: '13TICKER' },
       query: gql`
         query q($ticker: String!) {
-          distributions(filter: { assetId: { equalTo: $ticker }, localId: { equalTo: 0 } }) {
+          distributions(
+            filter: { assetId: { equalTo: $ticker }, localId: { equalTo: 0 } }
+            orderBy: ID_ASC
+          ) {
             nodes {
               taxes
             }

@@ -7,7 +7,7 @@ describe('trustedClaimIssuer', () => {
     const q = {
       query: gql`
         query {
-          trustedClaimIssuers {
+          trustedClaimIssuers(orderBy: ID_ASC) {
             nodes {
               assetId
               issuer
