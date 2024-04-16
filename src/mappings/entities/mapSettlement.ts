@@ -187,8 +187,11 @@ const handleInstructionCreated = async (args: HandlerArgs): Promise<void> => {
 
   /**
    * Events from 6.0.0 chain were updated to support NFT and OffChain instructions
+   *
+   * NOTE - For Polymesh private, the spec version starts from 1.0.0
    */
-  if (block.specVersion >= 6000000) {
+  const specName = api.runtimeVersion.specName.toString();
+  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
     legs = getSettlementLeg(rawLegs);
   } else {
     legs = getLegsValue(rawLegs);
