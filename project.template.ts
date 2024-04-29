@@ -238,7 +238,7 @@ const filters = {
     'Unreserved',
   ],
   protocolFee: ['FeeCharged'],
-  system: ['CodeUpdated'],
+  system: ['CodeUpdated', 'NewAccount'],
   confidentialAsset: [
     'AccountCreated',
     'AccountDeposit',
