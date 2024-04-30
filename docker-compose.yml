@@ -34,7 +34,6 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       START_BLOCK: 1
-      # NO_NATIVE_GRAPHQL_DATA: 'TRUE' # Setting this value only processes tooling specific handlers. Native subquery entities are ignored.
       # Polymesh-local
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
       # Setting NETWORK_HTTP_ENDPOINT will allow dynamic lookup of NETWORK_CHAIN_ID
@@ -59,6 +58,7 @@ services:
       # - --workers=4 # Number of available CPU cores strictly limits the usage of worker threads. Read more here - https://academy.subquery.network/run_publish/references.html#w-workers
       # - --log-level=debug
       - --store-flush-interval=0 ## this is only needed for tests to run without any cache. Comment this out if using for production instance
+      # - --disable-historical=false # Enable/disable automated historical state tracking (by default it is false). Read more here - https://academy.subquery.network/indexer/run_publish/historical.html
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://subquery-node:3000/ready']
       interval: 3s
