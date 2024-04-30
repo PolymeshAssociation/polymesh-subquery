@@ -1,18 +1,26 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: [master, alpha]
+    branches:
+      - master
+      - alpha
   pull_request:
-    types: [assigned, opened, synchronize, reopened, edited]
+    types:
+      - assigned
+      - opened
+      - synchronize
+      - reopened
+      - edited
 
 jobs:
   lint_test:
     name: Linting and Testing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'yarn'
@@ -38,13 +46,16 @@ jobs:
     needs: [lint_test]
     steps:
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          fetch-depth: 1
       - uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile
-      - name: setup git
+      - name: Setup SSH signing key
         run: |
           echo "$SSH_KEY_PRIVATE" | tr -d '\r' > /tmp/id_ed25519
           echo $SSH_KEY_PUBLIC > /tmp/id_ed25519.pub
