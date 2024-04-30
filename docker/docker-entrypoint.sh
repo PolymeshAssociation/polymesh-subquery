@@ -23,7 +23,7 @@ npm run build ## This creates the project.yaml file
 
 (npm run sql || (sleep 3 && kill "$$")) &
 
-npm run migrations
+# npm run migrations
 
 # Allow configuring node memory. Default to 1.5MB, should be ~75% of available RAM
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-1536}
