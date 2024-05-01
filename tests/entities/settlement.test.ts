@@ -8,11 +8,11 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          settlements(first: 10) {
+          settlements(first: 10, orderBy: ID_ASC) {
             totalCount
             nodes {
               createdBlockId
-              legs {
+              legs(orderBy: ID_ASC) {
                 nodes {
                   from {
                     identityId
@@ -50,13 +50,14 @@ describe('settlements', () => {
                 startsWith: "${eveDid}"
               }
             }
+            orderBy: ID_ASC
           ) {
             nodes {
               settlement {
                 id
                 createdBlockId
                 result
-                legs {
+                legs(orderBy: ID_ASC) {
                   nodes {
                     from {
                       identityId
@@ -88,13 +89,13 @@ describe('settlements', () => {
     const q = {
       query: gql`
         query {
-          legs(filter: { assetId: { equalTo: "11BTICKER1" } }) {
+          legs(filter: { assetId: { equalTo: "11BTICKER1" } }, orderBy: ID_ASC) {
             nodes {
               settlement {
                 id
                 createdBlockId
                 result
-                legs {
+                legs(orderBy: ID_ASC) {
                   nodes {
                     from {
                       identityId

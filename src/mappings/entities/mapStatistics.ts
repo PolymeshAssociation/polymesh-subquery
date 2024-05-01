@@ -379,7 +379,8 @@ const handleAssetRedeemed = async (blockId: string, params: Codec[], block: Subs
   const ticker = serializeTicker(rawTicker);
 
   const specVersion = block.specVersion;
-  if (specVersion < transferRestrictionSpecVersion) {
+  const specName = api.runtimeVersion.specName.toString();
+  if (specVersion < transferRestrictionSpecVersion && specName !== 'polymesh_private_dev') {
     const asset = await Asset.getByTicker(ticker);
     if (asset.totalSupply === BigInt(0)) {
       await StatType.remove(`${ticker}/Count`);

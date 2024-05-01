@@ -2,6 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateExtrinsic } from '@subql/types';
 import {
   EventIdEnum,
+  IdentityInstructions,
   Instruction,
   InstructionStatusEnum,
   Leg,
@@ -62,14 +63,14 @@ export const createLeg = async (
   legIndex: number,
   { ticker, amount, nftIds, from, to, legType }: LegDetails,
   { eventIdx, eventId, block }: HandlerArgs
-): Promise<void> => {
+): Promise<string[]> => {
   // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
   await Promise.all([
     createPortfolioIfNotExists(from, blockId, eventId, eventIdx, block),
     createPortfolioIfNotExists(to, blockId, eventId, eventIdx, block),
   ]);
 
-  return Leg.create({
+  await Leg.create({
     id: `${instructionId}/${legIndex}`,
     assetId: ticker,
     amount,
@@ -82,6 +83,8 @@ export const createLeg = async (
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
+
+  return [from.identityId, to.identityId];
 };
 
 const updateLegs = async (
@@ -112,6 +115,24 @@ const getVenue = async (venueId: string): Promise<Venue> => {
   }
 
   return venue;
+};
+
+const createIdentityInstructionRelation = async (
+  instructionId: string,
+  blockId: string,
+  identityList: string[]
+): Promise<void> => {
+  const uniqueDids = [...new Set(identityList)];
+
+  const promises = uniqueDids.map(did =>
+    IdentityInstructions.create({
+      id: `${did}/${instructionId}/${blockId}`,
+      identityId: did,
+      instructionId,
+    }).save()
+  );
+
+  await Promise.all(promises);
 };
 
 const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<void> => {
@@ -166,8 +187,11 @@ const handleInstructionCreated = async (args: HandlerArgs): Promise<void> => {
 
   /**
    * Events from 6.0.0 chain were updated to support NFT and OffChain instructions
+   *
+   * NOTE - For Polymesh private, the spec version starts from 1.0.0
    */
-  if (block.specVersion >= 6000000) {
+  const specName = api.runtimeVersion.specName.toString();
+  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
     legs = getSettlementLeg(rawLegs);
   } else {
     legs = getLegsValue(rawLegs);
@@ -192,11 +216,13 @@ const handleInstructionCreated = async (args: HandlerArgs): Promise<void> => {
   });
   await instruction.save();
 
-  await Promise.all(
+  const dids = await Promise.all(
     legs.map((legDetails, index) =>
       createLeg(blockId, instructionId, address, index, legDetails, args)
     )
   );
+
+  await createIdentityInstructionRelation(instructionId, blockId, dids.flat());
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {

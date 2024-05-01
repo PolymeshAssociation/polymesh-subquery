@@ -7,7 +7,7 @@ describe('compliances', () => {
     const q = {
       query: gql`
         query {
-          compliances(filter: { assetId: { equalTo: "7TICKER" } }) {
+          compliances(filter: { assetId: { equalTo: "7TICKER" } }, orderBy: ID_ASC) {
             nodes {
               id: complianceId
               data

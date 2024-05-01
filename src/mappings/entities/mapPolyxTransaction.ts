@@ -79,7 +79,8 @@ const processTreasuryDisbursementArgs = async (args: HandlerArgs | Event, ss58Fo
     /**
      * Before spec version 500000, TreasuryDisbursement only had three params and there was not target account address in the event
      */
-    if (args.specVersionId < 5000000) {
+    const specName = api.runtimeVersion.specName.toString();
+    if (args.specVersionId < 5000000 && specName !== 'polymesh_private_dev') {
       [{ value: did }, { value: toDid }, { value: balance }] = attributes;
     } else {
       [{ value: did }, { value: toDid }, { value: toAddressHex }, { value: balance }] = attributes;
@@ -94,7 +95,9 @@ const processTreasuryDisbursementArgs = async (args: HandlerArgs | Event, ss58Fo
     }
   } else {
     let rawFromIdentity, rawToDid, rawTo, rawBalance;
-    if (args.block.specVersion < 5000000) {
+
+    const specName = api.runtimeVersion.specName.toString();
+    if (args.block.specVersion < 5000000 && specName !== 'polymesh_private_dev') {
       [rawFromIdentity, rawToDid, rawBalance] = args.params;
     } else {
       [rawFromIdentity, rawToDid, rawTo, rawBalance] = args.params;

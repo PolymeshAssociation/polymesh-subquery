@@ -53,7 +53,7 @@ export default async (): Promise<void> => {
     console.log('Test environment started, waiting for subquery to catch up');
     await sleep(20000);
 
-    const latestBlock = 400;
+    const latestBlock = 398;
 
     await retry(200, 2000, async () => {
       const { errors, data } = await query({

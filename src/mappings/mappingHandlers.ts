@@ -6,6 +6,7 @@ import { createExtrinsic } from './entities/mapExtrinsic';
 import mapSubqueryVersion from './entities/mapSubqueryVersion';
 import genesisHandler from './migrations/genesisHandler';
 import { logError } from './util';
+import migrationHandlers from './migrations/migrationHandlers';
 
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
   const header = substrateEvent.block.block.header;
@@ -23,11 +24,11 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
     await genesisHandler().catch(e => logError(e));
   }
 
-  // /**
-  //  * In case some data needs to be migrated for newly added entities/attributes to any entity, this can be used
-  //  */
-  // const ss58Format = header.registry.chainSS58;
-  // await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
+  /**
+   * In case some data needs to be migrated for newly added entities/attributes to any entity, this can be used
+   */
+  const ss58Format = header.registry.chainSS58;
+  await migrationHandlers(blockId, ss58Format).catch(e => logError(e));
 
   /**
    * In case of major chain upgrade, we need to process some entities

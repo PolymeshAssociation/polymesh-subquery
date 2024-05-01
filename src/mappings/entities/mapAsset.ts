@@ -137,10 +137,13 @@ const handleAssetCreated = async (
   /**
    * Events from chain >= 6.0.0 doesn't have disable investor uniqueness value
    * It defaults to false from 6.0.0
+   *
+   * NOTE - for Polymesh Private SDK the spec version starts again from 1.0.0
    */
   let isUniquenessRequired = false;
 
-  if (block.specVersion >= 6000000) {
+  const specName = api.runtimeVersion.specName.toString();
+  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
     [rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
   } else {
     [disableIu, rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
@@ -159,7 +162,8 @@ const handleAssetCreated = async (
    *   - For chain < 5.0.0, asset.assetNames provides name of the ticker in plain text. In case
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
-  const rawName = rawAssetName ?? (await api.query.asset.assetNames(rawTicker));
+  const rawName =
+    rawAssetName ?? ((await api.query.asset.assetNames(rawTicker)) as unknown as Codec);
   const name = bytesToString(rawName);
 
   /**
@@ -168,7 +172,8 @@ const handleAssetCreated = async (
    */
   let fundingRound: string = null;
 
-  const rawFundingRound = rawFundingRoundName ?? (await api.query.asset.fundingRound(rawTicker));
+  const rawFundingRound =
+    rawFundingRoundName ?? ((await api.query.asset.fundingRound(rawTicker)) as unknown as Codec);
   if (!rawFundingRound.isEmpty) {
     fundingRound = bytesToString(rawFundingRound);
   }

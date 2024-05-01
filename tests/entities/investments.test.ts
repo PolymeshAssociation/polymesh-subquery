@@ -7,7 +7,10 @@ describe('investments', () => {
     const q = {
       query: gql`
         query {
-          investments(filter: { offeringToken: { equalTo: "14TICKER" }, stoId: { equalTo: 0 } }) {
+          investments(
+            filter: { offeringToken: { equalTo: "14TICKER" }, stoId: { equalTo: 0 } }
+            orderBy: ID_ASC
+          ) {
             totalCount
             nodes {
               createdBlockId

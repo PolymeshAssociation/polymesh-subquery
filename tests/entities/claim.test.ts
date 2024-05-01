@@ -95,7 +95,7 @@ describe('claims', () => {
     const q = {
       query: gql`
         query {
-          claims(first: 10) {
+          claims(first: 10, orderBy: ID_ASC) {
             totalCount
             nodes {
               targetId
@@ -139,7 +139,7 @@ describe('claims', () => {
             issuerId: {
               equalTo: "${trustedClaimIssuer}"
             }
-          }) {
+          }, orderBy: ID_ASC) {
             totalCount
             nodes {
               targetId
