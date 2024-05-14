@@ -615,9 +615,6 @@ const handlePreApprovedAsset = async ({ params, blockId }: HandlerArgs) => {
   const identityId = getTextValue(params[0]);
   const assetId = serializeTicker(params[1]);
 
-  logger.info(identityId);
-  logger.info(assetId);
-
   await AssetPreApproval.create({
     id: `${assetId}/${identityId}`,
     assetId,

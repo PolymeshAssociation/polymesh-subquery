@@ -1,15 +1,14 @@
 import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../types';
-import { serializeCallArgsLikeHarvester } from '../serializeLikeHarvester';
-import { camelToSnakeCase, logFoundType } from '../util';
+import { camelToSnakeCase } from '../util';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = extrinsic.block.block.header.number.toString();
   const extrinsicIdx = extrinsic.idx;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
-  const params = serializeCallArgsLikeHarvester(extrinsic.extrinsic, logFoundType);
+  const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
 
   return Extrinsic.create({
     id: `${blockId}/${extrinsicIdx}`,
@@ -19,7 +18,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
     moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
     callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
-    paramsTxt: JSON.stringify(params),
+    paramsTxt,
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
