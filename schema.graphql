@@ -208,6 +208,7 @@ enum EventIdEnum {
   ProposalRejectionVote
   ProposalRejected
   ProposalExecutionFailed
+  ProposalFailedToExecute
   # SchedulingFailed (already defined in Settlement)
 
   ## bridge ##

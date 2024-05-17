@@ -130,6 +130,7 @@ const filters = {
     'ProposalRejected',
     'ProposalRejectionVote',
     'SchedulingFailed',
+    'ProposalFailedToExecute',
   ],
   nft: ['NFTPortfolioUpdated', 'NftCollectionCreated'],
   portfolio: [
