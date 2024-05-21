@@ -53,6 +53,7 @@ enum ModuleIdEnum {
   preimage
   testutils
   nft
+  statetriemigration
 
   ## deprecated ##
   confidential @deprecated
@@ -1116,6 +1117,14 @@ enum CallIdEnum {
   create_nft_collection
   issue_nft
   redeem_nft
+
+  ## state trie migration ##
+  continue_migrate
+  control_auto_migration
+  force_set_progress
+  migrate_custom_child
+  migrate_custom_top
+  set_signed_max_limits
 
   ## deprecated ##
   accept_authorization @deprecated
