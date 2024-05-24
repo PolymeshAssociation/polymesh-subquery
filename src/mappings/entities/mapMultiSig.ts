@@ -3,6 +3,7 @@ import { SubstrateEvent } from '@subql/types';
 import {
   MultiSig,
   MultiSigProposal,
+  MultiSigProposalParams,
   MultiSigProposalStatusEnum,
   MultiSigProposalVote,
   MultiSigSigner,
@@ -162,6 +163,21 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
   const creatorAccount = extrinsic?.extrinsic.signer.toString();
+  const parsed = (extrinsic?.extrinsic?.toHuman() as any).method.args || [];
+
+  const module = parsed[1]?.value.call_module;
+  const call = parsed[1]?.value.call_function;
+  const callIndex = parsed[1]?.value.call_index;
+  const expiry = parsed[2]?.value;
+  const args = parsed[1]?.value.call_args;
+
+  const proposalParams: MultiSigProposalParams = {
+    module,
+    call,
+    callIndex,
+    expiry,
+    args,
+  };
 
   await MultiSigProposal.create({
     id: `${multisigId}/${proposalId}`,
@@ -171,6 +187,7 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
+    params: Object.values(proposalParams).length ? proposalParams : undefined,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,

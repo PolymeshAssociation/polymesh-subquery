@@ -2358,6 +2358,15 @@ enum MultiSigProposalStatusEnum {
   Deleted
 }
 
+
+type MultiSigProposalParams @jsonField {
+  module: String
+  call: String
+  callIndex: String
+  expiry: String
+  args: String
+}
+
 """
 Represents a MultiSig proposal
 """
@@ -2373,6 +2382,7 @@ type MultiSigProposal @entity {
   datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int!
+  params: MultiSigProposalParams
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
   createdBlock: Block!
   updatedBlock: Block!
