@@ -1,6 +1,8 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import {
+  ModuleIdEnum,
+  CallIdEnum,
   MultiSig,
   MultiSigProposal,
   MultiSigProposalParams,
@@ -8,15 +10,19 @@ import {
   MultiSigProposalVote,
   MultiSigSigner,
   MultiSigSignerStatusEnum,
+  SingleProposal,
+  MultiSigProposalVoteActionEnum,
+  SignerTypeEnum,
 } from '../../types';
 import {
+  capitalizeFirstLetter,
   getBooleanValue,
   getMultiSigSigner,
   getMultiSigSigners,
   getNumberValue,
   getTextValue,
+  camelToSnakeCase,
 } from '../util';
-import { MultiSigProposalVoteActionEnum, SignerTypeEnum } from './../../types/enums';
 import { Attributes, extractArgs } from './common';
 
 export const createMultiSig = (
@@ -163,21 +169,37 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
   const creatorAccount = extrinsic?.extrinsic.signer.toString();
-  const parsed = (extrinsic?.extrinsic?.toHuman() as any).method.args || [];
-
-  const module = parsed[1]?.value.call_module;
-  const call = parsed[1]?.value.call_function;
-  const callIndex = parsed[1]?.value.call_index;
-  const expiry = parsed[2]?.value;
-  const args = parsed[1]?.value.call_args;
 
   const proposalParams: MultiSigProposalParams = {
-    module,
-    call,
-    callIndex,
-    expiry,
-    args,
+    isBatch: false,
+    isBridge: false,
   };
+
+  const args = (extrinsic?.extrinsic?.toHuman() as any).method.args;
+
+  const callToProposalParam = (call: any): SingleProposal => {
+    return {
+      module: capitalizeFirstLetter(call.section) as ModuleIdEnum,
+      call: camelToSnakeCase(call.method) as CallIdEnum,
+      args: JSON.stringify(call.args),
+    };
+  };
+
+  if (args?.bridge_txs) {
+    proposalParams.bridge = args.bridge_txs;
+    proposalParams.isBridge = true;
+  } else if (args?.proposal?.method === 'batch') {
+    proposalParams.isBatch = true;
+    proposalParams.proposals = args?.proposal?.args?.calls?.map(callToProposalParam);
+    proposalParams.expiry = args.expiry;
+    proposalParams.autoClose = args.auto_close;
+  } else {
+    const proposal: SingleProposal = callToProposalParam(args.proposal);
+
+    proposalParams.proposals = [proposal];
+    proposalParams.expiry = args.expiry;
+    proposalParams.autoClose = args.auto_close;
+  }
 
   await MultiSigProposal.create({
     id: `${multisigId}/${proposalId}`,
@@ -187,7 +209,7 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
-    params: Object.values(proposalParams).length ? proposalParams : undefined,
+    params: proposalParams,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,

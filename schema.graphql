@@ -2358,13 +2358,32 @@ enum MultiSigProposalStatusEnum {
   Deleted
 }
 
+"""
+Represents bridge transaction
+"""
+type BridgeTx @jsonField {
+  nonce: String!
+  amount: String!
+  txHash: String!
+  recipient: String!
+}
+
+"""
+Represents a single MultiSigProposal Call
+"""
+type SingleProposal @jsonField {
+  module: String!
+  call: String!
+  args: String!
+}
 
 type MultiSigProposalParams @jsonField {
-  module: String
-  call: String
-  callIndex: String
+  isBridge: Boolean!
+  isBatch: Boolean!
+  proposals: [SingleProposal!]
+  bridge: [BridgeTx!]
   expiry: String
-  args: String
+  autoClose: Boolean
 }
 
 """
@@ -2382,7 +2401,7 @@ type MultiSigProposal @entity {
   datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int!
-  params: MultiSigProposalParams
+  params: MultiSigProposalParams!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
   createdBlock: Block!
   updatedBlock: Block!
