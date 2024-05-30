@@ -1,4 +1,3 @@
-import { hexStripPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../types';
 import { camelToSnakeCase } from '../util';
@@ -23,7 +22,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
     nonce: extrinsic.extrinsic.nonce.toNumber(),
-    extrinsicHash: hexStripPrefix(extrinsic.extrinsic.hash.toJSON()),
+    extrinsicHash: extrinsic.extrinsic.hash.toJSON(),
     specVersionId: extrinsic.block.specVersion,
   });
 }

@@ -186,7 +186,13 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
   };
 
   if (args?.bridge_txs) {
+    // for extrinsic bridge.batch_propose_bridge_tx
     proposalParams.bridge = args.bridge_txs;
+    proposalParams.isBridge = true;
+    proposalParams.isBatch = true;
+  } else if (args?.bridge_tx) {
+    // for extrinsic bridge.propose_bridge_tx
+    proposalParams.bridge = [args.bridge_tx];
     proposalParams.isBridge = true;
   } else if (args?.proposal?.method === 'batch') {
     proposalParams.isBatch = true;
