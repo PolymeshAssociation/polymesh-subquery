@@ -8,6 +8,7 @@ import genesisHandler from './migrations/genesisHandler';
 import { logError } from './util';
 import migrationHandlers from './migrations/migrationHandlers';
 
+let lastBlockHash = '';
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
   const header = substrateEvent.block.block.header;
   const blockId = header.number.toNumber();
@@ -36,8 +37,12 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
   await mapChainUpgrade(substrateEvent).catch(e => logError(e));
 
   const promises = [];
-  const block = await mapBlock(substrateEvent.block);
-  promises.push(block.save());
+  const blockHash = substrateEvent.block.hash.toHex();
+  if (blockHash !== lastBlockHash) {
+    lastBlockHash = blockHash;
+    const block = await mapBlock(substrateEvent.block);
+    promises.push(block.save());
+  }
 
   if (substrateEvent.extrinsic) {
     const extrinsic = createExtrinsic(substrateEvent.extrinsic);
