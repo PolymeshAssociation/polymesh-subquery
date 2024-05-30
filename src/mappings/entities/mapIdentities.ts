@@ -26,7 +26,7 @@ import { createPortfolio, getPortfolio } from './mapPortfolio';
 /**
  * Subscribes to the Identities related events
  */
-export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: number): Promise<void> {
+export async function mapIdentities(args: HandlerArgs): Promise<void> {
   const { moduleId, eventId } = args;
 
   if (moduleId !== ModuleIdEnum.identity) {
@@ -34,7 +34,7 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
   }
 
   if (eventId === EventIdEnum.DidCreated) {
-    await handleDidCreated(args, ss58Format);
+    await handleDidCreated(args);
   }
 
   if (eventId === EventIdEnum.ChildDidCreated) {
@@ -46,7 +46,7 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
   }
 
   if (eventId === EventIdEnum.SecondaryKeysAdded) {
-    await handleSecondaryKeysAdded(args, ss58Format);
+    await handleSecondaryKeysAdded(args);
   }
 
   if (eventId === EventIdEnum.SecondaryKeysFrozen) {
@@ -58,19 +58,19 @@ export async function mapIdentities(args: HandlerArgs | Event, ss58Format?: numb
   }
 
   if (eventId === EventIdEnum.SecondaryKeysRemoved) {
-    await handleSecondaryKeysRemoved(args, ss58Format);
+    await handleSecondaryKeysRemoved(args);
   }
 
   if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
-    await handleSecondaryKeysPermissionsUpdated(args, ss58Format);
+    await handleSecondaryKeysPermissionsUpdated(args);
   }
 
   if (eventId === EventIdEnum.PrimaryKeyUpdated) {
-    await handlePrimaryKeyUpdated(args, ss58Format);
+    await handlePrimaryKeyUpdated(args);
   }
 
   if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
-    await handleSecondaryKeyLeftIdentity(args, ss58Format);
+    await handleSecondaryKeyLeftIdentity(args);
   }
 }
 
@@ -172,23 +172,13 @@ export const createIdentityIfNotExists = async (
   }
 };
 
-const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number): Promise<void> => {
+const handleDidCreated = async (args: HandlerArgs): Promise<void> => {
   const { eventId, createdBlockId: blockId, datetime, eventIdx } = await getEventParams(args);
 
-  let did: string, address: string;
+  const [rawDid, rawAddress] = args.params;
 
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    const [{ value: identityId }, { value: addressHex }] = attributes;
-
-    did = identityId;
-    address = getAccountKey(addressHex, ss58Format);
-  } else {
-    const [rawDid, rawAddress] = args.params;
-
-    did = getTextValue(rawDid);
-    address = getTextValue(rawAddress);
-  }
+  const did = getTextValue(rawDid);
+  const address = getTextValue(rawAddress);
 
   let defaultPortfolio;
   const identity = await Identity.get(did);
@@ -249,7 +239,7 @@ const handleDidCreated = async (args: HandlerArgs | Event, ss58Format?: number):
   await Promise.all([permissions, account, defaultPortfolio]);
 };
 
-const handleChildDidCreated = async (args: HandlerArgs | Event): Promise<void> => {
+const handleChildDidCreated = async (args: HandlerArgs): Promise<void> => {
   const { createdBlockId, updatedBlockId } = await getEventParams(args);
 
   let childDid: string, parentDid: string;
@@ -273,7 +263,7 @@ const handleChildDidCreated = async (args: HandlerArgs | Event): Promise<void> =
   }).save();
 };
 
-const handleChildDidUnlinked = async (args: HandlerArgs | Event): Promise<void> => {
+const handleChildDidUnlinked = async (args: HandlerArgs): Promise<void> => {
   let childDid: string;
 
   if (args instanceof Event) {
@@ -350,35 +340,20 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
   };
 };
 
-const handleSecondaryKeysPermissionsUpdated = async (
-  args: HandlerArgs | Event,
-  ss58Format?: number
-): Promise<void> => {
+const handleSecondaryKeysPermissionsUpdated = async (args: HandlerArgs): Promise<void> => {
   let address;
-  let updatedPermissions;
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    let addressHex;
-    [, { value: addressHex }, , { value: updatedPermissions }] = attributes;
-    if (typeof addressHex === 'string') {
-      address = getAccountKey(addressHex, ss58Format);
-    } else {
-      addressHex = addressHex.signer.account || addressHex.signer.Account;
-      address = getAccountKey(addressHex, ss58Format);
-    }
-  } else {
-    const [, rawSignerDetails, , rawUpdatedPermissions] = args.params;
 
-    if (rawSignerDetails instanceof Map) {
-      // for chain version < 5.0.0
-      const signer = rawSignerDetails.get('signer').toString();
-      address = JSON.parse(signer).account;
-    } else {
-      // for chain version >= 5.0.0
-      address = getTextValue(rawSignerDetails);
-    }
-    updatedPermissions = JSON.parse(rawUpdatedPermissions.toString());
+  const [, rawSignerDetails, , rawUpdatedPermissions] = args.params;
+
+  if (rawSignerDetails instanceof Map) {
+    // for chain version < 5.0.0
+    const signer = rawSignerDetails.get('signer').toString();
+    address = JSON.parse(signer).account;
+  } else {
+    // for chain version >= 5.0.0
+    address = getTextValue(rawSignerDetails);
   }
+  const updatedPermissions = JSON.parse(rawUpdatedPermissions.toString());
 
   const permissions = await Permissions.get(address);
   if (!permissions) {
@@ -398,17 +373,11 @@ const handleSecondaryKeysPermissionsUpdated = async (
 type MeshAccount = string | { account: string };
 
 const handleSecondaryKeysRemoved = async (
-  args: HandlerArgs | Event,
+  args: HandlerArgs,
   ss58Format?: number
 ): Promise<void> => {
-  let accounts;
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [, { value: accounts }] = attributes;
-  } else {
-    const [, rawAccounts] = args.params;
-    accounts = rawAccounts.toJSON() as MeshAccount[];
-  }
+  const [, rawAccounts] = args.params;
+  const accounts = rawAccounts.toJSON() as MeshAccount[];
 
   const removePromises = accounts.map(account => {
     let address;
@@ -428,20 +397,11 @@ const handleSecondaryKeysRemoved = async (
   await Promise.all(removePromises.flat());
 };
 
-const handleSecondaryKeysFrozen = async (
-  args: HandlerArgs | Event,
-  frozen: boolean
-): Promise<void> => {
+const handleSecondaryKeysFrozen = async (args: HandlerArgs, frozen: boolean): Promise<void> => {
   const { blockId, eventId } = args;
-  let did: string;
 
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [{ value: did }] = attributes;
-  } else {
-    const [rawDid] = args.params;
-    did = getTextValue(rawDid);
-  }
+  const [rawDid] = args.params;
+  const did = getTextValue(rawDid);
 
   const identity = await getIdentity(did);
 
@@ -454,23 +414,14 @@ const handleSecondaryKeysFrozen = async (
   await identity.save();
 };
 
-const handleSecondaryKeysAdded = async (
-  args: HandlerArgs | Event,
-  ss58Format?: number
-): Promise<void> => {
+const handleSecondaryKeysAdded = async (args: HandlerArgs): Promise<void> => {
   const { eventId, createdBlockId: blockId, datetime } = await getEventParams(args);
 
   const promises = [];
-  let did, accounts;
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [{ value: did }, { value: accounts }] = attributes;
-  } else {
-    const [rawDid, rawAccounts] = args.params;
+  const [rawDid, rawAccounts] = args.params;
 
-    did = getTextValue(rawDid);
-    accounts = JSON.parse(rawAccounts.toString());
-  }
+  const did = getTextValue(rawDid);
+  const accounts = JSON.parse(rawAccounts.toString());
 
   const { id: identityId } = await getIdentity(did);
 
@@ -483,11 +434,6 @@ const handleSecondaryKeysAdded = async (
     } else if ('signer' in rest) {
       // for chain version < 5.0.0
       address = rest.signer.account;
-    }
-
-    // for migration cases
-    if (ss58Format) {
-      address = getAccountKey(address, ss58Format);
     }
 
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
@@ -523,26 +469,13 @@ const handleSecondaryKeysAdded = async (
   await Promise.all(promises);
 };
 
-const handlePrimaryKeyUpdated = async (
-  args: HandlerArgs | Event,
-  ss58Format?: number
-): Promise<void> => {
+const handlePrimaryKeyUpdated = async (args: HandlerArgs): Promise<void> => {
   const { eventId, createdBlockId: blockId, datetime, eventIdx } = await getEventParams(args);
 
-  let did: string, address: string;
+  const [rawDid, , newKey] = args.params;
 
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    const [{ value: identityId }, , { value: addressHex }] = attributes;
-
-    did = identityId;
-    address = getAccountKey(addressHex, ss58Format);
-  } else {
-    const [rawDid, , newKey] = args.params;
-
-    did = getTextValue(rawDid);
-    address = getTextValue(newKey);
-  }
+  const did = getTextValue(rawDid);
+  const address = getTextValue(newKey);
 
   const identity = await getIdentity(did);
   const [account, permissions] = await Promise.all([
@@ -605,7 +538,7 @@ const handlePrimaryKeyUpdated = async (
 };
 
 const handleSecondaryKeyLeftIdentity = async (
-  args: HandlerArgs | Event,
+  args: HandlerArgs,
   ss58Format?: number
 ): Promise<void> => {
   let address: string;

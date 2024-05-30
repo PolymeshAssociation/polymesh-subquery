@@ -43,7 +43,7 @@ export function handleToolingEvent(
   eventIdx: number,
   block: SubstrateBlock,
   extrinsic?: SubstrateExtrinsic
-): Event {
+): { event: Event; harvesterLikeArgs: any[] } {
   const genericEvent = event.event as GenericEvent;
   const blockId = block.block.header.number.toString();
   const moduleId = genericEvent.section.toLowerCase();
@@ -74,28 +74,31 @@ export function handleToolingEvent(
     extrinsicId = `${blockId}/${extrinsic?.idx}`;
   }
 
-  return Event.create({
-    id: `${blockId}/${eventIdx}`,
-    blockId,
-    eventIdx,
-    extrinsicIdx: extrinsic?.idx,
-    specVersionId: block.specVersion,
-    eventId: eventId as EventIdEnum,
-    moduleId: moduleId as ModuleIdEnum,
-    attributesTxt: JSON.stringify(harvesterLikeArgs),
-    eventArg_0,
-    eventArg_1,
-    eventArg_2,
-    eventArg_3,
-    claimType,
-    claimExpiry,
-    claimIssuer,
-    claimScope,
-    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
-    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
-    transferTo: extractTransferTo(harvesterLikeArgs),
-    extrinsicId,
-  });
+  return {
+    event: Event.create({
+      id: `${blockId}/${eventIdx}`,
+      blockId,
+      eventIdx,
+      extrinsicIdx: extrinsic?.idx,
+      specVersionId: block.specVersion,
+      eventId: eventId as EventIdEnum,
+      moduleId: moduleId as ModuleIdEnum,
+      attributesTxt: JSON.stringify(harvesterLikeArgs),
+      eventArg_0,
+      eventArg_1,
+      eventArg_2,
+      eventArg_3,
+      claimType,
+      claimExpiry,
+      claimIssuer,
+      claimScope,
+      corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
+      fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
+      transferTo: extractTransferTo(harvesterLikeArgs),
+      extrinsicId,
+    }),
+    harvesterLikeArgs,
+  };
 }
 
 // handles an event to populate native GraphQL tables as well as what is needed for tooling
@@ -108,7 +111,13 @@ export async function createEvent(
   const genericEvent = event.event as GenericEvent;
   const moduleId = genericEvent.section.toLowerCase();
   const eventId = genericEvent.method;
-  const dbEvent = handleToolingEvent(event, eventIdx, block, extrinsic);
+  const { event: dbEvent, harvesterLikeArgs } = handleToolingEvent(
+    event,
+    eventIdx,
+    block,
+    extrinsic
+  );
+
   try {
     const blockId = block.block.header.number.toString();
     const args = genericEvent.data;
@@ -150,10 +159,6 @@ export async function createEvent(
       mapConfidentialTransaction(handlerArgs),
       mapConfidentialAssetTransaction(handlerArgs),
     ];
-
-    const harvesterLikeArgs = args.map((arg, i) => ({
-      value: serializeLikeHarvester(arg, genericEvent.meta.args[i].toString(), logFoundType),
-    }));
 
     const {
       claimExpiry,

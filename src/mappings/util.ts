@@ -4,14 +4,11 @@ import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@pol
 import { SubstrateExtrinsic } from '@subql/types';
 import {
   AssetDocument,
-  Block,
   CallIdEnum,
   ClaimTypeEnum,
   Compliance,
   Distribution,
-  Event,
   EventIdEnum,
-  Extrinsic,
   FoundType,
   LegTypeEnum,
   ModuleIdEnum,
@@ -537,42 +534,26 @@ type EventParams = {
   updatedBlockId: string;
 };
 
-export const getEventParams = async (args: HandlerArgs | Event): Promise<EventParams> => {
-  if (args instanceof Event) {
-    const { id, moduleId, eventId, blockId, eventIdx } = args;
-    const extrinsic = await Extrinsic.get(`${blockId}/${args.extrinsicIdx}`);
-    const block = await Block.get(blockId);
-    return {
-      id,
-      moduleId,
-      eventId,
-      callId: extrinsic?.callId,
-      extrinsicId: extrinsic?.id,
-      datetime: block?.datetime,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    };
-  } else {
-    const {
-      blockId,
-      eventId,
-      moduleId,
-      eventIdx,
-      block: { timestamp: datetime },
-      extrinsic,
-    } = args;
-    return {
-      id: `${blockId}/${eventIdx}`,
-      moduleId,
-      eventId,
-      ...getExtrinsicDetails(blockId, extrinsic),
-      datetime,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    };
-  }
+export const getEventParams = async (args: HandlerArgs): Promise<EventParams> => {
+  const {
+    blockId,
+    eventId,
+    moduleId,
+    eventIdx,
+    block: { timestamp: datetime },
+    extrinsic,
+  } = args;
+
+  return {
+    id: `${blockId}/${eventIdx}`,
+    moduleId,
+    eventId,
+    ...getExtrinsicDetails(blockId, extrinsic),
+    datetime,
+    eventIdx,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  };
 };
 
 export const getProposerValue = (item: Codec): Proposer => {
