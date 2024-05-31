@@ -9,6 +9,7 @@ import { logError } from './util';
 import migrationHandlers from './migrations/migrationHandlers';
 
 let lastBlockHash = '';
+let lastEventIdx = -1;
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
   const header = substrateEvent.block.block.header;
   const blockId = header.number.toNumber();
@@ -40,11 +41,13 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
   const blockHash = substrateEvent.block.hash.toHex();
   if (blockHash !== lastBlockHash) {
     lastBlockHash = blockHash;
-    const block = await mapBlock(substrateEvent.block);
+    lastEventIdx = -1;
+    const block = mapBlock(substrateEvent.block);
     promises.push(block.save());
   }
 
-  if (substrateEvent.extrinsic) {
+  if (substrateEvent?.extrinsic?.idx > lastEventIdx) {
+    lastEventIdx = substrateEvent?.extrinsic?.idx;
     const extrinsic = createExtrinsic(substrateEvent.extrinsic);
     promises.push(extrinsic.save());
   }

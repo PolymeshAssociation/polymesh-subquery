@@ -1,7 +1,7 @@
 import { SubstrateBlock } from '@subql/types';
 import { Block } from '../../types';
 
-export const mapBlock = async (block: SubstrateBlock): Promise<Block> => {
+export const mapBlock = (block: SubstrateBlock): Block => {
   const header = block.block.header;
   const blockId = header.number.toNumber();
   const countExtrinsics = block.block.extrinsics?.length;
