@@ -320,7 +320,7 @@ const project: SubstrateProject = {
         handlers: [
           {
             kind: SubstrateHandlerKind.Event,
-            handler: 'handleEvent',
+            handler: 'handleGenesis',
           },
         ],
       },

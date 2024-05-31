@@ -193,5 +193,6 @@ export async function createEvent(
     );
     throw error;
   }
+
   return dbEvent;
 }
