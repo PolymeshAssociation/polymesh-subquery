@@ -330,6 +330,23 @@ const project: SubstrateProject = {
       startBlock: Number('$START_BLOCK'),
       mapping: {
         file: './dist/index.js',
+        handlers: [
+          {
+            kind: SubstrateHandlerKind.Event,
+            handler: 'handleMigration',
+            filter: {
+              module: 'system',
+              method: 'CodeUpdated',
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: SubstrateDatasourceKind.Runtime,
+      startBlock: Number('$START_BLOCK'),
+      mapping: {
+        file: './dist/index.js',
         handlers,
       },
     },
