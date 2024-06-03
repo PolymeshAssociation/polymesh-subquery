@@ -173,7 +173,7 @@ export const createIdentityIfNotExists = async (
 };
 
 const handleDidCreated = async (args: HandlerArgs): Promise<void> => {
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = await getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   const [rawDid, rawAddress] = args.params;
 
@@ -240,7 +240,7 @@ const handleDidCreated = async (args: HandlerArgs): Promise<void> => {
 };
 
 const handleChildDidCreated = async (args: HandlerArgs): Promise<void> => {
-  const { createdBlockId, updatedBlockId } = await getEventParams(args);
+  const { createdBlockId, updatedBlockId } = getEventParams(args);
 
   let childDid: string, parentDid: string;
 
@@ -415,7 +415,7 @@ const handleSecondaryKeysFrozen = async (args: HandlerArgs, frozen: boolean): Pr
 };
 
 const handleSecondaryKeysAdded = async (args: HandlerArgs): Promise<void> => {
-  const { eventId, createdBlockId: blockId, datetime } = await getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime } = getEventParams(args);
 
   const promises = [];
   const [rawDid, rawAccounts] = args.params;
@@ -470,7 +470,7 @@ const handleSecondaryKeysAdded = async (args: HandlerArgs): Promise<void> => {
 };
 
 const handlePrimaryKeyUpdated = async (args: HandlerArgs): Promise<void> => {
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = await getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   const [rawDid, , newKey] = args.params;
 
@@ -542,7 +542,7 @@ const handleSecondaryKeyLeftIdentity = async (
   ss58Format?: number
 ): Promise<void> => {
   let address: string;
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = await getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   if (args instanceof Event) {
     const attributes = JSON.parse(args.attributesTxt);

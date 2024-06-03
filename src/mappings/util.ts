@@ -534,7 +534,7 @@ type EventParams = {
   updatedBlockId: string;
 };
 
-export const getEventParams = async (args: HandlerArgs): Promise<EventParams> => {
+export const getEventParams = (args: HandlerArgs): EventParams => {
   const {
     blockId,
     eventId,
