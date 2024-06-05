@@ -1,11 +1,12 @@
 import { SubstrateEvent } from '@subql/types';
 import { mapBlock } from './entities/mapBlock';
 import mapChainUpgrade from './entities/mapChainUpgrade';
-import { createEvent } from './entities/mapEvent';
+import { handleToolingEvent } from './entities/mapEvent';
 import { createExtrinsic } from './entities/mapExtrinsic';
 import mapSubqueryVersion from './entities/mapSubqueryVersion';
 import genesisHandler from './migrations/genesisHandler';
 import { logError } from './util';
+import { mapExternalAgentAction } from './entities';
 
 let lastBlockHash = '';
 let lastEventIdx = -1;
@@ -52,13 +53,10 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
     promises.push(extrinsic.save());
   }
 
-  const event = await createEvent(
-    substrateEvent,
-    substrateEvent.idx,
-    substrateEvent.block,
-    substrateEvent.extrinsic
-  );
+  const event = handleToolingEvent(substrateEvent);
   promises.push(event.save());
+
+  promises.push(mapExternalAgentAction(substrateEvent));
 
   await Promise.all(promises);
 }

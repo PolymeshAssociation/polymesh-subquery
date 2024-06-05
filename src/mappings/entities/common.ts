@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { FunctionPropertyNames } from '@subql/types-core';
 import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 
@@ -28,4 +28,16 @@ export const getAsset = async (ticker: string): Promise<Asset> => {
   }
 
   return asset;
+};
+
+export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
+  return {
+    blockId: event.block.block.header.number.toString(),
+    eventId: event.event.method as EventIdEnum,
+    moduleId: event.event.section.toLowerCase() as ModuleIdEnum,
+    params: event.event.data,
+    eventIdx: event.idx,
+    block: event.block,
+    extrinsic: event.extrinsic,
+  };
 };

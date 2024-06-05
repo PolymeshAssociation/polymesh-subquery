@@ -1,12 +1,5 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import {
-  EventIdEnum,
-  ModuleIdEnum,
-  Portfolio,
-  PortfolioMovement,
-  PortfolioMovementTypeEnum,
-} from '../../types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { EventIdEnum, Portfolio, PortfolioMovement, PortfolioMovementTypeEnum } from '../../types';
 import {
   bytesToString,
   getBigIntValue,
@@ -19,7 +12,7 @@ import {
   hexToString,
   serializeTicker,
 } from '../util';
-import { Attributes, HandlerArgs } from './common';
+import { Attributes, extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
 export const getPortfolio = async ({
@@ -78,11 +71,8 @@ export const createPortfolioIfNotExists = async (
   }
 };
 
-const handlePortfolioCreated = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number
-): Promise<void> => {
+export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -111,7 +101,8 @@ const handlePortfolioCreated = async (
   }
 };
 
-const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -125,24 +116,22 @@ const handlePortfolioRenamed = async (blockId: string, params: Codec[]): Promise
   await portfolio.save();
 };
 
-const handlePortfolioDeleted = async (
-  blockId: string,
-  params: Codec[],
-  datetime: Date
-): Promise<void> => {
+export const handlePortfolioDeleted = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, block } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
-  portfolio.deletedAt = datetime;
+  portfolio.deletedAt = block.timestamp;
   portfolio.updatedBlockId = blockId;
 
   await portfolio.save();
 };
 
-const handlePortfolioCustodianChanged = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawPortfolio, rawCustodian] = params;
 
   const portfolioValue = getPortfolioValue(rawPortfolio);
@@ -155,12 +144,8 @@ const handlePortfolioCustodianChanged = async (blockId: string, params: Codec[])
   await portfolio.save();
 };
 
-const handlePortfolioMovement = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  extrinsic?: SubstrateExtrinsic
-): Promise<void> => {
+export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<void> => {
+  const { params, extrinsic, blockId, eventIdx } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawTicker, rawAmount, rawMemo] = params;
 
   const address = getSignerAddress(extrinsic);
@@ -184,12 +169,8 @@ const handlePortfolioMovement = async (
   }).save();
 };
 
-const handleFundsMovedBetweenPortfolios = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  extrinsic?: SubstrateExtrinsic
-): Promise<void> => {
+export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): Promise<void> => {
+  const { params, extrinsic, blockId, eventIdx } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
   const address = getSignerAddress(extrinsic);
   const from = getPortfolioValue(rawFromPortfolio);
@@ -227,34 +208,3 @@ const handleFundsMovedBetweenPortfolios = async (
     updatedBlockId: blockId,
   }).save();
 };
-
-export async function mapPortfolio({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-  extrinsic,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.portfolio) {
-    if (eventId === EventIdEnum.PortfolioCreated) {
-      await handlePortfolioCreated(blockId, params, eventIdx);
-    }
-    if (eventId === EventIdEnum.PortfolioRenamed) {
-      await handlePortfolioRenamed(blockId, params);
-    }
-    if (eventId === EventIdEnum.PortfolioCustodianChanged) {
-      await handlePortfolioCustodianChanged(blockId, params);
-    }
-    if (eventId === EventIdEnum.PortfolioDeleted) {
-      await handlePortfolioDeleted(blockId, params, block.timestamp);
-    }
-    if (eventId === EventIdEnum.MovedBetweenPortfolios) {
-      await handlePortfolioMovement(blockId, params, eventIdx, extrinsic);
-    }
-    if (eventId === EventIdEnum.FundsMovedBetweenPortfolios) {
-      await handleFundsMovedBetweenPortfolios(blockId, params, eventIdx, extrinsic);
-    }
-  }
-}

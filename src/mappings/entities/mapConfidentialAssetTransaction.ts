@@ -1,12 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import {
-  EventIdEnum,
-  ModuleIdEnum,
-  ConfidentialAssetHolder,
-  ConfidentialAssetHistory,
-} from '../../types';
+import { EventIdEnum, ConfidentialAssetHolder, ConfidentialAssetHistory } from '../../types';
 import { getTextValue } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
 type AssetHolderParams = {
   id: string;
@@ -28,13 +24,8 @@ const extractAssetHolderParams = (params: Codec[]): AssetHolderParams => {
   return { id, accountId, assetId, amount, balance };
 };
 
-const handleConfidentialTransaction = async ({
-  blockId,
-  eventIdx,
-  eventId,
-  params,
-  block,
-}: HandlerArgs): Promise<void> => {
+export const handleConfidentialDepositOrWithdraw = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, eventId, block } = extractArgs(event);
   const { id, accountId, assetId, amount, balance } = extractAssetHolderParams(params);
 
   const existingAssetHolder = await ConfidentialAssetHolder.get(id);
@@ -70,13 +61,9 @@ const handleConfidentialTransaction = async ({
   }).save();
 };
 
-const handleAccountDepositIncoming = async ({
-  blockId,
-  eventIdx,
-  eventId,
-  params,
-  block,
-}: HandlerArgs): Promise<void> => {
+export const handleAccountDepositIncoming = async (event: SubstrateEvent): Promise<void> => {
+  const { params, eventIdx, eventId, block, blockId } = extractArgs(event);
+
   const { id, assetId, amount, accountId } = extractAssetHolderParams(params);
 
   await ConfidentialAssetHistory.create({
@@ -90,20 +77,4 @@ const handleAccountDepositIncoming = async ({
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
-};
-
-export const mapConfidentialAssetTransaction = async (args: HandlerArgs): Promise<void> => {
-  const { moduleId, eventId } = args;
-
-  if (moduleId !== ModuleIdEnum.confidentialasset) {
-    return;
-  }
-
-  if ([EventIdEnum.AccountDeposit, EventIdEnum.AccountWithdraw].includes(eventId)) {
-    await handleConfidentialTransaction(args);
-  }
-
-  if (eventId === EventIdEnum.AccountDepositIncoming) {
-    await handleAccountDepositIncoming(args);
-  }
 };

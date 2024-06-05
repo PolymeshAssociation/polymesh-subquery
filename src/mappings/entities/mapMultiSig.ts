@@ -1,8 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
 import {
-  EventIdEnum,
-  ModuleIdEnum,
   MultiSig,
   MultiSigProposal,
   MultiSigProposalStatusEnum,
@@ -18,7 +16,7 @@ import {
   getTextValue,
 } from '../util';
 import { MultiSigProposalVoteActionEnum, SignerTypeEnum } from './../../types/enums';
-import { Attributes, HandlerArgs } from './common';
+import { Attributes, extractArgs } from './common';
 
 export const createMultiSig = (
   address: string,
@@ -54,7 +52,8 @@ export const createMultiSigSigner = (
     updatedBlockId: blockId,
   }).save();
 
-const handleMultiSigCreated = async (blockId: string, params: Codec[]) => {
+export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawDid, rawMultiSigAddress, rawCreator, rawSigners, rawSignaturesRequired] = params;
 
   const creator = getTextValue(rawDid);
@@ -88,19 +87,18 @@ const handleMultiSigCreated = async (blockId: string, params: Codec[]) => {
 
 const getMultiSigSignerDetails = (params: Codec[]): Omit<Attributes<MultiSigSigner>, 'status'> => {
   const [, rawMultiSigAddress, rawSigner] = params;
-
   const multisigId = getTextValue(rawMultiSigAddress);
   const signer = getMultiSigSigner(rawSigner);
-
   return {
     multisigId,
     ...signer,
   };
 };
 
-const handleMultiSigSignerAuthorized = async (blockId: string, params: Codec[]) => {
-  const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params);
+export const handleMultiSigSignerAuthorized = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
 
+  const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params);
   await MultiSigSigner.create({
     id: `${multisigId}/${signerType}/${signerValue}`,
     multisigId,
@@ -112,24 +110,34 @@ const handleMultiSigSignerAuthorized = async (blockId: string, params: Codec[]) 
   }).save();
 };
 
+export const handleMultiSigSignerAdded = async (event: SubstrateEvent): Promise<void> => {
+  await handleMultiSigSignerStatus(event, MultiSigSignerStatusEnum.Approved);
+};
+
+export const handleMultiSigSignerRemoved = async (event: SubstrateEvent): Promise<void> => {
+  await handleMultiSigSignerStatus(event, MultiSigSignerStatusEnum.Removed);
+};
+
 const handleMultiSigSignerStatus = async (
-  blockId: string,
-  params: Codec[],
+  event: SubstrateEvent,
   status: MultiSigSignerStatusEnum
-) => {
+): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params);
-
   const multiSigSigner = await MultiSigSigner.get(`${multisigId}/${signerType}/${signerValue}`);
-
   Object.assign(multiSigSigner, {
     status,
     updatedBlockId: blockId,
   });
-
   await multiSigSigner.save();
 };
 
-const handleMultiSigSignaturesRequiredChanged = async (blockId: string, params: Codec[]) => {
+export const handleMultiSigSignaturesRequiredChanged = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawMultiSigAddress, rawSignaturesRequired] = params;
 
   const multiSigAddress = getTextValue(rawMultiSigAddress);
@@ -145,13 +153,9 @@ const handleMultiSigSignaturesRequiredChanged = async (blockId: string, params: 
   await multiSig.save();
 };
 
-const handleMultiSigProposalAdded = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock,
-  extrinsic: SubstrateExtrinsic
-) => {
+export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, extrinsic, eventIdx, block } = extractArgs(event);
+
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
   const creatorId = getTextValue(rawDid);
@@ -195,9 +199,9 @@ const handleMultiSigProposalStatus = async (
   await proposal.save();
 };
 
-const handleMultiSigProposalRejected = async (blockId: string, params: Codec[]) => {
+export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawMultiSigAddress, rawProposalId] = params;
-
   await handleMultiSigProposalStatus(
     rawMultiSigAddress,
     rawProposalId,
@@ -206,7 +210,9 @@ const handleMultiSigProposalRejected = async (blockId: string, params: Codec[]) 
   );
 };
 
-const handleMultiSigProposalExecuted = async (blockId: string, params: Codec[]) => {
+export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
 
   const success = getBooleanValue(rawSuccess);
@@ -220,13 +226,10 @@ const handleMultiSigProposalExecuted = async (blockId: string, params: Codec[]) 
 };
 
 const handleMultiSigProposalVoteAction = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock,
-  action: MultiSigProposalVoteActionEnum,
-  extrinsic?: SubstrateExtrinsic
+  event: SubstrateEvent,
+  action: MultiSigProposalVoteActionEnum
 ) => {
+  const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -255,6 +258,14 @@ const handleMultiSigProposalVoteAction = async (
     }).save(),
     proposal.save(),
   ]);
+};
+
+export const handleMultiSigVoteApproved = async (event: SubstrateEvent): Promise<void> => {
+  await handleMultiSigProposalVoteAction(event, MultiSigProposalVoteActionEnum.Approved);
+};
+
+export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise<void> => {
+  await handleMultiSigProposalVoteAction(event, MultiSigProposalVoteActionEnum.Rejected);
 };
 
 export const handleMultiSigProposalDeleted = async (blockId: string): Promise<void> => {
@@ -286,58 +297,3 @@ export const handleMultiSigProposalDeleted = async (blockId: string): Promise<vo
     await store.bulkUpdate('MultiSigProposal', deletedProposals);
   }
 };
-
-/**
- * Subscribes to events related to MultiSigs
- */
-export async function mapMultiSig({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-  extrinsic,
-}: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.multisig) {
-    return;
-  }
-
-  switch (eventId) {
-    case EventIdEnum.MultiSigCreated:
-      return handleMultiSigCreated(blockId, params);
-    case EventIdEnum.MultiSigSignaturesRequiredChanged:
-      return handleMultiSigSignaturesRequiredChanged(blockId, params);
-    case EventIdEnum.MultiSigSignerAuthorized:
-      return handleMultiSigSignerAuthorized(blockId, params);
-    case EventIdEnum.MultiSigSignerAdded:
-      return handleMultiSigSignerStatus(blockId, params, MultiSigSignerStatusEnum.Approved);
-    case EventIdEnum.MultiSigSignerRemoved:
-      return handleMultiSigSignerStatus(blockId, params, MultiSigSignerStatusEnum.Removed);
-
-    case EventIdEnum.ProposalAdded:
-      return handleMultiSigProposalAdded(blockId, params, eventIdx, block, extrinsic);
-    case EventIdEnum.ProposalRejected:
-      return handleMultiSigProposalRejected(blockId, params);
-    case EventIdEnum.ProposalExecuted:
-      return handleMultiSigProposalExecuted(blockId, params);
-    case EventIdEnum.ProposalApproved:
-      return handleMultiSigProposalVoteAction(
-        blockId,
-        params,
-        eventIdx,
-        block,
-        MultiSigProposalVoteActionEnum.Approved,
-        extrinsic
-      );
-    case EventIdEnum.ProposalRejectionVote:
-      return handleMultiSigProposalVoteAction(
-        blockId,
-        params,
-        eventIdx,
-        block,
-        MultiSigProposalVoteActionEnum.Rejected,
-        extrinsic
-      );
-  }
-}

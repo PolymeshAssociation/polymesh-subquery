@@ -1,7 +1,7 @@
-import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, ModuleIdEnum, TransferManager } from '../../types';
+import { TransferManager } from '../../types';
 import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
 const getTransferManageId = (
   ticker: string,
@@ -14,7 +14,8 @@ const getTransferManager = (
 ): Promise<TransferManager | undefined> =>
   TransferManager.get(getTransferManageId(ticker, restriction));
 
-const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
+export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker, rawManager] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -32,7 +33,8 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   }).save();
 };
 
-const handleTransferManagerRemoved = async (params: Codec[]) => {
+export const handleTransferManagerRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
   const [, rawTicker, rawManager] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -42,7 +44,8 @@ const handleTransferManagerRemoved = async (params: Codec[]) => {
   await TransferManager.remove(id);
 };
 
-const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -61,7 +64,8 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]): Promise<
   }
 };
 
-const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
+export const handleExemptionsRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -79,25 +83,3 @@ const handleExemptionsRemoved = async (blockId: string, params: Codec[]) => {
     await transferManager.save();
   }
 };
-
-export async function mapTransferManager({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.statistics) {
-    if (eventId === EventIdEnum.TransferManagerAdded) {
-      await handleTransferManagerAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.TransferManagerRemoved) {
-      await handleTransferManagerRemoved(params);
-    }
-    if (eventId === EventIdEnum.ExemptionsAdded) {
-      await handleExemptionsAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.ExemptionsRemoved) {
-      await handleExemptionsRemoved(blockId, params);
-    }
-  }
-}

@@ -1,56 +1,35 @@
-import { SubstrateBlock } from '@subql/types';
-import {
-  Claim,
-  ClaimScope,
-  ClaimScopeTypeEnum,
-  ClaimTypeEnum,
-  EventIdEnum,
-  ModuleIdEnum,
-} from '../../types';
-import { END_OF_TIME, getTextValue, serializeTicker } from '../util';
-import { HandlerArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
+import { GenericEvent } from '@polkadot/types/generic';
+import { Claim, ClaimScope, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum } from '../../types';
+import { END_OF_TIME, getTextValue, logFoundType, serializeTicker } from '../util';
+import { extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
+import { serializeLikeHarvester } from '../serializeLikeHarvester';
+import { extractClaimInfo } from '../generatedColumns';
 
-interface ClaimParams {
-  claimExpiry: bigint | undefined;
-  claimIssuer: string;
-  claimScope: string;
-  claimType: ClaimTypeEnum;
-  issuanceDate: bigint;
-  lastUpdateDate: bigint;
-  cddId: string;
-  jurisdiction: string;
-  customClaimTypeId: string | undefined;
-}
+const extractHarvesterArgs = (event: SubstrateEvent) => {
+  const genericEvent = event.event as GenericEvent;
+  const args = genericEvent.data;
+
+  return args.map((arg, i) => {
+    let type;
+    const typeName = genericEvent.meta.fields[i].typeName;
+    if (typeName.isSome) {
+      // for metadata >= v14
+      type = typeName.unwrap().toString();
+    } else {
+      // for metadata < v14
+      type = genericEvent.meta.args[i].toString();
+    }
+    return {
+      value: serializeLikeHarvester(arg, type, logFoundType),
+    };
+  });
+};
 
 interface Scope {
   type: ClaimScopeTypeEnum;
   value: string;
-}
-
-/**
- * Subscribes to the Claim events
- */
-export async function mapClaim(
-  { blockId, eventId, moduleId, params, eventIdx, block }: HandlerArgs,
-  claimParams: ClaimParams
-): Promise<void> {
-  if (moduleId === ModuleIdEnum.identity) {
-    const target = getTextValue(params[0]);
-
-    if (eventId === EventIdEnum.ClaimAdded) {
-      await handleClaimAdded(blockId, eventIdx, block, claimParams, target);
-    }
-
-    if (eventId === EventIdEnum.ClaimRevoked) {
-      await handleClaimRevoked(target, claimParams);
-    }
-
-    if (eventId === EventIdEnum.AssetDidRegistered) {
-      const ticker = serializeTicker(params[1]);
-      await handleScopes(blockId, target, ticker);
-    }
-  }
 }
 
 const getId = (
@@ -84,23 +63,23 @@ const getId = (
   return idAttributes.join('/');
 };
 
-const handleClaimAdded = async (
-  blockId: string,
-  eventIdx: number,
-  block: SubstrateBlock,
-  {
-    claimScope,
+export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventIdx, block, params } = extractArgs(event);
+  const harvesterArgs = extractHarvesterArgs(event);
+  const target = getTextValue(params[0]);
+
+  const {
     claimExpiry,
     claimIssuer,
+    claimScope,
     claimType,
     issuanceDate,
-    cddId,
     lastUpdateDate,
+    cddId,
     jurisdiction,
     customClaimTypeId,
-  }: ClaimParams,
-  target: string
-): Promise<void> => {
+  } = extractClaimInfo(harvesterArgs);
+
   const scope = JSON.parse(claimScope) as Scope;
 
   const filterExpiry = claimExpiry || END_OF_TIME;
@@ -116,7 +95,7 @@ const handleClaimAdded = async (
     issuanceDate,
     lastUpdateDate,
     expiry: claimExpiry,
-    type: claimType,
+    type: claimType as ClaimTypeEnum,
     scope,
     jurisdiction,
     cddId,
@@ -136,11 +115,14 @@ const handleClaimAdded = async (
   }
 };
 
-const handleClaimRevoked = async (
-  target: string,
-  { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId }: ClaimParams
-) => {
+export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
+  const harvesterArgs = extractHarvesterArgs(event);
+  const { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId } =
+    extractClaimInfo(harvesterArgs);
+
   const scope = JSON.parse(claimScope) as Scope;
+  const target = getTextValue(params[0]);
 
   const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
@@ -150,6 +132,15 @@ const handleClaimRevoked = async (
     claim.revokeDate = issuanceDate;
     await claim.save();
   }
+};
+
+export const handleDidRegistered = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
+  const target = getTextValue(params[0]);
+  const ticker = serializeTicker(params[1]);
+
+  await handleScopes(blockId, target, ticker);
 };
 
 const handleScopes = async (

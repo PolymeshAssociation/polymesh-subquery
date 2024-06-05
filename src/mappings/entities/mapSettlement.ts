@@ -1,5 +1,4 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateExtrinsic } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
 import {
   EventIdEnum,
   IdentityInstructions,
@@ -8,12 +7,11 @@ import {
   Leg,
   MediatorAffirmationStatus,
   MeditatorAffirmation,
-  ModuleIdEnum,
   Settlement,
   SettlementResultEnum,
   Venue,
 } from '../../types';
-import { HandlerArgs } from '../entities/common';
+import { extractArgs, HandlerArgs } from '../entities/common';
 import {
   LegDetails,
   bytesToString,
@@ -27,18 +25,6 @@ import {
   getTextValue,
 } from '../util';
 import { createPortfolioIfNotExists } from './mapPortfolio';
-
-const updateEvents: EventIdEnum[] = [
-  EventIdEnum.InstructionAuthorized,
-  EventIdEnum.InstructionUnauthorized,
-  EventIdEnum.InstructionAffirmed,
-];
-
-const finalizedEvents: EventIdEnum[] = [
-  EventIdEnum.InstructionExecuted,
-  EventIdEnum.InstructionRejected,
-  EventIdEnum.InstructionFailed,
-];
 
 const settlementResultMap = {
   [EventIdEnum.InstructionExecuted]: SettlementResultEnum.Executed,
@@ -135,7 +121,8 @@ const createIdentityInstructionRelation = async (
   await Promise.all(promises);
 };
 
-const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawIdentity, rawVenueId, rawDetails, rawType] = params;
 
   await Venue.create({
@@ -148,7 +135,8 @@ const handleVenueCreated = async (blockId: string, params: Codec[]): Promise<voi
   }).save();
 };
 
-const handleVenueDetailsUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawVenueId, rawDetails] = params;
 
   const venue = await getVenue(getTextValue(rawVenueId));
@@ -158,7 +146,8 @@ const handleVenueDetailsUpdated = async (blockId: string, params: Codec[]): Prom
   await venue.save();
 };
 
-const handleVenueTypeUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenueTypeUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawVenueId, rawType] = params;
 
   const venue = await getVenue(getTextValue(rawVenueId));
@@ -168,7 +157,8 @@ const handleVenueTypeUpdated = async (blockId: string, params: Codec[]): Promise
   await venue.save();
 };
 
-const handleInstructionCreated = async (args: HandlerArgs): Promise<void> => {
+export const handleInstructionCreated = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const { blockId, eventId, eventIdx, params, block, extrinsic } = args;
   const address = getSignerAddress(extrinsic);
 
@@ -235,12 +225,8 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const handleInstructionUpdate = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  extrinsic?: SubstrateExtrinsic
-): Promise<void> => {
+export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
+  const { params, extrinsic, eventId, blockId } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
   const [, , rawInstructionId] = params;
@@ -253,13 +239,8 @@ const handleInstructionUpdate = async (
   await Promise.all([instruction.save(), ...(await updateLegs(blockId, address, instructionId))]);
 };
 
-const handleInstructionFinalizedEvent = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  eventIdx: number,
-  extrinsic?: SubstrateExtrinsic
-): Promise<void> => {
+export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
+  const { params, extrinsic, eventId, eventIdx, blockId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId] = params;
 
   const address = getSignerAddress(extrinsic);
@@ -304,10 +285,8 @@ const handleInstructionFinalizedEvent = async (
   await Promise.all(promises);
 };
 
-const handleFailedToExecuteInstruction = async (
-  blockId: string,
-  params: Codec[]
-): Promise<void> => {
+export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawInstructionId] = params;
   const instructionId = getTextValue(rawInstructionId);
 
@@ -320,7 +299,8 @@ const handleFailedToExecuteInstruction = async (
   await instruction.save();
 };
 
-const handleMediatorAffirmation = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleMediatorAffirmation = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId, expiryOpt] = params;
 
   const identityId = getTextValue(rawIdentityId);
@@ -336,7 +316,8 @@ const handleMediatorAffirmation = async (blockId: string, params: Codec[]): Prom
   await affirmation.save();
 };
 
-const handleMediatorWithdrawn = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleMediatorWithdrawn = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId] = params;
   const identityId = getTextValue(rawIdentityId);
   const instructionId = getTextValue(rawInstructionId);
@@ -350,7 +331,8 @@ const handleMediatorWithdrawn = async (blockId: string, params: Codec[]): Promis
   await affirmation.save();
 };
 
-const handleInstructionMediators = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawInstructionId, rawIdentityIds] = params;
   const instructionId = getTextValue(rawInstructionId);
   const identityIds = getStringArrayValue(rawIdentityIds);
@@ -368,48 +350,3 @@ const handleInstructionMediators = async (blockId: string, params: Codec[]): Pro
 
   await Promise.all(promises);
 };
-
-export async function mapSettlement(args: HandlerArgs): Promise<void> {
-  const { blockId, eventId, moduleId, params, eventIdx, extrinsic } = args;
-  if (moduleId === ModuleIdEnum.settlement) {
-    if (eventId === EventIdEnum.VenueCreated) {
-      await handleVenueCreated(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.VenueDetailsUpdated) {
-      await handleVenueDetailsUpdated(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.VenueTypeUpdated) {
-      await handleVenueTypeUpdated(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.InstructionCreated) {
-      await handleInstructionCreated(args);
-    }
-
-    if (eventId === EventIdEnum.MediatorAffirmationReceived) {
-      await handleMediatorAffirmation(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.MediatorAffirmationWithdrawn) {
-      await handleMediatorWithdrawn(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.InstructionMediators) {
-      await handleInstructionMediators(blockId, params);
-    }
-
-    if (updateEvents.includes(eventId)) {
-      await handleInstructionUpdate(blockId, eventId, params, extrinsic);
-    }
-
-    if (finalizedEvents.includes(eventId)) {
-      await handleInstructionFinalizedEvent(blockId, eventId, params, eventIdx, extrinsic);
-    }
-
-    if (eventId === EventIdEnum.FailedToExecuteInstruction) {
-      await handleFailedToExecuteInstruction(blockId, params);
-    }
-  }
-}

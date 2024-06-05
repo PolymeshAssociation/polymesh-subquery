@@ -8,9 +8,11 @@ import {
   PolyxTransaction,
 } from '../../types';
 import { bytesToString, getBigIntValue, getEventParams, getTextValue } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs, HandlerArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
-const handleTreasuryReimbursement = async (args: HandlerArgs): Promise<void> => {
+export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const [rawIdentity, rawBalance] = args.params;
   const did = getTextValue(rawIdentity);
   const balance = getTextValue(rawBalance);
@@ -79,7 +81,9 @@ const processTreasuryDisbursementArgs = async (args: HandlerArgs) => {
   return { identityId, toId, toAddress, amount };
 };
 
-const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
+export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
   const { identityId, toId, toAddress, amount } = await processTreasuryDisbursementArgs(args);
 
   const details = getEventParams(args);
@@ -120,7 +124,9 @@ const handleTreasuryDisbursement = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
+export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance, rawMemo] = args.params;
 
   const amount = getBigIntValue(rawBalance);
@@ -168,7 +174,9 @@ const handleBalanceTransfer = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
+export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawAddress, rawActualFee] = args.params;
   const address = getTextValue(rawAddress);
   const amount = getBigIntValue(rawActualFee);
@@ -207,7 +215,9 @@ const handleTransactionFeePaid = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleBalanceAdded = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
+const handleBalanceAdded = async (event: SubstrateEvent, type: BalanceTypeEnum): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawAddress, rawBalance] = args.params;
   const toAddress = getTextValue(rawAddress);
   const amount = getBigIntValue(rawBalance);
@@ -224,7 +234,12 @@ const handleBalanceAdded = async (args: HandlerArgs, type: BalanceTypeEnum): Pro
   }).save();
 };
 
-const handleBalanceCharged = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
+const handleBalanceCharged = async (
+  event: SubstrateEvent,
+  type: BalanceTypeEnum
+): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawAddress, rawBalance] = args.params;
   const address = getTextValue(rawAddress);
   const amount = getBigIntValue(rawBalance);
@@ -240,7 +255,12 @@ const handleBalanceCharged = async (args: HandlerArgs, type: BalanceTypeEnum): P
   }).save();
 };
 
-const handleBalanceReceived = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
+const handleBalanceReceived = async (
+  event: SubstrateEvent,
+  type: BalanceTypeEnum
+): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawDid, rawAddress, rawBalance] = args.params;
   const toId = getTextValue(rawDid);
   const toAddress = getTextValue(rawAddress);
@@ -255,7 +275,9 @@ const handleBalanceReceived = async (args: HandlerArgs, type: BalanceTypeEnum): 
   }).save();
 };
 
-const handleBalanceSpent = async (args: HandlerArgs, type: BalanceTypeEnum): Promise<void> => {
+const handleBalanceSpent = async (event: SubstrateEvent, type: BalanceTypeEnum): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawDid, rawAddress, rawBalance] = args.params;
   const identityId = getTextValue(rawDid);
   const address = getTextValue(rawAddress);
@@ -270,7 +292,9 @@ const handleBalanceSpent = async (args: HandlerArgs, type: BalanceTypeEnum): Pro
   }).save();
 };
 
-const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
+export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
   const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
   const toId = getTextValue(rawDid);
   const toAddress = getTextValue(rawAddress);
@@ -298,87 +322,38 @@ const handleBalanceSet = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleTreasury = async (args: HandlerArgs): Promise<void> => {
-  const { eventId } = args;
-  if (eventId === EventIdEnum.TreasuryReimbursement) {
-    await handleTreasuryReimbursement(args);
-  }
-  if (eventId === EventIdEnum.TreasuryDisbursement) {
-    await handleTreasuryDisbursement(args);
-  }
+export const handleBalanceEndowed = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceReceived(event, BalanceTypeEnum.Free);
 };
 
-const handleBalances = async (args: HandlerArgs): Promise<void> => {
-  const { eventId } = args;
-  switch (eventId) {
-    case EventIdEnum.Transfer:
-      await handleBalanceTransfer(args);
-      break;
-    case EventIdEnum.Endowed:
-      await handleBalanceReceived(args, BalanceTypeEnum.Free);
-      break;
-    case EventIdEnum.Reserved:
-      await handleBalanceCharged(args, BalanceTypeEnum.Reserved);
-      break;
-    case EventIdEnum.Unreserved:
-      await handleBalanceAdded(args, BalanceTypeEnum.Free);
-      break;
-    case EventIdEnum.AccountBalanceBurned:
-      await handleBalanceSpent(args, BalanceTypeEnum.Free);
-      break;
-    case EventIdEnum.BalanceSet:
-      await handleBalanceSet(args);
-      break;
-  }
+export const handleBalanceReserved = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceCharged(event, BalanceTypeEnum.Reserved);
 };
 
-const handleStaking = async (args: HandlerArgs): Promise<void> => {
-  const { eventId } = args;
-  switch (eventId) {
-    case EventIdEnum.Bonded:
-      await handleBalanceSpent(args, BalanceTypeEnum.Bonded);
-      break;
-    case EventIdEnum.Unbonded:
-      await handleBalanceReceived(args, BalanceTypeEnum.Unbonded);
-      break;
-    case EventIdEnum.Reward:
-      await handleBalanceReceived(args, BalanceTypeEnum.Free);
-      break;
-    case EventIdEnum.Withdrawn:
-      await handleBalanceAdded(args, BalanceTypeEnum.Unbonded);
-      break;
-  }
+export const handleBalanceUnreserved = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceAdded(event, BalanceTypeEnum.Free);
 };
 
-const handleProtocolFee = async (args: HandlerArgs): Promise<void> => {
-  const { eventId } = args;
-  if (eventId === EventIdEnum.FeeCharged) {
-    await handleBalanceCharged(args, BalanceTypeEnum.Free);
-  }
+export const handleBalanceBurned = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceSpent(event, BalanceTypeEnum.Free);
 };
 
-const handleTransactionPayment = async (args: HandlerArgs): Promise<void> => {
-  const { eventId } = args;
-  if (eventId === EventIdEnum.TransactionFeePaid) {
-    await handleTransactionFeePaid(args);
-  }
+export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceSpent(event, BalanceTypeEnum.Bonded);
 };
 
-export async function mapPolyxTransaction(args: HandlerArgs): Promise<void> {
-  const { moduleId } = args;
-  if (moduleId === ModuleIdEnum.treasury) {
-    await handleTreasury(args);
-  }
-  if (moduleId === ModuleIdEnum.balances) {
-    await handleBalances(args);
-  }
-  if (moduleId === ModuleIdEnum.staking) {
-    await handleStaking(args);
-  }
-  if (moduleId === ModuleIdEnum.protocolfee) {
-    await handleProtocolFee(args);
-  }
-  if (moduleId === ModuleIdEnum.transactionpayment) {
-    await handleTransactionPayment(args);
-  }
-}
+export const handleUnbonded = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceReceived(event, BalanceTypeEnum.Unbonded);
+};
+
+export const handleReward = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceReceived(event, BalanceTypeEnum.Free);
+};
+
+export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceAdded(event, BalanceTypeEnum.Unbonded);
+};
+
+export const handleFeeCharged = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceCharged(event, BalanceTypeEnum.Free);
+};

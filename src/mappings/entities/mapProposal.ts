@@ -1,5 +1,4 @@
-import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, ModuleIdEnum, Proposal, ProposalStateEnum, ProposalVote } from '../../types';
+import { Proposal, ProposalStateEnum, ProposalVote } from '../../types';
 import {
   bytesToString,
   getBigIntValue,
@@ -8,9 +7,11 @@ import {
   getTextValue,
   serializeAccount,
 } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
-const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleProposalCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
 
   await Proposal.create({
@@ -29,7 +30,8 @@ const handleProposalCreated = async (blockId: string, params: Codec[]): Promise<
   }).save();
 };
 
-const handleProposalStateUpdated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawPipId, rawState] = params;
 
   const pipId = getTextValue(rawPipId);
@@ -41,7 +43,8 @@ const handleProposalStateUpdated = async (blockId: string, params: Codec[]): Pro
   await proposal.save();
 };
 
-const handleVoted = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawAccount, rawPipId, rawVote, rawWeight] = params;
 
   const account = serializeAccount(rawAccount);
@@ -88,7 +91,8 @@ const handleVoted = async (blockId: string, params: Codec[]): Promise<void> => {
   await Promise.all([proposal.save(), proposalVote.save()]);
 };
 
-const handleSnapshotTaken = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleSnapshotTaken = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const pips = params[2].toJSON() as any;
   const promises = [];
   pips.forEach(pip => {
@@ -102,31 +106,3 @@ const handleSnapshotTaken = async (blockId: string, params: Codec[]): Promise<vo
   });
   await Promise.all(promises);
 };
-
-/**
- * Subscribes to events related to proposals
- */
-export async function mapProposal({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.pips) {
-    if (eventId === EventIdEnum.ProposalCreated) {
-      await handleProposalCreated(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.ProposalStateUpdated) {
-      await handleProposalStateUpdated(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.Voted) {
-      await handleVoted(blockId, params);
-    }
-
-    if (eventId === EventIdEnum.SnapshotTaken) {
-      await handleSnapshotTaken(blockId, params);
-    }
-  }
-}
