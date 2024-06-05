@@ -1,9 +1,10 @@
-import { ConfidentialAccount, EventIdEnum, ModuleIdEnum } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { ConfidentialAccount } from '../../types';
 import { getTextValue } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs, HandlerArgs } from './common';
 
-const handleConfidentialAccountCreated = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, params, eventIdx } = args;
+export const handleConfidentialAccountCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, params, eventIdx } = extractArgs(event);
 
   const [rawCreator, rawAccount] = params;
 
@@ -21,8 +22,10 @@ const handleConfidentialAccountCreated = async (args: HandlerArgs): Promise<void
   }).save();
 };
 
-const handleConfidentialAssetFrozenForAccount = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, params } = args;
+export const handleConfidentialAssetFrozenForAccount = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { blockId, params } = extractArgs(event);
   const [, rawAccount, rawAsset] = params;
 
   const accountId = getTextValue(rawAccount);
@@ -38,7 +41,9 @@ const handleConfidentialAssetFrozenForAccount = async (args: HandlerArgs): Promi
   }
 };
 
-const handleConfidentialAssetUnfrozenForAccount = async (args: HandlerArgs): Promise<void> => {
+export const handleConfidentialAssetUnfrozenForAccount = async (
+  args: HandlerArgs
+): Promise<void> => {
   const { blockId, params } = args;
   const [, rawAccount, rawAsset] = params;
 
@@ -52,25 +57,5 @@ const handleConfidentialAssetUnfrozenForAccount = async (args: HandlerArgs): Pro
     account.updatedBlockId = blockId;
 
     await account.save();
-  }
-};
-
-export const mapConfidentialAccountCreated = async (args: HandlerArgs): Promise<void> => {
-  const { moduleId, eventId } = args;
-
-  if (moduleId !== ModuleIdEnum.confidentialasset) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.AccountCreated) {
-    handleConfidentialAccountCreated(args);
-  }
-
-  if (eventId === EventIdEnum.AccountAssetFrozen) {
-    await handleConfidentialAssetFrozenForAccount(args);
-  }
-
-  if (eventId === EventIdEnum.AccountAssetUnfrozen) {
-    await handleConfidentialAssetUnfrozenForAccount(args);
   }
 };

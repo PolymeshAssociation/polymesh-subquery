@@ -1,7 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { ConfidentialAsset, ConfidentialVenue, EventIdEnum, ModuleIdEnum } from '../../types';
+import { ConfidentialAsset, ConfidentialVenue, EventIdEnum } from '../../types';
 import { getBigIntValue, getBooleanValue, getTextValue, getNumberValue } from '../util';
-import { Attributes, HandlerArgs } from './common';
+import { Attributes, extractArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
 export const getAuditorsAndMediators = (
   item: Codec
@@ -14,11 +15,8 @@ export const getAuditorsAndMediators = (
   };
 };
 
-const handleConfidentialAssetCreated = async (
-  blockId: string,
-  eventIdx: number,
-  params: Codec[]
-): Promise<void> => {
+export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx } = extractArgs(event);
   const [rawCreator, rawAssetId, , rawAuditorsMediators] = params;
 
   const creatorId = getTextValue(rawCreator);
@@ -40,10 +38,11 @@ const handleConfidentialAssetCreated = async (
   }).save();
 };
 
-const handleConfidentialAssetIssuedOrBurned = async (
-  blockId: string,
-  params: Codec[]
+export const handleConfidentialAssetIssuedOrBurned = async (
+  event: SubstrateEvent
 ): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawAssetId, , rawTotalSupply] = params;
 
   const assetId = getTextValue(rawAssetId);
@@ -59,11 +58,9 @@ const handleConfidentialAssetIssuedOrBurned = async (
   }
 };
 
-const handleVenueCreated = async (
-  blockId: string,
-  eventIdx: number,
-  params: Codec[]
-): Promise<void> => {
+export const handleConfidentialVenueCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, eventIdx, blockId } = extractArgs(event);
+
   const [rawCreator, rawVenueId] = params;
 
   const creatorId = getTextValue(rawCreator);
@@ -79,7 +76,8 @@ const handleVenueCreated = async (
   }).save();
 };
 
-const handleVenuesAllowed = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenuesAllowed = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawAssetId, rawVenueId] = params;
 
   const assetId = getTextValue(rawAssetId);
@@ -96,7 +94,8 @@ const handleVenuesAllowed = async (blockId: string, params: Codec[]): Promise<vo
   }
 };
 
-const handleVenuesBlocked = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenuesBlocked = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawAssetId, rawVenueId] = params;
 
   const assetId = getTextValue(rawAssetId);
@@ -112,7 +111,9 @@ const handleVenuesBlocked = async (blockId: string, params: Codec[]): Promise<vo
   }
 };
 
-const handleVenueFiltering = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleVenueFiltering = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawAssetId, rawEnabled] = params;
   const assetId = getTextValue(rawAssetId);
   const enabled = getBooleanValue(rawEnabled);
@@ -127,11 +128,9 @@ const handleVenueFiltering = async (blockId: string, params: Codec[]): Promise<v
   }
 };
 
-const handleAssetFrozenUnfrozen = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[]
-): Promise<void> => {
+export const handleAssetFrozenUnfrozen = async (event: SubstrateEvent): Promise<void> => {
+  const { params, eventId, blockId } = extractArgs(event);
+
   const [, rawAssetId] = params;
 
   const assetId = getTextValue(rawAssetId);
@@ -143,41 +142,5 @@ const handleAssetFrozenUnfrozen = async (
     asset.updatedBlockId = blockId;
 
     await asset.save();
-  }
-};
-
-export const mapConfidentialAsset = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, moduleId, eventId, eventIdx, params } = args;
-
-  if (moduleId !== ModuleIdEnum.confidentialasset) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.AssetCreated) {
-    await handleConfidentialAssetCreated(blockId, eventIdx, params);
-  }
-
-  if (eventId === EventIdEnum.Issued || eventId === EventIdEnum.Burned) {
-    await handleConfidentialAssetIssuedOrBurned(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.VenueFiltering) {
-    await handleVenueFiltering(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.VenuesAllowed) {
-    await handleVenuesAllowed(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.VenuesBlocked) {
-    await handleVenuesBlocked(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.VenueCreated) {
-    await handleVenueCreated(blockId, eventIdx, params);
-  }
-
-  if (eventId === EventIdEnum.AssetFrozen || eventId === EventIdEnum.Unfrozen) {
-    handleAssetFrozenUnfrozen(blockId, eventId, params);
   }
 };

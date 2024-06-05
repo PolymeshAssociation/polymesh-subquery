@@ -4,7 +4,6 @@ import {
   ConfidentialTransaction,
   ConfidentialTransactionAffirmation,
   EventIdEnum,
-  ModuleIdEnum,
   ConfidentialTransactionStatusEnum,
   AffirmingPartyEnum,
   AffirmStatusEnum,
@@ -12,7 +11,8 @@ import {
   AssetAuditorGroup,
 } from '../../types';
 import { bytesToString, getNumberValue, getTextValue } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
+import { SubstrateEvent } from '@subql/types';
 
 type ConfidentialLegDetails = {
   mediators: string[];
@@ -44,11 +44,10 @@ const getPendingAffirmationCountFromLegs = (legs: ConfidentialLegDetails[]): num
   return legs.reduce((acc, leg) => acc + leg.mediators.length + 2, 0); // +2 for sender and receiver
 };
 
-const handleConfidentialTransactionCreated = async ({
-  blockId,
-  eventIdx,
-  params,
-}: HandlerArgs): Promise<void> => {
+export const handleConfidentialTransactionCreated = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { params, eventIdx, blockId } = extractArgs(event);
   const [, rawVenueId, rawTransactionId, rawLegs, rawMemo] = params;
 
   const venueId = getTextValue(rawVenueId);
@@ -86,10 +85,10 @@ const handleConfidentialTransactionCreated = async ({
   await Promise.all([transactionPromise, ...legPromises]);
 };
 
-const handleConfidentialTransactionExecutedOrRejected = async (
-  args: HandlerArgs
+export const handleConfidentialTransactionExecutedOrRejected = async (
+  event: SubstrateEvent
 ): Promise<void> => {
-  const { eventId, params, blockId } = args;
+  const { eventId, params, blockId } = extractArgs(event);
 
   const [, rawTransactionId, rawMemo] = params;
 
@@ -152,11 +151,10 @@ const getAffirmationTypeAndProofs = (rawParty: Codec): AffirmationsAndAffirmatio
   return { party, proofs };
 };
 
-const handleConfidentialTransactionAffirmed = async (
-  blockId: string,
-  eventIdx: number,
-  params: Codec[]
+export const handleConfidentialTransactionAffirmed = async (
+  event: SubstrateEvent
 ): Promise<void> => {
+  const { params, eventIdx, blockId } = extractArgs(event);
   const [rawDid, rawTransactionId, rawLegId, rawParty, rawPendingAffirmations] = params;
 
   const did = getTextValue(rawDid);
@@ -184,25 +182,5 @@ const handleConfidentialTransactionAffirmed = async (
     transaction.pendingAffirmations = pendingAffirmations;
 
     await Promise.all([transaction.save(), affirmation.save()]);
-  }
-};
-
-export const mapConfidentialTransaction = async (args: HandlerArgs): Promise<void> => {
-  const { blockId, moduleId, eventId, eventIdx, params } = args;
-
-  if (moduleId !== ModuleIdEnum.confidentialasset) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.TransactionCreated) {
-    await handleConfidentialTransactionCreated(args);
-  }
-
-  if (eventId === EventIdEnum.TransactionAffirmed) {
-    await handleConfidentialTransactionAffirmed(blockId, eventIdx, params);
-  }
-
-  if (eventId === EventIdEnum.TransactionRejected || eventId === EventIdEnum.TransactionExecuted) {
-    await handleConfidentialTransactionExecutedOrRejected(args);
   }
 };

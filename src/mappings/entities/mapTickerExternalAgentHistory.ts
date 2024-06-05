@@ -1,132 +1,123 @@
-import { SubstrateBlock } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
-  EventIdEnum,
-  ModuleIdEnum,
   TickerExternalAgentHistory,
 } from '../../types';
 import { serializeTicker } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
 
-export async function mapTickerExternalAgentHistory({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-}: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.externalagents) {
-    return;
-  }
-  if (eventId === EventIdEnum.GroupCreated) {
-    const group = params[2].toJSON();
-    const permissions = JSON.stringify(params[3].toJSON());
-    const ticker = serializeTicker(params[1]);
+export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
 
-    await AgentGroupEntity.create({
-      id: `${ticker}/${group}`,
-      permissions,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save();
-    return;
-  }
+  const group = params[2].toJSON();
+  const permissions = JSON.stringify(params[3].toJSON());
+  const ticker = serializeTicker(params[1]);
 
-  if (eventId === EventIdEnum.GroupPermissionsUpdated) {
-    const group = params[2].toJSON();
-    const permissions = JSON.stringify(params[3].toJSON());
-    const ticker = serializeTicker(params[1]);
+  await AgentGroupEntity.create({
+    id: `${ticker}/${group}`,
+    permissions,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
 
-    const ag = await AgentGroupEntity.get(`${ticker}/${group}`);
-    ag.permissions = permissions;
+export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block } = extractArgs(event);
 
-    const promises = [ag.save()];
-    const members = await AgentGroupMembership.getByGroupId(`${ticker}/${group}`);
+  const group = params[2].toJSON();
+  const permissions = JSON.stringify(params[3].toJSON());
+  const ticker = serializeTicker(params[1]);
 
-    for (const member of members) {
-      promises.push(
-        TickerExternalAgentHistory.create({
-          id: `${blockId}/${eventIdx}/${member.member}`,
-          assetId: ticker,
-          identityId: member.member,
-          eventIdx,
-          datetime: block.timestamp,
-          type: 'AgentPermissionsChanged',
-          permissions,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
-        }).save()
-      );
-    }
-    await Promise.all(promises);
-    return;
-  }
+  const ag = await AgentGroupEntity.get(`${ticker}/${group}`);
+  ag.permissions = permissions;
 
-  if (eventId === EventIdEnum.AgentAdded) {
-    const did = params[0].toString();
-    const group = params[2].toJSON() as AgentGroup;
-    const ticker = serializeTicker(params[1]);
+  const promises = [ag.save()];
+  const members = await AgentGroupMembership.getByGroupId(`${ticker}/${group}`);
 
-    const promises = [
-      addTickerExternalAgentHistory(ticker, group, blockId, eventIdx, did, block, 'AgentAdded'),
-    ];
-
-    // Only keep track of membership for custom agent groups.
-    if (isCustom(group)) {
-      promises.push(addAgentGroupMembership(blockId, ticker, group, did));
-    }
-    await Promise.all(promises);
-    return;
-  }
-
-  if (eventId === EventIdEnum.GroupChanged) {
-    const did = params[2].toString();
-    const group = params[3].toJSON() as AgentGroup;
-    const ticker = serializeTicker(params[1]);
-
-    const promises = [
-      removeMember(did, ticker),
-      addTickerExternalAgentHistory(
-        ticker,
-        group,
-        blockId,
-        eventIdx,
-        did,
-        block,
-        'AgentPermissionsChanged'
-      ),
-    ];
-
-    // Only keep track of membership for custom agent groups.
-    if (isCustom(group)) {
-      promises.push(addAgentGroupMembership(blockId, ticker, group, did));
-    }
-    await Promise.all(promises);
-    return;
-  }
-
-  if (eventId === EventIdEnum.AgentRemoved) {
-    const did = params[2].toString();
-    const ticker = serializeTicker(params[1]);
-
-    const promises = [
-      removeMember(did, ticker),
+  for (const member of members) {
+    promises.push(
       TickerExternalAgentHistory.create({
-        id: `${blockId}/${eventIdx}/${did}`,
+        id: `${blockId}/${eventIdx}/${member.member}`,
         assetId: ticker,
-        identityId: did,
+        identityId: member.member,
         eventIdx,
         datetime: block.timestamp,
-        type: 'AgentRemoved',
+        type: 'AgentPermissionsChanged',
+        permissions,
         createdBlockId: blockId,
         updatedBlockId: blockId,
-      }).save(),
-    ];
-
-    await Promise.all(promises);
+      }).save()
+    );
   }
+  await Promise.all(promises);
+};
+
+export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block } = extractArgs(event);
+
+  const did = params[0].toString();
+  const ticker = serializeTicker(params[1]);
+  const group = params[2].toJSON() as AgentGroup;
+
+  const promises = [
+    addTickerExternalAgentHistory(ticker, group, blockId, eventIdx, did, block, 'AgentAdded'),
+  ];
+
+  // Only keep track of membership for custom agent groups.
+  if (isCustom(group)) {
+    promises.push(addAgentGroupMembership(blockId, ticker, group, did));
+  }
+  await Promise.all(promises);
+};
+
+export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block } = extractArgs(event);
+
+  const did = params[2].toString();
+  const group = params[3].toJSON() as AgentGroup;
+  const ticker = serializeTicker(params[1]);
+
+  const promises = [
+    removeMember(did, ticker),
+    addTickerExternalAgentHistory(
+      ticker,
+      group,
+      blockId,
+      eventIdx,
+      did,
+      block,
+      'AgentPermissionsChanged'
+    ),
+  ];
+
+  // Only keep track of membership for custom agent groups.
+  if (isCustom(group)) {
+    promises.push(addAgentGroupMembership(blockId, ticker, group, did));
+  }
+  await Promise.all(promises);
+};
+
+export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
+  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const did = params[2].toString();
+  const ticker = serializeTicker(params[1]);
+
+  const promises = [
+    removeMember(did, ticker),
+    TickerExternalAgentHistory.create({
+      id: `${blockId}/${eventIdx}/${did}`,
+      assetId: ticker,
+      identityId: did,
+      eventIdx,
+      datetime: block.timestamp,
+      type: 'AgentRemoved',
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save(),
+  ];
+
+  await Promise.all(promises);
 }
 
 const addTickerExternalAgentHistory = async (

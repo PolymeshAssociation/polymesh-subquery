@@ -1,20 +1,15 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateExtrinsic } from '@subql/types';
+import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../types';
 import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
 
 /**
  * Subscribes to the events related to external agents
  */
-export async function mapExternalAgentAction({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  extrinsic,
-}: HandlerArgs): Promise<void> {
+export async function mapExternalAgentAction(event: SubstrateEvent): Promise<void> {
+  const { moduleId, eventId, blockId, params, extrinsic, eventIdx } = extractArgs(event);
+
   const ticker = await mgr.getTicker(moduleId, eventId, blockId, params, extrinsic);
   if (ticker) {
     await TickerExternalAgentAction.create({

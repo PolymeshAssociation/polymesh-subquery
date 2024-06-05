@@ -1,13 +1,13 @@
-import { SubstrateBlock } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   Account,
   AccountHistory,
   AssetPermissions,
   ChildIdentity,
+  CustomClaimType,
   Event,
   EventIdEnum,
   Identity,
-  ModuleIdEnum,
   Permissions,
   PermissionsJson,
   PortfolioPermissions,
@@ -15,64 +15,14 @@ import {
 } from '../../types';
 import {
   MeshPortfolio,
-  getAccountKey,
+  bytesToString,
   getEventParams,
+  getNumberValue,
   getTextValue,
   meshPortfolioToPortfolio,
 } from '../util';
-import { Attributes, HandlerArgs } from './common';
+import { Attributes, extractArgs } from './common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
-
-/**
- * Subscribes to the Identities related events
- */
-export async function mapIdentities(args: HandlerArgs): Promise<void> {
-  const { moduleId, eventId } = args;
-
-  if (moduleId !== ModuleIdEnum.identity) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.DidCreated) {
-    await handleDidCreated(args);
-  }
-
-  if (eventId === EventIdEnum.ChildDidCreated) {
-    await handleChildDidCreated(args);
-  }
-
-  if (eventId === EventIdEnum.ChildDidUnlinked) {
-    await handleChildDidUnlinked(args);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeysAdded) {
-    await handleSecondaryKeysAdded(args);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeysFrozen) {
-    await handleSecondaryKeysFrozen(args, true);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeysUnfrozen) {
-    await handleSecondaryKeysFrozen(args, false);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeysRemoved) {
-    await handleSecondaryKeysRemoved(args);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeyPermissionsUpdated) {
-    await handleSecondaryKeysPermissionsUpdated(args);
-  }
-
-  if (eventId === EventIdEnum.PrimaryKeyUpdated) {
-    await handlePrimaryKeyUpdated(args);
-  }
-
-  if (eventId === EventIdEnum.SecondaryKeyLeftIdentity) {
-    await handleSecondaryKeyLeftIdentity(args);
-  }
-}
 
 const createHistoryEntry = async (
   eventId: EventIdEnum,
@@ -172,7 +122,9 @@ export const createIdentityIfNotExists = async (
   }
 };
 
-const handleDidCreated = async (args: HandlerArgs): Promise<void> => {
+export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
   const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   const [rawDid, rawAddress] = args.params;
@@ -239,7 +191,8 @@ const handleDidCreated = async (args: HandlerArgs): Promise<void> => {
   await Promise.all([permissions, account, defaultPortfolio]);
 };
 
-const handleChildDidCreated = async (args: HandlerArgs): Promise<void> => {
+export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const { createdBlockId, updatedBlockId } = getEventParams(args);
 
   let childDid: string, parentDid: string;
@@ -263,7 +216,8 @@ const handleChildDidCreated = async (args: HandlerArgs): Promise<void> => {
   }).save();
 };
 
-const handleChildDidUnlinked = async (args: HandlerArgs): Promise<void> => {
+export const handleChildDidUnlinked = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   let childDid: string;
 
   if (args instanceof Event) {
@@ -340,7 +294,10 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
   };
 };
 
-const handleSecondaryKeysPermissionsUpdated = async (args: HandlerArgs): Promise<void> => {
+export const handleSecondaryKeysPermissionsUpdated = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const args = extractArgs(event);
   let address;
 
   const [, rawSignerDetails, , rawUpdatedPermissions] = args.params;
@@ -372,10 +329,8 @@ const handleSecondaryKeysPermissionsUpdated = async (args: HandlerArgs): Promise
 
 type MeshAccount = string | { account: string };
 
-const handleSecondaryKeysRemoved = async (
-  args: HandlerArgs,
-  ss58Format?: number
-): Promise<void> => {
+export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const [, rawAccounts] = args.params;
   const accounts = rawAccounts.toJSON() as MeshAccount[];
 
@@ -388,25 +343,23 @@ const handleSecondaryKeysRemoved = async (
       // for chain version < 5.0.0
       ({ account: address } = account);
     }
-    if (ss58Format) {
-      address = getAccountKey(address, ss58Format);
-    }
+
     return [Account.remove(address), Permissions.remove(address)];
   });
 
   await Promise.all(removePromises.flat());
 };
 
-const handleSecondaryKeysFrozen = async (args: HandlerArgs, frozen: boolean): Promise<void> => {
-  const { blockId, eventId } = args;
+export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventId, params } = extractArgs(event);
 
-  const [rawDid] = args.params;
+  const [rawDid] = params;
   const did = getTextValue(rawDid);
 
   const identity = await getIdentity(did);
 
   Object.assign(identity, {
-    secondaryKeysFrozen: frozen,
+    secondaryKeysFrozen: true,
     updatedBlockId: blockId,
     eventId,
   });
@@ -414,7 +367,25 @@ const handleSecondaryKeysFrozen = async (args: HandlerArgs, frozen: boolean): Pr
   await identity.save();
 };
 
-const handleSecondaryKeysAdded = async (args: HandlerArgs): Promise<void> => {
+export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventId, params } = extractArgs(event);
+
+  const [rawDid] = params;
+  const did = getTextValue(rawDid);
+
+  const identity = await getIdentity(did);
+
+  Object.assign(identity, {
+    secondaryKeysFrozen: false,
+    updatedBlockId: blockId,
+    eventId,
+  });
+
+  await identity.save();
+};
+
+export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const { eventId, createdBlockId: blockId, datetime } = getEventParams(args);
 
   const promises = [];
@@ -469,7 +440,8 @@ const handleSecondaryKeysAdded = async (args: HandlerArgs): Promise<void> => {
   await Promise.all(promises);
 };
 
-const handlePrimaryKeyUpdated = async (args: HandlerArgs): Promise<void> => {
+export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   const [rawDid, , newKey] = args.params;
@@ -537,21 +509,12 @@ const handlePrimaryKeyUpdated = async (args: HandlerArgs): Promise<void> => {
   ]);
 };
 
-const handleSecondaryKeyLeftIdentity = async (
-  args: HandlerArgs,
-  ss58Format?: number
-): Promise<void> => {
-  let address: string;
+export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
   const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    const [, { value: addressHex }] = attributes;
-    address = getAccountKey(addressHex, ss58Format);
-  } else {
-    const [, rawAccount] = args.params;
-    address = getTextValue(rawAccount);
-  }
+  const [, rawAccount] = args.params;
+  const address = getTextValue(rawAccount);
 
   const accountEntity = await Account.get(address);
   const did = accountEntity.identityId;
@@ -568,4 +531,26 @@ const handleSecondaryKeyLeftIdentity = async (
     Permissions.remove(address),
     createHistoryEntry(eventId, did, address, blockId, datetime, eventIdx),
   ]);
+};
+
+export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
+  const [rawDid, rawCustomClaimTypeId, rawName] = params;
+
+  const identityId = getTextValue(rawDid);
+  const id = getNumberValue(rawCustomClaimTypeId);
+  const name = bytesToString(rawName);
+
+  const customClaimType = await CustomClaimType.get(`${id}`);
+
+  if (!customClaimType) {
+    await CustomClaimType.create({
+      id: `${id}`,
+      name,
+      identityId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save();
+  }
 };

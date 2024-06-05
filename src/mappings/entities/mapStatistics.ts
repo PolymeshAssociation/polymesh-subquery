@@ -1,10 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
 import {
   Asset,
   ClaimTypeEnum,
-  EventIdEnum,
-  ModuleIdEnum,
   StatOpTypeEnum,
   StatType,
   TransferCompliance,
@@ -20,7 +18,7 @@ import {
   hexToString,
   serializeTicker,
 } from '../util';
-import { Attributes, HandlerArgs } from './common';
+import { Attributes, extractArgs } from './common';
 
 const getStatisticsScope = (item: Codec): { assetId: string } => {
   const { ticker } = JSON.parse(item.toString());
@@ -156,7 +154,9 @@ const getStatTypeId = (
   return statTypeId;
 };
 
-const handleStatTypeAdded = async (blockId: string, params: Codec[]) => {
+export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawStatisticsScope, rawStatType] = params;
 
   const { assetId } = getStatisticsScope(rawStatisticsScope);
@@ -173,7 +173,9 @@ const handleStatTypeAdded = async (blockId: string, params: Codec[]) => {
   await Promise.all(promises);
 };
 
-const handleStatTypeRemoved = async (params: Codec[]) => {
+export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
+
   const [, rawStatisticsScope, rawStatType] = params;
 
   const { assetId } = getStatisticsScope(rawStatisticsScope);
@@ -187,7 +189,9 @@ const handleStatTypeRemoved = async (params: Codec[]) => {
   );
 };
 
-const handleSetTransferCompliance = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleSetTransferCompliance = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawStatisticsScope, rawTransferConditions] = params;
 
   const { assetId } = getStatisticsScope(rawStatisticsScope);
@@ -230,7 +234,9 @@ const handleSetTransferCompliance = async (blockId: string, params: Codec[]): Pr
   await Promise.all([...removedConditions, ...newConditions]);
 };
 
-const handleExemptionsAdded = async (blockId: string, params: Codec[]) => {
+export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawExemptKey, rawExemptions] = params;
 
   const exemptKey = getExemptKeyValue(rawExemptKey);
@@ -262,7 +268,9 @@ const handleExemptionsAdded = async (blockId: string, params: Codec[]) => {
   await Promise.all(promises);
 };
 
-const handleExemptionsRemoved = async (params: Codec[]) => {
+export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
+
   const [, rawExemptKey, rawExemptions] = params;
 
   const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey);
@@ -275,7 +283,9 @@ const handleExemptionsRemoved = async (params: Codec[]) => {
   );
 };
 
-const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
+export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawTicker, rawManager] = params;
 
   const assetId = serializeTicker(rawTicker);
@@ -289,10 +299,11 @@ const handleTransferManagerAdded = async (blockId: string, params: Codec[]) => {
   }
 };
 
-const handleTransferManagerExemptionsAdded = async (
-  blockId: string,
-  params: Codec[]
+export const handleTransferManagerExemptionsAdded = async (
+  event: SubstrateEvent
 ): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -337,7 +348,11 @@ const handleTransferManagerExemptionsAdded = async (
   await Promise.all(promises);
 };
 
-const handleTransferManagerExemptionsRemoved = async (blockId: string, params: Codec[]) => {
+export const handleTransferManagerExemptionsRemoved = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { params } = extractArgs(event);
+
   const [, rawTicker, rawAgentGroup, rawExemptions] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -361,7 +376,9 @@ const handleTransferManagerExemptionsRemoved = async (blockId: string, params: C
   await Promise.all(promises);
 };
 
-const handleAssetIssued = async (blockId: string, params: Codec[], block: SubstrateBlock) => {
+export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promise<void> => {
+  const { params, block, blockId } = extractArgs(event);
+
   const [, rawTicker] = params;
 
   const assetId = serializeTicker(rawTicker);
@@ -374,7 +391,9 @@ const handleAssetIssued = async (blockId: string, params: Codec[], block: Substr
   }
 };
 
-const handleAssetRedeemed = async (blockId: string, params: Codec[], block: SubstrateBlock) => {
+export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Promise<void> => {
+  const { params, block } = extractArgs(event);
+
   const [, rawTicker] = params;
   const ticker = serializeTicker(rawTicker);
 
@@ -387,52 +406,3 @@ const handleAssetRedeemed = async (blockId: string, params: Codec[], block: Subs
     }
   }
 };
-
-export async function mapStatistics({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  block,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.statistics) {
-    if (eventId === EventIdEnum.StatTypesAdded) {
-      await handleStatTypeAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.StatTypesRemoved) {
-      await handleStatTypeRemoved(params);
-    }
-    if (eventId === EventIdEnum.SetAssetTransferCompliance) {
-      await handleSetTransferCompliance(blockId, params);
-    }
-    if (eventId === EventIdEnum.TransferConditionExemptionsAdded) {
-      await handleExemptionsAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.TransferConditionExemptionsRemoved) {
-      await handleExemptionsRemoved(params);
-    }
-  }
-
-  // TransferManager was the name before chain v5
-  if (moduleId === ModuleIdEnum.statistics) {
-    if (eventId === EventIdEnum.TransferManagerAdded) {
-      handleTransferManagerAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.ExemptionsAdded) {
-      await handleTransferManagerExemptionsAdded(blockId, params);
-    }
-    if (eventId === EventIdEnum.ExemptionsRemoved) {
-      await handleTransferManagerExemptionsRemoved(blockId, params);
-    }
-  }
-
-  if (moduleId === ModuleIdEnum.asset) {
-    if (eventId === EventIdEnum.Issued) {
-      await handleAssetIssued(blockId, params, block);
-    }
-
-    if (eventId === EventIdEnum.Redeemed) {
-      await handleAssetRedeemed(blockId, params, block);
-    }
-  }
-}

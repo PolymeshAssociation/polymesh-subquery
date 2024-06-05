@@ -1,21 +1,43 @@
-import { Codec } from '@polkadot/types/types';
-import { Compliance, EventIdEnum, ModuleIdEnum } from '../../types';
-import { getComplianceValue, getComplianceValues, getNumberValue, serializeTicker } from '../util';
-import { HandlerArgs, getAsset } from './common';
+import { Codec } from '@polkadot/types-codec/types';
+import { Compliance, TrustedClaimIssuer } from '../../types';
+import {
+  getComplianceValue,
+  getComplianceValues,
+  getNumberValue,
+  getTextValue,
+  serializeTicker,
+} from '../util';
+import { extractArgs, getAsset } from './common';
+import { SubstrateEvent } from '@subql/types';
 
-const handleAssetComplianceState = async (blockId: string, params: Codec[], isPaused: boolean) => {
+export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
 
   const asset = await getAsset(ticker);
-  asset.isCompliancePaused = isPaused;
+  asset.isCompliancePaused = true;
   asset.updatedBlockId = blockId;
 
   await asset.save();
 };
 
-const handleComplianceReset = async (params: Codec[]) => {
+export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+  const [, rawTicker] = params;
+
+  const ticker = serializeTicker(rawTicker);
+
+  const asset = await getAsset(ticker);
+  asset.isCompliancePaused = false;
+  asset.updatedBlockId = blockId;
+
+  await asset.save();
+};
+
+export const handleComplianceReset = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
   const [, rawTicker] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -35,7 +57,8 @@ const createCompliance = (ticker: string, complianceId: number, data: any, block
     updatedBlockId: blockId,
   }).save();
 
-const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
+export const handleComplianceCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker, rawCompliance] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -44,7 +67,8 @@ const handleComplianceCreated = async (blockId: string, params: Codec[]) => {
   await createCompliance(ticker, complianceId, data, blockId);
 };
 
-const handleComplianceReplaced = async (blockId: string, params: Codec[]) => {
+export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker, rawCompliances] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -61,7 +85,8 @@ const handleComplianceReplaced = async (blockId: string, params: Codec[]) => {
   ]);
 };
 
-const handleComplianceRemoved = async (params: Codec[]) => {
+export const handleComplianceRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
   const [, rawTicker, rawId] = params;
 
   const ticker = serializeTicker(rawTicker);
@@ -70,30 +95,30 @@ const handleComplianceRemoved = async (params: Codec[]) => {
   await Compliance.remove(`${ticker}/${complianceId}`);
 };
 
-export async function mapCompliance({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.compliancemanager) {
-    if (eventId === EventIdEnum.AssetCompliancePaused) {
-      await handleAssetComplianceState(blockId, params, true);
-    }
-    if (eventId === EventIdEnum.AssetComplianceResumed) {
-      await handleAssetComplianceState(blockId, params, false);
-    }
-    if (eventId === EventIdEnum.AssetComplianceReset) {
-      await handleComplianceReset(params);
-    }
-    if (eventId === EventIdEnum.AssetComplianceReplaced) {
-      await handleComplianceReplaced(blockId, params);
-    }
-    if (eventId === EventIdEnum.ComplianceRequirementCreated) {
-      await handleComplianceCreated(blockId, params);
-    }
-    if (eventId === EventIdEnum.ComplianceRequirementRemoved) {
-      await handleComplianceRemoved(params);
-    }
-  }
-}
+export const handleTrustedDefaultClaimIssuerAdded = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { params, eventIdx, blockId } = extractArgs(event);
+
+  const ticker = serializeTicker(params[1]);
+  const issuer = (params[2] as unknown as { issuer: Codec }).issuer.toString();
+
+  await TrustedClaimIssuer.create({
+    id: `${ticker}/${issuer}`,
+    eventIdx,
+    assetId: ticker,
+    issuer,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+};
+
+export const handleTrustedDefaultClaimIssuerRemoved = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { params } = extractArgs(event);
+
+  const ticker = serializeTicker(params[1]);
+  const issuer = getTextValue(params[2]);
+  await TrustedClaimIssuer.remove(`${ticker}/${issuer}`);
+};

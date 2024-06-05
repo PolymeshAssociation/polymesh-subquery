@@ -1,6 +1,6 @@
 import { GenericEvent } from '@polkadot/types/generic';
-import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { ClaimTypeEnum, Event, EventIdEnum, ModuleIdEnum } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { Event, EventIdEnum, ModuleIdEnum } from '../../types';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -9,41 +9,12 @@ import {
   extractTransferTo,
 } from '../generatedColumns';
 import { serializeLikeHarvester } from '../serializeLikeHarvester';
-import { logError, logFoundType } from '../util';
-import { HandlerArgs } from './common';
-import { mapAsset } from './mapAsset';
-import { mapAuthorization } from './mapAuthorization';
-import { mapBridgeEvent } from './mapBridgeEvent';
-import { mapClaim } from './mapClaim';
-import { mapCompliance } from './mapCompliance';
-import { mapCorporateActions } from './mapCorporateActions';
-import { mapExternalAgentAction } from './mapExternalAgentAction';
-import { mapIdentities } from './mapIdentities';
-import { mapMultiSig } from './mapMultiSig';
-import { mapNft } from './mapNfts';
-import { mapPolyxTransaction } from './mapPolyxTransaction';
-import { mapPortfolio } from './mapPortfolio';
-import { mapProposal } from './mapProposal';
-import { mapSettlement } from './mapSettlement';
-import { mapStakingEvent } from './mapStakingEvent';
-import { mapStatistics } from './mapStatistics';
-import { mapSto } from './mapSto';
-import { mapTickerExternalAgent } from './mapTickerExternalAgent';
-import { mapTickerExternalAgentHistory } from './mapTickerExternalAgentHistory';
-import { mapTransferManager } from './mapTransferManager';
-import { mapTrustedClaimIssuer } from './mapTrustedClaimIssuer';
-import { mapCustomClaimType } from './mapCustomClaimType';
-import { mapConfidentialAccountCreated } from './mapConfidentialAccountCreated';
-import { mapConfidentialAsset } from './mapConfidentialAsset';
-import { mapConfidentialTransaction } from './mapConfidentialTransaction';
-import { mapConfidentialAssetTransaction } from './mapConfidentialAssetTransaction';
+import { logFoundType } from '../util';
 
-export function handleToolingEvent(
-  event: SubstrateEvent,
-  eventIdx: number,
-  block: SubstrateBlock,
-  extrinsic?: SubstrateExtrinsic
-): { event: Event; harvesterLikeArgs: any[] } {
+export function handleToolingEvent(event: SubstrateEvent): Event {
+  const block = event.block;
+  const eventIdx = event.idx;
+  const extrinsic = event.extrinsic;
   const genericEvent = event.event as GenericEvent;
   const blockId = block.block.header.number.toString();
   const moduleId = genericEvent.section.toLowerCase();
@@ -74,124 +45,26 @@ export function handleToolingEvent(
     extrinsicId = `${blockId}/${extrinsic?.idx}`;
   }
 
-  return {
-    event: Event.create({
-      id: `${blockId}/${eventIdx}`,
-      blockId,
-      eventIdx,
-      extrinsicIdx: extrinsic?.idx,
-      specVersionId: block.specVersion,
-      eventId: eventId as EventIdEnum,
-      moduleId: moduleId as ModuleIdEnum,
-      attributesTxt: JSON.stringify(harvesterLikeArgs),
-      eventArg_0,
-      eventArg_1,
-      eventArg_2,
-      eventArg_3,
-      claimType,
-      claimExpiry,
-      claimIssuer,
-      claimScope,
-      corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
-      fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
-      transferTo: extractTransferTo(harvesterLikeArgs),
-      extrinsicId,
-    }),
-    harvesterLikeArgs,
-  };
-}
-
-// handles an event to populate native GraphQL tables as well as what is needed for tooling
-export async function createEvent(
-  event: SubstrateEvent,
-  eventIdx: number,
-  block: SubstrateBlock,
-  extrinsic?: SubstrateExtrinsic
-): Promise<Event> {
-  const genericEvent = event.event as GenericEvent;
-  const moduleId = genericEvent.section.toLowerCase();
-  const eventId = genericEvent.method;
-  const { event: dbEvent, harvesterLikeArgs } = handleToolingEvent(
-    event,
+  return Event.create({
+    id: `${blockId}/${eventIdx}`,
+    blockId,
     eventIdx,
-    block,
-    extrinsic
-  );
-
-  try {
-    const blockId = block.block.header.number.toString();
-    const args = genericEvent.data;
-
-    const handlerArgs: HandlerArgs = {
-      blockId,
-      eventId: eventId as EventIdEnum,
-      moduleId: moduleId as ModuleIdEnum,
-      params: args,
-      eventIdx,
-      block,
-      extrinsic,
-    };
-
-    const handlerPromises = [
-      mapIdentities(handlerArgs),
-      mapAsset(handlerArgs),
-      mapNft(handlerArgs),
-      mapCompliance(handlerArgs),
-      mapTransferManager(handlerArgs),
-      mapStatistics(handlerArgs),
-      mapPortfolio(handlerArgs),
-      mapSettlement(handlerArgs),
-      mapStakingEvent(handlerArgs),
-      mapBridgeEvent(handlerArgs),
-      mapSto(handlerArgs),
-      mapExternalAgentAction(handlerArgs),
-      mapTickerExternalAgent(handlerArgs),
-      mapTickerExternalAgentHistory(handlerArgs),
-      mapAuthorization(handlerArgs),
-      mapCorporateActions(handlerArgs),
-      mapProposal(handlerArgs),
-      mapTrustedClaimIssuer(handlerArgs),
-      mapPolyxTransaction(handlerArgs),
-      mapMultiSig(handlerArgs),
-      mapCustomClaimType(handlerArgs),
-      mapConfidentialAccountCreated(handlerArgs),
-      mapConfidentialAsset(handlerArgs),
-      mapConfidentialTransaction(handlerArgs),
-      mapConfidentialAssetTransaction(handlerArgs),
-    ];
-
-    const {
-      claimExpiry,
-      claimIssuer,
-      claimScope,
-      claimType,
-      issuanceDate,
-      lastUpdateDate,
-      cddId,
-      jurisdiction,
-      customClaimTypeId,
-    } = extractClaimInfo(harvesterLikeArgs);
-
-    handlerPromises.push(
-      mapClaim(handlerArgs, {
-        claimExpiry,
-        claimIssuer,
-        claimScope,
-        claimType: claimType as ClaimTypeEnum,
-        issuanceDate,
-        lastUpdateDate,
-        cddId,
-        jurisdiction,
-        customClaimTypeId,
-      })
-    );
-
-    await Promise.all(handlerPromises);
-  } catch (error) {
-    logError(
-      `Received an error in handleEvent while handling the event '${moduleId}.${eventId}': ${error.stack}`
-    );
-    throw error;
-  }
-  return dbEvent;
+    extrinsicIdx: extrinsic?.idx,
+    specVersionId: block.specVersion,
+    eventId: eventId as EventIdEnum,
+    moduleId: moduleId as ModuleIdEnum,
+    attributesTxt: JSON.stringify(harvesterLikeArgs),
+    eventArg_0,
+    eventArg_1,
+    eventArg_2,
+    eventArg_3,
+    claimType,
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
+    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
+    transferTo: extractTransferTo(harvesterLikeArgs),
+    extrinsicId,
+  });
 }

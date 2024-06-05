@@ -1,6 +1,5 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { EventIdEnum, Investment, ModuleIdEnum, Sto, StoStatus } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { Investment, Sto, StoStatus } from '../../types';
 import {
   coerceHexToString,
   getBigIntValue,
@@ -10,9 +9,10 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
 
-const handleFundraiserCreated = async (blockId: string, params: Codec[]) => {
+export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawStoId, rawStoName, rawFundraiserDetails] = params;
   const fundraiserDetails = getFundraiserDetails(rawFundraiserDetails);
   const stoId = getNumberValue(rawStoId);
@@ -28,13 +28,19 @@ const handleFundraiserCreated = async (blockId: string, params: Codec[]) => {
   }).save();
 };
 
-const handleFundraiserStatus = async (
-  blockId: string,
-  params: Codec[],
-  block: SubstrateBlock,
-  extrinsic: SubstrateExtrinsic,
-  status: StoStatus
-) => {
+export const handleStoFrozen = async (event: SubstrateEvent): Promise<void> => {
+  await handleFundraiserStatus(event, StoStatus.Frozen);
+};
+
+export const handleStoUnfrozen = async (event: SubstrateEvent): Promise<void> => {
+  await handleFundraiserStatus(event, StoStatus.Live);
+};
+export const handleStoClosed = async (event: SubstrateEvent): Promise<void> => {
+  await handleFundraiserStatus(event, StoStatus.Closed);
+};
+
+const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
+  const { params, extrinsic, block, blockId } = extractArgs(event);
   const [, rawStoId] = params;
   const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
   const stoId = getNumberValue(rawStoId);
@@ -56,11 +62,8 @@ const handleFundraiserStatus = async (
   await sto.save();
 };
 
-const handleFundraiserWindowModified = async (
-  blockId: string,
-  params: Codec[],
-  extrinsic: SubstrateExtrinsic
-) => {
+export const handleFundraiserWindowModified = async (event: SubstrateEvent): Promise<void> => {
+  const { params, extrinsic, blockId } = extractArgs(event);
   const [, rawStoId, , , rawStart, rawEnd] = params;
   const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
   const stoId = getNumberValue(rawStoId);
@@ -75,12 +78,8 @@ const handleFundraiserWindowModified = async (
   }
 };
 
-const handleInvested = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock
-): Promise<void> => {
+export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block } = extractArgs(event);
   const [
     rawInvestor,
     rawStoId,
@@ -103,44 +102,3 @@ const handleInvested = async (
     updatedBlockId: blockId,
   }).save();
 };
-
-/**
- * Subscribes to events related to STOs
- */
-export async function mapSto({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-  extrinsic,
-}: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.sto) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.FundraiserCreated) {
-    await handleFundraiserCreated(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.FundraiserFrozen) {
-    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Frozen);
-  }
-
-  if (eventId === EventIdEnum.FundraiserUnfrozen) {
-    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Live);
-  }
-
-  if (eventId === EventIdEnum.FundraiserClosed) {
-    await handleFundraiserStatus(blockId, params, block, extrinsic, StoStatus.Closed);
-  }
-
-  if (eventId === EventIdEnum.FundraiserWindowModified) {
-    await handleFundraiserWindowModified(blockId, params, extrinsic);
-  }
-
-  if (eventId === EventIdEnum.Invested) {
-    await handleInvested(blockId, params, eventIdx, block);
-  }
-}

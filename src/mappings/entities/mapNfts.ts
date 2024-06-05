@@ -1,7 +1,6 @@
 import { Option, u64, U8aFixed } from '@polkadot/types-codec';
-import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { EventIdEnum, ModuleIdEnum, NftHolder } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { EventIdEnum, NftHolder } from '../../types';
 import {
   bytesToString,
   getFirstKeyFromJson,
@@ -11,7 +10,7 @@ import {
   getTextValue,
   serializeTicker,
 } from '../util';
-import { getAsset, HandlerArgs } from './common';
+import { extractArgs, getAsset } from './common';
 import { createAssetTransaction } from './mapAsset';
 
 export const getNftHolder = async (
@@ -38,7 +37,8 @@ export const getNftHolder = async (
   return nftHolder;
 };
 
-const handleNftCollectionCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [, rawTicker] = params;
   const ticker = serializeTicker(rawTicker);
   const asset = await getAsset(ticker);
@@ -48,13 +48,8 @@ const handleNftCollectionCreated = async (blockId: string, params: Codec[]): Pro
   return asset.save();
 };
 
-const handleNftPortfolioUpdates = async (
-  blockId: string,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock,
-  extrinsic?: SubstrateExtrinsic
-): Promise<void> => {
+export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
   const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid, fromPortfolioId;
@@ -147,25 +142,3 @@ const handleNftPortfolioUpdates = async (
 
   await Promise.all(promises);
 };
-
-export async function mapNft({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-  extrinsic,
-}: HandlerArgs): Promise<void> {
-  if (moduleId !== ModuleIdEnum.nft) {
-    return;
-  }
-
-  if (eventId === EventIdEnum.NftCollectionCreated) {
-    await handleNftCollectionCreated(blockId, params);
-  }
-
-  if (eventId === EventIdEnum.NFTPortfolioUpdated) {
-    await handleNftPortfolioUpdates(blockId, params, eventIdx, block, extrinsic);
-  }
-}

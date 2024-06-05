@@ -1,37 +1,10 @@
-import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock } from '@subql/types';
-import { Distribution, DistributionPayment, EventIdEnum, ModuleIdEnum } from '../../types';
+import { SubstrateEvent } from '@subql/types';
+import { Distribution, DistributionPayment } from '../../types';
 import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
-import { HandlerArgs } from './common';
+import { extractArgs } from './common';
 
-/**
- * Subscribes to the CapitalDistribution events
- */
-export async function mapCorporateActions({
-  blockId,
-  eventId,
-  moduleId,
-  params,
-  eventIdx,
-  block,
-}: HandlerArgs): Promise<void> {
-  if (moduleId === ModuleIdEnum.capitaldistribution) {
-    if (eventId === EventIdEnum.Created) {
-      await handleDistributionCreated(blockId, params);
-    }
-    if (eventId === EventIdEnum.BenefitClaimed) {
-      await handleBenefitClaimed(blockId, eventId, params, eventIdx, block);
-    }
-    if (eventId === EventIdEnum.Reclaimed) {
-      await handleReclaimed(blockId, eventId, params, eventIdx, block);
-    }
-    if (eventId === EventIdEnum.Removed) {
-      await handleDistributionRemoved(params);
-    }
-  }
-}
-
-const handleDistributionCreated = async (blockId: string, params: Codec[]): Promise<void> => {
+export const handleDistributionCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
   const [rawDid, rawCaId, rawDistribution] = params;
 
   const { localId, assetId } = getCaIdValue(rawCaId);
@@ -49,7 +22,8 @@ const handleDistributionCreated = async (blockId: string, params: Codec[]): Prom
   }).save();
 };
 
-const handleDistributionRemoved = async (params: Codec[]): Promise<void> => {
+export const handleDistributionRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { params } = extractArgs(event);
   const [, rawCaId] = params;
 
   const { localId, assetId } = getCaIdValue(rawCaId);
@@ -57,13 +31,8 @@ const handleDistributionRemoved = async (params: Codec[]): Promise<void> => {
   await Distribution.remove(`${assetId}/${localId}`);
 };
 
-const handleBenefitClaimed = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock
-): Promise<void> => {
+export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventId, block, eventIdx } = extractArgs(event);
   const [, rawClaimantDid, rawCaId, , rawAmount, rawTax] = params;
 
   const targetId = getTextValue(rawClaimantDid);
@@ -93,13 +62,8 @@ const handleBenefitClaimed = async (
   await Promise.all([distributionPayment.save(), distribution.save()]);
 };
 
-const handleReclaimed = async (
-  blockId: string,
-  eventId: EventIdEnum,
-  params: Codec[],
-  eventIdx: number,
-  block: SubstrateBlock
-): Promise<void> => {
+export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx, block, eventId } = extractArgs(event);
   const [rawEventDid, rawCaId, rawAmount] = params;
 
   const targetId = getTextValue(rawEventDid);
