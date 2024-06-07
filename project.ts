@@ -5,10 +5,10 @@ import {
   SubstrateProject,
 } from '@subql/types';
 
-const startBlock = Number(process.env.START_BLOCK) ?? 1;
-const chainId = process.env.NETWORK_CHAIN_ID ?? '';
-const endpoint = process.env.NETWORK_ENDPOINT ?? '';
-const dictionary = process.env.NETWORK_DICTIONARY ?? '';
+const startBlock = Number(process.env.START_BLOCK) || 1;
+const chainId = process.env.NETWORK_CHAIN_ID || '';
+const endpoint = process.env.NETWORK_ENDPOINT || '';
+const dictionary = process.env.NETWORK_DICTIONARY || '';
 
 const filters = {
   asset: [
