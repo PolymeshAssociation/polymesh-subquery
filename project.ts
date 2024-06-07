@@ -5,6 +5,11 @@ import {
   SubstrateProject,
 } from '@subql/types';
 
+const startBlock = Number(process.env.START_BLOCK) ?? 1;
+const chainId = process.env.NETWORK_CHAIN_ID ?? '';
+const endpoint = process.env.NETWORK_ENDPOINT ?? '';
+const dictionary = process.env.NETWORK_DICTIONARY ?? '';
+
 const filters = {
   asset: [
     'AssetBalanceUpdated',
@@ -296,7 +301,7 @@ const project: SubstrateProject = {
   },
   network: {
     /* The genesis hash of the network (hash of block 0) */
-    chainId: '$NETWORK_CHAIN_ID',
+    chainId,
     /**
      * This endpoint must be a public non-pruned archive node
      * Public nodes may be rate limited, which can affect indexing speed
@@ -304,8 +309,8 @@ const project: SubstrateProject = {
      * You can get them from OnFinality for free https://app.onfinality.io
      * https://documentation.onfinality.io/support/the-enhanced-api-service
      */
-    endpoint: ['$NETWORK_ENDPOINT'],
-    dictionary: '$NETWORK_DICTIONARY',
+    endpoint: [endpoint],
+    dictionary,
     chaintypes: {
       file: './dist/chainTypes.js',
     },
@@ -327,7 +332,7 @@ const project: SubstrateProject = {
     },
     {
       kind: SubstrateDatasourceKind.Runtime,
-      startBlock: Number('$START_BLOCK'),
+      startBlock,
       mapping: {
         file: './dist/index.js',
         handlers: [
@@ -1562,7 +1567,7 @@ const project: SubstrateProject = {
     },
     {
       kind: SubstrateDatasourceKind.Runtime,
-      startBlock: Number('$START_BLOCK'),
+      startBlock,
       mapping: {
         file: './dist/index.js',
         handlers,

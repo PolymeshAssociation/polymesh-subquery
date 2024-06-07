@@ -54,7 +54,6 @@ scripts/archive
 coverage
 
 project.yaml
-project.ts
 tsconfig.tsbuildinfo
 
 metadata.json

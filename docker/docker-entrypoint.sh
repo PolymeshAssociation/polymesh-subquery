@@ -17,8 +17,6 @@ then
   echo "NETWORK_CHAIN_ID was set to ${NETWORK_CHAIN_ID} based on calling: $NETWORK_HTTP_ENDPOINT. Production chains should explictly set NETWORK_CHAIN_ID instead"
 fi
 
-envsubst < project.template.ts > project.ts
-
 npm run build ## This creates the project.yaml file
 
 (npm run sql || (sleep 3 && kill "$$")) &
