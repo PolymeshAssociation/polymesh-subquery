@@ -26,16 +26,14 @@ jobs:
           cache: 'yarn'
       - name: install dependencies
         run: yarn --frozen-lockfile
-      - name: make project.yaml
-        run: envsubst < project.template.ts > project.ts
-        env:
-          START_BLOCK: 1
-          NETWORK_ENDPOINT: 'ws://host.docker.internal:9944'
-          NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
       - name: gen types
         run: yarn codegen
       - name: build src
         run: yarn build
+        env:
+          START_BLOCK: 1
+          NETWORK_ENDPOINT: 'ws://host.docker.internal:9944'
+          NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
       - name: lint
         run: yarn lint
       - name: test
