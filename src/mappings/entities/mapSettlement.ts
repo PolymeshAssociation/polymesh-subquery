@@ -42,21 +42,24 @@ const instructionStatusMap = {
   [EventIdEnum.FailedToExecuteInstruction]: InstructionStatusEnum.Failed,
 };
 
-export const createLeg = async (
+/**
+ * Sets up required entities for a leg and returns params that can be batched for a bulk inserted
+ */
+const prepareLegCreateParams = async (
   blockId: string,
   instructionId: string,
   address: string,
   legIndex: number,
   { ticker, amount, nftIds, from, to, legType }: LegDetails,
   { eventIdx, eventId, block }: HandlerArgs
-): Promise<string[]> => {
+): Promise<{ params: Parameters<typeof Leg.create>[0]; dids: string[] }> => {
   // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
   await Promise.all([
     createPortfolioIfNotExists(from, blockId, eventId, eventIdx, block),
     createPortfolioIfNotExists(to, blockId, eventId, eventIdx, block),
   ]);
 
-  await Leg.create({
+  const params = {
     id: `${instructionId}/${legIndex}`,
     assetId: ticker,
     amount,
@@ -68,9 +71,9 @@ export const createLeg = async (
     addresses: [address],
     createdBlockId: blockId,
     updatedBlockId: blockId,
-  }).save();
+  };
 
-  return [from.identityId, to.identityId];
+  return { params, dids: [from.identityId, to.identityId] };
 };
 
 const updateLegs = async (
@@ -78,10 +81,10 @@ const updateLegs = async (
   address: string,
   instructionId: string,
   settlementId?: string
-): Promise<Promise<void>[]> => {
+): Promise<void> => {
   const legs = await Leg.getByInstructionId(instructionId);
 
-  return legs.map(leg => {
+  const updatedLegs = legs.map(leg => {
     if (address) {
       leg.addresses = [...new Set([...leg.addresses, address])];
     }
@@ -89,8 +92,11 @@ const updateLegs = async (
       leg.settlementId = settlementId;
     }
     leg.updatedBlockId = blockId;
-    return leg.save();
+
+    return leg;
   });
+
+  return store.bulkUpdate('Leg', updatedLegs);
 };
 
 const getVenue = async (venueId: string): Promise<Venue> => {
@@ -206,13 +212,23 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   });
   await instruction.save();
 
-  const dids = await Promise.all(
+  const legParams = await Promise.all(
     legs.map((legDetails, index) =>
-      createLeg(blockId, instructionId, address, index, legDetails, args)
+      prepareLegCreateParams(blockId, instructionId, address, index, legDetails, args)
     )
   );
 
-  await createIdentityInstructionRelation(instructionId, blockId, dids.flat());
+  await Promise.all([
+    store.bulkCreate(
+      'Leg',
+      legParams.map(({ params }) => params)
+    ),
+    createIdentityInstructionRelation(
+      instructionId,
+      blockId,
+      legParams.map(({ dids }) => dids).flat()
+    ),
+  ]);
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
@@ -236,7 +252,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   instruction.eventId = eventId;
   instruction.updatedBlockId = blockId;
 
-  await Promise.all([instruction.save(), ...(await updateLegs(blockId, address, instructionId))]);
+  await Promise.all([instruction.save(), updateLegs(blockId, address, instructionId)]);
 };
 
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
@@ -263,7 +279,7 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
   const promises = [
     settlement.save(),
     instruction.save(),
-    ...(await updateLegs(blockId, address, instructionId, settlementId)),
+    updateLegs(blockId, address, instructionId, settlementId),
   ];
 
   // incase the rejector was a mediator who previously affirmed their affirmation should be removed
