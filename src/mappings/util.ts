@@ -412,27 +412,28 @@ export const getLegsValue = (item: Codec): LegDetails[] => {
 export const getSettlementLeg = (item: Codec): LegDetails[] => {
   const legs = JSON.parse(item.toString());
 
-  const legTypes = Object.keys(legs);
-  if (legTypes.includes('OffChain')) {
-    return undefined;
-  }
-  return legs.map(leg => {
+  const legDetails = [];
+  legs.forEach(leg => {
     let legType = Object.keys(leg)[0];
     const legValue = leg[legType];
     let amount, nftIds;
 
-    const from = meshPortfolioToPortfolio(legValue.sender);
-    const to = meshPortfolioToPortfolio(legValue.receiver);
-    const ticker = hexToString(legValue.ticker);
-    if (legType === 'fungible') {
-      amount = extractBigInt(legValue, 'amount');
-      legType = LegTypeEnum.Fungible;
-    } else if (legType === 'nonFungible') {
-      nftIds = leg.nonFungible.nfts.ids;
-      legType = LegTypeEnum.NonFungible;
+    if (legType !== 'offChain') {
+      const from = meshPortfolioToPortfolio(legValue.sender);
+      const to = meshPortfolioToPortfolio(legValue.receiver);
+      const ticker = hexToString(legValue.ticker);
+      if (legType === 'fungible') {
+        amount = extractBigInt(legValue, 'amount');
+        legType = LegTypeEnum.Fungible;
+      } else if (legType === 'nonFungible') {
+        nftIds = leg.nonFungible.nfts.ids;
+        legType = LegTypeEnum.NonFungible;
+      }
+      legDetails.push({ from, to, ticker, amount, legType, nftIds });
     }
-    return { from, to, ticker, amount, legType, nftIds };
   });
+
+  return legDetails;
 };
 
 export const getSignerAddress = (extrinsic: SubstrateExtrinsic): string => {
