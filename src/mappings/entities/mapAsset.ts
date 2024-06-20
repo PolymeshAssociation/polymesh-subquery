@@ -164,7 +164,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     rawFundingRoundName ?? api.query.asset.fundingRound(rawTicker),
   ]);
 
-  const name = bytesToString(rawName);
+  const name = bytesToString(rawName as Codec);
   /**
    * FundingRound isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
@@ -172,7 +172,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
   let fundingRound: string = null;
 
   if (!rawFundingRound.isEmpty) {
-    fundingRound = bytesToString(rawFundingRound);
+    fundingRound = bytesToString(rawFundingRound as Codec);
   }
 
   /**

@@ -1,7 +1,7 @@
-# # Stage 1: Build Stage
+# Stage 1: Build Stage
 FROM node:lts-alpine3.17 AS builder
 
-# # Install build dependencies
+# Install build dependencies
 RUN apk add --no-cache \
   bash \
   gettext \
@@ -11,36 +11,33 @@ RUN apk add --no-cache \
   g++ \
   jq
 
-# # Set working directory
+# Set working directory
 WORKDIR /app/builder
 
-# # Copy the rest of the application code
+# Copy the rest of the application code
 COPY . .
 
-# # Build the application
+# Build the application
 RUN yarn --frozen-lockfile \
   && yarn codegen \
   && yarn build \
   && yarn remove $(cat package.json | jq -r '.devDependencies | keys | join(" ")') \
   && rm -rf /root/.npm /root/.cache
 
-# # Stage 2: Production Stage
-FROM onfinality/subql-node:v3.2.0 AS production
+# Stage 2: Production Stage
+FROM onfinality/subql-node:v4.6.5 AS production
+
+USER root
 
 WORKDIR /app
 
-# # Add a non-root user
-RUN addgroup subquery && \
-    adduser --uid 1001 -G subquery -D --shell /bin/false subquery
-
-# # # Copy only necessary files from the build stage
-COPY --from=builder --chown=subquery:subquery /app/builder/ ./
+# Copy only necessary files from the build stage
+COPY --from=builder --chown=1000:1000 /app/builder/ ./
 
 # Install bash to run the entrypoint script
 RUN apk add --no-cache gettext bash
 
 # Switch to the non-root user
-USER subquery
+USER 1000
 
-# Change ownership to non-root user
 ENTRYPOINT [ "/sbin/tini", "--", "bash", "/app/docker/docker-entrypoint.sh" ]

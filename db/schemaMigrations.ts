@@ -28,10 +28,10 @@ export const getMigrationVersion = (fileName: string): number | null => {
 const migrationInsert = (
   migrationNumber: number,
   id?: string
-) => `INSERT INTO "public"."migrations" ("id", "_id", "number", "version", "executed", "processed_block", "_block_range", "created_at", "updated_at")
+) => `INSERT INTO "public"."migrations" ("id", "_id", "number", "version", "executed", "processed_block", "_block_range", "created_at")
 VALUES ('${
   id || migrationNumber
-}', '${randomUUID()}', ${migrationNumber},'${latestVersion}', 1, 0, '[1,)', now(), now());`;
+}', '${randomUUID()}', ${migrationNumber},'${latestVersion}', 1, 0, '[1,)', now());`;
 
 export const schemaMigrations = async (connection?: Connection): Promise<void> => {
   const postgres = await (connection ?? getPostgresConnection());

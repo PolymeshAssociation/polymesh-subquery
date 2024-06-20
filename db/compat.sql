@@ -10,7 +10,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS data_block_id ON blocks (block_id);
 CREATE UNIQUE INDEX IF NOT EXISTS data_block_hash ON blocks (hash);
 CREATE INDEX IF NOT EXISTS data_block_datetime_timestamp ON blocks (((datetime)::timestamp(0) without time zone));
 CREATE INDEX IF NOT EXISTS data_block_parent_hash ON blocks (parent_hash);
-  
+
 CREATE UNIQUE INDEX IF NOT EXISTS data_extrinsic_id ON extrinsics (block_id, extrinsic_idx);
 CREATE INDEX IF NOT EXISTS data_extrinsic_block_id ON extrinsics (block_id);
 CREATE INDEX IF NOT EXISTS data_extrinsic_extrinsic_idx ON extrinsics (extrinsic_idx);
@@ -42,3 +42,21 @@ CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from at
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;
 DROP VIEW IF EXISTS data_extrinsic;
+
+-- Add `created_at` to all application tables for backwards compatibility
+DO $$
+DECLARE
+    tbl_name text;
+    current_schema_name text;
+BEGIN
+    -- Get the current schema name
+    SELECT current_schema() INTO current_schema_name;
+
+    FOR tbl_name IN
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = current_schema_name AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;', tbl_name);
+    END LOOP;
+END $$;

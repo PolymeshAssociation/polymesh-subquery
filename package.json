@@ -29,12 +29,12 @@
     "project.yaml"
   ],
   "dependencies": {
-    "@polkadot/api": "^10",
-    "@polkadot/types-support": "^10.9.1",
+    "@polkadot/api": "^11.2.1",
+    "@polkadot/types-support": "^11.2.1",
     "@polymeshassociation/polymesh-types": "^5.9.0",
-    "@subql/cli": "4.2.1",
-    "@subql/types": "3.3.0",
-    "@subql/types-core": "^0.3.0",
+    "@subql/cli": "4.14.0",
+    "@subql/types": "3.6.1",
+    "@subql/types-core": "^0.7.0",
     "bignumber.js": "^9.0.2",
     "pg": "^8.11.5",
     "typeorm": "^0.3.20"
@@ -50,7 +50,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",
     "@semantic-release/npm": "^11.0.0",
-    "@subql/node": "3.2.0",
+    "@subql/node": "4.6.5",
     "@types/bn.js": "^4.11.6",
     "@types/jest": "^29.5.4",
     "@types/js-yaml": "^4.0.3",
@@ -90,7 +90,7 @@
   },
   "resolutions": {
     "ipfs-unixfs": "6.0.6",
-    "@polkadot/util": "12.5.1"
+    "@polkadot/util": "12.6.2"
   },
   "config": {
     "commitizen": {

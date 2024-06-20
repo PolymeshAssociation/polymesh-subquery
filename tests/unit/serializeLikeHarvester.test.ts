@@ -394,25 +394,21 @@ describe('serializeLikeHarvester', () => {
     registry.setMetadata(metadata);
 
     const extrinsic = new GenericCall(registry, {
-      args: ['0x0000000000000000000000000000000000000000000000000000000000000000', 0, 0],
-      callIndex: [6, 1], // balances.setBalance
+      args: ['someRemark'],
+      callIndex: [0, 0], // system.remark
     });
     expect(extrinsic.toRawType()).toBe('Call');
 
     expect(serializeLikeHarvester(extrinsic, 'Call', logFoundType)).toStrictEqual({
       call_args: [
         {
-          name: 'who',
-          value: {
-            Id: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          },
+          name: 'remark',
+          value: 'someRemark',
         },
-        { name: 'new_free', value: 0 },
-        { name: 'old_reserved', value: 0 },
       ],
-      call_function: 'set_balance_deprecated',
-      call_index: '0601',
-      call_module: 'Balances',
+      call_function: 'remark',
+      call_index: '0000',
+      call_module: 'System',
     });
   });
 
