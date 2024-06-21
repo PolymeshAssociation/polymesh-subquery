@@ -60,3 +60,6 @@ BEGIN
         EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;', tbl_name);
     END LOOP;
 END $$;
+
+-- Add `updated_at` to subquery_versions for SDK <= v24.5.6 support
+ALTER TABLE subquery_versions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
