@@ -1,3 +1,4 @@
+import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../types';
 import {
   bytesToString,
@@ -6,9 +7,8 @@ import {
   getProposerValue,
   getTextValue,
   serializeAccount,
-} from '../util';
+} from '../../utils';
 import { extractArgs } from './common';
-import { SubstrateEvent } from '@subql/types';
 
 export const handleProposalCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId } = extractArgs(event);

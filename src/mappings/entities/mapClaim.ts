@@ -1,11 +1,16 @@
-import { SubstrateEvent } from '@subql/types';
 import { GenericEvent } from '@polkadot/types/generic';
+import { SubstrateEvent } from '@subql/types';
 import { Claim, ClaimScope, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum } from '../../types';
-import { END_OF_TIME, getTextValue, logFoundType, serializeTicker } from '../util';
+import {
+  END_OF_TIME,
+  extractClaimInfo,
+  getTextValue,
+  logFoundType,
+  serializeTicker,
+} from '../../utils';
+import { serializeLikeHarvester } from '../serializeLikeHarvester';
 import { extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
-import { serializeLikeHarvester } from '../serializeLikeHarvester';
-import { extractClaimInfo } from '../generatedColumns';
 
 const extractHarvesterArgs = (event: SubstrateEvent) => {
   const genericEvent = event.event as GenericEvent;

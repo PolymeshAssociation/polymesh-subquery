@@ -1,12 +1,12 @@
 import { SubstrateEvent } from '@subql/types';
+import { logError } from '../utils';
+import { mapExternalAgentAction } from './entities';
 import { mapBlock } from './entities/mapBlock';
 import mapChainUpgrade from './entities/mapChainUpgrade';
 import { handleToolingEvent } from './entities/mapEvent';
 import { createExtrinsic } from './entities/mapExtrinsic';
 import mapSubqueryVersion from './entities/mapSubqueryVersion';
 import genesisHandler from './migrations/genesisHandler';
-import { logError } from './util';
-import { mapExternalAgentAction } from './entities';
 
 let lastBlockHash = '';
 let lastEventIdx = -1;

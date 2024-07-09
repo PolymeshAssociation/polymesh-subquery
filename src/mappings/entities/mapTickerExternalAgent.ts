@@ -1,6 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { TickerExternalAgent } from '../../types';
-import { getTextValue, serializeTicker } from '../util';
+import { getTextValue, serializeTicker } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {

@@ -1,18 +1,18 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
 import {
+  AffirmStatusEnum,
+  AffirmingPartyEnum,
+  AssetAuditorGroup,
   ConfidentialLeg,
   ConfidentialTransaction,
   ConfidentialTransactionAffirmation,
-  EventIdEnum,
   ConfidentialTransactionStatusEnum,
-  AffirmingPartyEnum,
-  AffirmStatusEnum,
+  EventIdEnum,
   SenderProof,
-  AssetAuditorGroup,
 } from '../../types';
-import { bytesToString, getNumberValue, getTextValue } from '../util';
+import { bytesToString, getNumberValue, getTextValue } from '../../utils';
 import { extractArgs } from './common';
-import { SubstrateEvent } from '@subql/types';
 
 type ConfidentialLegDetails = {
   mediators: string[];

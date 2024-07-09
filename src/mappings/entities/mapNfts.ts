@@ -9,7 +9,7 @@ import {
   getPortfolioValue,
   getTextValue,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { extractArgs, getAsset } from './common';
 import { createAssetTransaction } from './mapAsset';
 
@@ -41,7 +41,7 @@ export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise
   const { params, blockId } = extractArgs(event);
   const [, rawTicker] = params;
   const ticker = serializeTicker(rawTicker);
-  const asset = await getAsset(ticker);
+  const asset = await await getAsset(ticker);
 
   asset.isNftCollection = true;
   asset.updatedBlockId = blockId;
@@ -73,7 +73,7 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
 
   const { ticker, ids } = getNftId(rawNftId);
 
-  const asset = await getAsset(ticker);
+  const asset = await await getAsset(ticker);
   asset.updatedBlockId = blockId;
 
   let instructionId: string;

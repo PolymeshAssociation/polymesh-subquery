@@ -1,13 +1,10 @@
 import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
-import {
-  extractClaimInfo,
-  extractCorporateActionTicker,
-  extractEventArgs,
-  extractOfferingAsset,
-  extractTransferTo,
-  JSONStringifyExceptStringAndNull,
-} from '../../src/mappings/generatedColumns';
+import { JSONStringifyExceptStringAndNull } from '../../src/utils/common';
+import { extractClaimInfo } from './../../src/utils/claims';
+import { extractCorporateActionTicker } from './../../src/utils/distributions';
+import { extractEventArgs, extractTransferTo } from './../../src/utils/events';
+import { extractOfferingAsset } from './../../src/utils/stos';
 
 test('JSONStringifyExceptStringAndNull', () => {
   expect(JSONStringifyExceptStringAndNull('hello')).toBe('hello');

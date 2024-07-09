@@ -8,7 +8,7 @@ import {
   getNumberValue,
   getTextValue,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { extractArgs } from './common';
 
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {

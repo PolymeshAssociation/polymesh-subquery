@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../types';
-import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../util';
+import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../../utils';
 import { extractArgs } from './common';
 
 /**

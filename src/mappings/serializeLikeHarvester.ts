@@ -22,7 +22,7 @@ import {
   fromEntries,
   removeNullChars,
   serializeTicker,
-} from './util';
+} from '../utils';
 
 /**
  * @returns A json representation of `item` serialized using the same rules as the harvester.

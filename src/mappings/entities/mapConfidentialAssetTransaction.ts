@@ -1,8 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, ConfidentialAssetHolder, ConfidentialAssetHistory } from '../../types';
-import { getTextValue } from '../util';
-import { extractArgs } from './common';
 import { SubstrateEvent } from '@subql/types';
+import { ConfidentialAssetHistory, ConfidentialAssetHolder, EventIdEnum } from '../../types';
+import { getTextValue } from '../../utils';
+import { extractArgs } from './common';
 
 type AssetHolderParams = {
   id: string;
