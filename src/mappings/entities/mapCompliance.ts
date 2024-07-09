@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types-codec/types';
+import { SubstrateEvent } from '@subql/types';
 import { Compliance, TrustedClaimIssuer } from '../../types';
 import {
   getComplianceValue,
@@ -6,9 +7,8 @@ import {
   getNumberValue,
   getTextValue,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { extractArgs, getAsset } from './common';
-import { SubstrateEvent } from '@subql/types';
 
 export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId } = extractArgs(event);
@@ -16,7 +16,7 @@ export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promis
 
   const ticker = serializeTicker(rawTicker);
 
-  const asset = await getAsset(ticker);
+  const asset = await await getAsset(ticker);
   asset.isCompliancePaused = true;
   asset.updatedBlockId = blockId;
 
@@ -29,7 +29,7 @@ export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promi
 
   const ticker = serializeTicker(rawTicker);
 
-  const asset = await getAsset(ticker);
+  const asset = await await getAsset(ticker);
   asset.isCompliancePaused = false;
   asset.updatedBlockId = blockId;
 

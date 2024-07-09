@@ -7,7 +7,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "PortfolioMovement",
-        "address": "bc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
+        "address": "5GKLEq7o3zZCGAeokuSoAMbmxamJ2uXJ984Fg8xYpaaWMUPr",
         "amount": "100",
         "assetId": "4TICKER",
         "fromId": "0xa9755a2d863adf7981d60f816884783bb2b71788efdfae845fc2830c36500551/0",
@@ -26,7 +26,7 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "PortfolioMovement",
-        "address": "bc18d7b0241882bcfc94b5fe0d520988f2a9f4050a2a1df58c4de14ee23f3915",
+        "address": "5GKLEq7o3zZCGAeokuSoAMbmxamJ2uXJ984Fg8xYpaaWMUPr",
         "amount": "100",
         "assetId": "4TICKER",
         "fromId": "0xa9755a2d863adf7981d60f816884783bb2b71788efdfae845fc2830c36500551/0",

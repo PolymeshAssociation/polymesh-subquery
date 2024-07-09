@@ -20,7 +20,7 @@ import {
   getNumberValue,
   getTextValue,
   meshPortfolioToPortfolio,
-} from '../util';
+} from '../../utils';
 import { Attributes, extractArgs } from './common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
@@ -144,6 +144,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
+
     portfolio.updatedBlockId = blockId;
     defaultPortfolio = portfolio.save();
   } else {

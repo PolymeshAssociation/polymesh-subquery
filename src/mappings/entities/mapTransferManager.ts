@@ -1,7 +1,7 @@
-import { TransferManager } from '../../types';
-import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../util';
-import { extractArgs } from './common';
 import { SubstrateEvent } from '@subql/types';
+import { TransferManager } from '../../types';
+import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../../utils';
+import { extractArgs } from './common';
 
 const getTransferManageId = (
   ticker: string,

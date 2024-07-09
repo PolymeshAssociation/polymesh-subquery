@@ -1,6 +1,6 @@
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../types';
-import { camelToSnakeCase } from '../util';
+import { camelToSnakeCase } from '../../utils';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = extrinsic.block.block.header.number.toString();

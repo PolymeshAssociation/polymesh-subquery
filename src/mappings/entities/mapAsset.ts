@@ -30,7 +30,7 @@ import {
   getSecurityIdentifiers,
   getTextValue,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { extractArgs, getAsset } from './common';
 
 export const createFunding = (

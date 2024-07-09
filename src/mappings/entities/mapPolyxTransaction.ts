@@ -1,3 +1,4 @@
+import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
 import {
   Account,
@@ -7,9 +8,8 @@ import {
   ModuleIdEnum,
   PolyxTransaction,
 } from '../../types';
-import { bytesToString, getBigIntValue, getEventParams, getTextValue } from '../util';
-import { extractArgs, HandlerArgs } from './common';
-import { SubstrateEvent } from '@subql/types';
+import { bytesToString, getBigIntValue, getEventParams, getTextValue } from '../../utils';
+import { HandlerArgs, extractArgs } from './common';
 
 export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);

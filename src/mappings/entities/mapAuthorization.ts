@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { Authorization, AuthorizationStatusEnum, AuthTypeEnum, EventIdEnum } from '../../types';
-import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../util';
-import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../util';
+import { getFirstKeyFromJson, getFirstValueFromJson, getTextValue } from '../../utils';
+import { capitalizeFirstLetter, getDateValue, serializeAccount } from './../../utils';
 import { extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
 

@@ -6,7 +6,7 @@ import {
   findTopLevelCommas,
   fromEntries,
   removeNullChars,
-} from '../../src/mappings/util';
+} from '../../src/utils';
 
 test('fromEntries', () => {
   expect(

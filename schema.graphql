@@ -1695,13 +1695,19 @@ type PortfolioMovement @entity {
 }
 
 """
-Represents all possible states of a Settlement
+Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
+
+e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
 """
-enum SettlementResultEnum {
-  None
-  Executed
-  Failed
-  Rejected
+type Venue @entity {
+  id: ID! # venueId
+  owner: Identity!
+  type: String!
+  details: String
+  instructions: [Instruction!] @derivedFrom(field: "venue")
+  signers: [String!]!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
@@ -1712,6 +1718,45 @@ enum InstructionStatusEnum {
   Executed
   Rejected
   Failed
+}
+
+"""
+Represents types of an Instruction
+"""
+enum InstructionTypeEnum {
+  SettleOnAffirmation
+  SettleOnBlock
+  SettleManual
+}
+
+"""
+Represents a request to exchange Assets between parties.
+
+Before an Instruction is executed all involved parties must sign and submit an affirmation.
+Once an Instruction is affirmed it will then be attempted to be executed.
+If any party fails to satisfy any compliance or transfer restriction the Instruction will fail,
+and no movement of assets will occur.
+"""
+type Instruction @entity {
+  id: ID! #instructionId
+  status: InstructionStatusEnum!
+  venue: Venue! @index(unique: false)
+  type: InstructionTypeEnum!
+  "`endBlock` is applicable only when `type` is `SettleOnBlock`"
+  endBlock: Int
+  "`endAfterBlock` is applicable only when `type` is `SettleManual`"
+  endAfterBlock: Int
+  tradeDate: Date
+  valueDate: Date
+  memo: String
+  "DID of the mediators"
+  mediators: [String!]!
+  legs: [Leg!]! @derivedFrom(field: "instruction")
+  parties: [InstructionParty]! @derivedFrom(field: "instruction")
+  affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
+  events: [InstructionEvent]! @derivedFrom(field: "instruction")
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
@@ -1728,62 +1773,22 @@ Represents the movement of a single Asset in a trade, e.g. Alice will give Bob 1
 """
 type Leg @entity {
   id: ID! # instructionId/legIndex
-  assetId: String! # @prashantasdeveloper Replace this with `asset: Asset` when chain validations are fixed
-  "`amount` can be null for non-fungible tokens"
-  amount: BigInt
-  nftIds: [BigInt]
+  instruction: Instruction!
+  legIndex: Int!
   legType: LegTypeEnum!
-  from: Portfolio! @index(unique: false)
-  to: Portfolio! @index(unique: false)
-  instruction: Instruction
-  settlement: Settlement
+  "`assetId` can be ticker for the on chain or off chain asset"
+  assetId: String!
+  from: String!
+  "`fromPortfolio` is null for off chain legs"
+  fromPortfolio: Int
+  to: String!
+  "`toPortfolio` is null for off chain legs"
+  toPortfolio: Int
+  "`amount` is null for non-fungible legs"
+  amount: BigInt
+  "`nftIds` is only applicable for non-fungible legs"
+  nftIds: [BigInt]
   addresses: [String!]!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
-Represents a trade of assets between parties
-"""
-type Settlement @entity {
-  id: ID!
-  result: SettlementResultEnum!
-  legs: [Leg!]! @derivedFrom(field: "settlement")
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
-Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
-
-e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
-"""
-type Venue @entity {
-  id: ID! # venueId
-  owner: Identity!
-  type: String!
-  details: String
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
-Represents a request to exchange Assets between parties.
-
-Before an Instruction is executed all involved parties must sign and submit an affirmation. Once an Instruction is affirmed it will then be attempted to be executed. If any party fails to satisfy any compliance or transfer restriction the Instruction will fail, and no movement of assets will occur.
-"""
-type Instruction @entity {
-  id: ID! #instructionId
-  eventId: EventIdEnum!
-  eventIdx: Int!
-  status: InstructionStatusEnum!
-  venue: Venue! @index(unique: false)
-  settlementType: String!
-  endBlock: Int
-  tradeDate: Date
-  valueDate: Date
-  legs: [Leg!]! @derivedFrom(field: "instruction")
-  memo: String
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -1791,10 +1796,93 @@ type Instruction @entity {
 """
 Represents a relationship between Identities and Instructions they are involved in
 """
-type IdentityInstructions @entity {
+type InstructionParty @entity {
   id: ID!
-  instruction: Instruction
-  identity: Identity
+  instruction: Instruction!
+  isMediator: Boolean!
+  "`identity` is the DID of the party involved in the instruction. No mapping to Identity is added, since instruction can have leg (e.g. off chain) where DID doesn't exists"
+  identity: String!
+  "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
+  portfolios: [Int]
+  affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents an off chain receipt
+"""
+type OffChainReceipt @entity {
+  id: ID!
+  uid: Int!
+  signer: String!
+  leg: Leg
+  metadata: String
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents affirmations received on an Instruction
+"""
+type InstructionAffirmation @entity {
+  id: ID!
+  instruction: Instruction!
+  party: InstructionParty!
+  identity: String!
+  "`portfolio` will be null for mediator affirmation and off chain affirmation"
+  portfolios: [Int]
+  isMediator: Boolean!
+  isAutomaticallyAffirmed: Boolean!
+  status: AffirmStatusEnum!
+  "If `expiry` is present the time should be check top ensure the affirmation is still valid. Applicable for mediator affirmations"
+  expiry: Date
+  "`offChainReceipt` is only applicable when affirmation"
+  offChainReceipt: OffChainReceipt
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+enum InstructionEventEnum {
+  FailedToExecuteInstruction
+  InstructionCreated
+  InstructionAffirmed
+  InstructionAutomaticallyAffirmed
+  InstructionExecuted
+  InstructionFailed
+  InstructionMediators
+  AffirmationWithdrawn
+  InstructionRejected
+  InstructionRescheduled
+  LegFailedExecution
+  MediatorAffirmationReceived
+  MediatorAffirmationWithdrawn
+  ReceiptClaimed
+  SchedulingFailed
+  SettlementManuallyExecuted
+  VenueCreated
+  VenueDetailsUpdated
+  VenueFiltering
+  VenueSignersUpdated
+  VenueTypeUpdated
+  VenueUnauthorized
+  VenuesAllowed
+  VenuesBlocked
+}
+
+"""
+Represents events associated with an Instruction
+"""
+type InstructionEvent @entity {
+  id: ID!
+  instruction: Instruction!
+  event: InstructionEventEnum!
+  eventIdx: Int!
+  identity: String
+  portfolio: Int
+  offChainReceipt: OffChainReceipt
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
@@ -2444,30 +2532,6 @@ type CustomClaimType @entity {
   updatedBlock: Block!
 }
 
-"""
-Represents the state of an instruction mediator's affirmation
-"""
-enum MediatorAffirmationStatus {
-  Pending
-  Affirmed
-  Rejected
-}
-
-"""
-Represents a mediator's approval for an instruction
-"""
-type MeditatorAffirmation @entity {
-  id: ID! # did/instruction ID
-  identity: Identity!
-  instruction: Instruction!
-  status: MediatorAffirmationStatus!
-  """
-  If expiry is present the time should be check top ensure the affirmation is still valid
-  """
-  expiry: Date
-  createdBlock: Block!
-  updatedBlock: Block!
-}
 enum AffirmingPartyEnum {
   Sender
   Receiver

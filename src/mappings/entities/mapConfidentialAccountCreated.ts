@@ -1,6 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { ConfidentialAccount } from '../../types';
-import { getTextValue } from '../util';
+import { getTextValue } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleConfidentialAccountCreated = async (event: SubstrateEvent): Promise<void> => {

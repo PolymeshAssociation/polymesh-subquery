@@ -17,7 +17,7 @@ import {
   getTransferManagerValue,
   hexToString,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { Attributes, extractArgs } from './common';
 
 const getStatisticsScope = (item: Codec): { assetId: string } => {

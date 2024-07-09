@@ -7,9 +7,9 @@ import {
   extractEventArgs,
   extractOfferingAsset,
   extractTransferTo,
-} from '../generatedColumns';
+  logFoundType,
+} from '../../utils';
 import { serializeLikeHarvester } from '../serializeLikeHarvester';
-import { logFoundType } from '../util';
 
 export function handleToolingEvent(event: SubstrateEvent): Event {
   const block = event.block;

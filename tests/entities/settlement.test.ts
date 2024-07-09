@@ -3,31 +3,27 @@ import { eveDid } from '../consts';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe('settlements', () => {
-  it('should return first 10 settlements', async () => {
+describe('instructions', () => {
+  it('should return first 10 instructions', async () => {
     const q = {
       query: gql`
         query {
-          settlements(first: 10, orderBy: ID_ASC) {
+          instructions(first: 10, orderBy: ID_ASC) {
             totalCount
             nodes {
               createdBlockId
               legs(orderBy: ID_ASC) {
                 nodes {
-                  from {
-                    identityId
-                    number
-                  }
-                  to {
-                    identityId
-                    number
-                  }
+                  from
+                  fromPortfolio
+                  to
+                  toPortfolio
                   assetId
                   amount
                   addresses
                 }
               }
-              result
+              status
             }
           }
         }
@@ -40,33 +36,29 @@ describe('settlements', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  it('should return settlements where a particular DID is involved', async () => {
+  it('should return instructions where a particular DID is involved', async () => {
     const q = {
       query: gql`
         query {
           legs(
             filter: {
-              fromId: {
-                startsWith: "${eveDid}"
+              from: {
+                equalTo: "${eveDid}"
               }
             }
             orderBy: ID_ASC
           ) {
             nodes {
-              settlement {
+              instruction {
                 id
                 createdBlockId
-                result
+                status
                 legs(orderBy: ID_ASC) {
                   nodes {
-                    from {
-                      identityId
-                      number
-                    }
-                    to {
-                      identityId
-                      number
-                    }
+                    from
+                    fromPortfolio
+                    to
+                    toPortfolio
                     assetId
                     amount
                     addresses
@@ -85,26 +77,22 @@ describe('settlements', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  it('should return settlements for a particular Asset', async () => {
+  it('should return instructions for a particular Asset', async () => {
     const q = {
       query: gql`
         query {
           legs(filter: { assetId: { equalTo: "11BTICKER1" } }, orderBy: ID_ASC) {
             nodes {
-              settlement {
+              instruction {
                 id
                 createdBlockId
-                result
+                status
                 legs(orderBy: ID_ASC) {
                   nodes {
-                    from {
-                      identityId
-                      number
-                    }
-                    to {
-                      identityId
-                      number
-                    }
+                    from
+                    fromPortfolio
+                    to
+                    toPortfolio
                     assetId
                     amount
                     addresses
@@ -123,32 +111,26 @@ describe('settlements', () => {
     expect(subquery?.data).toMatchSnapshot();
   });
 
-  it('should return the settlements with address filter', async () => {
+  it('should return the instructions with address filter', async () => {
     const q = {
       query: gql`
         query {
           legs(
             filter: {
-              addresses: {
-                contains: ["0x6cd2229cfcefc94ca4fa6e0596576d4d3bdbba6147647570f07b99cf16bbb56e"]
-              }
+              addresses: { contains: ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"] }
             }
           ) {
             nodes {
-              settlement {
+              instruction {
                 id
                 createdBlockId
-                result
+                status
                 legs {
                   nodes {
-                    from {
-                      identityId
-                      number
-                    }
-                    to {
-                      identityId
-                      number
-                    }
+                    from
+                    fromPortfolio
+                    to
+                    toPortfolio
                     assetId
                     amount
                     addresses

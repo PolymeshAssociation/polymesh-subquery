@@ -1,7 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { BridgeEvent } from '../../types';
-import { extractString } from '../generatedColumns';
-import { getTextValue } from '../util';
+import { extractString, getTextValue } from '../../utils';
 import { extractArgs } from './common';
 
 /**

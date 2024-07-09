@@ -1,28 +1,28 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import {
-  ModuleIdEnum,
   CallIdEnum,
+  ModuleIdEnum,
   MultiSig,
   MultiSigProposal,
   MultiSigProposalParams,
   MultiSigProposalStatusEnum,
   MultiSigProposalVote,
+  MultiSigProposalVoteActionEnum,
   MultiSigSigner,
   MultiSigSignerStatusEnum,
-  SingleProposal,
-  MultiSigProposalVoteActionEnum,
   SignerTypeEnum,
+  SingleProposal,
 } from '../../types';
 import {
+  camelToSnakeCase,
   capitalizeFirstLetter,
   getBooleanValue,
   getMultiSigSigner,
   getMultiSigSigners,
   getNumberValue,
   getTextValue,
-  camelToSnakeCase,
-} from '../util';
+} from '../../utils';
 import { Attributes, extractArgs } from './common';
 
 export const createMultiSig = (

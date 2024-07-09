@@ -4,7 +4,7 @@ import {
   AgentGroupMembership,
   TickerExternalAgentHistory,
 } from '../../types';
-import { serializeTicker } from '../util';
+import { serializeTicker } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {

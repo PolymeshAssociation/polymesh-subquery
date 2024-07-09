@@ -1,6 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { Distribution, DistributionPayment } from '../../types';
-import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../util';
+import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleDistributionCreated = async (event: SubstrateEvent): Promise<void> => {

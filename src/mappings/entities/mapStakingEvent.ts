@@ -1,8 +1,8 @@
 import { hexAddPrefix } from '@polkadot/util';
-import { EventIdEnum, StakingEvent } from '../../types';
-import { getBigIntValue, getTextValue } from '../util';
-import { extractArgs } from './common';
 import { SubstrateEvent } from '@subql/types';
+import { EventIdEnum, StakingEvent } from '../../types';
+import { getBigIntValue, getTextValue } from '../../utils';
+import { extractArgs } from './common';
 
 const bondedUnbondedOrReward = new Set([
   EventIdEnum.Bonded,

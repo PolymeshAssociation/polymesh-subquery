@@ -180,6 +180,10 @@ const filters = {
     'InstructionFailed',
     'InstructionRejected',
     'InstructionRescheduled',
+    'InstructionAutomaticallyAffirmed',
+    'MediatorAffirmationReceived',
+    'MediatorAffirmationWithdrawn',
+    'InstructionMediators',
     'LegFailedExecution',
     'ReceiptClaimed',
     'SchedulingFailed',
@@ -765,6 +769,14 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
+            handler: 'handleVenueSignersUpdated',
+            filter: {
+              module: 'settlement',
+              method: 'VenueSignersUpdated',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
             handler: 'handleInstructionCreated',
             filter: {
               module: 'settlement',
@@ -773,7 +785,7 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
-            handler: 'handleMediatorAffirmation',
+            handler: 'handleMediatorAffirmationReceived',
             filter: {
               module: 'settlement',
               method: 'MediatorAffirmationReceived',
@@ -781,7 +793,7 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
-            handler: 'handleMediatorWithdrawn',
+            handler: 'handleMediatorAffirmationWithdrawn',
             filter: {
               module: 'settlement',
               method: 'MediatorAffirmationWithdrawn',
@@ -797,10 +809,10 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
-            handler: 'handleFailedToExecuteInstruction',
+            handler: 'handleReceiptClaimed',
             filter: {
               module: 'settlement',
-              method: 'FailedToExecuteInstruction',
+              method: 'ReceiptClaimed',
             },
           },
           {
@@ -829,6 +841,30 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
+            handler: 'handleAffirmationWithdrawn',
+            filter: {
+              module: 'settlement',
+              method: 'AffirmationWithdrawn',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
+            handler: 'handleAutomaticAffirmation',
+            filter: {
+              module: 'settlement',
+              method: 'InstructionAutomaticallyAffirmed',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
+            handler: 'handleInstructionRejected',
+            filter: {
+              module: 'settlement',
+              method: 'InstructionRejected',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
             handler: 'handleInstructionFinalizedEvent',
             filter: {
               module: 'settlement',
@@ -840,15 +876,15 @@ const project: SubstrateProject = {
             handler: 'handleInstructionFinalizedEvent',
             filter: {
               module: 'settlement',
-              method: 'InstructionRejected',
+              method: 'InstructionFailed',
             },
           },
           {
             kind: SubstrateHandlerKind.Event,
-            handler: 'handleInstructionFinalizedEvent',
+            handler: 'handleSettlementManuallyExecuted',
             filter: {
               module: 'settlement',
-              method: 'InstructionFailed',
+              method: 'SettlementManuallyExecuted',
             },
           },
           {

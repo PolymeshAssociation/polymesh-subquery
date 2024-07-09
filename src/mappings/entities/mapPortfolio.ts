@@ -11,7 +11,7 @@ import {
   getTextValue,
   hexToString,
   serializeTicker,
-} from '../util';
+} from '../../utils';
 import { Attributes, extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
@@ -110,6 +110,7 @@ export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<voi
   const name = bytesToString(rawName);
 
   const portfolio = await getPortfolio({ identityId: ownerId, number });
+
   portfolio.name = name;
   portfolio.updatedBlockId = blockId;
 

@@ -9,7 +9,7 @@ import { getAccountId, systematicIssuers } from '../consts';
 import { createAccount, createIdentity, createPermissions } from '../entities/mapIdentities';
 import { createMultiSig, createMultiSigSigner } from '../entities/mapMultiSig';
 import { createPortfolio } from '../entities/mapPortfolio';
-import { extractString, extractValue } from '../generatedColumns';
+import { extractString, extractValue } from '../../utils';
 
 const genesisBlock = '0';
 type DidWithAccount = { did: string; accountId: string };
