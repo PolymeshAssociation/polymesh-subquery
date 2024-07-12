@@ -1777,11 +1777,11 @@ type Leg @entity {
   legIndex: Int!
   legType: LegTypeEnum!
   "`assetId` can be ticker for the on chain or off chain asset"
-  assetId: String!
-  from: String!
+  assetId: String! @index(unique: false)
+  from: String! @index(unique: false)
   "`fromPortfolio` is null for off chain legs"
   fromPortfolio: Int
-  to: String!
+  to: String! @index(unique: false)
   "`toPortfolio` is null for off chain legs"
   toPortfolio: Int
   "`amount` is null for non-fungible legs"
@@ -1798,10 +1798,10 @@ Represents a relationship between Identities and Instructions they are involved 
 """
 type InstructionParty @entity {
   id: ID!
-  instruction: Instruction!
+  instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
   "`identity` is the DID of the party involved in the instruction. No mapping to Identity is added, since instruction can have leg (e.g. off chain) where DID doesn't exists"
-  identity: String!
+  identity: String! @index(unique: false)
   "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
   portfolios: [Int]
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
@@ -1814,8 +1814,8 @@ Represents an off chain receipt
 """
 type OffChainReceipt @entity {
   id: ID!
-  uid: Int!
-  signer: String!
+  uid: Int! @index(unique: false)
+  signer: String! @index(unique: false)
   leg: Leg
   metadata: String
   createdBlock: Block!
@@ -1827,9 +1827,9 @@ Represents affirmations received on an Instruction
 """
 type InstructionAffirmation @entity {
   id: ID!
-  instruction: Instruction!
+  instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String!
+  identity: String! @index(unique: false)
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
   isMediator: Boolean!
@@ -1875,10 +1875,10 @@ Represents events associated with an Instruction
 """
 type InstructionEvent @entity {
   id: ID!
-  instruction: Instruction!
+  instruction: Instruction! @index(unique: false)
   event: InstructionEventEnum!
   eventIdx: Int!
-  identity: String
+  identity: String @index(unique: false)
   portfolio: Int
   offChainReceipt: OffChainReceipt
   createdBlock: Block!

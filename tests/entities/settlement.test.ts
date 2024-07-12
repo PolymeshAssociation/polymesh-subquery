@@ -12,18 +12,23 @@ describe('instructions', () => {
             totalCount
             nodes {
               createdBlockId
-              legs(orderBy: ID_ASC) {
+              status
+              venueId
+              type
+              legs(orderBy: LEG_INDEX_ASC) {
                 nodes {
+                  legType
+                  legIndex
                   from
                   fromPortfolio
                   to
                   toPortfolio
+                  nftIds
                   assetId
                   amount
                   addresses
                 }
               }
-              status
             }
           }
         }
@@ -125,7 +130,7 @@ describe('instructions', () => {
                 id
                 createdBlockId
                 status
-                legs {
+                legs(orderBy: ID_ASC) {
                   nodes {
                     from
                     fromPortfolio
