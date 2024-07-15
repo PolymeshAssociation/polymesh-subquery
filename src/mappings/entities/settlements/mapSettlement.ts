@@ -646,7 +646,6 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   });
 
   const partyId = getPartyId(instructionId, identityId, false);
-  // TODO handle case where party ID is the off chain affirmer
 
   const affirmation = InstructionAffirmation.create({
     id: partyId,

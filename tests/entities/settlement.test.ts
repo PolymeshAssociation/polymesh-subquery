@@ -124,6 +124,7 @@ describe('instructions', () => {
             filter: {
               addresses: { contains: ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"] }
             }
+            orderBy: ID_ASC
           ) {
             nodes {
               instruction {
