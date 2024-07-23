@@ -5,6 +5,7 @@ import {
   addIfNotIncludes,
   bytesToString,
   getDateValue,
+  getErrorDetails,
   getLegsValue,
   getNumberValue,
   getPortfolioValue,
@@ -15,7 +16,7 @@ import {
   getTextValue,
   removeIfIncludes,
 } from '../../../utils';
-import { HandlerArgs, extractArgs } from '../common';
+import { extractArgs, HandlerArgs } from '../common';
 import { createPortfolioIfNotExists } from '../mapPortfolio';
 import {
   AffirmStatusEnum,
@@ -523,9 +524,29 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
 /**
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const handleFailedToExecuteInstruction = (_: SubstrateEvent): void => {
-  // We can see type and details, which I think we can add in InstructionEvent, but that is not present in all
+export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
+  const { params, eventId, eventIdx, blockId } = extractArgs(event);
+  const [rawInstructionId, rawDispatchError] = params;
+
+  const instructionId = getTextValue(rawInstructionId);
+  const instruction = await getInstruction(instructionId);
+
+  const failureReason = getErrorDetails(rawDispatchError);
+
+  instruction.updatedBlockId = blockId;
+  instruction.failureReason = failureReason;
+
+  const finalizedEvent = InstructionEvent.create({
+    id: `${blockId}/${eventIdx}`,
+    instructionId,
+    event: eventId as unknown as InstructionEventEnum,
+    eventIdx,
+    failureReason,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  await Promise.all([instruction.save(), finalizedEvent.save()]);
 };
 
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
