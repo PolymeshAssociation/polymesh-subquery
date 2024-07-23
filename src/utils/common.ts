@@ -1,8 +1,7 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
+import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import { BN } from '@polkadot/util';
 import { ErrorJson, FoundType } from '../types';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
