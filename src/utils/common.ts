@@ -2,7 +2,8 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
-import { FoundType } from '../types';
+import { BN } from '@polkadot/util';
+import { ErrorJson, FoundType } from '../types';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
 
@@ -234,4 +235,34 @@ export const getStringArrayValue = (item: Codec): string[] => {
   const set = JSON.parse(item.toString());
 
   return set;
+};
+
+export const getErrorDetails = (item: Codec): ErrorJson => {
+  const dispatchError = JSON.parse(item.toString());
+
+  if ('module' in dispatchError) {
+    const { index, error } = dispatchError.module;
+
+    const metaError = {
+      index: new BN(index, 10),
+      error: new BN(hexStripPrefix(error), 'hex', 'le'),
+    };
+
+    const { docs, name, section } = api.registry.findMetaError(metaError);
+    return { errorType: `${section}.${name}`, details: docs.join('\n') };
+  }
+
+  const errorType = Object.keys(dispatchError)[0];
+
+  let details: string;
+  if (typeof dispatchError[errorType] === 'string') {
+    details = dispatchError[errorType];
+  } else {
+    details = Object.keys(dispatchError[errorType])[0];
+  }
+
+  return {
+    errorType: capitalizeFirstLetter(errorType),
+    details,
+  };
 };

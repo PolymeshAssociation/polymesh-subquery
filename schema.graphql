@@ -1729,6 +1729,11 @@ enum InstructionTypeEnum {
   SettleManual
 }
 
+type ErrorJson @jsonField {
+  errorType: String
+  details: String
+}
+
 """
 Represents a request to exchange Assets between parties.
 
@@ -1751,6 +1756,7 @@ type Instruction @entity {
   memo: String
   "DID of the mediators"
   mediators: [String!]!
+  failureReason: ErrorJson
   legs: [Leg!]! @derivedFrom(field: "instruction")
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
@@ -1881,6 +1887,7 @@ type InstructionEvent @entity {
   identity: String @index(unique: false)
   portfolio: Int
   offChainReceipt: OffChainReceipt
+  failureReason: ErrorJson
   createdBlock: Block!
   updatedBlock: Block!
 }

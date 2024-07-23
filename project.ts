@@ -881,6 +881,14 @@ const project: SubstrateProject = {
           },
           {
             kind: SubstrateHandlerKind.Event,
+            handler: 'handleFailedToExecuteInstruction',
+            filter: {
+              module: 'settlement',
+              method: 'FailedToExecuteInstruction',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
             handler: 'handleSettlementManuallyExecuted',
             filter: {
               module: 'settlement',
