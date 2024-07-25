@@ -265,6 +265,7 @@ const filters = {
     'VenueFiltering',
     'VenuesAllowed',
     'VenuesBlocked',
+    'FundsMoved',
   ],
 };
 
@@ -1432,6 +1433,14 @@ const project: SubstrateProject = {
             filter: {
               module: 'confidentialAsset',
               method: 'AccountAssetUnfrozen',
+            },
+          },
+          {
+            kind: SubstrateHandlerKind.Event,
+            handler: 'handleConfidentialAssetMoveFunds',
+            filter: {
+              module: 'confidentialAsset',
+              method: 'FundsMoved',
             },
           },
           {

@@ -1,8 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { ConfidentialAsset, ConfidentialVenue, EventIdEnum } from '../../types';
-import { getBigIntValue, getBooleanValue, getTextValue, getNumberValue } from '../util';
-import { Attributes, extractArgs } from './common';
 import { SubstrateEvent } from '@subql/types';
+import { ConfidentialAsset, ConfidentialVenue, EventIdEnum } from '../../types';
+import { getBigIntValue, getBooleanValue, getNumberValue, getTextValue } from '../util';
+import { Attributes, extractArgs } from './common';
 
 export const getAuditorsAndMediators = (
   item: Codec
@@ -143,4 +143,27 @@ export const handleAssetFrozenUnfrozen = async (event: SubstrateEvent): Promise<
 
     await asset.save();
   }
+};
+
+export const handleConfidentialAssetMoveFunds = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId, eventIdx } = extractArgs(event);
+
+  const [, rawFrom, rawTo, rawProofs] = params;
+
+  const fromId = getTextValue(rawFrom);
+  const toId = getTextValue(rawTo);
+
+  const proofs = JSON.parse(rawProofs.toString());
+
+  const proofParams = Object.keys(proofs).map(assetId => ({
+    id: `${blockId}/${eventIdx}`,
+    fromId,
+    toId,
+    assetId,
+    proof: proofs[assetId],
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }));
+
+  await store.bulkCreate('ConfidentialAssetMovement', proofParams);
 };

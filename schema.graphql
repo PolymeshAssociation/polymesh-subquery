@@ -553,6 +553,7 @@ enum EventIdEnum {
   # AssetFrozen -> defined before
   # AssetUnfrozen -> defined before
   Burned
+  FundsMoved
 
   ## deprecated ##
   Approval @deprecated
@@ -1157,6 +1158,7 @@ enum CallIdEnum {
   reject_transaction
   set_account_asset_frozen
   set_asset_frozen
+  move_assets
 
   ## state trie migration ##
   continue_migrate
@@ -2620,6 +2622,19 @@ type ConfidentialAssetHistory @entity {
   transaction: ConfidentialTransaction
   memo: String
   datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents a transfer of confidential assets between a single identities confidential accounts.
+"""
+type ConfidentialAssetMovement @entity {
+  id: ID!
+  from: ConfidentialAccount! @index(unique: false)
+  to: ConfidentialAccount! @index(unique: false)
+  asset: ConfidentialAsset!
+  proof: String!
   createdBlock: Block!
   updatedBlock: Block!
 }
