@@ -2043,6 +2043,7 @@ type StatType @entity {
   asset: Asset!
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
+  customClaimType: CustomClaimType
   claimIssuer: Identity
   createdBlock: Block!
   updatedBlock: Block!

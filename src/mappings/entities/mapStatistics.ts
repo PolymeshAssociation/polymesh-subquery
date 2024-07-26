@@ -32,28 +32,39 @@ interface MeshStatType {
 
 const transferRestrictionSpecVersion = 5000000;
 
-const getStatTypes = (item: Codec): Pick<StatType, 'opType' | 'claimType' | 'claimIssuerId'>[] => {
+const getStatTypes = (item: Codec): Omit<Attributes<StatType>, 'assetId'>[] => {
   const statTypes = JSON.parse(item.toString()) as MeshStatType[];
   return statTypes.map(({ op: opType, claimIssuer }) => {
-    let claimType: string = null;
-    let claimIssuerId: string = null;
+    /**
+     * claimIssuer -> Option<PolymeshPrimitivesIdentityClaimClaimType, PolymeshPrimitivesIdentityId>
+     * E.g. - [{ accredited: null }, '0x0100000000000000000000000000000000000000000000000000000000000000']
+     * In case of custom claim type, [{custom: 1}, '0x0100000000000000000000000000000000000000000000000000000000000000']
+     */
     if (claimIssuer) {
-      claimType = claimIssuer[0];
-      claimIssuerId = claimIssuer[1];
+      const [claimTypeInfo, claimIssuerId] = claimIssuer;
+      const claimType = Object.keys(claimTypeInfo)[0];
+      let customClaimTypeId;
+      if (claimType === 'custom') {
+        customClaimTypeId = claimTypeInfo[claimType];
+      }
+      return {
+        opType: opType as StatOpTypeEnum,
+        claimType: capitalizeFirstLetter(claimType) as ClaimTypeEnum,
+        customClaimTypeId,
+        claimIssuerId,
+      };
     }
     return {
       opType: opType as StatOpTypeEnum,
-      claimType: claimType as ClaimTypeEnum,
-      claimIssuerId,
     };
   });
 };
 
 const upsertStatType = async (
-  { assetId, opType, claimType, claimIssuerId }: Attributes<StatType>,
+  { assetId, opType, claimType, claimIssuerId, customClaimTypeId }: Attributes<StatType>,
   blockId: string
 ) => {
-  const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId);
+  const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId, customClaimTypeId);
   let statType = await StatType.get(statTypeId);
   if (statType) {
     statType.updatedBlockId = blockId;
@@ -64,6 +75,7 @@ const upsertStatType = async (
       opType,
       claimType,
       claimIssuerId,
+      customClaimTypeId,
       createdBlockId: blockId,
       updatedBlockId: blockId,
     });
@@ -145,11 +157,16 @@ const getStatTypeId = (
   assetId: string,
   opType: string,
   claimType?: string,
-  claimIssuerId?: string
+  claimIssuerId?: string,
+  customClaimTypeId?: string
 ) => {
   let statTypeId = `${assetId}/${opType}`;
   if (claimType) {
-    statTypeId += `/${claimType}/${claimIssuerId}`;
+    if (claimType === ClaimTypeEnum.Custom) {
+      statTypeId += `/${claimType}/${customClaimTypeId}/${claimIssuerId}`;
+    } else {
+      statTypeId += `/${claimType}/${claimIssuerId}`;
+    }
   }
   return statTypeId;
 };
@@ -163,9 +180,9 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
   const statTypes = getStatTypes(rawStatType);
 
   const promises = [];
-  statTypes.forEach(({ opType, claimType, claimIssuerId }) => {
+  statTypes.forEach(statType => {
     const upsert = async () => {
-      return upsertStatType({ assetId, opType, claimType, claimIssuerId }, blockId);
+      return upsertStatType({ assetId, ...statType }, blockId);
     };
     promises.push(upsert());
   });
