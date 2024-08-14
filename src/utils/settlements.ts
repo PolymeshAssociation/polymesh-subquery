@@ -1,10 +1,12 @@
 import { Codec } from '@polkadot/types-codec/types';
+import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import { Instruction, LegTypeEnum } from '../types';
 import {
   capitalizeFirstLetter,
   extractBigInt,
   extractString,
+  getAssetId,
   getBigIntValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
@@ -16,29 +18,32 @@ import { meshPortfolioToPortfolio } from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
-export const getLegsValue = (item: Codec): LegDetails[] => {
+/**
+ * This only extracts legs for spec version < 6000000
+ */
+export const getLegsValue = (item: Codec, block: SubstrateBlock): LegDetails[] => {
   const legs: any[] = JSON.parse(item.toString());
-  return legs.map(
-    ({ from: rawFromPortfolio, to: rawToPortfolio, asset: ticker, amount }, legIndex) => {
-      const { identityId: from, number: fromPortfolio } =
-        meshPortfolioToPortfolio(rawFromPortfolio);
-      const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(rawToPortfolio);
+  return legs.map((leg, legIndex) => {
+    const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
+    const assetId = getAssetId(leg.asset, block);
 
-      return {
-        legIndex,
-        from,
-        fromPortfolio,
-        to,
-        toPortfolio,
-        assetId: hexToString(ticker),
-        amount: getBigIntValue(amount),
-        legType: LegTypeEnum.Fungible,
-      } as LegDetails;
-    }
-  );
+    const { identityId: from, number: fromPortfolio } = meshPortfolioToPortfolio(rawFromPortfolio);
+    const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(rawToPortfolio);
+
+    return {
+      legIndex,
+      from,
+      fromPortfolio,
+      to,
+      toPortfolio,
+      assetId,
+      amount: getBigIntValue(amount),
+      legType: LegTypeEnum.Fungible,
+    } as LegDetails;
+  });
 };
 
-export const getSettlementLeg = (item: Codec): LegDetails[] => {
+export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails[] => {
   const legs: any[] = JSON.parse(item.toString());
 
   const legDetails: LegDetails[] = [];
@@ -63,10 +68,10 @@ export const getSettlementLeg = (item: Codec): LegDetails[] => {
 
       let assetId: string;
       if (legType === LegTypeEnum.Fungible) {
-        assetId = hexToString(legValue.ticker);
+        assetId = getAssetId(legValue.ticker ?? legValue.assetId, block);
         amount = extractBigInt(legValue, 'amount');
       } else if (legType === LegTypeEnum.NonFungible) {
-        assetId = hexToString(legValue.nfts.ticker);
+        assetId = getAssetId(legValue.nfts.ticker ?? legValue.nfts.assetId, block);
         nftIds = leg.nonFungible.nfts.ids;
       }
       legDetails.push({

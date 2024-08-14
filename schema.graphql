@@ -450,6 +450,8 @@ enum EventIdEnum {
   MediatorAffirmationWithdrawn
   InstructionMediators
 
+  TickerLinkedToAsset
+
   ## statistics ##
   TransferManagerAdded @deprecated
   TransferManagerRemoved @deprecated
@@ -870,7 +872,8 @@ enum CallIdEnum {
   sudo_as
 
   ## asset ##
-  register_ticker
+  register_ticker @deprecated
+  register_unique_ticker
   accept_ticker_transfer
   accept_asset_ownership_transfer
   create_asset
@@ -880,9 +883,10 @@ enum CallIdEnum {
   rename_asset
   issue
   redeem
-  redeem_from_portfolio
+  redeem_from_portfolio @deprecated
   make_divisible
-  pre_approve_ticker
+  pre_approve_ticker @deprecated
+  pre_approve_asset
   add_documents
   remove_documents
   set_funding_round
@@ -894,7 +898,8 @@ enum CallIdEnum {
   controller_transfer
   register_custom_asset_type
   create_asset_with_custom_type
-  exempt_ticker_affirmation
+  exempt_ticker_affirmation @deprecated
+  exempt_asset_affirmation
   set_asset_metadata
   set_asset_metadata_details
   register_and_set_local_asset_metadata
@@ -902,10 +907,13 @@ enum CallIdEnum {
   register_asset_metadata_global_type
   remove_local_metadata_key
   remove_metadata_value
-  remove_ticker_affirmation_exemption
-  remove_ticker_pre_approval
+  remove_ticker_affirmation_exemption @deprecated
+  remove_asset_affirmation_exemption
+  remove_ticker_pre_approval @deprecated
+  remove_asset_pre_approval
   add_mandatory_mediators
   remove_mandatory_mediators
+  link_ticker_to_asset_id
 
   ## capitaldistribution ##
   distribute
@@ -1595,7 +1603,7 @@ type Investment @entity {
 Represents an Identity authorized to perform actions on behalf of a company
 """
 type TickerExternalAgent @entity {
-  id: ID! # ticker/callerId
+  id: ID! # assetId/callerId
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
   eventIdx: Int!
@@ -1625,7 +1633,7 @@ type TickerExternalAgentHistory @entity {
 Represents a set of agents authorized to perform actions for a given Asset
 """
 type AgentGroup @entity {
-  id: ID! #ticker/group_id
+  id: ID! #assetId/group_id
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
   createdBlock: Block!
@@ -1636,7 +1644,7 @@ type AgentGroup @entity {
 Represent membership in a group. Tracks which members belong to which groups
 """
 type AgentGroupMembership @entity {
-  id: ID! #ticker/group_id/member
+  id: ID! #assetId/group_id/member
   member: String! @index(unique: false)
   group: AgentGroup! @index(unique: false)
   createdBlock: Block!
@@ -1782,7 +1790,7 @@ type Leg @entity {
   instruction: Instruction!
   legIndex: Int!
   legType: LegTypeEnum!
-  "`assetId` can be ticker for the on chain or off chain asset"
+  "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
   assetId: String! @index(unique: false)
   from: String! @index(unique: false)
   "`fromPortfolio` is null for off chain legs"
@@ -2013,7 +2021,9 @@ Represents all possible scopes a claim may have
 """
 enum ClaimScopeTypeEnum {
   Identity
+  "@deprecated in favour of `Asset`"
   Ticker
+  Asset
   Custom
 }
 
@@ -2033,7 +2043,7 @@ e.g. `target` is Blocked from owning "TICKER-A" or `target` is an Affiliate of "
 type ClaimScope @entity {
   id: ID!
   target: String! @index(unique: false)
-  ticker: String
+  assetId: String
   scope: Scope
   createdBlock: Block!
   updatedBlock: Block!
@@ -2090,7 +2100,7 @@ Represents a request to take ownership of a particular Asset
 """
 type AssetPendingOwnershipTransfer @entity {
   id: ID! # authorization id
-  ticker: String! @index(unique: false)
+  assetId: String! @index(unique: false)
   from: String! @index(unique: false)
   to: String! @index(unique: false)
   type: String! @index(unique: false)
@@ -2111,7 +2121,7 @@ enum TransferRestrictionTypeEnum {
 deprecated in favor of `TransferCompliance`
 """
 type TransferManager @entity {
-  id: ID! # ticker/transferManagerType/value
+  id: ID! # assetId/transferManagerType/value
   asset: Asset! @index(unique: false)
   type: TransferRestrictionTypeEnum!
   value: Int!
@@ -2136,7 +2146,7 @@ These are required to be enabled in order for the chain to enforce transfer rest
 e.g. A restriction requiring ownership to be at least 50% Canadian would require a StatType of type `Balance` scoped to Jurisdiction before being created
 """
 type StatType @entity {
-  id: ID! # ticker/op/type/claimIssuer
+  id: ID! # assetId/op/type/claimIssuer
   asset: Asset!
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
@@ -2162,7 +2172,7 @@ Represents restriction that will ensure the composition of ownership remains a c
 e.g. No more than 2000 individual investors to avoid additional reporting requirements
 """
 type TransferCompliance @entity {
-  id: ID! # ticker/op/type/claimIssuer
+  id: ID! # assetId/op/type/claimIssuer
   asset: Asset! @index(unique: false)
   type: TransferComplianceTypeEnum!
   statType: StatType!
@@ -2197,7 +2207,7 @@ Represents a restriction all investor must comply with for a given Asset
 e.g. All investors must be German citizens
 """
 type Compliance @entity {
-  id: ID! # ticker/complianceId
+  id: ID! # assetId/complianceId
   complianceId: Int!
   data: String! # This could be expanded into structured data
   asset: Asset! @index(unique: false)
@@ -2209,7 +2219,7 @@ type Compliance @entity {
 Represents how much of a given Asset an Identity owns
 """
 type AssetHolder @entity {
-  id: ID! # ticker/did
+  id: ID! # assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
@@ -2221,7 +2231,7 @@ type AssetHolder @entity {
 Represents what NFTs of a collection an Identity owns
 """
 type NftHolder @entity {
-  id: ID! #ticker/did
+  id: ID! #assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   nftIds: [Int]
@@ -2243,7 +2253,7 @@ Represents off chain documentation for an Asset. A hash should be included on ch
 e.g. A companies 10-K report
 """
 type AssetDocument @entity {
-  id: ID! # ticker/documentId
+  id: ID! # assetId/documentId
   documentId: Int!
   name: String!
   link: String!
@@ -2260,7 +2270,7 @@ Represents a tokenized Asset on the Polymesh chain. The central data structure f
 """
 type Asset @entity {
   id: ID! # ticker
-  ticker: String! @index(unique: true)
+  ticker: String @index(unique: false)
   name: String @index(unique: false)
   isNftCollection: Boolean!
   type: String @index(unique: false)
@@ -2328,7 +2338,7 @@ type Funding @entity {
 }
 
 type AssetMandatoryMediator @entity {
-  id: ID! # /ticker/did
+  id: ID! # /assetId/did
   asset: Asset!
   identityId: String! # The chain doesn't validate existence of the DID
   addedBy: Identity!

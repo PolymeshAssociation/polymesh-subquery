@@ -1,16 +1,16 @@
 import { SubstrateEvent } from '@subql/types';
 import { TickerExternalAgent } from '../../types';
-import { getTextValue, serializeTicker } from '../../utils';
+import { getAssetId, getTextValue } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, block } = extractArgs(event);
   const callerId = getTextValue(params[0]);
-  const ticker = serializeTicker(params[1]);
+  const assetId = getAssetId(params[1], block);
 
   await TickerExternalAgent.create({
-    id: `${ticker}/${callerId}`,
-    assetId: ticker,
+    id: `${assetId}/${callerId}`,
+    assetId,
     callerId,
     eventIdx,
     datetime: block.timestamp,
@@ -20,8 +20,8 @@ export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<v
 };
 
 export const handleExternalAgentRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
   const agent = params[2].toString();
-  const ticker = serializeTicker(params[1]);
-  await TickerExternalAgent.remove(`${ticker}/${agent}`);
+  const assetId = getAssetId(params[1], block);
+  await TickerExternalAgent.remove(`${assetId}/${agent}`);
 };

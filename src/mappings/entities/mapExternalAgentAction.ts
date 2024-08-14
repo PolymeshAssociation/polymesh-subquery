@@ -1,21 +1,35 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../types';
-import { getOfferingAsset, getOrDefault, getTextValue, serializeTicker } from '../../utils';
+import {
+  getAssetId,
+  getExemptKeyValue,
+  getOfferingAsset,
+  getOrDefault,
+  getTextValue,
+} from '../../utils';
 import { extractArgs } from './common';
+import { getAssetIdForStatisticsEvent } from './mapStatistics';
 
 /**
  * Subscribes to the events related to external agents
  */
 export async function mapExternalAgentAction(event: SubstrateEvent): Promise<void> {
-  const { moduleId, eventId, blockId, params, extrinsic, eventIdx } = extractArgs(event);
+  const { moduleId, eventId, blockId, block, params, extrinsic, eventIdx } = extractArgs(event);
 
-  const ticker = await mgr.getTicker(moduleId, eventId, blockId, params, extrinsic);
-  if (ticker) {
+  const assetId = await mgr.getAssetIdForEvent(
+    moduleId,
+    eventId,
+    blockId,
+    block,
+    params,
+    extrinsic
+  );
+  if (assetId) {
     await TickerExternalAgentAction.create({
       id: `${blockId}/${eventIdx}`,
       eventIdx,
-      assetId: ticker,
+      assetId,
       palletName: moduleId,
       eventId,
       callerId: getTextValue(params[0]),
@@ -29,24 +43,41 @@ type EntryOptions = {
   maxBlock?: number;
   minBlock?: number;
 };
+
 type StandardEntry = {
   type: 'standard';
   paramIndex: number;
   options: EntryOptions;
 };
-type TickerFromParams = (params: Codec[], extrinsic?: SubstrateExtrinsic) => Promise<string>;
+
+type AssetIdFromParams = (
+  params: Codec[],
+  block: SubstrateBlock,
+  extrinsic?: SubstrateExtrinsic
+) => Promise<string>;
+
 type SpecialEntry = {
   type: 'special';
-  tickerFromParams: TickerFromParams;
+  assetIdFromParams: AssetIdFromParams;
   options: EntryOptions;
 };
 type Entry = StandardEntry | SpecialEntry;
-const tickerFromCorporateAction: TickerFromParams = async params => {
-  if (params[1] instanceof Map && params[1].get('ticker')) {
-    return serializeTicker(params[1].get('ticker'));
+
+const assetIdFromCorporateAction: AssetIdFromParams = async (
+  params: Codec[],
+  block: SubstrateBlock
+) => {
+  if (params[1] instanceof Map) {
+    const rawAssetId = params[1].get('ticker') ?? params[1].get('assetId');
+    if (rawAssetId) {
+      return getAssetId(rawAssetId, block);
+    }
   }
-  if (params[2] instanceof Map && params[2].get('ticker')) {
-    return serializeTicker(params[2].get('ticker'));
+  if (params[2] instanceof Map) {
+    const rawAssetId = params[2].get('ticker') ?? params[2].get('assetId');
+    if (rawAssetId) {
+      return getAssetId(rawAssetId, block);
+    }
   }
   throw new Error("Event didn't have a CaID parameter");
 };
@@ -56,7 +87,7 @@ const tickerFromCorporateAction: TickerFromParams = async params => {
  * in a single source of truth.
  *
  * External agent authorized extrinsics are defined as those that call "ensure_agent_permissioned"
- * meaning they are extrinsics that can only be called if you are an external agent of the ticker.
+ * meaning they are extrinsics that can only be called if you are an external agent of the Asset.
  */
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
@@ -66,10 +97,11 @@ class ExternalAgentEventsManager {
     // Explicit private empty constructor
   }
 
-  public async getTicker(
+  public async getAssetIdForEvent(
     moduleId: ModuleIdEnum,
     eventId: EventIdEnum,
     blockId: string,
+    block: SubstrateBlock,
     params: Codec[],
     extrinsic?: SubstrateExtrinsic
   ): Promise<string | undefined> {
@@ -87,9 +119,9 @@ class ExternalAgentEventsManager {
         continue;
       }
       if (entry.type === 'standard') {
-        return serializeTicker(params[entry.paramIndex]);
+        return getAssetId(params[entry.paramIndex], block);
       } else {
-        return entry.tickerFromParams(params, extrinsic);
+        return entry.assetIdFromParams(params, block, extrinsic);
       }
     }
     return undefined;
@@ -118,6 +150,19 @@ class ExternalAgentEventsManager {
         1
       )
       .add(
+        ModuleIdEnum.statistics,
+        [EventIdEnum.AssetStatsUpdated, EventIdEnum.StatTypesAdded, EventIdEnum.StatTypesRemoved],
+        async (params, block) => getAssetIdForStatisticsEvent(params[1], block)
+      )
+      .add(
+        ModuleIdEnum.statistics,
+        [
+          EventIdEnum.TransferConditionExemptionsAdded,
+          EventIdEnum.TransferConditionExemptionsRemoved,
+        ],
+        async (params, block) => getExemptKeyValue(params[1], block).assetId
+      )
+      .add(
         ModuleIdEnum.corporateaction,
         [
           EventIdEnum.DefaultTargetIdentitiesChanged,
@@ -134,7 +179,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.CARemoved,
           EventIdEnum.RecordDateChanged,
         ],
-        tickerFromCorporateAction
+        assetIdFromCorporateAction
       )
       .add(
         ModuleIdEnum.corporateballot,
@@ -144,8 +189,9 @@ class ExternalAgentEventsManager {
           EventIdEnum.MetaChanged,
           EventIdEnum.RCVChanged,
           EventIdEnum.Removed,
+          EventIdEnum.VoteCast,
         ],
-        tickerFromCorporateAction
+        assetIdFromCorporateAction
       )
       .add(
         ModuleIdEnum.compliancemanager,
@@ -165,7 +211,7 @@ class ExternalAgentEventsManager {
       .add(
         ModuleIdEnum.capitaldistribution,
         [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.BenefitClaimed],
-        tickerFromCorporateAction
+        assetIdFromCorporateAction
       )
       .add(
         ModuleIdEnum.checkpoint,
@@ -196,8 +242,30 @@ class ExternalAgentEventsManager {
           EventIdEnum.DocumentRemoved,
           EventIdEnum.FundingRoundSet,
           EventIdEnum.IdentifiersUpdated,
+          EventIdEnum.AssetMediatorsAdded,
+          EventIdEnum.AssetMediatorsRemoved,
+          EventIdEnum.AssetTypeChanged,
+          EventIdEnum.LocalMetadataKeyDeleted,
+          EventIdEnum.MetadataValueDeleted,
+          EventIdEnum.PreApprovedAsset,
+          EventIdEnum.RegisterAssetMetadataLocalType,
+          EventIdEnum.RemovePreApprovedAsset,
+          EventIdEnum.SetAssetMetadataValue,
+          EventIdEnum.SetAssetMetadataValueDetails,
         ],
         1
+      )
+      .add(
+        ModuleIdEnum.asset,
+        [EventIdEnum.AssetAffirmationExemption, EventIdEnum.RemoveAssetAffirmationExemption],
+        0
+      )
+      .add(
+        ModuleIdEnum.asset,
+        [
+          // EventIdEnum.TickerLinkedToAsset,
+        ],
+        2
       )
       .add(
         ModuleIdEnum.externalagents,
@@ -220,7 +288,7 @@ class ExternalAgentEventsManager {
         ],
         1
       )
-      // Special case for the Sto pallet because most events don't contain the ticker,
+      // Special case for the Sto pallet because most events don't contain the Asset,
       // they contain a reference to a previously created fundraiser instead.
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params =>
         getOfferingAsset(params[3])
@@ -233,7 +301,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (_, extrinsic) => serializeTicker(extrinsic?.extrinsic.args[0])
+        async (_, block, extrinsic) => getAssetId(extrinsic?.extrinsic.args[0], block)
       );
     return eventsManager;
   }
@@ -241,7 +309,7 @@ class ExternalAgentEventsManager {
   private add(
     moduleId: ModuleIdEnum,
     eventIds: EventIdEnum[],
-    param: number | TickerFromParams,
+    param: number | AssetIdFromParams,
     options: EntryOptions = {}
   ) {
     // entries
@@ -250,7 +318,7 @@ class ExternalAgentEventsManager {
       const entry: Entry =
         typeof param === 'number'
           ? { type: 'standard', paramIndex: param, options }
-          : { type: 'special', tickerFromParams: param, options };
+          : { type: 'special', assetIdFromParams: param, options };
       getOrDefault(map, event, () => []).push(entry);
     }
 

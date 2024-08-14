@@ -2,19 +2,19 @@ import { SubstrateEvent } from '@subql/types';
 import { Investment, Sto, StoStatus } from '../../types';
 import {
   coerceHexToString,
+  getAssetId,
   getBigIntValue,
   getDateValue,
   getFundraiserDetails,
   getNumberValue,
   getTextValue,
-  serializeTicker,
 } from '../../utils';
 import { extractArgs } from './common';
 
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
   const [, rawStoId, rawStoName, rawFundraiserDetails] = params;
-  const fundraiserDetails = getFundraiserDetails(rawFundraiserDetails);
+  const fundraiserDetails = getFundraiserDetails(rawFundraiserDetails, block);
   const stoId = getNumberValue(rawStoId);
   const name = coerceHexToString(getTextValue(rawStoName));
 
@@ -42,7 +42,7 @@ export const handleStoClosed = async (event: SubstrateEvent): Promise<void> => {
 const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
   const { params, extrinsic, block, blockId } = extractArgs(event);
   const [, rawStoId] = params;
-  const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
+  const offeringAssetId = getAssetId(extrinsic.extrinsic.args[0], block);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
@@ -63,9 +63,9 @@ const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus):
 };
 
 export const handleFundraiserWindowModified = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId } = extractArgs(event);
+  const { params, extrinsic, blockId, block } = extractArgs(event);
   const [, rawStoId, , , rawStart, rawEnd] = params;
-  const offeringAssetId = serializeTicker(extrinsic.extrinsic.args[0]);
+  const offeringAssetId = getAssetId(extrinsic.extrinsic.args[0], block);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
@@ -93,8 +93,8 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
     id: `${blockId}/${eventIdx}`,
     investorId: getTextValue(rawInvestor),
     stoId: getNumberValue(rawStoId),
-    offeringToken: serializeTicker(rawOfferingToken),
-    raiseToken: serializeTicker(rawRaiseToken),
+    offeringToken: getAssetId(rawOfferingToken, block),
+    raiseToken: getAssetId(rawRaiseToken, block),
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
     raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
     datetime: block.timestamp,

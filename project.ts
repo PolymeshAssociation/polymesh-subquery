@@ -45,6 +45,7 @@ const filters = {
     RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
+    TickerLinkedToAsset: ['handleTickerLinkedToAsset'],
   },
   balances: {
     AccountBalanceBurned: ['handleBalanceBurned'],

@@ -30,12 +30,13 @@ import {
   getSecurityIdentifiers,
   getTextValue,
   serializeTicker,
+  getAssetId,
 } from '../../utils';
 import { extractArgs, getAsset } from './common';
 
 export const createFunding = (
   blockId: string,
-  ticker: string,
+  assetId: string,
   eventIdx: number,
   datetime: Date,
   fundingRound: string,
@@ -44,7 +45,7 @@ export const createFunding = (
 ): Promise<void> => {
   return Funding.create({
     id: `${blockId}/${eventIdx}`,
-    assetId: ticker,
+    assetId,
     fundingRound,
     amount: issuedAmount,
     totalFundingAmount,
@@ -101,11 +102,11 @@ export const createAssetTransaction = (
 };
 
 export const getAssetHolder = async (
-  ticker: string,
+  assetId: string,
   did: string,
   blockId: string
 ): Promise<AssetHolder> => {
-  const id = `${ticker}/${did}`;
+  const id = `${assetId}/${did}`;
 
   let assetHolder = await AssetHolder.get(id);
 
@@ -113,7 +114,7 @@ export const getAssetHolder = async (
     assetHolder = AssetHolder.create({
       id,
       identityId: did,
-      assetId: ticker,
+      assetId,
       amount: BigInt(0),
       createdBlockId: blockId,
       updatedBlockId: blockId,
@@ -126,7 +127,7 @@ export const getAssetHolder = async (
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, block, eventIdx, blockId } = extractArgs(event);
-  const [, rawTicker, divisible, rawType, rawOwnerDid, ...rest] = params;
+  const [, rawAssetId, divisible, rawType, rawOwnerDid, ...rest] = params;
   let disableIu: Codec, rawIdentifiers: Codec, rawAssetName: Codec, rawFundingRoundName: Codec;
 
   /**
@@ -146,7 +147,8 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
   }
 
   const ownerId = getTextValue(rawOwnerDid);
-  const ticker = serializeTicker(rawTicker);
+
+  const ticker = block.specVersion < 7000000 ? serializeTicker(rawAssetId) : undefined;
 
   /**
    * Name isn't present on the old events so we need to query storage.
@@ -160,8 +162,8 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 
   const [assetType, rawName, rawFundingRound] = await Promise.all([
     getAssetType(rawType),
-    rawAssetName ?? api.query.asset.assetNames(rawTicker),
-    rawFundingRoundName ?? api.query.asset.fundingRound(rawTicker),
+    rawAssetName ?? api.query.asset.assetNames(rawAssetId),
+    rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId),
   ]);
 
   const name = bytesToString(rawName as Codec);
@@ -186,7 +188,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
   }
 
   await Asset.create({
-    id: ticker,
+    id: getAssetId(rawAssetId, block),
     ticker,
     name,
     type: assetType,
@@ -207,12 +209,12 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawName] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawName] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.name = bytesToString(rawName);
   asset.updatedBlockId = blockId;
 
@@ -220,12 +222,12 @@ export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawFundingRound] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawFundingRound] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
 
   asset.fundingRound = bytesToString(rawFundingRound);
   asset.updatedBlockId = blockId;
@@ -234,17 +236,17 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawDocId, rawDoc] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawDocId, rawDoc] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
   const docDetails = getDocValue(rawDoc);
 
-  const { id: assetId } = await getAsset(ticker);
+  await getAsset(assetId);
 
   await AssetDocument.create({
-    id: `${ticker}/${documentId}`,
+    id: `${assetId}/${documentId}`,
     documentId,
     ...docDetails,
     assetId,
@@ -254,22 +256,22 @@ export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> 
 };
 
 export const handleDocumentRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
-  const [, rawTicker, rawDocId] = params;
+  const { params, block } = extractArgs(event);
+  const [, rawAssetId, rawDocId] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
 
-  await AssetDocument.remove(`${ticker}/${documentId}`);
+  await AssetDocument.remove(`${assetId}/${documentId}`);
 };
 
 export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawIdentifiers] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawIdentifiers] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
   asset.updatedBlockId = blockId;
 
@@ -277,12 +279,12 @@ export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<v
 };
 
 export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.isDivisible = true;
   asset.updatedBlockId = blockId;
 
@@ -291,26 +293,26 @@ export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<
 
 export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, extrinsic, block } = extractArgs(event);
-  const [, rawTicker, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
+  const [, rawAssetId, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
     params;
 
   const issuerDid = getTextValue(rawBeneficiaryDid);
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.totalSupply += issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetIssuer = await getAssetHolder(ticker, issuerDid, blockId);
+  const assetIssuer = await getAssetHolder(assetId, issuerDid, blockId);
   assetIssuer.amount += issuedAmount;
   assetIssuer.updatedBlockId = blockId;
 
   const assetTransaction = AssetTransaction.create({
     id: `${blockId}/${eventIdx}`,
-    assetId: ticker,
+    assetId,
     toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
     eventId: EventIdEnum.Issued,
     eventIdx,
@@ -327,7 +329,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     promises.push(
       createFunding(
         blockId,
-        ticker,
+        assetId,
         eventIdx,
         block.timestamp,
         fundingRound,
@@ -341,18 +343,18 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawBeneficiaryDid, rawAmount] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawBeneficiaryDid, rawAmount] = params;
 
   const issuerDid = getTextValue(rawBeneficiaryDid);
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.totalSupply -= issuedAmount;
   asset.updatedBlockId = blockId;
 
-  const assetRedeemer = await getAssetHolder(ticker, issuerDid, blockId);
+  const assetRedeemer = await getAssetHolder(assetId, issuerDid, blockId);
   assetRedeemer.amount -= issuedAmount;
   assetRedeemer.updatedBlockId = blockId;
 
@@ -362,12 +364,12 @@ export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.isFrozen = true;
   asset.updatedBlockId = blockId;
 
@@ -375,12 +377,12 @@ export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.isFrozen = false;
   asset.updatedBlockId = blockId;
 
@@ -388,13 +390,13 @@ export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
-  const [to, rawTicker] = params;
+  const [to, rawAssetId] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.ownerId = getTextValue(to);
   asset.updatedBlockId = blockId;
 
@@ -403,10 +405,10 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block, eventIdx, extrinsic } = extractArgs(event);
-  const [, rawTicker, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
+  const [, rawAssetId, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
   let fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
@@ -426,14 +428,14 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   let instructionId: string;
 
   if (fromPortfolioId && toPortfolioId) {
-    const asset = await getAsset(ticker);
+    const asset = await getAsset(assetId);
     asset.totalTransfers += BigInt(1);
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
 
     const [fromHolder, toHolder] = await Promise.all([
-      getAssetHolder(ticker, fromDid, blockId),
-      getAssetHolder(ticker, toDid, blockId),
+      getAssetHolder(assetId, fromDid, blockId),
+      getAssetHolder(assetId, toDid, blockId),
     ]);
 
     fromHolder.amount = fromHolder.amount - transferAmount;
@@ -459,7 +461,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
       eventIdx,
       block.timestamp,
       {
-        assetId: ticker,
+        assetId,
         fromPortfolioId,
         toPortfolioId,
         amount: transferAmount,
@@ -475,14 +477,14 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
 
 export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
-  const [, rawTicker, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
+  const [, rawAssetId, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid: string, toDid: string;
 
   let fromPortfolioNumber: number, toPortfolioNumber: number;
 
-  const ticker = serializeTicker(rawTicker);
-  const asset = await getAsset(ticker);
+  const assetId = getAssetId(rawAssetId, block);
+  const asset = await getAsset(assetId);
 
   let fromPortfolioId: string;
   let toPortfolioId: string;
@@ -499,7 +501,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
     fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
 
-    const fromHolder = await getAssetHolder(ticker, fromDid, blockId);
+    const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
     fromHolder.amount = fromHolder.amount - transferAmount;
     fromHolder.updatedBlockId = blockId;
     promises.push(fromHolder.save());
@@ -509,7 +511,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
     ({ identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio));
     toPortfolioId = `${toDid}/${toPortfolioNumber}`;
 
-    const toHolder = await getAssetHolder(ticker, toDid, blockId);
+    const toHolder = await getAssetHolder(assetId, toDid, blockId);
     toHolder.amount = toHolder.amount + transferAmount;
     toHolder.updatedBlockId = blockId;
     promises.push(toHolder.save());
@@ -529,7 +531,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       promises.push(
         createFunding(
           blockId,
-          ticker,
+          assetId,
           eventIdx,
           block.timestamp,
           fundingRoundName,
@@ -572,7 +574,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       eventIdx,
       block.timestamp,
       {
-        assetId: ticker,
+        assetId,
         fromPortfolioId,
         toPortfolioId,
         amount: transferAmount,
@@ -589,16 +591,16 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 };
 
 export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
   const addedById = getTextValue(params[0]);
-  const ticker = serializeTicker(params[1]);
+  const assetId = getAssetId(params[1], block);
   const mediators = getStringArrayValue(params[2]);
 
   const createPromises = mediators.map(mediator =>
     AssetMandatoryMediator.create({
-      id: `${ticker}/${mediator}`,
+      id: `${assetId}/${mediator}`,
       identityId: mediator,
-      assetId: ticker,
+      assetId,
       addedById,
       createdBlockId: blockId,
       updatedBlockId: blockId,
@@ -609,19 +611,19 @@ export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<
 };
 
 export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
-  const ticker = serializeTicker(params[1]);
+  const { params, block } = extractArgs(event);
+  const assetId = getAssetId(params[1], block);
   const mediators = getStringArrayValue(params[2]);
 
   await Promise.all(
-    mediators.map(mediator => AssetMandatoryMediator.remove(`${ticker}/${mediator}`))
+    mediators.map(mediator => AssetMandatoryMediator.remove(`${assetId}/${mediator}`))
   );
 };
 
 export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
   const identityId = getTextValue(params[0]);
-  const assetId = serializeTicker(params[1]);
+  const assetId = getAssetId(params[1], block);
 
   await AssetPreApproval.create({
     id: `${assetId}/${identityId}`,
@@ -633,10 +635,24 @@ export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<voi
 };
 
 export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
 
   const identityId = getTextValue(params[0]);
-  const assetId = serializeTicker(params[1]);
+  const assetId = getAssetId(params[1], block);
 
   await AssetPreApproval.remove(`${assetId}/${identityId}`);
+};
+
+export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
+  const [, rawTicker, rawAssetId] = params;
+  const ticker = serializeTicker(rawTicker);
+  const assetId = rawAssetId.toString();
+  const asset = await getAsset(assetId);
+
+  asset.ticker = ticker;
+  asset.updatedBlockId = blockId;
+
+  await asset.save();
 };

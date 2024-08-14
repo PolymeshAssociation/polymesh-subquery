@@ -4,10 +4,10 @@ import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from
 import { extractArgs } from './common';
 
 export const handleDistributionCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
   const [rawDid, rawCaId, rawDistribution] = params;
 
-  const { localId, assetId } = getCaIdValue(rawCaId);
+  const { localId, assetId } = getCaIdValue(rawCaId, block);
   const distributionDetails = getDistributionValue(rawDistribution);
 
   await Distribution.create({
@@ -23,10 +23,10 @@ export const handleDistributionCreated = async (event: SubstrateEvent): Promise<
 };
 
 export const handleDistributionRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
   const [, rawCaId] = params;
 
-  const { localId, assetId } = getCaIdValue(rawCaId);
+  const { localId, assetId } = getCaIdValue(rawCaId, block);
 
   await Distribution.remove(`${assetId}/${localId}`);
 };
@@ -36,7 +36,7 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
   const [, rawClaimantDid, rawCaId, , rawAmount, rawTax] = params;
 
   const targetId = getTextValue(rawClaimantDid);
-  const { localId, assetId } = getCaIdValue(rawCaId);
+  const { localId, assetId } = getCaIdValue(rawCaId, block);
   const amount = getBigIntValue(rawAmount);
   const tax = getBigIntValue(rawTax);
 
@@ -67,7 +67,7 @@ export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
   const [rawEventDid, rawCaId, rawAmount] = params;
 
   const targetId = getTextValue(rawEventDid);
-  const { localId, assetId } = getCaIdValue(rawCaId);
+  const { localId, assetId } = getCaIdValue(rawCaId, block);
   const amount = getBigIntValue(rawAmount);
 
   await DistributionPayment.create({

@@ -20,11 +20,11 @@ export interface HandlerArgs {
   extrinsic?: SubstrateExtrinsic;
 }
 
-export const getAsset = async (ticker: string): Promise<Asset> => {
-  const asset = await Asset.getByTicker(ticker);
+export const getAsset = async (assetId: string): Promise<Asset> => {
+  const asset = await Asset.get(assetId);
 
   if (!asset) {
-    throw new Error(`Asset with ticker ${ticker} was not found.`);
+    throw new Error(`Asset with ID ${assetId} was not found.`);
   }
 
   return asset;
