@@ -3,22 +3,22 @@ import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, NftHolder } from '../../types';
 import {
   bytesToString,
+  getAssetId,
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
   getPortfolioValue,
   getTextValue,
-  serializeTicker,
 } from '../../utils';
 import { extractArgs, getAsset } from './common';
 import { createAssetTransaction } from './mapAsset';
 
 export const getNftHolder = async (
-  ticker: string,
+  assetId: string,
   did: string,
   blockId: string
 ): Promise<NftHolder> => {
-  const id = `${ticker}/${did}`;
+  const id = `${assetId}/${did}`;
 
   let nftHolder = await NftHolder.get(id);
 
@@ -26,7 +26,7 @@ export const getNftHolder = async (
     nftHolder = NftHolder.create({
       id,
       identityId: did,
-      assetId: ticker,
+      assetId,
       nftIds: [],
       createdBlockId: blockId,
       updatedBlockId: blockId,
@@ -38,10 +38,10 @@ export const getNftHolder = async (
 };
 
 export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker] = params;
-  const ticker = serializeTicker(rawTicker);
-  const asset = await await getAsset(ticker);
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId] = params;
+  const assetId = getAssetId(rawAssetId, block);
+  const asset = await getAsset(assetId);
 
   asset.isNftCollection = true;
   asset.updatedBlockId = blockId;
@@ -71,9 +71,9 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
   const reason = getFirstKeyFromJson(rawUpdateReason);
   const value = getFirstValueFromJson(rawUpdateReason);
 
-  const { ticker, ids } = getNftId(rawNftId);
+  const { assetId, ids } = getNftId(rawNftId, block);
 
-  const asset = await await getAsset(ticker);
+  const asset = await getAsset(assetId);
   asset.updatedBlockId = blockId;
 
   let instructionId: string;
@@ -84,21 +84,21 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
     eventId = EventIdEnum.IssuedNFT;
     asset.totalSupply += BigInt(ids.length);
 
-    const nftHolder = await getNftHolder(ticker, did, blockId);
+    const nftHolder = await getNftHolder(assetId, did, blockId);
     nftHolder.nftIds.push(...ids);
     promises.push(nftHolder.save());
   } else if (reason === 'redeemed') {
     eventId = EventIdEnum.RedeemedNFT;
     asset.totalSupply -= BigInt(ids.length);
 
-    const nftHolder = await getNftHolder(ticker, did, blockId);
+    const nftHolder = await getNftHolder(assetId, did, blockId);
     nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
     nftHolder.updatedBlockId = blockId;
     promises.push(nftHolder.save());
   } else if (reason === 'transferred' || reason === 'controllerTransfer') {
     const [fromHolder, toHolder] = await Promise.all([
-      getNftHolder(ticker, fromDid, blockId),
-      getNftHolder(ticker, toDid, blockId),
+      getNftHolder(assetId, fromDid, blockId),
+      getNftHolder(assetId, toDid, blockId),
     ]);
     fromHolder.nftIds = fromHolder.nftIds.filter(id => !ids.includes(id));
     toHolder.nftIds.push(...ids);
@@ -127,7 +127,7 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
       eventIdx,
       block.timestamp,
       {
-        assetId: ticker,
+        assetId,
         fromPortfolioId,
         toPortfolioId,
         nftIds: ids.map(id => BigInt(id)),

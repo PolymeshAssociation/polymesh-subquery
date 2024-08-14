@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import {
   ClaimTypeEnum,
@@ -7,7 +8,8 @@ import {
   TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
-import { capitalizeFirstLetter, hexToString } from './common';
+import { getAssetId } from './assets';
+import { capitalizeFirstLetter } from './common';
 
 /**
  * Parses a Vec<AssetCompliance>
@@ -62,13 +64,20 @@ export const getTransferManagerValue = (
 };
 
 export const getExemptKeyValue = (
-  item: Codec
+  item: Codec,
+  block: SubstrateBlock
 ): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'> => {
-  const {
-    asset: { ticker },
-    op: opType,
-    claimType: claimTypeValue,
-  } = JSON.parse(item.toString());
+  const exemptKey = JSON.parse(item.toString());
+
+  const { op: opType, claimType: claimTypeValue } = exemptKey;
+
+  let assetId: string;
+
+  if ('assetId' in exemptKey) {
+    assetId = exemptKey.assetId;
+  } else {
+    assetId = exemptKey.asset.ticker;
+  }
 
   let claimType;
   if (!claimTypeValue || typeof claimTypeValue === 'string') {
@@ -79,7 +88,7 @@ export const getExemptKeyValue = (
   }
 
   return {
-    assetId: hexToString(ticker),
+    assetId: getAssetId(assetId, block),
     opType,
     claimType,
   };

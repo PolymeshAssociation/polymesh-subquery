@@ -1,30 +1,30 @@
 import { SubstrateEvent } from '@subql/types';
 import { TransferManager } from '../../types';
-import { getExemptionsValue, getTransferManagerValue, serializeTicker } from '../../utils';
+import { getAssetId, getExemptionsValue, getTransferManagerValue } from '../../utils';
 import { extractArgs } from './common';
 
 const getTransferManageId = (
-  ticker: string,
+  assetId: string,
   { type, value }: Pick<TransferManager, 'type' | 'value'>
-): string => `${ticker}/${type}/${value}`;
+): string => `${assetId}/${type}/${value}`;
 
 const getTransferManager = (
-  ticker: string,
+  assetId: string,
   restriction: Pick<TransferManager, 'type' | 'value'>
 ): Promise<TransferManager | undefined> =>
-  TransferManager.get(getTransferManageId(ticker, restriction));
+  TransferManager.get(getTransferManageId(assetId, restriction));
 
 export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawManager] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawManager] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const { type, value } = getTransferManagerValue(rawManager);
-  const id = `${ticker}/${type}/${value}`;
+  const id = `${assetId}/${type}/${value}`;
 
   await TransferManager.create({
     id,
-    assetId: ticker,
+    assetId,
     type,
     value,
     exemptedEntities: [],
@@ -34,25 +34,25 @@ export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise
 };
 
 export const handleTransferManagerRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
-  const [, rawTicker, rawManager] = params;
+  const { params, block } = extractArgs(event);
+  const [, rawAssetId, rawManager] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const { type, value } = getTransferManagerValue(rawManager);
-  const id = `${ticker}/${type}/${value}`;
+  const id = `${assetId}/${type}/${value}`;
 
   await TransferManager.remove(id);
 };
 
 export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
-  const transferManager = await getTransferManager(ticker, transferManagerValue);
+  const transferManager = await getTransferManager(assetId, transferManagerValue);
 
   if (transferManager) {
     transferManager.exemptedEntities = [
@@ -65,14 +65,14 @@ export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleExemptionsRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+  const { params, blockId, block } = extractArgs(event);
+  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
-  const transferManager = await getTransferManager(ticker, transferManagerValue);
+  const transferManager = await getTransferManager(assetId, transferManagerValue);
 
   if (transferManager) {
     transferManager.exemptedEntities = transferManager.exemptedEntities.filter(

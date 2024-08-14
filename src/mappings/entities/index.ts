@@ -25,6 +25,6 @@ export * from './mapStakingEvent';
 export * from './mapStatistics';
 export * from './mapSto';
 export * from './mapSubqueryVersion';
-export * from './mapTickerExternalAgent';
-export * from './mapTickerExternalAgentHistory';
+export * from './mapExternalAgent';
+export * from './mapExternalAgentHistory';
 export * from './mapTransferManager';

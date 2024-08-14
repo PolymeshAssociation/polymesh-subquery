@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   Asset,
   ClaimTypeEnum,
@@ -12,17 +12,22 @@ import {
 } from '../../types';
 import {
   capitalizeFirstLetter,
+  getAssetId,
   getExemptKeyValue,
   getExemptionsValue,
   getTransferManagerValue,
-  hexToString,
-  serializeTicker,
 } from '../../utils';
 import { Attributes, extractArgs } from './common';
 
-const getStatisticsScope = (item: Codec): { assetId: string } => {
-  const { ticker } = JSON.parse(item.toString());
-  return { assetId: hexToString(ticker) };
+export const getAssetIdForStatisticsEvent = (item: Codec, block: SubstrateBlock): string => {
+  let assetId: string;
+  if (block.specVersion < 7000000) {
+    const scope = JSON.parse(item.toString());
+    assetId = scope.ticker;
+  } else {
+    assetId = item.toString();
+  }
+  return getAssetId(assetId, block);
 };
 
 interface MeshStatType {
@@ -172,11 +177,11 @@ const getStatTypeId = (
 };
 
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
   const [, rawStatisticsScope, rawStatType] = params;
 
-  const { assetId } = getStatisticsScope(rawStatisticsScope);
+  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
   const statTypes = getStatTypes(rawStatType);
 
   const promises = [];
@@ -191,11 +196,11 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
 };
 
 export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
 
   const [, rawStatisticsScope, rawStatType] = params;
 
-  const { assetId } = getStatisticsScope(rawStatisticsScope);
+  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
   const statTypes = getStatTypes(rawStatType);
 
   await Promise.all(
@@ -207,11 +212,11 @@ export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleSetTransferCompliance = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
   const [, rawStatisticsScope, rawTransferConditions] = params;
 
-  const { assetId } = getStatisticsScope(rawStatisticsScope);
+  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
 
   const transferConditions = getTransferConditions(rawTransferConditions, assetId);
 
@@ -252,11 +257,11 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 };
 
 export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
   const [, rawExemptKey, rawExemptions] = params;
 
-  const exemptKey = getExemptKeyValue(rawExemptKey);
+  const exemptKey = getExemptKeyValue(rawExemptKey, block);
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
   const { assetId, opType, claimType } = exemptKey;
@@ -286,11 +291,11 @@ export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Pro
 };
 
 export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
 
   const [, rawExemptKey, rawExemptions] = params;
 
-  const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey);
+  const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey, block);
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
   await Promise.all(
@@ -301,11 +306,11 @@ export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): P
 };
 
 export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
-  const [, rawTicker, rawManager] = params;
+  const [, rawAssetId, rawManager] = params;
 
-  const assetId = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const { type } = getTransferManagerValue(rawManager);
 
   if (type === TransferRestrictionTypeEnum.Percentage) {
@@ -319,11 +324,11 @@ export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent)
 export const handleTransferManagerExemptionsAdded = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
-  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const { type } = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
@@ -331,12 +336,12 @@ export const handleTransferManagerExemptionsAdded = async (
     type === TransferRestrictionTypeEnum.Percentage ? StatOpTypeEnum.Balance : StatOpTypeEnum.Count;
 
   const exemptKey = {
-    assetId: ticker,
+    assetId,
     opType,
     claimType: null,
   };
 
-  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
+  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(assetId);
 
   const existingExemptions = transferComplianceExemptions.filter(
     ({ opType: exemptionType, exemptedEntityId }) =>
@@ -368,15 +373,15 @@ export const handleTransferManagerExemptionsAdded = async (
 export const handleTransferManagerExemptionsRemoved = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
 
-  const [, rawTicker, rawAgentGroup, rawExemptions] = params;
+  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const ticker = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
-  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(ticker);
+  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(assetId);
 
   const selectedOpType =
     transferManagerValue.type === TransferRestrictionTypeEnum.Percentage
@@ -396,9 +401,9 @@ export const handleTransferManagerExemptionsRemoved = async (
 export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promise<void> => {
   const { params, block, blockId } = extractArgs(event);
 
-  const [, rawTicker] = params;
+  const [, rawAssetId] = params;
 
-  const assetId = serializeTicker(rawTicker);
+  const assetId = getAssetId(rawAssetId, block);
   const { specVersion } = block;
   if (specVersion < transferRestrictionSpecVersion) {
     await upsertStatType(
@@ -411,15 +416,15 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
 export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Promise<void> => {
   const { params, block } = extractArgs(event);
 
-  const [, rawTicker] = params;
-  const ticker = serializeTicker(rawTicker);
+  const [, rawAssetId] = params;
+  const assetId = getAssetId(rawAssetId, block);
 
   const specVersion = block.specVersion;
   const specName = api.runtimeVersion.specName.toString();
   if (specVersion < transferRestrictionSpecVersion && specName !== 'polymesh_private_dev') {
-    const asset = await Asset.getByTicker(ticker);
+    const asset = await Asset.get(assetId);
     if (asset.totalSupply === BigInt(0)) {
-      await StatType.remove(`${ticker}/Count`);
+      await StatType.remove(`${assetId}/Count`);
     }
   }
 };

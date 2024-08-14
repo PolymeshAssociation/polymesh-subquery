@@ -1,13 +1,7 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateEvent } from '@subql/types';
 import { Claim, ClaimScope, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum } from '../../types';
-import {
-  END_OF_TIME,
-  extractClaimInfo,
-  getTextValue,
-  logFoundType,
-  serializeTicker,
-} from '../../utils';
+import { END_OF_TIME, extractClaimInfo, getAssetId, getTextValue, logFoundType } from '../../utils';
 import { serializeLikeHarvester } from '../serializeLikeHarvester';
 import { extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
@@ -114,7 +108,9 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     await handleScopes(
       blockId,
       target,
-      scope.type === ClaimScopeTypeEnum.Ticker ? scope.value : undefined,
+      [ClaimScopeTypeEnum.Ticker, ClaimScopeTypeEnum.Asset].includes(scope.type)
+        ? scope.value
+        : undefined,
       scope
     );
   }
@@ -140,25 +136,25 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleDidRegistered = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
   const target = getTextValue(params[0]);
-  const ticker = serializeTicker(params[1]);
+  const assetId = getAssetId(params[1], block);
 
-  await handleScopes(blockId, target, ticker);
+  await handleScopes(blockId, target, assetId);
 };
 
 const handleScopes = async (
   blockId: string,
   target: string,
-  ticker?: string,
+  assetId?: string,
   scope?: Scope
 ): Promise<void> => {
-  const id = `${target}/${scope?.value || ticker}`;
+  const id = `${target}/${scope?.value || assetId}`;
   await ClaimScope.create({
     id,
     target,
-    ticker,
+    assetId,
     scope,
     createdBlockId: blockId,
     updatedBlockId: blockId,

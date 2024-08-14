@@ -1,6 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { Portfolio, Distribution } from '../types';
-import { extractNumber, coerceHexToString } from './common';
+import { SubstrateBlock } from '@subql/types';
+import { Distribution, Portfolio } from '../types';
+import { getAssetId } from './assets';
+import { extractNumber } from './common';
 
 export interface MeshPortfolio {
   did: string;
@@ -34,10 +36,13 @@ export const getPortfolioId = ({
   number,
 }: Pick<Portfolio, 'identityId' | 'number'>): string => `${identityId}/${number}`;
 
-export const getCaIdValue = (item: Codec): Pick<Distribution, 'localId' | 'assetId'> => {
+export const getCaIdValue = (
+  item: Codec,
+  block: SubstrateBlock
+): Pick<Distribution, 'localId' | 'assetId'> => {
   const caId = JSON.parse(item.toString());
   return {
     localId: extractNumber(caId, 'local_id'),
-    assetId: coerceHexToString(caId.ticker),
+    assetId: getAssetId(caId.ticker ?? caId.assetId, block),
   };
 };

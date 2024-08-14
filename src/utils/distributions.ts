@@ -24,13 +24,13 @@ export const getDistributionValue = (
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const extractCorporateActionTicker = (args: any[]) => {
-  const value1Ticker = args[1]?.value?.ticker;
-  if (value1Ticker !== undefined) {
-    return value1Ticker;
+  const value1AssetId = args[1]?.value?.ticker ?? args[1]?.value?.assetId;
+  if (value1AssetId !== undefined) {
+    return value1AssetId;
   }
-  const value2Ticker = args[2]?.value?.ticker;
-  if (value2Ticker !== undefined) {
-    return value2Ticker;
+  const value2AssetId = args[2]?.value?.ticker ?? args[2]?.value?.assetId;
+  if (value2AssetId !== undefined) {
+    return value2AssetId;
   }
   return null;
 };

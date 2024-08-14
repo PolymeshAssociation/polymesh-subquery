@@ -1,6 +1,8 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import { Sto } from '../types';
+import { getAssetId } from './assets';
 import {
   capitalizeFirstLetter,
   extractBigInt,
@@ -11,7 +13,10 @@ import {
 } from './common';
 import { getPortfolioId, meshPortfolioToPortfolio } from './portfolios';
 
-export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
+export const getFundraiserDetails = (
+  item: Codec,
+  block: SubstrateBlock
+): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
   const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
@@ -30,9 +35,9 @@ export const getFundraiserDetails = (item: Codec): Omit<Attributes<Sto>, 'stoId'
     end: getDateValue(end),
     tiers,
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
-    offeringAssetId: hexToString(extractString(rest, 'offering_asset')),
+    offeringAssetId: getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
-    raisingAssetId: hexToString(extractString(rest, 'raising_asset')),
+    raisingAssetId: getAssetId(extractString(rest, 'raising_asset'), block),
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
   };

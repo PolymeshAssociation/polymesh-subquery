@@ -218,9 +218,9 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    */
   const specName = api.runtimeVersion.specName.toString();
   if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
-    legs = getSettlementLeg(rawLegs);
+    legs = getSettlementLeg(rawLegs, block);
   } else {
-    legs = getLegsValue(rawLegs);
+    legs = getLegsValue(rawLegs, block);
   }
 
   const instructionId = getTextValue(rawInstructionId);
