@@ -692,5 +692,23 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     updatedBlockId: blockId,
   });
 
-  await Promise.all([receipt.save(), affirmation.save(), receiptEvent.save()]);
+  const promises = [receipt.save(), affirmation.save(), receiptEvent.save()];
+
+  const party = await InstructionParty.get(partyId);
+
+  if (!party) {
+    await Promise.all([
+      InstructionParty.create({
+        id: partyId,
+        instructionId,
+        isMediator: false,
+        identity: identityId,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }).save(),
+      ...promises,
+    ]);
+  } else {
+    await Promise.all(promises);
+  }
 };
