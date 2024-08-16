@@ -7,6 +7,6 @@ const cwd = join(__dirname, '..');
 export = async (): Promise<void> => {
   await Promise.all([
     execAsync('polymesh-local stop -c', { cwd }),
-    execAsync('docker-compose down -v', { cwd }),
+    execAsync('docker compose down -v', { cwd }),
   ]);
 };
