@@ -1524,7 +1524,9 @@ type Sto @entity {
   venue: Venue!
   offeringAsset: Asset!
   offeringPortfolio: Portfolio!
-  raisingAssetId: String!
+  raisingAssetId: String! # This is not marked as Asset, since the raising asset need not be an registered asset. For example, USD
+  "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
+  raisingTicker: String!
   raisingPortfolio: Portfolio!
   creator: Identity!
   start: Date
@@ -1792,6 +1794,7 @@ type Leg @entity {
   legType: LegTypeEnum!
   "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
   assetId: String! @index(unique: false)
+  ticker: String @index(unique: false)
   from: String! @index(unique: false)
   "`fromPortfolio` is null for off chain legs"
   fromPortfolio: Int
@@ -2043,7 +2046,7 @@ e.g. `target` is Blocked from owning "TICKER-A" or `target` is an Affiliate of "
 type ClaimScope @entity {
   id: ID!
   target: String! @index(unique: false)
-  assetId: String
+  asset: Asset
   scope: Scope
   createdBlock: Block!
   updatedBlock: Block!
@@ -2093,20 +2096,6 @@ An off chain identifier for a given Asset. e.g. ISIN, CUSIP, FIGI, etc.
 type SecurityIdentifier @jsonField {
   type: String!
   value: String!
-}
-
-"""
-Represents a request to take ownership of a particular Asset
-"""
-type AssetPendingOwnershipTransfer @entity {
-  id: ID! # authorization id
-  assetId: String! @index(unique: false)
-  from: String! @index(unique: false)
-  to: String! @index(unique: false)
-  type: String! @index(unique: false)
-  data: String
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """

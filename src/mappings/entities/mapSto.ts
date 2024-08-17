@@ -1,5 +1,5 @@
 import { SubstrateEvent } from '@subql/types';
-import { Investment, Sto, StoStatus } from '../../types';
+import { Asset, Investment, Sto, StoStatus } from '../../types';
 import {
   coerceHexToString,
   getAssetId,
@@ -18,11 +18,14 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
   const stoId = getNumberValue(rawStoId);
   const name = coerceHexToString(getTextValue(rawStoName));
 
+  const raisingAsset = await Asset.get(fundraiserDetails.raisingAssetId);
+
   await Sto.create({
     id: `${fundraiserDetails.offeringAssetId}/${stoId}`,
     stoId,
     name,
     ...fundraiserDetails,
+    raisingTicker: raisingAsset?.ticker || raisingAsset.id,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();

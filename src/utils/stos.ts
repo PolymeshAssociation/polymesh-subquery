@@ -16,7 +16,7 @@ import { getPortfolioId, meshPortfolioToPortfolio } from './portfolios';
 export const getFundraiserDetails = (
   item: Codec,
   block: SubstrateBlock
-): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
+): Omit<Attributes<Sto>, 'stoId' | 'name' | 'raisingTicker'> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
   const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));

@@ -16,7 +16,7 @@ import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
 import { meshPortfolioToPortfolio } from './portfolios';
 
-export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
+export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses' | 'ticker'>;
 
 /**
  * This only extracts legs for spec version < 6000000
