@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Instruction, InstructionEvent, Leg } from '../../../types';
+import { Asset, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
   bytesToString,
@@ -23,6 +23,7 @@ import {
   EventIdEnum,
   InstructionEventEnum,
   InstructionStatusEnum,
+  LegTypeEnum,
 } from './../../../types/enums';
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
@@ -74,11 +75,20 @@ const prepareLegCreateParams = async (
     );
   }
 
+  let ticker: string;
+  if (legDetails.legType !== LegTypeEnum.OffChain) {
+    const asset = await Asset.get(legDetails.assetId);
+    ticker = asset?.ticker;
+  } else {
+    ticker = legDetails.assetId;
+  }
+
   await Promise.all(promises);
 
   return {
     id: `${instructionId}/${legIndex}`,
     ...legDetails,
+    ticker,
     instructionId,
     addresses: [address],
     createdBlockId: blockId,
