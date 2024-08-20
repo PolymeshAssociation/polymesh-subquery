@@ -46,7 +46,7 @@
     "@commitlint/cli": "13.1.0",
     "@commitlint/config-conventional": "13.1.0",
     "@polkadot/typegen": "^10.9.1",
-    "@polymeshassociation/polymesh-local": "^5.12.2",
+    "@polymeshassociation/polymesh-local": "^5.13.0-alpha.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",
     "@semantic-release/npm": "^11.0.0",
