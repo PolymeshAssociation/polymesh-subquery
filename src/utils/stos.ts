@@ -16,7 +16,7 @@ import { getPortfolioId, meshPortfolioToPortfolio } from './portfolios';
 export const getFundraiserDetails = (
   item: Codec,
   block: SubstrateBlock
-): Omit<Attributes<Sto>, 'stoId' | 'name' | 'raisingTicker'> => {
+): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
   const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
@@ -38,6 +38,7 @@ export const getFundraiserDetails = (
     offeringAssetId: getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
     raisingAssetId: getAssetId(extractString(rest, 'raising_asset'), block),
+    raisingTicker: extractString(rest, 'raising_asset'),
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
   };

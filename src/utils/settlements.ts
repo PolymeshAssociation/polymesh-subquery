@@ -16,7 +16,7 @@ import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
 import { meshPortfolioToPortfolio } from './portfolios';
 
-export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses' | 'ticker'>;
+export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
 /**
  * This only extracts legs for spec version < 6000000
@@ -37,6 +37,7 @@ export const getLegsValue = (item: Codec, block: SubstrateBlock): LegDetails[] =
       to,
       toPortfolio,
       assetId,
+      ticker: leg.asset,
       amount: getBigIntValue(amount),
       legType: LegTypeEnum.Fungible,
     } as LegDetails;
@@ -59,19 +60,31 @@ export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails
       const from = extractString(legValue, 'sender_identity');
       const to = extractString(legValue, 'receiver_identity');
       const assetId = hexToString(legValue.ticker);
+      const ticker = assetId;
       const amount = extractBigInt(legValue, 'amount');
 
-      legDetails.push({ from, to, amount, assetId, legIndex, legType: LegTypeEnum.OffChain });
+      legDetails.push({
+        from,
+        to,
+        amount,
+        assetId,
+        ticker,
+        legIndex,
+        legType: LegTypeEnum.OffChain,
+      });
     } else {
       const { identityId: from, number: fromPortfolio } = meshPortfolioToPortfolio(legValue.sender);
       const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(legValue.receiver);
 
       let assetId: string;
+      let ticker: string;
       if (legType === LegTypeEnum.Fungible) {
-        assetId = getAssetId(legValue.ticker ?? legValue.assetId, block);
+        ticker = legValue.ticker ?? legValue.assetId;
+        assetId = getAssetId(ticker, block);
         amount = extractBigInt(legValue, 'amount');
       } else if (legType === LegTypeEnum.NonFungible) {
-        assetId = getAssetId(legValue.nfts.ticker ?? legValue.nfts.assetId, block);
+        ticker = legValue.nfts.ticker ?? legValue.nfts.assetId;
+        assetId = getAssetId(ticker, block);
         nftIds = leg.nonFungible.nfts.ids;
       }
       legDetails.push({
@@ -80,6 +93,7 @@ export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails
         to,
         toPortfolio,
         assetId,
+        ticker,
         amount,
         legType: legType as LegTypeEnum,
         nftIds,

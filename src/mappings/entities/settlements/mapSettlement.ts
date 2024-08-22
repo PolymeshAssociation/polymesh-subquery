@@ -75,12 +75,12 @@ const prepareLegCreateParams = async (
     );
   }
 
-  let ticker: string;
+  let ticker = legDetails.ticker;
   if (legDetails.legType !== LegTypeEnum.OffChain) {
     const asset = await Asset.get(legDetails.assetId);
-    ticker = asset?.ticker;
-  } else {
-    ticker = legDetails.assetId;
+    if (asset) {
+      ticker = asset.ticker;
+    }
   }
 
   await Promise.all(promises);
