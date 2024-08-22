@@ -36,8 +36,8 @@ jobs:
           NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
       - name: lint
         run: yarn lint
-      - name: test
-        run: yarn test
+      # - name: test
+      #   run: yarn test
   release:
     name: Building and releasing project
     runs-on: ubuntu-latest

@@ -25,7 +25,7 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
     stoId,
     name,
     ...fundraiserDetails,
-    raisingTicker: raisingAsset?.ticker || raisingAsset.id,
+    raisingTicker: raisingAsset?.ticker ?? fundraiserDetails.raisingTicker,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
