@@ -2038,6 +2038,8 @@ Represents where this claim may apply
 type Scope @jsonField {
   type: String!
   value: String!
+  "`assetId` is only present when `type` is `Asset`"
+  assetId: String
 }
 
 """

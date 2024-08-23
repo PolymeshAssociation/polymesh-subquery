@@ -1,7 +1,21 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateEvent } from '@subql/types';
-import { Claim, ClaimScope, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum } from '../../types';
-import { END_OF_TIME, extractClaimInfo, getAssetId, getTextValue, logFoundType } from '../../utils';
+import {
+  Claim,
+  ClaimScope,
+  ClaimScopeTypeEnum,
+  ClaimTypeEnum,
+  EventIdEnum,
+  Scope,
+} from '../../types';
+import {
+  END_OF_TIME,
+  extractClaimInfo,
+  getAssetId,
+  getAssetIdWithTicker,
+  getTextValue,
+  logFoundType,
+} from '../../utils';
 import { serializeLikeHarvester } from '../serializeLikeHarvester';
 import { extractArgs } from './common';
 import { createIdentityIfNotExists } from './mapIdentities';
@@ -25,11 +39,6 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
     };
   });
 };
-
-interface Scope {
-  type: ClaimScopeTypeEnum;
-  value: string;
-}
 
 const getId = (
   target: string,
@@ -81,6 +90,13 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 
   const scope = JSON.parse(claimScope) as Scope;
 
+  if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
+    scope.type = ClaimScopeTypeEnum.Asset;
+    const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
+    scope.value = ticker;
+    scope.assetId = assetId;
+  }
+
   const filterExpiry = claimExpiry || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
@@ -108,7 +124,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     await handleScopes(
       blockId,
       target,
-      [ClaimScopeTypeEnum.Ticker, ClaimScopeTypeEnum.Asset].includes(scope.type)
+      scope.type === ClaimScopeTypeEnum.Asset || scope.type === ClaimScopeTypeEnum.Ticker
         ? scope.value
         : undefined,
       scope
