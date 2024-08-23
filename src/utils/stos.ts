@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import { Sto } from '../types';
-import { getAssetId } from './assets';
+import { getAssetId, getAssetIdWithTicker } from './assets';
 import {
   capitalizeFirstLetter,
   extractBigInt,
@@ -13,10 +13,10 @@ import {
 } from './common';
 import { getPortfolioId, meshPortfolioToPortfolio } from './portfolios';
 
-export const getFundraiserDetails = (
+export const getFundraiserDetails = async (
   item: Codec,
   block: SubstrateBlock
-): Omit<Attributes<Sto>, 'stoId' | 'name'> => {
+): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'>> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
   const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
@@ -28,6 +28,11 @@ export const getFundraiserDetails = (
     stoStatus = capitalizeFirstLetter(Object.keys(status)[0]);
   }
 
+  const { assetId: raisingAssetId, ticker: raisingTicker } = await getAssetIdWithTicker(
+    extractString(rest, 'raising_asset'),
+    block
+  );
+
   return {
     creatorId,
     status: stoStatus,
@@ -37,8 +42,8 @@ export const getFundraiserDetails = (
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
     offeringAssetId: getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
-    raisingAssetId: getAssetId(extractString(rest, 'raising_asset'), block),
-    raisingTicker: extractString(rest, 'raising_asset'),
+    raisingAssetId,
+    raisingTicker,
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),
   };

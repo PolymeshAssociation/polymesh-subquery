@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { Asset, Instruction, InstructionEvent, Leg } from '../../../types';
+import { Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
   bytesToString,
@@ -23,7 +23,6 @@ import {
   EventIdEnum,
   InstructionEventEnum,
   InstructionStatusEnum,
-  LegTypeEnum,
 } from './../../../types/enums';
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
@@ -75,20 +74,11 @@ const prepareLegCreateParams = async (
     );
   }
 
-  let ticker = legDetails.ticker;
-  if (legDetails.legType !== LegTypeEnum.OffChain) {
-    const asset = await Asset.get(legDetails.assetId);
-    if (asset) {
-      ticker = asset.ticker;
-    }
-  }
-
   await Promise.all(promises);
 
   return {
     id: `${instructionId}/${legIndex}`,
     ...legDetails,
-    ticker,
     instructionId,
     addresses: [address],
     createdBlockId: blockId,
@@ -228,9 +218,9 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    */
   const specName = api.runtimeVersion.specName.toString();
   if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
-    legs = getSettlementLeg(rawLegs, block);
+    legs = await getSettlementLeg(rawLegs, block);
   } else {
-    legs = getLegsValue(rawLegs, block);
+    legs = await getLegsValue(rawLegs, block);
   }
 
   const instructionId = getTextValue(rawInstructionId);
