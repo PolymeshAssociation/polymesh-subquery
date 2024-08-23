@@ -2,14 +2,20 @@ import { Codec } from '@polkadot/types/types';
 import { hexAddPrefix, hexStripPrefix, stringToHex } from '@polkadot/util';
 import { blake2AsHex } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
-import { AssetDocument, SecurityIdentifier } from '../types';
+import { Asset, AssetDocument, SecurityIdentifier } from '../types';
 import {
   coerceHexToString,
   extractString,
   extractValue,
   getTextValue,
   hexToString,
+  serializeTicker,
 } from './common';
+
+export interface AssetIdWithTicker {
+  assetId: string;
+  ticker: string;
+}
 
 export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
   const customType = await api.query.asset.customTypes(rawCustomId);
@@ -101,4 +107,32 @@ export const getNftId = (nft: Codec, block: SubstrateBlock): { assetId: string; 
   const { ticker: rawTicker, assetId: rawAssetId, ids } = nft.toJSON() as any;
 
   return { assetId: getAssetId(rawTicker ?? rawAssetId, block), ids };
+};
+
+export const getAssetIdWithTicker = async (
+  assetIdOrTicker: Codec | string,
+  block: SubstrateBlock
+): Promise<AssetIdWithTicker> => {
+  const { specVersion } = block;
+  const specName = api.runtimeVersion.specName.toString();
+
+  let assetId: string;
+  let ticker: string;
+  if (specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000)) {
+    assetId = typeof assetIdOrTicker === 'string' ? assetIdOrTicker : assetIdOrTicker.toString();
+
+    const asset = await Asset.get(assetId);
+    ticker = asset?.ticker ?? assetId;
+  } else {
+    ticker =
+      typeof assetIdOrTicker === 'string'
+        ? hexToString(assetIdOrTicker)
+        : serializeTicker(assetIdOrTicker);
+    assetId = getAssetIdForLegacyTicker(assetIdOrTicker);
+  }
+
+  return {
+    assetId,
+    ticker,
+  };
 };

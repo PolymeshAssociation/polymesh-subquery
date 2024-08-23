@@ -6,7 +6,7 @@ import {
   capitalizeFirstLetter,
   extractBigInt,
   extractString,
-  getAssetId,
+  getAssetIdWithTicker,
   getBigIntValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
@@ -21,35 +21,45 @@ export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 /**
  * This only extracts legs for spec version < 6000000
  */
-export const getLegsValue = (item: Codec, block: SubstrateBlock): LegDetails[] => {
+export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
-  return legs.map((leg, legIndex) => {
+
+  let legIndex = 0;
+  const data: LegDetails[] = [];
+  for (const leg of legs) {
     const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
-    const assetId = getAssetId(leg.asset, block);
+    const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
 
     const { identityId: from, number: fromPortfolio } = meshPortfolioToPortfolio(rawFromPortfolio);
     const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(rawToPortfolio);
 
-    return {
+    data.push({
       legIndex,
       from,
       fromPortfolio,
       to,
       toPortfolio,
       assetId,
-      ticker: leg.asset,
+      ticker,
       amount: getBigIntValue(amount),
       legType: LegTypeEnum.Fungible,
-    } as LegDetails;
-  });
+    });
+
+    legIndex++;
+  }
+  return data;
 };
 
-export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails[] => {
+export const getSettlementLeg = async (
+  item: Codec,
+  block: SubstrateBlock
+): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
   const legDetails: LegDetails[] = [];
 
-  legs.forEach((leg, legIndex) => {
+  let legIndex = 0;
+  for (const leg of legs) {
     const legTypeKey = Object.keys(leg)[0];
     const legValue = leg[legTypeKey];
 
@@ -79,12 +89,16 @@ export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails
       let assetId: string;
       let ticker: string;
       if (legType === LegTypeEnum.Fungible) {
-        ticker = legValue.ticker ?? legValue.assetId;
-        assetId = getAssetId(ticker, block);
+        ({ assetId, ticker } = await getAssetIdWithTicker(
+          legValue.ticker ?? legValue.assetId,
+          block
+        ));
         amount = extractBigInt(legValue, 'amount');
       } else if (legType === LegTypeEnum.NonFungible) {
-        ticker = legValue.nfts.ticker ?? legValue.nfts.assetId;
-        assetId = getAssetId(ticker, block);
+        ({ assetId, ticker } = await getAssetIdWithTicker(
+          legValue.nfts.ticker ?? legValue.nfts.assetId,
+          block
+        ));
         nftIds = leg.nonFungible.nfts.ids;
       }
       legDetails.push({
@@ -100,7 +114,9 @@ export const getSettlementLeg = (item: Codec, block: SubstrateBlock): LegDetails
         legIndex,
       });
     }
-  });
+
+    legIndex++;
+  }
 
   return legDetails;
 };

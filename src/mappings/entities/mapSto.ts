@@ -1,8 +1,9 @@
 import { SubstrateEvent } from '@subql/types';
-import { Asset, Investment, Sto, StoStatus } from '../../types';
+import { Investment, Sto, StoStatus } from '../../types';
 import {
   coerceHexToString,
   getAssetId,
+  getAssetIdWithTicker,
   getBigIntValue,
   getDateValue,
   getFundraiserDetails,
@@ -14,18 +15,15 @@ import { extractArgs } from './common';
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const [, rawStoId, rawStoName, rawFundraiserDetails] = params;
-  const fundraiserDetails = getFundraiserDetails(rawFundraiserDetails, block);
+  const fundraiserDetails = await getFundraiserDetails(rawFundraiserDetails, block);
   const stoId = getNumberValue(rawStoId);
   const name = coerceHexToString(getTextValue(rawStoName));
-
-  const raisingAsset = await Asset.get(fundraiserDetails.raisingAssetId);
 
   await Sto.create({
     id: `${fundraiserDetails.offeringAssetId}/${stoId}`,
     stoId,
     name,
     ...fundraiserDetails,
-    raisingTicker: raisingAsset?.ticker ?? fundraiserDetails.raisingTicker,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
@@ -86,18 +84,30 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
   const [
     rawInvestor,
     rawStoId,
-    rawOfferingToken,
-    rawRaiseToken,
+    rawOfferingAsset,
+    rawRaisingAsset,
     rawOfferingTokenAmount,
     rawRaiseTokenAmount,
   ] = params;
+
+  const { assetId: offeringAssetId, ticker: offeringToken } = await getAssetIdWithTicker(
+    rawOfferingAsset,
+    block
+  );
+
+  const { assetId: raisingAssetId, ticker: raiseToken } = await getAssetIdWithTicker(
+    rawRaisingAsset,
+    block
+  );
 
   await Investment.create({
     id: `${blockId}/${eventIdx}`,
     investorId: getTextValue(rawInvestor),
     stoId: getNumberValue(rawStoId),
-    offeringToken: getAssetId(rawOfferingToken, block),
-    raiseToken: getAssetId(rawRaiseToken, block),
+    offeringAssetId,
+    offeringToken,
+    raisingAssetId,
+    raiseToken,
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
     raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
     datetime: block.timestamp,
