@@ -18,6 +18,7 @@ enum ModuleIdEnum {
   upgradecommittee
   upgradecommitteemembership
   multisig
+  "`bridge` has been deprecated from 6.0.0 chain version"
   bridge
   staking
   offences
@@ -55,6 +56,7 @@ enum ModuleIdEnum {
   nft
   confidentialasset
   statetriemigration
+  electionprovidermultiphase
 
   ## deprecated ##
   confidential @deprecated
@@ -204,6 +206,7 @@ enum EventIdEnum {
   MultiSigSignerAdded
   MultiSigSignerAuthorized
   MultiSigSignerRemoved
+  "`MultiSigSignaturesRequiredChanged` has been deprecated from 7.0.0 chain version"
   MultiSigSignaturesRequiredChanged
   ProposalApproved
   ProposalRejectionVote
@@ -211,31 +214,58 @@ enum EventIdEnum {
   ProposalExecutionFailed
   ProposalFailedToExecute
   # SchedulingFailed (already defined in Settlement)
+  MultiSigAddedAdmin
+  MultiSigRemovedAdmin
+  MultiSigRemovedPayingDid
+  MultiSigSignersAuthorized
+  MultiSigSignersRemoved
+  MultiSigSignersRequiredChanged
+  ProposalApprovalVote
 
-  ## bridge ##
+  ## bridge (events removed from 6.0.0 chain) ##
+  "`ControllerChanged` has been deprecated from 6.0.0 chain version"
   ControllerChanged
+  "`AdminChanged` has been deprecated from 6.0.0 chain version"
   AdminChanged
+  "`TimelockChanged` has been deprecated from 6.0.0 chain version"
   TimelockChanged
+  "`Bridged` has been deprecated from 6.0.0 chain version"
   Bridged
+  "`Frozen` has been deprecated from 6.0.0 chain version"
   Frozen
+  "`Unfrozen` has been deprecated from 6.0.0 chain version"
   Unfrozen
+  "`FrozenTx` has been deprecated from 6.0.0 chain version"
   FrozenTx
+  "`UnfrozenTx` has been deprecated from 6.0.0 chain version"
   UnfrozenTx
+  "`ExemptedUpdated` has been deprecated from 6.0.0 chain version"
   ExemptedUpdated
+  "`BridgeLimitUpdated` has been deprecated from 6.0.0 chain version"
   BridgeLimitUpdated
+  "`BridgeTxFailed` has been deprecated from 6.0.0 chain version"
   BridgeTxFailed
+  "`TxsHandled` has been deprecated from 6.0.0 chain version"
   TxsHandled
+  "`BridgeTxScheduled` has been deprecated from 6.0.0 chain version"
   BridgeTxScheduled
+  "`BridgeTxScheduleFailed` has been deprecated from 6.0.0 chain version"
   BridgeTxScheduleFailed
+  "`FreezeAdminAdded` has been deprecated from 6.0.0 chain version"
   FreezeAdminAdded
+  "`FreezeAdminRemoved` has been deprecated from 6.0.0 chain version"
   FreezeAdminRemoved
+  "`TxRemoved` has been deprecated from 6.0.0 chain version"
   TxRemoved
 
   ## staking ##
+  "`EraPayout` has been deprecated from 7.0.0 chain version"
   EraPayout
   Reward
+  "`Slash` has been renamed to `Slashed` from 7.0.0 chain version"
   Slash
   OldSlashingReportDiscarded
+  "`StakingElection` has been deprecated from 7.0.0 chain version"
   StakingElection
   SolutionStored
   Bonded
@@ -246,9 +276,18 @@ enum EventIdEnum {
   PermissionedIdentityRemoved
   InvalidatedNominators
   CommissionCapUpdated
+  "`MinimumBondThresholdUpdated` has been deprecated from 7.0.0 chain version"
   MinimumBondThresholdUpdated
   RewardPaymentSchedulingInterrupted
   SlashingAllowedForChanged
+  Chilled
+  EraPaid
+  ForceEra
+  Kicked
+  PayoutStarted
+  SlashReported
+  StakersElected
+  ValidatorPrefsSet
 
   ## offences ##
   Offence
@@ -288,7 +327,9 @@ enum EventIdEnum {
   AssetCreated
   IdentifiersUpdated
   DivisibilityChanged
+  "`TransferWithData` has been deprecated from 7.0.0 chain version"
   TransferWithData
+  "`IsIssuable` has been deprecated from 7.0.0 chain version"
   IsIssuable
   TickerRegistered
   TickerTransferred
@@ -300,6 +341,7 @@ enum EventIdEnum {
   FundingRoundSet
   DocumentAdded
   DocumentRemoved
+  "`ExtensionRemoved` has been deprecated from 7.0.0 chain version"
   ExtensionRemoved
   "`ClassicTickerClaimed` has been deprecated from 6.0.0 chain version"
   ClassicTickerClaimed
@@ -557,6 +599,14 @@ enum EventIdEnum {
   Burned
   FundsMoved
 
+  ## electionprovidermultiphase ##
+  ElectionFailed
+  ElectionFinalized
+  PhaseTransitioned
+  Rewarded
+  Slashed
+  # SolutionStored -> defined before in staking
+
   ## deprecated ##
   Approval @deprecated
   AssetPurchased @deprecated
@@ -770,44 +820,92 @@ enum CallIdEnum {
 
   ## multisig ##
   create_multisig
+  "`create_or_approve_proposal_as_identity` has been deprecated from 7.0.0 chain version"
   create_or_approve_proposal_as_identity
+  "`create_or_approve_proposal_as_key` has been deprecated from 7.0.0 chain version"
   create_or_approve_proposal_as_key
+  "`create_proposal_as_identity` has been deprecated from 7.0.0 chain version"
   create_proposal_as_identity
+  "`create_proposal_as_key` has been deprecated from 7.0.0 chain version"
   create_proposal_as_key
+  "`approve_as_identity` has been deprecated from 7.0.0 chain version"
   approve_as_identity
+  "`approve_as_key` has been deprecated from 7.0.0 chain version"
   approve_as_key
   reject_as_identity
+  "`reject_as_key` has been renamed to `reject` from 7.0.0 chain version"
   reject_as_key
-  accept_multisig_signer_as_identity ## deprecated
+  "`accept_multisig_signer_as_identity` has been deprecated from 7.0.0 chain version"
+  accept_multisig_signer_as_identity
+  "`accept_multisig_signer_as_key` has been deprecated from 7.0.0 chain version"
   accept_multisig_signer_as_key
+  accept_multisig_signer
+  "`add_multisig_signer` has been renamed to `add_multisig_signers` from 7.0.0 chain version"
   add_multisig_signer
+  "`remove_multisig_signer` has been renamed to `remove_multisig_signers` from 7.0.0 chain version"
   remove_multisig_signer
+  "`add_multisig_signers_via_creator` has been renamed to `add_multisig_signers_via_admin` from 7.0.0 chain version"
   add_multisig_signers_via_creator
+  "`remove_multisig_signers_via_creator` has been renamed to `remove_multisig_signers_via_admin` from 7.0.0 chain version"
   remove_multisig_signers_via_creator
   change_sigs_required
+  "`change_sigs_required_via_creator` has been renamed to `change_sigs_required_via_admin` from 7.0.0 chain version"
   change_sigs_required_via_creator
+  "`make_multisig_secondary` has been deprecated from 7.0.0 chain version"
   make_multisig_secondary
+  "`make_multisig_primary` has been deprecated from 7.0.0 chain version"
   make_multisig_primary
+  "`execute_scheduled_proposal` has been deprecated from 7.0.0 chain version"
   execute_scheduled_proposal
+  "`remove_creator_controls` has been deprecated from 7.0.0 chain version"
   remove_creator_controls
+  add_admin
+  add_multisig_signers
+  add_multisig_signers_via_admin
+  approve
+  approve_join_identity
+  change_sigs_required_via_admin
+  create_proposal
+  join_identity
+  reject
+  remove_admin_via_admin
+  remove_multisig_signers_via_admin
+  remove_multisig_signers
+  remove_payer
+  remove_payer_via_payer
 
   ## bridge ##
+  "`change_controller` has been deprecated from 7.0.0 chain version"
   change_controller
+  "`change_admin` has been deprecated from 7.0.0 chain version"
   change_admin
+  "`change_timelock` has been deprecated from 7.0.0 chain version"
   change_timelock
   # freeze ( already defined in indices)
   # unfreeze ( already defined in asset)
+  "`change_bridge_limit` has been deprecated from 7.0.0 chain version"
   change_bridge_limit
+  "`change_bridge_exempted` has been deprecated from 7.0.0 chain version"
   change_bridge_exempted
+  "`force_handle_bridge_tx` has been deprecated from 7.0.0 chain version"
   force_handle_bridge_tx
+  "`batch_propose_bridge_tx` has been deprecated from 7.0.0 chain version"
   batch_propose_bridge_tx
+  "`propose_bridge_tx` has been deprecated from 7.0.0 chain version"
   propose_bridge_tx
+  "`handle_bridge_tx` has been deprecated from 7.0.0 chain version"
   handle_bridge_tx
+  "`freeze_txs` has been deprecated from 7.0.0 chain version"
   freeze_txs
+  "`unfreeze_txs` has been deprecated from 7.0.0 chain version"
   unfreeze_txs
+  "`handle_scheduled_bridge_tx` has been deprecated from 7.0.0 chain version"
   handle_scheduled_bridge_tx
+  "`add_freeze_admin` has been deprecated from 7.0.0 chain version"
   add_freeze_admin
+  "`remove_freeze_admin` has been deprecated from 7.0.0 chain version"
   remove_freeze_admin
+  "`remove_txs` has been deprecated from 7.0.0 chain version"
   remove_txs
 
   ## staking ##
@@ -819,16 +917,21 @@ enum CallIdEnum {
   nominate
   chill
   chill_from_governance
+  chill_other
+  force_apply_min_commission
   set_payee
   set_controller
   set_validator_count
   increase_validator_count
+  kick
   scale_validator_count
   add_permissioned_validator
   remove_permissioned_validator
   validate_cdd_expiry_nominators
   set_commission_cap
+  "`set_min_bond_threshold` has been renamed to `set_min_commission` from 7.0.0 chain version"
   set_min_bond_threshold
+  set_min_commission
   force_no_eras
   force_new_era
   set_invulnerables
@@ -837,13 +940,17 @@ enum CallIdEnum {
   cancel_deferred_slash
   payout_stakers
   rebond
+  "`set_history_depth` has been deprecated from 7.0.0 chain version"
   set_history_depth
   reap_stash
+  "`submit_election_solution` has been deprecated from 7.0.0 chain version"
   submit_election_solution
+  "`submit_election_solution_unsigned` has been deprecated from 7.0.0 chain version"
   submit_election_solution_unsigned
   payout_stakers_by_system
   change_slashing_allowed_for
   update_permissioned_validator_intended_count
+  set_staking_configs
 
   ## offences ##
 
@@ -872,6 +979,7 @@ enum CallIdEnum {
   sudo_as
 
   ## asset ##
+  "`register_ticker` has been renamed to `register_unique_ticker` from 7.0.0 chain version"
   register_ticker @deprecated
   register_unique_ticker
   accept_ticker_transfer
@@ -883,8 +991,10 @@ enum CallIdEnum {
   rename_asset
   issue
   redeem
+  "`redeem_from_portfolio` has been deprecated and been replaced by `redeem` itself from 7.0.0 chain version"
   redeem_from_portfolio @deprecated
   make_divisible
+  "`pre_approve_ticker` has been renamed to `pre_approve_asset` from 7.0.0 chain version"
   pre_approve_ticker @deprecated
   pre_approve_asset
   add_documents
@@ -898,7 +1008,8 @@ enum CallIdEnum {
   controller_transfer
   register_custom_asset_type
   create_asset_with_custom_type
-  exempt_ticker_affirmation @deprecated
+  "`exempt_ticker_affirmation` has been renamed to `exempt_asset_affirmation` from 7.0.0 chain version"
+  exempt_ticker_affirmation
   exempt_asset_affirmation
   set_asset_metadata
   set_asset_metadata_details
@@ -907,8 +1018,10 @@ enum CallIdEnum {
   register_asset_metadata_global_type
   remove_local_metadata_key
   remove_metadata_value
+  "`remove_ticker_affirmation_exemption` has been renamed to `remove_asset_affirmation_exemption` from 7.0.0 chain version"
   remove_ticker_affirmation_exemption @deprecated
   remove_asset_affirmation_exemption
+  "`remove_ticker_pre_approval` has been renamed to `remove_asset_pre_approval` from 7.0.0 chain version"
   remove_ticker_pre_approval @deprecated
   remove_asset_pre_approval
   add_mandatory_mediators
@@ -1032,6 +1145,7 @@ enum CallIdEnum {
   change_receipt_validity
   execute_scheduled_instruction
   execute_scheduled_instruction_v2
+  "`reschedule_instruction` has been deprecated from 6.0.0 chain version"
   reschedule_instruction
   update_venue_signers
   placeholder_add_instruction
@@ -1176,6 +1290,13 @@ enum CallIdEnum {
   migrate_custom_top
   set_signed_max_limits
 
+  ## electionprovidermultiphase ##
+  governance_fallback
+  set_emergency_election_result
+  set_minimum_untrusted_score
+  submit
+  sumbit_unsigned
+
   ## deprecated ##
   accept_authorization @deprecated
   accept_master_key @deprecated
@@ -1188,7 +1309,6 @@ enum CallIdEnum {
   add_transfer_manager @deprecated
   add_verify_range_proof @deprecated
   amend_proposal @deprecated
-  approve @deprecated
   archive_extension @deprecated
   authorize_instruction @deprecated
   authorize_with_receipts @deprecated
