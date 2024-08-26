@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { ConfidentialAccount } from '../../types';
 import { getTextValue } from '../util';
-import { extractArgs, HandlerArgs } from './common';
+import { extractArgs } from './common';
 
 export const handleConfidentialAccountCreated = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, params, eventIdx } = extractArgs(event);
@@ -33,11 +33,7 @@ export const handleConfidentialAssetFrozenForAccount = async (
 
   const account = await ConfidentialAccount.get(accountId);
 
-  if (account && !Array.isArray(account.frozenForAsset)) {
-    account.frozenForAsset = [assetId];
-
-    await account.save();
-  } else if (account && !account.frozenForAsset.includes(assetId)) {
+  if (account && !account.frozenForAsset.includes(assetId)) {
     account.frozenForAsset = [...account.frozenForAsset, assetId];
     account.updatedBlockId = blockId;
 
@@ -58,9 +54,10 @@ export const handleConfidentialAssetFrozenForAccount = async (
 };
 
 export const handleConfidentialAssetUnfrozenForAccount = async (
-  args: HandlerArgs
+  event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, params, eventIdx } = args;
+  const { blockId, params, eventIdx } = extractArgs(event);
+
   const [rawCreator, rawAccount, rawAsset] = params;
 
   const accountId = getTextValue(rawAccount);
@@ -68,11 +65,7 @@ export const handleConfidentialAssetUnfrozenForAccount = async (
 
   const account = await ConfidentialAccount.get(accountId);
 
-  if (account && !Array.isArray(account.frozenForAsset)) {
-    account.frozenForAsset = [];
-
-    await account.save();
-  } else if (account?.frozenForAsset.includes(assetId)) {
+  if (account?.frozenForAsset.includes(assetId)) {
     account.frozenForAsset = account.frozenForAsset.filter(id => id !== assetId);
     account.updatedBlockId = blockId;
 
