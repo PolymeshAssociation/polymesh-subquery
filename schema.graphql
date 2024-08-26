@@ -1877,7 +1877,7 @@ and no movement of assets will occur.
 type Instruction @entity {
   id: ID! #instructionId
   status: InstructionStatusEnum!
-  venue: Venue! @index(unique: false)
+  venue: Venue @index(unique: false)
   type: InstructionTypeEnum!
   "`endBlock` is applicable only when `type` is `SettleOnBlock`"
   endBlock: Int

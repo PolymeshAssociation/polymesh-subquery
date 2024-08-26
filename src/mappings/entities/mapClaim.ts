@@ -88,13 +88,16 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     customClaimTypeId,
   } = extractClaimInfo(harvesterArgs);
 
-  const scope = JSON.parse(claimScope) as Scope;
+  let scope: Scope;
+  if (claimScope) {
+    scope = JSON.parse(claimScope);
 
-  if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
-    scope.type = ClaimScopeTypeEnum.Asset;
-    const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
-    scope.value = ticker;
-    scope.assetId = assetId;
+    if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
+      scope.type = ClaimScopeTypeEnum.Asset;
+      const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
+      scope.value = ticker;
+      scope.assetId = assetId;
+    }
   }
 
   const filterExpiry = claimExpiry || END_OF_TIME;
