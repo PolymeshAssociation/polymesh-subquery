@@ -142,7 +142,7 @@ const handleGenesisDids = async (datetime: Date) => {
  * This method adds all the MultiSigs and their signers present in the genesis block
  */
 const handleMultiSigs = async (): Promise<void> => {
-  const multiSigEntries = await api.query.multiSig.multiSigToIdentity.entries();
+  const multiSigEntries = await api.query.multiSig.adminDid.entries();
 
   const multiSigInserts = [];
   for (const multiSigEntry of multiSigEntries) {
