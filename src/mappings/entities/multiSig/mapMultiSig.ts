@@ -51,6 +51,20 @@ export const createMultiSigSigner = (
     updatedBlockId: blockId,
   }).save();
 
+export const createMultiSigAdmin = (
+  multisigId: string,
+  identityId: string,
+  blockId: string
+): Promise<void> =>
+  MultiSigAdmin.create({
+    id: `${multisigId}/${identityId}`,
+    multisigId,
+    identityId,
+    status: MultiSigAdminStatusEnum.Authorized,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+
 const getMultiSigSignerDetails = (
   params: Codec[],
   block: SubstrateBlock
@@ -123,16 +137,7 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
   const promises = [multiSigPromise, store.bulkCreate('MultiSigSigner', signerParams)];
 
   if (!is7xChain(block)) {
-    promises.push(
-      MultiSigAdmin.create({
-        id: `${multiSigAddress}/${creator}`,
-        multisigId: multiSigAddress,
-        identityId: creator,
-        status: MultiSigAdminStatusEnum.Authorized,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      }).save()
-    );
+    promises.push(createMultiSigAdmin(multiSigAddress, creator, blockId));
   }
 
   await Promise.all(promises);
@@ -145,14 +150,7 @@ export const handleMultiSigAddedAdmin = async (event: SubstrateEvent): Promise<v
   const admin = getTextValue(rawAdminDid);
   const multisigId = getTextValue(rawMultiSigAddress);
 
-  await MultiSigAdmin.create({
-    id: `${multisigId}/${admin}`,
-    multisigId,
-    identityId: admin,
-    status: MultiSigAdminStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
+  await createMultiSigAdmin(multisigId, admin, blockId);
 };
 
 export const handleMultiSigRemovedAdmin = async (event: SubstrateEvent): Promise<void> => {
