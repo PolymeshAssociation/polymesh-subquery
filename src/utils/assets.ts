@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { hexAddPrefix, hexStripPrefix, stringToHex } from '@polkadot/util';
+import { hexAddPrefix, hexStripPrefix, stringToHex, hexHasPrefix } from '@polkadot/util';
 import { blake2AsHex } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
 import { Asset, AssetDocument, SecurityIdentifier } from '../types';
@@ -85,7 +85,13 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
 };
 
 export const getAssetIdForLegacyTicker = (ticker: Codec | string): string => {
-  const hexTicker = typeof ticker === 'string' ? ticker : ticker.toString();
+  const getHexTicker = (value: string) => {
+    if (hexHasPrefix(value)) {
+      return value;
+    }
+    return stringToHex(value.padEnd(12, '\0'));
+  };
+  const hexTicker = typeof ticker === 'string' ? getHexTicker(ticker) : ticker.toString();
   const assetComponents = [stringToHex('legacy_ticker'), hexTicker];
 
   const data = hexAddPrefix(assetComponents.map(e => hexStripPrefix(e)).join(''));
@@ -124,7 +130,7 @@ export const getAssetIdWithTicker = async (
   } else {
     ticker =
       typeof assetIdOrTicker === 'string'
-        ? hexToString(assetIdOrTicker)
+        ? coerceHexToString(assetIdOrTicker)
         : serializeTicker(assetIdOrTicker);
     assetId = getAssetIdForLegacyTicker(assetIdOrTicker);
   }
