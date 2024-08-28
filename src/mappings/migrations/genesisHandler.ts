@@ -5,15 +5,19 @@ import {
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
+import { capitalizeFirstLetter, extractString, extractValue } from '../../utils';
 import { getAccountId, systematicIssuers } from '../consts';
 import {
   createAccount,
   createIdentity,
   createPermissions,
 } from '../entities/identities/mapIdentities';
-import { createMultiSig, createMultiSigSigner } from '../entities/multiSig/mapMultiSig';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
-import { extractString, extractValue } from '../../utils';
+import {
+  createMultiSig,
+  createMultiSigAdmin,
+  createMultiSigSigner,
+} from '../entities/multiSig/mapMultiSig';
 
 const genesisBlock = '0';
 type DidWithAccount = { did: string; accountId: string };
@@ -146,7 +150,13 @@ const handleGenesisDids = async (datetime: Date) => {
  * This method adds all the MultiSigs and their signers present in the genesis block
  */
 const handleMultiSigs = async (): Promise<void> => {
-  const multiSigEntries = await api.query.multiSig.adminDid.entries();
+  let multiSigEntries;
+  const is7xChainAtGenesis = 'adminDid' in api.query.multiSig;
+  if (is7xChainAtGenesis) {
+    multiSigEntries = await api.query.multiSig.adminDid.entries();
+  } else {
+    multiSigEntries = await api.query.multiSig.multiSigToIdentity.entries();
+  }
 
   const multiSigInserts = [];
   for (const multiSigEntry of multiSigEntries) {
@@ -177,22 +187,34 @@ const handleMultiSigs = async (): Promise<void> => {
       )
     );
 
+    if (is7xChainAtGenesis) {
+      createMultiSigAdmin(multiSigAddress, creator, genesisBlock);
+    }
+
     signerEntries.forEach(
       ([
         {
           args: [, rawSigner],
         },
       ]) => {
-        const signer = JSON.parse(rawSigner.toString());
+        let signerType: SignerTypeEnum;
+        let signerValue: string;
+        if (is7xChainAtGenesis) {
+          signerType = SignerTypeEnum.Account;
+          signerValue = rawSigner.toString();
+        } else {
+          const signer = JSON.parse(rawSigner.toString());
 
-        const signerTypeString = Object.keys(signer)[0];
-        const signerType = signerTypeString[0].toUpperCase() + signerTypeString.slice(1);
-        const signerValue = signer[signerTypeString];
+          const signerTypeString = Object.keys(signer)[0];
+
+          signerType = capitalizeFirstLetter(signerTypeString) as SignerTypeEnum;
+          signerValue = signer[signerTypeString];
+        }
 
         multiSigInserts.push(
           createMultiSigSigner(
             multiSigAddress,
-            signerType as SignerTypeEnum,
+            signerType,
             signerValue,
             MultiSigSignerStatusEnum.Approved,
             genesisBlock
