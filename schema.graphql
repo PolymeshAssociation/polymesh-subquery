@@ -2538,9 +2538,30 @@ type MultiSig @entity {
   address: String! @index(unique: true)
   creator: Identity!
   creatorAccount: Account!
+  signaturesRequired: Int!
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
   proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
-  signaturesRequired: Int!
+  admins: [MultiSigAdmin!] @derivedFrom(field: "multisig")
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Represents MultiSig signer status
+"""
+enum MultiSigAdminStatusEnum {
+  Authorized ## when a admin is added
+  Removed ## when admin has been removed
+}
+
+"""
+Represents a MultiSig admin
+"""
+type MultiSigAdmin @entity {
+  id: ID!
+  multisig: MultiSig! @index(unique: false)
+  identityId: String!
+  status: MultiSigAdminStatusEnum!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2573,6 +2594,7 @@ Represents the list of proposal status
 """
 enum MultiSigProposalStatusEnum {
   Active
+  Approved
   Success
   Failed
   Rejected
@@ -2614,8 +2636,8 @@ type MultiSigProposal @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
   proposalId: Int! @index(unique: false)
-  creator: Identity!
-  creatorAccount: String!
+  creator: Identity
+  creatorAccount: String
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!

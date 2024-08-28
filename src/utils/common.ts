@@ -1,7 +1,7 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
-import { SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { ErrorJson, FoundType } from '../types';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
@@ -264,4 +264,10 @@ export const getErrorDetails = (item: Codec): ErrorJson => {
     errorType: capitalizeFirstLetter(errorType),
     details,
   };
+};
+
+export const is7xChain = (block: SubstrateBlock) => {
+  const { specVersion } = block;
+  const specName = api.runtimeVersion.specName.toString();
+  return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
 };
