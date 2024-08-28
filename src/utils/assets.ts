@@ -9,6 +9,7 @@ import {
   extractValue,
   getTextValue,
   hexToString,
+  is7xChain,
   serializeTicker,
 } from './common';
 
@@ -113,12 +114,9 @@ export const getAssetIdWithTicker = async (
   assetIdOrTicker: Codec | string,
   block: SubstrateBlock
 ): Promise<AssetIdWithTicker> => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-
   let assetId: string;
   let ticker: string;
-  if (specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000)) {
+  if (is7xChain(block)) {
     assetId = typeof assetIdOrTicker === 'string' ? assetIdOrTicker : assetIdOrTicker.toString();
 
     const asset = await Asset.get(assetId);

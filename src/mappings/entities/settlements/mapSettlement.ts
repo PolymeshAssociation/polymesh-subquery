@@ -17,7 +17,7 @@ import {
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
-import { createPortfolioIfNotExists } from '../mapPortfolio';
+import { createPortfolioIfNotExists } from '../identities/mapPortfolio';
 import {
   AffirmStatusEnum,
   EventIdEnum,

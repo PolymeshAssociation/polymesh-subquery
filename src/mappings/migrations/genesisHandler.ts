@@ -6,9 +6,13 @@ import {
   SignerTypeEnum,
 } from '../../types';
 import { getAccountId, systematicIssuers } from '../consts';
-import { createAccount, createIdentity, createPermissions } from '../entities/mapIdentities';
-import { createMultiSig, createMultiSigSigner } from '../entities/mapMultiSig';
-import { createPortfolio } from '../entities/mapPortfolio';
+import {
+  createAccount,
+  createIdentity,
+  createPermissions,
+} from '../entities/identities/mapIdentities';
+import { createMultiSig, createMultiSigSigner } from '../entities/multiSig/mapMultiSig';
+import { createPortfolio } from '../entities/identities/mapPortfolio';
 import { extractString, extractValue } from '../../utils';
 
 const genesisBlock = '0';
