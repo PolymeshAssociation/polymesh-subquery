@@ -105,7 +105,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
   const transferConditions = JSON.parse(item.toString()) as MeshTransferCondition[];
   return transferConditions.map(
     ({ maxInvestorCount, maxInvestorOwnership, claimOwnership, claimCount }) => {
-      if (maxInvestorCount) {
+      if (maxInvestorCount !== undefined) {
         return {
           assetId,
           type: TransferComplianceTypeEnum.MaxInvestorCount,
@@ -113,7 +113,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           value: BigInt(maxInvestorCount),
         };
       }
-      if (maxInvestorOwnership) {
+      if (maxInvestorOwnership !== undefined) {
         return {
           assetId,
           type: TransferComplianceTypeEnum.MaxInvestorOwnership,
@@ -121,7 +121,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           value: BigInt(maxInvestorOwnership),
         };
       }
-      if (claimCount) {
+      if (claimCount !== undefined) {
         const { type: claimType, value: claimValue } = getStatClaim(claimCount[0]);
         const claimIssuerId = claimCount[1];
         return {
@@ -135,7 +135,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           max: BigInt(claimCount[3]),
         };
       }
-      if (claimOwnership) {
+      if (claimOwnership !== undefined) {
         const { type: claimType, value: claimValue } = getStatClaim(claimOwnership[0]);
         const claimIssuerId = claimOwnership[1];
         return {
