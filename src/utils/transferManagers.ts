@@ -69,8 +69,9 @@ export const getExemptKeyValue = (
 ): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'> => {
   const exemptKey = JSON.parse(item.toString());
 
-  const { op: opType, claimType: claimTypeValue } = exemptKey;
+  const { op, operationType, claimType: claimTypeValue } = exemptKey;
 
+  const opType = operationType ?? op;
   let assetId: string;
 
   if ('assetId' in exemptKey) {

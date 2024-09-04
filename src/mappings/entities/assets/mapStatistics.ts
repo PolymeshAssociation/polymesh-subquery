@@ -30,16 +30,12 @@ export const getAssetIdForStatisticsEvent = (item: Codec, block: SubstrateBlock)
   return getAssetId(assetId, block);
 };
 
-interface MeshStatType {
-  op: string;
-  claimIssuer: string[] | null;
-}
-
 const transferRestrictionSpecVersion = 5000000;
 
 const getStatTypes = (item: Codec): Omit<Attributes<StatType>, 'assetId'>[] => {
-  const statTypes = JSON.parse(item.toString()) as MeshStatType[];
-  return statTypes.map(({ op: opType, claimIssuer }) => {
+  const statTypes = JSON.parse(item.toString());
+  return statTypes.map(({ op, operationType, claimIssuer }) => {
+    const opType = operationType ?? op;
     /**
      * claimIssuer -> Option<PolymeshPrimitivesIdentityClaimClaimType, PolymeshPrimitivesIdentityId>
      * E.g. - [{ accredited: null }, '0x0100000000000000000000000000000000000000000000000000000000000000']
