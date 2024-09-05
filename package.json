@@ -1,6 +1,6 @@
 {
   "name": "polymesh-subquery",
-  "version": "15.1.0-alpha.2",
+  "version": "15.1.0",
   "author": "Polymesh Association",
   "license": "Apache-2.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
@@ -21,7 +21,7 @@
     "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
     "semantic-release": "semantic-release"
   },
-  "homepage": "https://polymath.network/",
+  "homepage": "https://polymesh.network/",
   "repository": "github:PolymeshAssociation/polymesh-subquery",
   "files": [
     "dist",
