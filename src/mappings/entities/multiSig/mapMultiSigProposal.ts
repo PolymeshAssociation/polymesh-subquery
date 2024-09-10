@@ -153,10 +153,40 @@ const handleMultiSigProposalVoteAction = async (
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
   const multisigId = getTextValue(rawMultiSigAddress);
-  const proposalId = getNumberValue(rawProposalId);
+  const proposalIndex = getNumberValue(rawProposalId);
   const { signerType, signerValue } = getMultiSigSigner(rawSigner, block);
 
-  const proposal = await MultiSigProposal.get(`${multisigId}/${proposalId}`);
+  const signerId = `${multisigId}/${signerType}/${signerValue}`;
+  const proposalId = `${multisigId}/${proposalIndex}`;
+  const voteId = `${proposalId}/${signerValue}`;
+
+  const [proposal, previousVote] = await Promise.all([
+    MultiSigProposal.get(proposalId),
+    MultiSigProposalVote.get(voteId),
+  ]);
+
+  let vote = previousVote;
+  if (vote) {
+    if (vote.action === MultiSigProposalVoteActionEnum.Approved) {
+      proposal.approvalCount--;
+    } else if (vote.action === MultiSigProposalVoteActionEnum.Rejected) {
+      proposal.rejectionCount--;
+    }
+
+    vote.action = action;
+  } else {
+    vote = MultiSigProposalVote.create({
+      id: voteId,
+      proposalId,
+      signerId,
+      action,
+      datetime: block.timestamp,
+      eventIdx,
+      extrinsicIdx: extrinsic?.idx,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+  }
 
   if (action === MultiSigProposalVoteActionEnum.Approved) {
     proposal.approvalCount++;
@@ -164,20 +194,7 @@ const handleMultiSigProposalVoteAction = async (
     proposal.rejectionCount++;
   }
 
-  await Promise.all([
-    MultiSigProposalVote.create({
-      id: `${blockId}/${eventIdx}`,
-      proposalId: `${multisigId}/${proposalId}`,
-      signerId: `${multisigId}/${signerType}/${signerValue}`,
-      action,
-      datetime: block.timestamp,
-      eventIdx,
-      extrinsicIdx: extrinsic?.idx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save(),
-    proposal.save(),
-  ]);
+  await Promise.all([vote.save(), proposal.save()]);
 };
 
 export const handleMultiSigVoteApproved = async (event: SubstrateEvent): Promise<void> => {
