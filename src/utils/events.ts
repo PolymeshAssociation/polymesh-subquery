@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { SubstrateExtrinsic } from '@subql/types';
 import { JSONStringifyExceptStringAndNull, camelToSnakeCase } from './common';
 import { HandlerArgs } from '../mappings/entities/common';
 import { CallIdEnum, ModuleIdEnum, EventIdEnum } from 'src/types';
 import { PolyxTransactionProps } from '../types/models/PolyxTransaction';
 
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {
     return JSONStringifyExceptStringAndNull(arg?.value);
@@ -15,7 +15,6 @@ export const extractEventArg = (arg: any, exists: boolean) => {
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const extractEventArgs = (args: any[]) => {
   const [arg0, arg1, arg2, arg3] = args;
   return {
@@ -73,6 +72,5 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
   };
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export const extractTransferTo = (args: any[]) =>
   JSONStringifyExceptStringAndNull(args[3]?.value?.did);
