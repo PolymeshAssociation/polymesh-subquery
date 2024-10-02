@@ -31,19 +31,28 @@ export const getAssetIdForStatisticsEvent = (item: Codec, block: SubstrateBlock)
 };
 
 const transferRestrictionSpecVersion = 5000000;
+const statTypeAsEnumSpecVersion = 5001000;
 
-const getStatTypes = (item: Codec): Omit<Attributes<StatType>, 'assetId'>[] => {
+const getStatTypes = (
+  item: Codec,
+  block: SubstrateBlock
+): Omit<Attributes<StatType>, 'assetId'>[] => {
   const statTypes = JSON.parse(item.toString());
   return statTypes.map(({ op, operationType, claimIssuer }) => {
     const opType = operationType ?? op;
     /**
+     * Custom claim variant was added v5.1.0, which makes the enum serialize into an object vs plain string previously
+     *
      * claimIssuer -> Option<PolymeshPrimitivesIdentityClaimClaimType, PolymeshPrimitivesIdentityId>
      * E.g. - [{ accredited: null }, '0x0100000000000000000000000000000000000000000000000000000000000000']
      * In case of custom claim type, [{custom: 1}, '0x0100000000000000000000000000000000000000000000000000000000000000']
      */
     if (claimIssuer) {
       const [claimTypeInfo, claimIssuerId] = claimIssuer;
-      const claimType = Object.keys(claimTypeInfo)[0];
+      const claimType =
+        block.specVersion >= statTypeAsEnumSpecVersion
+          ? Object.keys(claimTypeInfo)[0]
+          : claimTypeInfo;
       let customClaimTypeId;
       if (claimType === 'custom') {
         customClaimTypeId = claimTypeInfo[claimType];
@@ -178,7 +187,7 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
   const [, rawStatisticsScope, rawStatType] = params;
 
   const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
-  const statTypes = getStatTypes(rawStatType);
+  const statTypes = getStatTypes(rawStatType, block);
 
   const promises = [];
   statTypes.forEach(statType => {
@@ -197,7 +206,7 @@ export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void
   const [, rawStatisticsScope, rawStatType] = params;
 
   const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
-  const statTypes = getStatTypes(rawStatType);
+  const statTypes = getStatTypes(rawStatType, block);
 
   await Promise.all(
     statTypes.map(({ opType, claimType, claimIssuerId }) => {
