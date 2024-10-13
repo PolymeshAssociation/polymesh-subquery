@@ -15,7 +15,6 @@ import {
   getPortfolioValue,
   getSignerAddress,
   getTextValue,
-  hexToString,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
@@ -205,7 +204,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
       ids: number[];
     };
     nftIds = description.ids.map(id => BigInt(id));
-    assetId = hexToString(description.ticker ?? description.assetId);
+    assetId = getAssetId(description.ticker ?? description.assetId, block);
     type = PortfolioMovementTypeEnum.NonFungible;
   }
 
