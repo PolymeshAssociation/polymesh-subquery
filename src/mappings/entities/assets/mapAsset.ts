@@ -648,11 +648,26 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
 
   const [, rawTicker, rawAssetId] = params;
   const ticker = serializeTicker(rawTicker);
-  const assetId = rawAssetId.toString();
+  const assetId = getTextValue(rawAssetId);
   const asset = await getAsset(assetId);
 
   asset.ticker = ticker;
   asset.updatedBlockId = blockId;
 
   await asset.save();
+};
+
+export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
+  const [, rawTicker, rawAssetId] = params;
+  const ticker = serializeTicker(rawTicker);
+  const assetId = getTextValue(rawAssetId);
+  const asset = await getAsset(assetId);
+
+  if (asset.ticker === ticker) {
+    asset.ticker = undefined;
+    asset.updatedBlockId = blockId;
+    await asset.save();
+  }
 };

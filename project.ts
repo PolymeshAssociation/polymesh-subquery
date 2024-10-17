@@ -46,6 +46,7 @@ const filters = {
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
     TickerLinkedToAsset: ['handleTickerLinkedToAsset'],
+    TickerUnlinkedFromAsset: ['handleTickerUnlinkedFromAsset'],
   },
   balances: {
     AccountBalanceBurned: ['handleBalanceBurned'],
