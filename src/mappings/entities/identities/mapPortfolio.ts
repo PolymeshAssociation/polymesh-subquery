@@ -159,7 +159,7 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
   const address = getSignerAddress(extrinsic);
   const from = getPortfolioValue(rawFromPortfolio);
   const to = getPortfolioValue(rawToPortfolio);
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const amount = getBigIntValue(rawAmount);
   const memo = bytesToString(rawMemo);
 
@@ -194,7 +194,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
       assetId?: string;
       amount: number;
     };
-    assetId = getAssetId(description.ticker ?? description.assetId, block);
+    assetId = await getAssetId(description.ticker ?? description.assetId, block);
     amount = BigInt(description.amount);
     type = PortfolioMovementTypeEnum.Fungible;
   } else if (assetType === 'nonFungible') {
@@ -204,7 +204,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
       ids: number[];
     };
     nftIds = description.ids.map(id => BigInt(id));
-    assetId = getAssetId(description.ticker ?? description.assetId, block);
+    assetId = await getAssetId(description.ticker ?? description.assetId, block);
     type = PortfolioMovementTypeEnum.NonFungible;
   }
 

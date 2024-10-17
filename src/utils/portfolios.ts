@@ -36,13 +36,13 @@ export const getPortfolioId = ({
   number,
 }: Pick<Portfolio, 'identityId' | 'number'>): string => `${identityId}/${number}`;
 
-export const getCaIdValue = (
+export const getCaIdValue = async (
   item: Codec,
   block: SubstrateBlock
-): Pick<Distribution, 'localId' | 'assetId'> => {
+): Promise<Pick<Distribution, 'localId' | 'assetId'>> => {
   const caId = JSON.parse(item.toString());
   return {
     localId: extractNumber(caId, 'local_id'),
-    assetId: getAssetId(caId.ticker ?? caId.assetId, block),
+    assetId: await getAssetId(caId.ticker ?? caId.assetId, block),
   };
 };

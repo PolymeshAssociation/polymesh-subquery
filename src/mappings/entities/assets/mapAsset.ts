@@ -188,7 +188,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
   }
 
   await Asset.create({
-    id: getAssetId(rawAssetId, block),
+    id: await getAssetId(rawAssetId, block),
     ticker,
     name,
     type: assetType,
@@ -212,7 +212,7 @@ export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> =
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawName] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.name = bytesToString(rawName);
@@ -225,7 +225,7 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawFundingRound] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
 
@@ -239,7 +239,7 @@ export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> 
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawDocId, rawDoc] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
   const docDetails = getDocValue(rawDoc);
 
@@ -259,7 +259,7 @@ export const handleDocumentRemoved = async (event: SubstrateEvent): Promise<void
   const { params, block } = extractArgs(event);
   const [, rawAssetId, rawDocId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
 
   await AssetDocument.remove(`${assetId}/${documentId}`);
@@ -269,7 +269,7 @@ export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<v
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawIdentifiers] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
@@ -282,7 +282,7 @@ export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isDivisible = true;
@@ -297,7 +297,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     params;
 
   const issuerDid = getTextValue(rawBeneficiaryDid);
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
   const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
@@ -347,7 +347,7 @@ export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
   const [, rawAssetId, rawBeneficiaryDid, rawAmount] = params;
 
   const issuerDid = getTextValue(rawBeneficiaryDid);
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
 
   const asset = await getAsset(assetId);
@@ -367,7 +367,7 @@ export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isFrozen = true;
@@ -380,7 +380,7 @@ export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isFrozen = false;
@@ -394,7 +394,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 
   const [to, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.ownerId = getTextValue(to);
@@ -408,7 +408,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   const [, rawAssetId, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
   let fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
@@ -483,7 +483,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
   let fromPortfolioNumber: number, toPortfolioNumber: number;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
 
   let fromPortfolioId: string;
@@ -593,7 +593,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const addedById = getTextValue(params[0]);
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
   const mediators = getStringArrayValue(params[2]);
 
   const createPromises = mediators.map(mediator =>
@@ -612,7 +612,7 @@ export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<
 
 export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promise<void> => {
   const { params, block } = extractArgs(event);
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
   const mediators = getStringArrayValue(params[2]);
 
   await Promise.all(
@@ -623,7 +623,7 @@ export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promis
 export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const identityId = getTextValue(params[0]);
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   await AssetPreApproval.create({
     id: `${assetId}/${identityId}`,
@@ -638,7 +638,7 @@ export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promi
   const { params, block } = extractArgs(event);
 
   const identityId = getTextValue(params[0]);
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   await AssetPreApproval.remove(`${assetId}/${identityId}`);
 };

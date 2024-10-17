@@ -152,7 +152,7 @@ class ExternalAgentEventsManager {
       .add(
         ModuleIdEnum.statistics,
         [EventIdEnum.AssetStatsUpdated, EventIdEnum.StatTypesAdded, EventIdEnum.StatTypesRemoved],
-        async (params, block) => getAssetIdForStatisticsEvent(params[1], block)
+        async (params, block) => await getAssetIdForStatisticsEvent(params[1], block)
       )
       .add(
         ModuleIdEnum.statistics,
@@ -160,7 +160,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.TransferConditionExemptionsAdded,
           EventIdEnum.TransferConditionExemptionsRemoved,
         ],
-        async (params, block) => getExemptKeyValue(params[1], block).assetId
+        async (params, block) => (await getExemptKeyValue(params[1], block)).assetId
       )
       .add(
         ModuleIdEnum.corporateaction,

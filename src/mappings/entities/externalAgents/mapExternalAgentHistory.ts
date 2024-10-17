@@ -12,7 +12,7 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
 
   const group = params[2].toJSON();
   const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   await AgentGroupEntity.create({
     id: `${assetId}/${group}`,
@@ -27,7 +27,7 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 
   const group = params[2].toJSON();
   const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   const ag = await AgentGroupEntity.get(`${assetId}/${group}`);
   ag.permissions = permissions;
@@ -57,7 +57,7 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
   const { params, blockId, eventIdx, block } = extractArgs(event);
 
   const did = params[0].toString();
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   const group = params[2].toJSON() as AgentGroup;
 
@@ -77,7 +77,7 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 
   const did = params[2].toString();
   const group = params[3].toJSON() as AgentGroup;
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   const promises = [
     removeMember(did, assetId),
@@ -102,7 +102,7 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
   const { params, blockId, eventIdx, block } = extractArgs(event);
   const did = params[2].toString();
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   const promises = [
     removeMember(did, assetId),

@@ -18,7 +18,7 @@ export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawManager] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { type, value } = getTransferManagerValue(rawManager);
   const id = `${assetId}/${type}/${value}`;
 
@@ -37,7 +37,7 @@ export const handleTransferManagerRemoved = async (event: SubstrateEvent): Promi
   const { params, block } = extractArgs(event);
   const [, rawAssetId, rawManager] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { type, value } = getTransferManagerValue(rawManager);
   const id = `${assetId}/${type}/${value}`;
 
@@ -48,7 +48,7 @@ export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
@@ -68,7 +68,7 @@ export const handleExemptionsRemoved = async (event: SubstrateEvent): Promise<vo
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 

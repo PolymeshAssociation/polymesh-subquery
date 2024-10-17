@@ -14,7 +14,7 @@ export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promis
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isCompliancePaused = true;
@@ -27,7 +27,7 @@ export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promi
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isCompliancePaused = false;
@@ -40,7 +40,7 @@ export const handleComplianceReset = async (event: SubstrateEvent): Promise<void
   const { params, block } = extractArgs(event);
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const complianceRequirements = await Compliance.getByAssetId(assetId);
 
@@ -61,7 +61,7 @@ export const handleComplianceCreated = async (event: SubstrateEvent): Promise<vo
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawCompliance] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { complianceId, data } = getComplianceValue(rawCompliance);
 
   await createCompliance(assetId, complianceId, data, blockId);
@@ -71,7 +71,7 @@ export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<v
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId, rawCompliances] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const existingCompliances = await Compliance.getByAssetId(assetId);
 
@@ -89,7 +89,7 @@ export const handleComplianceRemoved = async (event: SubstrateEvent): Promise<vo
   const { params, block } = extractArgs(event);
   const [, rawAssetId, rawId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const complianceId = getNumberValue(rawId);
 
   await Compliance.remove(`${assetId}/${complianceId}`);
@@ -101,7 +101,7 @@ export const handleTrustedDefaultClaimIssuerAdded = async (
   const { params, eventIdx, blockId, block } = extractArgs(event);
 
   const [, rawAssetId, rawIssuer] = params;
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const issuer = (rawIssuer as unknown as { issuer: Codec }).issuer.toString();
 
   await TrustedClaimIssuer.create({
@@ -120,7 +120,7 @@ export const handleTrustedDefaultClaimIssuerRemoved = async (
   const { params, block } = extractArgs(event);
 
   const [, rawAssetId, rawIdentity] = params;
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const issuer = getTextValue(rawIdentity);
   await TrustedClaimIssuer.remove(`${assetId}/${issuer}`);
 };

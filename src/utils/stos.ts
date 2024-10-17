@@ -40,7 +40,7 @@ export const getFundraiserDetails = async (
     end: getDateValue(end),
     tiers,
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
-    offeringAssetId: getAssetId(extractString(rest, 'offering_asset'), block),
+    offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
     raisingAssetId,
     raisingTicker,

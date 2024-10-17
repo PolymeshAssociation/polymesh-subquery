@@ -158,7 +158,7 @@ export const handleDidRegistered = async (event: SubstrateEvent): Promise<void> 
   const { params, blockId, block } = extractArgs(event);
 
   const target = getTextValue(params[0]);
-  const assetId = getAssetId(params[1], block);
+  const assetId = await getAssetId(params[1], block);
 
   await handleScopes(blockId, target, assetId);
 };

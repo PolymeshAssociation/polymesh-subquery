@@ -40,7 +40,7 @@ export const getNftHolder = async (
 export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block } = extractArgs(event);
   const [, rawAssetId] = params;
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
 
   asset.isNftCollection = true;
@@ -71,7 +71,7 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
   const reason = getFirstKeyFromJson(rawUpdateReason);
   const value = getFirstValueFromJson(rawUpdateReason);
 
-  const { assetId, ids } = getNftId(rawNftId, block);
+  const { assetId, ids } = await getNftId(rawNftId, block);
 
   const asset = await getAsset(assetId);
   asset.updatedBlockId = blockId;

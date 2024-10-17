@@ -43,7 +43,7 @@ export const handleStoClosed = async (event: SubstrateEvent): Promise<void> => {
 const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
   const { params, extrinsic, block, blockId } = extractArgs(event);
   const [, rawStoId] = params;
-  const offeringAssetId = getAssetId(extrinsic.extrinsic.args[0], block);
+  const offeringAssetId = await getAssetId(extrinsic.extrinsic.args[0], block);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);
@@ -66,7 +66,7 @@ const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus):
 export const handleFundraiserWindowModified = async (event: SubstrateEvent): Promise<void> => {
   const { params, extrinsic, blockId, block } = extractArgs(event);
   const [, rawStoId, , , rawStart, rawEnd] = params;
-  const offeringAssetId = getAssetId(extrinsic.extrinsic.args[0], block);
+  const offeringAssetId = await getAssetId(extrinsic.extrinsic.args[0], block);
   const stoId = getNumberValue(rawStoId);
 
   const sto = await Sto.get(`${offeringAssetId}/${stoId}`);

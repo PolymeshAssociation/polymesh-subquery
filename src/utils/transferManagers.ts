@@ -63,10 +63,10 @@ export const getTransferManagerValue = (
   throw new Error('Unknown transfer restriction type found');
 };
 
-export const getExemptKeyValue = (
+export const getExemptKeyValue = async (
   item: Codec,
   block: SubstrateBlock
-): Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'> => {
+): Promise<Omit<Attributes<TransferComplianceExemption>, 'exemptedEntityId'>> => {
   const exemptKey = JSON.parse(item.toString());
 
   const { op, operationType, claimType: claimTypeValue } = exemptKey;
@@ -89,7 +89,7 @@ export const getExemptKeyValue = (
   }
 
   return {
-    assetId: getAssetId(assetId, block),
+    assetId: await getAssetId(assetId, block),
     opType,
     claimType,
   };

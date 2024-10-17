@@ -19,7 +19,10 @@ import {
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 
-export const getAssetIdForStatisticsEvent = (item: Codec, block: SubstrateBlock): string => {
+export const getAssetIdForStatisticsEvent = (
+  item: Codec,
+  block: SubstrateBlock
+): Promise<string> => {
   let assetId: string;
   if (block.specVersion < 7000000) {
     const scope = JSON.parse(item.toString());
@@ -186,7 +189,7 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
 
   const [, rawStatisticsScope, rawStatType] = params;
 
-  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
+  const assetId = await getAssetIdForStatisticsEvent(rawStatisticsScope, block);
   const statTypes = getStatTypes(rawStatType, block);
 
   const promises = [];
@@ -205,7 +208,7 @@ export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void
 
   const [, rawStatisticsScope, rawStatType] = params;
 
-  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
+  const assetId = await getAssetIdForStatisticsEvent(rawStatisticsScope, block);
   const statTypes = getStatTypes(rawStatType, block);
 
   await Promise.all(
@@ -221,7 +224,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 
   const [, rawStatisticsScope, rawTransferConditions] = params;
 
-  const assetId = getAssetIdForStatisticsEvent(rawStatisticsScope, block);
+  const assetId = await getAssetIdForStatisticsEvent(rawStatisticsScope, block);
 
   const transferConditions = getTransferConditions(rawTransferConditions, assetId);
 
@@ -266,7 +269,7 @@ export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Pro
 
   const [, rawExemptKey, rawExemptions] = params;
 
-  const exemptKey = getExemptKeyValue(rawExemptKey, block);
+  const exemptKey = await getExemptKeyValue(rawExemptKey, block);
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
   const { assetId, opType, claimType } = exemptKey;
@@ -300,7 +303,7 @@ export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): P
 
   const [, rawExemptKey, rawExemptions] = params;
 
-  const { assetId, opType, claimType } = getExemptKeyValue(rawExemptKey, block);
+  const { assetId, opType, claimType } = await getExemptKeyValue(rawExemptKey, block);
   const exemptedEntities = rawExemptions.toJSON() as string[];
 
   await Promise.all(
@@ -315,7 +318,7 @@ export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent)
 
   const [, rawAssetId, rawManager] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { type } = getTransferManagerValue(rawManager);
 
   if (type === TransferRestrictionTypeEnum.Percentage) {
@@ -333,7 +336,7 @@ export const handleTransferManagerExemptionsAdded = async (
 
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { type } = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
@@ -382,7 +385,7 @@ export const handleTransferManagerExemptionsRemoved = async (
 
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
@@ -408,7 +411,7 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
 
   const [, rawAssetId] = params;
 
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
   const { specVersion } = block;
   if (specVersion < transferRestrictionSpecVersion) {
     await upsertStatType(
@@ -422,7 +425,7 @@ export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Prom
   const { params, block } = extractArgs(event);
 
   const [, rawAssetId] = params;
-  const assetId = getAssetId(rawAssetId, block);
+  const assetId = await getAssetId(rawAssetId, block);
 
   const specVersion = block.specVersion;
   const specName = api.runtimeVersion.specName.toString();

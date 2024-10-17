@@ -1,8 +1,8 @@
 import { Codec } from '@polkadot/types/types';
-import { hexAddPrefix, hexStripPrefix, stringToHex, hexHasPrefix, u8aToHex } from '@polkadot/util';
+import { hexAddPrefix, hexHasPrefix, hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
-import { Asset, AssetDocument, SecurityIdentifier } from '../types';
+import { Asset, AssetDocument, Block, SecurityIdentifier } from '../types';
 import {
   coerceHexToString,
   extractString,
@@ -84,7 +84,8 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
   });
 };
 
-export const getAssetIdForLegacyTicker = (ticker: Codec | string): string => {
+let genesisHash: string;
+export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise<string> => {
   const getHexTicker = (value: string) => {
     if (hexHasPrefix(value)) {
       return value;
@@ -99,15 +100,25 @@ export const getAssetIdForLegacyTicker = (ticker: Codec | string): string => {
 
   const rawBytes = blake2AsU8a(data, 128);
 
-  // Version 8.
-  rawBytes[6] = (rawBytes[6] & 0x0f) | 0x80;
-  // Standard RFC4122 variant (bits 10xx)
-  rawBytes[8] = (rawBytes[8] & 0x3f) | 0x80;
+  if (!genesisHash) {
+    ({ hash: genesisHash } = await Block.get('0'));
+  }
+
+  // Current staging chain already migrated the old ticker into asset IDs without the valid UUID logic
+  if (genesisHash !== '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee') {
+    // Version 8.
+    rawBytes[6] = (rawBytes[6] & 0x0f) | 0x80;
+    // Standard RFC4122 variant (bits 10xx)
+    rawBytes[8] = (rawBytes[8] & 0x3f) | 0x80;
+  }
 
   return u8aToHex(rawBytes);
 };
 
-export const getAssetId = (assetId: string | Codec, block: SubstrateBlock): string => {
+export const getAssetId = async (
+  assetId: string | Codec,
+  block: SubstrateBlock
+): Promise<string> => {
   const { specVersion } = block;
   const specName = api.runtimeVersion.specName.toString();
 
@@ -118,10 +129,13 @@ export const getAssetId = (assetId: string | Codec, block: SubstrateBlock): stri
   return getAssetIdForLegacyTicker(assetId);
 };
 
-export const getNftId = (nft: Codec, block: SubstrateBlock): { assetId: string; ids: number[] } => {
+export const getNftId = async (
+  nft: Codec,
+  block: SubstrateBlock
+): Promise<{ assetId: string; ids: number[] }> => {
   const { ticker: rawTicker, assetId: rawAssetId, ids } = nft.toJSON() as any;
 
-  return { assetId: getAssetId(rawTicker ?? rawAssetId, block), ids };
+  return { assetId: await getAssetId(rawTicker ?? rawAssetId, block), ids };
 };
 
 export const getAssetIdWithTicker = async (
@@ -140,7 +154,7 @@ export const getAssetIdWithTicker = async (
       typeof assetIdOrTicker === 'string'
         ? coerceHexToString(assetIdOrTicker)
         : serializeTicker(assetIdOrTicker);
-    assetId = getAssetIdForLegacyTicker(assetIdOrTicker);
+    assetId = await getAssetIdForLegacyTicker(assetIdOrTicker);
   }
 
   return {
