@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { hexAddPrefix, hexStripPrefix, stringToHex, hexHasPrefix } from '@polkadot/util';
-import { blake2AsHex } from '@polkadot/util-crypto';
+import { hexAddPrefix, hexStripPrefix, stringToHex, hexHasPrefix, u8aToHex } from '@polkadot/util';
+import { blake2AsU8a } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
 import { Asset, AssetDocument, SecurityIdentifier } from '../types';
 import {
@@ -91,12 +91,20 @@ export const getAssetIdForLegacyTicker = (ticker: Codec | string): string => {
     }
     return stringToHex(value.padEnd(12, '\0'));
   };
+
   const hexTicker = typeof ticker === 'string' ? getHexTicker(ticker) : ticker.toString();
   const assetComponents = [stringToHex('legacy_ticker'), hexTicker];
 
   const data = hexAddPrefix(assetComponents.map(e => hexStripPrefix(e)).join(''));
 
-  return blake2AsHex(data, 128);
+  const rawBytes = blake2AsU8a(data, 128);
+
+  // Version 8.
+  rawBytes[6] = (rawBytes[6] & 0x0f) | 0x80;
+  // Standard RFC4122 variant (bits 10xx)
+  rawBytes[8] = (rawBytes[8] & 0x3f) | 0x80;
+
+  return u8aToHex(rawBytes);
 };
 
 export const getAssetId = (assetId: string | Codec, block: SubstrateBlock): string => {
