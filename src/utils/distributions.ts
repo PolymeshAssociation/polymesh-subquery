@@ -1,19 +1,24 @@
 import { Codec } from '@polkadot/types/types';
-import { END_OF_TIME, extractBigInt, getBigIntValue, hexToString } from './common';
-import { meshPortfolioToPortfolio } from './portfolios';
+import { SubstrateBlock } from '@subql/types';
 import { Distribution } from 'src/types';
+import { getAssetId } from './assets';
+import { END_OF_TIME, extractBigInt, getBigIntValue } from './common';
+import { meshPortfolioToPortfolio } from './portfolios';
 
-export const getDistributionValue = (
-  item: Codec
-): Pick<
-  Distribution,
-  'portfolioId' | 'currency' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
+export const getDistributionValue = async (
+  item: Codec,
+  block: SubstrateBlock
+): Promise<
+  Pick<
+    Distribution,
+    'portfolioId' | 'currencyId' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
+  >
 > => {
   const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
   const { identityId, number } = meshPortfolioToPortfolio(from);
   return {
     portfolioId: `${identityId}/${number}`,
-    currency: hexToString(currency),
+    currencyId: await getAssetId(currency, block),
     perShare: BigInt(extractBigInt(rest, 'per_share') || 0),
     amount: getBigIntValue(amount),
     remaining: getBigIntValue(remaining),

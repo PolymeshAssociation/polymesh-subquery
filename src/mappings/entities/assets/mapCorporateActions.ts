@@ -8,7 +8,7 @@ export const handleDistributionCreated = async (event: SubstrateEvent): Promise<
   const [rawDid, rawCaId, rawDistribution] = params;
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
-  const distributionDetails = getDistributionValue(rawDistribution);
+  const distributionDetails = await getDistributionValue(rawDistribution, block);
 
   await Distribution.create({
     id: `${assetId}/${localId}`,
