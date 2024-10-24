@@ -2037,7 +2037,7 @@ type Distribution @entity {
   localId: Int! @index(unique: false)
   asset: Asset! @index(unique: false)
   portfolio: Portfolio!
-  currency: String!
+  currency: Asset!
   perShare: BigInt!
   amount: BigInt!
   remaining: BigInt!
