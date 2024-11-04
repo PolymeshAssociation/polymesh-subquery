@@ -9,6 +9,7 @@ let oldSpecVersion = 3000;
  */
 export default async (substrateEvent: SubstrateEvent): Promise<void> => {
   const specVersion = substrateEvent.block.specVersion;
+
   if (oldSpecVersion !== specVersion) {
     logger.info(
       `Checking for transaction version after chain spec version upgrade from "${oldSpecVersion}" to "${specVersion}"`

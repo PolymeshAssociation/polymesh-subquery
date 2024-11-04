@@ -1,5 +1,5 @@
 import { GenericEvent } from '@polkadot/types/generic';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   Claim,
   ClaimScope,
@@ -57,7 +57,7 @@ const getId = (
   if (scope) {
     // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
     idAttributes.push(scope.type);
-    idAttributes.push(scope.value);
+    idAttributes.push(scope.assetId ?? scope.value);
   }
   if (jurisdiction) {
     // Only applicable in case of Jurisdiction claim type
@@ -69,6 +69,23 @@ const getId = (
   }
 
   return idAttributes.join('/');
+};
+
+const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promise<Scope> => {
+  const scope = JSON.parse(claimScope);
+
+  if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
+    scope.type = ClaimScopeTypeEnum.Asset;
+    const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
+
+    if (ticker) {
+      scope.value = ticker;
+    }
+
+    scope.assetId = assetId;
+  }
+
+  return scope;
 };
 
 export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
@@ -90,14 +107,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 
   let scope: Scope;
   if (claimScope) {
-    scope = JSON.parse(claimScope);
-
-    if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
-      scope.type = ClaimScopeTypeEnum.Asset;
-      const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
-      scope.value = ticker;
-      scope.assetId = assetId;
-    }
+    scope = await processClaimScope(claimScope, block);
   }
 
   const filterExpiry = claimExpiry || END_OF_TIME;
@@ -136,12 +146,12 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
-  const { params } = extractArgs(event);
+  const { params, block } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
   const { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId } =
     extractClaimInfo(harvesterArgs);
 
-  const scope = JSON.parse(claimScope) as Scope;
+  const scope = await processClaimScope(claimScope, block);
   const target = getTextValue(params[0]);
 
   const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
