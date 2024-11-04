@@ -57,7 +57,11 @@ const getId = (
   if (scope) {
     // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
     idAttributes.push(scope.type);
-    idAttributes.push(scope.value);
+    if (scope.type === ClaimScopeTypeEnum.Asset) {
+      idAttributes.push(scope.assetId);
+    } else {
+      idAttributes.push(scope.value);
+    }
   }
   if (jurisdiction) {
     // Only applicable in case of Jurisdiction claim type
