@@ -50,7 +50,7 @@ export const createPortfolio = (
 /**
  * Creates a Portfolio if not present.
  *
- * @note - WARNING: This is needed when an Instruction is created with a target Portfolio that doesn't exist. It should not be used unless necessary.
+ * @note - WARNING: This is needed when an Instruction is created with a target Portfolio that doesn't exist. It should not be used unless necessary (i.e. before chain v7).
  */
 export const createPortfolioIfNotExists = async (
   { identityId, number }: Pick<Portfolio, 'identityId' | 'number'>,

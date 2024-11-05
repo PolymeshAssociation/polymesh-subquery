@@ -47,34 +47,38 @@ const prepareLegCreateParams = async (
   legDetails: LegDetails,
   { eventIdx, eventId, block }: HandlerArgs
 ): Promise<Parameters<typeof Leg.create>[0]> => {
-  // since an instruction leg can be created without a valid DID/Portfolio, we make sure DB has an entry for Portfolio/Identity to avoid foreign key constraint
   const { from, fromPortfolio, to, toPortfolio, legIndex } = legDetails;
   const promises = [];
 
-  if (fromPortfolio) {
-    promises.push(
-      createPortfolioIfNotExists(
-        { identityId: from, number: fromPortfolio },
-        blockId,
-        eventId,
-        eventIdx,
-        block
-      )
-    );
-  }
-  if (toPortfolio) {
-    promises.push(
-      createPortfolioIfNotExists(
-        { identityId: to, number: toPortfolio },
-        blockId,
-        eventId,
-        eventIdx,
-        block
-      )
-    );
-  }
+  /**
+   * older versions did not ensure the existence of sender and receivers, so entries may need to be added
+   */
+  if (block.specVersion < 7000000) {
+    if (fromPortfolio) {
+      promises.push(
+        createPortfolioIfNotExists(
+          { identityId: from, number: fromPortfolio },
+          blockId,
+          eventId,
+          eventIdx,
+          block
+        )
+      );
+    }
+    if (toPortfolio) {
+      promises.push(
+        createPortfolioIfNotExists(
+          { identityId: to, number: toPortfolio },
+          blockId,
+          eventId,
+          eventIdx,
+          block
+        )
+      );
+    }
 
-  await Promise.all(promises);
+    await Promise.all(promises);
+  }
 
   return {
     id: `${instructionId}/${legIndex}`,
