@@ -119,10 +119,7 @@ export const getAssetId = async (
   assetId: string | Codec,
   block: SubstrateBlock
 ): Promise<string> => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-
-  if ((specName === 'polymesh_private_dev' && specVersion >= 2000000) || specVersion >= 7000000) {
+  if (is7xChain(block)) {
     return typeof assetId === 'string' ? assetId : assetId.toString();
   }
 

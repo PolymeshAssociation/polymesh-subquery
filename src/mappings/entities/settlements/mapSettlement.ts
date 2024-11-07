@@ -14,6 +14,7 @@ import {
   getSignerAddress,
   getStringArrayValue,
   getTextValue,
+  is7xChain,
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
@@ -53,7 +54,7 @@ const prepareLegCreateParams = async (
   /**
    * older versions did not ensure the existence of sender and receivers, so entries may need to be added
    */
-  if (block.specVersion < 7000000) {
+  if (is7xChain(block)) {
     if (fromPortfolio) {
       promises.push(
         createPortfolioIfNotExists(

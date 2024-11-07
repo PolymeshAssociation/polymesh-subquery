@@ -16,6 +16,7 @@ import {
   getExemptKeyValue,
   getExemptionsValue,
   getTransferManagerValue,
+  is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 
@@ -24,12 +25,14 @@ export const getAssetIdForStatisticsEvent = (
   block: SubstrateBlock
 ): Promise<string> => {
   let assetId: string;
-  if (block.specVersion < 7000000) {
+
+  if (is7xChain(block)) {
+    assetId = item.toString();
+  } else {
     const scope = JSON.parse(item.toString());
     assetId = scope.ticker;
-  } else {
-    assetId = item.toString();
   }
+
   return getAssetId(assetId, block);
 };
 

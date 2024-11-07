@@ -30,6 +30,7 @@ import {
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
+  is7xChain,
   serializeTicker,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
@@ -148,7 +149,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 
   const ownerId = getTextValue(rawOwnerDid);
 
-  const ticker = block.specVersion < 7000000 ? serializeTicker(rawAssetId) : undefined;
+  const ticker = !is7xChain(block) ? serializeTicker(rawAssetId) : undefined;
 
   /**
    * Name isn't present on the old events so we need to query storage.
