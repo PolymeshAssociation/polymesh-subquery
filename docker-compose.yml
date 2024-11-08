@@ -35,20 +35,21 @@ services:
       DB_PORT: 5432
       START_BLOCK: 1
       # Polymesh-local
-      # NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      NETWORK_ENDPOINT: ws://host.docker.internal:9944
       # Setting NETWORK_HTTP_ENDPOINT will allow dynamic lookup of NETWORK_CHAIN_ID
-      # NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
+      NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
       # Staging
       # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.dev/
       # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
       # NETWORK_DICTIONARY: https://subql-dictionary.polymesh.dev
       # Testnet
-      NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
-      NETWORK_CHAIN_ID: '0x2ace05e703aa50b48c0ccccfc8b424f7aab9a1e2c424ed12e45d20b1e8ffd0d6'
-      NETWORK_DICTIONARY: https://testnet-subql-dictionary.polymesh.live/
+      # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
+      # NETWORK_CHAIN_ID: '0x2ace05e703aa50b48c0ccccfc8b424f7aab9a1e2c424ed12e45d20b1e8ffd0d6'
+      # NETWORK_DICTIONARY: https://testnet-subql-dictionary.polymesh.live/
       # Mainnet
       # NETWORK_ENDPOINT: wss://mainnet-rpc.polymesh.network
       # NETWORK_CHAIN_ID: '0x6fbd74e5e1d0a61d52ccfe9d4adaed16dd3a7caa37c6bc4d0c2fa12e8b2f4063'
+      # NETWORK_DICTIONARY: https://mainnet-subql-dictionary.polymesh.network/
     command:
       - -f=/app # Path of the project
       - --batch-size=50 # Batch size of blocks to fetch in one round
