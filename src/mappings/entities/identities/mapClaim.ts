@@ -151,7 +151,11 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
   const { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId } =
     extractClaimInfo(harvesterArgs);
 
-  const scope = await processClaimScope(claimScope, block);
+  let scope: Scope;
+  if (claimScope) {
+    scope = await processClaimScope(claimScope, block);
+  }
+
   const target = getTextValue(params[0]);
 
   const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
