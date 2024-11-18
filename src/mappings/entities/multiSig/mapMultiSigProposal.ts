@@ -19,6 +19,7 @@ import {
   getNumberValue,
   getTextValue,
   is7xChain,
+  padId,
 } from '../../../utils';
 import { extractArgs } from '../common';
 
@@ -229,7 +230,7 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 
 // triggered on major chain upgrades only
 export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
-  const blockId = block.block.header.number.toString();
+  const blockId = padId(block.block.header.number.toString());
 
   const activeProposals = await store.getByFields<MultiSigProposal>('MultiSigProposal', [
     ['status', '=', MultiSigProposalStatusEnum.Active],

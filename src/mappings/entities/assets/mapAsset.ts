@@ -34,6 +34,7 @@ import {
   serializeTicker,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
+import { processInstructionId } from '../settlements/mapSettlement';
 
 export const createFunding = (
   blockId: string,
@@ -452,7 +453,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
       ({ event }) => event.method === 'InstructionExecuted'
     );
     if (instructionExecutedEvent) {
-      instructionId = getTextValue(instructionExecutedEvent.event.data[1]);
+      instructionId = processInstructionId(instructionExecutedEvent.event.data[1]);
     }
   }
 
@@ -556,7 +557,9 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       readonly instructionMemo: Option<U8aFixed>;
     };
 
-    instructionId = getTextValue(details.instructionId);
+    instructionId = details.instructionId?.isSome
+      ? processInstructionId(details.instructionId.unwrap())
+      : null;
     instructionMemo = bytesToString(details.instructionMemo);
 
     eventId = EventIdEnum.Transfer;

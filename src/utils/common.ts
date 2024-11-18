@@ -6,6 +6,15 @@ import { ErrorJson, FoundType } from '../types';
 
 export const emptyDid = '0x00'.padEnd(66, '0');
 
+const blockIdLength = 10;
+
+/**
+ * Left pad ID with 0 so that lexical order is equal to numeric order
+ */
+export const padId = (id: string): string => {
+  return id.padStart(blockIdLength, '0');
+};
+
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== 'string') {

@@ -1697,7 +1697,8 @@ enum AuthorizationStatusEnum {
 Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
 """
 type Authorization @entity {
-  id: ID!
+  id: ID! # Left padded AuthID
+  authId: Int! @index(unique: true) # AuthId as Int
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
   toId: String @index(unique: false)
@@ -1879,7 +1880,8 @@ If any party fails to satisfy any compliance or transfer restriction the Instruc
 and no movement of assets will occur.
 """
 type Instruction @entity {
-  id: ID! #instructionId
+  id: ID! # instructionId, left padded with 0
+  instructionId: Int! @index(unique: true) # instructionId as Int
   status: InstructionStatusEnum!
   venue: Venue @index(unique: false)
   type: InstructionTypeEnum!
