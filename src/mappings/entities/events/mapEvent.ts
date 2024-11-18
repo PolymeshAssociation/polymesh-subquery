@@ -8,6 +8,7 @@ import {
   extractOfferingAsset,
   extractTransferTo,
   logFoundType,
+  padId,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
 
@@ -16,7 +17,7 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
   const eventIdx = event.idx;
   const extrinsic = event.extrinsic;
   const genericEvent = event.event as GenericEvent;
-  const blockId = block.block.header.number.toString();
+  const blockId = padId(block.block.header.number.toString());
   const moduleId = genericEvent.section.toLowerCase();
   const eventId = genericEvent.method;
   const args = genericEvent.data;

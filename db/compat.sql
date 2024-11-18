@@ -42,24 +42,3 @@ CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from at
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;
 DROP VIEW IF EXISTS data_extrinsic;
-
--- Add `created_at` to all application tables for backwards compatibility
-DO $$
-DECLARE
-    tbl_name text;
-    current_schema_name text;
-BEGIN
-    -- Get the current schema name
-    SELECT current_schema() INTO current_schema_name;
-
-    FOR tbl_name IN
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = current_schema_name AND table_type = 'BASE TABLE'
-    LOOP
-        EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;', tbl_name);
-    END LOOP;
-END $$;
-
--- Add `updated_at` to subquery_versions for SDK <= v24.5.6 support
-ALTER TABLE subquery_versions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;

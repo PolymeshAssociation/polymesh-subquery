@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { SubstrateExtrinsic } from '@subql/types';
-import { JSONStringifyExceptStringAndNull, camelToSnakeCase } from './common';
+import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
 import { HandlerArgs } from '../mappings/entities/common';
 import { CallIdEnum, ModuleIdEnum, EventIdEnum } from 'src/types';
 import { PolyxTransactionProps } from '../types/models/PolyxTransaction';
@@ -67,8 +67,8 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     ...getExtrinsicDetails(blockId, extrinsic),
     datetime,
     eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdBlockId: padId(blockId),
+    updatedBlockId: padId(blockId),
   };
 };
 

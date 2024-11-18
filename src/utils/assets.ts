@@ -10,6 +10,7 @@ import {
   getTextValue,
   hexToString,
   is7xChain,
+  padId,
   serializeTicker,
 } from './common';
 
@@ -101,7 +102,7 @@ export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise
   const rawBytes = blake2AsU8a(data, 128);
 
   if (!genesisHash) {
-    ({ hash: genesisHash } = await Block.get('0'));
+    ({ hash: genesisHash } = await Block.get(padId('0')));
   }
 
   // Current staging chain already migrated the old ticker into asset IDs without the valid UUID logic
