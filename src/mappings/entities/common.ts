@@ -2,6 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { FunctionPropertyNames } from '@subql/types-core';
 import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
+import { padId } from '../../utils';
 
 export type Attributes<T> = Omit<
   T,
@@ -32,7 +33,7 @@ export const getAsset = async (assetId: string): Promise<Asset> => {
 
 export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
   return {
-    blockId: event.block.block.header.number.toString(),
+    blockId: padId(event.block.block.header.number.toString()),
     eventId: event.event.method as EventIdEnum,
     moduleId: event.event.section.toLowerCase() as ModuleIdEnum,
     params: event.event.data,

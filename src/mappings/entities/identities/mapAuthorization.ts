@@ -1,3 +1,4 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Authorization, AuthorizationStatusEnum, AuthTypeEnum, EventIdEnum } from '../../../types';
 import {
@@ -6,6 +7,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getTextValue,
+  padId,
   serializeAccount,
 } from '../../../utils';
 import { extractArgs } from '../common';
@@ -17,11 +19,16 @@ const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus
   [EventIdEnum.AuthorizationRejected, AuthorizationStatusEnum.Rejected],
 ]);
 
+const processAuthId = (id: Codec): string => {
+  return padId(getTextValue(id));
+};
+
 export async function handleAuthorization(event: SubstrateEvent): Promise<void> {
   const { eventId, blockId, params, eventIdx, block } = extractArgs(event);
 
   if (authorizationEventStatusMapping.has(eventId)) {
-    const auth = await Authorization.get(params[2].toString());
+    const authId = processAuthId(params[2]);
+    const auth = await Authorization.get(authId);
     auth.status = authorizationEventStatusMapping.get(eventId);
     auth.updatedBlockId = blockId;
 
@@ -31,9 +38,10 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
 
     // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
     await createIdentityIfNotExists(fromId, blockId, eventId, eventIdx, block);
-
+    const authId = processAuthId(params[3]);
     await Authorization.create({
-      id: getTextValue(params[3]),
+      id: authId,
+      authId: Number(authId),
       fromId,
       toId: getTextValue(params[1]),
       toKey: serializeAccount(params[2]),

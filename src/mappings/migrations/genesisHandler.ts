@@ -5,7 +5,7 @@ import {
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
-import { capitalizeFirstLetter, extractString, extractValue } from '../../utils';
+import { capitalizeFirstLetter, extractString, extractValue, padId } from '../../utils';
 import { getAccountId, systematicIssuers } from '../consts';
 import {
   createAccount,
@@ -27,7 +27,7 @@ type DidWithAccount = { did: string; accountId: string };
  */
 const insertGenesisBlock = async (datetime: Date) =>
   Block.create({
-    id: '0',
+    id: padId('0'),
     blockId: 0,
     parentId: 0,
     hash: chainId,

@@ -15,6 +15,7 @@ import {
   getStringArrayValue,
   getTextValue,
   is7xChain,
+  padId,
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
@@ -110,6 +111,10 @@ const updateLegs = async (
   return store.bulkUpdate('Leg', updatedLegs);
 };
 
+export const processInstructionId = (id: Codec): string => {
+  return padId(getTextValue(id));
+};
+
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
   const instruction = await Instruction.get(instructionId);
 
@@ -150,7 +155,7 @@ const mapAutomaticAffirmation = async (
   eventIndex: number
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawPortfolio, rawInstructionId] = params;
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
 
   const automaticAffirmationEvent = InstructionEvent.create({
@@ -228,11 +233,12 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     legs = await getLegsValue(rawLegs, block);
   }
 
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const memo = bytesToString(rawOptMemo);
 
   const instruction = Instruction.create({
     id: instructionId,
+    instructionId: Number(instructionId),
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(rawVenueId),
     ...typeDetails,
@@ -321,7 +327,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
 
   const [, rawPortfolio, rawInstructionId] = params;
 
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
 
   const partyId = getPartyId(instructionId, did, false);
@@ -372,7 +378,7 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
 
   const [, rawPortfolio, rawInstructionId] = params;
 
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
 
   const partyId = getPartyId(instructionId, did, false);
@@ -438,7 +444,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
   const [rawIdentityId, rawInstructionId] = params;
 
   const identityId = getTextValue(rawIdentityId);
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
 
   const instruction = await getInstruction(instructionId);
 
@@ -484,7 +490,7 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
   const [, rawInstructionId] = params;
 
   const address = getSignerAddress(extrinsic);
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
   instruction.status = instructionStatusMap[eventId];
@@ -515,7 +521,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
 
   const manuallyExecutedEvent = InstructionEvent.create({
     id: `${blockId}/${eventIdx}`,
-    instructionId: getTextValue(rawInstructionId),
+    instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.SettlementManuallyExecuted,
     eventIdx,
     identity: getTextValue(rawIdentityId),
@@ -533,7 +539,7 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   const { params, eventId, eventIdx, blockId } = extractArgs(event);
   const [rawInstructionId, rawDispatchError] = params;
 
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
   const failureReason = getErrorDetails(rawDispatchError);
@@ -559,7 +565,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
   const [rawIdentityId, rawInstructionId, expiryOpt] = params;
 
   const identityId = getTextValue(rawIdentityId);
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const expiry = getDateValue(expiryOpt);
 
   const partyId = getPartyId(instructionId, identityId, true);
@@ -578,7 +584,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
 
   const mediatorAffirmationEvent = InstructionEvent.create({
     id: `${blockId}/${eventIdx}`,
-    instructionId: getTextValue(rawInstructionId),
+    instructionId,
     event: InstructionEventEnum.MediatorAffirmationReceived,
     eventIdx,
     identity: identityId,
@@ -597,7 +603,7 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
 
   const affirmationWithdrawnEvent = InstructionEvent.create({
     id: `${blockId}/${eventIdx}`,
-    instructionId: getTextValue(rawInstructionId),
+    instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
     eventIdx,
     identity: identityId,
@@ -617,7 +623,7 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
 export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx } = extractArgs(event);
   const [rawInstructionId, rawIdentityIds] = params;
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const identityIds = getStringArrayValue(rawIdentityIds);
 
   const instruction = await getInstruction(instructionId);
@@ -656,7 +662,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   const { params, blockId, eventIdx } = extractArgs(event);
   const [rawIdentityId, rawInstructionId, rawLegId, rawReceiptUid, rawSigner, rawMetadata] = params;
   const identityId = getTextValue(rawIdentityId);
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
   const legId = getNumberValue(rawLegId);
   const signer = getTextValue(rawSigner);
   const uid = getNumberValue(rawReceiptUid);
@@ -688,7 +694,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 
   const receiptEvent = InstructionEvent.create({
     id: `${blockId}/${eventIdx}/receipt/${legId}`,
-    instructionId: getTextValue(rawInstructionId),
+    instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.ReceiptClaimed,
     eventIdx,
     identity: identityId,
