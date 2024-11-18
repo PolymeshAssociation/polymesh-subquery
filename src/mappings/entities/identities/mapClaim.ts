@@ -89,7 +89,7 @@ const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promis
 };
 
 export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, params } = extractArgs(event);
+  const { blockId, eventIdx, block, params, blockEventId } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
   const target = getTextValue(params[0]);
 
@@ -113,7 +113,14 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
   const filterExpiry = claimExpiry || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
-  await createIdentityIfNotExists(target, blockId, EventIdEnum.ClaimAdded, eventIdx, block);
+  await createIdentityIfNotExists(
+    target,
+    blockId,
+    EventIdEnum.ClaimAdded,
+    eventIdx,
+    block,
+    blockEventId
+  );
 
   await Claim.create({
     id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
@@ -131,6 +138,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     createdBlockId: blockId,
     updatedBlockId: blockId,
     customClaimTypeId,
+    createdEventId: blockEventId,
   }).save();
 
   if (scope) {

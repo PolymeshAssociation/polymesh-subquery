@@ -12,13 +12,14 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
     blockId,
     eventIdx,
     block: { timestamp: datetime },
+    blockEventId,
   } = extractArgs(event);
   const [rawDid, rawBridgeDetails] = params;
 
   const { recipient, amount, ...rest } = JSON.parse(rawBridgeDetails.toString());
 
   await BridgeEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     identityId: getTextValue(rawDid),
     recipient,
     amount: BigInt(amount) / BigInt(1000000),
@@ -27,5 +28,6 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
     datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 }

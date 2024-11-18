@@ -103,9 +103,7 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
     if (transferPolyxTransaction && amount === transferPolyxTransaction.amount) {
       // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
       // We ignore this case to insert in PolyxTransaction
-      Object.assign(transferPolyxTransaction, {
-        eventId: EventIdEnum.TreasuryDisbursement,
-      });
+      transferPolyxTransaction.eventId = EventIdEnum.TreasuryDisbursement;
       await transferPolyxTransaction.save();
       return;
     }
@@ -152,11 +150,9 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
     if (endowedPolyxTransaction && amount === endowedPolyxTransaction.amount) {
       // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
       // We ignore this case to insert in PolyxTransaction
-      Object.assign(endowedPolyxTransaction, {
-        identityId,
-        address,
-        memo,
-      });
+      endowedPolyxTransaction.identityId = identityId;
+      endowedPolyxTransaction.address = address;
+      endowedPolyxTransaction.memo = memo;
       await endowedPolyxTransaction.save();
       return;
     }
@@ -193,12 +189,10 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
      * We also update the amount to get the exact value (since in treasury reimbursement, we calculate the amount as amount * 1.25 which can be off by some balance amount)
      */
     if (reimbursementTransaction) {
-      Object.assign(reimbursementTransaction, {
-        address,
-        amount,
-        moduleId: ModuleIdEnum.transactionpayment,
-        eventId: EventIdEnum.TransactionFeePaid,
-      });
+      reimbursementTransaction.address = address;
+      reimbursementTransaction.amount = amount;
+      reimbursementTransaction.moduleId = ModuleIdEnum.transactionpayment;
+      reimbursementTransaction.eventId = EventIdEnum.TransactionFeePaid;
       await reimbursementTransaction.save();
       return;
     }

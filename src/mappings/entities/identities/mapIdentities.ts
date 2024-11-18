@@ -30,11 +30,11 @@ const createHistoryEntry = async (
   address: string,
   blockId: string,
   datetime: Date,
-  eventIdx: number,
+  blockEventId: string,
   permissions?: PermissionsJson
 ): Promise<void> =>
   AccountHistory.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     eventId,
     account: address,
     identity,
@@ -96,7 +96,8 @@ export const createIdentityIfNotExists = async (
   blockId: string,
   eventId: EventIdEnum,
   eventIdx: number,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  blockEventId: string
 ): Promise<void> => {
   const identity = await Identity.get(did);
   if (!identity) {
@@ -116,6 +117,7 @@ export const createIdentityIfNotExists = async (
         identityId: did,
         number: 0,
         eventIdx,
+        createdEventId: blockEventId,
       },
       blockId
     );
@@ -125,7 +127,13 @@ export const createIdentityIfNotExists = async (
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const {
+    eventId,
+    createdBlockId: blockId,
+    datetime,
+    eventIdx,
+    blockEventId,
+  } = getEventParams(args);
 
   const [rawDid, rawAddress] = args.params;
 
@@ -135,12 +143,10 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   let defaultPortfolio;
   const identity = await Identity.get(did);
   if (identity) {
-    Object.assign(identity, {
-      primaryAccount: address,
-      updatedBlockId: blockId,
-      eventId,
-      datetime,
-    });
+    identity.primaryAccount = address;
+    identity.updatedBlockId = blockId;
+    identity.eventId = eventId;
+    identity.datetime = datetime;
     await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
@@ -164,6 +170,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
         identityId: did,
         number: 0,
         eventIdx,
+        createdEventId: blockEventId,
       },
       blockId
     );
@@ -318,12 +325,14 @@ export const handleSecondaryKeysPermissionsUpdated = async (
     throw new Error(`Permissions for account ${address} were not found`);
   }
 
-  const updatedPermissionsValue = getPermissions(updatedPermissions);
+  const { assets, portfolios, transactionGroups, transactions } =
+    getPermissions(updatedPermissions);
 
-  Object.assign(permissions, {
-    ...updatedPermissionsValue,
-    updatedBlockId: args.blockId,
-  });
+  permissions.assets = assets;
+  permissions.portfolios = portfolios;
+  permissions.transactions = transactions;
+  permissions.transactionGroups = transactionGroups;
+  permissions.updatedBlockId = args.blockId;
 
   await permissions.save();
 };
@@ -359,11 +368,9 @@ export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<
 
   const identity = await getIdentity(did);
 
-  Object.assign(identity, {
-    secondaryKeysFrozen: true,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.secondaryKeysFrozen = true;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   await identity.save();
 };
@@ -376,11 +383,9 @@ export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promis
 
   const identity = await getIdentity(did);
 
-  Object.assign(identity, {
-    secondaryKeysFrozen: false,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.secondaryKeysFrozen = false;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   await identity.save();
 };
@@ -443,7 +448,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
 
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
   const [rawDid, , newKey] = args.params;
 
@@ -456,19 +461,15 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     Permissions.get(identity.primaryAccount),
   ]);
 
-  Object.assign(identity, {
-    primaryAccount: address,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.primaryAccount = address;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   // remove the identity mapping from account and set permissions to null
-  Object.assign(account, {
-    identityId: undefined,
-    permissionsId: undefined,
-    eventId,
-    updatedBlockId: blockId,
-  });
+  account.identityId = undefined;
+  account.permissionsId = undefined;
+  account.eventId = eventId;
+  account.updatedBlockId = blockId;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { assets, portfolios, transactionGroups, transactions } = permissions || {
@@ -501,7 +502,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     // unlink the old account from the identity
     account.save(),
     Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx, {
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, blockEventId, {
       assets,
       portfolios,
       transactionGroups,
@@ -512,7 +513,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
   const [, rawAccount] = args.params;
   const address = getTextValue(rawAccount);
@@ -520,17 +521,15 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   const accountEntity = await Account.get(address);
   const did = accountEntity.identityId;
 
-  Object.assign(accountEntity, {
-    identityId: undefined,
-    permissionsId: undefined,
-    eventId,
-    updatedBlockId: blockId,
-  });
+  accountEntity.identityId = undefined;
+  accountEntity.permissionsId = undefined;
+  accountEntity.eventId = eventId;
+  accountEntity.updatedBlockId = blockId;
 
   await Promise.all([
     accountEntity.save(),
     Permissions.remove(address),
-    createHistoryEntry(eventId, did, address, blockId, datetime, eventIdx),
+    createHistoryEntry(eventId, did, address, blockId, datetime, blockEventId),
   ]);
 };
 

@@ -1,16 +1,17 @@
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../../types';
-import { camelToSnakeCase } from '../../../utils';
+import { camelToSnakeCase, padId } from '../../../utils';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
-  const blockId = extrinsic.block.block.header.number.toString();
+  const blockId = padId(extrinsic.block.block.header.number.toString());
   const extrinsicIdx = extrinsic.idx;
+  const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
   const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
 
   return Extrinsic.create({
-    id: `${blockId}/${extrinsicIdx}`,
+    id: extrinsicId,
     blockId,
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,

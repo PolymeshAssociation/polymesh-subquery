@@ -16,6 +16,7 @@ import {
   is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
+import { MultiSigSignerProps } from 'src/types/models/MultiSigSigner';
 
 export const createMultiSig = (
   address: string,
@@ -99,10 +100,8 @@ const handleMultiSigSignerStatus = async (
 
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params, block);
   const multiSigSigner = await MultiSigSigner.get(`${multisigId}/${signerType}/${signerValue}`);
-  Object.assign(multiSigSigner, {
-    status,
-    updatedBlockId: blockId,
-  });
+  multiSigSigner.status = status;
+  multiSigSigner.updatedBlockId = blockId;
   await multiSigSigner.save();
 };
 
@@ -124,15 +123,18 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
     blockId
   );
 
-  const signerParams = signers.map(({ signerType, signerValue }) => ({
-    id: `${multiSigAddress}/${signerType}/${signerValue}`,
-    multisigId: multiSigAddress,
-    signerType,
-    signerValue,
-    status: MultiSigSignerStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }));
+  const signerParams: MultiSigSignerProps[] = signers.map(
+    ({ signerType, signerValue }) =>
+      ({
+        id: `${multiSigAddress}/${signerType}/${signerValue}`,
+        multisigId: multiSigAddress,
+        signerType,
+        signerValue,
+        status: MultiSigSignerStatusEnum.Authorized,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      } satisfies MultiSigSignerProps)
+  );
 
   const promises = [multiSigPromise, store.bulkCreate('MultiSigSigner', signerParams)];
 
@@ -163,11 +165,8 @@ export const handleMultiSigRemovedAdmin = async (event: SubstrateEvent): Promise
   const multiSigAdmin = await MultiSigAdmin.get(`${multisigId}/${admin}`);
 
   if (multiSigAdmin) {
-    Object.assign(multiSigAdmin, {
-      status: MultiSigAdminStatusEnum.Removed,
-      updatedBlockId: blockId,
-    });
-
+    multiSigAdmin.status = MultiSigAdminStatusEnum.Removed;
+    multiSigAdmin.updatedBlockId = blockId;
     await multiSigAdmin.save();
   }
 };
@@ -192,15 +191,18 @@ export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Pr
 
   const signerDetails = getMultiSigSignersDetails(params, block);
 
-  const signerParams = signerDetails.map(({ multisigId, signerType, signerValue }) => ({
-    id: `${multisigId}/${signerType}/${signerValue}`,
-    multisigId,
-    signerType,
-    signerValue,
-    status: MultiSigSignerStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }));
+  const signerParams: MultiSigSignerProps[] = signerDetails.map(
+    ({ multisigId, signerType, signerValue }) =>
+      ({
+        id: `${multisigId}/${signerType}/${signerValue}`,
+        multisigId,
+        signerType,
+        signerValue,
+        status: MultiSigSignerStatusEnum.Authorized,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      } satisfies MultiSigSignerProps)
+  );
 
   await store.bulkCreate('MultiSigSigner', signerParams);
 };
@@ -225,12 +227,10 @@ export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promi
   );
 
   const existingSigners = multiSigSigners.filter(multiSigSigner => multiSigSigner);
-  existingSigners.forEach(multiSigSigner =>
-    Object.assign(multiSigSigner, {
-      status: MultiSigSignerStatusEnum.Removed,
-      updatedBlockId: blockId,
-    })
-  );
+  existingSigners.forEach(multiSigSigner => {
+    multiSigSigner.status = MultiSigSignerStatusEnum.Removed;
+    multiSigSigner.updatedBlockId = blockId;
+  });
 
   await Promise.all(existingSigners.map(existingSigner => existingSigner.save()));
 };
@@ -247,10 +247,8 @@ export const handleMultiSigSignaturesRequiredChanged = async (
 
   const multiSig = await MultiSig.get(multiSigAddress);
 
-  Object.assign(multiSig, {
-    signaturesRequired,
-    updatedBlockId: blockId,
-  });
+  multiSig.signaturesRequired = signaturesRequired;
+  multiSig.updatedBlockId = blockId;
 
   await multiSig.save();
 };

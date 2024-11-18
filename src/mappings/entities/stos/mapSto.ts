@@ -80,7 +80,7 @@ export const handleFundraiserWindowModified = async (event: SubstrateEvent): Pro
 };
 
 export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const { params, blockId, block, blockEventId } = extractArgs(event);
   const [
     rawInvestor,
     rawStoId,
@@ -101,7 +101,7 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
   );
 
   await Investment.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     investorId: getTextValue(rawInvestor),
     stoId: getNumberValue(rawStoId),
     offeringAssetId,

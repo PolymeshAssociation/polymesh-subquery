@@ -19,11 +19,13 @@ import {
   getNumberValue,
   getTextValue,
   is7xChain,
+  padId,
 } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, extrinsic, eventIdx, block } = extractArgs(event);
+  const { params, blockId, extrinsic, eventIdx, block, blockEventId, extrinsicId } =
+    extractArgs(event);
 
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
@@ -99,6 +101,8 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     status: MultiSigProposalStatusEnum.Active,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    extrinsicId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -113,10 +117,8 @@ const handleMultiSigProposalStatus = async (
 
   const proposal = await MultiSigProposal.get(`${multisigId}/${proposalId}`);
 
-  Object.assign(proposal, {
-    status,
-    updatedBlockId: blockId,
-  });
+  proposal.status = status;
+  proposal.updatedBlockId = blockId;
 
   await proposal.save();
 };
@@ -171,7 +173,7 @@ const handleMultiSigProposalVoteAction = async (
   event: SubstrateEvent,
   action: MultiSigProposalVoteActionEnum
 ) => {
-  const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
+  const { params, blockId, eventIdx, block, extrinsicIdx, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -204,9 +206,10 @@ const handleMultiSigProposalVoteAction = async (
       action,
       datetime: block.timestamp,
       eventIdx,
-      extrinsicIdx: extrinsic?.idx,
+      extrinsicIdx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      createdEventId: blockEventId,
     });
   }
 
@@ -229,7 +232,7 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 
 // triggered on major chain upgrades only
 export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
-  const blockId = block.block.header.number.toString();
+  const blockId = padId(block.block.header.number.toString());
 
   const activeProposals = await store.getByFields<MultiSigProposal>('MultiSigProposal', [
     ['status', '=', MultiSigProposalStatusEnum.Active],
@@ -254,10 +257,8 @@ export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Prom
 
   if (deletedProposals.length) {
     deletedProposals.forEach(proposal => {
-      Object.assign(proposal, {
-        status: MultiSigProposalStatusEnum.Deleted,
-        updatedBlockId: blockId,
-      });
+      proposal.status = MultiSigProposalStatusEnum.Deleted;
+      proposal.updatedBlockId = blockId;
     });
     await store.bulkUpdate('MultiSigProposal', deletedProposals);
   }

@@ -1584,6 +1584,7 @@ type BridgeEvent @entity {
   amount: BigInt!
   txHash: String! @index(unique: false)
   eventIdx: Int!
+  createdEvent: Event!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -1603,6 +1604,7 @@ type StakingEvent @entity {
   datetime: Date! @index
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -1617,6 +1619,7 @@ type TickerExternalAgentAction @entity {
   eventIdx: Int!
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -1707,6 +1710,7 @@ type Authorization @entity {
   status: AuthorizationStatusEnum!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -1738,6 +1742,7 @@ type TickerExternalAgent @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -1755,6 +1760,7 @@ type TickerExternalAgentHistory @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -1802,6 +1808,7 @@ type Portfolio @entity {
   deletedAt: Date
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 enum PortfolioMovementTypeEnum {
@@ -1879,7 +1886,7 @@ If any party fails to satisfy any compliance or transfer restriction the Instruc
 and no movement of assets will occur.
 """
 type Instruction @entity {
-  id: ID! #instructionId
+  id: ID!
   status: InstructionStatusEnum!
   venue: Venue @index(unique: false)
   type: InstructionTypeEnum!
@@ -1899,6 +1906,7 @@ type Instruction @entity {
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2027,6 +2035,7 @@ type InstructionEvent @entity {
   failureReason: ErrorJson
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2064,6 +2073,7 @@ type DistributionPayment @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2202,6 +2212,7 @@ type Claim @entity {
   revokeDate: BigInt
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2216,6 +2227,7 @@ type TrustedClaimIssuer @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2409,6 +2421,7 @@ type Asset @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2438,6 +2451,7 @@ type AssetTransaction @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2452,6 +2466,7 @@ type Funding @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 type AssetMandatoryMediator @entity {
@@ -2647,11 +2662,13 @@ type MultiSigProposal @entity {
   rejectionCount: Int!
   datetime: Date!
   eventIdx: Int!
-  extrinsicIdx: Int!
+  extrinsicIdx: Int
   params: MultiSigProposalParams!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
   createdBlock: Block!
   updatedBlock: Block!
+  extrinsic: Extrinsic
+  createdEvent: Event!
 }
 
 """
@@ -2675,6 +2692,7 @@ type MultiSigProposalVote @entity {
   extrinsicIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2724,6 +2742,7 @@ type ConfidentialAccount @entity {
   frozenForAsset: [String!]!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2736,6 +2755,7 @@ type ConfidentialVenue @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2756,6 +2776,7 @@ type ConfidentialAsset @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2772,6 +2793,7 @@ type ConfidentialAssetHolder @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2789,6 +2811,7 @@ type ConfidentialTransactionAffirmation @entity {
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 type AssetAuditorGroup @jsonField {
@@ -2825,6 +2848,7 @@ type ConfidentialTransaction @entity {
   pendingAffirmations: Int!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2844,6 +2868,7 @@ type ConfidentialAssetHistory @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
@@ -2857,6 +2882,7 @@ type ConfidentialAssetMovement @entity {
   proof: String!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """

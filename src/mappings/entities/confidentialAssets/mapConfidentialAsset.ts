@@ -8,6 +8,7 @@ import {
   getTextValue,
 } from '../../../utils/common';
 import { Attributes, extractArgs } from '../common';
+import { ConfidentialAssetMovementProps } from 'src/types/models/ConfidentialAssetMovement';
 
 export const getAuditorsAndMediators = (
   item: Codec
@@ -21,7 +22,7 @@ export const getAuditorsAndMediators = (
 };
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawCreator, rawAssetId, , rawAuditorsMediators] = params;
 
   const creatorId = getTextValue(rawCreator);
@@ -40,6 +41,7 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -64,7 +66,7 @@ export const handleConfidentialAssetIssuedOrBurned = async (
 };
 
 export const handleConfidentialVenueCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId } = extractArgs(event);
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
 
   const [rawCreator, rawVenueId] = params;
 
@@ -78,6 +80,7 @@ export const handleConfidentialVenueCreated = async (event: SubstrateEvent): Pro
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -151,7 +154,7 @@ export const handleAssetFrozenUnfrozen = async (event: SubstrateEvent): Promise<
 };
 
 export const handleConfidentialAssetMoveFunds = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, blockEventId } = extractArgs(event);
 
   const [, rawFrom, rawTo, rawProofs] = params;
 
@@ -160,15 +163,19 @@ export const handleConfidentialAssetMoveFunds = async (event: SubstrateEvent): P
 
   const proofs = JSON.parse(rawProofs.toString());
 
-  const proofParams = Object.keys(proofs).map(assetId => ({
-    id: `${blockId}/${eventIdx}`,
-    fromId,
-    toId,
-    assetId,
-    proof: proofs[assetId],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }));
+  const proofParams: ConfidentialAssetMovementProps[] = Object.keys(proofs).map(
+    assetId =>
+      ({
+        id: blockEventId,
+        fromId,
+        toId,
+        assetId,
+        proof: proofs[assetId],
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+        createdEventId: blockEventId,
+      } satisfies ConfidentialAssetMovementProps)
+  );
 
   await store.bulkCreate('ConfidentialAssetMovement', proofParams);
 };

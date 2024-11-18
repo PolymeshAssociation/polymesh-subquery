@@ -1,5 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import { Block } from '../../../types';
+import { padId } from '../../../utils';
 
 export const mapBlock = (block: SubstrateBlock): Block => {
   const header = block.block.header;
@@ -7,7 +8,7 @@ export const mapBlock = (block: SubstrateBlock): Block => {
   const countExtrinsics = block.block.extrinsics?.length;
 
   return Block.create({
-    id: `${blockId}`,
+    id: `${padId(blockId.toString())}`,
     blockId,
     parentId: blockId - 1,
     hash: header.hash.toHex(),

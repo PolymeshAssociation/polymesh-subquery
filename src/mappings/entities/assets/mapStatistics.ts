@@ -19,6 +19,7 @@ import {
   is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
+import { TransferComplianceProps } from 'src/types/models/TransferCompliance';
 
 export const getAssetIdForStatisticsEvent = (
   item: Codec,
@@ -127,7 +128,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           type: TransferComplianceTypeEnum.MaxInvestorCount,
           statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Count),
           value: BigInt(maxInvestorCount),
-        };
+        } satisfies Attributes<TransferCompliance>;
       }
       if (maxInvestorOwnership !== undefined) {
         return {
@@ -135,7 +136,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           type: TransferComplianceTypeEnum.MaxInvestorOwnership,
           statTypeId: getStatTypeId(assetId, StatOpTypeEnum.Balance),
           value: BigInt(maxInvestorOwnership),
-        };
+        } satisfies Attributes<TransferCompliance>;
       }
       if (claimCount !== undefined) {
         const { type: claimType, value: claimValue } = getStatClaim(claimCount[0]);
@@ -149,7 +150,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           claimIssuerId,
           min: BigInt(claimCount[2]),
           max: BigInt(claimCount[3]),
-        };
+        } satisfies Attributes<TransferCompliance>;
       }
       if (claimOwnership !== undefined) {
         const { type: claimType, value: claimValue } = getStatClaim(claimOwnership[0]);
@@ -163,7 +164,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
           claimIssuerId,
           min: BigInt(claimOwnership[2]),
           max: BigInt(claimOwnership[3]),
-        };
+        } satisfies Attributes<TransferCompliance>;
       }
     }
   );
@@ -250,7 +251,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
         Object.assign(transferCompliance, {
           ...condition,
           updatedBlockId: blockId,
-        });
+        } satisfies Partial<TransferComplianceProps>);
       } else {
         transferCompliance = TransferCompliance.create({
           id: statTypeId,
