@@ -14,6 +14,7 @@ import {
   camelToSnakeCase,
   capitalizeFirstLetter,
   getBooleanValue,
+  getFirstKeyFromJson,
   getMultiSigSigner,
   getNumberValue,
   getTextValue,
@@ -132,11 +133,16 @@ export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Pro
 };
 
 export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, block } = extractArgs(event);
 
   const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
 
-  const success = getBooleanValue(rawSuccess);
+  let success: boolean;
+  if (is7xChain(block)) {
+    success = getFirstKeyFromJson(rawSuccess) === 'ok';
+  } else {
+    success = getBooleanValue(rawSuccess);
+  }
 
   let status = MultiSigProposalStatusEnum.Success;
   if (!success) {
