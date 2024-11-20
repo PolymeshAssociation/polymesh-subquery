@@ -115,8 +115,9 @@ export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Pro
       MultiSigProposalStatusEnum.Approved,
       blockId
     );
+  } else {
+    await handleMultiSigVoteApproved(event);
   }
-  await handleMultiSigVoteApproved(event);
 };
 
 export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Promise<void> => {
