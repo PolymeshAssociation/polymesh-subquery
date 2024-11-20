@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   CallIdEnum,
   ModuleIdEnum,
@@ -213,13 +213,18 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 };
 
 // triggered on major chain upgrades only
-export const handleMultiSigProposalDeleted = async (blockId: string): Promise<void> => {
+export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
+  const blockId = block.block.header.number.toString();
+
   const activeProposals = await store.getByFields<MultiSigProposal>('MultiSigProposal', [
     ['status', '=', MultiSigProposalStatusEnum.Active],
   ]);
 
+  const is7 = is7xChain(block);
+  const query = is7 ? api.query.multiSig.proposalStates : api.query.multiSig.proposalDetail;
+
   const queryMultiParams = activeProposals.map(proposal => [
-    api.query.multiSig.proposalDetail,
+    query,
     [proposal.multisigId, proposal.proposalId],
   ]);
 

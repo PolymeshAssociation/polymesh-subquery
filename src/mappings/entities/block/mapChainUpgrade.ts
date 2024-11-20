@@ -24,7 +24,7 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
 
     if (txVersion !== transactionVersion) {
       logger.info(`Major chain upgrade found with transaction version upgraded `);
-      await handleMultiSigProposalDeleted(substrateEvent.block.block.header.number.toString());
+      await handleMultiSigProposalDeleted(substrateEvent.block);
       transactionVersion = txVersion;
     } else {
       logger.info(`Transaction version was not changed for the chain upgrade`);
