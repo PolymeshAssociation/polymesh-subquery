@@ -288,6 +288,7 @@ enum EventIdEnum {
   SlashReported
   StakersElected
   ValidatorPrefsSet
+  StakingElectionFailed
 
   ## offences ##
   Offence

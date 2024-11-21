@@ -8,6 +8,7 @@ const bondedUnbondedOrReward = new Set([
   EventIdEnum.Bonded,
   EventIdEnum.Unbonded,
   EventIdEnum.Reward,
+  EventIdEnum.Rewarded, // from 7.x Reward was renamed to Rewarded
 ]);
 
 /**
@@ -20,7 +21,7 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   let nominatedValidators: string[];
   let identityId: string;
 
-  if (eventId === EventIdEnum.Slash) {
+  if ([EventIdEnum.Slash, EventIdEnum.Slashed].includes(eventId)) {
     const [rawAccount, rawAmount] = params;
 
     stashAccount = getTextValue(rawAccount);

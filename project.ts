@@ -268,8 +268,10 @@ const filters = {
     PermissionedIdentityAdded: [],
     PermissionedIdentityRemoved: [],
     Reward: ['handleStakingEvent', 'handleReward'],
+    Rewarded: ['handleStakingEvent', 'handleReward'],
     RewardPaymentSchedulingInterrupted: [],
     Slash: ['handleStakingEvent'],
+    Slashed: ['handleStakingEvent'],
     SlashingAllowedForChanged: [],
     SolutionStored: [],
     StakingElection: [],
@@ -283,6 +285,7 @@ const filters = {
     SlashReported: [],
     StakersElected: [],
     ValidatorPrefsSet: [],
+    StakingElectionFailed: [],
   },
   statistics: {
     AssetStatsUpdated: [],
