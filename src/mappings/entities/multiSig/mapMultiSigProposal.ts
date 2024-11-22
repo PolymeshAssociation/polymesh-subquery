@@ -13,6 +13,7 @@ import {
 import {
   camelToSnakeCase,
   capitalizeFirstLetter,
+  extractString,
   getBooleanValue,
   getFirstKeyFromJson,
   getMultiSigSigner,
@@ -47,7 +48,21 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     };
   };
 
-  if (args?.bridge_txs) {
+  const underlyingCall = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
+
+  if (underlyingCall === CallIdEnum.approve_join_identity) {
+    /**
+     * in case of `ProposalAdded` being triggered by `approve_join_identity` extrinsic,
+     * there are no proposal args in the extrinsics params, instead only an `auth_id` is present.
+     */
+    proposalParams.proposals = [
+      {
+        module: ModuleIdEnum.multisig,
+        call: CallIdEnum.join_identity,
+        args: JSON.stringify({ authId: extractString(args, 'auth_id') }),
+      },
+    ];
+  } else if (args?.bridge_txs) {
     // for extrinsic bridge.batch_propose_bridge_tx
     proposalParams.bridge = args.bridge_txs;
     proposalParams.isBridge = true;
