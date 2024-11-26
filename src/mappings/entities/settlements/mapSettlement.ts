@@ -674,7 +674,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   const partyId = getPartyId(instructionId, identityId, false);
 
   const affirmation = InstructionAffirmation.create({
-    id: partyId,
+    id: `${partyId}/${signer}/${uid}`,
     isMediator: false,
     isAutomaticallyAffirmed: false,
     instructionId,
