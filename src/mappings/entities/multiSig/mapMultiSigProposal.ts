@@ -12,7 +12,6 @@ import {
 } from '../../../types';
 import {
   camelToSnakeCase,
-  capitalizeFirstLetter,
   extractString,
   getBooleanValue,
   getFirstKeyFromJson,
@@ -42,7 +41,7 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
 
   const callToProposalParam = (call: any): SingleProposal => {
     return {
-      module: capitalizeFirstLetter(call.section) as ModuleIdEnum,
+      module: call.section.toLowerCase() as ModuleIdEnum,
       call: camelToSnakeCase(call.method) as CallIdEnum,
       args: JSON.stringify(call.args),
     };
@@ -71,7 +70,8 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     // for extrinsic bridge.propose_bridge_tx
     proposalParams.bridge = [args.bridge_tx];
     proposalParams.isBridge = true;
-  } else if (args?.proposal?.method === 'batch') {
+  } else if (args?.proposal?.method?.startsWith('batch')) {
+    // for batch, batch_atomic, batch_all, batch_optimistic
     proposalParams.isBatch = true;
     proposalParams.proposals = args?.proposal?.args?.calls?.map(callToProposalParam);
     proposalParams.expiry = args.expiry;
