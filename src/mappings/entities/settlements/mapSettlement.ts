@@ -301,7 +301,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
           promises.push(automaticAffirmation.save());
           promises.push(automaticAffirmationEvent.save());
         };
-        automaticAffirmationPromises.push(automaticAffirmationPromise);
+        automaticAffirmationPromises.push(automaticAffirmationPromise());
       }
     });
 
@@ -425,8 +425,12 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
    * The below logic handles the case after 6.3.1 when ordering was correct and we can safely assume instruction exists here
    */
   if (specVersion >= 6003001 || specName === 'polymesh_private_dev') {
-    const promises = await mapAutomaticAffirmation(params, blockId, eventIdx);
-    await Promise.all(promises);
+    const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
+      params,
+      blockId,
+      eventIdx
+    );
+    await Promise.all([instructionEvent.save(), instructionAffirmation.save()]);
   }
 };
 
