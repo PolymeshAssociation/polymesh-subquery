@@ -543,6 +543,7 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   const failureReason = getErrorDetails(rawDispatchError);
 
   instruction.updatedBlockId = blockId;
+  instruction.status = InstructionStatusEnum.Failed;
   instruction.failureReason = failureReason;
 
   const finalizedEvent = InstructionEvent.create({
