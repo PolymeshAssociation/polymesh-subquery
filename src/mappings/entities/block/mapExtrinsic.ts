@@ -5,12 +5,13 @@ import { camelToSnakeCase, padId } from '../../../utils';
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = padId(extrinsic.block.block.header.number.toString());
   const extrinsicIdx = extrinsic.idx;
+  const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
   const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
 
   return Extrinsic.create({
-    id: `${blockId}/${extrinsicIdx}`,
+    id: extrinsicId,
     blockId,
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,

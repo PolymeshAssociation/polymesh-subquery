@@ -32,7 +32,7 @@ export const handleDistributionRemoved = async (event: SubstrateEvent): Promise<
 };
 
 export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventId, block, eventIdx } = extractArgs(event);
+  const { params, blockId, eventId, block, blockEventId } = extractArgs(event);
   const [, rawClaimantDid, rawCaId, , rawAmount, rawTax] = params;
 
   const targetId = getTextValue(rawClaimantDid);
@@ -46,7 +46,7 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
   distribution.updatedBlockId = blockId;
 
   const distributionPayment = DistributionPayment.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
@@ -57,13 +57,14 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   });
 
   await Promise.all([distributionPayment.save(), distribution.save()]);
 };
 
 export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, eventId } = extractArgs(event);
+  const { params, blockId, block, eventId, blockEventId } = extractArgs(event);
   const [rawEventDid, rawCaId, rawAmount] = params;
 
   const targetId = getTextValue(rawEventDid);
@@ -71,7 +72,7 @@ export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
   const amount = getBigIntValue(rawAmount);
 
   await DistributionPayment.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     distributionId: `${assetId}/${localId}`,
     targetId,
     eventId,
@@ -82,5 +83,6 @@ export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   }).save();
 };

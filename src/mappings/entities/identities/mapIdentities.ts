@@ -30,11 +30,11 @@ const createHistoryEntry = async (
   address: string,
   blockId: string,
   datetime: Date,
-  eventIdx: number,
+  blockEventId: string,
   permissions?: PermissionsJson
 ): Promise<void> =>
   AccountHistory.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     eventId,
     account: address,
     identity,
@@ -96,7 +96,8 @@ export const createIdentityIfNotExists = async (
   blockId: string,
   eventId: EventIdEnum,
   eventIdx: number,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  blockEventId: string
 ): Promise<void> => {
   const identity = await Identity.get(did);
   if (!identity) {
@@ -116,6 +117,7 @@ export const createIdentityIfNotExists = async (
         identityId: did,
         number: 0,
         eventIdx,
+        blockEventId,
       },
       blockId
     );
@@ -125,7 +127,13 @@ export const createIdentityIfNotExists = async (
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const {
+    eventId,
+    createdBlockId: blockId,
+    datetime,
+    eventIdx,
+    blockEventId,
+  } = getEventParams(args);
 
   const [rawDid, rawAddress] = args.params;
 
@@ -164,6 +172,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
         identityId: did,
         number: 0,
         eventIdx,
+        blockEventId,
       },
       blockId
     );
@@ -443,7 +452,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
 
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
   const [rawDid, , newKey] = args.params;
 
@@ -501,7 +510,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     // unlink the old account from the identity
     account.save(),
     Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, eventIdx, {
+    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, blockEventId, {
       assets,
       portfolios,
       transactionGroups,
@@ -512,7 +521,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
   const [, rawAccount] = args.params;
   const address = getTextValue(rawAccount);
@@ -530,7 +539,7 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   await Promise.all([
     accountEntity.save(),
     Permissions.remove(address),
-    createHistoryEntry(eventId, did, address, blockId, datetime, eventIdx),
+    createHistoryEntry(eventId, did, address, blockId, datetime, blockEventId),
   ]);
 };
 

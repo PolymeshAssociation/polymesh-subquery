@@ -47,7 +47,7 @@ const getPendingAffirmationCountFromLegs = (legs: ConfidentialLegDetails[]): num
 export const handleConfidentialTransactionCreated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId } = extractArgs(event);
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [, rawVenueId, rawTransactionId, rawLegs, rawMemo] = params;
 
   const venueId = getTextValue(rawVenueId);
@@ -65,6 +65,7 @@ export const handleConfidentialTransactionCreated = async (
     memo,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   }).save();
 
   const legPromises = legs.map(async (leg, index) => {
@@ -154,7 +155,7 @@ const getAffirmationTypeAndProofs = (rawParty: Codec): AffirmationsAndAffirmatio
 export const handleConfidentialTransactionAffirmed = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId } = extractArgs(event);
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [rawDid, rawTransactionId, rawLegId, rawParty, rawPendingAffirmations] = params;
 
   const did = getTextValue(rawDid);
@@ -174,6 +175,7 @@ export const handleConfidentialTransactionAffirmed = async (
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   });
 
   const transaction = await ConfidentialTransaction.get(transactionId);

@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { SubstrateExtrinsic } from '@subql/types';
 import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
 import { HandlerArgs } from '../mappings/entities/common';
 import { CallIdEnum, ModuleIdEnum, EventIdEnum } from 'src/types';
-import { PolyxTransactionProps } from '../types/models/PolyxTransaction';
 
 export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {
@@ -25,19 +23,6 @@ export const extractEventArgs = (args: any[]) => {
   };
 };
 
-const getExtrinsicDetails = (
-  blockId: string,
-  extrinsic?: SubstrateExtrinsic
-): Pick<PolyxTransactionProps, 'callId' | 'extrinsicId'> => {
-  let callId: CallIdEnum;
-  let extrinsicId: string;
-  if (extrinsic) {
-    callId = camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum;
-    extrinsicId = `${blockId}/${extrinsic.idx}`;
-  }
-  return { callId, extrinsicId };
-};
-
 type EventParams = {
   id: string;
   moduleId: ModuleIdEnum;
@@ -45,9 +30,10 @@ type EventParams = {
   callId?: CallIdEnum;
   extrinsicId?: string;
   datetime: Date;
-  eventIdx;
+  eventIdx: number;
   createdBlockId: string;
   updatedBlockId: string;
+  blockEventId: string;
 };
 
 export const getEventParams = (args: HandlerArgs): EventParams => {
@@ -58,17 +44,23 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     eventIdx,
     block: { timestamp: datetime },
     extrinsic,
+    blockEventId,
+    extrinsicId,
   } = args;
 
   return {
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     moduleId,
     eventId,
-    ...getExtrinsicDetails(blockId, extrinsic),
+    extrinsicId,
+    callId: extrinsic
+      ? (camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum)
+      : undefined,
     datetime,
     eventIdx,
     createdBlockId: padId(blockId),
     updatedBlockId: padId(blockId),
+    blockEventId,
   };
 };
 

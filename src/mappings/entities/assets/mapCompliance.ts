@@ -98,7 +98,7 @@ export const handleComplianceRemoved = async (event: SubstrateEvent): Promise<vo
 export const handleTrustedDefaultClaimIssuerAdded = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId, block } = extractArgs(event);
+  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawIssuer] = params;
   const assetId = await getAssetId(rawAssetId, block);
@@ -111,6 +111,7 @@ export const handleTrustedDefaultClaimIssuerAdded = async (
     issuer,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   }).save();
 };
 

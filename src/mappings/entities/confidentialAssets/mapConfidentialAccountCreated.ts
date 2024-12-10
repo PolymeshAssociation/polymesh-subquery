@@ -4,7 +4,7 @@ import { getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleConfidentialAccountCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, params, eventIdx } = extractArgs(event);
+  const { blockId, params, eventIdx, blockEventId } = extractArgs(event);
 
   const [rawCreator, rawAccount] = params;
 
@@ -19,13 +19,14 @@ export const handleConfidentialAccountCreated = async (event: SubstrateEvent): P
     frozenForAsset: [],
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   }).save();
 };
 
 export const handleConfidentialAssetFrozenForAccount = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, params, eventIdx } = extractArgs(event);
+  const { blockId, params, eventIdx, blockEventId } = extractArgs(event);
   const [rawCreator, rawAccount, rawAsset] = params;
 
   const accountId = getTextValue(rawAccount);
@@ -49,6 +50,7 @@ export const handleConfidentialAssetFrozenForAccount = async (
       frozenForAsset: [assetId],
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      blockEventId,
     }).save();
   }
 };
@@ -56,7 +58,7 @@ export const handleConfidentialAssetFrozenForAccount = async (
 export const handleConfidentialAssetUnfrozenForAccount = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, params, eventIdx } = extractArgs(event);
+  const { blockId, params, eventIdx, blockEventId } = extractArgs(event);
 
   const [rawCreator, rawAccount, rawAsset] = params;
 
@@ -81,6 +83,7 @@ export const handleConfidentialAssetUnfrozenForAccount = async (
       frozenForAsset: [],
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      blockEventId,
     }).save();
   }
 };

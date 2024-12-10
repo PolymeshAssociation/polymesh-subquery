@@ -1,6 +1,6 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateEvent } from '@subql/types';
-import { Event, EventIdEnum, ModuleIdEnum } from '../../../types';
+import { Event } from '../../../types';
 import {
   extractClaimInfo,
   extractCorporateActionTicker,
@@ -8,22 +8,26 @@ import {
   extractOfferingAsset,
   extractTransferTo,
   logFoundType,
-  padId,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
+import { extractArgs } from '../common';
 
 export function handleToolingEvent(event: SubstrateEvent): Event {
-  const block = event.block;
-  const eventIdx = event.idx;
-  const extrinsic = event.extrinsic;
+  const {
+    block,
+    blockEventId,
+    eventIdx,
+    extrinsicId,
+    extrinsicIdx,
+    blockId,
+    eventId,
+    moduleId,
+    params: args,
+  } = extractArgs(event);
   const genericEvent = event.event as GenericEvent;
-  const blockId = padId(block.block.header.number.toString());
-  const moduleId = genericEvent.section.toLowerCase();
-  const eventId = genericEvent.method;
-  const args = genericEvent.data;
 
   const harvesterLikeArgs = args.map((arg, i) => {
-    let type;
+    let type: string;
     const typeName = genericEvent.meta.fields[i].typeName;
     if (typeName.isSome) {
       // for metadata >= v14
@@ -41,19 +45,14 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
 
   const { claimExpiry, claimIssuer, claimScope, claimType } = extractClaimInfo(harvesterLikeArgs);
 
-  let extrinsicId: string;
-  if (extrinsic) {
-    extrinsicId = `${blockId}/${extrinsic?.idx}`;
-  }
-
   return Event.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     blockId,
     eventIdx,
-    extrinsicIdx: extrinsic?.idx,
+    extrinsicIdx,
     specVersionId: block.specVersion,
-    eventId: eventId as EventIdEnum,
-    moduleId: moduleId as ModuleIdEnum,
+    eventId,
+    moduleId,
     attributesTxt: JSON.stringify(harvesterLikeArgs),
     eventArg_0,
     eventArg_1,

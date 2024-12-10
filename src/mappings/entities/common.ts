@@ -11,14 +11,15 @@ export type Attributes<T> = Omit<
 
 export interface HandlerArgs {
   blockId: string;
+  blockEventId: string;
   moduleId: ModuleIdEnum;
   eventId: EventIdEnum;
   eventIdx: number;
   params: Codec[];
-
   block: SubstrateBlock;
-
   extrinsic?: SubstrateExtrinsic;
+  extrinsicId?: string;
+  extrinsicIdx?: number;
 }
 
 export const getAsset = async (assetId: string): Promise<Asset> => {
@@ -32,13 +33,22 @@ export const getAsset = async (assetId: string): Promise<Asset> => {
 };
 
 export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
+  const blockId = padId(event.block.block.header.number.toString());
+  const blockEventId = `${blockId}/${padId(event.idx.toString())}`;
+  const extrinsicId = event.extrinsic?.idx
+    ? `${blockId}/${padId(event.extrinsic.idx.toString())}`
+    : undefined;
+
   return {
-    blockId: padId(event.block.block.header.number.toString()),
+    blockId,
+    blockEventId,
     eventId: event.event.method as EventIdEnum,
     moduleId: event.event.section.toLowerCase() as ModuleIdEnum,
     params: event.event.data,
     eventIdx: event.idx,
     block: event.block,
     extrinsic: event.extrinsic,
+    extrinsicId,
+    extrinsicIdx: event.extrinsic?.idx,
   };
 };

@@ -1584,6 +1584,7 @@ type BridgeEvent @entity {
   amount: BigInt!
   txHash: String! @index(unique: false)
   eventIdx: Int!
+  blockEvent: Event!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -1603,6 +1604,7 @@ type StakingEvent @entity {
   datetime: Date! @index
   createdBlock: Block!
   updatedBlock: Block!
+  blockEvent: Event!
 }
 
 """
@@ -1615,6 +1617,7 @@ type TickerExternalAgentAction @entity {
   palletName: String! @index(unique: false)
   eventId: EventIdEnum!
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block! @index(unique: false)
   updatedBlock: Block!
 }
@@ -1736,6 +1739,7 @@ type TickerExternalAgent @entity {
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
   eventIdx: Int!
+  blockEvent: Event!
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -1754,6 +1758,7 @@ type TickerExternalAgentHistory @entity {
   type: String!
   permissions: String
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -1800,6 +1805,7 @@ type Portfolio @entity {
   name: String
   custodian: Identity
   eventIdx: Int!
+  blockEvent: Event!
   deletedAt: Date
   createdBlock: Block!
   updatedBlock: Block!
@@ -2023,6 +2029,7 @@ type InstructionEvent @entity {
   instruction: Instruction! @index(unique: false)
   event: InstructionEventEnum!
   eventIdx: Int!
+  blockEvent: Event!
   identity: String @index(unique: false)
   portfolio: Int
   offChainReceipt: OffChainReceipt
@@ -2066,6 +2073,7 @@ type DistributionPayment @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  blockEvent: Event!
 }
 
 """
@@ -2190,6 +2198,7 @@ e.g. The Identity belongs to an accredited, US citizen
 type Claim @entity {
   id: ID!
   eventIdx: Int! @index(unique: false)
+  blockEvent: Event!
   target: Identity! @index(unique: false)
   issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
@@ -2216,6 +2225,7 @@ type TrustedClaimIssuer @entity {
   asset: Asset! @index(unique: false)
   issuer: String! @index(unique: false)
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2409,6 +2419,7 @@ type Asset @entity {
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2429,6 +2440,7 @@ type AssetTransaction @entity {
   nftIds: [BigInt]
   eventId: EventIdEnum!
   eventIdx: Int!
+  blockEvent: Event!
   "`extrinsicIdx` will be null for scheduled transactions"
   extrinsicIdx: Int
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
@@ -2454,6 +2466,7 @@ type Funding @entity {
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
+  blockEvent: Event!
 }
 
 type AssetMandatoryMediator @entity {
@@ -2513,6 +2526,7 @@ type PolyxTransaction @entity {
   extrinsic: Extrinsic
   datetime: Date!
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2649,11 +2663,13 @@ type MultiSigProposal @entity {
   rejectionCount: Int!
   datetime: Date!
   eventIdx: Int!
-  extrinsicIdx: Int!
+  blockEvent: Event!
+  extrinsicIdx: Int
   params: MultiSigProposalParams!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
   createdBlock: Block!
   updatedBlock: Block!
+  extrinsic: Extrinsic
 }
 
 """
@@ -2674,6 +2690,7 @@ type MultiSigProposalVote @entity {
   action: MultiSigProposalVoteActionEnum
   datetime: Date!
   eventIdx: Int!
+  blockEvent: Event!
   extrinsicIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
@@ -2723,6 +2740,7 @@ type ConfidentialAccount @entity {
   account: String!
   creator: Identity!
   eventIdx: Int!
+  blockEvent: Event!
   frozenForAsset: [String!]!
   createdBlock: Block!
   updatedBlock: Block!
@@ -2736,6 +2754,7 @@ type ConfidentialVenue @entity {
   venueId: Int!
   creator: Identity!
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2756,6 +2775,7 @@ type ConfidentialAsset @entity {
   venueFiltering: Boolean!
   isFrozen: Boolean!
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2772,6 +2792,7 @@ type ConfidentialAssetHolder @entity {
   """
   amount: String
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2789,6 +2810,7 @@ type ConfidentialTransactionAffirmation @entity {
   status: AffirmStatusEnum!
   proofs: [SenderProof!]
   eventIdx: Int!
+  blockEvent: Event!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2821,6 +2843,7 @@ type ConfidentialTransaction @entity {
   status: ConfidentialTransactionStatusEnum!
   eventId: EventIdEnum!
   eventIdx: Int!
+  blockEvent: Event!
   legs: [ConfidentialLeg!]! @derivedFrom(field: "transaction")
   affirmations: [ConfidentialTransactionAffirmation!]! @derivedFrom(field: "transaction")
   memo: String
@@ -2840,6 +2863,7 @@ type ConfidentialAssetHistory @entity {
   amount: String!
   eventId: EventIdEnum!
   eventIdx: Int!
+  blockEvent: Event!
   extrinsicIdx: Int
   transaction: ConfidentialTransaction
   memo: String
@@ -2859,6 +2883,7 @@ type ConfidentialAssetMovement @entity {
   proof: String!
   createdBlock: Block!
   updatedBlock: Block!
+  blockEvent: Event!
 }
 
 """

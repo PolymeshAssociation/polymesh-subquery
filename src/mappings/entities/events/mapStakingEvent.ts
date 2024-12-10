@@ -15,7 +15,7 @@ const bondedUnbondedOrReward = new Set([
  * Subscribes to staking events
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
-  const { eventId, params, extrinsic, blockId, eventIdx, block } = extractArgs(event);
+  const { eventId, params, extrinsic, blockId, blockEventId, block } = extractArgs(event);
   let amount: bigint;
   let stashAccount: string;
   let nominatedValidators: string[];
@@ -45,7 +45,7 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   }
 
   await StakingEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     eventId,
     identityId,
     stashAccount,
@@ -55,5 +55,6 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    blockEventId,
   }).save();
 }

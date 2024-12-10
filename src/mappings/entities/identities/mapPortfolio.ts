@@ -57,9 +57,10 @@ export const createPortfolioIfNotExists = async (
   blockId: string,
   eventId: EventIdEnum,
   eventIdx: number,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  blockEventId: string
 ): Promise<void> => {
-  await createIdentityIfNotExists(identityId, blockId, eventId, eventIdx, block);
+  await createIdentityIfNotExists(identityId, blockId, eventId, eventIdx, block, blockEventId);
 
   const portfolio = await Portfolio.get(`${identityId}/${number}`);
   if (!portfolio) {
@@ -69,6 +70,7 @@ export const createPortfolioIfNotExists = async (
         number,
         name: '',
         eventIdx,
+        blockEventId,
       },
       blockId
     );
@@ -76,7 +78,7 @@ export const createPortfolioIfNotExists = async (
 };
 
 export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -91,6 +93,7 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
         number,
         name,
         eventIdx,
+        blockEventId,
       },
       blockId
     );
@@ -99,6 +102,7 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
       name,
       eventIdx,
       updatedBlockId: blockId,
+      blockEventId,
     });
 
     await portfolio.save();
@@ -153,7 +157,7 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
  * Handles old event for portfolio movement
  */
 export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, eventIdx } = extractArgs(event);
+  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawAssetId, rawAmount, rawMemo] = params;
 
   const address = getSignerAddress(extrinsic);
@@ -164,7 +168,7 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
   const memo = bytesToString(rawMemo);
 
   await PortfolioMovement.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     type: PortfolioMovementTypeEnum.Fungible,
@@ -178,7 +182,7 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
 };
 
 export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, eventIdx } = extractArgs(event);
+  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
   const address = getSignerAddress(extrinsic);
   const from = getPortfolioValue(rawFromPortfolio);
@@ -211,7 +215,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
   const memo = bytesToString(rawMemo);
 
   await PortfolioMovement.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     fromId: `${from.identityId}/${from.number}`,
     toId: `${to.identityId}/${to.number}`,
     type,
