@@ -47,7 +47,7 @@ const prepareLegCreateParams = async (
   instructionId: string,
   address: string,
   legDetails: LegDetails,
-  { eventIdx, eventId, block }: HandlerArgs
+  { eventIdx, eventId, block, blockEventId }: HandlerArgs
 ): Promise<Parameters<typeof Leg.create>[0]> => {
   const { from, fromPortfolio, to, toPortfolio, legIndex } = legDetails;
   const promises = [];
@@ -63,7 +63,8 @@ const prepareLegCreateParams = async (
           blockId,
           eventId,
           eventIdx,
-          block
+          block,
+          blockEventId
         )
       );
     }
@@ -74,7 +75,8 @@ const prepareLegCreateParams = async (
           blockId,
           eventId,
           eventIdx,
-          block
+          block,
+          blockEventId
         )
       );
     }
@@ -152,14 +154,15 @@ const createInstructionParty = async (
 const mapAutomaticAffirmation = async (
   params: Codec[],
   blockId: string,
-  eventIndex: number
+  eventIndex: number,
+  blockEventId: string
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawPortfolio, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
   const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
 
   const automaticAffirmationEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIndex}`,
+    id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionAutomaticallyAffirmed,
     eventIdx: eventIndex,
@@ -167,6 +170,7 @@ const mapAutomaticAffirmation = async (
     portfolio,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   const partyId = getPartyId(instructionId, did, false);
@@ -201,7 +205,7 @@ const mapAutomaticAffirmation = async (
  */
 export const handleInstructionCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { blockId, params, block, extrinsic, eventIdx } = args;
+  const { blockId, params, block, extrinsic, eventIdx, blockEventId } = args;
   const address = getSignerAddress(extrinsic);
 
   const [
@@ -272,13 +276,14 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   });
 
   const instructionCreatedEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionCreated,
     eventIdx,
     identity: creator,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   const promises = [
@@ -299,10 +304,12 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     block.events.forEach((event, eventIndex) => {
       if (event.event.method === EventIdEnum.InstructionAutomaticallyAffirmed) {
         const automaticAffirmationPromise = async () => {
+          const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
           const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
             event.event.data,
             blockId,
-            eventIndex
+            eventIndex,
+            blockEventId
           );
           promises.push(automaticAffirmation.save());
           promises.push(automaticAffirmationEvent.save());
@@ -322,7 +329,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
  *   - InstructionAffirmed
  */
 export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, blockId } = extractArgs(event);
+  const { params, extrinsic, eventIdx, blockId, blockEventId } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
   const [, rawPortfolio, rawInstructionId] = params;
@@ -353,7 +360,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   }
 
   const affirmationEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionAffirmed,
     eventIdx,
@@ -361,6 +368,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
     portfolio,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([
@@ -374,7 +382,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
  * Maps the event - `settlement.AffirmationWithdrawn`
  */
 export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId } = extractArgs(event);
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
 
   const [, rawPortfolio, rawInstructionId] = params;
 
@@ -386,7 +394,7 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
 
   const promises = [
     InstructionEvent.create({
-      id: `${blockId}/${eventIdx}`,
+      id: blockEventId,
       instructionId,
       event: InstructionEventEnum.AffirmationWithdrawn,
       eventIdx,
@@ -394,6 +402,7 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
       portfolio,
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      createdEventId: blockEventId,
     }).save(),
   ];
 
@@ -422,6 +431,7 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
     blockId,
     block: { specVersion },
     eventIdx,
+    blockEventId,
   } = extractArgs(event);
 
   const specName = api.runtimeVersion.specName.toString();
@@ -434,7 +444,8 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
     const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
       params,
       blockId,
-      eventIdx
+      eventIdx,
+      blockEventId
     );
     await Promise.all([instructionEvent.save(), instructionAffirmation.save()]);
   }
@@ -444,7 +455,7 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.InstructionRejected`
  */
 export const handleInstructionRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId } = extractArgs(event);
+  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId] = params;
 
   const identityId = getTextValue(rawIdentityId);
@@ -472,13 +483,14 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
   });
 
   const rejectionEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionRejected,
     eventIdx,
     identity: identityId,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([instruction.save(), rejection.save(), rejectionEvent.save()]);
@@ -490,7 +502,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionFailed
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventId, eventIdx, blockId } = extractArgs(event);
+  const { params, extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [, rawInstructionId] = params;
 
   const address = getSignerAddress(extrinsic);
@@ -501,12 +513,13 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
   instruction.updatedBlockId = blockId;
 
   const finalizedEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: eventId as unknown as InstructionEventEnum,
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([
@@ -520,17 +533,18 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
  * Maps the event - `settlement.SettlementManuallyExecuted`
  */
 export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId } = extractArgs(event);
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId] = params;
 
   const manuallyExecutedEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.SettlementManuallyExecuted,
     eventIdx,
     identity: getTextValue(rawIdentityId),
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await manuallyExecutedEvent.save();
@@ -540,7 +554,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
 export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId } = extractArgs(event);
+  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [rawInstructionId, rawDispatchError] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
@@ -553,20 +567,21 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   instruction.failureReason = failureReason;
 
   const finalizedEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: eventId as unknown as InstructionEventEnum,
     eventIdx,
     failureReason,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([instruction.save(), finalizedEvent.save()]);
 };
 
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId, expiryOpt] = params;
 
   const identityId = getTextValue(rawIdentityId);
@@ -588,32 +603,34 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
   });
 
   const mediatorAffirmationEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId,
     event: InstructionEventEnum.MediatorAffirmationReceived,
     eventIdx,
     identity: identityId,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([mediatorAffirmation.save(), mediatorAffirmationEvent.save()]);
 };
 
 export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId] = params;
   const identityId = getTextValue(rawIdentityId);
   const instructionId = getTextValue(rawInstructionId);
 
   const affirmationWithdrawnEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
     eventIdx,
     identity: identityId,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   await Promise.all([
@@ -626,7 +643,7 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
  * Maps the event - `settlement.InstructionMediators`
  */
 export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawInstructionId, rawIdentityIds] = params;
   const instructionId = processInstructionId(rawInstructionId);
   const identityIds = getStringArrayValue(rawIdentityIds);
@@ -638,13 +655,14 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
 
   const mediatorEventPromises = identityIds.map((identity, index) => {
     return InstructionEvent.create({
-      id: `${blockId}/${eventIdx}/${index}`,
+      id: `${blockEventId}/${index}`,
       instructionId,
       event: InstructionEventEnum.InstructionMediators,
       eventIdx,
       identity,
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      createdEventId: blockEventId,
     }).save();
   });
 
@@ -664,7 +682,7 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.ReceiptClaimed`
  */
 export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx } = extractArgs(event);
+  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
   const [rawIdentityId, rawInstructionId, rawLegId, rawReceiptUid, rawSigner, rawMetadata] = params;
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
@@ -698,7 +716,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   });
 
   const receiptEvent = InstructionEvent.create({
-    id: `${blockId}/${eventIdx}/receipt/${legId}`,
+    id: `${blockEventId}/receipt/${legId}`,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.ReceiptClaimed,
     eventIdx,
@@ -706,6 +724,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     offChainReceiptId: `${signer}/${uid}`,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   const promises = [receipt.save(), affirmation.save(), receiptEvent.save()];

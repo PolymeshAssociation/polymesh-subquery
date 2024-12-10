@@ -39,14 +39,14 @@ import { processInstructionId } from '../settlements/mapSettlement';
 export const createFunding = (
   blockId: string,
   assetId: string,
-  eventIdx: number,
+  blockEventId: string,
   datetime: Date,
   fundingRound: string,
   issuedAmount: bigint,
   totalFundingAmount: bigint
 ): Promise<void> => {
   return Funding.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     assetId,
     fundingRound,
     amount: issuedAmount,
@@ -54,6 +54,7 @@ export const createFunding = (
     datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -72,6 +73,7 @@ export const createAssetTransaction = (
     | 'instructionId'
     | 'instructionMemo'
   >,
+  blockEventId: string,
   eventId?: EventIdEnum,
   extrinsic?: SubstrateExtrinsic
 ): Promise<void> => {
@@ -91,7 +93,7 @@ export const createAssetTransaction = (
   };
 
   return AssetTransaction.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     ...details,
     // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
@@ -100,6 +102,7 @@ export const createAssetTransaction = (
     datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -128,7 +131,7 @@ export const getAssetHolder = async (
 };
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, eventIdx, blockId } = extractArgs(event);
+  const { params, block, eventIdx, blockId, blockEventId } = extractArgs(event);
   const [, rawAssetId, divisible, rawType, rawOwnerDid, ...rest] = params;
   let disableIu: Codec, rawIdentifiers: Codec, rawAssetName: Codec, rawFundingRoundName: Codec;
 
@@ -207,6 +210,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
@@ -294,7 +298,7 @@ export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<
 };
 
 export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, extrinsic, block } = extractArgs(event);
+  const { params, blockId, eventIdx, extrinsic, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
     params;
 
@@ -313,7 +317,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   assetIssuer.updatedBlockId = blockId;
 
   const assetTransaction = AssetTransaction.create({
-    id: `${blockId}/${eventIdx}`,
+    id: blockEventId,
     assetId,
     toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
     eventId: EventIdEnum.Issued,
@@ -324,6 +328,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
 
   const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
@@ -332,7 +337,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
       createFunding(
         blockId,
         assetId,
-        eventIdx,
+        blockEventId,
         block.timestamp,
         fundingRound,
         issuedAmount,
@@ -406,7 +411,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 };
 
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block, eventIdx, extrinsic } = extractArgs(event);
+  const { params, blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
   const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
   const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
@@ -469,6 +474,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
         amount: transferAmount,
         instructionId,
       },
+      blockEventId,
       EventIdEnum.Transfer,
       extrinsic
     )
@@ -478,7 +484,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
 };
 
 export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
+  const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid: string, toDid: string;
@@ -534,7 +540,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
         createFunding(
           blockId,
           assetId,
-          eventIdx,
+          blockEventId,
           block.timestamp,
           fundingRoundName,
           transferAmount,
@@ -586,6 +592,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
         instructionId,
         instructionMemo,
       },
+      blockEventId,
       eventId,
       extrinsic
     )

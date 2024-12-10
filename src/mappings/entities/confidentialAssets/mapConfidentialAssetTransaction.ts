@@ -25,7 +25,7 @@ const extractAssetHolderParams = (params: Codec[]): AssetHolderParams => {
 };
 
 export const handleConfidentialDepositOrWithdraw = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, eventId, block } = extractArgs(event);
+  const { params, blockId, eventIdx, eventId, block, blockEventId } = extractArgs(event);
   const { id, accountId, assetId, amount, balance } = extractAssetHolderParams(params);
 
   const existingAssetHolder = await ConfidentialAssetHolder.get(id);
@@ -44,6 +44,7 @@ export const handleConfidentialDepositOrWithdraw = async (event: SubstrateEvent)
       eventIdx,
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      createdEventId: blockEventId,
     }).save();
   }
 
@@ -58,11 +59,12 @@ export const handleConfidentialDepositOrWithdraw = async (event: SubstrateEvent)
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 
 export const handleAccountDepositIncoming = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, eventId, block, blockId } = extractArgs(event);
+  const { params, eventIdx, eventId, block, blockId, blockEventId } = extractArgs(event);
 
   const { id, assetId, amount, accountId } = extractAssetHolderParams(params);
 
@@ -76,5 +78,6 @@ export const handleAccountDepositIncoming = async (event: SubstrateEvent): Promi
     datetime: block.timestamp,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };

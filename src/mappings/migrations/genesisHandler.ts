@@ -19,7 +19,7 @@ import {
   createMultiSigSigner,
 } from '../entities/multiSig/mapMultiSig';
 
-const genesisBlock = '0';
+const genesisBlock = padId('0');
 type DidWithAccount = { did: string; accountId: string };
 
 /**
@@ -27,7 +27,7 @@ type DidWithAccount = { did: string; accountId: string };
  */
 const insertGenesisBlock = async (datetime: Date) =>
   Block.create({
-    id: padId('0'),
+    id: genesisBlock,
     blockId: 0,
     parentId: 0,
     hash: chainId,
@@ -134,6 +134,7 @@ const handleGenesisDids = async (datetime: Date) => {
         identityId: did,
         number: 0,
         eventIdx: 0,
+        createdEventId: `${genesisBlock}/${padId('0')}`,
       },
       genesisBlock
     ),

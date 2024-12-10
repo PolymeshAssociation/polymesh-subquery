@@ -23,7 +23,7 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
 
   const group = params[2].toJSON();
   const permissions = JSON.stringify(params[3].toJSON());
@@ -38,7 +38,7 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
   for (const member of members) {
     promises.push(
       TickerExternalAgentHistory.create({
-        id: `${blockId}/${eventIdx}/${member.member}`,
+        id: `${blockEventId}/${member.member}`,
         assetId,
         identityId: member.member,
         eventIdx,
@@ -47,6 +47,7 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
         permissions,
         createdBlockId: blockId,
         updatedBlockId: blockId,
+        createdEventId: blockEventId,
       }).save()
     );
   }
@@ -54,7 +55,7 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 };
 
 export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
 
   const did = params[0].toString();
   const assetId = await getAssetId(params[1], block);
@@ -62,7 +63,16 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
   const group = params[2].toJSON() as AgentGroup;
 
   const promises = [
-    addExternalAgentHistory(assetId, group, blockId, eventIdx, did, block, 'AgentAdded'),
+    addExternalAgentHistory(
+      assetId,
+      group,
+      blockId,
+      eventIdx,
+      did,
+      block,
+      'AgentAdded',
+      blockEventId
+    ),
   ];
 
   // Only keep track of membership for custom agent groups.
@@ -73,7 +83,7 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
 
   const did = params[2].toString();
   const group = params[3].toJSON() as AgentGroup;
@@ -88,7 +98,8 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
       eventIdx,
       did,
       block,
-      'AgentPermissionsChanged'
+      'AgentPermissionsChanged',
+      blockEventId
     ),
   ];
 
@@ -100,14 +111,14 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 };
 
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
-  const { params, blockId, eventIdx, block } = extractArgs(event);
+  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const did = params[2].toString();
   const assetId = await getAssetId(params[1], block);
 
   const promises = [
     removeMember(did, assetId),
     TickerExternalAgentHistory.create({
-      id: `${blockId}/${eventIdx}/${did}`,
+      id: `${blockEventId}/${did}`,
       assetId,
       identityId: did,
       eventIdx,
@@ -115,6 +126,7 @@ export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
       type: 'AgentRemoved',
       createdBlockId: blockId,
       updatedBlockId: blockId,
+      createdEventId: blockEventId,
     }).save(),
   ];
 
@@ -128,14 +140,15 @@ const addExternalAgentHistory = async (
   eventIdx: number,
   did: string,
   block: SubstrateBlock,
-  type: 'AgentAdded' | 'AgentPermissionsChanged'
+  type: 'AgentAdded' | 'AgentPermissionsChanged',
+  blockEventId: string
 ): Promise<void> => {
   const permissions = await permissionsFromAgentGroup(assetId, group, async n => {
     const ag = await AgentGroupEntity.get(`${assetId}/${n}`);
     return ag.permissions;
   });
   await TickerExternalAgentHistory.create({
-    id: `${blockId}/${eventIdx}/${did}`,
+    id: `${blockEventId}/${did}`,
     assetId,
     identityId: did,
     eventIdx,
@@ -144,6 +157,7 @@ const addExternalAgentHistory = async (
     permissions,
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   }).save();
 };
 

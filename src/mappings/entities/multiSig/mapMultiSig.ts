@@ -16,6 +16,7 @@ import {
   is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
+import { MultiSigSignerProps } from 'src/types/models/MultiSigSigner';
 
 export const createMultiSig = (
   address: string,
@@ -124,7 +125,7 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
     blockId
   );
 
-  const signerParams = signers.map(({ signerType, signerValue }) => ({
+  const signerParams: MultiSigSignerProps[] = signers.map(({ signerType, signerValue }) => ({
     id: `${multiSigAddress}/${signerType}/${signerValue}`,
     multisigId: multiSigAddress,
     signerType,
@@ -192,15 +193,17 @@ export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Pr
 
   const signerDetails = getMultiSigSignersDetails(params, block);
 
-  const signerParams = signerDetails.map(({ multisigId, signerType, signerValue }) => ({
-    id: `${multisigId}/${signerType}/${signerValue}`,
-    multisigId,
-    signerType,
-    signerValue,
-    status: MultiSigSignerStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }));
+  const signerParams: MultiSigSignerProps[] = signerDetails.map(
+    ({ multisigId, signerType, signerValue }) => ({
+      id: `${multisigId}/${signerType}/${signerValue}`,
+      multisigId,
+      signerType,
+      signerValue,
+      status: MultiSigSignerStatusEnum.Authorized,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    })
+  );
 
   await store.bulkCreate('MultiSigSigner', signerParams);
 };

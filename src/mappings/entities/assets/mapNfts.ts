@@ -49,7 +49,7 @@ export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise
 };
 
 export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, extrinsic } = extractArgs(event);
+  const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid, fromPortfolioId;
@@ -134,6 +134,7 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
         instructionId,
         instructionMemo,
       },
+      blockEventId,
       eventId,
       extrinsic
     )
