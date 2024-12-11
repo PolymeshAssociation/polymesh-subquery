@@ -242,7 +242,6 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
 
   const instruction = Instruction.create({
     id: instructionId,
-    instructionId: Number(instructionId),
     status: InstructionStatusEnum.Created,
     venueId: getTextValue(rawVenueId),
     ...typeDetails,

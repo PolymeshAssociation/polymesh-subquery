@@ -1886,8 +1886,7 @@ If any party fails to satisfy any compliance or transfer restriction the Instruc
 and no movement of assets will occur.
 """
 type Instruction @entity {
-  id: ID! # instructionId, left padded with 0
-  instructionId: Int! @index(unique: true) # instructionId as Int
+  id: ID!
   status: InstructionStatusEnum!
   venue: Venue @index(unique: false)
   type: InstructionTypeEnum!
