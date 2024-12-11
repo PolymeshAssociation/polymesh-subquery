@@ -1700,8 +1700,7 @@ enum AuthorizationStatusEnum {
 Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
 """
 type Authorization @entity {
-  id: ID! # Left padded AuthID
-  authId: Int! @index(unique: true) # AuthId as Int
+  id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
   toId: String @index(unique: false)
@@ -1711,6 +1710,7 @@ type Authorization @entity {
   status: AuthorizationStatusEnum!
   createdBlock: Block!
   updatedBlock: Block!
+  createdEvent: Event!
 }
 
 """
