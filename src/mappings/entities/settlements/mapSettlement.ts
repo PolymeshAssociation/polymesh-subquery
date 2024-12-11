@@ -114,7 +114,7 @@ const updateLegs = async (
 };
 
 export const processInstructionId = (id: Codec): string => {
-  return padId(getTextValue(id));
+  return getTextValue(id);
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
