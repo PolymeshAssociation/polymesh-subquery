@@ -251,6 +251,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     mediators: [],
     createdBlockId: blockId,
     updatedBlockId: blockId,
+    createdEventId: blockEventId,
   });
   await instruction.save();
 
