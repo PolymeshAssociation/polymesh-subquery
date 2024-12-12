@@ -23,6 +23,9 @@ import {
 } from '../../../utils';
 import { Attributes, extractArgs } from './../common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
+import { IdentityProps } from 'src/types/models/Identity';
+import { PermissionsProps } from 'src/types/models/Permissions';
+import { AccountProps } from 'src/types/models/Account';
 
 const createHistoryEntry = async (
   eventId: EventIdEnum,
@@ -143,12 +146,10 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   let defaultPortfolio;
   const identity = await Identity.get(did);
   if (identity) {
-    Object.assign(identity, {
-      primaryAccount: address,
-      updatedBlockId: blockId,
-      eventId,
-      datetime,
-    });
+    identity.primaryAccount = address;
+    identity.updatedBlockId = blockId;
+    identity.eventId = eventId;
+    identity.datetime = datetime;
     await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
@@ -327,12 +328,14 @@ export const handleSecondaryKeysPermissionsUpdated = async (
     throw new Error(`Permissions for account ${address} were not found`);
   }
 
-  const updatedPermissionsValue = getPermissions(updatedPermissions);
+  const { assets, portfolios, transactionGroups, transactions } =
+    getPermissions(updatedPermissions);
 
-  Object.assign(permissions, {
-    ...updatedPermissionsValue,
-    updatedBlockId: args.blockId,
-  });
+  permissions.assets = assets;
+  permissions.portfolios = portfolios;
+  permissions.transactions = transactions;
+  permissions.transactionGroups = transactionGroups;
+  permissions.updatedBlockId = args.blockId;
 
   await permissions.save();
 };
@@ -368,11 +371,9 @@ export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<
 
   const identity = await getIdentity(did);
 
-  Object.assign(identity, {
-    secondaryKeysFrozen: true,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.secondaryKeysFrozen = true;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   await identity.save();
 };
@@ -385,11 +386,9 @@ export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promis
 
   const identity = await getIdentity(did);
 
-  Object.assign(identity, {
-    secondaryKeysFrozen: false,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.secondaryKeysFrozen = false;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   await identity.save();
 };
@@ -465,19 +464,15 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     Permissions.get(identity.primaryAccount),
   ]);
 
-  Object.assign(identity, {
-    primaryAccount: address,
-    updatedBlockId: blockId,
-    eventId,
-  });
+  identity.primaryAccount = address;
+  identity.updatedBlockId = blockId;
+  identity.eventId = eventId;
 
   // remove the identity mapping from account and set permissions to null
-  Object.assign(account, {
-    identityId: undefined,
-    permissionsId: undefined,
-    eventId,
-    updatedBlockId: blockId,
-  });
+  account.identityId = undefined;
+  account.permissionsId = undefined;
+  account.eventId = eventId;
+  account.updatedBlockId = blockId;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { assets, portfolios, transactionGroups, transactions } = permissions || {
@@ -529,12 +524,10 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   const accountEntity = await Account.get(address);
   const did = accountEntity.identityId;
 
-  Object.assign(accountEntity, {
-    identityId: undefined,
-    permissionsId: undefined,
-    eventId,
-    updatedBlockId: blockId,
-  });
+  accountEntity.identityId = undefined;
+  accountEntity.permissionsId = undefined;
+  accountEntity.eventId = eventId;
+  accountEntity.updatedBlockId = blockId;
 
   await Promise.all([
     accountEntity.save(),

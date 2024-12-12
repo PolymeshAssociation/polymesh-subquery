@@ -22,6 +22,7 @@ import {
   padId,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { MultiSigProposalProps } from 'src/types/models/MultiSigProposal';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, extrinsic, eventIdx, block, blockEventId, extrinsicId } =
@@ -117,10 +118,8 @@ const handleMultiSigProposalStatus = async (
 
   const proposal = await MultiSigProposal.get(`${multisigId}/${proposalId}`);
 
-  Object.assign(proposal, {
-    status,
-    updatedBlockId: blockId,
-  });
+  proposal.status = status;
+  proposal.updatedBlockId = blockId;
 
   await proposal.save();
 };
@@ -259,10 +258,8 @@ export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Prom
 
   if (deletedProposals.length) {
     deletedProposals.forEach(proposal => {
-      Object.assign(proposal, {
-        status: MultiSigProposalStatusEnum.Deleted,
-        updatedBlockId: blockId,
-      });
+      proposal.status = MultiSigProposalStatusEnum.Deleted;
+      proposal.updatedBlockId = blockId;
     });
     await store.bulkUpdate('MultiSigProposal', deletedProposals);
   }

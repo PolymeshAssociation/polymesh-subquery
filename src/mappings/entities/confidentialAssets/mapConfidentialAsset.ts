@@ -163,16 +163,19 @@ export const handleConfidentialAssetMoveFunds = async (event: SubstrateEvent): P
 
   const proofs = JSON.parse(rawProofs.toString());
 
-  const proofParams: ConfidentialAssetMovementProps[] = Object.keys(proofs).map(assetId => ({
-    id: blockEventId,
-    fromId,
-    toId,
-    assetId,
-    proof: proofs[assetId],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  }));
+  const proofParams: ConfidentialAssetMovementProps[] = Object.keys(proofs).map(
+    assetId =>
+      ({
+        id: blockEventId,
+        fromId,
+        toId,
+        assetId,
+        proof: proofs[assetId],
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+        createdEventId: blockEventId,
+      } satisfies ConfidentialAssetMovementProps)
+  );
 
   await store.bulkCreate('ConfidentialAssetMovement', proofParams);
 };

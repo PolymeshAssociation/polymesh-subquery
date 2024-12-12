@@ -18,6 +18,7 @@ import {
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
+import { PortfolioProps } from 'src/types/models/Portfolio';
 
 export const getPortfolio = async ({
   identityId,
@@ -98,12 +99,12 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
       blockId
     );
   } else {
-    Object.assign(portfolio, {
-      name,
-      eventIdx,
-      updatedBlockId: blockId,
-      blockEventId,
-    });
+    // If the Portfolio was initially created by createPortfolioIfNotExists we update it as if it were newly created.
+    portfolio.name = name;
+    portfolio.eventIdx = eventIdx;
+    portfolio.createdBlockId = blockId;
+    portfolio.updatedBlockId = blockId;
+    portfolio.createdEventId = blockEventId;
 
     await portfolio.save();
   }
