@@ -312,8 +312,7 @@ const filters = {
     NewAccount: [],
   },
   transactionPayment: {
-    TransactionFeePaid: [],
-    FeeCharged: ['handleTransactionFeeCharged'],
+    TransactionFeePaid: ['handleTransactionFeeCharged'],
   },
   treasury: {
     TreasuryDisbursement: ['handleTreasuryDisbursement'],
