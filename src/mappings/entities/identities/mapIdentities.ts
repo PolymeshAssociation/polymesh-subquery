@@ -360,6 +360,28 @@ export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise
   await Promise.all(removePromises.flat());
 };
 
+export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+  const [, rawAccount] = args.params;
+
+  logger.info(`got raw account: ${rawAccount.toJSON()}`);
+
+  const account = rawAccount.toJSON() as MeshAccount;
+
+  let address;
+  if (typeof account === 'string') {
+    // for chain version >= 5.0.0
+    address = account;
+  } else {
+    // for chain version < 5.0.0
+    ({ account: address } = account);
+  }
+
+  logger.info('removing account for address: ', address);
+
+  await Promise.all([Account.remove(address), Permissions.remove(address)]);
+};
+
 export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventId, params } = extractArgs(event);
 

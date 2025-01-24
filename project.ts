@@ -169,6 +169,7 @@ const filters = {
     SecondaryKeysFrozen: ['handleSecondaryKeysFrozen'],
     SecondaryKeysRemoved: ['handleSecondaryKeysRemoved'],
     SecondaryKeysUnfrozen: ['handleSecondaryKeysUnfrozen'],
+    SignerLeft: ['handleSignerLeft'],
   },
   multiSig: {
     MultiSigAddedAdmin: ['handleMultiSigAddedAdmin'],
