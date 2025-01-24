@@ -21,6 +21,9 @@ jobs:
           username: ${{ secrets.ASSOCIATION_DOCKER_USERNAME }}
           password: ${{ secrets.ASSOCIATION_DOCKER_TOKEN }}
 
+      - name: Set package version
+        run: ./scripts/set-package-version.sh
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v4
