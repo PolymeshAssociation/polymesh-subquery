@@ -1,6 +1,6 @@
 {
   "name": "polymesh-subquery",
-  "version": "0.0.0",
+  "version": "19.0.0",
   "author": "Polymesh Association",
   "license": "Apache-2.0",
   "description": "A Polymesh Chain Indexer, providing a GraphQL interface",
@@ -19,7 +19,8 @@
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict",
     "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
-    "semantic-release": "semantic-release"
+    "semantic-release": "semantic-release",
+    "set-version": "sh scripts/set-package-version.sh"
   },
   "homepage": "https://polymesh.network/",
   "repository": "github:PolymeshAssociation/polymesh-subquery",

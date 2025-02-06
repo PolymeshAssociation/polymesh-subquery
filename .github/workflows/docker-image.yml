@@ -22,7 +22,7 @@ jobs:
           password: ${{ secrets.ASSOCIATION_DOCKER_TOKEN }}
 
       - name: Set package version
-        run: ./scripts/set-package-version.sh
+        run: yarn set-version
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
