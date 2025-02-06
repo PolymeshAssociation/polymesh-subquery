@@ -1,4 +1,3 @@
-import { Option, u64, U8aFixed } from '@polkadot/types-codec';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import {
@@ -559,14 +558,12 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
     promises.push(asset.save());
   } else if (updateReason === 'transferred') {
     const details = value as unknown as {
-      readonly instructionId: Option<u64>;
-      readonly instructionMemo: Option<U8aFixed>;
+      instructionId: number | null;
+      instructionMemo: `0x${string}` | null;
     };
 
-    instructionId = details.instructionId?.isSome
-      ? processInstructionId(details.instructionId.unwrap())
-      : null;
-    instructionMemo = bytesToString(details.instructionMemo);
+    instructionId = details.instructionId ? details.instructionId.toString() : null;
+    instructionMemo = details.instructionMemo ? coerceHexToString(details.instructionMemo) : null;
 
     eventId = EventIdEnum.Transfer;
     if (!instructionId) {
