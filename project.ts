@@ -47,6 +47,7 @@ const filters = {
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
     TickerLinkedToAsset: ['handleTickerLinkedToAsset'],
     TickerUnlinkedFromAsset: ['handleTickerUnlinkedFromAsset'],
+    GlobalMetadataSpecUpdated: [],
   },
   balances: {
     AccountBalanceBurned: ['handleBalanceBurned'],
@@ -226,6 +227,8 @@ const filters = {
     PortfolioDeleted: ['handlePortfolioDeleted'],
     PortfolioRenamed: ['handlePortfolioRenamed'],
     UserPortfolios: [],
+    AllowIdentityToCreatePortfolios: [],
+    RevokeCreatePortfoliosPermission: [],
   },
   protocolFee: {
     FeeCharged: ['handleFeeCharged'],

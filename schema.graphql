@@ -359,6 +359,7 @@ enum EventIdEnum {
   SetAssetMediators # This can be removed, `AssetMediatorsAdded` is emitted instead
   AssetMediatorsRemoved
   TickerUnlinkedFromAsset
+  GlobalMetadataSpecUpdated
 
   ## capitaldistribution ##
   Created
@@ -438,6 +439,8 @@ enum EventIdEnum {
   UserPortfolios
   PortfolioCustodianChanged
   FundsMovedBetweenPortfolios
+  AllowIdentityToCreatePortfolios
+  RevokeCreatePortfoliosPermission
 
   ## protocolfee ##
   FeeSet
@@ -727,6 +730,7 @@ enum CallIdEnum {
   burn_account_balance
 
   ## transactionpayment ##
+  set_disable_fees
 
   ## identity ##
   cdd_register_did
@@ -1031,6 +1035,7 @@ enum CallIdEnum {
   remove_mandatory_mediators
   link_ticker_to_asset_id
   unlink_ticker_from_asset_id
+  update_global_metadata_spec
 
   ## capitaldistribution ##
   distribute
@@ -1066,6 +1071,7 @@ enum CallIdEnum {
   remove_ca
   change_record_date
   initiate_corporate_action_and_distribute
+  initiate_corporate_action_and_ballot
 
   ## corporateballot ##
   attach_ballot
