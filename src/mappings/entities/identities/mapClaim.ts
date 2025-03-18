@@ -21,7 +21,7 @@ import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
 const extractHarvesterArgs = (event: SubstrateEvent) => {
-  const genericEvent = event.event as GenericEvent;
+  const genericEvent = event.event as unknown as GenericEvent;
   const args = genericEvent.data;
 
   return args.map((arg, i) => {

@@ -16,7 +16,7 @@ import {
   is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
-import { MultiSigSignerProps } from 'src/types/models/MultiSigSigner';
+import { MultiSigSignerProps } from '../../../types/models/MultiSigSigner';
 
 export const createMultiSig = (
   address: string,

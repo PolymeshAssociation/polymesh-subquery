@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
 import { HandlerArgs, toEnum } from '../mappings/entities/common';
-import { CallIdEnum, ModuleIdEnum, EventIdEnum } from 'src/types';
+import { CallIdEnum, EventIdEnum, ModuleIdEnum } from '../types';
+import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
 
 export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {

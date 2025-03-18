@@ -1,4 +1,4 @@
-import { Codec } from '@polkadot/types/types';
+import { AnyTuple } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { FunctionPropertyNames } from '@subql/types-core';
 import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
@@ -17,7 +17,7 @@ export interface HandlerArgs {
   eventIdText: string;
   moduleIdText: string;
   eventIdx: number;
-  params: Codec[];
+  params: AnyTuple;
   block: SubstrateBlock;
   extrinsic?: SubstrateExtrinsic;
   extrinsicId?: string;
@@ -59,7 +59,7 @@ export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
     eventIdText: eventId,
     moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unsupported),
     moduleIdText: moduleId,
-    params: event.event.data,
+    params: event.event.data as unknown as AnyTuple,
     eventIdx: event.idx,
     block: event.block,
     extrinsic: event.extrinsic,

@@ -1,6 +1,5 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { TransferComplianceProps } from 'src/types/models/TransferCompliance';
 import {
   Asset,
   ClaimTypeEnum,
@@ -11,6 +10,7 @@ import {
   TransferComplianceTypeEnum,
   TransferRestrictionTypeEnum,
 } from '../../../types';
+import { TransferComplianceProps } from '../../../types/models/TransferCompliance';
 import {
   capitalizeFirstLetter,
   getAssetId,

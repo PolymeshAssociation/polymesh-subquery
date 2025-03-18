@@ -303,7 +303,8 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (_, block, extrinsic) => getAssetId(extrinsic?.extrinsic.args[0], block)
+        async (_, block, extrinsic) =>
+          getAssetId(extrinsic?.extrinsic.args[0] as unknown as Codec, block)
       );
     return eventsManager;
   }

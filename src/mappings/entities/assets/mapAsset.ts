@@ -457,7 +457,9 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
       ({ event }) => event.method === 'InstructionExecuted'
     );
     if (instructionExecutedEvent) {
-      instructionId = processInstructionId(instructionExecutedEvent.event.data[1]);
+      instructionId = processInstructionId(
+        instructionExecutedEvent.event.data[1] as unknown as Codec
+      );
     }
   }
 

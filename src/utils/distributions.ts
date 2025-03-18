@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
-import { Distribution } from 'src/types';
+import { Distribution } from '../types';
 import { getAssetId } from './assets';
 import { END_OF_TIME, extractBigInt, getBigIntValue } from './common';
 import { meshPortfolioToPortfolio } from './portfolios';

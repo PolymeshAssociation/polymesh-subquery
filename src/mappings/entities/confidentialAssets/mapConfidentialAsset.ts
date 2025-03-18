@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { ConfidentialAsset, ConfidentialVenue, EventIdEnum } from '../../../types';
+import { ConfidentialAssetMovementProps } from '../../../types/models/ConfidentialAssetMovement';
 import {
   getBigIntValue,
   getBooleanValue,
@@ -8,7 +9,6 @@ import {
   getTextValue,
 } from '../../../utils/common';
 import { Attributes, extractArgs } from '../common';
-import { ConfidentialAssetMovementProps } from 'src/types/models/ConfidentialAssetMovement';
 
 export const getAuditorsAndMediators = (
   item: Codec

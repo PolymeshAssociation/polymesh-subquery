@@ -1,4 +1,4 @@
-import { Codec } from '@polkadot/types/types';
+import { AnyTuple, Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Instruction, InstructionEvent, Leg } from '../../../types';
 import {
@@ -307,7 +307,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
         const automaticAffirmationPromise = async () => {
           const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
           const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
-            event.event.data,
+            event.event.data as unknown as AnyTuple,
             blockId,
             eventIndex,
             blockEventId

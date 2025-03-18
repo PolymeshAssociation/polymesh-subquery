@@ -26,7 +26,7 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     moduleIdText,
     params: args,
   } = extractArgs(event);
-  const genericEvent = event.event as GenericEvent;
+  const genericEvent = event.event as unknown as GenericEvent;
 
   const harvesterLikeArgs = args.map((arg, i) => {
     let type: string;
