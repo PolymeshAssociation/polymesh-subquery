@@ -4,7 +4,7 @@ import {
   AgentGroupMembership,
   TickerExternalAgentHistory,
 } from '../../../types';
-import { getAssetId } from '../../../utils';
+import { getAssetId, getPaginatedData } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -33,7 +33,11 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
   ag.permissions = permissions;
 
   const promises = [ag.save()];
-  const members = await AgentGroupMembership.getByGroupId(`${assetId}/${group}`);
+  const members = await getPaginatedData(
+    AgentGroupMembership.getByGroupId,
+    `${assetId}/${group}`,
+    'groupId'
+  );
 
   for (const member of members) {
     promises.push(
@@ -177,13 +181,14 @@ const addAgentGroupMembership = (
 };
 
 const removeMember = async (did: string, assetId: string) => {
-  const memberships = await AgentGroupMembership.getByMember(did);
-  for (const membership of memberships) {
-    const t = membership.groupId.split('/')[0];
-    if (assetId === t) {
-      await AgentGroupMembership.remove(`${membership.groupId}/${did}`);
-      return;
-    }
+  const memberships = await getPaginatedData(AgentGroupMembership.getByMember, did, 'member');
+
+  const memberIds = memberships
+    .filter(({ groupId }) => groupId.split('/')[0] === assetId)
+    .map(({ id }) => id);
+
+  if (memberIds.length > 0) {
+    await store.bulkRemove('AgentGroupMembership', memberIds);
   }
 };
 

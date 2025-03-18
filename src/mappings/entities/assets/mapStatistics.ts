@@ -1,5 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { TransferComplianceProps } from 'src/types/models/TransferCompliance';
 import {
   Asset,
   ClaimTypeEnum,
@@ -15,11 +16,11 @@ import {
   getAssetId,
   getExemptKeyValue,
   getExemptionsValue,
+  getPaginatedData,
   getTransferManagerValue,
   is7xChain,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
-import { TransferComplianceProps } from 'src/types/models/TransferCompliance';
 
 export const getAssetIdForStatisticsEvent = (
   item: Codec,
@@ -232,7 +233,11 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 
   const transferConditions = getTransferConditions(rawTransferConditions, assetId);
 
-  const existingTransferCompliances = await TransferCompliance.getByAssetId(assetId);
+  const existingTransferCompliances = await getPaginatedData(
+    TransferCompliance.getByAssetId,
+    assetId,
+    'assetId'
+  );
 
   const removedConditions = existingTransferCompliances
     .filter(
@@ -353,7 +358,11 @@ export const handleTransferManagerExemptionsAdded = async (
     claimType: null,
   };
 
-  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(assetId);
+  const transferComplianceExemptions = await getPaginatedData(
+    TransferComplianceExemption.getByAssetId,
+    assetId,
+    'assetId'
+  );
 
   const existingExemptions = transferComplianceExemptions.filter(
     ({ opType: exemptionType, exemptedEntityId }) =>
@@ -393,7 +402,11 @@ export const handleTransferManagerExemptionsRemoved = async (
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
-  const transferComplianceExemptions = await TransferComplianceExemption.getByAssetId(assetId);
+  const transferComplianceExemptions = await getPaginatedData(
+    TransferComplianceExemption.getByAssetId,
+    assetId,
+    'assetId'
+  );
 
   const selectedOpType =
     transferManagerValue.type === TransferRestrictionTypeEnum.Percentage

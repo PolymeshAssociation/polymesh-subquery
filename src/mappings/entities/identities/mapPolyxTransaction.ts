@@ -1,3 +1,4 @@
+import { getPaginatedData } from './../../../utils/common';
 import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
 import {
@@ -35,7 +36,11 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const transactions = await getPaginatedData(
+      PolyxTransaction.getByExtrinsicId,
+      details.extrinsicId,
+      'extrinsicId'
+    );
 
     const protocolFeePolyxTransaction = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.FeeCharged
@@ -89,7 +94,11 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const transactions = await getPaginatedData(
+      PolyxTransaction.getByExtrinsicId,
+      details.extrinsicId,
+      'extrinsicId'
+    );
 
     const transferPolyxTransaction = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.Transfer
@@ -137,7 +146,11 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const transactions = await getPaginatedData(
+      PolyxTransaction.getByExtrinsicId,
+      details.extrinsicId,
+      'extrinsicId'
+    );
     const endowedPolyxTransaction = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.Endowed
     );
@@ -179,7 +192,11 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
 
   const details = getEventParams(args);
   if (details.extrinsicId) {
-    const transactions = await PolyxTransaction.getByExtrinsicId(details.extrinsicId);
+    const transactions = await getPaginatedData(
+      PolyxTransaction.getByExtrinsicId,
+      details.extrinsicId,
+      'extrinsicId'
+    );
     const reimbursementTransaction = transactions
       .reverse()
       .find(({ eventId }) => eventId === EventIdEnum.TreasuryReimbursement);

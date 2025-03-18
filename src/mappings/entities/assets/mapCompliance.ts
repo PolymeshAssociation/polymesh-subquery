@@ -6,6 +6,7 @@ import {
   getComplianceValue,
   getComplianceValues,
   getNumberValue,
+  getPaginatedData,
   getTextValue,
 } from '../../../utils';
 import { extractArgs, getAsset } from '../common';
@@ -42,9 +43,12 @@ export const handleComplianceReset = async (event: SubstrateEvent): Promise<void
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const complianceRequirements = await Compliance.getByAssetId(assetId);
+  const compliances = await getPaginatedData(Compliance.getByAssetId, assetId, 'assetId');
 
-  await Promise.all(complianceRequirements.map(({ id }) => Compliance.remove(id)));
+  await store.bulkRemove(
+    'Compliance',
+    compliances.map(({ id }) => id)
+  );
 };
 
 const createCompliance = (assetId: string, complianceId: number, data: any, blockId: string) =>
@@ -73,14 +77,24 @@ export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<v
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const existingCompliances = await Compliance.getByAssetId(assetId);
-
   const compliances = getComplianceValues(rawCompliances);
 
+  const compliancesToRemove = await getPaginatedData(Compliance.getByAssetId, assetId, 'assetId');
   await Promise.all([
-    ...existingCompliances.map(({ id }) => Compliance.remove(id)),
-    ...compliances.map(({ complianceId, data }) =>
-      createCompliance(assetId, complianceId, data, blockId)
+    store.bulkRemove(
+      'Compliance',
+      compliancesToRemove.map(({ id }) => id)
+    ),
+    store.bulkCreate(
+      'Compliance',
+      compliances.map(({ complianceId, data }) => ({
+        id: `${assetId}/${complianceId}`,
+        complianceId,
+        data,
+        assetId,
+        createdBlockId: blockId,
+        updatedBlockId: blockId,
+      }))
     ),
   ]);
 };

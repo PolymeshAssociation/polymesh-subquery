@@ -17,6 +17,7 @@ import {
   getFirstKeyFromJson,
   getMultiSigSigner,
   getNumberValue,
+  getPaginatedData,
   getTextValue,
   is7xChain,
   padId,
@@ -234,9 +235,11 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
   const blockId = padId(block.block.header.number.toString());
 
-  const activeProposals = await store.getByFields<MultiSigProposal>('MultiSigProposal', [
-    ['status', '=', MultiSigProposalStatusEnum.Active],
-  ]);
+  const activeProposals = await getPaginatedData(
+    MultiSigProposal.getByStatus,
+    MultiSigProposalStatusEnum.Active,
+    'status'
+  );
 
   const is7 = is7xChain(block);
   const query = is7 ? api.query.multiSig.proposalStates : api.query.multiSig.proposalDetail;

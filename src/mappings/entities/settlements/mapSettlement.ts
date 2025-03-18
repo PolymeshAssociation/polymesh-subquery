@@ -8,6 +8,7 @@ import {
   getErrorDetails,
   getLegsValue,
   getNumberValue,
+  getPaginatedData,
   getPortfolioValue,
   getSettlementLeg,
   getSettlementTypeDetails,
@@ -99,7 +100,7 @@ const updateLegs = async (
   address: string,
   instructionId: string
 ): Promise<void> => {
-  const legs = await Leg.getByInstructionId(instructionId);
+  const legs = await getPaginatedData(Leg.getByInstructionId, instructionId, 'instructionId');
 
   const updatedLegs = legs.map(leg => {
     if (address) {

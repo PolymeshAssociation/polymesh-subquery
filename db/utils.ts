@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import { chdir, env } from 'process';
-import { Connection, createConnection } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 chdir(__dirname);
 
@@ -28,28 +28,28 @@ export const retry = async <T>(
   throw err;
 };
 
-export const getPostgresConnection = async (): Promise<Connection> => {
+export const getPostgresConnection = async (): Promise<DataSource> => {
   const maxAttempts = env.NODE_ENV === 'local' ? 10 : 1;
+  const dataSource = new DataSource({
+    type: 'postgres',
+    host: env.DB_HOST,
+    port: Number(env.DB_PORT),
+    username: env.DB_USER,
+    password: env.DB_PASS,
+    database: env.DB_DATABASE,
+    name: 'postgres',
+  });
   return retry(
     maxAttempts,
     1000,
-    async () =>
-      await createConnection({
-        type: 'postgres',
-        host: env.DB_HOST,
-        port: Number(env.DB_PORT),
-        username: env.DB_USER,
-        password: env.DB_PASS,
-        database: env.DB_DATABASE,
-        name: 'postgres',
-      }),
+    async () => await dataSource.initialize(),
     () => {
       console.log('Database connection not ready, retrying in 1s');
     }
   );
 };
 
-export const dbIsReady = (postgres: Connection, retryAttempts = 100): Promise<void> => {
+export const dbIsReady = (postgres: DataSource, retryAttempts = 100): Promise<void> => {
   return retry(
     retryAttempts,
     1000,
