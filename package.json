@@ -30,9 +30,9 @@
     "project.yaml"
   ],
   "dependencies": {
-    "@polkadot/api": "^11.2.1",
-    "@polkadot/types-support": "^11.2.1",
-    "@polymeshassociation/polymesh-types": "^5.14.0",
+    "@polkadot/api": "^15.8.1",
+    "@polkadot/types-support": "^15.8.1",
+    "@polymeshassociation/polymesh-types": "^5.15.0",
     "@subql/cli": "^5.7.0",
     "@subql/types": "^3.12.1",
     "@subql/types-core": "^2.0.2",
@@ -46,7 +46,7 @@
     "@babel/preset-env": "^7.24.4",
     "@commitlint/cli": "^17.8.1",
     "@commitlint/config-conventional": "^17.8.1",
-    "@polkadot/typegen": "^10.9.1",
+    "@polkadot/typegen": "^15.8.1",
     "@polymeshassociation/polymesh-local": "^5.13.0-alpha.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",
@@ -91,7 +91,7 @@
   },
   "resolutions": {
     "ipfs-unixfs": "6.0.6",
-    "@polkadot/util": "12.6.2"
+    "@polkadot/util": "13.4.3"
   },
   "config": {
     "commitizen": {
