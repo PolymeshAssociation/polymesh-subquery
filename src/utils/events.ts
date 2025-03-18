@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
-import { HandlerArgs } from '../mappings/entities/common';
+import { HandlerArgs, toEnum } from '../mappings/entities/common';
 import { CallIdEnum, ModuleIdEnum, EventIdEnum } from 'src/types';
 
 export const extractEventArg = (arg: any, exists: boolean) => {
@@ -26,8 +26,11 @@ export const extractEventArgs = (args: any[]) => {
 type EventParams = {
   id: string;
   moduleId: ModuleIdEnum;
+  moduleIdText: string;
   eventId: EventIdEnum;
+  eventIdText: string;
   callId?: CallIdEnum;
+  callIdText?: string;
   extrinsicId?: string;
   datetime: Date;
   eventIdx: number;
@@ -41,6 +44,8 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     blockId,
     eventId,
     moduleId,
+    moduleIdText,
+    eventIdText,
     eventIdx,
     block: { timestamp: datetime },
     extrinsic,
@@ -48,14 +53,22 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     extrinsicId,
   } = args;
 
+  let callId: CallIdEnum | undefined;
+  let callIdText: string | undefined;
+  if (extrinsic) {
+    callIdText = camelToSnakeCase(extrinsic.extrinsic.method.method);
+    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unsupported);
+  }
+
   return {
     id: blockEventId,
     moduleId,
     eventId,
+    moduleIdText,
+    eventIdText,
     extrinsicId,
-    callId: extrinsic
-      ? (camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum)
-      : undefined,
+    callId,
+    callIdText,
     datetime,
     eventIdx,
     createdBlockId: padId(blockId),

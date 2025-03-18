@@ -1,6 +1,7 @@
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../../types';
 import { camelToSnakeCase, padId } from '../../../utils';
+import { toEnum } from '../common';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = padId(extrinsic.block.block.header.number.toString());
@@ -9,6 +10,8 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
   const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
+  const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
+  const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
 
   return Extrinsic.create({
     id: extrinsicId,
@@ -16,8 +19,10 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: extrinsic.extrinsic.method.section.toLowerCase() as ModuleIdEnum,
-    callId: camelToSnakeCase(extrinsic.extrinsic.method.method) as CallIdEnum,
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unsupported),
+    moduleIdText: moduleId,
+    callId: toEnum(CallIdEnum, callId, CallIdEnum.unsupported),
+    callIdText: callId,
     paramsTxt,
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,

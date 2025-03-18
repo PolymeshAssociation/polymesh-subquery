@@ -1,4 +1,4 @@
-import { Codec } from '@polkadot/types-codec/types';
+import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import { Instruction, LegTypeEnum } from '../types';

@@ -64,6 +64,8 @@ enum ModuleIdEnum {
   exemption @deprecated
   finalitytracker @deprecated
   stocapped @deprecated
+
+  unsupported
 }
 
 """
@@ -683,6 +685,8 @@ enum EventIdEnum {
   VenueUpdated @deprecated
   VoteEnactReferendum @deprecated
   VoteRejectReferendum @deprecated
+
+  Unsupported
 }
 
 """
@@ -1396,6 +1400,8 @@ enum CallIdEnum {
   set_primary_key @deprecated
   set_proposal_cool_off_period @deprecated
   set_proposal_duration @deprecated
+
+  unsupported
 }
 
 type Debug @entity {
@@ -1447,7 +1453,9 @@ type Extrinsic @entity {
   signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
   address: String
   moduleId: ModuleIdEnum!
+  moduleIdText: String!
   callId: CallIdEnum!
+  callIdText: String!
   paramsTxt: String!
   success: Int! @index(unique: false)
   nonce: Int
@@ -1465,7 +1473,9 @@ type Event @entity {
   extrinsicIdx: Int
   specVersionId: Int!
   moduleId: ModuleIdEnum!
+  moduleIdText: String!
   eventId: EventIdEnum!
+  eventIdText: String!
   attributesTxt: String!
   eventArg_0: String
   eventArg_1: String
@@ -2526,8 +2536,11 @@ type PolyxTransaction @entity {
   amount: BigInt!
   type: BalanceTypeEnum!
   moduleId: ModuleIdEnum
+  moduleIdText: String
   callId: CallIdEnum
+  callIdText: String
   eventId: EventIdEnum
+  eventIdText: String
   memo: String
   extrinsic: Extrinsic
   datetime: Date!

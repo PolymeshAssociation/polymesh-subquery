@@ -14,6 +14,8 @@ export interface HandlerArgs {
   blockEventId: string;
   moduleId: ModuleIdEnum;
   eventId: EventIdEnum;
+  eventIdText: string;
+  moduleIdText: string;
   eventIdx: number;
   params: Codec[];
   block: SubstrateBlock;
@@ -32,6 +34,14 @@ export const getAsset = async (assetId: string): Promise<Asset> => {
   return asset;
 };
 
+export function toEnum<T extends Record<string, string>>(
+  enumType: T,
+  value: string,
+  fallback: T[keyof T]
+): T[keyof T] {
+  return (Object.values(enumType) as string[]).includes(value) ? (value as T[keyof T]) : fallback;
+}
+
 export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
   const blockId = padId(event.block.block.header.number.toString());
   const blockEventId = `${blockId}/${padId(event.idx.toString())}`;
@@ -39,11 +49,16 @@ export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
     ? `${blockId}/${padId(event.extrinsic.idx.toString())}`
     : undefined;
 
+  const eventId = event.event.method;
+  const moduleId = event.event.section.toLowerCase();
+
   return {
     blockId,
     blockEventId,
-    eventId: event.event.method as EventIdEnum,
-    moduleId: event.event.section.toLowerCase() as ModuleIdEnum,
+    eventId: toEnum(EventIdEnum, eventId, EventIdEnum.Unsupported),
+    eventIdText: eventId,
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unsupported),
+    moduleIdText: moduleId,
     params: event.event.data,
     eventIdx: event.idx,
     block: event.block,

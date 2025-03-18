@@ -21,7 +21,9 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     extrinsicIdx,
     blockId,
     eventId,
+    eventIdText,
     moduleId,
+    moduleIdText,
     params: args,
   } = extractArgs(event);
   const genericEvent = event.event as GenericEvent;
@@ -53,6 +55,8 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     specVersionId: block.specVersion,
     eventId,
     moduleId,
+    moduleIdText,
+    eventIdText,
     attributesTxt: JSON.stringify(harvesterLikeArgs),
     eventArg_0,
     eventArg_1,

@@ -1,4 +1,4 @@
-import { Codec } from '@polkadot/types-codec/types';
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Compliance, TrustedClaimIssuer } from '../../../types';
 import {
