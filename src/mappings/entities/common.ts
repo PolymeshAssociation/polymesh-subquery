@@ -55,9 +55,9 @@ export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
   return {
     blockId,
     blockEventId,
-    eventId: toEnum(EventIdEnum, eventId, EventIdEnum.Unsupported),
+    eventId: toEnum(EventIdEnum, eventId, EventIdEnum.Unknown),
     eventIdText: eventId,
-    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unsupported),
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown),
     moduleIdText: moduleId,
     params: event.event.data as unknown as AnyTuple,
     eventIdx: event.idx,

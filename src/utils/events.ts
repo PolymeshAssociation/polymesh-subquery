@@ -57,7 +57,7 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
   let callIdText: string | undefined;
   if (extrinsic) {
     callIdText = camelToSnakeCase(extrinsic.extrinsic.method.method);
-    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unsupported);
+    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown);
   }
 
   return {

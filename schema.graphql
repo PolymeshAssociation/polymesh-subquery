@@ -1403,7 +1403,7 @@ enum CallIdEnum {
   set_proposal_cool_off_period @deprecated
   set_proposal_duration @deprecated
 
-  unsupported
+  unknown
 }
 
 type Debug @entity {
