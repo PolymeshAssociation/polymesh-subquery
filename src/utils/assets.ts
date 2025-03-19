@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { hexAddPrefix, hexHasPrefix, hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
-import { Asset, AssetDocument, Block, SecurityIdentifier } from '../types';
+import { Asset, AssetDocument, SecurityIdentifier } from '../types';
 import {
   coerceHexToString,
   extractString,
@@ -10,7 +10,6 @@ import {
   getTextValue,
   hexToString,
   is7xChain,
-  padId,
   serializeTicker,
 } from './common';
 
@@ -85,7 +84,6 @@ export const getSecurityIdentifiers = (item: Codec): SecurityIdentifier[] => {
   });
 };
 
-let genesisHash: string;
 export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise<string> => {
   const getHexTicker = (value: string) => {
     if (hexHasPrefix(value)) {
@@ -101,12 +99,8 @@ export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise
 
   const rawBytes = blake2AsU8a(data, 128);
 
-  if (!genesisHash) {
-    ({ hash: genesisHash } = await Block.get(padId('0')));
-  }
-
   // Current staging chain already migrated the old ticker into asset IDs without the valid UUID logic
-  if (genesisHash !== '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee') {
+  if (chainId !== '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee') {
     // Version 8.
     rawBytes[6] = (rawBytes[6] & 0x0f) | 0x80;
     // Standard RFC4122 variant (bits 10xx)

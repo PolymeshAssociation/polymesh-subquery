@@ -39,7 +39,7 @@ export function toEnum<T extends Record<string, string>>(
   value: string,
   fallback: T[keyof T]
 ): T[keyof T] {
-  return (Object.values(enumType) as string[]).includes(value) ? (value as T[keyof T]) : fallback;
+  return Object.values(enumType).includes(value) ? (value as T[keyof T]) : fallback;
 }
 
 export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
