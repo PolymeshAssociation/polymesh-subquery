@@ -20,6 +20,12 @@ alter table polyx_transactions
   add column if not exists call_id_text text,
   add column if not exists module_id_text text;
 
-update events set event_id_text = event_id, module_id_text = module_id;
-update extrinsics set call_id_text = call_id, module_id_text = module_id;
-update polyx_transactions set event_id_text = event_id, call_id_text = call_id, module_id_text = module_id;
+update events set event_id_text = event_id where event_id_text is null;
+update events set module_id_text = module_id where module_id_text is null;
+
+update extrinsics set call_id_text = call_id where call_id_text is null;
+update extrinsics set module_id_text = module_id where module_id_text is null;
+
+update polyx_transactions set event_id_text = event_id where event_id_text is null;
+update polyx_transactions set call_id_text = call_id where call_id_text is null;
+update polyx_transactions set module_id_text = module_id where module_id_text is null;
