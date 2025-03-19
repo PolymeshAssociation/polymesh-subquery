@@ -411,7 +411,7 @@ const project: SubstrateProject = {
         file: './dist/index.js',
         handlers: [
           {
-            kind: SubstrateHandlerKind.Event,
+            kind: SubstrateHandlerKind.Block,
             handler: 'handleGenesis',
           },
         ],
