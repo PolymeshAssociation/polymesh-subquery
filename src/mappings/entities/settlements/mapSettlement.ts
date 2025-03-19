@@ -100,7 +100,7 @@ const updateLegs = async (
   address: string,
   instructionId: string
 ): Promise<void> => {
-  const legs = await getPaginatedData(Leg.getByInstructionId, instructionId, 'instructionId');
+  const legs = await getPaginatedData<Leg, 'instructionId'>('Leg', 'instructionId', instructionId);
 
   const updatedLegs = legs.map(leg => {
     if (address) {

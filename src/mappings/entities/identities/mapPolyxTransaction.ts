@@ -36,10 +36,10 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData(
-      PolyxTransaction.getByExtrinsicId,
-      details.extrinsicId,
-      'extrinsicId'
+    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
+      'PolyxTransaction',
+      'extrinsicId',
+      details.extrinsicId
     );
 
     const protocolFeePolyxTransaction = transactions.find(
@@ -94,10 +94,10 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData(
-      PolyxTransaction.getByExtrinsicId,
-      details.extrinsicId,
-      'extrinsicId'
+    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
+      'PolyxTransaction',
+      'extrinsicId',
+      details.extrinsicId
     );
 
     const transferPolyxTransaction = transactions.find(
@@ -146,10 +146,10 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData(
-      PolyxTransaction.getByExtrinsicId,
-      details.extrinsicId,
-      'extrinsicId'
+    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
+      'PolyxTransaction',
+      'extrinsicId',
+      details.extrinsicId
     );
     const endowedPolyxTransaction = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.Endowed
@@ -192,10 +192,10 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
 
   const details = getEventParams(args);
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData(
-      PolyxTransaction.getByExtrinsicId,
-      details.extrinsicId,
-      'extrinsicId'
+    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
+      'PolyxTransaction',
+      'extrinsicId',
+      details.extrinsicId
     );
     const reimbursementTransaction = transactions
       .reverse()

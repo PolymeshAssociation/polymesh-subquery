@@ -43,7 +43,11 @@ export const handleComplianceReset = async (event: SubstrateEvent): Promise<void
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const compliances = await getPaginatedData(Compliance.getByAssetId, assetId, 'assetId');
+  const compliances = await getPaginatedData<Compliance, 'assetId'>(
+    'Compliance',
+    'assetId',
+    assetId
+  );
 
   await store.bulkRemove(
     'Compliance',
@@ -79,7 +83,11 @@ export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<v
 
   const compliances = getComplianceValues(rawCompliances);
 
-  const compliancesToRemove = await getPaginatedData(Compliance.getByAssetId, assetId, 'assetId');
+  const compliancesToRemove = await getPaginatedData<Compliance, 'assetId'>(
+    'Compliance',
+    'assetId',
+    assetId
+  );
   await Promise.all([
     store.bulkRemove(
       'Compliance',

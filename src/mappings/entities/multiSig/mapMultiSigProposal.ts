@@ -235,10 +235,10 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
   const blockId = padId(block.block.header.number.toString());
 
-  const activeProposals = await getPaginatedData(
-    MultiSigProposal.getByStatus,
-    MultiSigProposalStatusEnum.Active,
-    'status'
+  const activeProposals = await getPaginatedData<MultiSigProposal, 'status'>(
+    'MultiSigProposal',
+    'status',
+    MultiSigProposalStatusEnum.Active
   );
 
   const is7 = is7xChain(block);

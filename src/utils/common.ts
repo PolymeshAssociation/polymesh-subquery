@@ -2,9 +2,9 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { Entity, GetOptions } from '@subql/types-core';
-import { ErrorJson, FoundType } from '../types';
+import { Entity } from '@subql/types-core';
 import { Attributes } from 'src/mappings/entities/common';
+import { ErrorJson, FoundType } from '../types';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
 const blockIdLength = 10;
@@ -282,19 +282,19 @@ export const is7xChain = (block: SubstrateBlock) => {
   return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
 };
 
-export const getPaginatedData = async <T extends Omit<Entity, 'id'>>(
-  method: (assetId: string, options: GetOptions<Attributes<T>>) => Promise<T[]>,
-  param: string,
-  orderBy: keyof Attributes<T>
+export const getPaginatedData = async <T extends Omit<Entity, 'id'>, F extends keyof Attributes<T>>(
+  entityName: string,
+  field: F,
+  param: T[F]
 ): Promise<T[]> => {
   let offset = 0;
   const result: T[] = [];
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const data = await method(param, {
+    const data = await store.getByField<T & { id: string }>(entityName, field, param, {
       limit: 100,
       offset,
-      orderBy,
+      orderBy: field,
       orderDirection: 'ASC',
     });
     result.push(...data);

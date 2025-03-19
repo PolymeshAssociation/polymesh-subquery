@@ -33,10 +33,10 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
   ag.permissions = permissions;
 
   const promises = [ag.save()];
-  const members = await getPaginatedData(
-    AgentGroupMembership.getByGroupId,
-    `${assetId}/${group}`,
-    'groupId'
+  const members = await getPaginatedData<AgentGroupMembership, 'groupId'>(
+    'AgentGroupMembership',
+    'groupId',
+    `${assetId}/${group}`
   );
 
   for (const member of members) {
@@ -181,7 +181,11 @@ const addAgentGroupMembership = (
 };
 
 const removeMember = async (did: string, assetId: string) => {
-  const memberships = await getPaginatedData(AgentGroupMembership.getByMember, did, 'member');
+  const memberships = await getPaginatedData<AgentGroupMembership, 'member'>(
+    'AgentGroupMembership',
+    'member',
+    did
+  );
 
   const memberIds = memberships
     .filter(({ groupId }) => groupId.split('/')[0] === assetId)
