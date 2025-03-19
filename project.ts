@@ -329,15 +329,27 @@ const handlers: SubstrateEventHandler[] = [];
 const eventSpecificHandlers: SubstrateEventHandler[] = [];
 
 Object.keys(filters).forEach(module => {
-  Object.keys(filters[module]).forEach(method => {
+  if (module !== 'system') {
     handlers.push({
       kind: SubstrateHandlerKind.Event,
       handler: 'handleEvent',
       filter: {
         module,
-        method,
       },
     } as SubstrateEventHandler);
+  }
+
+  Object.keys(filters[module]).forEach(method => {
+    if (module === 'system') {
+      handlers.push({
+        kind: SubstrateHandlerKind.Event,
+        handler: 'handleEvent',
+        filter: {
+          module,
+          method,
+        },
+      } as SubstrateEventHandler);
+    }
 
     if (filters[module][method].length > 0) {
       const handlerList = filters[module][method];

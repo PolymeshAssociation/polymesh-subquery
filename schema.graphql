@@ -65,7 +65,8 @@ enum ModuleIdEnum {
   finalitytracker @deprecated
   stocapped @deprecated
 
-  unsupported
+  "unknown module value is populated for modules not yet implemented by Polymesh SubQuery"
+  unknown
 }
 
 """
@@ -686,7 +687,8 @@ enum EventIdEnum {
   VoteEnactReferendum @deprecated
   VoteRejectReferendum @deprecated
 
-  Unsupported
+  "Unknown event value is populated for events not yet implemented by Polymesh SubQuery"
+  Unknown
 }
 
 """
