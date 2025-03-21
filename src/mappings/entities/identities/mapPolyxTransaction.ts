@@ -198,6 +198,7 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
       details.extrinsicId
     );
     const reimbursementTransaction = transactions
+      .slice()
       .reverse()
       .find(({ eventId }) => eventId === EventIdEnum.TreasuryReimbursement);
     /**

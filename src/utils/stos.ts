@@ -38,7 +38,11 @@ export const getFundraiserDetails = async (
     status: stoStatus,
     start: getDateValue(start),
     end: getDateValue(end),
-    tiers,
+    tiers: tiers.map(tier => ({
+      price: BigInt(tier.price),
+      remaining: BigInt(tier.remaining),
+      total: BigInt(tier.total),
+    })),
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
     offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),

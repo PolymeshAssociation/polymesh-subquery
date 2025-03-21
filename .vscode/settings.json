@@ -10,15 +10,16 @@
     "vscode-extension",
     ".git/objects",
     ".vscode",
-    ".eslintrc",
+    ".eslintrc"
   ],
   "cSpell.ignoreRegExpList": [
     "/from\\s+(['\"]).*\\1/", // ignore imports
-    "/\/\/ TODO @\\w+/", // ignore github handles in TODOs
+    "/// TODO @\\w+/", // ignore github handles in TODOs
     "/0x.+/" // ignore hex values
   ],
   "cSpell.words": [
     "Capitaldistribution",
+    "cddserviceproviders",
     "chaintypes",
     "codegen",
     "Compliancemanager",
@@ -30,13 +31,21 @@
     "Externalagents",
     "extrinsics",
     "fundings",
+    "healthcheck",
+    "isready",
+    "onfinality",
+    "Permissioned",
     "Polkadot",
     "Polymesh",
     "Polyx",
+    "Prefs",
     "signedbyAddress",
     "snapshotted",
     "subql",
     "Subquery",
+    "Timelock",
+    "tini",
+    "transactionpayment",
     "Unbonded"
   ]
 }

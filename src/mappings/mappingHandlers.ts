@@ -13,6 +13,11 @@ let lastEventIdx = -1;
 let startupHandled = false;
 
 export async function handleGenesis(): Promise<void> {
+  // this is need to populate subquery version on startup
+  if (!startupHandled) {
+    await handleStartup();
+    startupHandled = true;
+  }
   await genesisHandler().catch(e => logError(e));
 }
 
