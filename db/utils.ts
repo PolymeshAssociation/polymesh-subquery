@@ -28,7 +28,7 @@ export const retry = async <T>(
   throw err;
 };
 
-export const getPostgresConnection = async (): Promise<DataSource> => {
+export const getPostgresDataSource = async (): Promise<DataSource> => {
   const maxAttempts = env.NODE_ENV === 'local' ? 10 : 1;
   const dataSource = new DataSource({
     type: 'postgres',

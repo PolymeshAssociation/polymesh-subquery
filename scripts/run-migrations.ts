@@ -1,8 +1,8 @@
 import { schemaMigrations } from '../db/schemaMigrations';
-import { dbIsReady, getPostgresConnection } from '../db/utils';
+import { dbIsReady, getPostgresDataSource } from '../db/utils';
 
 const main = async () => {
-  const postgres = await getPostgresConnection();
+  const postgres = await getPostgresDataSource();
 
   try {
     await dbIsReady(postgres, 1);

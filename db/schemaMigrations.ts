@@ -1,10 +1,10 @@
-import { readdirSync, readFileSync } from 'fs';
-import { Connection } from 'typeorm';
-import { version as latestVersion } from '../package.json';
-import { getPostgresConnection } from './utils';
 import { randomUUID } from 'crypto';
+import { readdirSync, readFileSync } from 'fs';
+import { DataSource } from 'typeorm';
+import { version as latestVersion } from '../package.json';
+import { getPostgresDataSource } from './utils';
 
-const getLastMigrationFromDB = (postgres: Connection) => {
+const getLastMigrationFromDB = (postgres: DataSource) => {
   return postgres
     .createQueryBuilder()
     .select('number', 'lastMigration')
@@ -33,8 +33,8 @@ VALUES ('${
   id || migrationNumber
 }', '${randomUUID()}', ${migrationNumber},'${latestVersion}', 1, 0, '[1,)');`;
 
-export const schemaMigrations = async (connection?: Connection): Promise<void> => {
-  const postgres = await (connection ?? getPostgresConnection());
+export const schemaMigrations = async (dataSource?: DataSource): Promise<void> => {
+  const postgres = await (dataSource ?? getPostgresDataSource());
 
   let lastMigration = 0;
   try {

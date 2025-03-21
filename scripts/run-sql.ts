@@ -1,8 +1,8 @@
 import { readFileSync } from 'fs';
-import { dbIsReady, getPostgresConnection } from '../db/utils';
+import { dbIsReady, getPostgresDataSource } from '../db/utils';
 
 const main = async (): Promise<void> => {
-  const postgres = await getPostgresConnection();
+  const postgres = await getPostgresDataSource();
 
   await dbIsReady(postgres);
 
