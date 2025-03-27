@@ -364,8 +364,6 @@ export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => 
   const args = extractArgs(event);
   const [, rawAccount] = args.params;
 
-  logger.info(`got raw account: ${rawAccount.toJSON()}`);
-
   const account = rawAccount.toJSON() as MeshAccount;
 
   let address;
@@ -376,8 +374,6 @@ export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => 
     // for chain version < 5.0.0
     ({ account: address } = account);
   }
-
-  logger.info('removing account for address: ', address);
 
   await Promise.all([Account.remove(address), Permissions.remove(address)]);
 };
