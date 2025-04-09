@@ -3,7 +3,6 @@ import { Codec } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity } from '@subql/types-core';
-import { Attributes } from 'src/mappings/entities/common';
 import { ErrorJson, FoundType } from '../types';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
@@ -282,7 +281,7 @@ export const is7xChain = (block: SubstrateBlock) => {
   return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
 };
 
-export const getPaginatedData = async <T extends Omit<Entity, 'id'>, F extends keyof Attributes<T>>(
+export const getPaginatedData = async <T extends Entity, F extends keyof T>(
   entityName: string,
   field: F,
   param: T[F]
@@ -291,16 +290,19 @@ export const getPaginatedData = async <T extends Omit<Entity, 'id'>, F extends k
   const result: T[] = [];
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const data = await store.getByField<T & { id: string }>(entityName, field, param, {
+    const data = await store.getByField<T>(entityName, field, param, {
       limit: 100,
       offset,
       orderBy: field,
       orderDirection: 'ASC',
     });
+
     result.push(...data);
+
     if (data.length < 100) {
       break;
     }
+
     offset += data.length;
   }
   return result;

@@ -36,13 +36,12 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
-      'PolyxTransaction',
-      'extrinsicId',
-      details.extrinsicId
-    );
+    const transactions: PolyxTransaction[] = await getPaginatedData<
+      PolyxTransaction,
+      'extrinsicId'
+    >('PolyxTransaction', 'extrinsicId', details.extrinsicId);
 
-    const protocolFeePolyxTransaction = transactions.find(
+    const protocolFeePolyxTransaction: PolyxTransaction | undefined = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.FeeCharged
     );
 
@@ -94,13 +93,12 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
-      'PolyxTransaction',
-      'extrinsicId',
-      details.extrinsicId
-    );
+    const transactions: PolyxTransaction[] = await getPaginatedData<
+      PolyxTransaction,
+      'extrinsicId'
+    >('PolyxTransaction', 'extrinsicId', details.extrinsicId);
 
-    const transferPolyxTransaction = transactions.find(
+    const transferPolyxTransaction: PolyxTransaction | undefined = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.Transfer
     );
     /**
@@ -146,12 +144,12 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   const details = getEventParams(args);
 
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
-      'PolyxTransaction',
-      'extrinsicId',
-      details.extrinsicId
-    );
-    const endowedPolyxTransaction = transactions.find(
+    const transactions: PolyxTransaction[] = await getPaginatedData<
+      PolyxTransaction,
+      'extrinsicId'
+    >('PolyxTransaction', 'extrinsicId', details.extrinsicId);
+
+    const endowedPolyxTransaction: PolyxTransaction | undefined = transactions.find(
       ({ eventId }) => eventId === EventIdEnum.Endowed
     );
     /**
@@ -192,12 +190,12 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
 
   const details = getEventParams(args);
   if (details.extrinsicId) {
-    const transactions = await getPaginatedData<PolyxTransaction, 'extrinsicId'>(
-      'PolyxTransaction',
-      'extrinsicId',
-      details.extrinsicId
-    );
-    const reimbursementTransaction = transactions
+    const transactions: PolyxTransaction[] = await getPaginatedData<
+      PolyxTransaction,
+      'extrinsicId'
+    >('PolyxTransaction', 'extrinsicId', details.extrinsicId);
+
+    const reimbursementTransaction: PolyxTransaction | undefined = transactions
       .slice()
       .reverse()
       .find(({ eventId }) => eventId === EventIdEnum.TreasuryReimbursement);
