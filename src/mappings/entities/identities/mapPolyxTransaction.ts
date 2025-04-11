@@ -111,7 +111,7 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
       // this is the case where treasury reimbursement is showing that 80% of protocol fee charged
       // We ignore this case to insert in PolyxTransaction
       transferPolyxTransaction.eventId = EventIdEnum.TreasuryDisbursement;
-      await transferPolyxTransaction.save();
+      await PolyxTransaction.create(transferPolyxTransaction).save();
       return;
     }
   }
@@ -164,7 +164,8 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
       endowedPolyxTransaction.identityId = identityId;
       endowedPolyxTransaction.address = address;
       endowedPolyxTransaction.memo = memo;
-      await endowedPolyxTransaction.save();
+
+      await PolyxTransaction.create(endowedPolyxTransaction).save();
       return;
     }
   }
@@ -209,7 +210,7 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
       reimbursementTransaction.amount = amount;
       reimbursementTransaction.moduleId = ModuleIdEnum.transactionpayment;
       reimbursementTransaction.eventId = EventIdEnum.TransactionFeePaid;
-      await reimbursementTransaction.save();
+      await PolyxTransaction.create(reimbursementTransaction).save();
       return;
     }
   }

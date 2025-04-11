@@ -25,7 +25,7 @@ RUN yarn --frozen-lockfile \
   && rm -rf /root/.npm /root/.cache
 
 # Stage 2: Production Stage
-FROM onfinality/subql-node:v5.10.0 AS production
+FROM onfinality/subql-node:v5.11.2 AS production
 
 USER root
 

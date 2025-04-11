@@ -51,7 +51,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",
     "@semantic-release/npm": "^11.0.0",
-    "@subql/node": "^5.10.0",
+    "@subql/node": "^5.11.2",
     "@types/bn.js": "^4.11.6",
     "@types/jest": "^29.5.4",
     "@types/js-yaml": "^4.0.3",

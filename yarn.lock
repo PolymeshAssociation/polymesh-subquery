@@ -2885,10 +2885,10 @@
     semver "^7.6.3"
     update-notifier "^5.1.0"
 
-"@subql/node-core@17.1.0":
-  version "17.1.0"
-  resolved "https://registry.yarnpkg.com/@subql/node-core/-/node-core-17.1.0.tgz#59ca8e7d87ee5d7e564b7c56239e313a658cdcae"
-  integrity sha512-C4/1nQ2BqvBprRNJOY7H/s51UboOMd7GZKciMoNlzqim6hZ4KgybfQ3zEOjK2beZPcC1EAbSDKOpH3Blmw44ew==
+"@subql/node-core@17.2.2":
+  version "17.2.2"
+  resolved "https://registry.yarnpkg.com/@subql/node-core/-/node-core-17.2.2.tgz#7d3b283ee222fdde9d490932338c7863ecf1d14a"
+  integrity sha512-dos9rIbqwcLPYFMyZqmcz9zgU16kcChm3BDM/FRVp/0+VLTi8kEjzm2EDy0eJkjssYaB8RRADxrtxZKQakc1Jw==
   dependencies:
     "@apollo/client" "^3.11.2"
     "@nestjs/common" "^11.0.7"
@@ -2915,10 +2915,10 @@
     vm2 "^3.9.19"
     yargs "^16.2.0"
 
-"@subql/node@^5.10.0":
-  version "5.10.0"
-  resolved "https://registry.yarnpkg.com/@subql/node/-/node-5.10.0.tgz#b04ca9162aa1b6e076cde9482f0b91576dafaea3"
-  integrity sha512-ZevO6oZNTEUt3cTgxlkhfxOwlarDRK3kCoqx7YufKwljYTZJQvxkjIp7x2XqULIO8Q6cVJmeUJcreeTJq7nqQA==
+"@subql/node@^5.11.2":
+  version "5.11.2"
+  resolved "https://registry.yarnpkg.com/@subql/node/-/node-5.11.2.tgz#239f8eca5f88a79a4ad528f0faa672b35ac0c37f"
+  integrity sha512-g78M4rcm+8doIQOEkX5y9myO57EyMPPersCdOs70NccbqaqK0mXbLZ3fKgsRUqQyJhw13bQ0rx9eWaFJLgZfWQ==
   dependencies:
     "@nestjs/common" "^11.0.7"
     "@nestjs/core" "^11.0.7"
@@ -2928,7 +2928,7 @@
     "@polkadot/api" "^15.6.1"
     "@subql/common" "5.4.0"
     "@subql/common-substrate" "4.3.7"
-    "@subql/node-core" "17.1.0"
+    "@subql/node-core" "17.2.2"
     "@subql/types" "3.12.1"
     "@subql/utils" "2.18.0"
     fetch-h2 "3.0.2"
