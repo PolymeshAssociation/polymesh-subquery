@@ -56,7 +56,7 @@ jobs:
         run: yarn --frozen-lockfile
       - name: Setup SSH signing key
         run: |
-          echo "$SSH_KEY_PRIVATE" | tr -d '\r' > /tmp/id_ed25519
+          echo $SSH_KEY_PRIVATE | base64 -d > /tmp/id_ed25519
           echo $SSH_KEY_PUBLIC > /tmp/id_ed25519.pub
           chmod 600 /tmp/id_ed25519
           eval "$(ssh-agent -s)"
