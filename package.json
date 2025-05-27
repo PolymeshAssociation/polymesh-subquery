@@ -16,6 +16,7 @@
     "codegen": "./node_modules/.bin/subql codegen",
     "commit": "npx git-cz",
     "start:docker": "docker compose pull && docker compose up --remove-orphans",
+    "stop:docker": "docker compose down -v",
     "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package polymesh-subql/api-interfaces --input ./src/api-interfaces",
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict",
     "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
