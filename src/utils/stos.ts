@@ -47,6 +47,7 @@ export const getFundraiserDetails = async (
     offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
     raisingAssetId,
+    offChainFundingEnabled: false,
     raisingTicker,
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
     venueId: extractString(rest, 'venue_id'),

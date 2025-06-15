@@ -141,6 +141,12 @@ export const getSettlementTypeDetails = (
     };
   }
 
+  if (type === InstructionTypeEnum.SettleAfterLock) {
+    return {
+      type: InstructionTypeEnum.SettleAfterLock,
+    };
+  }
+
   return {
     type: InstructionTypeEnum.SettleOnAffirmation,
   };

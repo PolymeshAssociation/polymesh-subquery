@@ -281,6 +281,15 @@ export const is7xChain = (block: SubstrateBlock) => {
   return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
 };
 
+/**
+ * From the spec version 7.3, sto events were modified to include asset ID details
+ */
+export const is7Dot3Chain = (block: SubstrateBlock) => {
+  const { specVersion } = block;
+  const specName = api.runtimeVersion.specName.toString();
+  return specVersion >= 7300000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
+};
+
 export const getPaginatedData = async <T extends Entity, F extends keyof T>(
   entityName: string,
   field: F,

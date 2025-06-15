@@ -38,6 +38,7 @@ const instructionStatusMap = {
   [EventIdEnum.InstructionFailed]: InstructionStatusEnum.Failed,
   [EventIdEnum.InstructionCreated]: InstructionStatusEnum.Created,
   [EventIdEnum.FailedToExecuteInstruction]: InstructionStatusEnum.Failed,
+  [EventIdEnum.InstructionLocked]: InstructionStatusEnum.Locked,
 };
 
 /**
@@ -501,6 +502,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  * Maps events -
  *   - settlement.InstructionExecuted
  *   - settlement.InstructionFailed
+ *   - settlement.InstructionLocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
   const { params, extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);

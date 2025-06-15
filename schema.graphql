@@ -499,6 +499,7 @@ enum EventIdEnum {
   MediatorAffirmationReceived
   MediatorAffirmationWithdrawn
   InstructionMediators
+  InstructionLocked
 
   TickerLinkedToAsset
 
@@ -521,6 +522,7 @@ enum EventIdEnum {
   FundraiserUnfrozen
   FundraiserWindowModified
   FundraiserClosed
+  FundraiserOffchainFundingEnabled
 
   ## treasury ##
   TreasuryDisbursement
@@ -940,6 +942,7 @@ enum CallIdEnum {
   scale_validator_count
   add_permissioned_validator
   remove_permissioned_validator
+  "`validate_cdd_expiry_nominators` has been deprecated from 7.3.0 chain version"
   validate_cdd_expiry_nominators
   set_commission_cap
   "`set_min_bond_threshold` has been renamed to `set_min_commission` from 7.0.0 chain version"
@@ -1181,6 +1184,7 @@ enum CallIdEnum {
   withdraw_affirmation_as_mediator
   reject_instruction_as_mediator
   add_and_affirm_with_mediators
+  lock_instruction
 
   ## statistics ##
   set_active_asset_stats
@@ -1195,6 +1199,7 @@ enum CallIdEnum {
   unfreeze_fundraiser
   modify_fundraiser_window
   stop
+  enable_offchain_funding
 
   ## treasury ##
   disbursement
@@ -1679,6 +1684,8 @@ type Sto @entity {
   tiers: [FundraiserTierJson!]!
   status: StoStatus!
   minimumInvestment: BigInt!
+  offChainFundingEnabled: Boolean!
+  offChainFundingToken: String
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -1731,6 +1738,11 @@ type Authorization @entity {
   createdEvent: Event!
 }
 
+enum RaisingAssetTypeEnum {
+  OnChain
+  OffChain
+}
+
 """
 Represents participation in an STO
 """
@@ -1742,6 +1754,7 @@ type Investment @entity {
   offeringToken: String! @index(unique: false)
   raisingAssetId: String!
   raiseToken: String!
+  raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
   datetime: Date!
@@ -1879,6 +1892,7 @@ enum InstructionStatusEnum {
   Executed
   Rejected
   Failed
+  Locked
 }
 
 """
@@ -1888,6 +1902,7 @@ enum InstructionTypeEnum {
   SettleOnAffirmation
   SettleOnBlock
   SettleManual
+  SettleAfterLock
 }
 
 type ErrorJson @jsonField {

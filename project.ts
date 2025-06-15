@@ -242,6 +242,7 @@ const filters = {
     InstructionCreated: ['handleInstructionCreated'],
     InstructionExecuted: ['handleInstructionFinalizedEvent'],
     InstructionFailed: ['handleInstructionFinalizedEvent'],
+    InstructionLocked: ['handleInstructionLocked'],
     InstructionRejected: ['handleInstructionRejected'],
     InstructionRescheduled: [],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],
@@ -310,6 +311,7 @@ const filters = {
     FundraiserUnfrozen: ['handleStoUnfrozen'],
     FundraiserWindowModified: ['handleFundraiserWindowModified'],
     Invested: ['handleInvested'],
+    FundraiserOffchainFundingEnabled: ['handleFundraiserOffchainFundingEnabled'],
   },
   system: {
     CodeUpdated: ['handleMigration'],

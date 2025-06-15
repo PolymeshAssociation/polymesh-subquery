@@ -7,6 +7,7 @@ import {
   getOfferingAsset,
   getOrDefault,
   getTextValue,
+  is7Dot3Chain,
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
@@ -292,8 +293,8 @@ class ExternalAgentEventsManager {
       )
       // Special case for the Sto pallet because most events don't contain the Asset,
       // they contain a reference to a previously created fundraiser instead.
-      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async params =>
-        getOfferingAsset(params[3])
+      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async (params, block) =>
+        is7Dot3Chain(block) ? getAssetId(params[1], block) : getOfferingAsset(params[3])
       )
       .add(
         ModuleIdEnum.sto,
@@ -303,9 +304,13 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (_, block, extrinsic) =>
-          getAssetId(extrinsic?.extrinsic.args[0] as unknown as Codec, block)
-      );
+        async (params, block, extrinsic) =>
+          is7Dot3Chain(block)
+            ? getAssetId(params[1], block)
+            : getAssetId(extrinsic?.extrinsic.args[0] as unknown as Codec, block)
+      )
+      .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserOffchainFundingEnabled], 1);
+
     return eventsManager;
   }
 
