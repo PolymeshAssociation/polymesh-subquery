@@ -15,7 +15,7 @@ import {
 
 export interface AssetIdWithTicker {
   assetId: string;
-  ticker: string;
+  ticker?: string;
 }
 
 export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
@@ -140,7 +140,7 @@ export const getAssetIdWithTicker = async (
     assetId = typeof assetIdOrTicker === 'string' ? assetIdOrTicker : assetIdOrTicker.toString();
 
     const asset = await Asset.get(assetId);
-    ticker = asset?.ticker ?? assetId;
+    ticker = asset?.ticker;
   } else {
     ticker =
       typeof assetIdOrTicker === 'string'

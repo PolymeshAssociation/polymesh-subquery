@@ -86,7 +86,13 @@ export const handleFundraiserOffchainFundingEnabled = async (
 
 const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
   const { params, extrinsic, block, blockId } = extractArgs(event);
-  const [, rawStoId] = params;
+  let rawStoId: Codec;
+
+  if (is7Dot3Chain(block)) {
+    [, , rawStoId] = params;
+  } else {
+    [, rawStoId] = params;
+  }
 
   const offeringAssetId = await getOfferingAsset(block, params, extrinsic);
   const stoId = getNumberValue(rawStoId);
@@ -151,27 +157,31 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
   let raisingAssetType: RaisingAssetTypeEnum;
 
   if (is7Dot3Chain(block)) {
-    [rawInvestor, rawOfferingAsset, rawStoId, , rawOfferingTokenAmount, rawRaiseTokenAmount] =
-      params;
+    [
+      rawInvestor,
+      rawOfferingAsset,
+      rawStoId,
+      rawRaisingAsset,
+      rawOfferingTokenAmount,
+      rawRaiseTokenAmount,
+    ] = params;
 
     ({ assetId: offeringAssetId, ticker: offeringToken } = await getAssetIdWithTicker(
       rawOfferingAsset,
       block
     ));
 
-    const rawFundingAssetDetails = JSON.parse(params[3].toString());
-
-    const assetType = capitalizeFirstLetter(getFirstKeyFromJson(rawFundingAssetDetails));
-    const rawFundingAsset = getFirstValueFromJson(rawFundingAssetDetails);
+    const assetType = capitalizeFirstLetter(getFirstKeyFromJson(rawRaisingAsset));
+    const fundingAssetIdOrTicker = getFirstValueFromJson(rawRaisingAsset);
 
     if (assetType === RaisingAssetTypeEnum.OnChain) {
       ({ assetId: raisingAssetId, ticker: raiseToken } = await getAssetIdWithTicker(
-        rawFundingAsset,
+        fundingAssetIdOrTicker,
         block
       ));
       raisingAssetType = RaisingAssetTypeEnum.OnChain;
     } else {
-      const offChainTicker = coerceHexToString(rawFundingAsset);
+      const offChainTicker = coerceHexToString(fundingAssetIdOrTicker);
       raisingAssetId = offChainTicker;
       raiseToken = offChainTicker;
       raisingAssetType = RaisingAssetTypeEnum.OffChain;

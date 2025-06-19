@@ -242,7 +242,7 @@ const filters = {
     InstructionCreated: ['handleInstructionCreated'],
     InstructionExecuted: ['handleInstructionFinalizedEvent'],
     InstructionFailed: ['handleInstructionFinalizedEvent'],
-    InstructionLocked: ['handleInstructionLocked'],
+    InstructionLocked: ['handleInstructionFinalizedEvent'],
     InstructionRejected: ['handleInstructionRejected'],
     InstructionRescheduled: [],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],

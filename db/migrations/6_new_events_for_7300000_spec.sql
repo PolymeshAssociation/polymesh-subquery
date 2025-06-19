@@ -6,6 +6,7 @@ alter type "8f5a39c8ee" add value if not exists 'FundraiserOffchainFundingEnable
 
 alter table "public"."stos" add column if not exists "off_chain_funding_enabled" boolean not null default false;
 alter table "public"."stos" add column if not exists "off_chain_funding_token" text;
+alter table "public"."stos" alter column "raising_ticker" drop not null;
 
 alter type "b861be9158" add value if not exists 'Locked' after 'Failed';
 
@@ -20,3 +21,5 @@ END
 $$;
 
 alter table "public"."investments" add column if not exists "raising_asset_type" "867b307be0" not null default 'OnChain';
+
+alter type "3e29b3f361" add value if not exists 'InstructionLocked' after 'InstructionFailed';

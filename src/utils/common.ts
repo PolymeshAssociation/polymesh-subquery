@@ -287,7 +287,7 @@ export const is7xChain = (block: SubstrateBlock) => {
 export const is7Dot3Chain = (block: SubstrateBlock) => {
   const { specVersion } = block;
   const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 7300000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
+  return specVersion >= 7003000 || (specName === 'polymesh_private_dev' && specVersion >= 2001000);
 };
 
 export const getPaginatedData = async <T extends Entity, F extends keyof T>(

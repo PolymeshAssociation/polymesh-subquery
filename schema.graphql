@@ -1676,7 +1676,7 @@ type Sto @entity {
   offeringPortfolio: Portfolio!
   raisingAssetId: String! # This is not marked as Asset, since the raising asset need not be an registered asset. For example, USD
   "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
-  raisingTicker: String!
+  raisingTicker: String
   raisingPortfolio: Portfolio!
   creator: Identity!
   start: Date
@@ -2034,6 +2034,7 @@ enum InstructionEventEnum {
   InstructionAutomaticallyAffirmed
   InstructionExecuted
   InstructionFailed
+  InstructionLocked
   InstructionMediators
   AffirmationWithdrawn
   InstructionRejected
