@@ -1751,9 +1751,9 @@ type Investment @entity {
   investor: Identity!
   stoId: Int! @index(unique: false)
   offeringAssetId: String! @index(unique: false)
-  offeringToken: String! @index(unique: false)
+  offeringToken: String @index(unique: false)
   raisingAssetId: String!
-  raiseToken: String!
+  raiseToken: String
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
