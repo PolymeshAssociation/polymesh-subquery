@@ -19,13 +19,15 @@ jobs:
     name: Linting and Testing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - name: Enable corepack
+        run: corepack enable
+      - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
           cache: 'yarn'
       - name: install dependencies
-        run: yarn --frozen-lockfile
+        run: yarn --immutable
       - name: gen types
         run: yarn codegen
       - name: build src
@@ -44,16 +46,18 @@ jobs:
     needs: [lint_test]
     if: github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
           cache: 'yarn'
+      - name: Enable corepack
+        run: corepack enable
       - name: install dependencies
-        run: yarn --frozen-lockfile
+        run: yarn --immutable
       - name: Setup SSH signing key
         run: |
           echo $SSH_KEY_PRIVATE | base64 -d > /tmp/id_ed25519

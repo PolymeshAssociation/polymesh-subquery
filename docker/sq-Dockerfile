@@ -18,7 +18,8 @@ WORKDIR /app/builder
 COPY . .
 
 # Build the application
-RUN yarn --frozen-lockfile \
+RUN corepack enable \
+  && yarn --immutable \
   && yarn codegen \
   && yarn build \
   && yarn remove $(cat package.json | jq -r '.devDependencies | keys | join(" ")') \

@@ -61,3 +61,4 @@ metadata.json
 .project-cid
 
 .env
+.yarn/
