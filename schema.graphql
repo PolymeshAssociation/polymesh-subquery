@@ -2932,3 +2932,16 @@ type AssetPreApproval @entity {
   createdBlock: Block!
   updatedBlock: Block!
 }
+
+"""
+Represents a ticker reservation. If linked to an Asset `asset` will be set
+"""
+type TickerReservation @entity {
+  id: ID!
+  ticker: String!
+  asset: Asset
+  identity: Identity! @index(unique: false)
+  expiry: Date
+  createdBlock: Block!
+  updatedBlock: Block!
+}
