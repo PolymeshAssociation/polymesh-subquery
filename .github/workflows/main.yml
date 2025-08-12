@@ -45,11 +45,11 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
-      - name: Enable corepack
-        run: corepack enable
         with:
           persist-credentials: false
           fetch-depth: 1
+      - name: Enable corepack
+        run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
