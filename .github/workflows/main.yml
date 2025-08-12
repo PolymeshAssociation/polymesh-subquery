@@ -45,6 +45,8 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
+      - name: Enable corepack
+        run: corepack enable
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -52,8 +54,6 @@ jobs:
         with:
           node-version: '22.x'
           cache: 'yarn'
-      - name: Enable corepack
-        run: corepack enable
       - name: install dependencies
         run: yarn --immutable
       - name: test
