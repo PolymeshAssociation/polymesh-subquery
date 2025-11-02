@@ -1,4 +1,3 @@
-import { getPaginatedData } from './../../../utils/common';
 import { SubstrateEvent } from '@subql/types';
 import BigNumber from 'bignumber.js';
 import {
@@ -10,7 +9,9 @@ import {
   PolyxTransaction,
 } from '../../../types';
 import { bytesToString, getBigIntValue, getEventParams, getTextValue } from '../../../utils';
+import { is8xChain } from '../../../utils/common';
 import { HandlerArgs, extractArgs } from '../common';
+import { getPaginatedData } from './../../../utils/common';
 
 export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
@@ -289,10 +290,19 @@ const handleBalanceReceived = async (
 const handleBalanceSpent = async (event: SubstrateEvent, type: BalanceTypeEnum): Promise<void> => {
   const args = extractArgs(event);
 
-  const [rawDid, rawAddress, rawBalance] = args.params;
-  const identityId = getTextValue(rawDid);
-  const address = getTextValue(rawAddress);
-  const amount = getBigIntValue(rawBalance);
+  let identityId: string | undefined;
+  let address: string | undefined;
+  let amount: bigint | undefined;
+  if (is8xChain(args.block)) {
+    const [rawAddress, rawBalance] = args.params;
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  } else {
+    const [rawDid, rawAddress, rawBalance] = args.params;
+    identityId = getTextValue(rawDid);
+    address = getTextValue(rawAddress);
+    amount = getBigIntValue(rawBalance);
+  }
 
   await PolyxTransaction.create({
     ...getEventParams(args),
@@ -305,12 +315,22 @@ const handleBalanceSpent = async (event: SubstrateEvent, type: BalanceTypeEnum):
 
 export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
+  let toId: string;
+  let toAddress: string;
+  let amount: bigint;
+  let reservedAmount: bigint;
 
-  const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
-  const toId = getTextValue(rawDid);
-  const toAddress = getTextValue(rawAddress);
-  const amount = getBigIntValue(rawFreeBalance);
-  const reservedAmount = getBigIntValue(rawReservedBalance);
+  if (is8xChain(args.block)) {
+    const [rawAddress, rawFreeBalance] = args.params;
+    toAddress = getTextValue(rawAddress);
+    amount = getBigIntValue(rawFreeBalance);
+  } else {
+    const [rawDid, rawAddress, rawFreeBalance, rawReservedBalance] = args.params;
+    toId = getTextValue(rawDid);
+    toAddress = getTextValue(rawAddress);
+    amount = getBigIntValue(rawFreeBalance);
+    reservedAmount = getBigIntValue(rawReservedBalance);
+  }
 
   const details = getEventParams(args);
 
@@ -323,14 +343,16 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
     type: BalanceTypeEnum.Free,
   }).save();
 
-  // add the newly set reserve balance
-  await PolyxTransaction.create({
-    ...details,
-    toId,
-    toAddress,
-    amount: reservedAmount,
-    type: BalanceTypeEnum.Reserved,
-  }).save();
+  if (reservedAmount) {
+    // add the newly set reserve balance
+    await PolyxTransaction.create({
+      ...details,
+      toId,
+      toAddress,
+      amount: reservedAmount,
+      type: BalanceTypeEnum.Reserved,
+    }).save();
+  }
 };
 
 export const handleBalanceEndowed = async (event: SubstrateEvent): Promise<void> => {
@@ -367,4 +389,8 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
 
 export const handleFeeCharged = async (event: SubstrateEvent): Promise<void> => {
   await handleBalanceCharged(event, BalanceTypeEnum.Free);
+};
+
+export const handleBalanceDeposit = async (event: SubstrateEvent): Promise<void> => {
+  await handleBalanceAdded(event, BalanceTypeEnum.Free);
 };

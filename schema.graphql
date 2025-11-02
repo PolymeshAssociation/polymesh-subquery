@@ -57,6 +57,7 @@ enum ModuleIdEnum {
   confidentialasset
   statetriemigration
   electionprovidermultiphase
+  validators
 
   ## deprecated ##
   confidential @deprecated
@@ -80,7 +81,10 @@ enum EventIdEnum {
   NewAccount
   KilledAccount
   Remarked
+  "`PlaceholderFillBlock` has been deprecated from 8.0.0 chain version"
   PlaceholderFillBlock
+  RejectedInvalidAuthorizedUpgrade
+  UpgradeAuthorized
 
   ## babe ##
 
@@ -90,6 +94,7 @@ enum EventIdEnum {
   IndexAssigned
   IndexFreed
   IndexFrozen
+  DepositPoked
 
   ## authorship ##
 
@@ -97,11 +102,29 @@ enum EventIdEnum {
   Endowed
   # Transfer (already defined in Asset)
   BalanceSet
+  "`AccountBalanceBurned` has been deprecated from 8.0.0 chain version"
   AccountBalanceBurned
   Reserved
   Unreserved
   ReserveRepatriated
   TransactionFeePaid
+  Burned
+  Deposit
+  DustLost
+  Frozen
+  # Issued (already defined in asset)
+  Locked
+  Minted
+  Rescinded
+  Restored
+  # Slashed (already defined in electionprovidermultiphase)
+  Suspended
+  Thawed
+  TotalIssuanceForced
+  TransferMemo
+  Unlocked
+  Upgraded
+  Withdraw
 
   ## transactionpayment ##
 
@@ -207,14 +230,18 @@ enum EventIdEnum {
   ProposalAdded
   ProposalExecuted
   MultiSigSignerAdded
+  "`MultiSigSignerAuthorized` has been deprecated from 8.0.0 chain version"
   MultiSigSignerAuthorized
+  "`MultiSigSignerRemoved` has been deprecated from 8.0.0 chain version"
   MultiSigSignerRemoved
   "`MultiSigSignaturesRequiredChanged` has been deprecated from 7.0.0 chain version"
   MultiSigSignaturesRequiredChanged
   ProposalApproved
   ProposalRejectionVote
   ProposalRejected
+  "`ProposalExecutionFailed` has been deprecated from 8.0.0 chain version"
   ProposalExecutionFailed
+  "`ProposalFailedToExecute` has been deprecated from 8.0.0 chain version"
   ProposalFailedToExecute
   # SchedulingFailed (already defined in Settlement)
   MultiSigAddedAdmin
@@ -264,6 +291,7 @@ enum EventIdEnum {
   ## staking ##
   "`EraPayout` has been deprecated from 7.0.0 chain version"
   EraPayout
+  "`Reward` has been deprecated from 8.0.0 chain version"
   Reward
   "`Slash` has been renamed to `Slashed` from 7.0.0 chain version"
   Slash
@@ -292,12 +320,18 @@ enum EventIdEnum {
   StakersElected
   ValidatorPrefsSet
   StakingElectionFailed
+  ControllerBatchDeprecated
+  CurrencyMigrated
+  SnapshotTargetsSizeExceeded
+  SnapshotVotersSizeExceeded
 
   ## offences ##
   Offence
 
   ## session ##
   NewSession
+  ValidatorDisabled
+  ValidatorReenabled
 
   ## authoritydiscovery ##
 
@@ -359,7 +393,8 @@ enum EventIdEnum {
   MetadataValueDeleted
   LocalMetadataKeyDeleted
   AssetMediatorsAdded
-  SetAssetMediators # This can be removed, `AssetMediatorsAdded` is emitted instead
+  "`SetAssetMediators` has been deprecated from 6.0.0 chain version"
+  SetAssetMediators
   AssetMediatorsRemoved
   TickerUnlinkedFromAsset
   GlobalMetadataSpecUpdated
@@ -434,9 +469,11 @@ enum EventIdEnum {
   ## portfolio ##
   PortfolioCreated
   PortfolioDeleted
+  "`MovedBetweenPortfolios` has been deprecated from 6.0.0 chain version"
   MovedBetweenPortfolios
   "`FungibleTokensMovedBetweenPortfolios` has been deprecated from 6.0.0 chain version"
   FungibleTokensMovedBetweenPortfolios
+  "`NFTsMovedBetweenPortfolios` has been deprecated from 6.0.0 chain version"
   NFTsMovedBetweenPortfolios
   PortfolioRenamed
   UserPortfolios
@@ -458,6 +495,10 @@ enum EventIdEnum {
   CallUnavailable
   PeriodicFailed
   PermanentlyOverweight
+  AgendaIncomplete
+  RetryCancelled
+  RetryFailed
+  RetrySet
 
   ## settlement ##
   VenueCreated
@@ -531,10 +572,13 @@ enum EventIdEnum {
 
   ## utility ##
   BatchInterrupted
+  "`BatchOptimisticFailed` has been deprecated from 8.0.0 chain version"
   BatchOptimisticFailed
   BatchCompleted
+  "`BatchCompletedOld` has been deprecated from 8.0.0 chain version"
   BatchCompletedOld
   BatchCompletedWithErrors
+  "`BatchInterruptedOld` has been deprecated from 8.0.0 chain version"
   BatchInterruptedOld
   DispatchedAs
   ItemCompleted
@@ -569,6 +613,8 @@ enum EventIdEnum {
   ContractCodeUpdated
   Called
   DelegateCalled
+  StorageDepositTransferredAndHeld
+  StorageDepositTransferredAndReleased
 
   ## polymeshcontracts ##
   ApiHashUpdated
@@ -698,6 +744,7 @@ Represents all known chain extrinsics
 """
 enum CallIdEnum {
   ## system ##
+  "`fill_block` has been removed from 8.0.0 chain version"
   fill_block
   remark
   set_heap_pages
@@ -709,6 +756,9 @@ enum CallIdEnum {
   remark_with_event
   "`placeholder_fill_block` has been deprecated from 6.0.0 chain version"
   placeholder_fill_block
+  apply_authorized_upgrade
+  authorize_upgrade
+  authorize_upgrade_without_checks
 
   ## babe ##
   report_equivocation
@@ -724,6 +774,7 @@ enum CallIdEnum {
   free
   force_transfer
   freeze
+  poke_deposit
 
   ## authorship ##
   "`set_uncles` has been deprecated from 6.0.0 chain version"
@@ -732,10 +783,21 @@ enum CallIdEnum {
   ## balances ##
   # transfer (already defined in indices)
   transfer_with_memo
+  "`deposit_block_reward_reserve_balance` has been removed from 8.0.0 chain version"
   deposit_block_reward_reserve_balance
+  "`set_balance` has been removed from 8.0.0 chain version"
   set_balance
   # force_transfer (already defined in indices)
+  "`burn_account_balance` has been removed from 8.0.0 chain version"
   burn_account_balance
+  burn
+  force_set_balance
+  force_adjust_total_issuance
+  force_unreserve
+  transfer_all
+  transfer_allow_death
+  transfer_keep_alive
+  upgrade_accounts
 
   ## transactionpayment ##
   set_disable_fees
@@ -760,10 +822,13 @@ enum CallIdEnum {
   unfreeze_secondary_keys
   add_authorization
   remove_authorization
+  "`add_secondary_keys_with_authorization_old` has been removed from 8.0.0 chain version"
   add_secondary_keys_with_authorization_old
+  "`add_investor_uniqueness_claim` has been removed from 8.0.0 chain version"
   add_investor_uniqueness_claim
   gc_add_cdd_claim
   gc_revoke_cdd_claim
+  "`add_investor_uniqueness_claim_v2` has been removed from 8.0.0 chain version"
   add_investor_uniqueness_claim_v2
   revoke_claim_by_index
   rotate_primary_key_to_secondary
@@ -846,6 +911,7 @@ enum CallIdEnum {
   approve_as_identity
   "`approve_as_key` has been deprecated from 7.0.0 chain version"
   approve_as_key
+  "`reject_as_identity` has been removed from 8.0.0 chain version"
   reject_as_identity
   "`reject_as_key` has been renamed to `reject` from 7.0.0 chain version"
   reject_as_key
@@ -967,6 +1033,12 @@ enum CallIdEnum {
   change_slashing_allowed_for
   update_permissioned_validator_intended_count
   set_staking_configs
+  update_payee
+  payout_stakers_by_page
+  deprecate_controller_batch
+  manual_slash
+  migrate_currency
+  restore_ledger
 
   ## offences ##
 
@@ -1115,6 +1187,7 @@ enum CallIdEnum {
   create_portfolio
   delete_portfolio
   move_portfolio_funds
+  "`move_portfolio_funds_v2` has been removed from 8.0.0 chain version"
   move_portfolio_funds_v2
   rename_portfolio
   quit_portfolio_custody
@@ -1133,18 +1206,27 @@ enum CallIdEnum {
   cancel_named
   schedule_after
   schedule_named_after
+  cancel_retry
+  cancel_retry_named
+  set_retry
+  set_retry_named
 
   ## settlement ##
   create_venue
   update_venue_details
   update_venue_type
   add_instruction
+  "`add_instruction_with_memo` has been removed from 8.0.0 chain version"
   add_instruction_with_memo
+  "`add_instruction_with_memo_v2` has been removed from 8.0.0 chain version"
   add_instruction_with_memo_v2
   add_and_affirm_instruction
+  "`add_and_affirm_instruction_with_memo` has been removed from 8.0.0 chain version"
   add_and_affirm_instruction_with_memo
+  "`add_and_affirm_instruction_with_memo_v2` has been removed from 8.0.0 chain version"
   add_and_affirm_instruction_with_memo_v2
   affirm_instruction
+  "`affirm_instruction_v2` has been removed from 8.0.0 chain version"
   affirm_instruction_v2
   withdraw_affirmation
   "`withdraw_affirmation_v2` has been deprecated from 6.0.0 chain version"
@@ -1153,27 +1235,41 @@ enum CallIdEnum {
   "`reject_instruction_v2` has been deprecated from 6.0.0 chain version"
   reject_instruction_v2
   affirm_with_receipts
+  "`claim_receipt` has been removed from 8.0.0 chain version"
   claim_receipt
+  "`placeholder_claim_receipt` has been removed from 8.0.0 chain version"
   placeholder_claim_receipt
+  "`unclaim_receipt` has been removed from 8.0.0 chain version"
   unclaim_receipt
+  "`placeholder_unclaim_receipt` has been removed from 8.0.0 chain version"
   placeholder_unclaim_receipt
   set_venue_filtering
   allow_venues
   disallow_venues
   execute_manual_instruction
+  "`change_receipt_validity` has been removed from 8.0.0 chain version"
   change_receipt_validity
   execute_scheduled_instruction
+  "`execute_scheduled_instruction_v2` has been removed from 8.0.0 chain version"
   execute_scheduled_instruction_v2
   "`reschedule_instruction` has been deprecated from 6.0.0 chain version"
   reschedule_instruction
   update_venue_signers
+  "`placeholder_add_instruction` has been removed from 8.0.0 chain version"
   placeholder_add_instruction
+  "`placeholder_add_and_affirm_instruction` has been removed from 8.0.0 chain version"
   placeholder_add_and_affirm_instruction
+  "`placeholder_affirm_instruction` has been removed from 8.0.0 chain version"
   placeholder_affirm_instruction
+  "`placeholder_withdraw_affirmation` has been removed from 8.0.0 chain version"
   placeholder_withdraw_affirmation
+  "`placeholder_reject_instruction` has been removed from 8.0.0 chain version"
   placeholder_reject_instruction
+  "`placeholder_add_instruction_with_memo` has been removed from 8.0.0 chain version"
   placeholder_add_instruction_with_memo
+  "`placeholder_add_and_affirm_instruction_with_memo` has been removed from 8.0.0 chain version"
   placeholder_add_and_affirm_instruction_with_memo
+  "`execute_scheduled_instruction_v3` has been removed from 8.0.0 chain version"
   execute_scheduled_instruction_v3
   affirm_with_receipts_with_count
   affirm_instruction_with_count
@@ -1207,7 +1303,9 @@ enum CallIdEnum {
 
   ## utility ##
   batch
+  "`batch_atomic` has been removed from 8.0.0 chain version"
   batch_atomic
+  "`batch_optimistic` has been removed from 8.0.0 chain version"
   batch_optimistic
   relay_tx
   batch_all
@@ -1215,6 +1313,7 @@ enum CallIdEnum {
   dispatch_as
   force_batch
   with_weight
+  "`batch_old` has been removed from 8.0.0 chain version"
   batch_old
 
   ## base ##
@@ -1250,6 +1349,8 @@ enum CallIdEnum {
   call_old_weight
   instantiate_with_code_old_weight
   instantiate_old_weight
+  set_code
+  migrate
 
   ## polymeshcontracts ##
   instantiate_with_code_perms
@@ -1267,6 +1368,7 @@ enum CallIdEnum {
   unnote_preimage
   request_preimage
   unrequest_preimage
+  ensure_updated
 
   ## testutils ##
   register_did
@@ -1317,6 +1419,15 @@ enum CallIdEnum {
   set_minimum_untrusted_score
   submit
   sumbit_unsigned
+
+  ## validators ## added from 8.0.0 chain version
+  # add_permissioned_validator (already was defined in staking)
+  # change_slashing_allowed_for (already was defined in staking)
+  # chill_from_governance (already was defined in staking)
+  payout_stakers_by_system
+  # remove_permissioned_validator (already was defined in staking)
+  # set_commission_cap (already was defined in staking)
+  # update_permissioned_validator_intended_count (already was defined in staking)
 
   ## deprecated ##
   accept_authorization @deprecated

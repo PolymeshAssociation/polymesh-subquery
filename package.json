@@ -34,7 +34,7 @@
   "dependencies": {
     "@polkadot/api": "^15.8.1",
     "@polkadot/types-support": "^15.8.1",
-    "@polymeshassociation/polymesh-types": "^5.15.0",
+    "@polymeshassociation/polymesh-types": "^6.3.0",
     "@subql/cli": "^5.7.0",
     "@subql/types": "^3.12.1",
     "@subql/types-core": "^2.0.2",

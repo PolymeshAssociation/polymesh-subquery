@@ -290,6 +290,12 @@ export const is7Dot3Chain = (block: SubstrateBlock) => {
   return specVersion >= 7003000 || (specName === 'polymesh_private_dev' && specVersion >= 2001000);
 };
 
+export const is8xChain = (block: SubstrateBlock) => {
+  const { specVersion } = block;
+  const specName = api.runtimeVersion.specName.toString();
+  return specVersion >= 8000000 || (specName === 'polymesh_private_dev' && specVersion >= 2002000);
+};
+
 export const getPaginatedData = async <T extends Entity, F extends keyof T>(
   entityName: string,
   field: F,
