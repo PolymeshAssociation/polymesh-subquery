@@ -108,15 +108,15 @@ enum EventIdEnum {
   Unreserved
   ReserveRepatriated
   TransactionFeePaid
-  Burned
+  # Burned
   Deposit
   DustLost
-  Frozen
+  # Frozen
   # Issued (already defined in asset)
   Locked
   Minted
   Rescinded
-  Restored
+  # Restored
   # Slashed (already defined in electionprovidermultiphase)
   Suspended
   Thawed
@@ -790,7 +790,7 @@ enum CallIdEnum {
   # force_transfer (already defined in indices)
   "`burn_account_balance` has been removed from 8.0.0 chain version"
   burn_account_balance
-  burn
+  # burn
   force_set_balance
   force_adjust_total_issuance
   force_unreserve
@@ -1349,7 +1349,7 @@ enum CallIdEnum {
   call_old_weight
   instantiate_with_code_old_weight
   instantiate_old_weight
-  set_code
+  # set_code
   migrate
 
   ## polymeshcontracts ##
@@ -1424,7 +1424,7 @@ enum CallIdEnum {
   # add_permissioned_validator (already was defined in staking)
   # change_slashing_allowed_for (already was defined in staking)
   # chill_from_governance (already was defined in staking)
-  payout_stakers_by_system
+  # payout_stakers_by_system
   # remove_permissioned_validator (already was defined in staking)
   # set_commission_cap (already was defined in staking)
   # update_permissioned_validator_intended_count (already was defined in staking)

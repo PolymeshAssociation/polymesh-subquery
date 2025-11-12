@@ -4,8 +4,7 @@ alter type "0bf3c7d4ef" add value if not exists 'apply_authorized_upgrade' after
 alter type "0bf3c7d4ef" add value if not exists 'authorize_upgrade' after 'apply_authorized_upgrade';
 alter type "0bf3c7d4ef" add value if not exists 'authorize_upgrade_without_checks' after 'authorize_upgrade';
 alter type "0bf3c7d4ef" add value if not exists 'poke_deposit' after 'freeze';
-alter type "0bf3c7d4ef" add value if not exists 'burn' after 'burn_account_balance';
-alter type "0bf3c7d4ef" add value if not exists 'force_set_balance' after 'force_transfer';
+alter type "0bf3c7d4ef" add value if not exists 'force_set_balance' after 'burn_account_balance';
 alter type "0bf3c7d4ef" add value if not exists 'force_adjust_total_issuance' after 'force_set_balance';
 alter type "0bf3c7d4ef" add value if not exists 'force_unreserve' after 'force_adjust_total_issuance';
 alter type "0bf3c7d4ef" add value if not exists 'transfer_all' after 'force_unreserve';
@@ -21,22 +20,18 @@ alter type "0bf3c7d4ef" add value if not exists 'cancel_retry' after 'schedule_n
 alter type "0bf3c7d4ef" add value if not exists 'cancel_retry_named' after 'cancel_retry';
 alter type "0bf3c7d4ef" add value if not exists 'set_retry' after 'cancel_retry_named';
 alter type "0bf3c7d4ef" add value if not exists 'set_retry_named' after 'set_retry';
-alter type "0bf3c7d4ef" add value if not exists 'set_code' after 'instantiate_old_weight';
-alter type "0bf3c7d4ef" add value if not exists 'migrate' after 'set_code';
+alter type "0bf3c7d4ef" add value if not exists 'migrate' after 'instantiate_old_weight';
 alter type "0bf3c7d4ef" add value if not exists 'ensure_updated' after 'unrequest_preimage';
 
 alter type "8f5a39c8ee" add value if not exists 'RejectedInvalidAuthorizedUpgrade' after 'PlaceholderFillBlock';
 alter type "8f5a39c8ee" add value if not exists 'UpgradeAuthorized' after 'RejectedInvalidAuthorizedUpgrade';
 alter type "8f5a39c8ee" add value if not exists 'DepositPoked' after 'IndexFrozen';
-alter type "8f5a39c8ee" add value if not exists 'Burned' after 'TransactionFeePaid';
 alter type "8f5a39c8ee" add value if not exists 'Deposit' after 'Burned';
 alter type "8f5a39c8ee" add value if not exists 'DustLost' after 'Deposit';
-alter type "8f5a39c8ee" add value if not exists 'Frozen' after 'DustLost';
-alter type "8f5a39c8ee" add value if not exists 'Locked' after 'Frozen';
+alter type "8f5a39c8ee" add value if not exists 'Locked' after 'DustLost';
 alter type "8f5a39c8ee" add value if not exists 'Minted' after 'Locked';
 alter type "8f5a39c8ee" add value if not exists 'Rescinded' after 'Minted';
-alter type "8f5a39c8ee" add value if not exists 'Restored' after 'Rescinded';
-alter type "8f5a39c8ee" add value if not exists 'Suspended' after 'Restored';
+alter type "8f5a39c8ee" add value if not exists 'Suspended' after 'Rescinded';
 alter type "8f5a39c8ee" add value if not exists 'Thawed' after 'Suspended';
 alter type "8f5a39c8ee" add value if not exists 'TotalIssuanceForced' after 'Thawed';
 alter type "8f5a39c8ee" add value if not exists 'Unlocked' after 'TotalIssuanceForced';
