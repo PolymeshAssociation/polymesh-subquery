@@ -1,4 +1,4 @@
-import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, Extrinsic, ModuleIdEnum } from '../../../types';
 import { camelToSnakeCase, padId } from '../../../utils';
 import { toEnum } from '../common';
@@ -30,20 +30,5 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     nonce: extrinsic.extrinsic.nonce.toNumber(),
     extrinsicHash: extrinsic.extrinsic.hash.toJSON(),
     specVersionId: extrinsic.block.specVersion,
-  });
-}
-
-export function wrapExtrinsics(wrappedBlock: SubstrateBlock): SubstrateExtrinsic[] {
-  return wrappedBlock.block.extrinsics.map((extrinsic, idx) => {
-    const events = wrappedBlock.events.filter(
-      ({ phase }) => phase.isApplyExtrinsic && phase.asApplyExtrinsic.eqn(idx)
-    );
-    return {
-      idx,
-      extrinsic,
-      block: wrappedBlock,
-      events,
-      success: events.findIndex(evt => evt.event.method === 'ExtrinsicSuccess') > -1,
-    };
   });
 }

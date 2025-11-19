@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: ./docker/pg-Dockerfile
     ports:
-      - 5678:5432
+      - 5999:5432
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:
@@ -33,13 +33,13 @@ services:
       DB_PORT: 5432
       START_BLOCK: 1
       # Polymesh-local
-      NETWORK_ENDPOINT: ws://host.docker.internal:9944
+      # NETWORK_ENDPOINT: ws://host.docker.internal:9944
       # Setting NETWORK_HTTP_ENDPOINT will allow dynamic lookup of NETWORK_CHAIN_ID
-      NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
+      # NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
       # Staging
-      # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.dev/
-      # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
-      # NETWORK_DICTIONARY: https://subql-dictionary.polymesh.dev
+      NETWORK_ENDPOINT: wss://staging-rpc.polymesh.dev/
+      NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
+      NETWORK_DICTIONARY: https://subql-dictionary.polymesh.dev
       # Testnet
       # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live
       # NETWORK_CHAIN_ID: '0x2ace05e703aa50b48c0ccccfc8b424f7aab9a1e2c424ed12e45d20b1e8ffd0d6'

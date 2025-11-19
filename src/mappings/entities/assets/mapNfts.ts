@@ -1,4 +1,4 @@
-import { Option, u64, U8aFixed } from '@polkadot/types-codec';
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, NftHolder } from '../../../types';
 import {
@@ -110,8 +110,8 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
     if (reason === 'transferred') {
       eventId = EventIdEnum.Transfer;
       const details = value as unknown as {
-        readonly instructionId: Option<u64>;
-        readonly instructionMemo: Option<U8aFixed>;
+        readonly instructionId: Codec;
+        readonly instructionMemo: Codec;
       };
 
       instructionId = getTextValue(details.instructionId);
@@ -137,9 +137,9 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
       blockEventId,
       eventId,
       extrinsic
-    )
+    ),
+    asset.save()
   );
-  promises.push(asset.save());
 
   await Promise.all(promises);
 };
