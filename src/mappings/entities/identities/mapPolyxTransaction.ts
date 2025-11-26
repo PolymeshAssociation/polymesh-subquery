@@ -172,7 +172,7 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
     identityId = (await Account.get(address))?.identityId;
     toId = (await Account.get(toAddress))?.identityId;
   } else {
-    const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance, rawMemo] = args.params;
+    const [rawFromDid, rawFrom, rawToDid, rawTo, rawBalance] = args.params;
 
     amount = getBigIntValue(rawBalance);
     identityId = getTextValue(rawFromDid);
