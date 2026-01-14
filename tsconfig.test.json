@@ -1,4 +1,13 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["**/node_modules/**", "**/*.spec.ts", "**/*.test.ts"]
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "tests/unit/globals.d.ts",
+    "node_modules/@subql/types/dist/global.d.ts",
+    "node_modules/@subql/types-core/dist/global.d.ts"
+  ]
 }

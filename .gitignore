@@ -52,6 +52,7 @@ Thumbs.db
 scripts/errors_*
 scripts/archive
 coverage
+coverage-unit
 
 project.yaml
 tsconfig.tsbuildinfo

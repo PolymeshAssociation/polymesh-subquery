@@ -296,6 +296,32 @@ export const is8xChain = (block: SubstrateBlock) => {
   return specVersion >= 8000000 || (specName === 'polymesh_private_dev' && specVersion >= 2002000);
 };
 
+/**
+ * Extracts the amount from 8.x chain staking event parameters.
+ *
+ * On 8.x chain, staking events have different parameter structures:
+ * - Bonded/Unbonded: [stash, amount] (2 params)
+ * - Rewarded: [stash, dest, amount] (3 params, dest is RewardDestination enum)
+ *
+ * This function detects if the second param is numeric (amount) or an enum (RewardDestination),
+ * and returns the amount from the appropriate position.
+ *
+ * @param rawSecondParam - The second parameter (could be amount or RewardDestination)
+ * @param rawThirdParam - The third parameter (amount for Rewarded events), optional
+ * @returns The amount as bigint
+ */
+export const extract8xStakingAmount = (rawSecondParam: Codec, rawThirdParam?: Codec): bigint => {
+  const secondParamText = getTextValue(rawSecondParam);
+  const isSecondParamNumeric = /^\d+$/.test(secondParamText);
+
+  if (isSecondParamNumeric) {
+    return getBigIntValue(rawSecondParam);
+  } else if (rawThirdParam) {
+    return getBigIntValue(rawThirdParam);
+  }
+  return BigInt(0);
+};
+
 export const getPaginatedData = async <T extends Entity, F extends keyof T>(
   entityName: string,
   field: F,

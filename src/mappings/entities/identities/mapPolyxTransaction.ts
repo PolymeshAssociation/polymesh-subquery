@@ -9,7 +9,7 @@ import {
   PolyxTransaction,
 } from '../../../types';
 import { bytesToString, getBigIntValue, getEventParams, getTextValue } from '../../../utils';
-import { getFirstKeyFromJson, is8xChain } from '../../../utils/common';
+import { extract8xStakingAmount, getFirstKeyFromJson, is8xChain } from '../../../utils/common';
 import { HandlerArgs, extractArgs } from '../common';
 import { getPaginatedData } from './../../../utils/common';
 
@@ -20,9 +20,12 @@ const getBasicDetails = async (
   let amount: bigint;
   let identityId: string | undefined;
   if (is8xChain(args.block)) {
-    const [rawAddress, rawBalance] = args.params;
+    // On 8.x chain, staking events don't have DID as first param
+    // Bonded/Unbonded: [stash, amount] - 2 params
+    // Rewarded: [stash, dest, amount] - 3 params (dest is RewardDestination enum)
+    const [rawAddress, rawDest, rawAmount] = args.params;
     address = getTextValue(rawAddress);
-    amount = getBigIntValue(rawBalance);
+    amount = extract8xStakingAmount(rawDest, rawAmount);
     identityId = (await Account.get(address))?.identityId;
   } else {
     const [rawDid, rawAddress, rawBalance] = args.params;

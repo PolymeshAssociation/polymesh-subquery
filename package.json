@@ -13,6 +13,7 @@
     "prepare": "husky install",
     "lint": "eslint . --ext .ts",
     "test": "jest",
+    "test:unit": "jest --config jest.unit.config.js",
     "test:integration": "./scripts/integration-test.sh",
     "codegen": "./node_modules/.bin/subql codegen",
     "commit": "npx git-cz",
