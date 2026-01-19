@@ -2659,9 +2659,9 @@ Represents transactions involving POLYX
 type PolyxTransaction @entity {
   id: ID!
   identityId: String
-  address: String
+  address: String @index(unique: false)
   toId: String
-  toAddress: String
+  toAddress: String @index(unique: false)
   amount: BigInt!
   type: BalanceTypeEnum!
   moduleId: ModuleIdEnum
