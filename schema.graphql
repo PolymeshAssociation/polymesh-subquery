@@ -3033,6 +3033,284 @@ type ConfidentialAssetMovement @entity {
   createdEvent: Event!
 }
 
+## DART confidential assets ##
+
+enum DartLegActionEnum {
+  SenderAffirmed
+  SenderReverted
+  SenderCounterUpdated
+  MediatorAffirmed
+  MediatorRejected
+  ReceiverAffirmed
+  ReceiverClaimed
+}
+
+"""
+Represents an encryption key registered on the DART confidential assets pallet
+"""
+type DartConfidentialEncryptionKey @entity {
+  id: ID!
+  caller: Identity!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Represents a confidential account registered on the DART confidential assets pallet
+"""
+type DartConfidentialAccount @entity {
+  id: ID!
+  caller: Identity!
+  encryptionKey: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+  assets: [DartConfidentialAccountAsset!]! @derivedFrom(field: "account")
+}
+
+"""
+Links a confidential account to an asset registration
+"""
+type DartConfidentialAccountAsset @entity {
+  id: ID!
+  account: DartConfidentialAccount!
+  assetId: Int!
+  caller: Identity!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores account curve tree root updates
+"""
+type DartConfidentialAccountCurveRoot @entity {
+  id: ID!
+  root: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores account state leaf insertions
+"""
+type DartConfidentialAccountStateLeaf @entity {
+  id: ID!
+  leafIndex: BigInt!
+  commitment: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Represents a confidential asset created on the DART confidential assets pallet
+"""
+type DartConfidentialAsset @entity {
+  id: ID!
+  assetId: Int!
+  caller: Identity!
+  mediators: [String!]
+  auditors: [String!]
+  name: String!
+  symbol: String!
+  decimals: Int!
+  data: String
+  totalSupply: BigInt
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+  mints: [DartConfidentialAssetMint!]! @derivedFrom(field: "asset")
+}
+
+"""
+Captures updates to mediators/auditors for a confidential asset
+"""
+type DartConfidentialAssetUpdate @entity {
+  id: ID!
+  asset: DartConfidentialAsset!
+  mediators: [String!]
+  auditors: [String!]
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores asset curve tree root updates
+"""
+type DartConfidentialAssetCurveRoot @entity {
+  id: ID!
+  root: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores asset state leaf updates
+"""
+type DartConfidentialAssetStateLeaf @entity {
+  id: ID!
+  leafIndex: BigInt!
+  leaf: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Represents a mint of a DART confidential asset
+"""
+type DartConfidentialAssetMint @entity {
+  id: ID!
+  asset: DartConfidentialAsset! @index(unique: false)
+  account: DartConfidentialAccount
+  caller: Identity!
+  amount: BigInt!
+  totalSupply: BigInt!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Represents a fee account registration or top-up event
+"""
+type DartConfidentialFeeAccount @entity {
+  id: ID!
+  account: String!
+  caller: Identity!
+  isRegistration: Boolean!
+  amount: BigInt!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores fee account curve tree root updates
+"""
+type DartConfidentialFeeAccountCurveRoot @entity {
+  id: ID!
+  root: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Stores fee account state leaf insertions
+"""
+type DartConfidentialFeeAccountStateLeaf @entity {
+  id: ID!
+  leafIndex: BigInt!
+  commitment: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Captures deposits into the fee account
+"""
+type DartConfidentialFeeAccountDeposit @entity {
+  id: ID!
+  sender: String!
+  amount: BigInt!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Captures withdrawals from the fee account
+"""
+type DartConfidentialFeeAccountWithdraw @entity {
+  id: ID!
+  receiver: String!
+  amount: BigInt!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Captures actions on a settlement leg
+"""
+type DartConfidentialLegAction @entity {
+  id: ID!
+  legRef: String!
+  action: DartLegActionEnum!
+  keyIndex: Int
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Captures relayer batch submissions
+"""
+type DartConfidentialRelayerBatch @entity {
+  id: ID!
+  relayer: String!
+  amount: BigInt!
+  batchHash: String!
+  batchResult: String
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
+"""
+Represents a confidential settlement on DART
+"""
+type DartConfidentialSettlement @entity {
+  id: ID!
+  settlementRef: String!
+  memo: String
+  assetRootBlock: Int!
+  legs: [String!]!
+  status: String
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+  statuses: [DartConfidentialSettlementStatus!]! @derivedFrom(field: "settlement")
+}
+
+"""
+Tracks settlement status changes
+"""
+type DartConfidentialSettlementStatus @entity {
+  id: ID!
+  settlement: DartConfidentialSettlement!
+  status: String!
+  eventIdx: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+  createdEvent: Event!
+}
+
 """
 Represent asset pre-approvals from an Identity. These entries will not require an affirmation when the identity is receiving them
 """

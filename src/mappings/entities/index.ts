@@ -9,6 +9,7 @@ export * from './confidentialAssets/mapConfidentialAccountCreated';
 export * from './confidentialAssets/mapConfidentialAsset';
 export * from './confidentialAssets/mapConfidentialAssetTransaction';
 export * from './confidentialAssets/mapConfidentialTransaction';
+export * from './confidentialAssets/mapDartConfidentialAssets';
 export * from './assets/mapCorporateActions';
 export * from './events/mapEvent';
 export * from './externalAgents/mapExternalAgentAction';
