@@ -12,7 +12,8 @@ alter type "0bf3c7d4ef" add value if not exists 'transfer_allow_death' after 'tr
 alter type "0bf3c7d4ef" add value if not exists 'transfer_keep_alive' after 'transfer_allow_death';
 alter type "0bf3c7d4ef" add value if not exists 'upgrade_accounts' after 'transfer_keep_alive';
 alter type "0bf3c7d4ef" add value if not exists 'update_payee' after 'set_staking_configs';
-alter type "0bf3c7d4ef" add value if not exists 'deprecate_controller_batch' after 'update_payee';
+alter type "0bf3c7d4ef" add value if not exists 'payout_stakers_by_page' after 'update_payee';
+alter type "0bf3c7d4ef" add value if not exists 'deprecate_controller_batch' after 'payout_stakers_by_page';
 alter type "0bf3c7d4ef" add value if not exists 'manual_slash' after 'deprecate_controller_batch';
 alter type "0bf3c7d4ef" add value if not exists 'migrate_currency' after 'manual_slash';
 alter type "0bf3c7d4ef" add value if not exists 'restore_ledger' after 'migrate_currency';
@@ -26,7 +27,7 @@ alter type "0bf3c7d4ef" add value if not exists 'ensure_updated' after 'unreques
 alter type "8f5a39c8ee" add value if not exists 'RejectedInvalidAuthorizedUpgrade' after 'PlaceholderFillBlock';
 alter type "8f5a39c8ee" add value if not exists 'UpgradeAuthorized' after 'RejectedInvalidAuthorizedUpgrade';
 alter type "8f5a39c8ee" add value if not exists 'DepositPoked' after 'IndexFrozen';
-alter type "8f5a39c8ee" add value if not exists 'Deposit' after 'Burned';
+alter type "8f5a39c8ee" add value if not exists 'Deposit' after 'TransactionFeePaid';
 alter type "8f5a39c8ee" add value if not exists 'DustLost' after 'Deposit';
 alter type "8f5a39c8ee" add value if not exists 'Locked' after 'DustLost';
 alter type "8f5a39c8ee" add value if not exists 'Minted' after 'Locked';
@@ -34,7 +35,8 @@ alter type "8f5a39c8ee" add value if not exists 'Rescinded' after 'Minted';
 alter type "8f5a39c8ee" add value if not exists 'Suspended' after 'Rescinded';
 alter type "8f5a39c8ee" add value if not exists 'Thawed' after 'Suspended';
 alter type "8f5a39c8ee" add value if not exists 'TotalIssuanceForced' after 'Thawed';
-alter type "8f5a39c8ee" add value if not exists 'Unlocked' after 'TotalIssuanceForced';
+alter type "8f5a39c8ee" add value if not exists 'TransferMemo' after 'TotalIssuanceForced';
+alter type "8f5a39c8ee" add value if not exists 'Unlocked' after 'TransferMemo';
 alter type "8f5a39c8ee" add value if not exists 'Upgraded' after 'Unlocked';
 alter type "8f5a39c8ee" add value if not exists 'Withdraw' after 'Upgraded';
 alter type "8f5a39c8ee" add value if not exists 'ControllerBatchDeprecated' after 'StakingElectionFailed';
