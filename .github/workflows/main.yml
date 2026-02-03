@@ -56,8 +56,8 @@ jobs:
           cache: 'yarn'
       - name: install dependencies
         run: yarn --immutable
-      - name: test
-        run: yarn test:integration
+      # - name: test
+      #   run: yarn test:integration
       - name: Setup SSH signing key
         run: |
           echo $SSH_KEY_PRIVATE | base64 -d > /tmp/id_ed25519

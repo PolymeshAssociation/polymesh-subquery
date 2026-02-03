@@ -121,7 +121,7 @@ enum EventIdEnum {
   Suspended
   Thawed
   TotalIssuanceForced
-  TransferMemo
+  TransferWithMemo
   Unlocked
   Upgraded
   Withdraw
@@ -398,6 +398,7 @@ enum EventIdEnum {
   AssetMediatorsRemoved
   TickerUnlinkedFromAsset
   GlobalMetadataSpecUpdated
+  CreatedAssetTransfer
 
   ## capitaldistribution ##
   Created
@@ -1117,6 +1118,9 @@ enum CallIdEnum {
   link_ticker_to_asset_id
   unlink_ticker_from_asset_id
   update_global_metadata_spec
+  receiver_affirm_asset_transfer
+  reject_asset_transfer
+  transfer_asset
 
   ## capitaldistribution ##
   distribute
