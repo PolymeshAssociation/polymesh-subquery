@@ -7,7 +7,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
-  getPortfolioValue,
+  getPortfolioIdOrAccount,
   getTextValue,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
@@ -53,16 +53,22 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
   const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
   let fromDid, fromPortfolioId;
+  let fromAccount: string;
   if (!rawFromPortfolio.isEmpty) {
-    let fromPortfolioNumber;
-    ({ identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio));
-    fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
+    ({
+      account: fromAccount,
+      portfolioId: fromPortfolioId,
+      identityId: fromDid,
+    } = getPortfolioIdOrAccount(rawFromPortfolio));
   }
   let toDid, toPortfolioId;
+  let toAccount: string;
   if (!rawToPortfolio.isEmpty) {
-    let toPortfolioNumber;
-    ({ identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio));
-    toPortfolioId = `${toDid}/${toPortfolioNumber}`;
+    ({
+      account: toAccount,
+      portfolioId: toPortfolioId,
+      identityId: toDid,
+    } = getPortfolioIdOrAccount(rawToPortfolio));
   }
 
   const promises = [];
@@ -129,7 +135,9 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
       {
         assetId,
         fromPortfolioId,
+        fromAccount,
         toPortfolioId,
+        toAccount,
         nftIds: ids.map(id => BigInt(id)),
         instructionId,
         instructionMemo,

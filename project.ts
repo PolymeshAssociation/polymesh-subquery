@@ -22,7 +22,7 @@ const filters = {
     AssetRenamed: ['handleAssetRenamed'],
     AssetTypeChanged: [],
     AssetUnfrozen: ['handleUnfrozen'],
-    CreatedAssetTransfer: [''],
+    CreatedAssetTransfer: [],
     ControllerTransfer: [],
     CustomAssetTypeExists: [],
     CustomAssetTypeRegistered: [],

@@ -1969,8 +1969,10 @@ Note: transfers between identities are known as `Settlements`
 """
 type PortfolioMovement @entity {
   id: ID!
-  from: Portfolio! @index(unique: false)
-  to: Portfolio! @index(unique: false)
+  from: Portfolio @index(unique: false)
+  fromAccount: String @index(unique: false)
+  to: Portfolio @index(unique: false)
+  toAccount: String @index(unique: false)
   type: PortfolioMovementTypeEnum!
   asset: Asset!
   "the number of fungible tokens transferred. Defined if type == Fungible"
@@ -2078,9 +2080,11 @@ type Leg @entity {
   assetId: String! @index(unique: false)
   ticker: String @index(unique: false)
   from: String! @index(unique: false)
+  fromAccount: String
   "`fromPortfolio` is null for off chain legs"
   fromPortfolio: Int
   to: String! @index(unique: false)
+  toAccount: String
   "`toPortfolio` is null for off chain legs"
   toPortfolio: Int
   "`amount` is null for non-fungible legs"
@@ -2129,6 +2133,7 @@ type InstructionAffirmation @entity {
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
   identity: String! @index(unique: false)
+  account: String
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
   isMediator: Boolean!
@@ -2180,6 +2185,7 @@ type InstructionEvent @entity {
   eventIdx: Int!
   identity: String @index(unique: false)
   portfolio: Int
+  account: String
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
   createdBlock: Block!
@@ -2581,8 +2587,12 @@ type AssetTransaction @entity {
   asset: Asset!
   "`fromPortfolioId` will be null in transactions where the Asset was issued"
   fromPortfolio: Portfolio
+  "`fromAccount` will be populated when asset transaction has initiated directly from an account"
+  fromAccount: String
   "`toPortfolioId` will be null in transactions where the Asset was redeemed"
   toPortfolio: Portfolio
+  "`toAccount` will be populated when asset transaction has settled directly into an account"
+  toAccount: String
   "`amount` is the number of fungible tokens involved in this transaction"
   amount: BigInt
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"

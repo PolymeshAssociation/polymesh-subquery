@@ -25,15 +25,15 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getPortfolioValue,
+  getPortfolioIdOrAccount,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
   is7xChain,
   serializeTicker,
 } from '../../../utils';
-import { extractArgs, getAsset } from './../common';
 import { processInstructionId } from '../settlements/mapSettlement';
+import { extractArgs, getAsset } from './../common';
 
 export const createFunding = (
   blockId: string,
@@ -64,8 +64,10 @@ export const createAssetTransaction = (
   details: Pick<
     AssetTransaction,
     | 'assetId'
-    | 'toPortfolioId'
     | 'fromPortfolioId'
+    | 'fromAccount'
+    | 'toPortfolioId'
+    | 'toAccount'
     | 'amount'
     | 'fundingRound'
     | 'nftIds'
@@ -412,21 +414,27 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
-  const { identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio);
-  const { identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio);
   const assetId = await getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
-  let fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
-  let toPortfolioId = `${toDid}/${toPortfolioNumber}`;
+  const {
+    account: fromAccount,
+    portfolioId: fromPortfolioId,
+    identityId: fromDid,
+  } = getPortfolioIdOrAccount(rawFromPortfolio);
+  const {
+    account: toAccount,
+    portfolioId: toPortfolioIdValue,
+    identityId: toDid,
+  } = getPortfolioIdOrAccount(rawToPortfolio);
 
+  let toPortfolioId = toPortfolioIdValue;
   const promises = [];
 
-  if (fromDid === emptyDid) {
-    fromPortfolioId = null;
+  if (fromDid && fromDid === emptyDid) {
     return; // We ignore the transfer case when Asset tokens are issued
   }
-  if (toDid === emptyDid) {
+  if (toDid && toDid === emptyDid) {
     // case for Assets being redeemed
     toPortfolioId = null;
   }
@@ -471,7 +479,9 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
       {
         assetId,
         fromPortfolioId,
+        fromAccount,
         toPortfolioId,
+        toAccount,
         amount: transferAmount,
         instructionId,
       },
@@ -491,6 +501,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   let fromDid: string, toDid: string;
 
   let fromPortfolioNumber: number, toPortfolioNumber: number;
+  let fromAccount: string, toAccount: string;
 
   const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
@@ -506,9 +517,11 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const transferAmount = getBigIntValue(rawAmount);
 
   if (!rawFromPortfolio.isEmpty) {
-    ({ identityId: fromDid, number: fromPortfolioNumber } = getPortfolioValue(rawFromPortfolio));
-
-    fromPortfolioId = `${fromDid}/${fromPortfolioNumber}`;
+    ({
+      account: fromAccount,
+      portfolioId: fromPortfolioId,
+      identityId: fromDid,
+    } = getPortfolioIdOrAccount(rawFromPortfolio));
 
     const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
     fromHolder.amount = fromHolder.amount - transferAmount;
@@ -517,8 +530,11 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   }
 
   if (!rawToPortfolio.isEmpty) {
-    ({ identityId: toDid, number: toPortfolioNumber } = getPortfolioValue(rawToPortfolio));
-    toPortfolioId = `${toDid}/${toPortfolioNumber}`;
+    ({
+      account: toAccount,
+      portfolioId: toPortfolioId,
+      identityId: toDid,
+    } = getPortfolioIdOrAccount(rawToPortfolio));
 
     const toHolder = await getAssetHolder(assetId, toDid, blockId);
     toHolder.amount = toHolder.amount + transferAmount;
@@ -585,7 +601,9 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       {
         assetId,
         fromPortfolioId,
+        fromAccount,
         toPortfolioId,
+        toAccount,
         amount: transferAmount,
         fundingRound: fundingRoundName,
         instructionId,

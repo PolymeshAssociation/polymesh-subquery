@@ -4,19 +4,28 @@ import { Distribution, Portfolio } from '../types';
 import { getAssetId } from './assets';
 import { extractNumber } from './common';
 
+export type PortfolioOrAccount = Pick<Portfolio, 'identityId'> &
+  (Pick<Portfolio, 'number'> | { accountId: string });
 export interface MeshPortfolio {
   did: string;
   kind:
     | {
         user: number;
       }
-    | { default: null };
+    | { default: null }
+    | { accountId: string };
 }
 
-export const meshPortfolioToPortfolio = (
+export const meshPortfolioToPortfolioOrAccount = (
   meshPortfolio: MeshPortfolio
-): Pick<Portfolio, 'identityId' | 'number'> => {
+): PortfolioOrAccount => {
   let number = 0;
+  if ('accountId' in meshPortfolio.kind) {
+    return {
+      identityId: meshPortfolio.did,
+      accountId: meshPortfolio.kind.accountId,
+    };
+  }
   if ('user' in meshPortfolio.kind) {
     number = meshPortfolio.kind.user;
   }
@@ -26,9 +35,9 @@ export const meshPortfolioToPortfolio = (
   };
 };
 
-export const getPortfolioValue = (item: Codec): Pick<Portfolio, 'identityId' | 'number'> => {
+export const getPortfolioOrAccountValue = (item: Codec): PortfolioOrAccount => {
   const meshPortfolio = JSON.parse(item.toString());
-  return meshPortfolioToPortfolio(meshPortfolio);
+  return meshPortfolioToPortfolioOrAccount(meshPortfolio);
 };
 
 export const getPortfolioId = ({

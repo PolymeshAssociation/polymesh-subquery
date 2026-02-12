@@ -10,6 +10,7 @@ import {
   Identity,
   Permissions,
   PermissionsJson,
+  Portfolio,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
@@ -19,7 +20,7 @@ import {
   getEventParams,
   getNumberValue,
   getTextValue,
-  meshPortfolioToPortfolio,
+  meshPortfolioToPortfolioOrAccount,
 } from '../../../utils';
 import { Attributes, extractArgs } from './../common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
@@ -274,7 +275,9 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
         portfolios = {
           type,
           values: portfolioPermissions[type]?.map(meshPortfolio => {
-            const { identityId: did, number } = meshPortfolioToPortfolio(meshPortfolio);
+            const { identityId: did, number } = meshPortfolioToPortfolioOrAccount(
+              meshPortfolio
+            ) as unknown as Pick<Portfolio, 'number' | 'identityId'>;
             return { did, number };
           }),
         };

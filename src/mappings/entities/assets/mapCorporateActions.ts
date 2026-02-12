@@ -10,6 +10,10 @@ export const handleDistributionCreated = async (event: SubstrateEvent): Promise<
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const distributionDetails = await getDistributionValue(rawDistribution, block);
 
+  if (!distributionDetails) {
+    return;
+  }
+
   await Distribution.create({
     id: `${assetId}/${localId}`,
     identityId: getTextValue(rawDid),

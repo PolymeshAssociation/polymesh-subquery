@@ -12,6 +12,7 @@ import {
   is7xChain,
   serializeTicker,
 } from './common';
+import { getPortfolioOrAccountValue } from './portfolios';
 
 export interface AssetIdWithTicker {
   assetId: string;
@@ -153,4 +154,21 @@ export const getAssetIdWithTicker = async (
     assetId,
     ticker,
   };
+};
+
+export const getPortfolioIdOrAccount = (
+  item: Codec
+): { identityId: string; account?: string; portfolioId?: string } => {
+  const data = getPortfolioOrAccountValue(item);
+
+  let portfolioId: string | undefined;
+  let account: string | undefined;
+  let identityId: string;
+  if ('accountId' in data) {
+    ({ accountId: account, identityId } = data);
+  } else {
+    ({ identityId } = data);
+    portfolioId = `${data.identityId}/${data.number}`;
+  }
+  return { account, portfolioId, identityId };
 };

@@ -1,4 +1,3 @@
-import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Investment, RaisingAssetTypeEnum, Sto, StoStatus } from '../../../types';
@@ -15,6 +14,7 @@ import {
   is7Dot3Chain,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
 
 const getOfferingAsset = (
   block: SubstrateBlock,
@@ -40,6 +40,11 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
   }
 
   const fundraiserDetails = await getFundraiserDetails(rawFundraiserDetails, block);
+
+  if (!fundraiserDetails) {
+    return;
+  }
+
   const stoId = getNumberValue(rawStoId);
   const name = coerceHexToString(getTextValue(rawStoName));
 

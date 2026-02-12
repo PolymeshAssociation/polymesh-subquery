@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
-import { meshPortfolioToPortfolio } from './portfolios';
+import { getPortfolioOrAccountValue, meshPortfolioToPortfolioOrAccount } from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
@@ -30,15 +30,32 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
     const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
     const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
 
-    const { identityId: from, number: fromPortfolio } = meshPortfolioToPortfolio(rawFromPortfolio);
-    const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(rawToPortfolio);
+    const fromData = meshPortfolioToPortfolioOrAccount(rawFromPortfolio);
+    const toData = meshPortfolioToPortfolioOrAccount(rawToPortfolio);
+
+    let fromAccount: string | undefined, toAccount: string | undefined; // for accounts
+    let from: string, to: string; // for dids
+
+    let fromPortfolio: number | undefined, toPortfolio: number | undefined;
+    if ('accountId' in fromData) {
+      ({ accountId: fromAccount, identityId: from } = fromData);
+    } else {
+      ({ identityId: from, number: fromPortfolio } = fromData);
+    }
+    if ('accountId' in toData) {
+      ({ accountId: toAccount, identityId: to } = toData);
+    } else {
+      ({ identityId: to, number: toPortfolio } = toData);
+    }
 
     data.push({
       legIndex,
       from,
       fromPortfolio,
+      fromAccount,
       to,
       toPortfolio,
+      toAccount,
       assetId,
       ticker,
       amount: getBigIntValue(amount),
@@ -83,8 +100,23 @@ export const getSettlementLeg = async (
         legType: LegTypeEnum.OffChain,
       });
     } else {
-      const { identityId: from, number: fromPortfolio } = meshPortfolioToPortfolio(legValue.sender);
-      const { identityId: to, number: toPortfolio } = meshPortfolioToPortfolio(legValue.receiver);
+      const fromData = meshPortfolioToPortfolioOrAccount(legValue.sender);
+      const toData = meshPortfolioToPortfolioOrAccount(legValue.receiver);
+
+      let from: string, to: string;
+      let fromAccount: string | undefined, toAccount: string | undefined;
+      let fromPortfolio: number | undefined, toPortfolio: number | undefined;
+
+      if ('accountId' in fromData) {
+        ({ accountId: fromAccount, identityId: from } = fromData);
+      } else {
+        ({ identityId: from, number: fromPortfolio } = fromData);
+      }
+      if ('accountId' in toData) {
+        ({ accountId: toAccount, identityId: to } = toData);
+      } else {
+        ({ identityId: to, number: toPortfolio } = toData);
+      }
 
       let assetId: string;
       let ticker: string;
@@ -104,8 +136,10 @@ export const getSettlementLeg = async (
       legDetails.push({
         from,
         fromPortfolio,
+        fromAccount,
         to,
         toPortfolio,
+        toAccount,
         assetId,
         ticker,
         amount,
@@ -149,5 +183,25 @@ export const getSettlementTypeDetails = (
 
   return {
     type: InstructionTypeEnum.SettleOnAffirmation,
+  };
+};
+
+export const getPortfolioOrAccount = (
+  rawPortfolio: Codec
+): { identity: string; account?: string; portfolio?: number } => {
+  const data = getPortfolioOrAccountValue(rawPortfolio);
+  let account: string | undefined;
+  let portfolio: number | undefined;
+  let identityId: string;
+  if ('accountId' in data) {
+    ({ accountId: account, identityId } = data);
+  } else {
+    ({ identityId, number: portfolio } = data);
+  }
+
+  return {
+    account,
+    portfolio,
+    identity: identityId,
   };
 };

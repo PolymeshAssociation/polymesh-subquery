@@ -12,7 +12,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getPortfolioValue,
+  getPortfolioOrAccountValue,
   getSignerAddress,
   getTextValue,
 } from '../../../utils';
@@ -143,7 +143,11 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
   const { params, blockId } = extractArgs(event);
   const [, rawPortfolio, rawCustodian] = params;
 
-  const portfolioValue = getPortfolioValue(rawPortfolio);
+  const portfolioValue = getPortfolioOrAccountValue(rawPortfolio);
+  // ignore account custodian change
+  if ('accountId' in portfolioValue) {
+    return;
+  }
   const custodian = getTextValue(rawCustodian);
 
   const portfolio = await getPortfolio(portfolioValue);
@@ -161,8 +165,15 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
   const [, rawFromPortfolio, rawToPortfolio, rawAssetId, rawAmount, rawMemo] = params;
 
   const address = getSignerAddress(extrinsic);
-  const from = getPortfolioValue(rawFromPortfolio);
-  const to = getPortfolioValue(rawToPortfolio);
+  const from = getPortfolioOrAccountValue(rawFromPortfolio);
+  // since this event was on old event, it is safe to assume that only portfolio data can be received for below params
+  if ('accountId' in from) {
+    return;
+  }
+  const to = getPortfolioOrAccountValue(rawToPortfolio);
+  if ('accountId' in to) {
+    return;
+  }
   const assetId = await getAssetId(rawAssetId, block);
   const amount = getBigIntValue(rawAmount);
   const memo = bytesToString(rawMemo);
@@ -185,8 +196,20 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
   const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
   const address = getSignerAddress(extrinsic);
-  const from = getPortfolioValue(rawFromPortfolio);
-  const to = getPortfolioValue(rawToPortfolio);
+  const fromData = getPortfolioOrAccountValue(rawFromPortfolio);
+  const toData = getPortfolioOrAccountValue(rawToPortfolio);
+  let fromPortfolioId: string, toPortfolioId: string;
+  let fromAccount: string, toAccount: string;
+  if ('accountId' in fromData) {
+    ({ accountId: fromAccount } = fromData);
+  } else {
+    fromPortfolioId = `${fromData.identityId}/${fromData.number}`;
+  }
+  if ('accountId' in toData) {
+    ({ accountId: toAccount } = toData);
+  } else {
+    toPortfolioId = `${toData.identityId}/${toData.number}`;
+  }
   let assetId: string, amount: bigint, nftIds: bigint[];
   let type: PortfolioMovementTypeEnum;
 
@@ -216,8 +239,10 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
 
   await PortfolioMovement.create({
     id: blockEventId,
-    fromId: `${from.identityId}/${from.number}`,
-    toId: `${to.identityId}/${to.number}`,
+    fromId: fromPortfolioId,
+    fromAccount,
+    toId: toPortfolioId,
+    toAccount,
     type,
     assetId,
     amount,

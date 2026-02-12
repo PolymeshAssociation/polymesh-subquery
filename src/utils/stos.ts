@@ -11,16 +11,24 @@ import {
   getDateValue,
   hexToString,
 } from './common';
-import { getPortfolioId, meshPortfolioToPortfolio } from './portfolios';
+import { getPortfolioId, meshPortfolioToPortfolioOrAccount } from './portfolios';
 
 export const getFundraiserDetails = async (
   item: Codec,
   block: SubstrateBlock
-): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'>> => {
+): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'> | null> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
-  const offeringPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'offering_portfolio'));
-  const raisingPortfolio = meshPortfolioToPortfolio(extractValue(rest, 'raising_portfolio'));
+  const offeringPortfolio = meshPortfolioToPortfolioOrAccount(
+    extractValue(rest, 'offering_portfolio')
+  );
+  const raisingPortfolio = meshPortfolioToPortfolioOrAccount(
+    extractValue(rest, 'raising_portfolio')
+  );
+
+  if ('accountId' in offeringPortfolio || 'accountId' in raisingPortfolio) {
+    return null;
+  }
 
   let stoStatus = status;
   if (typeof status !== 'string') {

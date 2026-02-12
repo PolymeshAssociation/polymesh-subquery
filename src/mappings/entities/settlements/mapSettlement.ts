@@ -9,7 +9,6 @@ import {
   getLegsValue,
   getNumberValue,
   getPaginatedData,
-  getPortfolioValue,
   getSettlementLeg,
   getSettlementTypeDetails,
   getSignerAddress,
@@ -30,7 +29,7 @@ import {
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
-import { LegDetails } from './../../../utils/settlements';
+import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
 
 const instructionStatusMap = {
   [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
@@ -161,21 +160,22 @@ const mapAutomaticAffirmation = async (
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawPortfolio, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
-  const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
+  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
 
   const automaticAffirmationEvent = InstructionEvent.create({
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionAutomaticallyAffirmed,
     eventIdx: eventIndex,
-    identity: did,
+    identity,
+    account,
     portfolio,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     createdEventId: blockEventId,
   });
 
-  const partyId = getPartyId(instructionId, did, false);
+  const partyId = getPartyId(instructionId, identity, false);
 
   const affirmation = await InstructionAffirmation.get(partyId);
 
@@ -190,7 +190,8 @@ const mapAutomaticAffirmation = async (
     id: partyId,
     instructionId,
     partyId,
-    identity: did,
+    identity,
+    account,
     portfolios: [portfolio],
     isMediator: false,
     isAutomaticallyAffirmed: true,
@@ -337,9 +338,9 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
+  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
 
-  const partyId = getPartyId(instructionId, did, false);
+  const partyId = getPartyId(instructionId, identity, false);
 
   let affirmation = await InstructionAffirmation.get(partyId);
 
@@ -351,7 +352,8 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
       id: partyId,
       instructionId,
       partyId,
-      identity: did,
+      account,
+      identity,
       portfolios: [portfolio],
       isMediator: false,
       isAutomaticallyAffirmed: false,
@@ -366,8 +368,9 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
     instructionId,
     event: InstructionEventEnum.InstructionAffirmed,
     eventIdx,
-    identity: did,
+    identity,
     portfolio,
+    account,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     createdEventId: blockEventId,
@@ -389,9 +392,9 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identityId: did, number: portfolio } = getPortfolioValue(rawPortfolio);
+  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
 
-  const partyId = getPartyId(instructionId, did, false);
+  const partyId = getPartyId(instructionId, identity, false);
   const affirmation = await InstructionAffirmation.get(partyId);
 
   const promises = [
@@ -400,7 +403,8 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
       instructionId,
       event: InstructionEventEnum.AffirmationWithdrawn,
       eventIdx,
-      identity: did,
+      identity,
+      account,
       portfolio,
       createdBlockId: blockId,
       updatedBlockId: blockId,

@@ -3,19 +3,23 @@ import { SubstrateBlock } from '@subql/types';
 import { Distribution } from '../types';
 import { getAssetId } from './assets';
 import { END_OF_TIME, extractBigInt, getBigIntValue } from './common';
-import { meshPortfolioToPortfolio } from './portfolios';
+import { meshPortfolioToPortfolioOrAccount } from './portfolios';
 
 export const getDistributionValue = async (
   item: Codec,
   block: SubstrateBlock
-): Promise<
-  Pick<
-    Distribution,
-    'portfolioId' | 'currencyId' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
-  >
-> => {
+): Promise<Pick<
+  Distribution,
+  'portfolioId' | 'currencyId' | 'perShare' | 'amount' | 'remaining' | 'paymentAt' | 'expiresAt'
+> | null> => {
   const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
-  const { identityId, number } = meshPortfolioToPortfolio(from);
+
+  const fromData = meshPortfolioToPortfolioOrAccount(from);
+  if ('accountId' in fromData) {
+    return null;
+  }
+
+  const { identityId, number } = fromData;
   return {
     portfolioId: `${identityId}/${number}`,
     currencyId: await getAssetId(currency, block),
