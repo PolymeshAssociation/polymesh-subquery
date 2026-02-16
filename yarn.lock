@@ -4370,16 +4370,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polymeshassociation/polymesh-types@npm:^7.0.0":
-  version: 7.0.0
-  resolution: "@polymeshassociation/polymesh-types@npm:7.0.0"
+"@polymeshassociation/polymesh-types@npm:^7.2.0":
+  version: 7.2.0
+  resolution: "@polymeshassociation/polymesh-types@npm:7.2.0"
   dependencies:
     "@polkadot/api": "npm:16.5.2"
     "@polkadot/api-base": "npm:16.5.2"
     "@polkadot/rpc-core": "npm:16.5.2"
     "@polkadot/types": "npm:16.5.2"
     "@polkadot/types-codec": "npm:16.5.2"
-  checksum: 10c0/431a96557f23ded316f8889ba6a059e4f99ecab288ed485c55e540a91d1745f0780c02f2b80f4f63c9d1337dd9549a53ee4f99c7bf2545a8b7c79a056f068016
+  checksum: 10c0/258bda42dea27d2f0d107e3cbfff6134a93ba042d8e6ab4b1c52a3e47437eff4a0b1672d8db251e745489edcbdcfbefd26b6c5e95f6239dacde68013e5fe858c
   languageName: node
   linkType: hard
 
@@ -14788,7 +14788,7 @@ __metadata:
     "@polkadot/typegen": "npm:^16.5.2"
     "@polkadot/types-support": "npm:^16.5.2"
     "@polymeshassociation/polymesh-local": "npm:^5.13.0-alpha.3"
-    "@polymeshassociation/polymesh-types": "npm:^7.0.0"
+    "@polymeshassociation/polymesh-types": "npm:^7.2.0"
     "@semantic-release/changelog": "npm:^6.0.3"
     "@semantic-release/exec": "npm:^6.0.3"
     "@semantic-release/npm": "npm:^11.0.0"
