@@ -67,6 +67,78 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
   return data;
 };
 
+const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => {
+  const from = extractString(legValue, 'sender_identity');
+  const to = extractString(legValue, 'receiver_identity');
+  const assetId = hexToString(legValue.ticker);
+  const ticker = assetId;
+  const amount = extractBigInt(legValue, 'amount');
+
+  return {
+    from,
+    to,
+    amount,
+    assetId,
+    ticker,
+    legIndex,
+    legType: LegTypeEnum.OffChain,
+  };
+};
+
+const processOnChainLeg = async (
+  legValue: any,
+  legType: LegTypeEnum,
+  legIndex: number,
+  block: SubstrateBlock
+): Promise<LegDetails> => {
+  const fromData = meshPortfolioToPortfolioOrAccount(legValue.sender);
+  const toData = meshPortfolioToPortfolioOrAccount(legValue.receiver);
+
+  let from: string, to: string;
+  let fromAccount: string | undefined, toAccount: string | undefined;
+  let fromPortfolio: number | undefined, toPortfolio: number | undefined;
+
+  if ('accountId' in fromData) {
+    ({ accountId: fromAccount, identityId: from } = fromData);
+  } else {
+    ({ identityId: from, number: fromPortfolio } = fromData);
+  }
+  if ('accountId' in toData) {
+    ({ accountId: toAccount, identityId: to } = toData);
+  } else {
+    ({ identityId: to, number: toPortfolio } = toData);
+  }
+
+  let assetId: string;
+  let ticker: string;
+  let amount, nftIds;
+
+  if (legType === LegTypeEnum.Fungible) {
+    ({ assetId, ticker } = await getAssetIdWithTicker(legValue.ticker ?? legValue.assetId, block));
+    amount = extractBigInt(legValue, 'amount');
+  } else {
+    ({ assetId, ticker } = await getAssetIdWithTicker(
+      legValue.nfts.ticker ?? legValue.nfts.assetId,
+      block
+    ));
+    nftIds = legValue.nfts.ids;
+  }
+  return {
+    from,
+    fromPortfolio,
+    fromAccount,
+    to,
+    toPortfolio,
+    toAccount,
+    assetId,
+    ticker,
+    amount,
+    legType,
+    nftIds,
+    legIndex,
+  };
+};
+
 export const getSettlementLeg = async (
   item: Codec,
   block: SubstrateBlock
@@ -81,72 +153,11 @@ export const getSettlementLeg = async (
     const legValue = leg[legTypeKey];
 
     const legType = capitalizeFirstLetter(legTypeKey);
-    let amount, nftIds;
 
     if (legType === LegTypeEnum.OffChain) {
-      const from = extractString(legValue, 'sender_identity');
-      const to = extractString(legValue, 'receiver_identity');
-      const assetId = hexToString(legValue.ticker);
-      const ticker = assetId;
-      const amount = extractBigInt(legValue, 'amount');
-
-      legDetails.push({
-        from,
-        to,
-        amount,
-        assetId,
-        ticker,
-        legIndex,
-        legType: LegTypeEnum.OffChain,
-      });
+      legDetails.push(processOffChainLeg(legValue, legIndex));
     } else {
-      const fromData = meshPortfolioToPortfolioOrAccount(legValue.sender);
-      const toData = meshPortfolioToPortfolioOrAccount(legValue.receiver);
-
-      let from: string, to: string;
-      let fromAccount: string | undefined, toAccount: string | undefined;
-      let fromPortfolio: number | undefined, toPortfolio: number | undefined;
-
-      if ('accountId' in fromData) {
-        ({ accountId: fromAccount, identityId: from } = fromData);
-      } else {
-        ({ identityId: from, number: fromPortfolio } = fromData);
-      }
-      if ('accountId' in toData) {
-        ({ accountId: toAccount, identityId: to } = toData);
-      } else {
-        ({ identityId: to, number: toPortfolio } = toData);
-      }
-
-      let assetId: string;
-      let ticker: string;
-      if (legType === LegTypeEnum.Fungible) {
-        ({ assetId, ticker } = await getAssetIdWithTicker(
-          legValue.ticker ?? legValue.assetId,
-          block
-        ));
-        amount = extractBigInt(legValue, 'amount');
-      } else if (legType === LegTypeEnum.NonFungible) {
-        ({ assetId, ticker } = await getAssetIdWithTicker(
-          legValue.nfts.ticker ?? legValue.nfts.assetId,
-          block
-        ));
-        nftIds = leg.nonFungible.nfts.ids;
-      }
-      legDetails.push({
-        from,
-        fromPortfolio,
-        fromAccount,
-        to,
-        toPortfolio,
-        toAccount,
-        assetId,
-        ticker,
-        amount,
-        legType: legType as LegTypeEnum,
-        nftIds,
-        legIndex,
-      });
+      legDetails.push(await processOnChainLeg(legValue, legType as LegTypeEnum, legIndex, block));
     }
 
     legIndex++;
