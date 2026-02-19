@@ -1936,7 +1936,8 @@ JSON representation of a Portfolio identifier. Portfolios are uniquely identifie
 """
 type PortfolioJson @jsonField {
   did: String!
-  number: Int!
+  number: Int
+  accountId: String
 }
 
 """
@@ -2585,11 +2586,11 @@ Represents all the transactions related to an Asset
 type AssetTransaction @entity {
   id: ID!
   asset: Asset!
-  "`fromPortfolioId` will be null in transactions where the Asset was issued"
+  "`fromPortfolioId` will be null in transactions where either the Asset was issued or the sender is an account"
   fromPortfolio: Portfolio
   "`fromAccount` will be populated when asset transaction has initiated directly from an account"
   fromAccount: String
-  "`toPortfolioId` will be null in transactions where the Asset was redeemed"
+  "`toPortfolioId` will be null in transactions where either the Asset was redeemed or the receiver is an account"
   toPortfolio: Portfolio
   "`toAccount` will be populated when asset transaction has settled directly into an account"
   toAccount: String

@@ -198,18 +198,21 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
   const address = getSignerAddress(extrinsic);
   const fromData = getPortfolioOrAccountValue(rawFromPortfolio);
   const toData = getPortfolioOrAccountValue(rawToPortfolio);
-  let fromPortfolioId: string, toPortfolioId: string;
-  let fromAccount: string, toAccount: string;
+
+  let fromPortfolioId: string, toPortfolioId: string, fromAccount: string, toAccount: string;
+
   if ('accountId' in fromData) {
     ({ accountId: fromAccount } = fromData);
   } else {
     fromPortfolioId = `${fromData.identityId}/${fromData.number}`;
   }
+
   if ('accountId' in toData) {
     ({ accountId: toAccount } = toData);
   } else {
     toPortfolioId = `${toData.identityId}/${toData.number}`;
   }
+
   let assetId: string, amount: bigint, nftIds: bigint[];
   let type: PortfolioMovementTypeEnum;
 

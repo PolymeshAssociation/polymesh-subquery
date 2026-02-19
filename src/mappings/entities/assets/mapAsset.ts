@@ -498,10 +498,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
 
-  let fromDid: string, toDid: string;
-
-  let fromPortfolioNumber: number, toPortfolioNumber: number;
-  let fromAccount: string, toAccount: string;
+  let fromDid: string, toDid: string, fromAccount: string, toAccount: string;
 
   const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);

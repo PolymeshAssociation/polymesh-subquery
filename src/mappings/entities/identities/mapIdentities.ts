@@ -10,7 +10,6 @@ import {
   Identity,
   Permissions,
   PermissionsJson,
-  Portfolio,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
@@ -275,10 +274,11 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
         portfolios = {
           type,
           values: portfolioPermissions[type]?.map(meshPortfolio => {
-            const { identityId: did, number } = meshPortfolioToPortfolioOrAccount(
-              meshPortfolio
-            ) as unknown as Pick<Portfolio, 'number' | 'identityId'>;
-            return { did, number };
+            const data = meshPortfolioToPortfolioOrAccount(meshPortfolio);
+            if ('accountId' in data) {
+              return { did: data.identityId, accountId: data.accountId };
+            }
+            return { did: data.identityId, number: data.number };
           }),
         };
         break;
