@@ -1,10 +1,34 @@
 import { SubstrateEvent } from '@subql/types';
-import { serializeTicker, getTextValue, getDateValue } from '../../../utils';
-import { getAsset, extractArgs } from '../common';
 import { TickerReservation } from '../../../types';
+import { getDateValue, getTextValue, serializeTicker } from '../../../utils';
+import { extractArgs, getAsset } from '../common';
 
 const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
   return TickerReservation.get(ticker);
+};
+
+export const handleClassicTickerClaimed = async (
+  event: SubstrateEvent
+): Promise<TickerReservation> => {
+  const { params, blockId } = extractArgs(event);
+
+  const [rawIdentity, rawTicker] = params;
+
+  const identityId = getTextValue(rawIdentity);
+  const ticker = serializeTicker(rawTicker);
+
+  const reservation = TickerReservation.create({
+    id: ticker,
+    ticker,
+    assetId: null,
+    identityId,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  await reservation.save();
+
+  return reservation;
 };
 
 export const handleTickerRegistered = async (event: SubstrateEvent): Promise<void> => {
@@ -69,7 +93,12 @@ export const handleTickerTransferred = async (event: SubstrateEvent): Promise<vo
   const did = getTextValue(rawDid);
   const ticker = serializeTicker(rawTicker);
 
-  const reservation = await getTickerReservation(ticker);
+  let reservation = await getTickerReservation(ticker);
+
+  // before 6.0.0 TickerTransferred was emitted before ClassicTickerClaimed
+  if (!reservation) {
+    reservation = await handleClassicTickerClaimed(event);
+  }
 
   reservation.identityId = did;
   reservation.updatedBlockId = blockId;
