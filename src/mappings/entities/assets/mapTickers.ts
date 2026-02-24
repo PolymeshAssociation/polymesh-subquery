@@ -17,16 +17,19 @@ export const handleClassicTickerClaimed = async (
   const identityId = getTextValue(rawIdentity);
   const ticker = serializeTicker(rawTicker);
 
-  const reservation = TickerReservation.create({
-    id: ticker,
-    ticker,
-    assetId: null,
-    identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
+  let reservation = await TickerReservation.get(ticker);
 
-  await reservation.save();
+  if (!reservation) {
+    reservation = TickerReservation.create({
+      id: ticker,
+      ticker,
+      assetId: null,
+      identityId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+    await reservation.save();
+  }
 
   return reservation;
 };
@@ -40,14 +43,24 @@ export const handleTickerRegistered = async (event: SubstrateEvent): Promise<voi
   const ticker = serializeTicker(rawTicker);
   const expiry = rawExpiry ? getDateValue(rawExpiry) : null;
 
-  await TickerReservation.create({
-    id: ticker,
-    ticker,
-    identityId,
-    expiry,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  const reservation = await getTickerReservation(ticker);
+
+  // this is need to handle case when ticker registered events were re-triggerred in 7.1.0
+  if (reservation) {
+    reservation.identityId = identityId;
+    reservation.expiry = expiry;
+    reservation.updatedBlockId = blockId;
+    await reservation.save();
+  } else {
+    await TickerReservation.create({
+      id: ticker,
+      ticker,
+      identityId,
+      expiry,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save();
+  }
 };
 
 export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<void> => {
