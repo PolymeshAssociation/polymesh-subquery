@@ -15,7 +15,7 @@ export const getDistributionValue = async (
   const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
 
   const fromData = meshPortfolioToPortfolioOrAccount(from);
-  if ('accountId' in fromData) {
+  if ('account' in fromData) {
     return null;
   }
 

@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import {
+  Account,
   Asset,
   AssetDocument,
   AssetHolder,
@@ -17,6 +18,7 @@ import {
   camelToSnakeCase,
   coerceHexToString,
   emptyDid,
+  extractAssetHolder,
   getAssetId,
   getAssetType,
   getBigIntValue,
@@ -25,7 +27,6 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getPortfolioIdOrAccount,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
@@ -413,7 +414,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
-  const [, rawAssetId, rawFromPortfolio, rawToPortfolio, rawAmount] = params;
+  const [, rawAssetId, rawFromHolder, rawToHolder, rawAmount] = params;
   const assetId = await getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
@@ -421,12 +422,12 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
     account: fromAccount,
     portfolioId: fromPortfolioId,
     identityId: fromDid,
-  } = getPortfolioIdOrAccount(rawFromPortfolio);
+  } = await extractAssetHolder(rawFromHolder, block);
   const {
     account: toAccount,
     portfolioId: toPortfolioIdValue,
     identityId: toDid,
-  } = getPortfolioIdOrAccount(rawToPortfolio);
+  } = await extractAssetHolder(rawToHolder, block);
 
   let toPortfolioId = toPortfolioIdValue;
   const promises = [];
@@ -496,7 +497,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
 
 export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
-  const [, rawAssetId, rawAmount, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
+  const [, rawAssetId, rawAmount, rawFromHolder, rawToHolder, rawUpdateReason] = params;
 
   let fromDid: string, toDid: string, fromAccount: string, toAccount: string;
 
@@ -513,30 +514,43 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
   const transferAmount = getBigIntValue(rawAmount);
 
-  if (!rawFromPortfolio.isEmpty) {
+  if (!rawFromHolder.isEmpty) {
     ({
       account: fromAccount,
       portfolioId: fromPortfolioId,
       identityId: fromDid,
-    } = getPortfolioIdOrAccount(rawFromPortfolio));
+    } = await extractAssetHolder(rawFromHolder, block));
 
-    const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
-    fromHolder.amount = fromHolder.amount - transferAmount;
-    fromHolder.updatedBlockId = blockId;
-    promises.push(fromHolder.save());
+    console.log(JSON.stringify({ fromAccount, fromPortfolioId, fromDid }));
+    if (!fromDid && fromAccount) {
+      fromDid = (await Account.get(fromAccount))?.identityId;
+    }
+
+    if (fromDid) {
+      const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
+      fromHolder.amount = fromHolder.amount - transferAmount;
+      fromHolder.updatedBlockId = blockId;
+      promises.push(fromHolder.save());
+    }
   }
 
-  if (!rawToPortfolio.isEmpty) {
+  if (!rawToHolder.isEmpty) {
     ({
       account: toAccount,
       portfolioId: toPortfolioId,
       identityId: toDid,
-    } = getPortfolioIdOrAccount(rawToPortfolio));
+    } = await extractAssetHolder(rawToHolder, block));
 
-    const toHolder = await getAssetHolder(assetId, toDid, blockId);
-    toHolder.amount = toHolder.amount + transferAmount;
-    toHolder.updatedBlockId = blockId;
-    promises.push(toHolder.save());
+    if (!toDid && toAccount) {
+      toDid = (await Account.get(toAccount))?.identityId;
+    }
+
+    if (toDid) {
+      const toHolder = await getAssetHolder(assetId, toDid, blockId);
+      toHolder.amount = toHolder.amount + transferAmount;
+      toHolder.updatedBlockId = blockId;
+      promises.push(toHolder.save());
+    }
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);

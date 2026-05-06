@@ -1,11 +1,12 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
-import { Distribution, Portfolio } from '../types';
+import { Account, Distribution, Portfolio } from '../types';
 import { getAssetId } from './assets';
-import { extractNumber } from './common';
+import { extractNumber, is8xChain } from './common';
 
-export type PortfolioOrAccount = Pick<Portfolio, 'identityId'> &
-  (Pick<Portfolio, 'number'> | { accountId: string });
+export type PortfolioOrAccount =
+  | { account: string; identityId?: string }
+  | { identityId: string; number: number };
 export interface MeshPortfolio {
   did: string;
   kind:
@@ -16,6 +17,8 @@ export interface MeshPortfolio {
     | { accountId: string };
 }
 
+export type MeshAssetHolder = { account: string } | { portfolio: MeshPortfolio };
+
 export const meshPortfolioToPortfolioOrAccount = (
   meshPortfolio: MeshPortfolio
 ): PortfolioOrAccount => {
@@ -23,7 +26,7 @@ export const meshPortfolioToPortfolioOrAccount = (
   if ('accountId' in meshPortfolio.kind) {
     return {
       identityId: meshPortfolio.did,
-      accountId: meshPortfolio.kind.accountId,
+      account: meshPortfolio.kind.accountId,
     };
   }
   if ('user' in meshPortfolio.kind) {
@@ -38,6 +41,36 @@ export const meshPortfolioToPortfolioOrAccount = (
 export const getPortfolioOrAccountValue = (item: Codec): PortfolioOrAccount => {
   const meshPortfolio = JSON.parse(item.toString());
   return meshPortfolioToPortfolioOrAccount(meshPortfolio);
+};
+
+export const meshAssetHolderToPortfolioOrAccount = async (
+  meshAssetHolder: MeshAssetHolder
+): Promise<PortfolioOrAccount> => {
+  if ('account' in meshAssetHolder) {
+    const account = await Account.get(meshAssetHolder.account);
+    if (account) {
+      return { identityId: account.identityId, account: meshAssetHolder.account };
+    }
+    return { account: meshAssetHolder.account };
+  }
+
+  const { did, kind } = meshAssetHolder.portfolio;
+
+  let number = 0;
+  if ('user' in kind) {
+    number = kind.user;
+  }
+  return { identityId: did, number };
+};
+
+export const extractAccountOrPortfolio = async (
+  value: MeshAssetHolder | MeshPortfolio,
+  block: SubstrateBlock
+): Promise<PortfolioOrAccount> => {
+  if (is8xChain(block)) {
+    return await meshAssetHolderToPortfolioOrAccount(value as MeshAssetHolder);
+  }
+  return meshPortfolioToPortfolioOrAccount(value as MeshPortfolio);
 };
 
 export const getPortfolioId = ({

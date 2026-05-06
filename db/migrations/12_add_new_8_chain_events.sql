@@ -1,0 +1,50 @@
+alter type "7a0b4cc03e" add value if not exists 'beefy' after 'validators';
+alter type "7a0b4cc03e" add value if not exists 'revive' after 'beefy';
+
+alter type "0bf3c7d4ef" add value if not exists 'self_register_did' after 'unlink_child_identity';
+alter type "0bf3c7d4ef" add value if not exists 'remove_key' after 'sudo_as';
+alter type "0bf3c7d4ef" add value if not exists 'set_mandatory_receiver_affirmation' after 'lock_instruction';
+alter type "0bf3c7d4ef" add value if not exists 'transfer_funds' after 'set_mandatory_receiver_affirmation';
+alter type "0bf3c7d4ef" add value if not exists 'unlock_instruction' after 'transfer_funds';
+alter type "0bf3c7d4ef" add value if not exists 'approve_subsidy' after 'decrease_polyx_limit';
+alter type "0bf3c7d4ef" add value if not exists 'revoke_subsidy' after 'approve_subsidy';
+alter type "0bf3c7d4ef" add value if not exists 'accept_subsidy' after 'revoke_subsidy';
+alter type "0bf3c7d4ef" add value if not exists 'remove_subsidy' after 'accept_subsidy';
+alter type "0bf3c7d4ef" add value if not exists 'report_double_voting' after 'redeem_nft';
+alter type "0bf3c7d4ef" add value if not exists 'report_double_voting_unsigned' after 'redeem_nft';
+alter type "0bf3c7d4ef" add value if not exists 'set_new_genesis' after 'redeem_nft';
+alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting' after 'sumbit_unsigned';
+alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting_unsigned' after 'report_fork_voting';
+alter type "0bf3c7d4ef" add value if not exists 'report_future_block_voting' after 'report_fork_voting_unsigned';
+alter type "0bf3c7d4ef" add value if not exists 'report_future_block_voting_unsigned' after 'report_future_block_voting';
+alter type "0bf3c7d4ef" add value if not exists 'eth_transact' after 'report_future_block_voting_unsigned';
+alter type "0bf3c7d4ef" add value if not exists 'eth_instantiate_with_code' after 'eth_transact';
+alter type "0bf3c7d4ef" add value if not exists 'eth_call' after 'eth_instantiate_with_code';
+alter type "0bf3c7d4ef" add value if not exists 'eth_substrate_call' after 'eth_call';
+alter type "0bf3c7d4ef" add value if not exists 'map_account' after 'eth_substrate_call';
+alter type "0bf3c7d4ef" add value if not exists 'unmap_account' after 'map_account';
+alter type "0bf3c7d4ef" add value if not exists 'dispatch_as_fallback_account' after 'unmap_account';
+
+
+alter type "8f5a39c8ee" add value if not exists 'BurnedDebt' after 'Withdraw';
+alter type "8f5a39c8ee" add value if not exists 'BurnedHeld' after 'BurnedDebt';
+alter type "8f5a39c8ee" add value if not exists 'Held' after 'BurnedHeld';
+alter type "8f5a39c8ee" add value if not exists 'MintedCredit' after 'Held';
+alter type "8f5a39c8ee" add value if not exists 'Released' after 'MintedCredit';
+alter type "8f5a39c8ee" add value if not exists 'TransferAndHold' after 'Released';
+alter type "8f5a39c8ee" add value if not exists 'TransferOnHold' after 'TransferAndHold';
+alter type "8f5a39c8ee" add value if not exists 'Unexpected' after 'TransferOnHold';
+alter type "8f5a39c8ee" add value if not exists 'RootsPruned' after 'Slashed';
+alter type "8f5a39c8ee" add value if not exists 'RootStored' after 'RootsPruned';
+alter type "8f5a39c8ee" add value if not exists 'NFTHoldingsUpdated' after 'NFTPortfolioUpdated';
+alter type "8f5a39c8ee" add value if not exists 'NewQueued' after 'ValidatorReenabled';
+alter type "8f5a39c8ee" add value if not exists 'KeyRemoved' after 'KeyChanged';
+alter type "8f5a39c8ee" add value if not exists 'InstructionUnlocked' after 'VenueSignersUpdated';
+alter type "8f5a39c8ee" add value if not exists 'MandatoryReceiverAffirmationSet' after 'InstructionUnlocked';
+alter type "8f5a39c8ee" add value if not exists 'AcceptedSubsidy' after 'UpdatedPolyxLimit';
+alter type "8f5a39c8ee" add value if not exists 'ApprovedSubsidy' after 'AcceptedSubsidy';
+alter type "8f5a39c8ee" add value if not exists 'RemovedPendingSubsidy' after 'ApprovedSubsidy';
+alter type "8f5a39c8ee" add value if not exists 'RemovedSubsidy' after 'RemovedPendingSubsidy';
+alter type "8f5a39c8ee" add value if not exists 'SubsidyDebited' after 'RemovedSubsidy';
+alter type "8f5a39c8ee" add value if not exists 'EthExtrinsicRevert' after 'RootStored';
+

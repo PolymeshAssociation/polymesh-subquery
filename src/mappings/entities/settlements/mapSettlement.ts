@@ -1,5 +1,5 @@
 import { AnyTuple, Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
@@ -128,8 +128,8 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const getPartyId = (instructionId: string, did: string, isMediator: boolean) =>
-  `${instructionId}/${did}/${isMediator}`;
+const getPartyId = (instructionId: string, did: string, account: string, isMediator: boolean) =>
+  `${instructionId}/${account ?? did}/${isMediator}`;
 
 const createInstructionParty = async (
   instructionId: string,
@@ -139,7 +139,7 @@ const createInstructionParty = async (
 ): Promise<void> => {
   const promises = Object.keys(parties).map(did =>
     InstructionParty.create({
-      id: getPartyId(instructionId, did, isMediator),
+      id: getPartyId(instructionId, did, undefined, isMediator),
       instructionId,
       isMediator,
       identity: did,
@@ -154,13 +154,14 @@ const createInstructionParty = async (
 
 const mapAutomaticAffirmation = async (
   params: Codec[],
+  block: SubstrateBlock,
   blockId: string,
   eventIndex: number,
   blockEventId: string
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
-  const [, rawPortfolio, rawInstructionId] = params;
+  const [, rawHolder, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(rawHolder, block);
 
   const automaticAffirmationEvent = InstructionEvent.create({
     id: blockEventId,
@@ -175,7 +176,7 @@ const mapAutomaticAffirmation = async (
     createdEventId: blockEventId,
   });
 
-  const partyId = getPartyId(instructionId, identity, false);
+  const partyId = getPartyId(instructionId, identity, account, false);
 
   const affirmation = await InstructionAffirmation.get(partyId);
 
@@ -266,16 +267,24 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
 
   const parties = {};
   legParams.forEach(leg => {
-    const addParty = (did: string, portfolio: number): void => {
-      if (portfolio !== undefined) {
-        parties[did] = [...(parties[did] || []), portfolio];
-      } else {
+    const addParty = (did: string, portfolio?: number): void => {
+      if (portfolio === undefined) {
         parties[did] = undefined;
+      } else {
+        parties[did] = [...(parties[did] || []), portfolio];
       }
     };
 
-    addParty(leg.from, leg.fromPortfolio);
-    addParty(leg.to, leg.toPortfolio);
+    if (leg.fromAccount) {
+      addParty(leg.fromAccount);
+    } else {
+      addParty(leg.from, leg.fromPortfolio);
+    }
+    if (leg.toAccount) {
+      addParty(leg.toAccount);
+    } else {
+      addParty(leg.to, leg.toPortfolio);
+    }
   });
 
   const instructionCreatedEvent = InstructionEvent.create({
@@ -310,12 +319,12 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
           const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
           const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
             event.event.data as unknown as AnyTuple,
+            block,
             blockId,
             eventIndex,
             blockEventId
           );
-          promises.push(automaticAffirmation.save());
-          promises.push(automaticAffirmationEvent.save());
+          promises.push(automaticAffirmation.save(), automaticAffirmationEvent.save());
         };
         automaticAffirmationPromises.push(automaticAffirmationPromise());
       }
@@ -332,15 +341,15 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
  *   - InstructionAffirmed
  */
 export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, extrinsic, eventIdx, blockId, block, blockEventId } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(rawPortfolio, block);
 
-  const partyId = getPartyId(instructionId, identity, false);
+  const partyId = getPartyId(instructionId, identity, account, false);
 
   let affirmation = await InstructionAffirmation.get(partyId);
 
@@ -387,14 +396,14 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
  * Maps the event - `settlement.AffirmationWithdrawn`
  */
 export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
 
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = getPortfolioOrAccount(rawPortfolio);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(rawPortfolio, block);
 
-  const partyId = getPartyId(instructionId, identity, false);
+  const partyId = getPartyId(instructionId, identity, account, false);
   const affirmation = await InstructionAffirmation.get(partyId);
 
   const promises = [
@@ -434,6 +443,7 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
 export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise<void> => {
   const {
     params,
+    block,
     blockId,
     block: { specVersion },
     eventIdx,
@@ -449,6 +459,7 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
   if (specVersion >= 6003001 || specName === 'polymesh_private_dev') {
     const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
       params,
+      block,
       blockId,
       eventIdx,
       blockEventId
@@ -474,7 +485,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
 
   const isMediator = instruction.mediators.includes(identityId);
 
-  const partyId = getPartyId(instructionId, identityId, isMediator);
+  const partyId = getPartyId(instructionId, identityId, undefined, isMediator);
 
   const rejection = InstructionAffirmation.create({
     id: partyId,
@@ -595,7 +606,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
   const instructionId = processInstructionId(rawInstructionId);
   const expiry = getDateValue(expiryOpt);
 
-  const partyId = getPartyId(instructionId, identityId, true);
+  const partyId = getPartyId(instructionId, identityId, undefined, true);
   const mediatorAffirmation = InstructionAffirmation.create({
     id: partyId,
     instructionId,
@@ -641,7 +652,7 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
   });
 
   await Promise.all([
-    InstructionAffirmation.remove(getPartyId(instructionId, identityId, true)),
+    InstructionAffirmation.remove(getPartyId(instructionId, identityId, undefined, true)),
     affirmationWithdrawnEvent.save(),
   ]);
 };
@@ -707,7 +718,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     updatedBlockId: blockId,
   });
 
-  const partyId = getPartyId(instructionId, identityId, false);
+  const partyId = getPartyId(instructionId, identityId, undefined, false);
 
   const affirmation = InstructionAffirmation.create({
     id: `${partyId}/${signer}/${uid}`,

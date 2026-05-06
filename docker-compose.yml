@@ -38,7 +38,7 @@ services:
       NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9933'
       # Staging
       # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.dev/
-      # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
+      # NETWORK_CHAIN_ID: '0xd12a4b22b06f4eabaef920226b2dfb0fa9a5b99d4f2b1e72729da97e07dd374d'
       # NETWORK_DICTIONARY: https://subql-dictionary.polymesh.dev
       # Testnet
       # NETWORK_ENDPOINT: wss://testnet-rpc.polymesh.live

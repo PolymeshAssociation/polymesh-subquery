@@ -10,9 +10,10 @@ import {
   getTextValue,
   hexToString,
   is7xChain,
+  is8xChain,
   serializeTicker,
 } from './common';
-import { getPortfolioOrAccountValue } from './portfolios';
+import { getPortfolioOrAccountValue, meshAssetHolderToPortfolioOrAccount } from './portfolios';
 
 export interface AssetIdWithTicker {
   assetId: string;
@@ -158,17 +159,29 @@ export const getAssetIdWithTicker = async (
 
 export const getPortfolioIdOrAccount = (
   item: Codec
-): { identityId: string; account?: string; portfolioId?: string } => {
+): { identityId?: string; account?: string; portfolioId?: string } => {
   const data = getPortfolioOrAccountValue(item);
 
   let portfolioId: string | undefined;
   let account: string | undefined;
   let identityId: string;
-  if ('accountId' in data) {
-    ({ accountId: account, identityId } = data);
+  if ('account' in data) {
+    ({ account, identityId } = data);
   } else {
     ({ identityId } = data);
     portfolioId = `${data.identityId}/${data.number}`;
   }
   return { account, portfolioId, identityId };
+};
+
+export const extractAssetHolder = async (
+  item: Codec,
+  block: SubstrateBlock
+): Promise<{ identityId?: string; account?: string; portfolioId?: string }> => {
+  if (is8xChain(block)) {
+    const meshAssetHolder = JSON.parse(item.toString());
+    return await meshAssetHolderToPortfolioOrAccount(meshAssetHolder);
+  }
+
+  return getPortfolioIdOrAccount(item);
 };

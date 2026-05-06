@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
-import { getPortfolioOrAccountValue, meshPortfolioToPortfolioOrAccount } from './portfolios';
+import { extractAccountOrPortfolio, meshPortfolioToPortfolioOrAccount } from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
@@ -37,13 +37,13 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
     let from: string, to: string; // for dids
 
     let fromPortfolio: number | undefined, toPortfolio: number | undefined;
-    if ('accountId' in fromData) {
-      ({ accountId: fromAccount, identityId: from } = fromData);
+    if ('account' in fromData) {
+      ({ account: fromAccount, identityId: from } = fromData);
     } else {
       ({ identityId: from, number: fromPortfolio } = fromData);
     }
-    if ('accountId' in toData) {
-      ({ accountId: toAccount, identityId: to } = toData);
+    if ('account' in toData) {
+      ({ account: toAccount, identityId: to } = toData);
     } else {
       ({ identityId: to, number: toPortfolio } = toData);
     }
@@ -91,20 +91,20 @@ const processOnChainLeg = async (
   legIndex: number,
   block: SubstrateBlock
 ): Promise<LegDetails> => {
-  const fromData = meshPortfolioToPortfolioOrAccount(legValue.sender);
-  const toData = meshPortfolioToPortfolioOrAccount(legValue.receiver);
+  const fromData = await extractAccountOrPortfolio(legValue.sender, block);
+  const toData = await extractAccountOrPortfolio(legValue.receiver, block);
 
   let from: string, to: string;
   let fromAccount: string | undefined, toAccount: string | undefined;
   let fromPortfolio: number | undefined, toPortfolio: number | undefined;
 
-  if ('accountId' in fromData) {
-    ({ accountId: fromAccount, identityId: from } = fromData);
+  if ('account' in fromData) {
+    ({ account: fromAccount, identityId: from } = fromData);
   } else {
     ({ identityId: from, number: fromPortfolio } = fromData);
   }
-  if ('accountId' in toData) {
-    ({ accountId: toAccount, identityId: to } = toData);
+  if ('account' in toData) {
+    ({ account: toAccount, identityId: to } = toData);
   } else {
     ({ identityId: to, number: toPortfolio } = toData);
   }
@@ -197,15 +197,17 @@ export const getSettlementTypeDetails = (
   };
 };
 
-export const getPortfolioOrAccount = (
-  rawPortfolio: Codec
-): { identity: string; account?: string; portfolio?: number } => {
-  const data = getPortfolioOrAccountValue(rawPortfolio);
+export const getPortfolioOrAccount = async (
+  rawItem: Codec,
+  block: SubstrateBlock
+): Promise<{ identity: string; account?: string; portfolio?: number }> => {
+  const item = JSON.parse(rawItem.toString());
+  const data = await extractAccountOrPortfolio(item, block);
   let account: string | undefined;
   let portfolio: number | undefined;
   let identityId: string;
-  if ('accountId' in data) {
-    ({ accountId: account, identityId } = data);
+  if ('account' in data) {
+    ({ account, identityId } = data);
   } else {
     ({ identityId, number: portfolio } = data);
   }

@@ -58,6 +58,8 @@ enum ModuleIdEnum {
   statetriemigration
   electionprovidermultiphase
   validators
+  beefy
+  revive
 
   ## deprecated ##
   confidential @deprecated
@@ -125,6 +127,14 @@ enum EventIdEnum {
   Unlocked
   Upgraded
   Withdraw
+  BurnedDebt
+  BurnedHeld
+  Held
+  MintedCredit
+  Released
+  TransferAndHold
+  TransferOnHold
+  Unexpected
 
   ## transactionpayment ##
 
@@ -144,11 +154,15 @@ enum EventIdEnum {
   AuthorizationRejected
   AuthorizationConsumed
   AuthorizationRetryLimitReached
+  "`CddRequirementForPrimaryKeyUpdated` has been deprecated from 8.0.0 chain version"
   CddRequirementForPrimaryKeyUpdated
+  "`CddClaimsInvalidated` has been deprecated from 8.0.0 chain version"
   CddClaimsInvalidated
   SecondaryKeysFrozen
   SecondaryKeysUnfrozen
+  "`ChildDidCreated` has been deprecated from 8.0.0 chain version"
   ChildDidCreated
+  "`ChildDidUnlinked` has been deprecated from 8.0.0 chain version"
   ChildDidUnlinked
 
   ## cddserviceproviders ##
@@ -172,13 +186,14 @@ enum EventIdEnum {
   ExpiresAfterUpdated
   VoteThresholdUpdated
 
-  ## committeemembership ##
+  ## didRegistrars ##
   MemberAdded
   MemberRemoved
   MemberRevoked
   MembersSwapped
   MembersReset
   ActiveLimitChanged
+  "`Dummy` has been deprecated from 8.0.0 chain version"
   Dummy
 
   ## technicalcommittee ##
@@ -332,6 +347,7 @@ enum EventIdEnum {
   NewSession
   ValidatorDisabled
   ValidatorReenabled
+  NewQueued
 
   ## authoritydiscovery ##
 
@@ -352,6 +368,7 @@ enum EventIdEnum {
   ## sudo ##
   Sudid
   KeyChanged
+  KeyRemoved
   SudoAsDone
 
   ## asset ##
@@ -526,10 +543,14 @@ enum EventIdEnum {
   InstructionFailed
   InstructionExecuted
   VenueUnauthorized
+  "`SchedulingFailed` has been deprecated from 8.0.0 chain version"
   SchedulingFailed
   SettlementManuallyExecuted
+  "`InstructionRescheduled` has been deprecated from 8.0.0 chain version"
   InstructionRescheduled
   VenueSignersUpdated
+  InstructionUnlocked
+  MandatoryReceiverAffirmationSet
 
   RemoveAssetAffirmationExemption
   AssetAffirmationExemption
@@ -587,6 +608,7 @@ enum EventIdEnum {
   RelayedTx
 
   ## base ##
+  "`UnexpectedError` has been deprecated from 8.0.0 chain version"
   UnexpectedError
 
   ## externalagents ##
@@ -601,6 +623,11 @@ enum EventIdEnum {
   AcceptedPayingKey
   RemovedPayingKey
   UpdatedPolyxLimit
+  AcceptedSubsidy
+  ApprovedSubsidy
+  RemovedPendingSubsidy
+  RemovedSubsidy
+  SubsidyDebited
 
   ## rewards ##
   ItnRewardClaimed
@@ -637,7 +664,9 @@ enum EventIdEnum {
   NftCollectionCreated
   "`RedeemedNFT` has been deprecated from 6.0.0 chain version"
   RedeemedNFT
+  "`NFTPortfolioUpdated` has been renamed as `NFTHoldingsUpdated` from 8.0.0 chain version"
   NFTPortfolioUpdated
+  NFTHoldingsUpdated
 
   ## confidential assets ##
   AccountCreated
@@ -664,8 +693,17 @@ enum EventIdEnum {
   Slashed
   # SolutionStored -> defined before in staking
 
+  ## historical ##
+  RootsPruned
+  RootStored
+
+  ## revive ##
+  # ContractEmitted (already defined in contracts)
+  EthExtrinsicRevert
+  # Instantiated (already defined in contracts)
+
   ## deprecated ##
-  Approval @deprecated
+  Approval
   AssetPurchased @deprecated
   AssetRuleChanged @deprecated
   AssetRuleRemoved @deprecated
@@ -840,6 +878,7 @@ enum CallIdEnum {
   create_child_identities
   create_child_identity
   unlink_child_identity
+  self_register_did
 
   ## cddserviceproviders ##
   set_active_members_limit
@@ -1066,6 +1105,7 @@ enum CallIdEnum {
   sudo_unchecked_weight
   set_key
   sudo_as
+  remove_key
 
   ## asset ##
   "`register_ticker` has been renamed to `register_unique_ticker` from 7.0.0 chain version"
@@ -1285,6 +1325,9 @@ enum CallIdEnum {
   reject_instruction_as_mediator
   add_and_affirm_with_mediators
   lock_instruction
+  set_mandatory_receiver_affirmation
+  transfer_funds
+  unlock_instruction
 
   ## statistics ##
   set_active_asset_stats
@@ -1339,6 +1382,10 @@ enum CallIdEnum {
   update_polyx_limit
   increase_polyx_limit
   decrease_polyx_limit
+  approve_subsidy
+  revoke_subsidy
+  accept_subsidy
+  remove_subsidy
 
   ## rewards ##
   claim_itn_reward
@@ -1384,6 +1431,7 @@ enum CallIdEnum {
   create_nft_collection
   issue_nft
   redeem_nft
+  transfer_nft
 
   ## confidential assets ##
   add_mediator_account
@@ -1432,6 +1480,30 @@ enum CallIdEnum {
   # remove_permissioned_validator (already was defined in staking)
   # set_commission_cap (already was defined in staking)
   # update_permissioned_validator_intended_count (already was defined in staking)
+
+  ### beefy ###
+  report_double_voting
+  report_double_voting_unsigned
+  set_new_genesis
+  report_fork_voting
+  report_fork_voting_unsigned
+  report_future_block_voting
+  report_future_block_voting_unsigned
+
+  ### revive ###
+  eth_transact
+  # call (already defined in contracts)
+  # instantiate (already defined in contracts)
+  # instantiate_with_code (already defined in contracts)
+  eth_instantiate_with_code
+  eth_call
+  eth_substrate_call
+  # upload_code (already defined in contracts)
+  # remove_code (already defined in contracts)
+  # set_code (already defined in contracts)
+  map_account
+  unmap_account
+  dispatch_as_fallback_account
 
   ## deprecated ##
   accept_authorization @deprecated
@@ -2084,7 +2156,7 @@ type Leg @entity {
   fromAccount: String
   "`fromPortfolio` is null for off chain legs"
   fromPortfolio: Int
-  to: String! @index(unique: false)
+  to: String @index(unique: false)
   toAccount: String
   "`toPortfolio` is null for off chain legs"
   toPortfolio: Int
@@ -2133,7 +2205,7 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String! @index(unique: false)
+  identity: String @index(unique: false)
   account: String
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
@@ -2505,7 +2577,7 @@ Represents how much of a given Asset an Identity owns
 """
 type AssetHolder @entity {
   id: ID! # assetId/did
-  identity: Identity! @index(unique: false)
+  identity: Identity @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
   createdBlock: Block!
@@ -2517,7 +2589,7 @@ Represents what NFTs of a collection an Identity owns
 """
 type NftHolder @entity {
   id: ID! #assetId/did
-  identity: Identity! @index(unique: false)
+  identity: Identity @index(unique: false)
   asset: Asset! @index(unique: false)
   nftIds: [Int]
   createdBlock: Block!

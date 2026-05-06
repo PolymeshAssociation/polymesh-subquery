@@ -145,7 +145,7 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
 
   const portfolioValue = getPortfolioOrAccountValue(rawPortfolio);
   // ignore account custodian change
-  if ('accountId' in portfolioValue) {
+  if ('account' in portfolioValue) {
     return;
   }
   const custodian = getTextValue(rawCustodian);
@@ -167,11 +167,11 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
   const address = getSignerAddress(extrinsic);
   const from = getPortfolioOrAccountValue(rawFromPortfolio);
   // since this event was on old event, it is safe to assume that only portfolio data can be received for below params
-  if ('accountId' in from) {
+  if ('account' in from) {
     return;
   }
   const to = getPortfolioOrAccountValue(rawToPortfolio);
-  if ('accountId' in to) {
+  if ('account' in to) {
     return;
   }
   const assetId = await getAssetId(rawAssetId, block);
@@ -201,14 +201,14 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
 
   let fromPortfolioId: string, toPortfolioId: string, fromAccount: string, toAccount: string;
 
-  if ('accountId' in fromData) {
-    ({ accountId: fromAccount } = fromData);
+  if ('account' in fromData) {
+    ({ account: fromAccount } = fromData);
   } else {
     fromPortfolioId = `${fromData.identityId}/${fromData.number}`;
   }
 
-  if ('accountId' in toData) {
-    ({ accountId: toAccount } = toData);
+  if ('account' in toData) {
+    ({ account: toAccount } = toData);
   } else {
     toPortfolioId = `${toData.identityId}/${toData.number}`;
   }

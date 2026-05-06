@@ -275,8 +275,8 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
           type,
           values: portfolioPermissions[type]?.map(meshPortfolio => {
             const data = meshPortfolioToPortfolioOrAccount(meshPortfolio);
-            if ('accountId' in data) {
-              return { did: data.identityId, accountId: data.accountId };
+            if ('account' in data) {
+              return { did: data.identityId, account: data.account };
             }
             return { did: data.identityId, number: data.number };
           }),
@@ -447,10 +447,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
         },
         address,
         blockId
-      )
-    );
-
-    promises.push(
+      ),
       createAccount(
         {
           address,

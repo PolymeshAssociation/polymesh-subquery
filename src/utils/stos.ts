@@ -26,7 +26,7 @@ export const getFundraiserDetails = async (
     extractValue(rest, 'raising_portfolio')
   );
 
-  if ('accountId' in offeringPortfolio || 'accountId' in raisingPortfolio) {
+  if ('account' in offeringPortfolio || 'account' in raisingPortfolio) {
     return null;
   }
 
