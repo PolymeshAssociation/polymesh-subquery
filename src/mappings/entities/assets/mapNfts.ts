@@ -68,7 +68,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       account: toAccount,
       portfolioId: toPortfolioId,
       identityId: toDid,
-    } = await extractAssetHolder(rawFromHolder, block));
+    } = await extractAssetHolder(rawToHolder, block));
   }
 
   const promises = [];
