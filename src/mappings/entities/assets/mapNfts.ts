@@ -3,11 +3,11 @@ import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, NftHolder } from '../../../types';
 import {
   bytesToString,
+  extractAssetHolder,
   getAssetId,
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
-  getPortfolioIdOrAccount,
   getTextValue,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
@@ -48,27 +48,27 @@ export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise
   return asset.save();
 };
 
-export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<void> => {
+export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
-  const [rawId, rawNftId, rawFromPortfolio, rawToPortfolio, rawUpdateReason] = params;
+  const [rawId, rawNftId, rawFromHolder, rawToHolder, rawUpdateReason] = params;
 
   let fromDid, fromPortfolioId;
   let fromAccount: string;
-  if (!rawFromPortfolio.isEmpty) {
+  if (!rawFromHolder.isEmpty) {
     ({
       account: fromAccount,
       portfolioId: fromPortfolioId,
       identityId: fromDid,
-    } = getPortfolioIdOrAccount(rawFromPortfolio));
+    } = await extractAssetHolder(rawFromHolder, block));
   }
   let toDid, toPortfolioId;
   let toAccount: string;
-  if (!rawToPortfolio.isEmpty) {
+  if (!rawToHolder.isEmpty) {
     ({
       account: toAccount,
       portfolioId: toPortfolioId,
       identityId: toDid,
-    } = getPortfolioIdOrAccount(rawToPortfolio));
+    } = await extractAssetHolder(rawFromHolder, block));
   }
 
   const promises = [];
@@ -84,7 +84,6 @@ export const handleNftPortfolioUpdates = async (event: SubstrateEvent): Promise<
 
   let instructionId: string;
   let instructionMemo: string;
-
   let eventId: EventIdEnum;
   if (reason === 'issued') {
     eventId = EventIdEnum.IssuedNFT;

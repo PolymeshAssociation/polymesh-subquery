@@ -216,7 +216,8 @@ const filters = {
     ProposalFailedToExecute: [],
   },
   nft: {
-    NFTPortfolioUpdated: ['handleNftPortfolioUpdates'],
+    NFTPortfolioUpdated: ['handleNftHoldingsUpdates'],
+    NFTHoldingsUpdated: ['handleNftHoldingsUpdates'],
     NftCollectionCreated: ['handleNftCollectionCreated'],
   },
   pips: {

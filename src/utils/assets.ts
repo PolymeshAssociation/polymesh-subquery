@@ -13,7 +13,11 @@ import {
   is8xChain,
   serializeTicker,
 } from './common';
-import { getPortfolioOrAccountValue, meshAssetHolderToPortfolioOrAccount } from './portfolios';
+import {
+  getPortfolioOrAccountValue,
+  meshAssetHolderToPortfolioOrAccount,
+  PortfolioOrAccount,
+} from './portfolios';
 
 export interface AssetIdWithTicker {
   assetId: string;
@@ -157,11 +161,7 @@ export const getAssetIdWithTicker = async (
   };
 };
 
-export const getPortfolioIdOrAccount = (
-  item: Codec
-): { identityId?: string; account?: string; portfolioId?: string } => {
-  const data = getPortfolioOrAccountValue(item);
-
+const extractPortfolioOrAccount = (data: PortfolioOrAccount) => {
   let portfolioId: string | undefined;
   let account: string | undefined;
   let identityId: string;
@@ -174,13 +174,21 @@ export const getPortfolioIdOrAccount = (
   return { account, portfolioId, identityId };
 };
 
+export const getPortfolioIdOrAccount = (
+  item: Codec
+): { identityId?: string; account?: string; portfolioId?: string } => {
+  const data = getPortfolioOrAccountValue(item);
+  return extractPortfolioOrAccount(data);
+};
+
 export const extractAssetHolder = async (
   item: Codec,
   block: SubstrateBlock
 ): Promise<{ identityId?: string; account?: string; portfolioId?: string }> => {
   if (is8xChain(block)) {
     const meshAssetHolder = JSON.parse(item.toString());
-    return await meshAssetHolderToPortfolioOrAccount(meshAssetHolder);
+    const data = await meshAssetHolderToPortfolioOrAccount(meshAssetHolder);
+    return extractPortfolioOrAccount(data);
   }
 
   return getPortfolioIdOrAccount(item);

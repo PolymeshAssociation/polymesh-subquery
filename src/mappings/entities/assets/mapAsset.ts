@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import {
-  Account,
   Asset,
   AssetDocument,
   AssetHolder,
@@ -521,11 +520,6 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       identityId: fromDid,
     } = await extractAssetHolder(rawFromHolder, block));
 
-    console.log(JSON.stringify({ fromAccount, fromPortfolioId, fromDid }));
-    if (!fromDid && fromAccount) {
-      fromDid = (await Account.get(fromAccount))?.identityId;
-    }
-
     if (fromDid) {
       const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
       fromHolder.amount = fromHolder.amount - transferAmount;
@@ -540,10 +534,6 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       portfolioId: toPortfolioId,
       identityId: toDid,
     } = await extractAssetHolder(rawToHolder, block));
-
-    if (!toDid && toAccount) {
-      toDid = (await Account.get(toAccount))?.identityId;
-    }
 
     if (toDid) {
       const toHolder = await getAssetHolder(assetId, toDid, blockId);
