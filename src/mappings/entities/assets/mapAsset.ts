@@ -66,8 +66,10 @@ export const createAssetTransaction = (
     | 'assetId'
     | 'fromPortfolioId'
     | 'fromAccount'
+    | 'fromIdentityId'
     | 'toPortfolioId'
     | 'toAccount'
+    | 'toIdentityId'
     | 'amount'
     | 'fundingRound'
     | 'nftIds'
@@ -98,6 +100,8 @@ export const createAssetTransaction = (
     ...details,
     // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
+    fromIdentityId: details.fromIdentityId,
+    toIdentityId: details.toIdentityId,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime,
@@ -321,6 +325,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     id: blockEventId,
     assetId,
     toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
+    toIdentityId: issuerDid,
     eventId: EventIdEnum.Issued,
     eventIdx,
     amount: issuedAmount,
@@ -480,8 +485,10 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
         assetId,
         fromPortfolioId,
         fromAccount,
+        fromIdentityId: fromDid,
         toPortfolioId,
         toAccount,
+        toIdentityId: toDid,
         amount: transferAmount,
         instructionId,
       },
@@ -603,8 +610,10 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
         assetId,
         fromPortfolioId,
         fromAccount,
+        fromIdentityId: fromDid,
         toPortfolioId,
         toAccount,
+        toIdentityId: toDid,
         amount: transferAmount,
         fundingRound: fundingRoundName,
         instructionId,

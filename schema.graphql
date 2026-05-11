@@ -2662,10 +2662,14 @@ type AssetTransaction @entity {
   fromPortfolio: Portfolio
   "`fromAccount` will be populated when asset transaction has initiated directly from an account"
   fromAccount: String
+  "`fromIdentityId` is the DID of the sender, present for transfers and redemptions. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
+  fromIdentity: Identity @index(unique: false)
   "`toPortfolioId` will be null in transactions where either the Asset was redeemed or the receiver is an account"
   toPortfolio: Portfolio
   "`toAccount` will be populated when asset transaction has settled directly into an account"
   toAccount: String
+  "`toIdentityId` is the DID of the receiver, present for issuances and transfers. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
+  toIdentity: Identity @index(unique: false)
   "`amount` is the number of fungible tokens involved in this transaction"
   amount: BigInt
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
