@@ -60,6 +60,10 @@ enum ModuleIdEnum {
   validators
   beefy
   revive
+  didregistrars
+  polymeshtransactionpayment
+  multiblockmigrations
+  confidentialassets
 
   ## deprecated ##
   confidential @deprecated
@@ -416,7 +420,8 @@ enum EventIdEnum {
   TickerUnlinkedFromAsset
   GlobalMetadataSpecUpdated
   CreatedAssetTransfer
-
+  AllowanceSpent
+  
   ## capitaldistribution ##
   Created
   BenefitClaimed
@@ -704,6 +709,44 @@ enum EventIdEnum {
   EthExtrinsicRevert
   # Instantiated (already defined in contracts)
 
+  ## confidentialassets ##
+  AccountAssetRegistered
+  AccountCurveTreeRootUpdated
+  AccountRegistered
+  AccountStateLeafInserted
+  # AssetCreated
+  AssetCurveTreeRootUpdated
+  AssetMinted
+  AssetStateLeafUpdated
+  AssetUpdated
+  EncryptionKeyRegistered
+  FeeAccountCurveTreeRootUpdated
+  FeeAccountDeposited
+  FeeAccountStateLeafInserted
+  FeeAccountUpdated
+  FeeAccountWithdrawn
+  MediatorAffirmed
+  MediatorRejected
+  ReceiverAffirmationReverted
+  ReceiverAffirmed
+  ReceiverClaimed
+  RelayerBatchedProofs
+  SenderAffirmationReverted
+  SenderAffirmed
+  SenderCounterUpdated
+  SettlementCreated
+  SettlementStatusUpdated
+
+  ## multiBlockMigrations ##
+  HistoricCleared
+  MigrationAdvanced
+  MigrationCompleted
+  MigrationFailed
+  MigrationSkipped
+  UpgradeCompleted
+  UpgradeFailed
+  UpgradeStarted
+
   ## deprecated ##
   Approval
   AssetPurchased @deprecated
@@ -882,7 +925,7 @@ enum CallIdEnum {
   unlink_child_identity
   self_register_did
 
-  ## cddserviceproviders ##
+  ## cddserviceproviders/didregistrars ##
   set_active_members_limit
   disable_member
   add_member
@@ -1506,6 +1549,35 @@ enum CallIdEnum {
   map_account
   unmap_account
   dispatch_as_fallback_account
+
+  ## multiblockmigrations ##
+  force_set_cursor
+  force_set_active_cursor
+  force_onboard_mbms
+  clear_historic
+
+  ## confidentialassets ##
+  register_accounts
+  register_encryption_keys
+  # create_asset
+  register_account_assets
+  mint_asset
+  create_settlement
+  sender_affirmation
+  receiver_affirmation
+  mediator_affirmation
+  sender_update_counter
+  sender_revert_affirmation
+  receiver_revert_affirmation
+  receiver_claim
+  batched_settlement
+  register_fee_accounts
+  topup_fee_accounts
+  submit_batched_proofs
+  relayer_submit_batched_proofs
+  execute_instant_settlement
+  instant_sender_affirmation
+  instant_receiver_affirmation
 
   ## deprecated ##
   accept_authorization @deprecated

@@ -10,7 +10,7 @@ const chainId = process.env.NETWORK_CHAIN_ID || '';
 const endpoint = process.env.NETWORK_ENDPOINT || '';
 const dictionary = process.env.NETWORK_DICTIONARY || '';
 
-const filters = {
+const filters: Record<string, Record<string, string[]>> = {
   asset: {
     AssetAffirmationExemption: [],
     AssetBalanceUpdated: ['handleAssetBalanceUpdated'],
@@ -364,6 +364,14 @@ const filters = {
     RewardPaymentSchedulingInterrupted: [],
     SlashingAllowedForChanged: [],
   },
+  confidentialAssets: {},
+  didregistrars: {},
+  polymeshTransactionPayment: {},
+  multiBlockMigrations: {},
+  beefy: {},
+  revive: {},
+  stateTrieMigration: {},
+  electionProviderMultiPhase: {},
 };
 
 const handlers: SubstrateEventHandler[] = [];
@@ -377,7 +385,7 @@ Object.keys(filters).forEach(module => {
       filter: {
         module,
       },
-    } as SubstrateEventHandler);
+    });
   }
 
   Object.keys(filters[module]).forEach(method => {
@@ -389,7 +397,7 @@ Object.keys(filters).forEach(module => {
           module,
           method,
         },
-      } as SubstrateEventHandler);
+      });
     }
 
     if (filters[module][method].length > 0) {
@@ -403,7 +411,7 @@ Object.keys(filters).forEach(module => {
             module,
             method,
           },
-        } as SubstrateEventHandler);
+        });
       });
     }
   });
