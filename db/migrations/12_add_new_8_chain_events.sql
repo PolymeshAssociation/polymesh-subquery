@@ -10,9 +10,9 @@ alter type "0bf3c7d4ef" add value if not exists 'approve_subsidy' after 'decreas
 alter type "0bf3c7d4ef" add value if not exists 'revoke_subsidy' after 'approve_subsidy';
 alter type "0bf3c7d4ef" add value if not exists 'accept_subsidy' after 'revoke_subsidy';
 alter type "0bf3c7d4ef" add value if not exists 'remove_subsidy' after 'accept_subsidy';
-alter type "0bf3c7d4ef" add value if not exists 'report_double_voting' after 'redeem_nft';
-alter type "0bf3c7d4ef" add value if not exists 'report_double_voting_unsigned' after 'redeem_nft';
-alter type "0bf3c7d4ef" add value if not exists 'set_new_genesis' after 'redeem_nft';
+alter type "0bf3c7d4ef" add value if not exists 'report_double_voting' after 'sumbit_unsigned';
+alter type "0bf3c7d4ef" add value if not exists 'report_double_voting_unsigned' after 'report_double_voting';
+alter type "0bf3c7d4ef" add value if not exists 'set_new_genesis' after 'report_double_voting_unsigned';
 alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting' after 'sumbit_unsigned';
 alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting_unsigned' after 'report_fork_voting';
 alter type "0bf3c7d4ef" add value if not exists 'report_future_block_voting' after 'report_fork_voting_unsigned';

@@ -139,7 +139,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
         toPortfolioId,
         toAccount,
         toIdentityId: toDid,
-        nftIds: ids.map(id => BigInt(id)),
+        nftIds: ids.map(BigInt),
         instructionId,
         instructionMemo,
       },

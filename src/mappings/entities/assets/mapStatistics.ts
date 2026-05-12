@@ -123,7 +123,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
   const transferConditions = JSON.parse(item.toString()) as MeshTransferCondition[];
 
   const optBigInt = (x?: bigint) => {
-    return x !== null ? BigInt(x) : null;
+    return x == null ? null : BigInt(x);
   };
 
   return transferConditions.map(

@@ -158,7 +158,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 
   const ownerId = getTextValue(rawOwnerDid);
 
-  const ticker = !is7xChain(block) ? serializeTicker(rawAssetId) : undefined;
+  const ticker = is7xChain(block) ? undefined : serializeTicker(rawAssetId);
 
   /**
    * Name isn't present on the old events so we need to query storage.
@@ -501,24 +501,79 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   await Promise.all(promises);
 };
 
+const updateAssetHolderAmount = async (
+  assetId: string,
+  identityId: string,
+  blockId: string,
+  delta: bigint,
+  promises: Promise<void>[]
+): Promise<void> => {
+  const holder = await getAssetHolder(assetId, identityId, blockId);
+  holder.amount += delta;
+  holder.updatedBlockId = blockId;
+  promises.push(holder.save());
+};
+
+type UpdateReasonResult = {
+  eventId: EventIdEnum;
+  fundingRoundName?: string;
+  instructionId?: string;
+  instructionMemo?: string;
+  assetDelta: { totalSupply?: bigint; totalTransfers?: bigint };
+};
+
+const processUpdateReason = (
+  updateReason: string,
+  value: unknown,
+  transferAmount: bigint,
+  eventIdx: number,
+  blockEvents: SubstrateEvent['event'][]
+): UpdateReasonResult => {
+  if (updateReason === 'issued') {
+    const { fundingRoundName: rawName } = value as { fundingRoundName: string };
+    return {
+      eventId: EventIdEnum.Issued,
+      fundingRoundName: coerceHexToString(rawName),
+      assetDelta: { totalSupply: transferAmount },
+    };
+  }
+
+  if (updateReason === 'redeemed') {
+    return {
+      eventId: EventIdEnum.Redeemed,
+      assetDelta: { totalSupply: -transferAmount },
+    };
+  }
+
+  if (updateReason === 'transferred') {
+    const details = value as {
+      instructionId: number | null;
+      instructionMemo: `0x${string}` | null;
+    };
+    const instructionId = details.instructionId ? details.instructionId.toString() : null;
+    const instructionMemo = details.instructionMemo
+      ? coerceHexToString(details.instructionMemo)
+      : null;
+    const eventId = instructionId
+      ? EventIdEnum.Transfer
+      : ((blockEvents[eventIdx + 1] as unknown as { method: string })?.method as EventIdEnum);
+    return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
+  }
+
+  return { eventId: undefined, assetDelta: {} };
+};
+
 export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawAmount, rawFromHolder, rawToHolder, rawUpdateReason] = params;
 
-  let fromDid: string, toDid: string, fromAccount: string, toAccount: string;
-
   const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
-
-  let fromPortfolioId: string;
-  let toPortfolioId: string;
-  let fundingRoundName: string;
-  let instructionId: string;
-  let instructionMemo: string;
-
-  const promises = [];
-
   const transferAmount = getBigIntValue(rawAmount);
+  const promises: Promise<void>[] = [];
+
+  let fromDid: string, toDid: string, fromAccount: string, toAccount: string;
+  let fromPortfolioId: string, toPortfolioId: string;
 
   if (!rawFromHolder.isEmpty) {
     ({
@@ -526,12 +581,8 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       portfolioId: fromPortfolioId,
       identityId: fromDid,
     } = await extractAssetHolder(rawFromHolder, block));
-
     if (fromDid) {
-      const fromHolder = await getAssetHolder(assetId, fromDid, blockId);
-      fromHolder.amount = fromHolder.amount - transferAmount;
-      fromHolder.updatedBlockId = blockId;
-      promises.push(fromHolder.save());
+      await updateAssetHolderAmount(assetId, fromDid, blockId, -transferAmount, promises);
     }
   }
 
@@ -541,64 +592,46 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       portfolioId: toPortfolioId,
       identityId: toDid,
     } = await extractAssetHolder(rawToHolder, block));
-
     if (toDid) {
-      const toHolder = await getAssetHolder(assetId, toDid, blockId);
-      toHolder.amount = toHolder.amount + transferAmount;
-      toHolder.updatedBlockId = blockId;
-      promises.push(toHolder.save());
+      await updateAssetHolderAmount(assetId, toDid, blockId, transferAmount, promises);
     }
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);
-
   const value = getFirstValueFromJson(rawUpdateReason);
 
-  let eventId: EventIdEnum;
-  if (updateReason === 'issued') {
-    eventId = EventIdEnum.Issued;
-    const issuedReason = value as unknown as { fundingRoundName: string };
-    fundingRoundName = coerceHexToString(issuedReason.fundingRoundName);
+  const { eventId, fundingRoundName, instructionId, instructionMemo, assetDelta } =
+    processUpdateReason(
+      updateReason,
+      value,
+      transferAmount,
+      eventIdx,
+      block.events as unknown as SubstrateEvent['event'][]
+    );
 
-    if (fundingRoundName) {
-      promises.push(
-        createFunding(
-          blockId,
-          assetId,
-          blockEventId,
-          block.timestamp,
-          fundingRoundName,
-          transferAmount,
-          transferAmount
-        )
-      );
-    }
-
-    asset.totalSupply += transferAmount;
+  if (assetDelta.totalSupply !== undefined) {
+    asset.totalSupply += assetDelta.totalSupply;
+  }
+  if (assetDelta.totalTransfers !== undefined) {
+    asset.totalTransfers += assetDelta.totalTransfers;
+  }
+  if (assetDelta.totalSupply !== undefined || assetDelta.totalTransfers !== undefined) {
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
-  } else if (updateReason === 'redeemed') {
-    eventId = EventIdEnum.Redeemed;
-    asset.totalSupply -= transferAmount;
-    asset.updatedBlockId = blockId;
-    promises.push(asset.save());
-  } else if (updateReason === 'transferred') {
-    const details = value as unknown as {
-      instructionId: number | null;
-      instructionMemo: `0x${string}` | null;
-    };
+  }
 
-    instructionId = details.instructionId ? details.instructionId.toString() : null;
-    instructionMemo = details.instructionMemo ? coerceHexToString(details.instructionMemo) : null;
-
-    eventId = EventIdEnum.Transfer;
-    if (!instructionId) {
-      eventId = block.events[eventIdx + 1]?.event?.method as EventIdEnum;
-    }
-
-    asset.totalTransfers += BigInt(1);
-    asset.updatedBlockId = blockId;
-    promises.push(asset.save());
+  if (fundingRoundName) {
+    promises.push(
+      createFunding(
+        blockId,
+        assetId,
+        blockEventId,
+        block.timestamp,
+        fundingRoundName,
+        transferAmount,
+        transferAmount
+      )
+    );
   }
 
   promises.push(

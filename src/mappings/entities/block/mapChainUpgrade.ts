@@ -48,12 +48,12 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
       `Current runtime transaction version - ${oldTxVersion}. New runtime tx version - ${txVersion}`
     );
 
-    if (txVersion !== oldTxVersion) {
+    if (txVersion === oldTxVersion) {
+      logger.info(`Transaction version was not changed for the chain upgrade`);
+    } else {
       logger.info(`Major chain upgrade found with transaction version upgraded `);
       await handleMultiSigProposalDeleted(substrateEvent.block);
       oldTxVersion = txVersion;
-    } else {
-      logger.info(`Transaction version was not changed for the chain upgrade`);
     }
 
     oldSpecVersion = specVersion;

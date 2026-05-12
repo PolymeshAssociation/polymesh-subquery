@@ -1,12 +1,11 @@
 import { AnyTuple, Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { Instruction, InstructionEvent, Leg, PortfolioMovement } from '../../../types';
+import { Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
   bytesToString,
   coerceHexToString,
   extractAccountOrPortfolio,
-  getAssetId,
   getDateValue,
   getErrorDetails,
   getLegsValue,
@@ -22,13 +21,12 @@ import {
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
-import { createPortfolioIfNotExists } from '../identities/mapPortfolio';
+import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
 import {
   AffirmStatusEnum,
   EventIdEnum,
   InstructionEventEnum,
   InstructionStatusEnum,
-  PortfolioMovementTypeEnum,
 } from './../../../types/enums';
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
@@ -337,7 +335,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     await Promise.all(automaticAffirmationPromises);
   }
 
-  await Promise.all([promises]);
+  await Promise.all(promises);
 };
 
 /**
@@ -753,7 +751,9 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 
   const party = await InstructionParty.get(partyId);
 
-  if (!party) {
+  if (party) {
+    await Promise.all(promises);
+  } else {
     await Promise.all([
       InstructionParty.create({
         id: partyId,
@@ -765,8 +765,6 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
       }).save(),
       ...promises,
     ]);
-  } else {
-    await Promise.all(promises);
   }
 };
 
@@ -779,59 +777,19 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
   const fromData = await extractAccountOrPortfolio(JSON.parse(rawFromPortfolio.toString()), block);
   const toData = await extractAccountOrPortfolio(JSON.parse(rawToPortfolio.toString()), block);
 
-  let fromPortfolioId: string, toPortfolioId: string, fromAccount: string, toAccount: string;
-
-  if ('account' in fromData) {
-    ({ account: fromAccount } = fromData);
-  } else {
-    fromPortfolioId = `${fromData.identityId}/${fromData.number}`;
-  }
-
-  if ('account' in toData) {
-    ({ account: toAccount } = toData);
-  } else {
-    toPortfolioId = `${toData.identityId}/${toData.number}`;
-  }
-
-  let assetId: string, amount: bigint, nftIds: bigint[];
-  let type: PortfolioMovementTypeEnum;
-
   const { description, memo } = JSON.parse(rawFund.toString());
   const assetType = Object.keys(description)[0];
   const fundDescription = description[assetType];
-  if (assetType === 'fungible') {
-    const description = fundDescription as unknown as {
-      ticker?: string;
-      assetId?: string;
-      amount: number;
-    };
-    assetId = await getAssetId(description.ticker ?? description.assetId, block);
-    amount = BigInt(description.amount);
-    type = PortfolioMovementTypeEnum.Fungible;
-  } else if (assetType === 'nonFungible') {
-    const description = fundDescription as unknown as {
-      ticker?: string;
-      assetId?: string;
-      ids: number[];
-    };
-    nftIds = description.ids.map(id => BigInt(id));
-    assetId = await getAssetId(description.ticker ?? description.assetId, block);
-    type = PortfolioMovementTypeEnum.NonFungible;
-  }
 
-  await PortfolioMovement.create({
-    id: blockEventId,
-    fromId: fromPortfolioId,
-    fromAccount,
-    toId: toPortfolioId,
-    toAccount,
-    type,
-    assetId,
-    amount,
-    nftIds,
+  await mapAssetMovement({
+    blockEventId,
+    blockId,
     address,
+    fromData,
+    toData,
+    assetType,
+    fundDescription,
     memo: memo ? coerceHexToString(memo) : undefined,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+    block,
+  });
 };
