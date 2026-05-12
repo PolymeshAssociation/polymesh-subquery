@@ -19,7 +19,7 @@ export const getMigrationVersion = (fileName: string): number | null => {
   const match = fileName.match(regex);
 
   if (match && match.length >= 2) {
-    return parseInt(match[1]);
+    return Number.parseInt(match[1]);
   }
 
   return null; // Return null if the version number is not found or invalid
@@ -41,24 +41,22 @@ export const schemaMigrations = async (dataSource?: DataSource): Promise<void> =
     const migrationDetails = await getLastMigrationFromDB(postgres);
     lastMigration = migrationDetails?.lastMigration || 0;
   } catch (e) {
-    console.log(`Error message: ${e.message}`);
+    console.log(`Error message: ${(e as Error).message}`);
   }
 
   const queries: string[] = [];
 
-  const migrations = readdirSync('../db/migrations');
-
   console.log(`Last executed migration sequence - ${lastMigration}`);
 
-  for (const file of migrations) {
-    const fileVersion = getMigrationVersion(file);
+  const migrations = readdirSync('../db/migrations')
+    .map(file => ({ file, version: getMigrationVersion(file) || 0 }))
+    .filter(m => m.version > lastMigration)
+    .sort((a, b) => a.version - b.version);
 
-    if (fileVersion && fileVersion > lastMigration) {
-      console.log(`Collecting migration file - ${file}`);
+  for (const { file, version } of migrations) {
+    console.log(`Collecting migration file - ${file}`);
 
-      queries.push(readFileSync(`../db/migrations/${file}`, 'utf-8'));
-      queries.push(migrationInsert(fileVersion));
-    }
+    queries.push(readFileSync(`../db/migrations/${file}`, 'utf-8'), migrationInsert(version));
   }
 
   if (queries.length > 0) {

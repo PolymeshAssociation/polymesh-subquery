@@ -47,4 +47,5 @@ alter type "8f5a39c8ee" add value if not exists 'RemovedPendingSubsidy' after 'A
 alter type "8f5a39c8ee" add value if not exists 'RemovedSubsidy' after 'RemovedPendingSubsidy';
 alter type "8f5a39c8ee" add value if not exists 'SubsidyDebited' after 'RemovedSubsidy';
 alter type "8f5a39c8ee" add value if not exists 'EthExtrinsicRevert' after 'RootStored';
+alter type "8f5a39c8ee" add value if not exists 'FundsTransferred' after 'TickerLinkedToAsset';
 

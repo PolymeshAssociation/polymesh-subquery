@@ -261,6 +261,7 @@ const filters = {
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
     FailedToExecuteInstruction: ['handleFailedToExecuteInstruction'],
+    FundsTransferred: ['handleFundsTransferred'],
     InstructionAffirmed: ['handleInstructionUpdate'],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],
     InstructionAuthorized: ['handleInstructionUpdate'],

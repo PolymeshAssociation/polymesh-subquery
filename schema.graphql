@@ -565,6 +565,8 @@ enum EventIdEnum {
   InstructionLocked
 
   TickerLinkedToAsset
+  FundsTransferred
+
 
   ## statistics ##
   TransferManagerAdded @deprecated
