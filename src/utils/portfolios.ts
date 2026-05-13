@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
-import { Account, Distribution, Portfolio } from '../types';
+import { Distribution, Portfolio } from '../types';
+import { getOrCreateAccount } from './accounts';
 import { getAssetId } from './assets';
 import { extractNumber, is8xChain } from './common';
 
@@ -44,10 +45,12 @@ export const getPortfolioOrAccountValue = (item: Codec): PortfolioOrAccount => {
 };
 
 export const meshAssetHolderToPortfolioOrAccount = async (
-  meshAssetHolder: MeshAssetHolder
+  meshAssetHolder: MeshAssetHolder,
+  blockId: string,
+  datetime: Date
 ): Promise<PortfolioOrAccount> => {
   if ('account' in meshAssetHolder) {
-    const account = await Account.get(meshAssetHolder.account);
+    const account = await getOrCreateAccount(meshAssetHolder.account, blockId, datetime);
     if (account) {
       return { identityId: account.identityId, account: meshAssetHolder.account };
     }
@@ -65,10 +68,15 @@ export const meshAssetHolderToPortfolioOrAccount = async (
 
 export const extractAccountOrPortfolio = async (
   value: MeshAssetHolder | MeshPortfolio,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  blockId: string
 ): Promise<PortfolioOrAccount> => {
   if (is8xChain(block)) {
-    return await meshAssetHolderToPortfolioOrAccount(value as MeshAssetHolder);
+    return await meshAssetHolderToPortfolioOrAccount(
+      value as MeshAssetHolder,
+      blockId,
+      block.timestamp
+    );
   }
   return meshPortfolioToPortfolioOrAccount(value as MeshPortfolio);
 };

@@ -426,12 +426,12 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
     account: fromAccount,
     portfolioId: fromPortfolioId,
     identityId: fromDid,
-  } = await extractAssetHolder(rawFromHolder, block);
+  } = await extractAssetHolder(rawFromHolder, block, blockId);
   const {
     account: toAccount,
     portfolioId: toPortfolioIdValue,
     identityId: toDid,
-  } = await extractAssetHolder(rawToHolder, block);
+  } = await extractAssetHolder(rawToHolder, block, blockId);
 
   let toPortfolioId = toPortfolioIdValue;
   const promises = [];
@@ -580,7 +580,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       account: fromAccount,
       portfolioId: fromPortfolioId,
       identityId: fromDid,
-    } = await extractAssetHolder(rawFromHolder, block));
+    } = await extractAssetHolder(rawFromHolder, block, blockId));
     if (fromDid) {
       await updateAssetHolderAmount(assetId, fromDid, blockId, -transferAmount, promises);
     }
@@ -591,7 +591,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       account: toAccount,
       portfolioId: toPortfolioId,
       identityId: toDid,
-    } = await extractAssetHolder(rawToHolder, block));
+    } = await extractAssetHolder(rawToHolder, block, blockId));
     if (toDid) {
       await updateAssetHolderAmount(assetId, toDid, blockId, transferAmount, promises);
     }

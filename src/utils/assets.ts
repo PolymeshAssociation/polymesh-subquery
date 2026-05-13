@@ -183,11 +183,16 @@ export const getPortfolioIdOrAccount = (
 
 export const extractAssetHolder = async (
   item: Codec,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  blockId: string
 ): Promise<{ identityId?: string; account?: string; portfolioId?: string }> => {
   if (is8xChain(block)) {
     const meshAssetHolder = JSON.parse(item.toString());
-    const data = await meshAssetHolderToPortfolioOrAccount(meshAssetHolder);
+    const data = await meshAssetHolderToPortfolioOrAccount(
+      meshAssetHolder,
+      blockId,
+      block.timestamp
+    );
     return extractPortfolioOrAccount(data);
   }
 

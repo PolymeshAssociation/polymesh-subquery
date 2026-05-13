@@ -163,7 +163,7 @@ const mapAutomaticAffirmation = async (
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawHolder, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(rawHolder, block);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(rawHolder, block, blockId);
 
   const automaticAffirmationEvent = InstructionEvent.create({
     id: blockEventId,
@@ -238,7 +238,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    */
   const specName = api.runtimeVersion.specName.toString();
   if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
-    legs = await getSettlementLeg(rawLegs, block);
+    legs = await getSettlementLeg(rawLegs, block, blockId);
   } else {
     legs = await getLegsValue(rawLegs, block);
   }
@@ -349,7 +349,11 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(rawPortfolio, block);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(
+    rawPortfolio,
+    block,
+    blockId
+  );
 
   const partyId = getPartyId(instructionId, identity, account, false);
 
@@ -403,7 +407,11 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
   const [, rawPortfolio, rawInstructionId] = params;
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(rawPortfolio, block);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(
+    rawPortfolio,
+    block,
+    blockId
+  );
 
   const partyId = getPartyId(instructionId, identity, account, false);
   const affirmation = await InstructionAffirmation.get(partyId);
@@ -774,8 +782,16 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
 
   const address = getSignerAddress(extrinsic);
 
-  const fromData = await extractAccountOrPortfolio(JSON.parse(rawFromPortfolio.toString()), block);
-  const toData = await extractAccountOrPortfolio(JSON.parse(rawToPortfolio.toString()), block);
+  const fromData = await extractAccountOrPortfolio(
+    JSON.parse(rawFromPortfolio.toString()),
+    block,
+    blockId
+  );
+  const toData = await extractAccountOrPortfolio(
+    JSON.parse(rawToPortfolio.toString()),
+    block,
+    blockId
+  );
 
   const { description, memo } = JSON.parse(rawFund.toString());
   const assetType = Object.keys(description)[0];
