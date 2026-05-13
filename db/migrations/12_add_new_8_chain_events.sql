@@ -13,7 +13,7 @@ alter type "0bf3c7d4ef" add value if not exists 'remove_subsidy' after 'accept_s
 alter type "0bf3c7d4ef" add value if not exists 'report_double_voting' after 'sumbit_unsigned';
 alter type "0bf3c7d4ef" add value if not exists 'report_double_voting_unsigned' after 'report_double_voting';
 alter type "0bf3c7d4ef" add value if not exists 'set_new_genesis' after 'report_double_voting_unsigned';
-alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting' after 'sumbit_unsigned';
+alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting' after 'set_new_genesis';
 alter type "0bf3c7d4ef" add value if not exists 'report_fork_voting_unsigned' after 'report_fork_voting';
 alter type "0bf3c7d4ef" add value if not exists 'report_future_block_voting' after 'report_fork_voting_unsigned';
 alter type "0bf3c7d4ef" add value if not exists 'report_future_block_voting_unsigned' after 'report_future_block_voting';
