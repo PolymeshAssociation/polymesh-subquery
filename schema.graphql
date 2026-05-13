@@ -106,7 +106,7 @@ enum EventIdEnum {
 
   ## balances ##
   Endowed
-  # Transfer (already defined in Asset)
+  Transfer
   BalanceSet
   "`AccountBalanceBurned` has been deprecated from 8.0.0 chain version"
   AccountBalanceBurned
@@ -117,12 +117,12 @@ enum EventIdEnum {
   # Burned
   Deposit
   DustLost
-  # Frozen
-  # Issued (already defined in asset)
+  Frozen
+  Issued
   Locked
   Minted
   Rescinded
-  # Restored
+  Restored
   # Slashed (already defined in electionprovidermultiphase)
   Suspended
   Thawed
@@ -152,6 +152,7 @@ enum EventIdEnum {
   ClaimAdded
   CustomClaimTypeAdded
   ClaimRevoked
+  "`AssetDidRegistered` has been deprecated from 8.0.0 chain version"
   AssetDidRegistered
   AuthorizationAdded
   AuthorizationRevoked
@@ -190,13 +191,21 @@ enum EventIdEnum {
   ExpiresAfterUpdated
   VoteThresholdUpdated
 
-  ## didRegistrars ##
+  ## didregistrars ##
   MemberAdded
   MemberRemoved
   MemberRevoked
   MembersSwapped
   MembersReset
   ActiveLimitChanged
+
+  ## committeemembership ##
+  # MemberAdded (already defined in didRegistrars)
+  # MemberRemoved (already defined in didRegistrars)
+  # MemberRevoked (already defined in didRegistrars)
+  # MembersSwapped (already defined in didRegistrars)
+  # MembersReset (already defined in didRegistrars)
+  # ActiveLimitChanged (already defined in didRegistrars)
   "`Dummy` has been deprecated from 8.0.0 chain version"
   Dummy
 
@@ -214,13 +223,13 @@ enum EventIdEnum {
   # VoteThresholdUpdated (already defined in PolymeshCommittee)
 
   ## technicalcommitteemembership ##
-  # MemberAdded (already defined in CommitteeMembership)
-  # MemberRemoved (already defined in CommitteeMembership)
-  # MemberRevoked (already defined in CommitteeMembership)
-  # MembersSwapped (already defined in CommitteeMembership)
-  # MembersReset (already defined in CommitteeMembership)
-  # ActiveLimitChanged (already defined in CommitteeMembership)
-  # Dummy (already defined in CommitteeMembership)
+  # MemberAdded (already defined in didRegistrars)
+  # MemberRemoved (already defined in didRegistrars)
+  # MemberRevoked (already defined in didRegistrars)
+  # MembersSwapped (already defined in didRegistrars)
+  # MembersReset (already defined in didRegistrars)
+  # ActiveLimitChanged (already defined in didRegistrars)
+  # Dummy (deprecated from 8.0.0 chain version)
 
   ## upgradecommittee ##
   # Proposed (already defined in TechnicalCommittee)
@@ -236,13 +245,13 @@ enum EventIdEnum {
   # VoteThresholdUpdated (already defined in TechnicalCommittee)
 
   ## upgradecommitteemembership ##
-  # MemberAdded (already defined in TechnicalCommitteeMembership)
-  # MemberRemoved (already defined in TechnicalCommitteeMembership)
-  # MemberRevoked (already defined in TechnicalCommitteeMembership)
-  # MembersSwapped (already defined in TechnicalCommitteeMembership)
-  # MembersReset (already defined in TechnicalCommitteeMembership)
-  # ActiveLimitChanged (already defined in TechnicalCommitteeMembership)
-  # Dummy (already defined in TechnicalCommitteeMembership)
+  # MemberAdded (already defined in didRegistrars)
+  # MemberRemoved (already defined in didRegistrars)
+  # MemberRevoked (already defined in didRegistrars)
+  # MembersSwapped (already defined in didRegistrars)
+  # MembersReset (already defined in didRegistrars)
+  # ActiveLimitChanged (already defined in didRegistrars)
+  # Dummy (deprecated from 8.0.0 chain version)
 
   ## multisig ##
   MultiSigCreated
@@ -280,8 +289,7 @@ enum EventIdEnum {
   TimelockChanged
   "`Bridged` has been deprecated from 6.0.0 chain version"
   Bridged
-  "`Frozen` has been deprecated from 6.0.0 chain version"
-  Frozen
+  # Frozen (deprecated as bridge event from 6.0.0, still active in balances)
   "`Unfrozen` has been deprecated from 6.0.0 chain version"
   Unfrozen
   "`FrozenTx` has been deprecated from 6.0.0 chain version"
@@ -376,10 +384,8 @@ enum EventIdEnum {
   SudoAsDone
 
   ## asset ##
-  "`Transfer` has been deprecated from 6.0.0 chain version"
-  Transfer
-  "`Issued` has been deprecated from 6.0.0 chain version"
-  Issued
+  # Transfer (deprecated as asset event from 6.0.0, still active in balances)
+  # Issued (deprecated as asset event from 6.0.0, still active in balances)
   "`Redeemed` has been deprecated from 6.0.0 chain version"
   Redeemed
   AssetBalanceUpdated
@@ -421,7 +427,8 @@ enum EventIdEnum {
   GlobalMetadataSpecUpdated
   CreatedAssetTransfer
   AllowanceSpent
-  
+  Approval
+
   ## capitaldistribution ##
   Created
   BenefitClaimed
@@ -514,6 +521,7 @@ enum EventIdEnum {
   Scheduled
   Canceled
   Dispatched
+  "`CallLookupFailed` has been deprecated from 8.0.0 chain version"
   CallLookupFailed
   CallUnavailable
   PeriodicFailed
@@ -545,6 +553,7 @@ enum EventIdEnum {
   VenuesAllowed
   VenuesBlocked
   LegFailedExecution
+  "`InstructionFailed` has been deprecated from 7.0.4 chain version"
   InstructionFailed
   InstructionExecuted
   VenueUnauthorized
@@ -571,7 +580,6 @@ enum EventIdEnum {
 
   TickerLinkedToAsset
   FundsTransferred
-
 
   ## statistics ##
   TransferManagerAdded @deprecated
@@ -612,7 +620,6 @@ enum EventIdEnum {
   DispatchedAs
   ItemCompleted
   ItemFailed
-  RelayedTx
 
   ## base ##
   "`UnexpectedError` has been deprecated from 8.0.0 chain version"
@@ -626,17 +633,22 @@ enum EventIdEnum {
   GroupChanged
 
   ## relayer ##
+  "`AuthorizedPayingKey` has been deprecated from 8.0.0 chain version"
   AuthorizedPayingKey
+  "`AcceptedPayingKey` has been deprecated from 8.0.0 chain version"
   AcceptedPayingKey
+  "`RemovedPayingKey` has been deprecated from 8.0.0 chain version"
   RemovedPayingKey
   UpdatedPolyxLimit
   AcceptedSubsidy
   ApprovedSubsidy
+  RelayedTx
   RemovedPendingSubsidy
   RemovedSubsidy
   SubsidyDebited
 
   ## rewards ##
+  "`ItnRewardClaimed` has been deprecated from 6.0.0 chain version"
   ItnRewardClaimed
 
   ## contracts ##
@@ -661,8 +673,11 @@ enum EventIdEnum {
   Cleared
 
   ## testutils ##
+  "`MockInvestorUIDCreated` has been deprecated from 6.0.0 chain version"
   MockInvestorUIDCreated
+  "`DidStatus` has been deprecated from 7.1.0 chain version"
   DidStatus
+  "`CddStatus` has been deprecated from 7.1.0 chain version"
   CddStatus
 
   ## nft ##
@@ -675,21 +690,32 @@ enum EventIdEnum {
   NFTPortfolioUpdated
   NFTHoldingsUpdated
 
-  ## confidential assets ##
+  ## confidential assets (events replaced by `confidentialAssets` pallet in 8.0.0) ##
+  "`AccountCreated` has been deprecated from 8.0.0 chain version"
   AccountCreated
   # ConfidentialAssetCreated -> uses existing AssetCreated
+  "`AccountDeposit` has been deprecated from 8.0.0 chain version"
   AccountDeposit
+  "`TransactionCreated` has been deprecated from 8.0.0 chain version"
   TransactionCreated
+  "`TransactionAffirmed` has been deprecated from 8.0.0 chain version"
   TransactionAffirmed
+  "`AccountWithdraw` has been deprecated from 8.0.0 chain version"
   AccountWithdraw
+  "`TransactionRejected` has been deprecated from 8.0.0 chain version"
   TransactionRejected
+  "`TransactionExecuted` has been deprecated from 8.0.0 chain version"
   TransactionExecuted
+  "`AccountDepositIncoming` has been deprecated from 8.0.0 chain version"
   AccountDepositIncoming
+  "`AccountAssetFrozen` has been deprecated from 8.0.0 chain version"
   AccountAssetFrozen
+  "`AccountAssetUnfrozen` has been deprecated from 8.0.0 chain version"
   AccountAssetUnfrozen
   # AssetFrozen -> defined before
   # AssetUnfrozen -> defined before
-  Burned
+  # Burned -> still active in balances pallet
+  "`FundsMoved` has been deprecated from 8.0.0 chain version"
   FundsMoved
 
   ## electionprovidermultiphase ##
@@ -748,7 +774,6 @@ enum EventIdEnum {
   UpgradeStarted
 
   ## deprecated ##
-  Approval
   AssetPurchased @deprecated
   AssetRuleChanged @deprecated
   AssetRuleRemoved @deprecated
@@ -800,7 +825,6 @@ enum EventIdEnum {
   ReferendumCreated @deprecated
   ReferendumScheduled @deprecated
   ReferendumStateUpdated @deprecated
-  Restored @deprecated
   ScheduleUpdated @deprecated
   SecondaryPermissionsUpdated @deprecated
   SignerLeft @deprecated
@@ -889,10 +913,12 @@ enum CallIdEnum {
   ## identity ##
   cdd_register_did
   cdd_register_did_with_cdd
+  "`invalidate_cdd_claims` has been removed from 8.0.0 chain version"
   invalidate_cdd_claims
   "`remove_secondary_keys_old` has been deprecated from 6.0.0 chain version"
   remove_secondary_keys_old
   accept_primary_key
+  "`change_cdd_requirement_for_mk_rotation` has been removed from 8.0.0 chain version"
   change_cdd_requirement_for_mk_rotation
   join_identity_as_key
   leave_identity_as_key
@@ -920,8 +946,12 @@ enum CallIdEnum {
   set_secondary_key_permissions
   remove_secondary_keys
   register_custom_claim_type
+  register_did
+  "`create_child_identities` has been removed from 8.0.0 chain version"
   create_child_identities
+  "`create_child_identity` has been removed from 8.0.0 chain version"
   create_child_identity
+  "`unlink_child_identity` has been removed from 8.0.0 chain version"
   unlink_child_identity
   self_register_did
 
@@ -1317,6 +1347,7 @@ enum CallIdEnum {
   affirm_instruction
   "`affirm_instruction_v2` has been removed from 8.0.0 chain version"
   affirm_instruction_v2
+  "`withdraw_affirmation` has been removed from 8.0.0 chain version"
   withdraw_affirmation
   "`withdraw_affirmation_v2` has been deprecated from 6.0.0 chain version"
   withdraw_affirmation_v2
@@ -1363,9 +1394,11 @@ enum CallIdEnum {
   affirm_with_receipts_with_count
   affirm_instruction_with_count
   reject_instruction_with_count
+  "`withdraw_affirmation_with_count` has been removed from 8.0.0 chain version"
   withdraw_affirmation_with_count
   add_instruction_with_mediators
   affirm_instruction_as_mediator
+  "`withdraw_affirmation_as_mediator` has been removed from 8.0.0 chain version"
   withdraw_affirmation_as_mediator
   reject_instruction_as_mediator
   add_and_affirm_with_mediators
@@ -1421,8 +1454,11 @@ enum CallIdEnum {
   create_and_change_custom_group
 
   ## relayer ##
+  "`set_paying_key` has been removed from 8.0.0 chain version"
   set_paying_key
+  "`accept_paying_key` has been removed from 8.0.0 chain version"
   accept_paying_key
+  "`remove_paying_key` has been removed from 8.0.0 chain version"
   remove_paying_key
   update_polyx_limit
   increase_polyx_limit
@@ -1433,7 +1469,9 @@ enum CallIdEnum {
   remove_subsidy
 
   ## rewards ##
+  "`claim_itn_reward` has been removed from 8.0.0 chain version"
   claim_itn_reward
+  "`set_itn_reward_status` has been removed from 8.0.0 chain version"
   set_itn_reward_status
 
   ## contracts ##
@@ -1455,7 +1493,9 @@ enum CallIdEnum {
   allow_identity_to_create_portfolios
   revoke_create_portfolios_permission
   create_custody_portfolio
+  "`instantiate_with_code_as_primary_key` has been removed from 8.0.0 chain version"
   instantiate_with_code_as_primary_key
+  "`instantiate_with_hash_as_primary_key` has been removed from 8.0.0 chain version"
   instantiate_with_hash_as_primary_key
   upgrade_api
 
@@ -1467,9 +1507,12 @@ enum CallIdEnum {
   ensure_updated
 
   ## testutils ##
-  register_did
+  # register_did (now active in identity pallet)
+  "`mock_cdd_register_did` has been removed from 8.0.0 chain version"
   mock_cdd_register_did
+  "`get_my_did` has been removed from 8.0.0 chain version"
   get_my_did
+  "`get_cdd_of` has been removed from 8.0.0 chain version"
   get_cdd_of
 
   ## nft ##
@@ -1478,36 +1521,60 @@ enum CallIdEnum {
   redeem_nft
   transfer_nft
 
-  ## confidential assets ##
+  ## confidential assets (calls replaced by `confidentialAssets` pallet in 8.0.0) ##
+  "`add_mediator_account` has been removed from 8.0.0 chain version"
   add_mediator_account
   # create_confidential_asset
   # create_asset -> removing as defined before
   # mint_confidential_asset -> mint
+  "`mint` has been removed from 8.0.0 chain version"
   mint
+  "`add_transaction` has been removed from 8.0.0 chain version"
   add_transaction
+  "`sender_affirm_transaction` has been removed from 8.0.0 chain version"
   sender_affirm_transaction
+  "`receiver_affirm_transaction` has been removed from 8.0.0 chain version"
   receiver_affirm_transaction
+  "`mediator_affirm_transaction` has been removed from 8.0.0 chain version"
   mediator_affirm_transaction
+  "`sender_unaffirm_transaction` has been removed from 8.0.0 chain version"
   sender_unaffirm_transaction
+  "`receiver_unaffirm_transaction` has been removed from 8.0.0 chain version"
   receiver_unaffirm_transaction
+  "`mediator_unaffirm_transaction` has been removed from 8.0.0 chain version"
   mediator_unaffirm_transaction
+  "`create_account` has been removed from 8.0.0 chain version"
   create_account
+  "`affirm_transactions` has been removed from 8.0.0 chain version"
   affirm_transactions
+  "`execute_transaction` has been removed from 8.0.0 chain version"
   execute_transaction
+  "`apply_incoming_balance` has been removed from 8.0.0 chain version"
   apply_incoming_balance
+  "`apply_incoming_balances` has been removed from 8.0.0 chain version"
   apply_incoming_balances
-  burn
+  # burn (still active in balances pallet)
+  "`reject_transaction` has been removed from 8.0.0 chain version"
   reject_transaction
+  "`set_account_asset_frozen` has been removed from 8.0.0 chain version"
   set_account_asset_frozen
+  "`set_asset_frozen` has been removed from 8.0.0 chain version"
   set_asset_frozen
+  "`move_assets` has been removed from 8.0.0 chain version"
   move_assets
 
-  ## state trie migration ##
+  ## state trie migration (pallet removed in 8.0.0) ##
+  "`continue_migrate` has been removed from 8.0.0 chain version"
   continue_migrate
+  "`control_auto_migration` has been removed from 8.0.0 chain version"
   control_auto_migration
+  "`force_set_progress` has been removed from 8.0.0 chain version"
   force_set_progress
+  "`migrate_custom_child` has been removed from 8.0.0 chain version"
   migrate_custom_child
+  "`migrate_custom_top` has been removed from 8.0.0 chain version"
   migrate_custom_top
+  "`set_signed_max_limits` has been removed from 8.0.0 chain version"
   set_signed_max_limits
 
   ## electionprovidermultiphase ##
@@ -1515,7 +1582,7 @@ enum CallIdEnum {
   set_emergency_election_result
   set_minimum_untrusted_score
   submit
-  sumbit_unsigned
+  submit_unsigned
 
   ## validators ## added from 8.0.0 chain version
   # add_permissioned_validator (already was defined in staking)
