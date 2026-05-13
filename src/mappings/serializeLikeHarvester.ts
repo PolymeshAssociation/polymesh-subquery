@@ -101,6 +101,14 @@ export const serializeLikeHarvester = (
   } else if (type === 'Balance') {
     return parseInt(item.toString()); // This might not work for big numbers but it's the way the harvester does it.
   } else if (type === 'ElectionScore') {
+    // In newer Substrate versions ElectionScore became a named struct (SpNposElectionsElectionScore)
+    // rather than a plain tuple/array of BN values. Fall back to the struct serializer in that case.
+    if (isStruct(item)) {
+      const types = extractStructTypes(item as unknown as Struct, rawType);
+      return fromEntries((item as unknown as Struct).entries(), (v, _, k) =>
+        serializeLikeHarvester(v, types[k], logFoundType)
+      );
+    }
     return (item as unknown as BN[]).map(n => parseInt(n.toString())); // This might not work for big numbers but that's the way the harvester does it.
   } else if (isTuple(item)) {
     const types = extractTupleTypes(item, type);
