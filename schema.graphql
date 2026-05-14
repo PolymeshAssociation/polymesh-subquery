@@ -2198,6 +2198,7 @@ type PortfolioMovement @entity {
   fromAccount: String @index(unique: false)
   to: Portfolio @index(unique: false)
   toAccount: String @index(unique: false)
+  identity: Identity @index(unique: false)
   type: PortfolioMovementTypeEnum!
   asset: Asset!
   "the number of fungible tokens transferred. Defined if type == Fungible"
