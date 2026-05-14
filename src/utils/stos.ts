@@ -11,7 +11,7 @@ import {
   getDateValue,
   hexToString,
 } from './common';
-import { getPortfolioId, meshPortfolioToPortfolioOrAccount } from './portfolios';
+import { getPortfolioId, meshPortfolioToAssetHolder } from './portfolios';
 
 export const getFundraiserDetails = async (
   item: Codec,
@@ -19,12 +19,8 @@ export const getFundraiserDetails = async (
 ): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'> | null> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
-  const offeringPortfolio = meshPortfolioToPortfolioOrAccount(
-    extractValue(rest, 'offering_portfolio')
-  );
-  const raisingPortfolio = meshPortfolioToPortfolioOrAccount(
-    extractValue(rest, 'raising_portfolio')
-  );
+  const offeringPortfolio = meshPortfolioToAssetHolder(extractValue(rest, 'offering_portfolio'));
+  const raisingPortfolio = meshPortfolioToAssetHolder(extractValue(rest, 'raising_portfolio'));
 
   if ('account' in offeringPortfolio || 'account' in raisingPortfolio) {
     return null;

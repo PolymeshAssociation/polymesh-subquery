@@ -106,7 +106,7 @@ enum EventIdEnum {
 
   ## balances ##
   Endowed
-  Transfer
+  # Transfer (already defined in Asset)
   BalanceSet
   "`AccountBalanceBurned` has been deprecated from 8.0.0 chain version"
   AccountBalanceBurned
@@ -117,12 +117,12 @@ enum EventIdEnum {
   # Burned
   Deposit
   DustLost
-  Frozen
-  Issued
+  # Frozen (already defined in asset)
+  # Issued (already defined in asset)
   Locked
   Minted
   Rescinded
-  Restored
+  # Restored
   # Slashed (already defined in electionprovidermultiphase)
   Suspended
   Thawed
@@ -289,7 +289,8 @@ enum EventIdEnum {
   TimelockChanged
   "`Bridged` has been deprecated from 6.0.0 chain version"
   Bridged
-  # Frozen (deprecated as bridge event from 6.0.0, still active in balances)
+  "`Frozen` has been deprecated as bridge event from 6.0.0, still active in balances"
+  Frozen
   "`Unfrozen` has been deprecated from 6.0.0 chain version"
   Unfrozen
   "`FrozenTx` has been deprecated from 6.0.0 chain version"
@@ -384,8 +385,10 @@ enum EventIdEnum {
   SudoAsDone
 
   ## asset ##
-  # Transfer (deprecated as asset event from 6.0.0, still active in balances)
-  # Issued (deprecated as asset event from 6.0.0, still active in balances)
+  "`Transfer` has been deprecated as an asset event from 6.0.0 chain version, still active in balances"
+  Transfer
+  "`Issued` has been deprecated as an asset event from 6.0.0 chain version, still active in balances"
+  Issued
   "`Redeemed` has been deprecated from 6.0.0 chain version"
   Redeemed
   AssetBalanceUpdated
@@ -427,7 +430,7 @@ enum EventIdEnum {
   GlobalMetadataSpecUpdated
   CreatedAssetTransfer
   AllowanceSpent
-  Approval
+  # Approval (already defined in deprecated events)
 
   ## capitaldistribution ##
   Created
@@ -620,6 +623,7 @@ enum EventIdEnum {
   DispatchedAs
   ItemCompleted
   ItemFailed
+  RelayedTx
 
   ## base ##
   "`UnexpectedError` has been deprecated from 8.0.0 chain version"
@@ -642,7 +646,7 @@ enum EventIdEnum {
   UpdatedPolyxLimit
   AcceptedSubsidy
   ApprovedSubsidy
-  RelayedTx
+  # RelayedTx (already defined in utility)
   RemovedPendingSubsidy
   RemovedSubsidy
   SubsidyDebited
@@ -714,7 +718,8 @@ enum EventIdEnum {
   AccountAssetUnfrozen
   # AssetFrozen -> defined before
   # AssetUnfrozen -> defined before
-  # Burned -> still active in balances pallet
+  "`Burned` is still active in balances pallet"
+  Burned
   "`FundsMoved` has been deprecated from 8.0.0 chain version"
   FundsMoved
 
@@ -773,6 +778,9 @@ enum EventIdEnum {
   UpgradeFailed
   UpgradeStarted
 
+  "`Approval` is now active for assets pallet"
+  Approval
+  
   ## deprecated ##
   AssetPurchased @deprecated
   AssetRuleChanged @deprecated
@@ -825,6 +833,7 @@ enum EventIdEnum {
   ReferendumCreated @deprecated
   ReferendumScheduled @deprecated
   ReferendumStateUpdated @deprecated
+  Restored @deprecated
   ScheduleUpdated @deprecated
   SecondaryPermissionsUpdated @deprecated
   SignerLeft @deprecated
@@ -946,7 +955,7 @@ enum CallIdEnum {
   set_secondary_key_permissions
   remove_secondary_keys
   register_custom_claim_type
-  register_did
+  # register_did (already defined in testutils)
   "`create_child_identities` has been removed from 8.0.0 chain version"
   create_child_identities
   "`create_child_identity` has been removed from 8.0.0 chain version"
@@ -1507,7 +1516,8 @@ enum CallIdEnum {
   ensure_updated
 
   ## testutils ##
-  # register_did (now active in identity pallet)
+  "`register_did` is now active in identity pallet"
+  register_did
   "`mock_cdd_register_did` has been removed from 8.0.0 chain version"
   mock_cdd_register_did
   "`get_my_did` has been removed from 8.0.0 chain version"
@@ -1553,7 +1563,8 @@ enum CallIdEnum {
   apply_incoming_balance
   "`apply_incoming_balances` has been removed from 8.0.0 chain version"
   apply_incoming_balances
-  # burn (still active in balances pallet)
+  "`burn` is still active in balances pallet"
+  burn
   "`reject_transaction` has been removed from 8.0.0 chain version"
   reject_transaction
   "`set_account_asset_frozen` has been removed from 8.0.0 chain version"
@@ -2297,7 +2308,7 @@ type Leg @entity {
   fromAccount: String
   "`fromPortfolio` is null for off chain legs"
   fromPortfolio: Int
-  to: String @index(unique: false)
+  to: String! @index(unique: false)
   toAccount: String
   "`toPortfolio` is null for off chain legs"
   toPortfolio: Int
@@ -2346,7 +2357,7 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String @index(unique: false)
+  identity: String! @index(unique: false)
   account: String
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
@@ -2718,7 +2729,7 @@ Represents how much of a given Asset an Identity owns
 """
 type AssetHolder @entity {
   id: ID! # assetId/did
-  identity: Identity @index(unique: false)
+  identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
   createdBlock: Block!
@@ -2730,7 +2741,7 @@ Represents what NFTs of a collection an Identity owns
 """
 type NftHolder @entity {
   id: ID! #assetId/did
-  identity: Identity @index(unique: false)
+  identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   nftIds: [Int]
   createdBlock: Block!

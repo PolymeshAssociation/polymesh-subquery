@@ -365,7 +365,7 @@ const filters: Record<string, Record<string, string[]>> = {
     SlashingAllowedForChanged: [],
   },
   confidentialAssets: {},
-  didregistrars: {},
+  didRegistrars: {},
   polymeshTransactionPayment: {},
   multiBlockMigrations: {},
   beefy: {},

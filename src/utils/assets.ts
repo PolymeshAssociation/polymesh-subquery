@@ -10,14 +10,8 @@ import {
   getTextValue,
   hexToString,
   is7xChain,
-  is8xChain,
   serializeTicker,
 } from './common';
-import {
-  getPortfolioOrAccountValue,
-  meshAssetHolderToPortfolioOrAccount,
-  PortfolioOrAccount,
-} from './portfolios';
 
 export interface AssetIdWithTicker {
   assetId: string;
@@ -159,42 +153,4 @@ export const getAssetIdWithTicker = async (
     assetId,
     ticker,
   };
-};
-
-const extractPortfolioOrAccount = (data: PortfolioOrAccount) => {
-  let portfolioId: string | undefined;
-  let account: string | undefined;
-  let identityId: string;
-  if ('account' in data) {
-    ({ account, identityId } = data);
-  } else {
-    ({ identityId } = data);
-    portfolioId = `${data.identityId}/${data.number}`;
-  }
-  return { account, portfolioId, identityId };
-};
-
-export const getPortfolioIdOrAccount = (
-  item: Codec
-): { identityId?: string; account?: string; portfolioId?: string } => {
-  const data = getPortfolioOrAccountValue(item);
-  return extractPortfolioOrAccount(data);
-};
-
-export const extractAssetHolder = async (
-  item: Codec,
-  block: SubstrateBlock,
-  blockId: string
-): Promise<{ identityId?: string; account?: string; portfolioId?: string }> => {
-  if (is8xChain(block)) {
-    const meshAssetHolder = JSON.parse(item.toString());
-    const data = await meshAssetHolderToPortfolioOrAccount(
-      meshAssetHolder,
-      blockId,
-      block.timestamp
-    );
-    return extractPortfolioOrAccount(data);
-  }
-
-  return getPortfolioIdOrAccount(item);
 };

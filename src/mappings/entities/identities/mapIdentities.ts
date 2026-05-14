@@ -19,7 +19,7 @@ import {
   getEventParams,
   getNumberValue,
   getTextValue,
-  meshPortfolioToPortfolioOrAccount,
+  meshPortfolioToAssetHolder,
 } from '../../../utils';
 import { Attributes, extractArgs } from './../common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
@@ -274,7 +274,7 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
         portfolios = {
           type,
           values: portfolioPermissions[type]?.map(meshPortfolio => {
-            const data = meshPortfolioToPortfolioOrAccount(meshPortfolio);
+            const data = meshPortfolioToAssetHolder(meshPortfolio);
             if ('account' in data) {
               return { did: data.identityId, account: data.account };
             }

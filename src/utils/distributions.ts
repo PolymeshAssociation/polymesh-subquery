@@ -3,7 +3,7 @@ import { SubstrateBlock } from '@subql/types';
 import { Distribution } from '../types';
 import { getAssetId } from './assets';
 import { END_OF_TIME, extractBigInt, getBigIntValue } from './common';
-import { meshPortfolioToPortfolioOrAccount } from './portfolios';
+import { meshPortfolioToAssetHolder } from './portfolios';
 
 export const getDistributionValue = async (
   item: Codec,
@@ -14,7 +14,7 @@ export const getDistributionValue = async (
 > | null> => {
   const { from, currency, amount, remaining, ...rest } = JSON.parse(item.toString());
 
-  const fromData = meshPortfolioToPortfolioOrAccount(from);
+  const fromData = meshPortfolioToAssetHolder(from);
   if ('account' in fromData) {
     return null;
   }

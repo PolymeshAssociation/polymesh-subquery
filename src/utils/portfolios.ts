@@ -5,9 +5,11 @@ import { getOrCreateAccount } from './accounts';
 import { getAssetId } from './assets';
 import { extractNumber, is8xChain } from './common';
 
-export type PortfolioOrAccount =
-  | { account: string; identityId?: string }
-  | { identityId: string; number: number };
+export type AccountDetails = { identityId: string; account: string };
+export type PortfolioDetails = Pick<Portfolio, 'identityId' | 'number'>;
+
+export type AssetHolderDetails = AccountDetails | PortfolioDetails;
+
 export interface MeshPortfolio {
   did: string;
   kind:
@@ -20,41 +22,51 @@ export interface MeshPortfolio {
 
 export type MeshAssetHolder = { account: string } | { portfolio: MeshPortfolio };
 
-export const meshPortfolioToPortfolioOrAccount = (
-  meshPortfolio: MeshPortfolio
-): PortfolioOrAccount => {
+/**
+ * Till 7.4 chain, portfolio support all Default Portfolio, Numbered Portfolio and even account type portfolio
+ */
+export const meshPortfolioToAssetHolder = (meshPortfolio: MeshPortfolio): AssetHolderDetails => {
   let number = 0;
+
+  // extract account address
   if ('accountId' in meshPortfolio.kind) {
     return {
       identityId: meshPortfolio.did,
       account: meshPortfolio.kind.accountId,
     };
   }
+  // extract portfolio number
   if ('user' in meshPortfolio.kind) {
     number = meshPortfolio.kind.user;
   }
   return {
     identityId: meshPortfolio.did,
-    number: number || 0,
+    number: number || 0, // 0 maps to default portfolio
   };
 };
 
-export const getPortfolioOrAccountValue = (item: Codec): PortfolioOrAccount => {
+/**
+ * Directly converts raw codec to AssetHolder type
+ */
+export const rawPortfolioToAssetHolder = (item: Codec): AssetHolderDetails => {
   const meshPortfolio = JSON.parse(item.toString());
-  return meshPortfolioToPortfolioOrAccount(meshPortfolio);
+  return meshPortfolioToAssetHolder(meshPortfolio);
 };
 
-export const meshAssetHolderToPortfolioOrAccount = async (
+/**
+ * Convert parsed asset holder into AssetHolder
+ * For account type asset holder, it fetches the did info from DB. If not present uses chain storage to figure out DID
+ */
+
+export const meshAssetHolderToAssetHolder = async (
   meshAssetHolder: MeshAssetHolder,
   blockId: string,
   datetime: Date
-): Promise<PortfolioOrAccount> => {
+): Promise<AssetHolderDetails> => {
   if ('account' in meshAssetHolder) {
     const account = await getOrCreateAccount(meshAssetHolder.account, blockId, datetime);
-    if (account) {
-      return { identityId: account.identityId, account: meshAssetHolder.account };
-    }
-    return { account: meshAssetHolder.account };
+    // @prashantasdeveloper need to confirm if we can safely assume that account will be present
+    return { account: meshAssetHolder.account, identityId: account?.identityId };
   }
 
   const { did, kind } = meshAssetHolder.portfolio;
@@ -66,19 +78,34 @@ export const meshAssetHolderToPortfolioOrAccount = async (
   return { identityId: did, number };
 };
 
-export const extractAccountOrPortfolio = async (
+/**
+ * Dual compatible method to deduce AssetHolder details
+ * For 8.x chain, parses asset holder directly
+ * For older chain, presumes that value is MeshPortfolio and parses as Portfolio
+ */
+export const extractAssetHolder = async (
   value: MeshAssetHolder | MeshPortfolio,
   block: SubstrateBlock,
   blockId: string
-): Promise<PortfolioOrAccount> => {
+): Promise<AssetHolderDetails> => {
   if (is8xChain(block)) {
-    return await meshAssetHolderToPortfolioOrAccount(
-      value as MeshAssetHolder,
-      blockId,
-      block.timestamp
-    );
+    return await meshAssetHolderToAssetHolder(value as MeshAssetHolder, blockId, block.timestamp);
   }
-  return meshPortfolioToPortfolioOrAccount(value as MeshPortfolio);
+  return meshPortfolioToAssetHolder(value as MeshPortfolio);
+};
+
+/**
+ * Dual compatible method to deduce AssetHolder details
+ * For 8.x chain, parses asset holder directly
+ * For older chain, presumes that value is MeshPortfolio and parses as Portfolio
+ */
+export const rawAssetHolderToAssetHolder = async (
+  rawItem: Codec,
+  block: SubstrateBlock,
+  blockId: string
+): Promise<AssetHolderDetails> => {
+  const item = JSON.parse(rawItem.toString());
+  return extractAssetHolder(item, block, blockId);
 };
 
 export const getPortfolioId = ({

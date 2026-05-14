@@ -5,7 +5,6 @@ import {
   addIfNotIncludes,
   bytesToString,
   coerceHexToString,
-  extractAccountOrPortfolio,
   getDateValue,
   getErrorDetails,
   getLegsValue,
@@ -18,6 +17,7 @@ import {
   getTextValue,
   is7xChain,
   padId,
+  rawAssetHolderToAssetHolder,
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
@@ -778,20 +778,14 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 
 export const handleFundsTransferred = async (event: SubstrateEvent): Promise<void> => {
   const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
-  const [, rawFromPortfolio, rawToPortfolio, rawFund] = params;
+  const [, rawFromHolder, rawToHolder, rawFund] = params;
 
   const address = getSignerAddress(extrinsic);
 
-  const fromData = await extractAccountOrPortfolio(
-    JSON.parse(rawFromPortfolio.toString()),
-    block,
-    blockId
-  );
-  const toData = await extractAccountOrPortfolio(
-    JSON.parse(rawToPortfolio.toString()),
-    block,
-    blockId
-  );
+  const [fromHolder, toHolder] = await Promise.all([
+    rawAssetHolderToAssetHolder(rawFromHolder, block, blockId),
+    rawAssetHolderToAssetHolder(rawToHolder, block, blockId),
+  ]);
 
   const { description, memo } = JSON.parse(rawFund.toString());
   const assetType = Object.keys(description)[0];
@@ -801,8 +795,8 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
     blockEventId,
     blockId,
     address,
-    fromData,
-    toData,
+    fromHolder,
+    toHolder,
     assetType,
     fundDescription,
     memo: memo ? coerceHexToString(memo) : undefined,

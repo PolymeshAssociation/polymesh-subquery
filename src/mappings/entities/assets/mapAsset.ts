@@ -13,11 +13,10 @@ import {
   SecurityIdentifier,
 } from '../../../types';
 import {
+  AssetHolderDetails,
   bytesToString,
   camelToSnakeCase,
   coerceHexToString,
-  emptyDid,
-  extractAssetHolder,
   getAssetId,
   getAssetType,
   getBigIntValue,
@@ -26,10 +25,12 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
+  getPortfolioId,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
   is7xChain,
+  rawAssetHolderToAssetHolder,
   serializeTicker,
 } from '../../../utils';
 import { processInstructionId } from '../settlements/mapSettlement';
@@ -63,19 +64,8 @@ export const createAssetTransaction = (
   datetime: Date,
   details: Pick<
     AssetTransaction,
-    | 'assetId'
-    | 'fromPortfolioId'
-    | 'fromAccount'
-    | 'fromIdentityId'
-    | 'toPortfolioId'
-    | 'toAccount'
-    | 'toIdentityId'
-    | 'amount'
-    | 'fundingRound'
-    | 'nftIds'
-    | 'instructionId'
-    | 'instructionMemo'
-  >,
+    'assetId' | 'amount' | 'fundingRound' | 'nftIds' | 'instructionId' | 'instructionMemo'
+  > & { fromHolder?: AssetHolderDetails; toHolder?: AssetHolderDetails },
   blockEventId: string,
   eventId?: EventIdEnum,
   extrinsic?: SubstrateExtrinsic
@@ -95,13 +85,42 @@ export const createAssetTransaction = (
     default: EventIdEnum.Transfer,
   };
 
+  let fromIdentityId: string;
+  let fromAccount: string;
+  let fromPortfolioId: string;
+  let toIdentityId: string;
+  let toAccount: string;
+  let toPortfolioId: string;
+
+  if (details.fromHolder) {
+    fromIdentityId = details.fromHolder.identityId;
+    if ('account' in details.fromHolder) {
+      fromAccount = details.fromHolder.account;
+    } else {
+      fromPortfolioId = getPortfolioId(details.fromHolder);
+    }
+  }
+
+  if (details.toHolder) {
+    toIdentityId = details.toHolder.identityId;
+    if ('account' in details.toHolder) {
+      toAccount = details.toHolder.account;
+    } else {
+      toPortfolioId = getPortfolioId(details.toHolder);
+    }
+  }
+
   return AssetTransaction.create({
     id: blockEventId,
     ...details,
     // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
-    fromIdentityId: details.fromIdentityId,
-    toIdentityId: details.toIdentityId,
+    fromPortfolioId,
+    fromAccount,
+    fromIdentityId,
+    toPortfolioId,
+    toAccount,
+    toIdentityId,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime,
@@ -422,31 +441,25 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   const assetId = await getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
-  const {
-    account: fromAccount,
-    portfolioId: fromPortfolioId,
-    identityId: fromDid,
-  } = await extractAssetHolder(rawFromHolder, block, blockId);
-  const {
-    account: toAccount,
-    portfolioId: toPortfolioIdValue,
-    identityId: toDid,
-  } = await extractAssetHolder(rawToHolder, block, blockId);
+  let fromHolder: AssetHolderDetails | undefined;
+  let fromDid: string;
+  let toDid: string;
 
-  let toPortfolioId = toPortfolioIdValue;
-  const promises = [];
-
-  if (fromDid && fromDid === emptyDid) {
-    return; // We ignore the transfer case when Asset tokens are issued
+  if (!rawFromHolder.isEmpty) {
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromDid = fromHolder.identityId;
   }
-  if (toDid && toDid === emptyDid) {
-    // case for Assets being redeemed
-    toPortfolioId = null;
+  let toHolder: AssetHolderDetails | undefined;
+
+  if (!rawToHolder.isEmpty) {
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
   }
 
   let instructionId: string;
 
-  if (fromPortfolioId && toPortfolioId) {
+  const promises = [];
+
+  if (fromHolder && toHolder) {
     const asset = await getAsset(assetId);
     asset.totalTransfers += BigInt(1);
     asset.updatedBlockId = blockId;
@@ -483,12 +496,8 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
       block.timestamp,
       {
         assetId,
-        fromPortfolioId,
-        fromAccount,
-        fromIdentityId: fromDid,
-        toPortfolioId,
-        toAccount,
-        toIdentityId: toDid,
+        fromHolder,
+        toHolder,
         amount: transferAmount,
         instructionId,
       },
@@ -556,7 +565,8 @@ const processUpdateReason = (
       : null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
-      : ((blockEvents[eventIdx + 1] as unknown as { method: string })?.method as EventIdEnum);
+      : ((blockEvents[eventIdx + 1] as unknown as { method: string })?.method as EventIdEnum) ??
+        EventIdEnum.Unknown;
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
   }
 
@@ -572,29 +582,23 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const transferAmount = getBigIntValue(rawAmount);
   const promises: Promise<void>[] = [];
 
-  let fromDid: string, toDid: string, fromAccount: string, toAccount: string;
-  let fromPortfolioId: string, toPortfolioId: string;
+  let fromHolder: AssetHolderDetails | undefined;
 
   if (!rawFromHolder.isEmpty) {
-    ({
-      account: fromAccount,
-      portfolioId: fromPortfolioId,
-      identityId: fromDid,
-    } = await extractAssetHolder(rawFromHolder, block, blockId));
-    if (fromDid) {
-      await updateAssetHolderAmount(assetId, fromDid, blockId, -transferAmount, promises);
-    }
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    await updateAssetHolderAmount(
+      assetId,
+      fromHolder.identityId,
+      blockId,
+      -transferAmount,
+      promises
+    );
   }
+  let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    ({
-      account: toAccount,
-      portfolioId: toPortfolioId,
-      identityId: toDid,
-    } = await extractAssetHolder(rawToHolder, block, blockId));
-    if (toDid) {
-      await updateAssetHolderAmount(assetId, toDid, blockId, transferAmount, promises);
-    }
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    await updateAssetHolderAmount(assetId, toHolder.identityId, blockId, transferAmount, promises);
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);
@@ -641,12 +645,8 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
       block.timestamp,
       {
         assetId,
-        fromPortfolioId,
-        fromAccount,
-        fromIdentityId: fromDid,
-        toPortfolioId,
-        toAccount,
-        toIdentityId: toDid,
+        fromHolder,
+        toHolder,
         amount: transferAmount,
         fundingRound: fundingRoundName,
         instructionId,

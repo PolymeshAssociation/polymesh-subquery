@@ -3,7 +3,7 @@ import { Codec } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
 import { createIdentity, createPermissions } from '../mappings/entities/identities/mapIdentities';
 import { Account, EventIdEnum, Identity } from '../types';
-import { getFirstValueFromJson } from './common';
+import { getFirstKeyFromJson, getFirstValueFromJson } from './common';
 
 export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
@@ -23,47 +23,53 @@ export const getOrCreateAccount = async (
   blockId: string,
   datetime: Date
 ): Promise<Account | undefined> => {
-  const account = await Account.get(address);
-  if (!account) {
-    const rawKeyRecord = (await api.query.identity.keyRecords(address)) as unknown as Codec;
+  let account = await Account.get(address);
 
-    const did = getFirstValueFromJson(rawKeyRecord);
-    const type = getFirstValueFromJson(rawKeyRecord);
-
-    const eventId = EventIdEnum.AccountCreated;
-
-    const identity = await Identity.get(did);
-
-    if (!identity || (type === 'primaryKey' && identity.primaryAccount !== address)) {
-      await createIdentity(
-        { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
-        blockId
-      );
-    }
-
-    await createPermissions(
-      {
-        datetime,
-        transactionGroups: [],
-      },
-      address,
-      blockId
-    );
-
-    const account = Account.create({
-      id: address,
-      eventId: EventIdEnum.AccountCreated,
-      datetime,
-      identityId: did,
-      permissionsId: address,
-      address,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    });
-
-    await account.save();
-
+  if (account) {
     return account;
   }
+
+  const rawKeyRecord = (await api.query.identity.keyRecords(address)) as unknown as Codec;
+
+  if (rawKeyRecord.isEmpty) {
+    return;
+  }
+
+  const did = getFirstValueFromJson(rawKeyRecord);
+  const type = getFirstKeyFromJson(rawKeyRecord);
+
+  const eventId = EventIdEnum.AccountCreated;
+
+  const identity = await Identity.get(did);
+
+  if (!identity || (type === 'primaryKey' && identity.primaryAccount !== address)) {
+    await createIdentity(
+      { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
+      blockId
+    );
+  }
+
+  await createPermissions(
+    {
+      datetime,
+      transactionGroups: [],
+    },
+    address,
+    blockId
+  );
+
+  account = Account.create({
+    id: address,
+    eventId: EventIdEnum.AccountCreated,
+    datetime,
+    identityId: did,
+    permissionsId: address,
+    address,
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  await account.save();
+
   return account;
 };

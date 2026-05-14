@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
-import { extractAccountOrPortfolio, meshPortfolioToPortfolioOrAccount } from './portfolios';
+import { extractAssetHolder, meshPortfolioToAssetHolder } from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
@@ -30,8 +30,8 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
     const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
     const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
 
-    const fromData = meshPortfolioToPortfolioOrAccount(rawFromPortfolio);
-    const toData = meshPortfolioToPortfolioOrAccount(rawToPortfolio);
+    const fromData = meshPortfolioToAssetHolder(rawFromPortfolio);
+    const toData = meshPortfolioToAssetHolder(rawToPortfolio);
 
     let fromAccount: string | undefined, toAccount: string | undefined; // for accounts
     let from: string, to: string; // for dids
@@ -92,8 +92,8 @@ const processOnChainLeg = async (
   block: SubstrateBlock,
   blockId: string
 ): Promise<LegDetails> => {
-  const fromData = await extractAccountOrPortfolio(legValue.sender, block, blockId);
-  const toData = await extractAccountOrPortfolio(legValue.receiver, block, blockId);
+  const fromData = await extractAssetHolder(legValue.sender, block, blockId);
+  const toData = await extractAssetHolder(legValue.receiver, block, blockId);
 
   let from: string, to: string;
   let fromAccount: string | undefined, toAccount: string | undefined;
@@ -207,7 +207,7 @@ export const getPortfolioOrAccount = async (
   blockId: string
 ): Promise<{ identity: string; account?: string; portfolio?: number }> => {
   const item = JSON.parse(rawItem.toString());
-  const data = await extractAccountOrPortfolio(item, block, blockId);
+  const data = await extractAssetHolder(item, block, blockId);
   let account: string | undefined;
   let portfolio: number | undefined;
   let identityId: string;

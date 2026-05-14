@@ -2,13 +2,14 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, NftHolder } from '../../../types';
 import {
+  AssetHolderDetails,
   bytesToString,
-  extractAssetHolder,
   getAssetId,
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
   getTextValue,
+  rawAssetHolderToAssetHolder,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction } from './mapAsset';
@@ -52,23 +53,19 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const [rawId, rawNftId, rawFromHolder, rawToHolder, rawUpdateReason] = params;
 
-  let fromDid, fromPortfolioId;
-  let fromAccount: string;
+  let fromHolder: AssetHolderDetails | undefined;
+  let fromDid: string;
+  let toDid: string;
+
   if (!rawFromHolder.isEmpty) {
-    ({
-      account: fromAccount,
-      portfolioId: fromPortfolioId,
-      identityId: fromDid,
-    } = await extractAssetHolder(rawFromHolder, block, blockId));
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromDid = fromHolder.identityId;
   }
-  let toDid, toPortfolioId;
-  let toAccount: string;
+  let toHolder: AssetHolderDetails | undefined;
+
   if (!rawToHolder.isEmpty) {
-    ({
-      account: toAccount,
-      portfolioId: toPortfolioId,
-      identityId: toDid,
-    } = await extractAssetHolder(rawToHolder, block, blockId));
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toDid = toHolder.identityId;
   }
 
   const promises = [];
@@ -133,12 +130,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       block.timestamp,
       {
         assetId,
-        fromPortfolioId,
-        fromAccount,
-        fromIdentityId: fromDid,
-        toPortfolioId,
-        toAccount,
-        toIdentityId: toDid,
+        fromHolder,
+        toHolder,
         nftIds: ids.map(BigInt),
         instructionId,
         instructionMemo,

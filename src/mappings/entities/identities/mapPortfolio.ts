@@ -6,16 +6,16 @@ import {
   PortfolioMovementTypeEnum,
 } from '../../../types';
 import {
+  AssetHolderDetails,
   bytesToString,
   getAssetId,
   getBigIntValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getPortfolioOrAccountValue,
   getSignerAddress,
   getTextValue,
-  PortfolioOrAccount,
+  rawPortfolioToAssetHolder,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
@@ -144,7 +144,7 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
   const { params, blockId } = extractArgs(event);
   const [, rawPortfolio, rawCustodian] = params;
 
-  const portfolioValue = getPortfolioOrAccountValue(rawPortfolio);
+  const portfolioValue = rawPortfolioToAssetHolder(rawPortfolio);
   // ignore account custodian change
   if ('account' in portfolioValue) {
     return;
@@ -166,12 +166,12 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
   const [, rawFromPortfolio, rawToPortfolio, rawAssetId, rawAmount, rawMemo] = params;
 
   const address = getSignerAddress(extrinsic);
-  const from = getPortfolioOrAccountValue(rawFromPortfolio);
+  const from = rawPortfolioToAssetHolder(rawFromPortfolio);
   // since this event was on old event, it is safe to assume that only portfolio data can be received for below params
   if ('account' in from) {
     return;
   }
-  const to = getPortfolioOrAccountValue(rawToPortfolio);
+  const to = rawPortfolioToAssetHolder(rawToPortfolio);
   if ('account' in to) {
     return;
   }
@@ -197,8 +197,8 @@ type AssetMovementArgs = {
   blockEventId: string;
   blockId: string;
   address: string;
-  fromData: PortfolioOrAccount;
-  toData: PortfolioOrAccount;
+  fromHolder: AssetHolderDetails;
+  toHolder: AssetHolderDetails;
   assetType: string;
   fundDescription: unknown;
   memo: string | undefined;
@@ -209,8 +209,8 @@ export const mapAssetMovement = async ({
   blockEventId,
   blockId,
   address,
-  fromData,
-  toData,
+  fromHolder,
+  toHolder,
   assetType,
   fundDescription,
   memo,
@@ -218,16 +218,16 @@ export const mapAssetMovement = async ({
 }: AssetMovementArgs): Promise<void> => {
   let fromPortfolioId: string, toPortfolioId: string, fromAccount: string, toAccount: string;
 
-  if ('account' in fromData) {
-    ({ account: fromAccount } = fromData);
+  if ('account' in fromHolder) {
+    ({ account: fromAccount } = fromHolder);
   } else {
-    fromPortfolioId = `${fromData.identityId}/${fromData.number}`;
+    fromPortfolioId = `${fromHolder.identityId}/${fromHolder.number}`;
   }
 
-  if ('account' in toData) {
-    ({ account: toAccount } = toData);
+  if ('account' in toHolder) {
+    ({ account: toAccount } = toHolder);
   } else {
-    toPortfolioId = `${toData.identityId}/${toData.number}`;
+    toPortfolioId = `${toHolder.identityId}/${toHolder.number}`;
   }
 
   let assetId: string, amount: bigint, nftIds: bigint[];
@@ -274,8 +274,8 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
   const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
   const address = getSignerAddress(extrinsic);
-  const fromData = getPortfolioOrAccountValue(rawFromPortfolio);
-  const toData = getPortfolioOrAccountValue(rawToPortfolio);
+  const fromHolder = rawPortfolioToAssetHolder(rawFromPortfolio);
+  const toHolder = rawPortfolioToAssetHolder(rawToPortfolio);
 
   const assetType = getFirstKeyFromJson(rawFundDescription);
   const fundDescription = getFirstValueFromJson(rawFundDescription);
@@ -285,8 +285,8 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
     blockEventId,
     blockId,
     address,
-    fromData,
-    toData,
+    fromHolder,
+    toHolder,
     assetType,
     fundDescription,
     memo,
