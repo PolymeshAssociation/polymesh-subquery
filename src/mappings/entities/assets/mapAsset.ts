@@ -605,7 +605,13 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const value = getFirstValueFromJson(rawUpdateReason);
 
   const { eventId, fundingRoundName, instructionId, instructionMemo, assetDelta } =
-    processUpdateReason(updateReason, value, transferAmount, eventIdx, block.events);
+    processUpdateReason(
+      updateReason,
+      value,
+      transferAmount,
+      eventIdx,
+      block.events as unknown as EventRecord[]
+    );
 
   if (assetDelta.totalSupply !== undefined) {
     asset.totalSupply += assetDelta.totalSupply;
