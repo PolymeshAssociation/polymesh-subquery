@@ -1961,6 +1961,8 @@ type StakingEvent @entity {
   identity: Identity
   eventId: EventIdEnum!
   amount: BigInt
+  rewardDestination: String
+  rewardDestinationAccount: String
   nominatedValidators: [String!]
   transactionId: String
   datetime: Date! @index

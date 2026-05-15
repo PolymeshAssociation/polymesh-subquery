@@ -1,8 +1,9 @@
 import { hexAddPrefix } from '@polkadot/util';
-import { SubstrateEvent } from '@subql/types';
-import { EventIdEnum, StakingEvent } from '../../../types';
+import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { Account, EventIdEnum, StakingEvent } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
-import { extract8xStakingAmount, is8xChain } from '../../../utils/common';
+import { is8xChain } from '../../../utils/common';
 import { extractArgs } from '../common';
 
 const bondedUnbondedOrReward = new Set([
@@ -12,45 +13,153 @@ const bondedUnbondedOrReward = new Set([
   EventIdEnum.Rewarded, // from 7.x Reward was renamed to Rewarded
 ]);
 
+type RewardDestinationDetails = {
+  type: string;
+  account?: string;
+};
+
+type StakingEventDetails = {
+  amount?: bigint;
+  stashAccount?: string;
+  nominatedValidators?: string[];
+  identityId?: string;
+  rewardDestination?: string;
+  rewardDestinationAccount?: string;
+};
+
+const getRewardDestinationDetails = (destParam: Codec): RewardDestinationDetails => {
+  const json = destParam.toJSON() as string | Record<string, unknown>;
+
+  if (typeof json === 'string') {
+    return { type: json };
+  }
+
+  const variant = Object.keys(json)[0] ?? 'Unknown';
+
+  const value = json[variant];
+
+  if (variant === 'Account') {
+    return {
+      type: variant,
+      account: typeof value === 'string' ? value : undefined,
+    };
+  }
+
+  return { type: variant };
+};
+
+const getRewardDestinationAccount = (
+  destinationDetails: RewardDestinationDetails,
+  stashAccount?: string
+): string | undefined => {
+  if (destinationDetails.type === 'Account') {
+    return destinationDetails.account;
+  }
+
+  if (destinationDetails.type === 'Staked' || destinationDetails.type === 'Stash') {
+    return stashAccount;
+  }
+
+  return undefined;
+};
+
+const getSlashEventDetails = (params: Codec[]): StakingEventDetails => {
+  const [rawAccount, rawAmount] = params;
+
+  return {
+    stashAccount: getTextValue(rawAccount),
+    amount: getBigIntValue(rawAmount),
+  };
+};
+
+const getNominatedEventDetails = (params: Codec[]): StakingEventDetails => {
+  const [rawDid, rawAccount, rawTargets] = params;
+
+  return {
+    identityId: getTextValue(rawDid),
+    stashAccount: getTextValue(rawAccount),
+    nominatedValidators: rawTargets.toJSON() as string[],
+  };
+};
+
+const get8xStakingEventDetails = (eventId: EventIdEnum, params: Codec[]): StakingEventDetails => {
+  const [rawAccount, rawSecondParam, rawThirdParam] = params;
+  const stashAccount = getTextValue(rawAccount);
+
+  if (eventId === EventIdEnum.Rewarded) {
+    const destinationDetails = getRewardDestinationDetails(rawSecondParam);
+
+    return {
+      stashAccount,
+      amount: getBigIntValue(rawThirdParam),
+      rewardDestination: destinationDetails.type,
+      rewardDestinationAccount: getRewardDestinationAccount(destinationDetails, stashAccount),
+    };
+  }
+
+  if (eventId === EventIdEnum.Bonded || eventId === EventIdEnum.Unbonded) {
+    return {
+      stashAccount,
+      amount: getBigIntValue(rawSecondParam),
+    };
+  }
+
+  return { stashAccount };
+};
+
+const getLegacyStakingEventDetails = (
+  eventId: EventIdEnum,
+  params: Codec[]
+): StakingEventDetails => {
+  const [rawDid, rawAccount] = params;
+  const stashAccount = getTextValue(rawAccount);
+  const details: StakingEventDetails = {
+    identityId: getTextValue(rawDid),
+    stashAccount,
+  };
+
+  if (bondedUnbondedOrReward.has(eventId)) {
+    details.amount = getBigIntValue(params[2]);
+
+    if (eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) {
+      details.rewardDestination = 'LegacyUnknown';
+    }
+  }
+
+  return details;
+};
+
+const getStakingEventDetails = async (
+  eventId: EventIdEnum,
+  params: Codec[],
+  block: SubstrateBlock
+): Promise<StakingEventDetails> => {
+  let details: StakingEventDetails;
+
+  if ([EventIdEnum.Slash, EventIdEnum.Slashed].includes(eventId)) {
+    details = getSlashEventDetails(params);
+  } else if (eventId === EventIdEnum.Nominated) {
+    details = getNominatedEventDetails(params);
+  } else if (is8xChain(block)) {
+    details = get8xStakingEventDetails(eventId, params);
+  } else {
+    details = getLegacyStakingEventDetails(eventId, params);
+  }
+
+  if (details.stashAccount && !details.identityId) {
+    details.identityId = (await Account.get(details.stashAccount))?.identityId;
+  }
+
+  return details;
+};
+
 /**
  * Subscribes to staking events
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   const { eventId, params, extrinsic, blockId, blockEventId, block } = extractArgs(event);
-  let amount: bigint;
-  let stashAccount: string;
-  let nominatedValidators: string[];
-  let identityId: string;
-
-  if ([EventIdEnum.Slash, EventIdEnum.Slashed].includes(eventId)) {
-    const [rawAccount, rawAmount] = params;
-
-    stashAccount = getTextValue(rawAccount);
-    amount = getBigIntValue(rawAmount);
-  } else if (is8xChain(block)) {
-    // On 8.x chain, staking events don't have DID as first param
-    // Bonded/Unbonded: [stash, amount] - 2 params
-    // Rewarded: [stash, dest, amount] - 3 params (dest is RewardDestination enum)
-    const [rawAccount, rawDest, rawAmount] = params;
-    stashAccount = getTextValue(rawAccount);
-
-    if (bondedUnbondedOrReward.has(eventId)) {
-      amount = extract8xStakingAmount(rawDest, rawAmount);
-    } else if (eventId === EventIdEnum.Nominated) {
-      nominatedValidators = rawAmount.toJSON() as string[];
-    }
-  } else {
-    const [rawDid, rawAccount] = params;
-
-    identityId = getTextValue(rawDid);
-    stashAccount = getTextValue(rawAccount);
-
-    if (bondedUnbondedOrReward.has(eventId)) {
-      amount = getBigIntValue(params[2]);
-    } else if (eventId === EventIdEnum.Nominated) {
-      nominatedValidators = params[2].toJSON() as string[];
-    }
-  }
+  const datetime = block.timestamp as Date;
+  const details = await getStakingEventDetails(eventId, params as Codec[], block);
 
   let transactionId;
   if (extrinsic) {
@@ -60,12 +169,9 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   await StakingEvent.create({
     id: blockEventId,
     eventId,
-    identityId,
-    stashAccount,
-    amount,
-    nominatedValidators,
+    ...details,
     transactionId,
-    datetime: block.timestamp,
+    datetime,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     createdEventId: blockEventId,
