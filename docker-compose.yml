@@ -35,7 +35,8 @@ services:
       # Polymesh-local
       NETWORK_ENDPOINT: ws://host.docker.internal:9944
       # Setting NETWORK_HTTP_ENDPOINT will allow dynamic lookup of NETWORK_CHAIN_ID
-      NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9944' # Staging
+      NETWORK_HTTP_ENDPOINT: 'http://host.docker.internal:9944'
+      # Staging
       # NETWORK_ENDPOINT: wss://staging-rpc.polymesh.dev/
       # NETWORK_CHAIN_ID: '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee'
       # NETWORK_DICTIONARY: https://subql-dictionary.polymesh.dev

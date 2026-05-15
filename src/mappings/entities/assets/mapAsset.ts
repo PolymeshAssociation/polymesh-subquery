@@ -1,3 +1,4 @@
+import { EventRecord } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import {
@@ -536,7 +537,7 @@ const processUpdateReason = (
   value: unknown,
   transferAmount: bigint,
   eventIdx: number,
-  blockEvents: SubstrateEvent['event'][]
+  blockEvents: EventRecord[]
 ): UpdateReasonResult => {
   if (updateReason === 'issued') {
     const { fundingRoundName: rawName } = value as { fundingRoundName: string };
@@ -565,8 +566,7 @@ const processUpdateReason = (
       : null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
-      : ((blockEvents[eventIdx + 1] as unknown as { method: string })?.method as EventIdEnum) ??
-        EventIdEnum.Unknown;
+      : (blockEvents[eventIdx + 1]?.event.method as EventIdEnum) ?? EventIdEnum.Unknown;
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
   }
 
@@ -605,13 +605,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const value = getFirstValueFromJson(rawUpdateReason);
 
   const { eventId, fundingRoundName, instructionId, instructionMemo, assetDelta } =
-    processUpdateReason(
-      updateReason,
-      value,
-      transferAmount,
-      eventIdx,
-      block.events as unknown as SubstrateEvent['event'][]
-    );
+    processUpdateReason(updateReason, value, transferAmount, eventIdx, block.events);
 
   if (assetDelta.totalSupply !== undefined) {
     asset.totalSupply += assetDelta.totalSupply;

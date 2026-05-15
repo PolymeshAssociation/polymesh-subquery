@@ -130,8 +130,12 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const getPartyId = (instructionId: string, did: string, account: string, isMediator: boolean) =>
-  `${instructionId}/${account ?? did}/${isMediator}`;
+const getPartyId = (
+  instructionId: string,
+  did: string,
+  account: string | undefined,
+  isMediator: boolean
+) => `${instructionId}/${account ?? did}/${isMediator}`;
 
 const createInstructionParty = async (
   instructionId: string,
