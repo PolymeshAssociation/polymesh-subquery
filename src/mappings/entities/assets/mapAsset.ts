@@ -18,6 +18,7 @@ import {
   bytesToString,
   camelToSnakeCase,
   coerceHexToString,
+  emptyDid,
   getAssetId,
   getAssetType,
   getBigIntValue,
@@ -449,11 +450,20 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   if (!rawFromHolder.isEmpty) {
     fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
     fromDid = fromHolder.identityId;
+    if (fromDid === emptyDid) {
+      return; // We ignore the transfer case when Asset tokens are issued
+    }
   }
+
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
     toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toDid = toHolder.identityId;
+    if (toDid === emptyDid) {
+      toDid = null;
+      toHolder = null; // case for Assets being redeemed
+    }
   }
 
   let instructionId: string;
