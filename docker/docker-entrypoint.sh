@@ -26,11 +26,9 @@ npm run migrations
 # Allow configuring node memory. It should be no more than 75% of available RAM.
 # Defaults to 3 GB (expecting at least 4 GB available).
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
-NODE_WORKERS=${MAX_WORKERS:-2}
 
 NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
 	/bin/run --disable-historical=false \
-	--db-schema=public \
-	--workers="$NODE_WORKERS" "$@" &
+	--db-schema=public "$@" &
 child=$!
 wait "$child"
