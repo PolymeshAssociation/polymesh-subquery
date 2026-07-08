@@ -1,43 +1,46 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { ConfidentialAsset, ConfidentialVenue, EventIdEnum } from '../../../types';
-import { ConfidentialAssetMovementProps } from '../../../types/models/ConfidentialAssetMovement';
+import { ConfidentialAccountAsset, ConfidentialAsset, MediatorKey } from '../../../types';
 import {
+  bytesToString,
   getBigIntValue,
-  getBooleanValue,
   getNumberValue,
+  getStringArrayValue,
   getTextValue,
-} from '../../../utils/common';
-import { Attributes, extractArgs } from '../common';
+} from '../../../utils';
+import { extractArgs } from '../common';
 
-export const getAuditorsAndMediators = (
-  item: Codec
-): Pick<Attributes<ConfidentialAsset>, 'auditors' | 'mediators'> => {
-  const { auditors, mediators } = JSON.parse(item.toString());
+/**
+ * Mediators are emitted as a map of confidential account public key -> encryption public key
+ */
+export const getMediators = (item: Codec): MediatorKey[] => {
+  const mediators = item.toJSON() as Record<string, string>;
 
-  return {
-    auditors,
-    mediators,
-  };
+  return Object.entries(mediators).map(([accountKey, encryptionKey]) => ({
+    accountKey,
+    encryptionKey,
+  }));
 };
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawCreator, rawAssetId, , rawAuditorsMediators] = params;
+  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
 
-  const creatorId = getTextValue(rawCreator);
+  const [rawDid, rawAssetId, rawMediators, rawAuditors, rawName, rawSymbol, rawDecimals, rawData] =
+    params;
+
   const assetId = getTextValue(rawAssetId);
-  const { auditors, mediators } = getAuditorsAndMediators(rawAuditorsMediators);
 
   await ConfidentialAsset.create({
     id: assetId,
-    assetId,
-    creatorId,
-    auditors,
-    mediators,
+    assetId: getNumberValue(rawAssetId),
+    name: bytesToString(rawName),
+    symbol: bytesToString(rawSymbol),
+    decimals: getNumberValue(rawDecimals),
+    data: bytesToString(rawData),
+    creatorId: getTextValue(rawDid),
+    mediators: getMediators(rawMediators),
+    auditors: getStringArrayValue(rawAuditors),
     totalSupply: BigInt(0),
-    venueFiltering: false,
-    isFrozen: false,
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -45,137 +48,54 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
   }).save();
 };
 
-export const handleConfidentialAssetIssuedOrBurned = async (
-  event: SubstrateEvent
-): Promise<void> => {
+export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockId } = extractArgs(event);
+
+  const [, rawAssetId, rawMediators, rawAuditors] = params;
+
+  const asset = await ConfidentialAsset.get(getTextValue(rawAssetId));
+
+  if (asset) {
+    asset.mediators = getMediators(rawMediators);
+    asset.auditors = getStringArrayValue(rawAuditors);
+    asset.updatedBlockId = blockId;
+
+    await asset.save();
+  }
+};
+
+export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId } = extractArgs(event);
 
   const [, rawAssetId, , rawTotalSupply] = params;
 
-  const assetId = getTextValue(rawAssetId);
-  const totalSupply = getBigIntValue(rawTotalSupply);
-
-  const asset = await ConfidentialAsset.get(assetId);
+  const asset = await ConfidentialAsset.get(getTextValue(rawAssetId));
 
   if (asset) {
-    asset.totalSupply = totalSupply;
+    asset.totalSupply = getBigIntValue(rawTotalSupply);
     asset.updatedBlockId = blockId;
 
     await asset.save();
   }
 };
 
-export const handleConfidentialVenueCreated = async (event: SubstrateEvent): Promise<void> => {
+export const handleConfidentialAccountAssetRegistered = async (
+  event: SubstrateEvent
+): Promise<void> => {
   const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
 
-  const [rawCreator, rawVenueId] = params;
+  const [, rawAccount, rawAssetId] = params;
 
-  const creatorId = getTextValue(rawCreator);
-  const venueId = getNumberValue(rawVenueId);
+  const accountId = getTextValue(rawAccount);
+  const assetId = getTextValue(rawAssetId);
 
-  await ConfidentialVenue.create({
-    id: `${venueId}`,
-    venueId,
-    creatorId,
+  await ConfidentialAccountAsset.create({
+    id: `${assetId}/${accountId}`,
+    accountId,
+    assetId,
     eventIdx,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     createdEventId: blockEventId,
   }).save();
-};
-
-export const handleVenuesAllowed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawAssetId, rawVenueId] = params;
-
-  const assetId = getTextValue(rawAssetId);
-  const venuesAllowed = JSON.parse(rawVenueId.toString()).map(val => getNumberValue(val)) || [];
-
-  const asset = await ConfidentialAsset.get(assetId);
-
-  if (asset) {
-    const existingVenues = asset.allowedVenues || [];
-    asset.allowedVenues = [...new Set([...venuesAllowed, ...existingVenues])];
-    asset.updatedBlockId = blockId;
-
-    await asset.save();
-  }
-};
-
-export const handleVenuesBlocked = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawAssetId, rawVenueId] = params;
-
-  const assetId = getTextValue(rawAssetId);
-  const blockedVenues = JSON.parse(rawVenueId.toString()).map(val => getNumberValue(val));
-
-  const asset = await ConfidentialAsset.get(assetId);
-
-  if (asset) {
-    asset.allowedVenues = asset.allowedVenues?.filter(val => !blockedVenues.includes(val));
-    asset.updatedBlockId = blockId;
-
-    await asset.save();
-  }
-};
-
-export const handleVenueFiltering = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-
-  const [, rawAssetId, rawEnabled] = params;
-  const assetId = getTextValue(rawAssetId);
-  const enabled = getBooleanValue(rawEnabled);
-
-  const asset = await ConfidentialAsset.get(assetId);
-
-  if (asset) {
-    asset.venueFiltering = enabled;
-    asset.updatedBlockId = blockId;
-
-    await asset.save();
-  }
-};
-
-export const handleAssetFrozenUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, blockId } = extractArgs(event);
-
-  const [, rawAssetId] = params;
-
-  const assetId = getTextValue(rawAssetId);
-
-  const asset = await ConfidentialAsset.get(assetId);
-
-  if (asset) {
-    asset.isFrozen = eventId === EventIdEnum.AssetFrozen;
-    asset.updatedBlockId = blockId;
-
-    await asset.save();
-  }
-};
-
-export const handleConfidentialAssetMoveFunds = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, blockEventId } = extractArgs(event);
-
-  const [, rawFrom, rawTo, rawProofs] = params;
-
-  const fromId = getTextValue(rawFrom);
-  const toId = getTextValue(rawTo);
-
-  const proofs = JSON.parse(rawProofs.toString());
-
-  const proofParams: ConfidentialAssetMovementProps[] = Object.keys(proofs).map(
-    assetId =>
-      ({
-        id: blockEventId,
-        fromId,
-        toId,
-        assetId,
-        proof: proofs[assetId],
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-        createdEventId: blockEventId,
-      } satisfies ConfidentialAssetMovementProps)
-  );
-
-  await store.bulkCreate('ConfidentialAssetMovement', proofParams);
 };

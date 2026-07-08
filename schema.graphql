@@ -3111,40 +3111,56 @@ enum AffirmStatusEnum {
   Rejected
 }
 
-enum ConfidentialTransactionStatusEnum {
-  Created
+enum ConfidentialSettlementStatusEnum {
+  Pending
   Executed
   Rejected
+  Finalized
+}
+
+enum ConfidentialAffirmationStatusEnum {
+  Affirmed
+  Rejected
+  Reverted
+  Finalized
+}
+
+enum ConfidentialCurveTreeEnum {
+  Asset
+  Account
+  FeeAccount
 }
 
 """
-Represents the proof of a transaction affirmation
+A mediator's confidential account public key and encryption key pair
 """
-type SenderProof @jsonField {
-  assetId: String!
-  proof: String!
+type MediatorKey @jsonField {
+  accountKey: String!
+  encryptionKey: String!
 }
 
 """
-Represents a confidential account
+Represents a confidential account (account public key)
 """
 type ConfidentialAccount @entity {
   id: ID!
   account: String!
+  encryptionKey: String!
   creator: Identity!
   eventIdx: Int!
-  frozenForAsset: [String!]!
+  assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
 }
 
 """
-Represents a confidential venue
+Represents a registered encryption key. Registered either with a confidential account or
+standalone for mediators/auditors
 """
-type ConfidentialVenue @entity {
+type ConfidentialEncryptionKey @entity {
   id: ID!
-  venueId: Int!
+  encryptionKey: String!
   creator: Identity!
   eventIdx: Int!
   createdBlock: Block!
@@ -3157,33 +3173,29 @@ Represents a confidential asset
 """
 type ConfidentialAsset @entity {
   id: ID!
-  assetId: String!
-  ticker: String
+  assetId: Int!
+  name: String
+  symbol: String
+  decimals: Int!
   data: String
   creator: Identity!
-  auditors: [String!]
-  mediators: [String!]
+  auditors: [String!]!
+  mediators: [MediatorKey!]!
   totalSupply: BigInt!
-  allowedVenues: [Int!]
-  venueFiltering: Boolean!
-  isFrozen: Boolean!
   eventIdx: Int!
+  holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
 }
 
 """
-Represents a confidential asset holder
+Represents the registration of a confidential asset to a confidential account
 """
-type ConfidentialAssetHolder @entity {
+type ConfidentialAccountAsset @entity {
   id: ID!
-  account: ConfidentialAccount!
-  asset: ConfidentialAsset!
-  """
-  the encrypted amount
-  """
-  amount: String
+  account: ConfidentialAccount! @index(unique: false)
+  asset: ConfidentialAsset! @index(unique: false)
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
@@ -3191,89 +3203,75 @@ type ConfidentialAssetHolder @entity {
 }
 
 """
-Represents a confidential asset transaction affirmation
+Represents a confidential settlement. On chain settlement state (legs, memo and affirmation
+statuses) is pruned at finalization, so these records are the durable history
 """
-type ConfidentialTransactionAffirmation @entity {
+type ConfidentialSettlement @entity {
   id: ID!
-  transaction: ConfidentialTransaction!
-  legId: Int!
-  account: ConfidentialAccount
-  identity: Identity!
-  party: AffirmingPartyEnum!
-  status: AffirmStatusEnum!
-  proofs: [SenderProof!]
+  memo: String
+  """
+  The block number of the asset curve tree root the settlement proof was built against
+  """
+  assetRootBlock: Int!
+  legCount: Int!
+  status: ConfidentialSettlementStatusEnum!
+  legs: [ConfidentialLeg!]! @derivedFrom(field: "settlement")
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
 }
 
-type AssetAuditorGroup @jsonField {
-  assetId: String!
-  auditors: [String!]
-}
-
 """
-Represents a leg of a confidential asset transaction
+Represents a leg of a confidential settlement
 """
 type ConfidentialLeg @entity {
   id: ID!
-  transaction: ConfidentialTransaction!
-  sender: ConfidentialAccount!
-  receiver: ConfidentialAccount!
-  mediators: [String!]!
-  assetAuditors: [AssetAuditorGroup!]!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
-Represents a confidential transaction
-"""
-type ConfidentialTransaction @entity {
-  id: ID!
-  venue: ConfidentialVenue! @index(unique: false)
-  status: ConfidentialTransactionStatusEnum!
-  eventId: EventIdEnum!
-  eventIdx: Int!
-  legs: [ConfidentialLeg!]! @derivedFrom(field: "transaction")
-  affirmations: [ConfidentialTransactionAffirmation!]! @derivedFrom(field: "transaction")
-  memo: String
-  pendingAffirmations: Int!
+  settlement: ConfidentialSettlement! @index(unique: false)
+  legId: Int!
+  """
+  SCALE encoded encrypted leg data (hex). Pruned from chain storage when the settlement is finalized
+  """
+  encryptedData: String!
+  affirmations: [ConfidentialLegAffirmation!]! @derivedFrom(field: "leg")
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
 }
 
 """
-Represents a confidential asset transaction history entry
+Represents the latest affirmation status of a party (sender, receiver or mediator) for a
+confidential settlement leg. A party without a record has not yet affirmed
 """
-type ConfidentialAssetHistory @entity {
+type ConfidentialLegAffirmation @entity {
   id: ID!
-  asset: ConfidentialAsset!
-  from: ConfidentialAccount
-  to: ConfidentialAccount
-  amount: String!
-  eventId: EventIdEnum!
+  settlement: ConfidentialSettlement! @index(unique: false)
+  leg: ConfidentialLeg! @index(unique: false)
+  party: AffirmingPartyEnum!
+  """
+  The mediator key index (only set when party is Mediator)
+  """
+  keyIndex: Int
+  status: ConfidentialAffirmationStatusEnum!
   eventIdx: Int!
-  extrinsicIdx: Int
-  transaction: ConfidentialTransaction
-  memo: String
-  datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
 }
 
 """
-Represents a transfer of confidential assets between a single identities confidential accounts.
+Represents a leaf of one of the confidential assets curve trees. The account and fee account
+trees are append only, while asset tree leaves can be updated in place
 """
-type ConfidentialAssetMovement @entity {
+type ConfidentialCurveTreeLeaf @entity {
   id: ID!
-  from: ConfidentialAccount! @index(unique: false)
-  to: ConfidentialAccount! @index(unique: false)
-  asset: ConfidentialAsset!
-  proof: String!
+  tree: ConfidentialCurveTreeEnum! @index(unique: false)
+  leafIndex: BigInt!
+  """
+  The compressed leaf value commitment (hex)
+  """
+  value: String!
+  eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
