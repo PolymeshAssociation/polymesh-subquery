@@ -18,6 +18,7 @@ import {
   createMultiSigAdmin,
   createMultiSigSigner,
 } from '../entities/multiSig/mapMultiSig';
+import { upsertEvmAccountMapping } from '../entities/revive/mapEvmAccountMapping';
 
 const genesisBlock = padId('0');
 type DidWithAccount = { did: string; accountId: string };
@@ -229,6 +230,40 @@ const handleMultiSigs = async (): Promise<void> => {
 };
 
 /**
+ * This method adds the `H160 -> AccountId32` mappings present in the genesis block
+ *
+ * `pallet_revive`'s genesis config seeds `OriginalAccount` directly through its `mapped_accounts`
+ * field, so these mappings exist without a `revive.mapAccount` extrinsic ever being dispatched and
+ * would otherwise be invisible to the indexer
+ */
+const handleEvmAccountMappings = async (datetime: Date): Promise<void> => {
+  // the revive pallet only exists from the 8.x chain onwards
+  if (!api.query.revive?.originalAccount) {
+    return;
+  }
+
+  const entries = await api.query.revive.originalAccount.entries();
+
+  await Promise.all(
+    entries.map(
+      ([
+        {
+          args: [rawEvmAddress],
+        },
+        rawAddress,
+      ]) =>
+        upsertEvmAccountMapping({
+          evmAddress: rawEvmAddress.toString(),
+          address: rawAddress.toString(),
+          mapped: true,
+          datetime,
+          blockId: genesisBlock,
+        })
+    )
+  );
+};
+
+/**
  * This adds in all the entries which are present in the genesisBlock
  */
 export default async (): Promise<void> => {
@@ -238,6 +273,9 @@ export default async (): Promise<void> => {
   const datetime = new Date(+timestamp.toString());
 
   await Promise.all([insertGenesisBlock(datetime), handleGenesisDids(datetime), handleMultiSigs()]);
+
+  // runs last so that it can link to the Accounts created above
+  await handleEvmAccountMappings(datetime);
 
   logger.info('Applied genesis migrations');
 };

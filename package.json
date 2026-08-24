@@ -34,6 +34,7 @@
     "project.yaml"
   ],
   "dependencies": {
+    "@ethereumjs/rlp": "^5.0.2",
     "@polkadot/api": "^16.5.2",
     "@polkadot/types-support": "^16.5.2",
     "@polymeshassociation/polymesh-types": "^7.4.0",

@@ -2,6 +2,7 @@
 import { HandlerArgs, toEnum } from '../mappings/entities/common';
 import { CallIdEnum, EventIdEnum, ModuleIdEnum } from '../types';
 import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
+import { isEthTransact, resolveEthTransact } from './ethExtrinsic';
 
 export const extractEventArg = (arg: any, exists: boolean) => {
   if (arg !== undefined && arg !== null && arg?.value != null) {
@@ -56,7 +57,13 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
   let callId: CallIdEnum | undefined;
   let callIdText: string | undefined;
   if (extrinsic) {
-    callIdText = camelToSnakeCase(extrinsic.extrinsic.method.method);
+    /**
+     * An `eth_transact` extrinsic is a wrapper, so the call it was transformed into is used
+     * instead. It is memoized per extrinsic, so resolving it once per event is cheap
+     */
+    const resolved = isEthTransact(extrinsic) ? resolveEthTransact(extrinsic) : undefined;
+
+    callIdText = resolved?.callId ?? camelToSnakeCase(extrinsic.extrinsic.method.method);
     callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown);
   }
 
