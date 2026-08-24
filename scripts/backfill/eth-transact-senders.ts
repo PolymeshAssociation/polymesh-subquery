@@ -9,27 +9,28 @@
  * For every affected row this script recovers the signer from the payload, then
  * - sets `extrinsics.address` to the SS58 encoding of the `0xEE` padded Ethereum derived account,
  *   alongside its `eth_address` and `eth_tx_hash`
- * - upserts an `accounts` row for that address (`key_type = 'ethereum'`), so joins against
- *   `extrinsics.address` behave. Existing rows are reclassified rather than duplicated
+ * - upserts an `accounts` row for that address (`key_type = 'ethereum'`) so joins against
+ *   `extrinsics.address` resolve. The forward path only ever creates accounts through an Identity's
+ *   key records; these keys have none, so an unattached row is inserted instead
  *
- * The stored `module_id`/`call_id`/`params_txt`/`success` values are deliberately left untouched:
- * they stay consistent with the historical event rows built from them.
+ * Only current revisions are read and written, and pagination runs on `_id` - see
+ * `scripts/backfill/historical.ts` for why. Backfilled rows keep their raw
+ * `module_id`/`call_id`/`params_txt`/`success` and get no `EvmTransaction` entity; the deployment
+ * notes cover what that means for consumers.
  *
  * Usage (from the repo root):
- *   yarn ts-node scripts/backfill/eth-transact-senders.ts [--apply]
- *        [--db-host=h] [--db-port=p] [--db-user=u] [--db-pass=p] [--db-name=d]
+ *   DB_HOST=h DB_PORT=p DB_USER=u DB_PASS=p DB_DATABASE=d \
+ *     yarn ts-node scripts/backfill/eth-transact-senders.ts [--apply]
  *        [--batch-size=N] [--ss58-format=N] [--limit=N]
  *
  * Defaults to a dry run, which prints would-be updates and a summary without writing anything.
- * Connection details fall back to the DB_* environment variables used by `db/utils.ts`.
+ * Connection details come from the DB_* environment variables used by `db/utils.ts`; setting them
+ * inline keeps credentials out of argv.
  */
+
 /**
- * Ambient declaration for the SubQuery injected `logger` global that this script's imports rely
- * on.
- *
- * `tsconfig.json` only maps SubQuery's globals onto `src/**`, so code running through ts-node
- * declares what it uses itself. At runtime the value only exists inside the SubQuery node; the
- * shim below provides it before any module that touches it is called
+ * `tsconfig.json` maps SubQuery's injected globals onto `src/**` only, so code running through
+ * ts-node declares what it uses itself.
  */
 declare global {
   const logger: {
@@ -41,29 +42,37 @@ declare global {
 }
 
 import { hexToU8a } from '@polkadot/util';
-import { DataSource } from 'typeorm';
-
-// `src/utils/ethTransaction.ts` reports failures through the sandbox injected global `logger`
-(globalThis as any).logger = console;
+import { randomUUID } from 'node:crypto';
+import { DataSource, EntityManager } from 'typeorm';
 
 import { getPostgresDataSource } from '../../db/utils';
 import { ss58FromEthAddress } from '../../src/utils/eth';
-import { decodeEthTransaction, ethTxHash, recoverEthSender } from '../../src/utils/ethTransaction';
+import {
+  decodeEthTransaction,
+  ethTxHash as computeEthTxHash,
+  recoverEthSender,
+} from '../../src/utils/ethTransaction';
+import { CURRENT_REVISION, fetchCurrentBatch, updateCurrentRevisions } from './historical';
+
+// `src/utils/ethTransaction.ts` logs through the injected `logger`; nothing calls it before this
+(globalThis as any).logger = console;
+
+/** Rows this script is responsible for: indexed as `revive.eth_transact`, never attributed */
+const UNATTRIBUTED_ETH_TRANSACT =
+  "module_id = 'revive' and call_id = 'eth_transact' and address is null";
+
+/** Pinned rather than read from `registry.chainSS58` (as the forward path does) since this runs offline */
+const DEFAULT_SS58_FORMAT = 12;
 
 interface Args {
   apply: boolean;
   batchSize: number;
-  dbHost?: string;
-  dbName?: string;
-  dbPass?: string;
-  dbPort?: number;
-  dbUser?: string;
   limit?: number;
   ss58Format: number;
 }
 
 const parseArgs = (): Args => {
-  const args: Args = { apply: false, batchSize: 500, ss58Format: 12 };
+  const args: Args = { apply: false, batchSize: 500, ss58Format: DEFAULT_SS58_FORMAT };
 
   for (const arg of process.argv.slice(2)) {
     const [key, value] = arg.replace(/^--/, '').split('=');
@@ -74,21 +83,6 @@ const parseArgs = (): Args => {
         break;
       case 'batch-size':
         args.batchSize = Number(value);
-        break;
-      case 'db-host':
-        args.dbHost = value;
-        break;
-      case 'db-name':
-        args.dbName = value;
-        break;
-      case 'db-pass':
-        args.dbPass = value;
-        break;
-      case 'db-port':
-        args.dbPort = Number(value);
-        break;
-      case 'db-user':
-        args.dbUser = value;
         break;
       case 'limit':
         args.limit = Number(value);
@@ -126,34 +120,39 @@ interface Recovered {
   ss58: string;
 }
 
+interface RecoveryTotals {
+  accountsInserted: number;
+  accountsSkippedNoBlock: number;
+  accountsUpdated: number;
+  extrinsicsUpdated: number;
+}
+
+interface RecoveredBatch {
+  failed: number;
+  lastScannedId: string | null;
+  recovered: Recovered[];
+  scannedCount: number;
+}
+
 const recoverBatch = async (
   postgres: DataSource,
   args: Args,
-  lastId: string
-): Promise<{
-  failed: number;
-  lastScannedId: string;
-  recovered: Recovered[];
-  scannedCount: number;
-}> => {
-  const rows: { id: string; params_txt: string | null }[] = await postgres.query(
-    `select id, params_txt
-       from extrinsics
-      where module_id = 'revive'
-        and call_id = 'eth_transact'
-        and address is null
-        and id > $1
-      order by id
-      limit $2`,
-    [lastId, args.batchSize]
+  afterId: string | null,
+  fetchSize: number
+): Promise<RecoveredBatch> => {
+  const rows = await fetchCurrentBatch<{ id: string; params_txt: string | null }>(
+    postgres,
+    { table: 'extrinsics', where: UNATTRIBUTED_ETH_TRANSACT },
+    afterId,
+    fetchSize
   );
 
   const recovered: Recovered[] = [];
+  let lastScannedId = afterId;
   let failed = 0;
-  let lastScannedId = lastId;
 
-  for (const { id, params_txt } of rows) {
-    lastScannedId = id;
+  for (const { _id, id, params_txt } of rows) {
+    lastScannedId = _id;
 
     const payload = extractPayload(params_txt);
     const tx = payload ? decodeEthTransaction(hexToU8a(payload)) : undefined;
@@ -171,7 +170,7 @@ const recoverBatch = async (
       id,
       ss58: ss58FromEthAddress(from, args.ss58Format),
       ethAddress: from,
-      ethTxHash: ethTxHash(hexToU8a(payload)),
+      ethTxHash: computeEthTxHash(hexToU8a(payload)),
     });
   }
 
@@ -184,76 +183,99 @@ const recoverBatch = async (
 };
 
 /**
- * Repairs one extrinsic row and its account row.
+ * Repairs one extrinsic row and its account row inside an open transaction.
  *
- * The account upsert reclassifies an existing row, or inserts one when the key was never attached
- * to an Identity and was therefore never indexed. An inserted row carries no identity or
- * permissions links, mirroring how the forward path leaves unattached keys alone
+ * An existing account is reclassified in place. Where none exists - the forward path only creates
+ * accounts through an Identity's key records, and these keys have none - a minimal unattached row
+ * is inserted so `extrinsics.address` joins resolve.
  */
 const applyRecovery = async (
+  manager: EntityManager,
+  { ethAddress, ethTxHash, id, ss58 }: Recovered,
+  totals: RecoveryTotals
+): Promise<void> => {
+  totals.extrinsicsUpdated += await updateCurrentRevisions(
+    manager,
+    'extrinsics',
+    'address = $1, eth_address = $2, eth_tx_hash = $3',
+    'id = $4',
+    [ss58, ethAddress, ethTxHash, id]
+  );
+
+  totals.accountsUpdated += await updateCurrentRevisions(
+    manager,
+    'accounts',
+    "key_type = 'ethereum', evm_address = $2",
+    "id = $1 and (key_type is distinct from 'ethereum' or evm_address is distinct from $2)",
+    [ss58, ethAddress]
+  );
+
+  // `id` carries no unique constraint under historical mode, so existence must be checked
+  // explicitly instead of relying on ON CONFLICT
+  const existing = await manager.query(
+    `select 1
+       from accounts
+      where ${CURRENT_REVISION}
+        and id = $1
+      limit 1`,
+    [ss58]
+  );
+
+  if (existing.length) {
+    return;
+  }
+
+  // `_id` and `_block_range` are NOT NULL with no DB default under historical mode and must be
+  // supplied explicitly (see migration 11); `returning id` doubles as the insertion count, as
+  // TypeORM carries no affected-rows tuple for INSERT
+  const inserted: unknown[][] = await manager.query(
+    `insert into accounts
+           (id, address, key_type, evm_address, event_id, datetime, created_block_id,
+            updated_block_id, _id, _block_range)
+    select $1, $1, 'ethereum', $2, 'AccountCreated', b.datetime, e.block_id, e.block_id,
+           $3::uuid, int8range(e.block_id::bigint, NULL::bigint)
+      from extrinsics e
+      left join blocks b on b.id = e.block_id and upper(b._block_range) is null
+     where upper(e._block_range) is null
+       and e.id = $4
+       and b.datetime is not null
+     returning id`,
+    [ss58, ethAddress, randomUUID(), id]
+  );
+
+  if (inserted.length) {
+    totals.accountsInserted += 1;
+  } else {
+    totals.accountsSkippedNoBlock += 1;
+    logger.warn(`No block datetime found for ${id}, account row not created`);
+  }
+};
+
+const applyRecoveries = async (
   postgres: DataSource,
-  { ethAddress, ethTxHash, id, ss58 }: Recovered
-): Promise<number> =>
-  postgres.transaction(async manager => {
-    await manager.query(
-      `update extrinsics
-          set address = $1, eth_address = $2, eth_tx_hash = $3
-        where id = $4`,
-      [ss58, ethAddress, ethTxHash, id]
-    );
-
-    const enrichment = await manager.query(
-      `update accounts
-          set key_type = 'ethereum', evm_address = $2
-        where id = $1
-          and (key_type is distinct from 'ethereum' or evm_address is distinct from $2)`,
-      [ss58, ethAddress]
-    );
-
-    if (enrichment[1] > 0) {
-      return 1;
+  batch: Recovered[],
+  totals: RecoveryTotals
+): Promise<void> => {
+  // a failure rolls back its batch and stops the run; re-running resumes, since rows repaired by
+  // earlier batches no longer match `address is null`
+  await postgres.transaction(async manager => {
+    for (const recovery of batch) {
+      await applyRecovery(manager, recovery, totals);
     }
-
-    // `event_id` is the hashed Postgres enum; `'AccountCreated'` is an existing label of it
-    const insertion = await manager.query(
-      `insert into accounts
-             (id, address, key_type, evm_address, event_id, datetime, created_block_id,
-              updated_block_id)
-      select $1, $1, 'ethereum', $2, 'AccountCreated', b.datetime, e.block_id, e.block_id
-        from extrinsics e
-        join blocks b on b.id = e.block_id
-       where e.id = $1
-         and b.datetime is not null
-      on conflict (id) do nothing`,
-      [ss58, ethAddress]
-    );
-
-    return insertion[1];
   });
+};
 
 const main = async (): Promise<void> => {
   const args = parseArgs();
 
-  const postgres =
-    args.dbHost || args.dbName || args.dbPass || args.dbPort || args.dbUser
-      ? await new DataSource({
-          type: 'postgres',
-          host: args.dbHost ?? process.env.DB_HOST,
-          port: args.dbPort ?? Number(process.env.DB_PORT ?? 5432),
-          username: args.dbUser ?? process.env.DB_USER,
-          password: args.dbPass ?? process.env.DB_PASS,
-          database: args.dbName ?? process.env.DB_DATABASE,
-          name: 'postgres-backfill',
-        }).initialize()
-      : await getPostgresDataSource();
+  const postgres = await getPostgresDataSource();
 
   try {
     const [{ count }] = await postgres.query(
       `select count(*)::int as count
          from extrinsics
-        where module_id = 'revive'
-          and call_id = 'eth_transact'
-          and address is null`
+        where ${CURRENT_REVISION}
+          and ${UNATTRIBUTED_ETH_TRANSACT}`
     );
     console.log(`Found ${count} revive.eth_transact extrinsics without an address`);
 
@@ -261,43 +283,58 @@ const main = async (): Promise<void> => {
       return;
     }
 
+    const totals: RecoveryTotals = {
+      accountsInserted: 0,
+      accountsSkippedNoBlock: 0,
+      accountsUpdated: 0,
+      extrinsicsUpdated: 0,
+    };
+
     let scanned = 0;
     let failed = 0;
-    let updated = 0;
-    let accountsUpserted = 0;
-    let lastId = '';
+    let afterId: string | null = null;
     let exhausted = false;
 
-    while (!exhausted && !(args.limit && scanned >= args.limit)) {
+    while (!exhausted) {
+      // honor the limit precisely instead of overshooting to the next batch boundary
+      const fetchSize =
+        args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
+
+      if (fetchSize <= 0) {
+        break;
+      }
+
       const {
         failed: batchFailed,
         lastScannedId,
         recovered,
         scannedCount,
-      } = await recoverBatch(postgres, args, lastId);
+      } = await recoverBatch(postgres, args, afterId, fetchSize);
 
       scanned += scannedCount;
       failed += batchFailed;
 
       if (args.apply) {
-        for (const row of recovered) {
-          updated += 1;
-          accountsUpserted += await applyRecovery(postgres, row);
+        if (recovered.length) {
+          await applyRecoveries(postgres, recovered, totals);
         }
       } else if (recovered.length) {
         console.log('Would update:');
         recovered.forEach(({ id, ss58 }) => console.log(`  ${id} -> ${ss58}`));
       }
 
-      lastId = lastScannedId;
-      exhausted = scannedCount < args.batchSize;
+      afterId = lastScannedId;
+      exhausted = scannedCount < fetchSize;
     }
 
+    const outcome = args.apply
+      ? `Updated ${totals.extrinsicsUpdated} extrinsics, reclassified ` +
+        `${totals.accountsUpdated} and inserted ${totals.accountsInserted} accounts ` +
+        `(${totals.accountsSkippedNoBlock} skipped for missing block datetime).`
+      : 'Dry run, nothing written. Pass --apply to write.';
+
     console.log(
-      `Done. Scanned ${scanned} rows, recovered ${scanned - failed}, failed ${failed}. ` +
-        (args.apply
-          ? `Updated ${updated} extrinsics and ${accountsUpserted} accounts.`
-          : 'Dry run, nothing written. Pass --apply to write.')
+      `Done. Scanned ${scanned} rows, recovered ${scanned - failed}, failed ${failed}. ${outcome}`
     );
   } finally {
     await postgres.destroy();
