@@ -4,7 +4,7 @@ import { mapExternalAgentAction } from './entities';
 import { mapBlock } from './entities/block/mapBlock';
 import mapChainUpgrade from './entities/block/mapChainUpgrade';
 import { handleToolingEvent } from './entities/events/mapEvent';
-import { createExtrinsic } from './entities/block/mapExtrinsic';
+import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
 import genesisHandler from './migrations/genesisHandler';
 
@@ -54,8 +54,7 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
 
   if (substrateEvent?.extrinsic?.idx > lastEventIdx) {
     lastEventIdx = substrateEvent?.extrinsic?.idx;
-    const extrinsic = createExtrinsic(substrateEvent.extrinsic);
-    promises.push(extrinsic.save());
+    promises.push(handleExtrinsic(substrateEvent.extrinsic));
   }
 
   const event = handleToolingEvent(substrateEvent);
