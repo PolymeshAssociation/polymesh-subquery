@@ -10,6 +10,16 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 
+/**
+ * Extracts venue signer addresses from the raw `VenueSignersUpdated` event param.
+ *
+ * From chain 8.0.0, `signers` is emitted as a `BTreeSet<AccountId>` (a native `Set`, which has
+ * no `.map`) instead of the `Vec<AccountId>` used until 7.x (array-like, has `.map`).
+ * `Array.from` accepts both iterables uniformly.
+ */
+export const extractVenueSigners = (rawSigners: Iterable<Codec>): string[] =>
+  Array.from(rawSigners).map(signer => signer.toString());
+
 const getVenue = async (venueId: string): Promise<Venue> => {
   const venue = await Venue.get(venueId);
 
@@ -65,7 +75,7 @@ export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<
   const { params, blockId } = extractArgs(event);
   const [, rawVenueId, rawSigners, rawUpdateType] = params;
 
-  const signers = (rawSigners as unknown as Codec[]).map(signer => signer.toString());
+  const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
 
   const id = getTextValue(rawVenueId);
   const venue = await getVenue(id);

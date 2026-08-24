@@ -40,6 +40,11 @@ const instructionStatusMap = {
   [EventIdEnum.InstructionCreated]: InstructionStatusEnum.Created,
   [EventIdEnum.FailedToExecuteInstruction]: InstructionStatusEnum.Failed,
   [EventIdEnum.InstructionLocked]: InstructionStatusEnum.Locked,
+  /**
+   * unlocking returns the instruction to `Pending`, which the schema represents with the same
+   * `Created` status used when the instruction was first created
+   */
+  [EventIdEnum.InstructionUnlocked]: InstructionStatusEnum.Created,
 };
 
 /**
@@ -532,6 +537,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionExecuted
  *   - settlement.InstructionFailed
  *   - settlement.InstructionLocked
+ *   - settlement.InstructionUnlocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
   const { params, extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
