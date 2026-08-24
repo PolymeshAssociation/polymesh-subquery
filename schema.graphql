@@ -1806,7 +1806,88 @@ type Extrinsic @entity {
   success: Int! @index(unique: false)
   nonce: Int
   extrinsicHash: String @index(unique: false)
+  """
+  Checksummed Ethereum address of the key that signed this `revive.eth_transact` extrinsic. `null` for every other extrinsic.
+
+  The equivalent SS58 address, formed by padding this address with 12 `0xEE` bytes, is stored in `address`
+  """
+  ethAddress: String @index(unique: false)
+  "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
+  ethTxHash: String @index(unique: false)
   specVersionId: Int!
+}
+
+"""
+The `revive` call an `eth_transact` extrinsic is transformed into by the runtime
+"""
+enum EvmCallKindEnum {
+  "`revive.eth_call` - a call to a contract or precompile"
+  call
+  "`revive.eth_instantiate_with_code` - a contract deployment"
+  instantiate
+  "`revive.eth_substrate_call` - a native runtime call, dispatched by targeting the `modlpy/paddr` address"
+  substrateCall
+}
+
+"""
+An Ethereum transaction submitted through `revive.ethTransact`, decoded from the RLP payload of the extrinsic.
+
+The chain includes these as unsigned extrinsics, so the signer, the dispatched call and whether the transaction reverted are all recovered by the indexer
+"""
+type EvmTransaction @entity {
+  "Same ID as the `Extrinsic` that carried this transaction"
+  id: ID!
+  extrinsic: Extrinsic!
+  block: Block! @index(unique: false)
+  "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
+  ethTxHash: String! @index(unique: false)
+  "0 for legacy, 1 for EIP-2930, 2 for EIP-1559"
+  ethTxType: Int!
+  callKind: EvmCallKindEnum!
+  "Checksummed Ethereum address that signed the transaction"
+  fromEthAddress: String! @index(unique: false)
+  "SS58 encoding of the `0xEE` padded account the runtime dispatched the call as"
+  fromAddress: String! @index(unique: false)
+  "`null` for a contract deployment"
+  toEthAddress: String @index(unique: false)
+  "Address of the deployed contract, taken from `revive.Instantiated`"
+  contractAddress: String @index(unique: false)
+  value: String!
+  ethNonce: BigInt!
+  gasLimit: String!
+  "Only set for legacy and EIP-2930 transactions"
+  gasPrice: String
+  "Only set for EIP-1559 transactions"
+  maxFeePerGas: String
+  "Only set for EIP-1559 transactions"
+  maxPriorityFeePerGas: String
+  chainId: String
+  "Hex encoded calldata. For a `substrateCall` this is the SCALE encoded runtime call"
+  input: String!
+  "An Ethereum transaction always succeeds at the extrinsic level. This flags the ones that reverted"
+  reverted: Boolean! @index(unique: false)
+  revertReason: String
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Mapping between an Ethereum address and its original `AccountId32`, registered with `revive.mapAccount`
+"""
+type EvmAccountMapping @entity {
+  "Same ID as `evmAddress`"
+  id: ID!
+  "Checksummed Ethereum address the account is reachable at inside `pallet_revive`. Same value as `id`"
+  evmAddress: String!
+  "SS58 address of the account that registered the mapping"
+  address: String! @index(unique: true)
+  account: Account
+  "`false` once the mapping has been removed with `revive.unmapAccount`"
+  mapped: Boolean!
+  datetime: Date!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
@@ -1883,6 +1964,10 @@ Before an Account can sign most Extrinsics it must first be attached to an Ident
 type Account @entity {
   id: ID!
   address: String! @index(unique: true)
+  "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
+  keyType: String!
+  "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
+  evmAddress: String @index(unique: false)
   identity: Identity
   permissions: Permissions
   eventId: EventIdEnum!

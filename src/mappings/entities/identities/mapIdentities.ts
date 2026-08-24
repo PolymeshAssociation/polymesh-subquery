@@ -21,6 +21,7 @@ import {
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
+import { getAccountKeyType } from '../../../utils/accounts';
 import { Attributes, extractArgs } from './../common';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
@@ -70,10 +71,14 @@ export const createPermissions = async (
     updatedBlockId: blockId,
   }).save();
 
-export const createAccount = async (args: Attributes<Account>, blockId: string): Promise<void> =>
+export const createAccount = async (
+  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
+  blockId: string
+): Promise<void> =>
   Account.create({
     id: args.address,
     ...args,
+    ...getAccountKeyType(args.address),
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();

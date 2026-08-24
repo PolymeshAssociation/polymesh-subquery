@@ -13,6 +13,7 @@ export * from './assets/mapCorporateActions';
 export * from './events/mapEvent';
 export * from './externalAgents/mapExternalAgentAction';
 export * from './block/mapExtrinsic';
+export * from './revive/mapEvmAccountMapping';
 export * from './identities/mapIdentities';
 export * from './multiSig/mapMultiSig';
 export * from './multiSig/mapMultiSigProposal';

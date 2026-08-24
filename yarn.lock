@@ -1629,6 +1629,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@ethereumjs/rlp@npm:^5.0.2":
+  version: 5.0.2
+  resolution: "@ethereumjs/rlp@npm:5.0.2"
+  bin:
+    rlp: bin/rlp.cjs
+  checksum: 10c0/56162eaee96dd429f0528a9e51b453398546d57f26057b3e188f2aa09efe8bd430502971c54238ca9cc42af41b0a3f137cf67b9e020d52bc83caca043d64911b
+  languageName: node
+  linkType: hard
+
 "@ethersproject/abi@npm:5.8.0, @ethersproject/abi@npm:^5.8.0":
   version: 5.8.0
   resolution: "@ethersproject/abi@npm:5.8.0"
@@ -14760,6 +14769,7 @@ __metadata:
     "@babel/preset-env": "npm:^7.24.4"
     "@commitlint/cli": "npm:^17.8.1"
     "@commitlint/config-conventional": "npm:^17.8.1"
+    "@ethereumjs/rlp": "npm:^5.0.2"
     "@polkadot/api": "npm:^16.5.2"
     "@polkadot/typegen": "npm:^16.5.2"
     "@polkadot/types-support": "npm:^16.5.2"
