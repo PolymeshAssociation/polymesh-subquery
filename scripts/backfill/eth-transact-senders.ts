@@ -79,6 +79,19 @@ const UNCLASSIFIED_ACCOUNTS = 'evm_address is null';
 /** Cap on the per-batch listing a dry run prints */
 const DRY_RUN_SAMPLE_SIZE = 20;
 
+/** Rows to request next, honouring `--limit` precisely instead of overshooting the batch boundary */
+const nextFetchSize = (args: Args, scanned: number): number =>
+  args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
+
+/** Prints a capped sample of what a dry run would have written */
+const printDryRun = <T>(rows: T[], describe: (row: T) => string): void => {
+  rows.slice(0, DRY_RUN_SAMPLE_SIZE).forEach(row => console.log(`  ${describe(row)}`));
+
+  if (rows.length > DRY_RUN_SAMPLE_SIZE) {
+    console.log(`  ...and ${rows.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
+  }
+};
+
 /** Pinned rather than read from `registry.chainSS58` (as the forward path does) since this runs offline */
 const DEFAULT_SS58_FORMAT = 12;
 
@@ -171,6 +184,61 @@ interface ClassifyTotals {
  * `revive.mapAccount` relationship and is revoked by `unmapAccount`. The address derived here
  * never stops being valid, so historical joins survive an unmapping.
  */
+interface Classification {
+  evmAddress: string;
+  id: string;
+  keyType: string;
+}
+
+/** Decodes one account, or `undefined` when its address is not 32 bytes under this prefix */
+const classifyRow = (row: AccountRow, ss58Format: number): Classification | undefined => {
+  const evmAddress = evmAddressFromSs58(row.address, ss58Format);
+
+  if (!evmAddress) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    evmAddress,
+    keyType: isEthDerivedAddress(row.address, ss58Format) ? 'ethereum' : 'substrate',
+  };
+};
+
+const tallyClassifications = (
+  scanned: number,
+  classifications: Classification[],
+  totals: ClassifyTotals
+): void => {
+  totals.scanned += scanned;
+  totals.resolved += classifications.length;
+  totals.ethereum += classifications.filter(({ keyType }) => keyType === 'ethereum').length;
+  // a wrong --ss58-format lands every row here, which the caller reports on
+  totals.undecodable += scanned - classifications.length;
+};
+
+const applyClassifications = async (
+  postgres: DataSource,
+  classifications: Classification[],
+  totals: ClassifyTotals
+): Promise<void> => {
+  if (!classifications.length) {
+    return;
+  }
+
+  await postgres.transaction(async manager => {
+    for (const { evmAddress, id, keyType } of classifications) {
+      totals.updated += await updateCurrentRevisions(
+        manager,
+        'accounts',
+        'key_type = $2, evm_address = $3',
+        'id = $1',
+        [id, keyType, evmAddress]
+      );
+    }
+  });
+};
+
 const classifyAccounts = async (
   postgres: DataSource,
   args: Args,
@@ -179,10 +247,7 @@ const classifyAccounts = async (
   let afterId: string | null = null;
 
   for (;;) {
-    const fetchSize =
-      args.limit === undefined
-        ? args.batchSize
-        : Math.min(args.batchSize, args.limit - totals.scanned);
+    const fetchSize = nextFetchSize(args, totals.scanned);
 
     if (fetchSize <= 0) {
       break;
@@ -195,54 +260,27 @@ const classifyAccounts = async (
       fetchSize
     );
 
-    const resolved: { evmAddress: string; id: string; keyType: string }[] = [];
+    const classifications: Classification[] = [];
 
     for (const row of rows) {
       afterId = row._id;
-      totals.scanned += 1;
 
-      const evmAddress = evmAddressFromSs58(row.address, args.ss58Format);
+      const classification = classifyRow(row, args.ss58Format);
 
-      if (!evmAddress) {
-        // not a 32 byte account under this prefix - a wrong --ss58-format lands every row here
-        totals.undecodable += 1;
-
-        continue;
+      if (classification) {
+        classifications.push(classification);
       }
-
-      const keyType = isEthDerivedAddress(row.address, args.ss58Format) ? 'ethereum' : 'substrate';
-
-      if (keyType === 'ethereum') {
-        totals.ethereum += 1;
-      }
-
-      resolved.push({ id: row.id, evmAddress, keyType });
     }
 
-    totals.resolved += resolved.length;
+    tallyClassifications(rows.length, classifications, totals);
 
-    if (args.apply && resolved.length) {
-      await postgres.transaction(async manager => {
-        for (const { evmAddress, id, keyType } of resolved) {
-          totals.updated += await updateCurrentRevisions(
-            manager,
-            'accounts',
-            'key_type = $2, evm_address = $3',
-            'id = $1',
-            [id, keyType, evmAddress]
-          );
-        }
-      });
-    } else if (resolved.length) {
-      resolved
-        .slice(0, DRY_RUN_SAMPLE_SIZE)
-        .forEach(({ evmAddress, id, keyType }) =>
-          console.log(`  Would set ${id} -> ${keyType} / ${evmAddress}`)
-        );
-
-      if (resolved.length > DRY_RUN_SAMPLE_SIZE) {
-        console.log(`  ...and ${resolved.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
-      }
+    if (args.apply) {
+      await applyClassifications(postgres, classifications, totals);
+    } else {
+      printDryRun(
+        classifications,
+        ({ evmAddress, id, keyType }) => `Would set ${id} -> ${keyType} / ${evmAddress}`
+      );
     }
 
     if (rows.length < fetchSize) {
@@ -380,6 +418,10 @@ const applyRecoveries = async (
   batch: Recovered[],
   totals: RecoveryTotals
 ): Promise<void> => {
+  if (!batch.length) {
+    return;
+  }
+
   // a failure rolls back its batch and stops the run; re-running resumes, since rows repaired by
   // earlier batches no longer match `address is null`
   await postgres.transaction(async manager => {
@@ -388,6 +430,13 @@ const applyRecoveries = async (
     }
   });
 };
+
+const recoveryOutcome = (args: Args, totals: RecoveryTotals): string =>
+  args.apply
+    ? `Updated ${totals.extrinsicsUpdated} extrinsics, reclassified ` +
+      `${totals.accountsUpdated} and inserted ${totals.accountsInserted} accounts ` +
+      `(${totals.accountsSkippedNoBlock} skipped for missing block datetime).`
+    : 'No writes (dry run).';
 
 /** Pass 2: attribute unsigned `revive.eth_transact` extrinsics to their recovered signer */
 const recoverSenders = async (postgres: DataSource, args: Args): Promise<void> => {
@@ -416,9 +465,7 @@ const recoverSenders = async (postgres: DataSource, args: Args): Promise<void> =
   let exhausted = false;
 
   while (!exhausted) {
-    // honor the limit precisely instead of overshooting to the next batch boundary
-    const fetchSize =
-      args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
+    const fetchSize = nextFetchSize(args, scanned);
 
     if (fetchSize <= 0) {
       break;
@@ -435,32 +482,18 @@ const recoverSenders = async (postgres: DataSource, args: Args): Promise<void> =
     failed += batchFailed;
 
     if (args.apply) {
-      if (recovered.length) {
-        await applyRecoveries(postgres, recovered, totals);
-      }
-    } else if (recovered.length) {
-      console.log('Would update:');
-      recovered
-        .slice(0, DRY_RUN_SAMPLE_SIZE)
-        .forEach(({ id, ss58 }) => console.log(`  ${id} -> ${ss58}`));
-
-      if (recovered.length > DRY_RUN_SAMPLE_SIZE) {
-        console.log(`  ...and ${recovered.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
-      }
+      await applyRecoveries(postgres, recovered, totals);
+    } else {
+      printDryRun(recovered, ({ id, ss58 }) => `Would attribute ${id} -> ${ss58}`);
     }
 
     afterId = lastScannedId;
     exhausted = scannedCount < fetchSize;
   }
 
-  const outcome = args.apply
-    ? `Updated ${totals.extrinsicsUpdated} extrinsics, reclassified ` +
-      `${totals.accountsUpdated} and inserted ${totals.accountsInserted} accounts ` +
-      `(${totals.accountsSkippedNoBlock} skipped for missing block datetime).`
-    : 'No writes (dry run).';
-
   console.log(
-    `Senders: scanned ${scanned} rows, recovered ${scanned - failed}, failed ${failed}. ${outcome}`
+    `Senders: scanned ${scanned} rows, recovered ${scanned - failed}, ` +
+      `failed ${failed}. ${recoveryOutcome(args, totals)}`
   );
 };
 
