@@ -1,5 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { handleMultiSigProposalDeleted } from '../multiSig/mapMultiSigProposal';
+import { repairAuthorizationsAfterUpgrade } from '../identities/repairAuthorizations';
 
 let oldTxVersion = 0;
 let oldSpecVersion = 3000;
@@ -53,6 +54,7 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
     } else {
       logger.info(`Major chain upgrade found with transaction version upgraded `);
       await handleMultiSigProposalDeleted(substrateEvent.block);
+      await repairAuthorizationsAfterUpgrade(substrateEvent.block);
       oldTxVersion = txVersion;
     }
 
