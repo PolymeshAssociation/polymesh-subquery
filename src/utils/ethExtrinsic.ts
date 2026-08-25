@@ -138,7 +138,8 @@ let memoBlockId = '';
 const memo = new Map<number, ResolvedEthTransact | undefined>();
 
 /**
- * Decodes the Ethereum transaction wrapped by a `revive.eth_transact` extrinsic.
+ * Decodes the Ethereum transaction wrapped by a `revive.eth_transact` extrinsic, or `undefined`
+ * for any other extrinsic and for a payload that cannot be decoded.
  *
  * Results are memoized per block, since recovering the signer is comparatively expensive and this
  * is called once for the extrinsic and again for every event it emitted
@@ -146,6 +147,10 @@ const memo = new Map<number, ResolvedEthTransact | undefined>();
 export const resolveEthTransact = (
   extrinsic: SubstrateExtrinsic
 ): ResolvedEthTransact | undefined => {
+  if (!isEthTransact(extrinsic)) {
+    return undefined;
+  }
+
   const blockId = extrinsic.block.block.header.number.toString();
 
   if (memoBlockId !== blockId) {

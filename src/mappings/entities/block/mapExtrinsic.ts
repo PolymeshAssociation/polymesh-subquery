@@ -6,7 +6,6 @@ import {
   evmAddressFromSs58,
   getOrCreateAccount,
   getSignerAddress,
-  isEthTransact,
   padId,
   resolveEthTransact,
 } from '../../../utils';
@@ -42,7 +41,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     specVersionId: extrinsic.block.specVersion,
   });
 
-  const resolved = isEthTransact(extrinsic) ? resolveEthTransact(extrinsic) : undefined;
+  const resolved = resolveEthTransact(extrinsic);
 
   if (resolved) {
     /**
@@ -135,24 +134,20 @@ const isAccountMappingCall = (extrinsic: SubstrateExtrinsic): boolean => {
  * account mapping it registered
  */
 export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+  const resolved = resolveEthTransact(extrinsic);
+
   await createExtrinsic(extrinsic).save();
 
-  if (isEthTransact(extrinsic)) {
-    const resolved = resolveEthTransact(extrinsic);
+  if (resolved) {
+    // `EvmTransaction` references the extrinsic, so it has to be written after it
+    await createEvmTransaction(extrinsic, resolved);
 
-    if (resolved) {
-      // `EvmTransaction` references the extrinsic, so it has to be written after it
-      await createEvmTransaction(extrinsic, resolved);
-
-      /**
-       * Only indexes the sender once it is attached to an Identity, as with every other account
-       */
-      await getOrCreateAccount(
-        resolved.fromAddress,
-        padId(extrinsic.block.block.header.number.toString()),
-        extrinsic.block.timestamp
-      );
-    }
+    // Only indexes the sender once it is attached to an Identity, as with every other account
+    await getOrCreateAccount(
+      resolved.fromAddress,
+      padId(extrinsic.block.block.header.number.toString()),
+      extrinsic.block.timestamp
+    );
   } else if (isAccountMappingCall(extrinsic)) {
     await handleEvmAccountMapping(extrinsic);
   }
