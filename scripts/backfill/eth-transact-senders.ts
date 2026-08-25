@@ -6,12 +6,20 @@
  * `address = null`. The raw RLP payloads are still stored in `extrinsics.params_txt`, which makes
  * history recoverable offline, without touching the chain.
  *
- * For every affected row this script recovers the signer from the payload, then
- * - sets `extrinsics.address` to the SS58 encoding of the `0xEE` padded Ethereum derived account,
- *   alongside its `eth_address` and `eth_tx_hash`
- * - upserts an `accounts` row for that address (`key_type = 'ethereum'`) so joins against
- *   `extrinsics.address` resolve. The forward path only ever creates accounts through an Identity's
- *   key records; these keys have none, so an unattached row is inserted instead
+ * It runs two passes:
+ *
+ * 1. Account classification. Migration 20 defaults every pre-existing account to
+ *    `key_type = 'substrate'` with a null `evm_address`, because postgres cannot decode an SS58
+ *    address. Ethereum keys were attributed long before `eth_transact` was indexed - registering a
+ *    DID or joining an identity emits the `0xEE` padded SS58 like any other key - so every account
+ *    is decoded here: all of them get the `evm_address` `pallet_revive` addresses them by, and the
+ *    `0xEE` padded ones get `key_type = 'ethereum'`.
+ * 2. Sender recovery. For every unattributed `revive.eth_transact` row, recover the signer and
+ *    - set `extrinsics.address` to the `0xEE` padded account it dispatched as, alongside its
+ *      `eth_address` and `eth_tx_hash`
+ *    - upsert an `accounts` row for that address so joins against `extrinsics.address` resolve. The
+ *      forward path only ever creates accounts through an Identity's key records; these keys have
+ *      none, so an unattached row is inserted instead
  *
  * Only current revisions are read and written, and pagination runs on `_id` - see
  * `scripts/backfill/historical.ts` for why. Backfilled rows keep their raw
@@ -24,8 +32,8 @@
  *        [--batch-size=N] [--ss58-format=N] [--limit=N]
  *
  * Defaults to a dry run, which prints would-be updates and a summary without writing anything.
- * Connection details come from the DB_* environment variables used by `db/utils.ts`; setting them
- * inline keeps credentials out of argv.
+ * `--limit` caps each pass independently. Connection details come from the DB_* environment
+ * variables used by `db/utils.ts`; setting them inline keeps credentials out of argv.
  */
 
 /**
@@ -46,7 +54,7 @@ import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 
 import { getPostgresDataSource } from '../../db/utils';
-import { ss58FromEthAddress } from '../../src/utils/eth';
+import { evmAddressFromSs58, isEthDerivedAddress, ss58FromEthAddress } from '../../src/utils/eth';
 import {
   decodeEthTransaction,
   ethTxHash as computeEthTxHash,
@@ -60,6 +68,16 @@ import { CURRENT_REVISION, fetchCurrentBatch, updateCurrentRevisions } from './h
 /** Rows this script is responsible for: indexed as `revive.eth_transact`, never attributed */
 const UNATTRIBUTED_ETH_TRANSACT =
   "module_id = 'revive' and call_id = 'eth_transact' and address is null";
+
+/**
+ * Accounts predating the `key_type`/`evm_address` columns. `evm_address` is derived for every
+ * account, so its absence is the marker - and skipping rows that already carry one keeps re-runs
+ * cheap.
+ */
+const UNCLASSIFIED_ACCOUNTS = 'evm_address is null';
+
+/** Cap on the per-batch listing a dry run prints */
+const DRY_RUN_SAMPLE_SIZE = 20;
 
 /** Pinned rather than read from `registry.chainSS58` (as the forward path does) since this runs offline */
 const DEFAULT_SS58_FORMAT = 12;
@@ -126,6 +144,112 @@ interface RecoveryTotals {
   accountsUpdated: number;
   extrinsicsUpdated: number;
 }
+
+interface AccountRow {
+  address: string;
+  id: string;
+}
+
+interface ClassifyTotals {
+  ethereum: number;
+  resolved: number;
+  scanned: number;
+  undecodable: number;
+  updated: number;
+}
+
+/**
+ * Fills `key_type`/`evm_address` on accounts indexed before those columns existed.
+ *
+ * Every account has an H160 that `pallet_revive` addresses it by - Ethereum keys drop their `0xEE`
+ * padding, substrate keys are hashed and truncated - so `evm_address` is filled for all of them,
+ * matching what `getAccountKeyType` does on the forward path. `key_type` is only corrected for the
+ * ones decoding as `0xEE` padded; migration 20's provisional `substrate` is already right for the
+ * rest.
+ *
+ * This is deliberately independent of `EvmAccountMapping`, which tracks the *registered*
+ * `revive.mapAccount` relationship and is revoked by `unmapAccount`. The address derived here
+ * never stops being valid, so historical joins survive an unmapping.
+ */
+const classifyAccounts = async (
+  postgres: DataSource,
+  args: Args,
+  totals: ClassifyTotals
+): Promise<void> => {
+  let afterId: string | null = null;
+
+  for (;;) {
+    const fetchSize =
+      args.limit === undefined
+        ? args.batchSize
+        : Math.min(args.batchSize, args.limit - totals.scanned);
+
+    if (fetchSize <= 0) {
+      break;
+    }
+
+    const rows = await fetchCurrentBatch<AccountRow>(
+      postgres,
+      { table: 'accounts', where: UNCLASSIFIED_ACCOUNTS },
+      afterId,
+      fetchSize
+    );
+
+    const resolved: { evmAddress: string; id: string; keyType: string }[] = [];
+
+    for (const row of rows) {
+      afterId = row._id;
+      totals.scanned += 1;
+
+      const evmAddress = evmAddressFromSs58(row.address, args.ss58Format);
+
+      if (!evmAddress) {
+        // not a 32 byte account under this prefix - a wrong --ss58-format lands every row here
+        totals.undecodable += 1;
+
+        continue;
+      }
+
+      const keyType = isEthDerivedAddress(row.address, args.ss58Format) ? 'ethereum' : 'substrate';
+
+      if (keyType === 'ethereum') {
+        totals.ethereum += 1;
+      }
+
+      resolved.push({ id: row.id, evmAddress, keyType });
+    }
+
+    totals.resolved += resolved.length;
+
+    if (args.apply && resolved.length) {
+      await postgres.transaction(async manager => {
+        for (const { evmAddress, id, keyType } of resolved) {
+          totals.updated += await updateCurrentRevisions(
+            manager,
+            'accounts',
+            'key_type = $2, evm_address = $3',
+            'id = $1',
+            [id, keyType, evmAddress]
+          );
+        }
+      });
+    } else if (resolved.length) {
+      resolved
+        .slice(0, DRY_RUN_SAMPLE_SIZE)
+        .forEach(({ evmAddress, id, keyType }) =>
+          console.log(`  Would set ${id} -> ${keyType} / ${evmAddress}`)
+        );
+
+      if (resolved.length > DRY_RUN_SAMPLE_SIZE) {
+        console.log(`  ...and ${resolved.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
+      }
+    }
+
+    if (rows.length < fetchSize) {
+      break;
+    }
+  }
+};
 
 interface RecoveredBatch {
   failed: number;
@@ -265,77 +389,120 @@ const applyRecoveries = async (
   });
 };
 
+/** Pass 2: attribute unsigned `revive.eth_transact` extrinsics to their recovered signer */
+const recoverSenders = async (postgres: DataSource, args: Args): Promise<void> => {
+  const [{ count }] = await postgres.query(
+    `select count(*)::int as count
+       from extrinsics
+      where ${CURRENT_REVISION}
+        and ${UNATTRIBUTED_ETH_TRANSACT}`
+  );
+  console.log(`Found ${count} revive.eth_transact extrinsics without an address`);
+
+  if (Number(count) === 0) {
+    return;
+  }
+
+  const totals: RecoveryTotals = {
+    accountsInserted: 0,
+    accountsSkippedNoBlock: 0,
+    accountsUpdated: 0,
+    extrinsicsUpdated: 0,
+  };
+
+  let scanned = 0;
+  let failed = 0;
+  let afterId: string | null = null;
+  let exhausted = false;
+
+  while (!exhausted) {
+    // honor the limit precisely instead of overshooting to the next batch boundary
+    const fetchSize =
+      args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
+
+    if (fetchSize <= 0) {
+      break;
+    }
+
+    const {
+      failed: batchFailed,
+      lastScannedId,
+      recovered,
+      scannedCount,
+    } = await recoverBatch(postgres, args, afterId, fetchSize);
+
+    scanned += scannedCount;
+    failed += batchFailed;
+
+    if (args.apply) {
+      if (recovered.length) {
+        await applyRecoveries(postgres, recovered, totals);
+      }
+    } else if (recovered.length) {
+      console.log('Would update:');
+      recovered
+        .slice(0, DRY_RUN_SAMPLE_SIZE)
+        .forEach(({ id, ss58 }) => console.log(`  ${id} -> ${ss58}`));
+
+      if (recovered.length > DRY_RUN_SAMPLE_SIZE) {
+        console.log(`  ...and ${recovered.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
+      }
+    }
+
+    afterId = lastScannedId;
+    exhausted = scannedCount < fetchSize;
+  }
+
+  const outcome = args.apply
+    ? `Updated ${totals.extrinsicsUpdated} extrinsics, reclassified ` +
+      `${totals.accountsUpdated} and inserted ${totals.accountsInserted} accounts ` +
+      `(${totals.accountsSkippedNoBlock} skipped for missing block datetime).`
+    : 'No writes (dry run).';
+
+  console.log(
+    `Senders: scanned ${scanned} rows, recovered ${scanned - failed}, failed ${failed}. ${outcome}`
+  );
+};
+
 const main = async (): Promise<void> => {
   const args = parseArgs();
 
   const postgres = await getPostgresDataSource();
 
   try {
-    const [{ count }] = await postgres.query(
-      `select count(*)::int as count
-         from extrinsics
-        where ${CURRENT_REVISION}
-          and ${UNATTRIBUTED_ETH_TRANSACT}`
-    );
-    console.log(`Found ${count} revive.eth_transact extrinsics without an address`);
+    console.log('Classifying accounts indexed before key_type existed...');
 
-    if (Number(count) === 0) {
-      return;
-    }
-
-    const totals: RecoveryTotals = {
-      accountsInserted: 0,
-      accountsSkippedNoBlock: 0,
-      accountsUpdated: 0,
-      extrinsicsUpdated: 0,
+    const classified: ClassifyTotals = {
+      ethereum: 0,
+      resolved: 0,
+      scanned: 0,
+      undecodable: 0,
+      updated: 0,
     };
 
-    let scanned = 0;
-    let failed = 0;
-    let afterId: string | null = null;
-    let exhausted = false;
+    await classifyAccounts(postgres, args, classified);
 
-    while (!exhausted) {
-      // honor the limit precisely instead of overshooting to the next batch boundary
-      const fetchSize =
-        args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
-
-      if (fetchSize <= 0) {
-        break;
-      }
-
-      const {
-        failed: batchFailed,
-        lastScannedId,
-        recovered,
-        scannedCount,
-      } = await recoverBatch(postgres, args, afterId, fetchSize);
-
-      scanned += scannedCount;
-      failed += batchFailed;
-
-      if (args.apply) {
-        if (recovered.length) {
-          await applyRecoveries(postgres, recovered, totals);
-        }
-      } else if (recovered.length) {
-        console.log('Would update:');
-        recovered.forEach(({ id, ss58 }) => console.log(`  ${id} -> ${ss58}`));
-      }
-
-      afterId = lastScannedId;
-      exhausted = scannedCount < fetchSize;
-    }
-
-    const outcome = args.apply
-      ? `Updated ${totals.extrinsicsUpdated} extrinsics, reclassified ` +
-        `${totals.accountsUpdated} and inserted ${totals.accountsInserted} accounts ` +
-        `(${totals.accountsSkippedNoBlock} skipped for missing block datetime).`
-      : 'Dry run, nothing written. Pass --apply to write.';
+    const written = args.apply
+      ? `updated ${classified.updated}`
+      : `would update ${classified.resolved}`;
+    const undecodable = classified.undecodable ? `, ${classified.undecodable} undecodable` : '';
 
     console.log(
-      `Done. Scanned ${scanned} rows, recovered ${scanned - failed}, failed ${failed}. ${outcome}`
+      `Accounts: scanned ${classified.scanned}, ${written} ` +
+        `(${classified.ethereum} Ethereum keys)${undecodable}`
     );
+
+    if (classified.undecodable && classified.undecodable === classified.scanned) {
+      logger.warn(
+        `No account decoded under SS58 prefix ${args.ss58Format} - check --ss58-format before trusting this run`
+      );
+    }
+
+    await recoverSenders(postgres, args);
+
+    if (!args.apply) {
+      console.log('Dry run, nothing written. Pass --apply to write.');
+    }
   } finally {
     await postgres.destroy();
   }
