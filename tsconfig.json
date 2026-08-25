@@ -13,6 +13,10 @@
     "rootDir": "src",
     "target": "es2017"
   },
+  "ts-node": {
+    // load the `include` below, so scripts run through ts-node see SubQuery's injected globals
+    "files": true
+  },
   "include": [
     "src/**/*",
     "node_modules/@subql/types/dist/global.d.ts",

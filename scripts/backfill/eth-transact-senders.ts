@@ -36,19 +36,6 @@
  * variables used by `db/utils.ts`; setting them inline keeps credentials out of argv.
  */
 
-/**
- * `tsconfig.json` maps SubQuery's injected globals onto `src/**` only, so code running through
- * ts-node declares what it uses itself.
- */
-declare global {
-  const logger: {
-    debug: (message: string) => void;
-    error: (message: string) => void;
-    info: (message: string) => void;
-    warn: (message: string) => void;
-  };
-}
-
 import { hexToU8a } from '@polkadot/util';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
