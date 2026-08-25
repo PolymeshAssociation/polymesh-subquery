@@ -47,7 +47,13 @@ import {
   ethTxHash as computeEthTxHash,
   recoverEthSender,
 } from '../../src/utils/ethTransaction';
-import { CURRENT_REVISION, fetchCurrentBatch, updateCurrentRevisions } from './historical';
+import {
+  CURRENT_REVISION,
+  fetchCurrentBatch,
+  nextFetchSize,
+  printDryRun,
+  updateCurrentRevisions,
+} from './historical';
 
 // `src/utils/ethTransaction.ts` logs through the injected `logger`; nothing calls it before this
 (globalThis as any).logger = console;
@@ -62,22 +68,6 @@ const UNATTRIBUTED_ETH_TRANSACT =
  * cheap.
  */
 const UNCLASSIFIED_ACCOUNTS = 'evm_address is null';
-
-/** Cap on the per-batch listing a dry run prints */
-const DRY_RUN_SAMPLE_SIZE = 20;
-
-/** Rows to request next, honouring `--limit` precisely instead of overshooting the batch boundary */
-const nextFetchSize = (args: Args, scanned: number): number =>
-  args.limit === undefined ? args.batchSize : Math.min(args.batchSize, args.limit - scanned);
-
-/** Prints a capped sample of what a dry run would have written */
-const printDryRun = <T>(rows: T[], describe: (row: T) => string): void => {
-  rows.slice(0, DRY_RUN_SAMPLE_SIZE).forEach(row => console.log(`  ${describe(row)}`));
-
-  if (rows.length > DRY_RUN_SAMPLE_SIZE) {
-    console.log(`  ...and ${rows.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
-  }
-};
 
 /** Pinned rather than read from `registry.chainSS58` (as the forward path does) since this runs offline */
 const DEFAULT_SS58_FORMAT = 12;

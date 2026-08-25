@@ -21,6 +21,42 @@ export type Queryable = Pick<DataSource | EntityManager, 'query'>;
 /** Predicate selecting the row version visible at the current chain head. */
 export const CURRENT_REVISION = 'upper(_block_range) is null';
 
+/** The paging options every backfill pass takes */
+export interface Paged {
+  batchSize: number;
+  limit?: number;
+}
+
+/** Rows to request next, honouring `--limit` precisely instead of overshooting the batch boundary */
+export const nextFetchSize = ({ batchSize, limit }: Paged, scanned: number): number =>
+  limit === undefined ? batchSize : Math.min(batchSize, limit - scanned);
+
+/** The `_id` to resume keyset pagination from, or `fallback` when the batch came back empty */
+export const resumeFrom = <T extends { _id: string }>(
+  rows: T[],
+  fallback: string | null
+): string | null => {
+  let last = fallback;
+
+  for (const { _id } of rows) {
+    last = _id;
+  }
+
+  return last;
+};
+
+/** Cap on the per-batch listing a dry run prints */
+const DRY_RUN_SAMPLE_SIZE = 20;
+
+/** Prints a capped sample of what a dry run would have written */
+export const printDryRun = <T>(rows: T[], describe: (row: T) => string): void => {
+  rows.slice(0, DRY_RUN_SAMPLE_SIZE).forEach(row => console.log(`  ${describe(row)}`));
+
+  if (rows.length > DRY_RUN_SAMPLE_SIZE) {
+    console.log(`  ...and ${rows.length - DRY_RUN_SAMPLE_SIZE} more in this batch`);
+  }
+};
+
 export interface CurrentBatchOptions {
   /** Table to read from */
   table: string;
