@@ -23,7 +23,7 @@ What the two direct GraphQL consumers actually query, and what that evidence set
 
 `assetTransactions` · `distributionPayments` · `multiSigProposals` · `portfolioMovements` · `stakingEvents`
 
-**Union: 28 of 67 entities are observably queried** — the portal's five are a subset of the SDK's surface except `stakingEvents`.
+**Union: 28 of 69 entities are observably queried** — the portal's five are a subset of the SDK's surface except `stakingEvents`.
 
 Notably absent from both: `Identity` and `Account` have **no root query field** in either consumer — identity data is reached through relations on other entities, never queried directly.
 
@@ -105,7 +105,7 @@ Both directions produce wrong compliance answers with no error anywhere. This sh
 
 ## 4. Entities unobserved by either consumer
 
-Roughly 39 of 67 entities are not queried by the SDK or portal. Grouped by what that likely means:
+Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction` and `EvmAccountMapping`, new in PR #342, are not yet queried by either). Grouped by what that likely means:
 
 | Group | Entities | Read |
 |---|---|---|
@@ -175,3 +175,50 @@ On the portal side, `origin/main` has **removed** the `paddedIds` compatibility 
 `polymesh-portal` `origin/main` HEAD is `chore: migrate to SDK v31 and remove chain v7 support` **[V]**.
 
 This does not reduce the indexer's obligation — it must still replay v7-era history correctly — but it does mean **consumer-facing** v7 compatibility shims are no longer needed at the query layer, and that the v7→v8 boundary work in this review is aligned with where consumers already are.
+
+---
+
+## 9. Filtering gaps observed in practice (added 2026-09-01)
+
+§1–§4 establish what consumers *do* query. This section records what a consumer building against the current schema **cannot** ask for and has to work around. Each is judged on its own merits — that a workaround exists is evidence the requirement is real, not an argument that the gap is acceptable.
+
+### 9.1 An authorization to a key with no identity is unfindable by DID
+
+`Authorization` carries `toId` (the target DID) and `toKey`. A `JoinIdentity` authorization targets a key that has **no identity yet**, so its `toId` is null. Filtering on DID alone therefore hides exactly the authorizations that invite someone in — the ones a new user most needs to see.
+
+A correct query has to match `toId` **or** `toKey`, and `toKey` is the **hex public key**, not SS58 — an encoding difference that produces zero rows rather than an error if a caller assumes otherwise.
+
+**Ask:** both columns filterable and indexed, and the encoding stated in the schema docstring. This is the §14 "make the existing column filterable" case from `../architecture-review.md` — no new entity, no new table.
+
+**Related:** `TYPE_ASC` sorts by the Postgres enum's ordinal, not alphabetically, so ordering by type *groups* rather than alphabetises. Not a defect, but not what a column header implies either; worth a docstring.
+
+### 9.2 A portfolio's contents cannot be read from the index
+
+`Portfolio` exposes its history — `assetTransactionsBy{From,To}PortfolioId`, `portfolioMovementsBy{From,To}Id`, `distributions`, `stos` — and **nothing about what is in it now**: no balance rows, no holder count, no asset count.
+
+So a screen listing portfolios can list, page, order and search them from the index, and cannot say what any of them holds without one chain read per portfolio. For an identity with several hundred portfolios that is several hundred reads to fill in a count.
+
+This is G8 / plan [03](../implementation/03-holdings-nfts.md) seen from the consumer side, and it independently confirms the portfolio-grain requirement. Even a bare `assetCount` on `Portfolio` would serve a picker; the `Holding` entity serves it properly.
+
+### 9.3 Sorting by a numeric id sorts alphabetically
+
+Covered as defect A14 and `../architecture-review.md` §9. Recorded here because it is a *consumer-visible* failure: `orderBy: [ID_DESC]` on `Instruction` is ordered, stable, pages correctly, and puts the newest instruction roughly a hundred and ninety pages in with nothing on screen to suggest it. The available workaround is to order on `CREATED_EVENT_ID_*` instead — padded on both halves, total, and equivalent to id order — which requires knowing the id column is a trap.
+
+### 9.4 `blocks` is not a freshness signal
+
+The `blocks` table only holds blocks that produced a handled event **[V]**, so its newest row can sit minutes behind the chain head while the indexer is perfectly current. Anything monitoring lag must read `_metadata.lastProcessedHeight`.
+
+Recorded here rather than only in the defect log (B9) because it is the kind of thing every new consumer re-derives wrongly, and the fix is a docstring on `Block` rather than a code change.
+
+### 9.5 Approvals have no history
+
+`assetPreApprovals` exists; there is nothing for `asset.allowances`. Current state is readable from the chain, but **there is no history at all** — a holder cannot see when an approval was granted, by which key, or what it was before it changed. For a permission that lets someone else move your assets, "when did I grant this" is worth being able to answer.
+
+`AssetAllowance` in plan [03](../implementation/03-holdings-nfts.md) closes it (G11 — `Approval` and `AllowanceSpent` are absent from `project.ts` entirely **[V]**).
+
+### 9.6 Closed since this document was written
+
+| Gap | Status |
+|---|---|
+| `revive.ethTransact` indexed with `address: null`, so nothing attributes to an Ethereum-derived account | **Closed** — PR #342 recovers the H160 from the RLP payload, derives the `0xEE`-padded `AccountId32`, and adds `EvmTransaction` / `EvmAccountMapping`. A backfill covers history. |
+| `authorizations.data` keeps the pre-migration payload, so it names a ticker where the chain names an asset id | **Closed** — PR #343. The migration is deterministic (`AssetId::from(ticker)` = `blake2_128(("legacy_ticker", ticker))` normalised to a v8 UUID) and the ticker is already stored, so the repair needs no chain read. Forward fix plus backfill. Note the failure this avoided: *resolving the stored ticker to the asset it names today* can point at a **different** asset, because a ticker can be unlinked and relinked in between. |

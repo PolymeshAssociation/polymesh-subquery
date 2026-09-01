@@ -142,14 +142,49 @@ Name-based decoding ([09](./09-infrastructure.md)) removes the misdecode regardl
 
 ---
 
+## A13 — `getPaginatedData` pages over a non-unique order
+
+Added 2026-09-01. [`common.ts:325`](../../src/utils/common.ts#L325) sets `orderBy` to the **column it is filtering on**, so every row in the result set holds an identical value and the ordering is not total. Offset paging over it can return a row twice and skip another — silently.
+
+```diff
+  const data = await store.getByField<T>(entityName, field, param, {
+    limit: 100,
+    offset,
+-   orderBy: field,
++   orderBy: 'id',        // unique on every entity; a filter column never is
+    orderDirection: 'ASC',
+  });
+```
+
+Three call sites are affected — settlement legs, agent-group memberships, transfer compliances — and in each the set is *acted on*, so a repeated or skipped row means a status not updated, updated twice, or a rule left stale.
+
+**[I]** Whether it has ever fired: Postgres very likely returns these rows in insertion order today, for small sets on freshly written tables. That is luck, not a guarantee.
+
+Belongs here rather than in [11](./11-throughput.md) because it is a one-line correctness fix with no schema change and no dependency, even though the rest of that plan is performance work. Replacing the helper with `store.getByFields` ([09](./09-infrastructure.md)) subsumes it — but the one-line fix should not wait for that.
+
+---
+
+## A14 — `Instruction.id` sorts lexicographically
+
+Added 2026-09-01. The chain's numeric instruction sequence is stored as a `String` **[V]**, so `orderBy: [ID_DESC]` ranks `9999` above `14712`.
+
+**Not fixable in this plan** — the id is a primary key and changing it is a resync, so it lands with the D5 rebuild (D12: zero-pad chain-assigned numeric ids). It is listed here so the defect is not lost between plans, and because the interim mitigation is free: **document it**. A docstring on `Instruction.id` saying "numeric sequence stored as text; order by `createdEventId` for chronological order" costs nothing and stops the next consumer rediscovering it the hard way.
+
+Worth a schema sweep for other chain-assigned numeric ids in the same shape before the rebuild, so D12 is applied once rather than per-entity as each is found.
+
+---
+
 ## Sequencing within this plan
 
-1. A1, A4, A7 — one-line/small, independent, no dependencies.
+1. A1, A4, A7, **A13** — one-line/small, independent, no dependencies.
 2. A3 — implement `handleBalanceSuspended`.
 3. A9 minimum — register `Held`/`Released`.
 4. A2 — once the routing decision is made.
 5. A6, A11 — fold into [02](./02-polyx-ledger.md) and [09](./09-infrastructure.md) respectively if those are close; otherwise do standalone.
+6. **A14** — docstring now; the id change itself lands with the D5 rebuild.
 
 ## Consumer impact
 
 None. Every fix here corrects values within the existing schema shape; no field or entity is added or removed. `polyxTransactions` and `assetTransactions` return the same shape with corrected data.
+
+A13 changes which rows *internal* paging returns, in the direction of correctness — no consumer-visible surface is involved. A14's docstring is additive documentation, and worth telling consumers about explicitly: anyone sorting an instruction list by id today is getting the wrong order.

@@ -187,6 +187,34 @@ Individual tokens number in the **thousands**, not millions. A row-per-token `Nf
 
 Mainnet has just **6** NFT collections, so this whole sub-domain is small; the value of `Nft` is addressability and provenance, not scale.
 
+### It is also the fix for the slowest blocks **[V]**
+
+Added 2026-09-01. `NftHolder.nftIds` is not just awkward to query — it is the largest single throughput cost in the indexer, and `Nft` removes it structurally rather than optimising it.
+
+```ts
+// mapNfts.ts:88 / :95
+nftHolder.nftIds.push(...ids);                                    // issue
+nftHolder.nftIds = nftHolder.nftIds.filter(h => !ids.includes(h)); // redeem
+await nftHolder.save();
+```
+
+Two multipliers compound. The **whole array is rewritten on every mutation** — removing one id from a 3,000-element array serialises 2,999 unchanged integers. And under historical state (D3) `save()` does not update a row; it closes the current `_block_range` and **inserts a new row carrying the entire array**.
+
+**Measured on testnet block 15,391,572** (2024-09-13), against the live middleware **[V]**: **399** `RedeemedNFT` rows, **one nft id per event** — the chain does not batch them — all against holder `0x84415cd92b0e…` of asset `0x80df7c05268282eaad949f225609f2dc`, whose array still holds **2,724** ids and so started that block at ~3,123.
+
+```
+399 events x ~2,920-element array
+  ≈ 1.16M filter comparisons
+  ≈ 1.16M integers serialised across 399 row versions
+  to delete 399 ids
+```
+
+Roughly three thousand integers written per integer deleted. The issuance side is the same shape: ~**4,990** `IssuedNFT` across ~200 blocks from 13,528,440, 20–30 per block, each appending to and rewriting a lengthening array **[V]**.
+
+With `Nft`, a mint is N inserts of a small immutable row and a burn is N updates of one column each — block 15,391,572 becomes 399 single-column updates. Under historical mode that is *cheaper*, not merely tidier: many small immutable rows beat few rows rewritten often. Detail and replay fixtures in plan [11](./11-throughput.md) §11.1.
+
+**There is no cheap mitigation short of this change**, and the one-id-per-event measurement is why: there is nothing to coalesce within an event. (`getNftHolder` does perform a `.get()` and, on a miss, an immediate `.save()` before the caller mutates and saves again — two row versions per new holder where one would do. Worth taking, but it is not the cost.)
+
 ---
 
 ## Tests

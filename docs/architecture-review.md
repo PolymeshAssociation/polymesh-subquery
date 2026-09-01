@@ -12,7 +12,7 @@ Four numbers explain most of the maintenance burden:
 
 | Metric | Value |
 |---|---|
-| Entities | 67 |
+| Entities | 69 |
 | Hand-maintained enum values (`ModuleIdEnum` 67 + `EventIdEnum` 503 + `CallIdEnum` 578) | **1,148** |
 | Share of `schema.graphql` that is hand-written enums (lines 4–1752 of 3,300) | **~53%** |
 | Indexes declared in `schema.graphql` / in raw SQL (`db/compat.sql`) | 95 / **30** |
@@ -334,7 +334,142 @@ And the portal no longer branches on `paddedIds` at all: on `origin/main` the fl
 
 ---
 
-## 9. Sequencing
+## 9. Ordering must be total — a rule, not a per-entity choice
+
+Three separate findings turned out to be the same defect wearing different clothes. Stating it once is more useful than fixing three sites.
+
+> **An ordering that is not a total order makes offset paging repeat rows and skip rows, silently. A paged read must order by a key that is unique. A filter column is never that key.**
+
+The three instances **[V]**:
+
+| Where | The ordering | The failure |
+|---|---|---|
+| The SDK's `polyxTransactions` (already fixed upstream) | `createdBlockId` alone | Same-block rows in arbitrary order; pages repeat and skip. This is *why* the padded composite id exists — D4 |
+| `getPaginatedData` ([`common.ts:325`](../src/utils/common.ts#L325)) | `orderBy` set to the **filter column** | Every row in the set holds the same value, so the order is arbitrary. Internal — affects settlement legs, agent memberships, transfer compliances. Plan [11](./implementation/11-throughput.md) §11.3 |
+| `Instruction.id` | the chain's numeric sequence, stored as `String` | `ID_DESC` sorts `9999` before `14712`. Stable, paged, ordered — and wrong. D12 |
+
+The third deserves a note, because it is the most deceptive. The list *works*: it is ordered, it is stable, it pages correctly, and it puts the newest instruction about a hundred and ninety pages in. Nothing on screen or in the response suggests anything is amiss. The workaround available to a consumer is to order by `createdEventId` — padded on both halves, total, and equivalent to id order because ids are assigned in creation order — but that requires knowing the id column is a trap.
+
+**Consequence for the redesign:** D4 already requires a padded composite id on every paginated entity. D12 extends it to bare numeric ids that come from the chain. Both reduce to: *if a column is going to be sorted, its sort order must agree with its meaning.*
+
+---
+
+## 10. Timestamps: the zone is missing, and ordering is a separate question
+
+### 10.1 The defect
+
+Every `Date` field in the schema — 27 of them — holds UTC and serializes without a zone marker:
+
+```
+"2021-11-05T13:56:36"     ← what a consumer receives today
+```
+
+SubQuery maps `Date` to Postgres `timestamp without time zone`, and PostGraphile serializes that verbatim. A consumer calling `new Date("2021-11-05T13:56:36")` in a browser gets **local** time in most runtimes — so the value shifts by the reader's offset, and it shifts differently for different readers. Nothing errors. For a securities index where a `tradeDate`, `valueDate`, `expiry` or record date can decide an entitlement, an unmarked hour is not cosmetic.
+
+**D8: the columns become `timestamptz`.** The serialized form becomes `2021-11-05T13:56:36+00:00`, which every ISO-8601 parser reads as the instant it is. No schema field changes, no new fields, no consumer field migration — only the string changes. It is breaking for anything doing exact string equality on a datetime, which is accepted under D1.
+
+Mechanically this is a `compat.sql` concern rather than a schema one, since SubQuery generates the DDL:
+
+```sql
+ALTER TABLE <t> ALTER COLUMN <c> TYPE timestamptz USING <c> AT TIME ZONE 'UTC';
+```
+
+The `USING … AT TIME ZONE 'UTC'` clause is load-bearing: without it Postgres interprets the existing values in the **server's** timezone, which would bake in exactly the error being fixed. Under D5 the database is rebuilt from genesis anyway, so this applies to a fresh schema rather than a migration — but the clause should be written regardless, because `compat.sql` is re-applied on every deploy (§4.1) and must be correct if it ever meets existing data.
+
+### 10.2 The epoch integer — open, deliberately
+
+A second question was raised alongside it: should timestamps *also* be exposed as an integer (Unix ms), for ordering and for consumers that would rather not parse strings? **No recommendation is made here.** It is a real trade-off and the arguments do not obviously resolve.
+
+**For:**
+
+- **No parsing, no locale, no ambiguity.** An integer cannot be misread as local time. It is the one representation that is unambiguous without a convention.
+- **Cheaper comparison and range filtering.** `BigInt` comparisons in GraphQL filters avoid string/date coercion on both sides.
+- **It survives serialization boundaries.** JSON has no date type; every consumer converts anyway. Handing over the integer skips a round trip through a format that has already caused this problem once.
+- **Arithmetic is direct.** "Rewards in the last 30 days" is subtraction, not date-library work.
+
+**Against:**
+
+- **Ordering is already solved, and not by time.** D4's padded composite id orders correctly *within* a block, which a timestamp cannot: every event in a block shares one timestamp. So an epoch column is not the ordering key and must not be used as one — adding it invites exactly that mistake.
+- **Two representations of one fact must be kept in agreement.** They are written by the same handler from the same source, so drift is unlikely — but "unlikely" is how the existing dual sources of truth for indexes started (§4.1).
+- **Cost on every ordered entity.** 8 bytes plus an index per entity, on the tables that grow fastest, on a write path already under throughput pressure (§13). Against a 5M-row `polyxTransactions` that is not free.
+- **`timestamptz` already fixes the stated defect.** The integer is a convenience on top of a correct value, not a fix for an incorrect one.
+- **Aggregation works on both.** pg-aggregates handles `timestamptz` fine, so there is no capability the integer unlocks.
+
+**A middle position worth considering:** add the integer only where a consumer demonstrably needs it, rather than schema-wide — and add it as `blockTimestamp: BigInt!` on the ledger entities (`PolyxEntry`, `AssetTransaction`) where time-range filtering is the dominant query, leaving the other 25 date fields as `timestamptz` alone. That keeps the cost proportional to the benefit, at the price of an inconsistent schema.
+
+The decision needs a consumer, not an argument. It is recorded in [`README.md`](./README.md) "Questions still open" as needing a decision rather than evidence.
+
+---
+
+## 11. Chain storage reads are not type-augmented
+
+`@polymeshassociation/polymesh-types` is a dependency, but only its `typesBundle` is used — the `polkadot/augment-api` declarations are never imported, and [`src/index.ts`](../src/index.ts) imports the **generic** `@polkadot/api-augment` instead. `QueryableStorage` carries an index signature, so `api.query.<anything>.<anything>()` compiles and yields bare `Codec` **[V]**.
+
+That is the same failure mode as §2, one layer over: **shape knowledge about storage lives in handler bodies** as `.toJSON() as any`, `JSON.parse(item.toString())` and hand-rolled guards. The decode registry fixes it for events; the augmentation fixes it for storage.
+
+**Measured, not estimated:** adding the import costs exactly **3** compile errors, identical under `tsconfig.json` and `tsconfig.test.json`, all three genuine **[V]**. Two are pre-7.x storage names the chain has removed; one is a `Codec` passed where the storage map keys on `u32`.
+
+The two legacy errors are the structural point, and it generalises:
+
+> **`polymesh-types` augments one metadata — the current one. An indexer reads historical storage across every spec version the chain has ever had.**
+
+So the augmentation needs a deliberate escape hatch for removed storage, in the same spirit as the frozen legacy tuple table in §2 — a `legacyQuery(section, method, specRange)` helper that is greppable, states its spec range at the call site, and can be checked mechanically against checked-in metadata. Detail in plan [12](./implementation/12-types-and-ci.md).
+
+**Why this was never noticed:** `src/types` is gitignored (it is `subql codegen` output), so a fresh checkout cannot type-check until `yarn codegen` runs; there is no `typecheck` script; and `.eslintrc` sets no `parserOptions.project`, so linting carries no type information at all **[V]**. Three gaps that together make the compiler invisible.
+
+---
+
+## 12. Starting from an arbitrary block
+
+`START_BLOCK` exists and does not work, in two independent ways: the genesis datasource declares a range the node will not cover, and every handler that modifies an existing entity meets an empty database **[V]**.
+
+The first is one conditional. The second is the interesting one, because it splits into two very different failures:
+
+- A **hard stall** — `getAsset` throws on a missing row and the block retries forever. Loud, and therefore safe.
+- A **silent wrong total** — `asset.totalSupply += n` against a freshly created `Asset` yields the net change since the start block, presented as a total. Quiet, and therefore not safe.
+
+This is why "make every write an upsert" is not on its own a solution: it converts the first failure into the second. D9 takes the other route — seed entity state from chain storage at the start block, record what was seeded in an `IndexOrigin` entity, and make accumulating writes **refuse** to run over an unseeded domain rather than accumulate from zero. §8 principle 2 applied to a new axis: *unknown is recorded, never guessed.*
+
+Two things make this cheaper than it sounds. `api.query` inside a handler already targets the block being indexed **[V]**, so a handler bound to `[startBlock, startBlock]` reads storage as of that block with no `.at` call. And `genesisHandler` already implements the seeding shape for identities, accounts, permissions, portfolios, multisigs and EVM mappings — the work is to extract those into a `src/seed/` module both entry points share, and to extend them to the domains genesis currently skips. Notably **balances**, which `genesisHandler` does not seed at all **[V]** and which plan [02](./implementation/02-polyx-ledger.md) needs regardless.
+
+Detail in plan [10](./implementation/10-partial-index.md).
+
+---
+
+## 13. Throughput
+
+Individual blocks take minutes — reproducibly, on both testnet and mainnet, with large NFT mints and burns as the canonical case. Four cost sources, from code reading rather than profiling; plan [11](./implementation/11-throughput.md) carries the detail and the measurement plan.
+
+| # | Cost | Note |
+|---|---|---|
+| 1 | `NftHolder.nftIds` is an unbounded array rewritten in full on every mutation | Multiplied by historical mode: each `save()` inserts a **new row version carrying the whole array**. The row-per-NFT entity in plan [03](./implementation/03-holdings-nfts.md), justified on addressability, is also the throughput fix |
+| 2 | `getOrCreateAccount` reads the chain on every miss and **caches nothing on a negative** | Reached twice per asset movement on v8. N events touching unknown addresses cost N chain reads |
+| 3 | Per-row read-modify-write where `bulkCreate`/`bulkUpdate` exist | Used in exactly one place (`Leg`) |
+| 4 | Block/extrinsic writes gated on module-level mutable state | Same class as A5, on a far hotter path. Also why the `blocks` table is sparse — see below |
+
+**One conclusion worth generalising:** a chain read inside a handler is standing in for state the index does not hold. Every one of them is a pointer at a modelling gap, which is why the holdings work (plan [03](./implementation/03-holdings-nfts.md)) and the seeding work (plan [10](./implementation/10-partial-index.md)) reduce read count as a side effect rather than as their goal. The rule to adopt: **a chain read in a handler must justify itself in a comment at the call site.**
+
+**And one fact consumers need:** `mapBlock` is called from `handleEvent`, not from a block handler, so a block that produced no handled event gets **no `Block` row** **[V]**. The `blocks` table is sparse and `MAX(block_id)` is not a freshness signal — it can sit minutes behind the head while the indexer is current. `_metadata.lastProcessedHeight` is the signal. This belongs in the `Block` docstring, because it is the kind of thing every new consumer re-derives wrongly.
+
+---
+
+## 14. Filtering, indexing and linking — a discipline, not a wishlist
+
+"Sensible filtering, appropriately indexed and linked, without bloating the database" is four competing goals, and the review currently argues each one in a different place. The rules below are what those arguments reduce to; they belong in a schema-review checklist.
+
+**On relations.** The recurring smell is a `String` holding an id that another entity is keyed by — `TrustedClaimIssuer.issuer`, `MultiSigAdmin.identityId`, `AgentGroupMembership.member`, `ProposalVote.account`, `MultiSig.address`, `Investment.offeringAssetId` **[V]**. Each is a join the schema knows about and refuses to express, so consumers filter in application code over a set they had to fetch whole. **Make it a relation when the target is an indexed entity and the id is not deliberately allowed to dangle.** `InstructionParty.identity: String!` is the counter-example that proves the rule — it is a documented choice, because an off-chain leg may name a party with no DID.
+
+**On indexes.** Two sources of truth is the actual problem (§4.1), not the count. Declare in `schema.graphql` whatever the directives can express; keep `compat.sql` for expression indexes, generated columns and JSONB paths only, each with a comment saying why it cannot live in the schema. Then: **an index is added from a measured access pattern, or it is not added.** Every index is paid for on the write path (§13), on a historical-mode table where writes are inserts.
+
+**On filtering.** The capability a consumer needs is usually not a new column — it is the column that exists being *filterable*, which for SubQuery means indexed and non-JSON. Two specific gaps worth closing because consumers demonstrably work around them: `Authorization` cannot be filtered by `toKey` in a form that finds an authorization whose target has no identity yet (a `JoinIdentity` authorization has a null `toId`, so filtering on DID alone hides it entirely), and `Portfolio` exposes its history but nothing about its current contents, so a portfolio list cannot say what any row holds without one chain read each — which plan [03](./implementation/03-holdings-nfts.md) fixes.
+
+**On bloat.** The cheapest capability is a column on a row that already exists; the most expensive is a new table with its own indexes. Prefer, in order: (1) make an existing column filterable, (2) denormalise one field onto an existing row, (3) add a `@jsonField` where the value is read whole and never filtered, (4) add a table. `Claim.scope` versus the separate `ClaimScope` entity is the case where the schema does (3) and (4) for the same fact — and the review recommends dropping the table.
+
+**A note on what "no bloat" cannot mean.** D3 keeps historical state, which is a deliberate multiplier on every write. Under it, *row count* is the wrong thing to optimise and *mutation count* is the right one: a table with many small immutable rows is cheaper than a table with few rows that are rewritten often. That inverts the usual instinct, and it is the argument for the entry-centric ledger (§4.5) and the row-per-NFT entity as much as any query-shape argument. The measured amplification for the entry-centric change is **1.035× on mainnet** **[V]** — the row-count objection did not survive the data.
+
+---
+
+## 15. Sequencing
 
 Breaking changes are approved (see [`README.md`](./README.md) decision log), so the model work no longer needs additive staging. The binding constraint is now **backfill**, not schema compatibility: every item in Tiers 3–4 requires a genesis replay.
 
@@ -345,30 +480,48 @@ Breaking changes are approved (see [`README.md`](./README.md) decision log), so 
 4. Register `Held` / `Released` — without them v8 `reserved` is entirely absent (A9).
 5. **Retire stale `ChildIdentity` rows at the v8 boundary** — the chain removed all child identities in a silent storage migration with no events (A11).
 6. `TransferWithMemo` routing decision (A2).
+7. **`getPaginatedData` orders by the column it filters on** (A13) — three call sites, no schema change, and it is the same defect class as D4. §9.
+
+**Tier 0.5 — make the compiler visible (new, 2026-09-01)**
+
+Cheapest work in the plan and it makes every later tier safer to write. No schema change, no runtime change, no consumer impact.
+
+8. `typecheck` script that runs `codegen` first; add it to CI between lint and build.
+9. Import the `polymesh-types` augmentation; fix the 3 resulting errors, two behind a `legacyQuery` escape hatch. §11, plan [12](./implementation/12-types-and-ci.md).
+10. `Block` docstring recording that the table is sparse and is not a freshness signal. §13.
 
 **Tier 1 — stop the bleeding on upgrades**
-7. Build-time check: every `project.ts` handler name is exported.
-8. Arity assertions on positional decodes.
-9. `scripts/sync-metadata.ts` — enum + migration generation, plus the **"in enum, registered, not handled"** report.
-10. `IndexerAnomaly` entity; wire decode fallbacks into it.
-11. Persist `ChainUpgrade`; drop `mapChainUpgrade`'s module-level state. This is also the hook Tier-0 item 5 needs.
+11. Build-time check: every `project.ts` handler name is exported.
+12. Arity assertions on positional decodes.
+13. `scripts/sync-metadata.ts` — enum + migration generation, plus the **"in enum, registered, not handled"** report.
+14. `IndexerAnomaly` entity; wire decode fallbacks into it.
+15. Persist `ChainUpgrade`; drop `mapChainUpgrade`'s module-level state. This is also the hook Tier-0 item 5 needs.
 
 **Tier 2 — decode layer**
-12. Name-based field access (§2) as the default accessor; freeze the legacy tuple table. Start with `balances` / `staking`.
-13. Fixture + metadata-contract tests alongside each migrated module.
-14. Replace `getPaginatedData` with `store.getByFields` (confirmed available with `limit`/`offset`/`orderBy`).
+16. Name-based field access (§2) as the default accessor; freeze the legacy tuple table. Start with `balances` / `staking`.
+17. Fixture + metadata-contract tests alongside each migrated module.
+18. Replace `getPaginatedData` with `store.getByFields` (confirmed available with `limit`/`offset`/`orderBy`) — subsumes item 7 if it lands first.
+19. Per-block resolution cache with negative caching for `getOrCreateAccount`. §14, plan [11](./implementation/11-throughput.md) §11.2.
 
 **Tier 3 — the model (breaking, needs backfill)**
-15. **Entry-centric movement ledger** — the best-evidenced change in the review; three independent confirmations of the `OR`-across-from/to pattern.
-16. **`Holding` at portfolio/account grain** — confirmed live requirement via the portal's `fromPortfolioId` filter.
-17. **POLYX ledger**: `PolyxEntry` + `AccountBalance` replacing `PolyxTransaction` and `BalanceTypeEnum`.
-18. **Genesis balance seeding** — hard prerequisite for 17; `genesisHandler` currently seeds no balances at all.
-19. `IdentityKey` replacing `AccountHistory`; `Nft`, `AssetAllowance`, `AssetMetadata`.
+20. **Entry-centric movement ledger** — the best-evidenced change in the review; three independent confirmations of the `OR`-across-from/to pattern.
+21. **`Holding` at portfolio/account grain** — confirmed live requirement via the portal's `fromPortfolioId` filter.
+22. **POLYX ledger**: `PolyxEntry` + `AccountBalance` replacing `PolyxTransaction` and `BalanceTypeEnum`.
+23. **Genesis balance seeding** — hard prerequisite for 22; `genesisHandler` currently seeds no balances at all. Extract into the shared `src/seed/` module that plan [10](./implementation/10-partial-index.md) also uses, rather than writing it twice.
+24. `IdentityKey` replacing `AccountHistory`; `Nft`, `AssetAllowance`, `AssetMetadata`. **`Nft` is also the fix for the slowest blocks** (§13).
+25. `timestamptz` on every date column, and padded numeric ids (D8, D12). Both are trivial *during* the resync and awkward after it, so they must not be deferred past this tier.
+26. **POLYX reconciliation harness** against public archive endpoints (D11) — the acceptance test for 22, not a follow-up to it.
 
 **Tier 4 — coverage**
-20. Corporate actions, checkpoints and ballots (0/18 handled across three pallets) — **in scope, low priority per D6**. Purely additive and dependency-free, so it can land in parallel whenever capacity allows.
-21. Staking positions; `PayoutStarted` (also supplies `eraIndex`).
-22. Index review with benchmarks; `attributesTxt` → `jsonb`; `@fullText` on the `eventArg_*` search columns (§8b).
+27. Corporate actions, checkpoints and ballots (0/18 handled across three pallets) — **in scope, low priority per D6**. Purely additive and dependency-free, so it can land in parallel whenever capacity allows.
+28. Staking positions; `PayoutStarted` (also supplies `eraIndex`); pre-v8 `rewardDestination` backfill from `staking.payee`, if measurement shows the gap is material (A15).
+29. `Subsidy` / `Relayer` entities — an 8-call pallet with full SDK support and zero indexer coverage. Smallest remaining pallet-shaped gap.
+30. Index review with benchmarks; `attributesTxt` → `jsonb`; `@fullText` on the `eventArg_*` search columns (§8b).
+
+**Tier 5 — operational modes**
+31. Partial indexing (D9, plan [10](./implementation/10-partial-index.md)). Sequenced last because §12's seeding reuses the domain seeders that Tier 3 builds — doing it earlier means writing them twice. The one-line `project.ts` fix that unblocks *development* use can land immediately and independently.
 
 **Not on the roadmap — considered and rejected**
 - Retiring `padId` via `@dbType`. The padded composite id is load-bearing for deterministic pagination in both consumers; see the correction in §8b.
+- **Upsert-everywhere as the answer to partial indexing.** It removes the stall and keeps the wrong number — §12.
+- **An epoch-integer timestamp alongside `timestamptz`, schema-wide.** Not rejected; *undecided*, and deliberately so. §10.2.

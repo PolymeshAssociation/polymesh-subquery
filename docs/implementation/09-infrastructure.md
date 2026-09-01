@@ -155,6 +155,17 @@ type Extrinsic @entity @compositeIndexes(fields: [["moduleId", "callId"]]) {
 
 **Consider `@fullText`** on `Event.eventArg_0..3` — currently served by `left(col, 100)` expression indexes, which is a prefix match, not a search. **[I]** Measure before switching; a GIN index has a different write cost.
 
+**`compat.sql` also owns the `timestamptz` conversion (D8)**, since SubQuery generates the DDL for `Date` columns and there is no directive for it. Under D5 this runs against a freshly built schema, but write the `USING` clause regardless — `compat.sql` is re-applied on every deploy and must be correct if it ever meets existing data:
+
+```sql
+-- D8: Date columns are UTC but serialize with no zone marker, so a consumer parsing
+-- "2021-11-05T13:56:36" gets local time. USING ... AT TIME ZONE 'UTC' is mandatory:
+-- without it Postgres reads existing values in the server's zone, baking in the bug.
+ALTER TABLE blocks ALTER COLUMN datetime TYPE timestamptz USING datetime AT TIME ZONE 'UTC';
+```
+
+Generate the statements from `schema.graphql`'s `Date` fields rather than hand-listing 27 columns — it is the same "generated artifacts are generated" argument as §9.6.
+
 ---
 
 ## 9.5 Build-time handler check
@@ -195,6 +206,43 @@ Also delete this repo's stale `spec_diffs/` (stops at 5003000).
 | `FoundType` | Remove, or gate behind a dev flag. Written by `logFoundType` during serialisation. |
 
 Both are unobserved by either consumer **[V]**.
+
+---
+
+## 9.8 Module-level mutable state on the event path (B9)
+
+§9.3 removes `mapChainUpgrade`'s `oldTxVersion`/`oldSpecVersion`. The same pattern exists one layer out, on a far hotter path — [`mappingHandlers.ts:11-13`](../../src/mappings/mappingHandlers.ts#L11):
+
+```ts
+let lastBlockHash = '';
+let lastEventIdx = -1;
+let startupHandled = false;
+```
+
+`handleEvent` writes the `Block` row only when the hash changes and calls `handleExtrinsic` only when `extrinsic.idx > lastEventIdx`. Two things follow, and they should be handled separately because only one is a defect.
+
+**The `blocks` table is sparse, and that is worth documenting rather than changing.** `mapBlock` runs from `handleEvent`, not a block handler, so a block producing no handled event gets no row **[V]**. Writing a row for every block would be correct-looking and expensive — under D3 it is an insert per block forever, for rows nothing reads. The right fix is a docstring:
+
+```graphql
+"""
+A block that produced at least one indexed event. Blocks with no handled event are absent,
+so this table is sparse and MAX(blockId) is NOT an indexer-freshness signal — it can sit
+behind the chain head while the indexer is current. Use `_metadata.lastProcessedHeight`.
+"""
+type Block @entity {
+```
+
+**The gating itself needs a decision before `--workers` is enabled.** Each worker holds its own copy, so the dedup is per-worker rather than per-index. The `Block` write is idempotent by id and a duplicate is harmless; the `lastEventIdx` gate decides whether an `Extrinsic` row is written at all, which is less obviously safe. **[I]** — not reproduced, and workers are commented out in `docker-compose.yml` **[V]**, so this is latent. Resolve it with A5 rather than separately, and **measure** before replacing the gate with an unconditional write: under historical mode a per-event `Block.save()` is a real cost.
+
+---
+
+## 9.9 What this plan does not cover
+
+Three adjacent plans were split out of this one because they are independently shippable:
+
+- [10](./10-partial-index.md) — partial indexing. Uses `IndexerAnomaly` and `ChainUpgrade` from here.
+- [11](./11-throughput.md) — throughput, including one correctness fix (A13, non-total internal paging) that belongs to §9's "make failure visible" theme but needs no infrastructure.
+- [12](./12-types-and-ci.md) — chain-type augmentation and the missing `typecheck` gate. Depends on nothing and should land before any of this, because it is what makes the decode layer's types meaningful.
 
 ---
 

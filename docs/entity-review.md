@@ -1,8 +1,9 @@
 # Entity-by-Entity Review
 
-
 Part of the [indexer review](./README.md).
-All 67 entities in `schema.graphql`, grouped by domain, each judged against the use cases it exists to serve.
+All **69** entities in `schema.graphql`, grouped by domain, each judged against the use cases it exists to serve.
+
+> **Revision 2026-09-01.** Re-based on `alpha@0f4f337`. Two entities added by PR #342 (`EvmTransaction`, `EvmAccountMapping`), the infrastructure verdicts corrected, and four new findings folded in. See [`CHANGES.md`](./CHANGES.md).
 
 Verdict key: **✅ fit for purpose** · **⚠️ partial — works but has a named limitation** · **❌ gap — cannot answer its core question** · **🚫 missing — no entity exists for a domain the chain emits**
 
@@ -31,17 +32,24 @@ Derived from `project.ts` (`handled` = has ≥1 handler, `empty` = registered as
 
 Three pallets have **zero** handled events. Two of them (`checkpoint`, `corporateBallot`) have **no entity at all**.
 
+`relayer` is absent from this table entirely — it is in `ModuleIdEnum` and `CallIdEnum` but has no `project.ts` entry and no entity **[V]**, so it is a fourth uncovered pallet that the coverage table cannot show. See §15.
+
 ---
 
 ## 1. Infrastructure
 
 | Entity | Verdict | Notes |
 |---|---|---|
-| `Block` | ✅ | Complete. Carries `specVersionId` — the hook a `ChainUpgrade` entity would build on. |
-| `Extrinsic` | ⚠️ | No index on `moduleId`, `callId`, or `address` — the three fields anyone filters by. |
-| `Event` | ⚠️ | Largest table; **no index on any filter column**, `attributesTxt` is `String` not `jsonb`. See `architecture-review.md` §4.1. |
+| `Block` | ⚠️ | Complete as a record, but **written from `handleEvent`, not a block handler** **[V]** — a block with no handled event gets no row. The table is sparse and `MAX(block_id)` is not a freshness signal; `_metadata.lastProcessedHeight` is. Belongs in the docstring (defect B9). Carries `specVersionId` — the hook a `ChainUpgrade` entity would build on. |
+| `Extrinsic` | ⚠️ | Indexes on `moduleId`, `callId`, `address` and `signed` **do exist** — in `db/compat.sql`, not `schema.graphql` **[V]**. The defect is the split source of truth, not the absence. `architecture-review.md` §4.1. |
+| `Event` | ⚠️ | Largest table. Indexes on `moduleId`, `eventId`, the composite, and `left(event_arg_N, 100)` all exist in `compat.sql` **[V]**, along with a generated `attributes JSONB` column — so the "`attributesTxt` → `jsonb`" recommendation is already implemented there. Same split-source-of-truth problem. |
+| `EvmTransaction` | ✅ | New in PR #342. Full decoded Ethereum transaction — calldata, gas fields, revert state — keyed to its `Extrinsic`. Well documented in the schema; follows the settlement domain's conventions. |
+| `EvmAccountMapping` | ✅ | New in PR #342. H160 ↔ `AccountId32`, from `revive.mapAccount` and genesis config. `mapped: Boolean!` correctly *not* indexed, consistent with the Boolean-index constraint (§8b). |
 | `SubqueryVersion`, `Migration` | ✅ | Operational bookkeeping, fit for purpose. |
 | `Debug`, `FoundType` | ⚠️ | Development instrumentation living in the production schema. |
+| 🚫 `IndexOrigin` | 🚫 | **Missing.** Nothing records whether this index started at genesis, so a partial index is indistinguishable from a complete one and every accumulated total is a trap. Plan [10](./implementation/10-partial-index.md). |
+
+> **Correction, 2026-09-01.** The `Extrinsic` and `Event` verdicts above previously read "no index on any filter column". That was true of `schema.graphql` and false of the deployed database — `db/compat.sql` creates 30 indexes including everything named **[V]**. `architecture-review.md` §4.1 carried the correction; this table did not, so the two documents disagreed. They now agree: the finding is **two sources of truth**, not missing indexes.
 
 ---
 
@@ -149,6 +157,10 @@ This is the best-modelled domain in the schema: an explicit lifecycle event tabl
 
 Minor: `InstructionParty.portfolios: [Int]` is an array of numbers, not relations, so portfolio joins aren't possible from a party.
 
+**One real defect, added 2026-09-01 (A14).** `Instruction.id` is the chain's own numeric sequence stored as a `String` **[V]**, so `orderBy: [ID_DESC]` sorts it lexicographically — `9999` ranks above `14712`. The list is ordered, stable, pages correctly, and puts the newest settlement about a hundred and ninety pages in. Nothing surfaces it. Fixed by D12 (zero-pad chain-assigned numeric ids); the interim workaround for a consumer is to order on `createdEventId`, which is padded on both halves and equivalent to id order.
+
+The same shape applies to any chain-assigned numeric identifier stored as text, so it is worth sweeping the schema for others rather than fixing `Instruction` alone.
+
 ---
 
 ## 9. Corporate actions — half a domain
@@ -222,10 +234,21 @@ Three entities for one concept (agent membership + history) — merge candidate 
 | Entity | Verdict | Notes |
 |---|---|---|
 | `PolyxTransaction` | ❌ | `BalanceTypeEnum` conflates pools, lock-floors and staking-ledger states; v8 `reserved` entirely unindexed. See `reference/polyx-balance-model.md`. |
-| `StakingEvent` | ⚠️ | A log, not a position. **No `StakingPosition` / nomination entity** — current bonded amount, nominations, and validator prefs are not queryable. `staking` is **8/32 handled**; `Nominated` is handled but `Chilled`, `Kicked`, `PayoutStarted`, `EraPaid`, `ValidatorPrefsSet`, `StakersElected` are not. |
+| `StakingEvent` | ❌ | A log, not a position — and for pre-v8 rewards, an *incomplete* log. `rewardDestination` is `'LegacyUnknown'` for every pre-8.x `Reward`/`Rewarded` **[V]**, because the event carried only the stash. The v8 path correctly decodes the `RewardDestination` variant and resolves the account. **No `StakingPosition` / nomination entity** — current bonded amount, nominations, and validator prefs are not queryable. `staking` is **8/32 handled**; `Nominated` is handled but `Chilled`, `Kicked`, `PayoutStarted`, `EraPaid`, `ValidatorPrefsSet`, `StakersElected` are not. |
 | `BridgeEvent` | ⚠️ | Only `Bridged` handled of 17 events. `BridgeTxScheduled`, `BridgeTxFailed`, `BridgeLimitUpdated`, `ControllerChanged`, `AdminChanged` unhandled — so bridge failures and configuration changes are invisible. Also hardcodes `/ 1_000_000` with integer division. |
 
 🚫 **Missing: `StakingPosition`, `Nomination`, `Validator`, `Era`.** Staking is recorded purely as an event stream, so *"how much is this account staking right now, and with whom"* requires replaying all events.
+
+### These rows are used for accounting, and that raises the bar **[V]**
+
+`PolyxTransaction` and `StakingEvent` are the closest thing the index has to a general ledger, and they are read as one. That makes coverage gaps here different in kind from coverage gaps elsewhere: a missing corporate-action entity leaves a capability absent, while a missing reward destination leaves a **number that looks complete and is not**.
+
+Two known cases, one verified and one not:
+
+- **Pre-v8 reward destination is unrecoverable from the event** (A15, verified). Recoverable from `staking.payee(stash)` at the reward block — chain storage, no archive of anything but state required. Unmeasured: how often the payee differs from the stash.
+- **Transaction-fee attribution across runtime versions** (not verified). Splitting a fee between validator, treasury and payer was derived rather than emitted on older runtimes, so the fee rows may not account for the whole fee at every spec version. Listed as an open question, not a finding.
+
+The design consequence is D11: for this domain, correctness is **verified against chain state** rather than asserted from event coverage. The reconciliation harness in plan [02](./implementation/02-polyx-ledger.md) is the acceptance test, not a follow-up.
 
 ---
 
@@ -239,6 +262,21 @@ Newest domain (19/26 handled), modelled with the settlement domain's structure �
 
 ---
 
+## 15. Relayer / subsidies — a whole pallet with no entity
+
+| Entity | Verdict | Notes |
+|---|---|---|
+| 🚫 `Subsidy` | 🚫 | **Missing.** |
+| 🚫 `Relayer` | 🚫 | **Missing.** |
+
+The `relayer` pallet exists in `ModuleIdEnum`, and `approve_subsidy` / `revoke_subsidy` / `accept_subsidy` / `remove_subsidy` are in `CallIdEnum` **[V]** — so the enums assert coverage that does not exist, the same pattern §12's closing observation describes. `project.ts` registers no relayer handler at all.
+
+A subsidy lets one key pay another's fees, which is a standing financial relationship between two identities. Its history — granted when, by whom, for how much, revoked when — is exactly the shape this index is good at, and it is entirely absent.
+
+Smallest of the remaining pallet-shaped gaps and the cheapest to close: one entity plus a paying-key/beneficiary relation, no version branching, and it is purely additive.
+
+---
+
 ## Summary — what does not serve its use case
 
 **Cannot answer their core question (❌):**
@@ -249,20 +287,24 @@ Newest domain (19/26 handled), modelled with the settlement domain's structure �
 4. `ChildIdentity` — stale rows for a removed feature.
 5. `PolyxTransaction` — balance buckets not derivable.
 6. `AgentGroup` — cannot be queried by asset.
+7. `StakingEvent` — pre-v8 rewards cannot say which account received them (A15).
 
-**Missing entirely (🚫):** `CorporateAction`, `Checkpoint`, `CorporateBallot`, `AssetMetadata`, `AssetAllowance`, `StakingPosition`/`Nomination`/`Validator`, `PipSnapshot`, plus the `IndexerAnomaly` / `ChainUpgrade` operational entities proposed earlier.
+**Missing entirely (🚫):** `CorporateAction`, `Checkpoint`, `CorporateBallot`, `AssetMetadata`, `AssetAllowance`, `StakingPosition`/`Nomination`/`Validator`, `PipSnapshot`, `Subsidy`/`Relayer`, plus the `IndexerAnomaly` / `ChainUpgrade` / `IndexOrigin` operational entities proposed earlier.
 
 **Priority by domain impact — [I], for team discussion:**
 
-1. **Portfolio holdings + per-NFT** — most-requested capability, largest gap.
+1. **Portfolio holdings + per-NFT** — most-requested capability, largest gap. Also the fix for the slowest blocks (`architecture-review.md` §13).
 2. **Corporate actions, checkpoints and ballots** — core securities domain, 0/18 handled across three pallets. **In scope but low priority (D6)**: it is purely additive, so unlike the items above it makes nothing *wrong* today — it only leaves a capability absent.
-3. **POLYX balance model** — correctness, not just coverage.
+3. **POLYX balance model** — correctness, not just coverage, and now with a verification requirement attached (D11).
 4. **Claim issuer collision** — silent data loss in compliance-critical data.
-5. **Staking positions** — event stream without state.
+5. **Staking positions** — event stream without state, plus the pre-v8 attribution gap.
 6. **PIP lifecycle** — enactment timing unknown.
+7. **Subsidies** — smallest remaining pallet-shaped gap, cheapest to close.
 
-## Two structural observations
+## Three structural observations
 
 **Settlement is the template.** It is the only domain with a first-class lifecycle event table (`InstructionEvent`), typed error capture, and denormalisation choices documented in the schema. Every gap above is a place where a domain lacks one of those three things. Adopting the settlement pattern domain-by-domain would be a coherent programme rather than a list of fixes.
 
-**A registered event with no handler is invisible in review.** `project.ts` lists ~150 events as `[]`, and `schema.graphql`'s `EventIdEnum` implies coverage that does not exist. Nothing surfaces the difference. The metadata-sync script (`architecture-review.md` §3) should emit an "in enum, registered, not handled" report — it is the cheapest way to stop this list regrowing.
+**A registered event with no handler is invisible in review.** `project.ts` lists ~150 events as `[]`, and `schema.graphql`'s `EventIdEnum` implies coverage that does not exist. Nothing surfaces the difference. The metadata-sync script (`architecture-review.md` §3) should emit an "in enum, registered, not handled" report — it is the cheapest way to stop this list regrowing. The `relayer` pallet (§15) is the clearest case: its calls are in `CallIdEnum` and it has no handler and no entity.
+
+**An id that will be sorted must sort correctly.** Three findings turn out to be one — the padded composite id (D4), `getPaginatedData` ordering by its filter column (A13), and `Instruction.id` sorting lexicographically (A14). Each produces a list that is ordered, stable, paged, and wrong, with nothing to indicate it. This is a schema-review rule rather than a domain: *if a column is going to be sorted, its sort order must agree with its meaning.* `architecture-review.md` §9 states it once.
