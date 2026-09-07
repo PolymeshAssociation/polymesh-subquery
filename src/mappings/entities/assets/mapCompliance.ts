@@ -130,7 +130,7 @@ export const handleTrustedDefaultClaimIssuerAdded = async (
     id: `${assetId}/${issuer}`,
     eventIdx,
     assetId,
-    issuer,
+    issuerId: issuer,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     createdEventId: blockEventId,

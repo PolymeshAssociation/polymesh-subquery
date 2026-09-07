@@ -2690,7 +2690,7 @@ Assets relying on on chain compliance should be explicit on which issuers they t
 type TrustedClaimIssuer @entity {
   id: ID!
   asset: Asset! @index(unique: false)
-  issuer: String! @index(unique: false)
+  issuer: Identity! @index(unique: false)
   eventIdx: Int!
   createdBlock: Block!
   updatedBlock: Block!
