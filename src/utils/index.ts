@@ -7,6 +7,7 @@ export * from './eth';
 export * from './ethExtrinsic';
 export * from './ethTransaction';
 export * from './events';
+export * from './legacyQuery';
 export * from './multisigs';
 export * from './portfolios';
 export * from './proposals';

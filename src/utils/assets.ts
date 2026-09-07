@@ -7,6 +7,7 @@ import {
   coerceHexToString,
   extractString,
   extractValue,
+  getNumberValue,
   getTextValue,
   hexToString,
   is7xChain,
@@ -19,7 +20,8 @@ export interface AssetIdWithTicker {
 }
 
 export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
-  const customType = await api.query.asset.customTypes(rawCustomId);
+  // `customTypes` keys on `CustomAssetTypeId` (u32), not a raw `Codec`
+  const customType = await api.query.asset.customTypes(getNumberValue(rawCustomId));
   return hexToString(customType.toString());
 };
 

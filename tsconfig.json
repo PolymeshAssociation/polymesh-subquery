@@ -8,6 +8,13 @@
     "incremental": true,
     "resolveJsonModule": true,
     "module": "commonjs",
+    // pinned explicitly rather than left to the `module: commonjs` default: `@polkadot/api-base`
+    // ships its storage type declarations twice behind conditional exports (a `node`-resolution
+    // file and a `node16`-resolution file), and polymesh-types augments the bare specifier one
+    // physical file resolves to. A mixed-mode build could augment one file while another config
+    // reads the other, silently losing the chain types with no error. See
+    // docs/implementation/12-types-and-ci.md §12.2c.
+    "moduleResolution": "node",
     "outDir": "dist",
     "baseUrl": ".",
     "rootDir": "src",
@@ -15,8 +22,10 @@
     // required for `tsc --noEmit` to pass at all: @subql/types' global.d.ts and
     // tests/unit/globals.d.ts both declare `api`/`unsafeApi`/`logger` as SubQuery runtime
     // globals (TS2451), and some node_modules .d.ts files use syntax this TypeScript version
-    // doesn't parse. Every error this suppresses is in node_modules; project code type-checks
-    // clean without it.
+    // doesn't parse. It is also inherent to how polkadot-js chain-type augmentation works:
+    // `QueryableStorage`'s index signature and the augmented pallets cannot both be satisfied
+    // (TS2411) — polymesh-sdk sets the same flag for the same reason. Every error this
+    // suppresses is in node_modules; project code type-checks clean without it.
     "skipLibCheck": true
   },
   "ts-node": {

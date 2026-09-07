@@ -191,10 +191,14 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
 
+  // `assetNames`/`fundingRound` key on a fixed-width codec: `AssetId` (16 bytes) on 7.x+,
+  // `Ticker` (12 bytes) before it. `.toU8a()` is those exact bytes in both eras, so this is
+  // an explicit encoding of what was previously an implicit `Codec` coercion, not a behaviour
+  // change.
   const [assetType, rawName, rawFundingRound] = await Promise.all([
     getAssetType(rawType),
-    rawAssetName ?? api.query.asset.assetNames(rawAssetId),
-    rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId),
+    rawAssetName ?? api.query.asset.assetNames(rawAssetId.toU8a()),
+    rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId.toU8a()),
   ]);
 
   const name = bytesToString(rawName as Codec);

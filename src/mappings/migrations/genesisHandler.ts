@@ -5,7 +5,13 @@ import {
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
-import { capitalizeFirstLetter, extractString, extractValue, padId } from '../../utils';
+import {
+  capitalizeFirstLetter,
+  extractString,
+  extractValue,
+  legacyQuery,
+  padId,
+} from '../../utils';
 import { getAccountId, systematicIssuers } from '../consts';
 import {
   createAccount,
@@ -157,7 +163,8 @@ const handleMultiSigs = async (): Promise<void> => {
   if (is7xChainAtGenesis) {
     multiSigEntries = await api.query.multiSig.adminDid.entries();
   } else {
-    multiSigEntries = await api.query.multiSig.multiSigToIdentity.entries();
+    // `multiSig.multiSigToIdentity` was renamed to `adminDid` at spec 7.0.0
+    multiSigEntries = await legacyQuery('multiSig', 'multiSigToIdentity', [0, 6_999_999]).entries();
   }
 
   const multiSigInserts = [];

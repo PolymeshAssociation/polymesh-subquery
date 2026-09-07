@@ -9,6 +9,17 @@
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-empty-function": "off"
+    "@typescript-eslint/no-empty-function": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@polkadot/api-augment",
+            "message": "Reintroducing @polkadot/api-augment (the generic Substrate kitchensink augmentation) alongside polymesh-types silently decides which chain ~161 shared members describe, by import order. Use `import '@polkadot/types-augment'` for the runtime type registry instead — see docs/implementation/12-types-and-ci.md §12.2."
+          }
+        ]
+      }
+    ]
   }
 }

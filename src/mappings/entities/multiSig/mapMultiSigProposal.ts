@@ -20,6 +20,7 @@ import {
   getPaginatedData,
   getTextValue,
   is7xChain,
+  legacyQuery,
   padId,
 } from '../../../utils';
 import { extractArgs } from '../common';
@@ -242,7 +243,10 @@ export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Prom
   );
 
   const is7 = is7xChain(block);
-  const query = is7 ? api.query.multiSig.proposalStates : api.query.multiSig.proposalDetail;
+  // `multiSig.proposalDetail` was renamed to `proposalStates` at spec 7.0.0
+  const query = is7
+    ? api.query.multiSig.proposalStates
+    : legacyQuery('multiSig', 'proposalDetail', [0, 6_999_999]);
 
   const queryMultiParams = activeProposals.map(proposal => [
     query,
