@@ -546,7 +546,7 @@ type UpdateReasonResult = {
   assetDelta: { totalSupply?: bigint; totalTransfers?: bigint };
 };
 
-const processUpdateReason = (
+export const processUpdateReason = (
   updateReason: string,
   value: unknown,
   transferAmount: bigint,
@@ -582,6 +582,15 @@ const processUpdateReason = (
       ? EventIdEnum.Transfer
       : (blockEvents[eventIdx + 1]?.event.method as EventIdEnum) ?? EventIdEnum.Unknown;
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
+  }
+
+  if (updateReason === 'controllerTransfer') {
+    // A controller transfer is a transfer: count it, and pin the event id so a
+    // batched controller_transfer does not fall back to the wrapping call name.
+    return {
+      eventId: EventIdEnum.ControllerTransfer,
+      assetDelta: { totalTransfers: BigInt(1) },
+    };
   }
 
   return { eventId: undefined, assetDelta: {} };
