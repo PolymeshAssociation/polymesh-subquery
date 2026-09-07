@@ -2354,6 +2354,13 @@ If any party fails to satisfy any compliance or transfer restriction the Instruc
 and no movement of assets will occur.
 """
 type Instruction @entity {
+  """
+  The chain's numeric instruction sequence, stored as text. Because it is not
+  zero-padded, `orderBy: [ID_ASC/DESC]` sorts it lexicographically ("9999"
+  outranks "14712"), not numerically. Order by `createdEventId` for a
+  chronological list — its halves are padded, so that ordering is total and
+  matches id-assignment order.
+  """
   id: ID!
   status: InstructionStatusEnum!
   venue: Venue @index(unique: false)
