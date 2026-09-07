@@ -33,6 +33,16 @@ import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
 import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
 
+/**
+ * Until spec 6.3.1, `InstructionAutomaticallyAffirmed` was emitted *before* `InstructionCreated`,
+ * so `handleInstructionCreated` re-scans the block for it. That workaround must be scoped to the
+ * 6.1.0–6.3.1 window on public chains; a folded `||` previously made it run on every non-private
+ * block at any spec version (defect A4). The private-chain equivalent range is unknown — if one is
+ * ever needed, add it as an explicit second clause rather than widening this one.
+ */
+export const shouldRescanAutomaticAffirmations = (specName: string, specVersion: number): boolean =>
+  specName !== 'polymesh_private_dev' && specVersion >= 6001000 && specVersion <= 6003001;
+
 const instructionStatusMap = {
   [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
   [EventIdEnum.InstructionRejected]: InstructionStatusEnum.Rejected,
@@ -315,14 +325,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     instructionCreatedEvent.save(),
   ];
 
-  /**
-   * Till spec version 6.3.1, InstructionAutomaticallyAffirmed was emitted before InstructionCreated event
-   * The below logic handles the case for this starting from spec version 6.1.0 from where it was introduced.
-   */
-  if (
-    (block.specVersion >= 6001000 && block.specVersion <= 6003001) ||
-    specName !== 'polymesh_private_dev'
-  ) {
+  if (shouldRescanAutomaticAffirmations(specName, block.specVersion)) {
     const automaticAffirmationPromises = [];
     block.events.forEach((event, eventIndex) => {
       if (event.event.method === EventIdEnum.InstructionAutomaticallyAffirmed) {
