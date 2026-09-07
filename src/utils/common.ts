@@ -334,7 +334,9 @@ export const getPaginatedData = async <T extends Entity, F extends keyof T>(
     const data = await store.getByField<T>(entityName, field, param, {
       limit: 100,
       offset,
-      orderBy: field,
+      // `id` is unique on every entity; the filter column never is, so ordering
+      // by it leaves offset paging free to repeat one row and skip another.
+      orderBy: 'id',
       orderDirection: 'ASC',
     });
 
