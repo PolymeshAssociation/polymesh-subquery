@@ -14,6 +14,7 @@ import {
   getAssetId,
   getAssetIdWithTicker,
   getTextValue,
+  logError,
   logFoundType,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
@@ -40,15 +41,26 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
   });
 };
 
-const getId = (
+/**
+ * Claim id: `(target, issuer, claimType, …)` — current-state semantics, one row per
+ * issuer per claim. `issuer` is deliberately part of the id: without it, two trusted
+ * issuers attesting the same target/type/scope collide on the same row, and the SDK's
+ * `issuerId: { in: $trustedClaimIssuers }` filter silently loses whichever claim was
+ * written first (defect A12). Block/eventIdx are deliberately NOT part of the id — the
+ * SDK's claims query is a current-state question ("does T hold a valid claim from A?"),
+ * and an append-only id would force every consumer to add a "latest per group" filter
+ * they do not have today.
+ */
+export const getId = (
   target: string,
+  issuer: string,
   claimType: string,
   scope: Scope,
   jurisdiction: string,
   cddId: string,
   customClaimTypeId: string | undefined
 ): string => {
-  const idAttributes = [target, claimType];
+  const idAttributes = [target, issuer, claimType];
 
   if (customClaimTypeId) {
     idAttributes.push(customClaimTypeId);
@@ -123,7 +135,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
   );
 
   await Claim.create({
-    id: getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId),
+    id: getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
     eventIdx,
     targetId: target,
     issuerId: claimIssuer,
@@ -135,6 +147,9 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     jurisdiction,
     cddId,
     filterExpiry,
+    // A fresh `Claim.create` fully replaces any row at this id, so a re-issue after
+    // revocation implicitly clears `revokeDate` — stated here rather than left implicit.
+    revokeDate: undefined,
     createdBlockId: blockId,
     updatedBlockId: blockId,
     customClaimTypeId,
@@ -156,8 +171,15 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
   const { params, block } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
-  const { claimScope, claimType, issuanceDate, cddId, jurisdiction, customClaimTypeId } =
-    extractClaimInfo(harvesterArgs);
+  const {
+    claimIssuer,
+    claimScope,
+    claimType,
+    issuanceDate,
+    cddId,
+    jurisdiction,
+    customClaimTypeId,
+  } = extractClaimInfo(harvesterArgs);
 
   let scope: Scope;
   if (claimScope) {
@@ -166,13 +188,21 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
 
   const target = getTextValue(params[0]);
 
-  const id = getId(target, claimType, scope, jurisdiction, cddId, customClaimTypeId);
+  const id = getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
   const claim = await Claim.get(id);
 
   if (claim) {
     claim.revokeDate = issuanceDate;
     await claim.save();
+  } else {
+    // With issuer-scoped ids the lookup above is exact, so a miss here means the revoked
+    // claim was never indexed (or was indexed under a different id) rather than merely
+    // being one of several rows sharing an id, as it silently was before A12 was fixed.
+    // TODO(Phase 3): replace this with an `IndexerAnomaly` entity write once it lands.
+    logError(
+      `ClaimRevoked: no Claim found for id "${id}" (target: ${target}, issuer: ${claimIssuer}, type: ${claimType})`
+    );
   }
 };
 
