@@ -2658,20 +2658,6 @@ type Scope @jsonField {
 }
 
 """
-The scope of a claim.
-
-e.g. `target` is Blocked from owning "TICKER-A" or `target` is an Affiliate of "TICKER-B"
-"""
-type ClaimScope @entity {
-  id: ID!
-  target: String! @index(unique: false)
-  asset: Asset
-  scope: Scope
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
 A claim made about an Identity. All active identities must have a valid CDD claim, but additional claims can be made.
 
 e.g. The Identity belongs to an accredited, US citizen

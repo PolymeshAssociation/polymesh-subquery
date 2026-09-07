@@ -1,17 +1,9 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import {
-  Claim,
-  ClaimScope,
-  ClaimScopeTypeEnum,
-  ClaimTypeEnum,
-  EventIdEnum,
-  Scope,
-} from '../../../types';
+import { Claim, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum, Scope } from '../../../types';
 import {
   END_OF_TIME,
   extractClaimInfo,
-  getAssetId,
   getAssetIdWithTicker,
   getTextValue,
   logError,
@@ -155,17 +147,6 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     customClaimTypeId,
     createdEventId: blockEventId,
   }).save();
-
-  if (scope) {
-    await handleScopes(
-      blockId,
-      target,
-      scope.type === ClaimScopeTypeEnum.Asset || scope.type === ClaimScopeTypeEnum.Ticker
-        ? scope.value
-        : undefined,
-      scope
-    );
-  }
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
@@ -206,28 +187,13 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
   }
 };
 
-export const handleDidRegistered = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-
-  const target = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
-
-  await handleScopes(blockId, target, assetId);
-};
-
-const handleScopes = async (
-  blockId: string,
-  target: string,
-  assetId?: string,
-  scope?: Scope
-): Promise<void> => {
-  const id = `${target}/${scope?.value || assetId}`;
-  await ClaimScope.create({
-    id,
-    target,
-    assetId,
-    scope,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
-};
+/**
+ * `AssetDidRegistered` previously only fed a `ClaimScope` row (the legacy ticker DID mapped
+ * to its asset). `ClaimScope` is removed — `Claim.scope` is already populated straight from
+ * `Asset` via `processClaimScope`/`getAssetIdWithTicker`, so nothing depended on that table.
+ * There is no other Claim-side state derived from this event, so this is now a no-op. The
+ * subscription in project.ts is left in place unchanged, per the redesign's `project.ts: No
+ * change` note for this phase.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const handleDidRegistered = async (event: SubstrateEvent): Promise<void> => {};
