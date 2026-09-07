@@ -1763,6 +1763,11 @@ type FoundType @entity {
 
 """
 A set of transactions that were executed together. Includes a reference to its parent, which reference its parent, this forms a chain to the genesis block
+
+This table is sparse: a row is only written for a block that produced at least one handled
+event, so it is NOT a freshness signal. `MAX(blockId)` can sit minutes behind the chain head
+while the indexer is perfectly current. To check indexer liveness, read
+`_metadata.lastProcessedHeight` instead.
 """
 type Block @entity {
   id: ID!
