@@ -109,6 +109,38 @@ describe('mapPolyxTransaction parameter extraction logic', () => {
     });
   });
 
+  describe('pre-8.x BalanceSet layout (defect A1)', () => {
+    /**
+     * The chain emits `BalanceSet(IdentityId, AccountId, free, reserved)` — four params, with
+     * reserved at index 3 — identically at v5.4.3 / v6.3.5 / v7.0.0 / v7.4.0. `handleBalanceSet`
+     * read `params[4]`, which is out of bounds, so `getBigIntValue` returned `BigInt(0)` and the
+     * `if (reservedAmount)` guard silently skipped the Reserved row. It now reads `params[3]`.
+     */
+    const extractBalanceSetReserved = (params: Codec[]): bigint => getBigIntValue(params[3]);
+
+    it('reads the reserved balance from index 3', () => {
+      const params = [
+        createMockCodec(TEST_DID),
+        createMockCodec(TEST_ADDRESS),
+        createMockCodec('1000'), // free
+        createMockCodec('250'), // reserved
+      ];
+
+      expect(extractBalanceSetReserved(params)).toBe(BigInt('250'));
+    });
+
+    it('index 4 is out of bounds for this event and would yield 0', () => {
+      const params = [
+        createMockCodec(TEST_DID),
+        createMockCodec(TEST_ADDRESS),
+        createMockCodec('1000'),
+        createMockCodec('250'),
+      ];
+
+      expect(getBigIntValue(params[4])).toBe(BigInt(0));
+    });
+  });
+
   describe('Numeric detection regex', () => {
     it.each([
       ['0', true],

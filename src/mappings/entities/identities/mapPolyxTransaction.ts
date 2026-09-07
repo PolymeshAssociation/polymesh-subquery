@@ -376,7 +376,8 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   let reservedAmount: bigint;
 
   if (!is8xChain(args.block)) {
-    reservedAmount = getBigIntValue(args.params[4]);
+    // BalanceSet(IdentityId, AccountId, free, reserved) — reserved is params[3], not params[4]
+    reservedAmount = getBigIntValue(args.params[3]);
   }
 
   const details = getEventParams(args);
