@@ -69,7 +69,9 @@ const filters: Record<string, Record<string, string[]>> = {
     ReserveRepatriated: ['handleReserveRepatriated'],
     Restored: ['handleBalanceMinted'],
     Slashed: ['handleBalanceBurned'],
-    Suspended: ['handleBalanceSuspended'],
+    // handleBalanceSuspended does not exist yet — it arrives with the POLYX ledger work
+    // (docs/implementation/02-polyx-ledger.md), which rewrites mapPolyxTransaction.ts wholesale
+    Suspended: [],
     Thawed: [],
     TotalIssuanceForced: [],
     Transfer: ['handleBalanceTransfer'],
