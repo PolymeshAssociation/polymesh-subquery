@@ -36,6 +36,8 @@ jobs:
           START_BLOCK: 1
           NETWORK_ENDPOINT: 'ws://host.docker.internal:9944'
           NETWORK_CHAIN_ID: '0xda7f2072787bfd0b09f7e12fca619afb6041b3d620f39f3a508814869100bf01'
+      - name: typecheck
+        run: yarn typecheck
       - name: lint
         run: yarn lint
   release:

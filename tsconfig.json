@@ -11,7 +11,13 @@
     "outDir": "dist",
     "baseUrl": ".",
     "rootDir": "src",
-    "target": "es2017"
+    "target": "es2017",
+    // required for `tsc --noEmit` to pass at all: @subql/types' global.d.ts and
+    // tests/unit/globals.d.ts both declare `api`/`unsafeApi`/`logger` as SubQuery runtime
+    // globals (TS2451), and some node_modules .d.ts files use syntax this TypeScript version
+    // doesn't parse. Every error this suppresses is in node_modules; project code type-checks
+    // clean without it.
+    "skipLibCheck": true
   },
   "ts-node": {
     // load the `include` below, so scripts run through ts-node see SubQuery's injected globals

@@ -17,6 +17,7 @@
     "test:unit": "jest --config jest.unit.config.js",
     "test:integration": "./scripts/integration-test.sh",
     "codegen": "./node_modules/.bin/subql codegen",
+    "typecheck": "yarn codegen && tsc --noEmit -p tsconfig.test.json",
     "commit": "npx git-cz",
     "start:docker": "docker compose pull && docker compose up --remove-orphans",
     "stop:docker": "docker compose down -v",
