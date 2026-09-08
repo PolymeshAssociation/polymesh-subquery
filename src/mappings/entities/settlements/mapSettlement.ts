@@ -10,7 +10,7 @@ import {
   getErrorDetails,
   getLegsValue,
   getNumberValue,
-  getPaginatedData,
+  getAllByFields,
   getSettlementLeg,
   getSettlementTypeDetails,
   getSignerAddress,
@@ -119,7 +119,7 @@ const updateLegs = async (
   address: string,
   instructionId: string
 ): Promise<void> => {
-  const legs = await getPaginatedData<Leg, 'instructionId'>('Leg', 'instructionId', instructionId);
+  const legs = await getAllByFields<Leg>('Leg', [['instructionId', '=', instructionId]]);
 
   const updatedLegs = legs.map(leg => {
     if (address) {

@@ -5,7 +5,7 @@ import {
   TickerExternalAgentHistory,
 } from '../../../types';
 import { decodeEvent } from '../../../decode';
-import { getAssetId, getPaginatedData } from '../../../utils';
+import { getAllByFields, getAssetId } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -36,11 +36,9 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
   ag.permissions = permissions;
 
   const promises = [ag.save()];
-  const members = await getPaginatedData<AgentGroupMembership, 'groupId'>(
-    'AgentGroupMembership',
-    'groupId',
-    `${assetId}/${group}`
-  );
+  const members = await getAllByFields<AgentGroupMembership>('AgentGroupMembership', [
+    ['groupId', '=', `${assetId}/${group}`],
+  ]);
 
   for (const member of members) {
     promises.push(
@@ -188,11 +186,9 @@ const addAgentGroupMembership = (
 };
 
 const removeMember = async (did: string, assetId: string) => {
-  const memberships = await getPaginatedData<AgentGroupMembership, 'member'>(
-    'AgentGroupMembership',
-    'member',
-    did
-  );
+  const memberships = await getAllByFields<AgentGroupMembership>('AgentGroupMembership', [
+    ['member', '=', did],
+  ]);
 
   const memberIds = memberships
     .filter(({ groupId }) => groupId.split('/')[0] === assetId)

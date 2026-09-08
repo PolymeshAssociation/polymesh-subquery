@@ -2,7 +2,7 @@ import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { Entity } from '@subql/types-core';
+import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
 import { ErrorJson, FoundType } from '../types';
 export const emptyDid = '0x00'.padEnd(66, '0');
@@ -333,31 +333,59 @@ export const extract8xStakingAmount = (rawSecondParam: Codec, rawThirdParam?: Co
   return BigInt(0);
 };
 
-export const getPaginatedData = async <T extends Entity, F extends keyof T>(
+/**
+ * `store.getByFields` rejects a limit above the node's query limit, so pages are kept small
+ */
+const PAGE_SIZE = 100;
+
+/**
+ * Every row matching `filter`, read in pages.
+ *
+ * `store.getByFields` returns one page, so reading a whole set is still a loop - but the loop is
+ * here rather than in a hand-rolled helper, and the filter is an expression list, so a call site
+ * that used to read a set and narrow it in JavaScript can push the narrowing into the query.
+ *
+ * Ordered by `id`. Every entity's id is unique, so offset paging over it is a total order; the
+ * filter columns are not, and paging over one of those repeats a row and skips another (defect
+ * A13).
+ *
+ * Note the store searches its write cache before the database, so a page can include rows
+ * written earlier in this block.
+ */
+export const getAllByFields = async <T extends Entity>(
   entityName: string,
-  field: F,
-  param: T[F]
+  filter: FieldsExpression<T>[]
 ): Promise<T[]> => {
+  const results: T[] = [];
   let offset = 0;
-  const result: T[] = [];
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const data = await store.getByField<T>(entityName, field, param, {
-      limit: 100,
+    const page = await store.getByFields<T>(entityName, filter, {
+      limit: PAGE_SIZE,
       offset,
-      // `id` is unique on every entity; the filter column never is, so ordering
-      // by it leaves offset paging free to repeat one row and skip another.
       orderBy: 'id',
       orderDirection: 'ASC',
     });
 
-    result.push(...data);
+    results.push(...page);
 
-    if (data.length < 100) {
-      break;
+    if (page.length < PAGE_SIZE) {
+      return results;
     }
 
-    offset += data.length;
+    offset += page.length;
   }
-  return result;
 };
+
+/**
+ * @deprecated Single-field adapter for `getAllByFields`.
+ *
+ * Only `mapPolyxTransaction` still calls this, and the POLYX ledger phase deletes that file
+ * along with the `PolyxTransaction` entity. It goes with it.
+ */
+export const getPaginatedData = async <T extends Entity, F extends keyof T>(
+  entityName: string,
+  field: F,
+  param: T[F]
+): Promise<T[]> => getAllByFields<T>(entityName, [[field, '=', param]]);

@@ -16,7 +16,7 @@ import {
   getAssetId,
   getExemptKeyValue,
   getExemptionsValue,
-  getPaginatedData,
+  getAllByFields,
   getTransferManagerValue,
   is7xChain,
 } from '../../../utils';
@@ -238,10 +238,9 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 
   const transferConditions = getTransferConditions(rawTransferConditions, assetId);
 
-  const existingTransferCompliances = await getPaginatedData<TransferCompliance, 'assetId'>(
+  const existingTransferCompliances = await getAllByFields<TransferCompliance>(
     'TransferCompliance',
-    'assetId',
-    assetId
+    [['assetId', '=', assetId]]
   );
 
   const removedConditions = existingTransferCompliances
@@ -363,10 +362,10 @@ export const handleTransferManagerExemptionsAdded = async (
     claimType: null,
   };
 
-  const transferComplianceExemptions = await getPaginatedData<
-    TransferComplianceExemption,
-    'assetId'
-  >('TransferComplianceExemption', 'assetId', assetId);
+  const transferComplianceExemptions = await getAllByFields<TransferComplianceExemption>(
+    'TransferComplianceExemption',
+    [['assetId', '=', assetId]]
+  );
 
   const existingExemptions = transferComplianceExemptions.filter(
     ({ opType: exemptionType, exemptedEntityId }) =>
@@ -406,10 +405,10 @@ export const handleTransferManagerExemptionsRemoved = async (
   const transferManagerValue = getTransferManagerValue(rawAgentGroup);
   const parsedExemptions = getExemptionsValue(rawExemptions);
 
-  const transferComplianceExemptions = await getPaginatedData<
-    TransferComplianceExemption,
-    'assetId'
-  >('TransferComplianceExemption', 'assetId', assetId);
+  const transferComplianceExemptions = await getAllByFields<TransferComplianceExemption>(
+    'TransferComplianceExemption',
+    [['assetId', '=', assetId]]
+  );
 
   const selectedOpType =
     transferManagerValue.type === TransferRestrictionTypeEnum.Percentage

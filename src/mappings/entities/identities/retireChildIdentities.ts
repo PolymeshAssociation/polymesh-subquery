@@ -1,38 +1,6 @@
 import { ChildIdentity } from '../../../types';
-import { is8xSpecVersion } from '../../../utils';
+import { getAllByFields, is8xSpecVersion } from '../../../utils';
 import { ChainUpgradeCrossing } from '../block/mapChainUpgrade';
-
-/** `store.getByFields` requires a limit, and the node rejects one above its query limit */
-const PAGE_SIZE = 100;
-
-/**
- * Every `ChildIdentity` row, read in pages over a total order.
- *
- * Read in full before anything is removed: paging by offset over a set that is shrinking under
- * the reader skips rows.
- */
-const allChildIdentityIds = async (): Promise<string[]> => {
-  const ids: string[] = [];
-  let offset = 0;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const page = await store.getByFields<ChildIdentity>('ChildIdentity', [], {
-      limit: PAGE_SIZE,
-      offset,
-      orderBy: 'id',
-      orderDirection: 'ASC',
-    });
-
-    ids.push(...page.map(({ id }) => id));
-
-    if (page.length < PAGE_SIZE) {
-      return ids;
-    }
-
-    offset += page.length;
-  }
-};
 
 /**
  * Drops every `ChildIdentity` row when the chain crosses into 8.x.
@@ -56,7 +24,12 @@ export const retireChildIdentitiesAtV8 = async ({
     return;
   }
 
-  const ids = await allChildIdentityIds();
+  /**
+   * Read in full before anything is removed: paging by offset over a set that is shrinking
+   * under the reader skips rows
+   */
+  const rows = await getAllByFields<ChildIdentity>('ChildIdentity', []);
+  const ids = rows.map(({ id }) => id);
 
   logger.info(
     `Chain crossed into 8.x at spec ${specVersion}; retiring ${ids.length} ChildIdentity rows the v8 storage migration deleted without an event`
