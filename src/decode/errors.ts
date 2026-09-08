@@ -33,3 +33,35 @@ export class FieldNotFound extends DecodeError {
     );
   }
 }
+
+/**
+ * An event carried a different number of parameters than any decoder registered for its spec
+ * version declares.
+ *
+ * This is the signal that a shape changed and the table was not updated - the exact failure the
+ * table exists to make loud rather than silent.
+ */
+export class ArityMismatch extends DecodeError {
+  readonly kind = AnomalyKind.ArityMismatch;
+
+  constructor(moduleId: string, eventId: string, readonly arity: number, expected: string) {
+    super(
+      moduleId,
+      eventId,
+      `${moduleId}.${eventId} carried ${arity} parameters; registered decoders expect ${expected}`
+    );
+  }
+}
+
+/** No registered decoder covers the spec version of the block the event was emitted in */
+export class NoDecoderForSpecVersion extends DecodeError {
+  readonly kind = AnomalyKind.NoDecoderForSpecVersion;
+
+  constructor(moduleId: string, eventId: string, readonly specVersion: number, covered: string) {
+    super(
+      moduleId,
+      eventId,
+      `${moduleId}.${eventId} has no decoder covering spec version ${specVersion}; registered ranges are ${covered}`
+    );
+  }
+}

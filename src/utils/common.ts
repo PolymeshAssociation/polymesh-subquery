@@ -3,6 +3,7 @@ import { Codec } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity } from '@subql/types-core';
+import { normaliseSpecVersion } from '../decode/specVersion';
 import { ErrorJson, FoundType } from '../types';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
@@ -275,20 +276,25 @@ export const getErrorDetails = (item: Codec): ErrorJson => {
   };
 };
 
-export const is7xChain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
-};
+/**
+ * A block's spec version on the public chain's scale.
+ *
+ * Every version comparison in the indexer goes through this, so the `polymesh_private_dev`
+ * offsets live in one place rather than being repeated per predicate. See
+ * `normaliseSpecVersion`.
+ */
+export const specVersionOf = (block: SubstrateBlock): number =>
+  normaliseSpecVersion(block.specVersion);
+
+export const is7xSpecVersion = (specVersion: number): boolean =>
+  normaliseSpecVersion(specVersion) >= 7_000_000;
+
+export const is7xChain = (block: SubstrateBlock): boolean => is7xSpecVersion(block.specVersion);
 
 /**
  * From the spec version 7.3, sto events were modified to include asset ID details
  */
-export const is7Dot3Chain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 7003000 || (specName === 'polymesh_private_dev' && specVersion >= 2001000);
-};
+export const is7Dot3Chain = (block: SubstrateBlock): boolean => specVersionOf(block) >= 7_003_000;
 
 /**
  * Whether a spec version is 8.x or later.
@@ -296,12 +302,10 @@ export const is7Dot3Chain = (block: SubstrateBlock) => {
  * Split out from `is8xChain` because upgrade detection compares the version the chain came
  * *from*, for which there is no block to hand.
  */
-export const is8xSpecVersion = (specVersion: number): boolean => {
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 8000000 || (specName === 'polymesh_private_dev' && specVersion >= 2002000);
-};
+export const is8xSpecVersion = (specVersion: number): boolean =>
+  normaliseSpecVersion(specVersion) >= 8_000_000;
 
-export const is8xChain = (block: SubstrateBlock) => is8xSpecVersion(block.specVersion);
+export const is8xChain = (block: SubstrateBlock): boolean => is8xSpecVersion(block.specVersion);
 
 /**
  * Extracts the amount from 8.x chain staking event parameters.
