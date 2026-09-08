@@ -1,5 +1,5 @@
-import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateEvent } from '@subql/types';
+import { metadataTypeNames } from '../../../decode';
 import { Event } from '../../../types';
 import {
   extractClaimInfo,
@@ -26,22 +26,11 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     moduleIdText,
     params: args,
   } = extractArgs(event);
-  const genericEvent = event.event as unknown as GenericEvent;
+  const types = metadataTypeNames(event);
 
-  const harvesterLikeArgs = args.map((arg, i) => {
-    let type: string;
-    const typeName = genericEvent.meta.fields[i].typeName;
-    if (typeName.isSome) {
-      // for metadata >= v14
-      type = typeName.unwrap().toString();
-    } else {
-      // for metadata < v14
-      type = genericEvent.meta.args[i].toString();
-    }
-    return {
-      value: serializeLikeHarvester(arg, type, logFoundType),
-    };
-  });
+  const harvesterLikeArgs = args.map((arg, i) => ({
+    value: serializeLikeHarvester(arg, types[i], logFoundType),
+  }));
 
   const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
 
