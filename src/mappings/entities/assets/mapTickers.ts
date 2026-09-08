@@ -1,4 +1,5 @@
 import { SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import { TickerReservation } from '../../../types';
 import { getDateValue, getTextValue, serializeTicker } from '../../../utils';
 import { extractArgs, getAsset } from '../common';
@@ -7,14 +8,18 @@ const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
   return TickerReservation.get(ticker);
 };
 
+/**
+ * Also reached from `handleTickerTransferred`, which passes its own event: before 6.0.0
+ * `TickerTransferred` was emitted first, so the reservation does not exist yet. Both events name
+ * their first two parameters `did` and `ticker`, so the decode is correct either way.
+ */
 export const handleClassicTickerClaimed = async (
   event: SubstrateEvent
 ): Promise<TickerReservation> => {
-  const { params, blockId } = extractArgs(event);
+  const { blockId } = extractArgs(event);
+  const { did, ticker: rawTicker } = decodeEvent(event);
 
-  const [rawIdentity, rawTicker] = params;
-
-  const identityId = getTextValue(rawIdentity);
+  const identityId = getTextValue(did);
   const ticker = serializeTicker(rawTicker);
 
   let reservation = await TickerReservation.get(ticker);
@@ -35,11 +40,10 @@ export const handleClassicTickerClaimed = async (
 };
 
 export const handleTickerRegistered = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { blockId } = extractArgs(event);
+  const { did, ticker: rawTicker, expiry: rawExpiry } = decodeEvent(event);
 
-  const [rawIdentity, rawTicker, rawExpiry] = params;
-
-  const identityId = getTextValue(rawIdentity);
+  const identityId = getTextValue(did);
   const ticker = serializeTicker(rawTicker);
   const expiry = rawExpiry ? getDateValue(rawExpiry) : null;
 
@@ -64,9 +68,9 @@ export const handleTickerRegistered = async (event: SubstrateEvent): Promise<voi
 };
 
 export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { blockId } = extractArgs(event);
+  const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
-  const [, rawTicker, rawAssetId] = params;
   const ticker = serializeTicker(rawTicker);
   const assetId = getTextValue(rawAssetId);
   const [asset, reservation] = await Promise.all([getAsset(assetId), getTickerReservation(ticker)]);
@@ -80,9 +84,9 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
 };
 
 export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { blockId } = extractArgs(event);
+  const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
-  const [, rawTicker, rawAssetId] = params;
   const ticker = serializeTicker(rawTicker);
   const assetId = getTextValue(rawAssetId);
   const [asset, reservation] = await Promise.all([getAsset(assetId), getTickerReservation(ticker)]);
@@ -99,9 +103,8 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
 };
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-
-  const [rawDid, rawTicker] = params;
+  const { blockId } = extractArgs(event);
+  const { did: rawDid, ticker: rawTicker } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
   const ticker = serializeTicker(rawTicker);

@@ -1,5 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import { Venue } from '../../../types';
 import {
   addIfNotIncludes,
@@ -31,14 +32,14 @@ const getVenue = async (venueId: string): Promise<Venue> => {
 };
 
 export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [rawIdentity, rawVenueId, rawDetails, rawType] = params;
+  const { blockId } = extractArgs(event);
+  const { did, venueId, details, venueType } = decodeEvent(event);
 
   await Venue.create({
-    id: getTextValue(rawVenueId),
-    ownerId: getTextValue(rawIdentity),
-    details: bytesToString(rawDetails),
-    type: getTextValue(rawType),
+    id: getTextValue(venueId),
+    ownerId: getTextValue(did),
+    details: bytesToString(details),
+    type: getTextValue(venueType),
     signers: [],
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -46,39 +47,36 @@ export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawVenueId, rawDetails] = params;
+  const { blockId } = extractArgs(event);
+  const { venueId, details } = decodeEvent(event);
 
-  const id = getTextValue(rawVenueId);
-  const venue = await getVenue(id);
+  const venue = await getVenue(getTextValue(venueId));
 
-  venue.details = bytesToString(rawDetails);
+  venue.details = bytesToString(details);
   venue.updatedBlockId = blockId;
 
   await venue.save();
 };
 
 export const handleVenueTypeUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawVenueId, rawType] = params;
+  const { blockId } = extractArgs(event);
+  const { venueId, venueType } = decodeEvent(event);
 
-  const id = getTextValue(rawVenueId);
-  const venue = await getVenue(id);
+  const venue = await getVenue(getTextValue(venueId));
 
-  venue.type = getTextValue(rawType);
+  venue.type = getTextValue(venueType);
   venue.updatedBlockId = blockId;
 
   await venue.save();
 };
 
 export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawVenueId, rawSigners, rawUpdateType] = params;
+  const { blockId } = extractArgs(event);
+  const { venueId, signers: rawSigners, updateType: rawUpdateType } = decodeEvent(event);
 
   const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
 
-  const id = getTextValue(rawVenueId);
-  const venue = await getVenue(id);
+  const venue = await getVenue(getTextValue(venueId));
 
   const updateType = getBooleanValue(rawUpdateType);
 

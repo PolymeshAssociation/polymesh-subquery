@@ -1,36 +1,33 @@
-import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { Claim, ClaimScopeTypeEnum, ClaimTypeEnum, EventIdEnum, Scope } from '../../../types';
+import { decodeEvent, metadataTypeNames } from '../../../decode';
+import {
+  AnomalyKind,
+  Claim,
+  ClaimScopeTypeEnum,
+  ClaimTypeEnum,
+  EventIdEnum,
+  ModuleIdEnum,
+  Scope,
+} from '../../../types';
 import {
   END_OF_TIME,
   extractClaimInfo,
   getAssetIdWithTicker,
   getTextValue,
-  logError,
   logFoundType,
+  recordAnomaly,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
 const extractHarvesterArgs = (event: SubstrateEvent) => {
-  const genericEvent = event.event as unknown as GenericEvent;
-  const args = genericEvent.data;
+  const args = event.event.data;
+  const types = metadataTypeNames(event);
 
-  return args.map((arg, i) => {
-    let type;
-    const typeName = genericEvent.meta.fields[i].typeName;
-    if (typeName.isSome) {
-      // for metadata >= v14
-      type = typeName.unwrap().toString();
-    } else {
-      // for metadata < v14
-      type = genericEvent.meta.args[i].toString();
-    }
-    return {
-      value: serializeLikeHarvester(arg, type, logFoundType),
-    };
-  });
+  return args.map((arg, i) => ({
+    value: serializeLikeHarvester(arg, types[i], logFoundType),
+  }));
 };
 
 /**
@@ -93,9 +90,9 @@ const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promis
 };
 
 export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, params, blockEventId } = extractArgs(event);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
-  const target = getTextValue(params[0]);
+  const target = getTextValue(decodeEvent(event).did);
 
   const {
     claimExpiry,
@@ -150,7 +147,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
+  const { block, eventIdx } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
   const {
     claimIssuer,
@@ -167,7 +164,7 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
     scope = await processClaimScope(claimScope, block);
   }
 
-  const target = getTextValue(params[0]);
+  const target = getTextValue(decodeEvent(event).did);
 
   const id = getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
@@ -177,13 +174,19 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
     claim.revokeDate = issuanceDate;
     await claim.save();
   } else {
-    // With issuer-scoped ids the lookup above is exact, so a miss here means the revoked
-    // claim was never indexed (or was indexed under a different id) rather than merely
-    // being one of several rows sharing an id, as it silently was before A12 was fixed.
-    // TODO(Phase 3): replace this with an `IndexerAnomaly` entity write once it lands.
-    logError(
-      `ClaimRevoked: no Claim found for id "${id}" (target: ${target}, issuer: ${claimIssuer}, type: ${claimType})`
-    );
+    /**
+     * With issuer-scoped ids the lookup above is exact, so a miss here means the revoked claim
+     * was never indexed, or was indexed under a different id, rather than merely being one of
+     * several rows sharing an id as it silently was before A12 was fixed
+     */
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `ClaimRevoked found no Claim at id "${id}" (target ${target}, issuer ${claimIssuer}, type ${claimType})`,
+      block,
+      eventIdx,
+      moduleId: ModuleIdEnum.identity,
+      eventId: EventIdEnum.ClaimRevoked,
+    });
   }
 };
 

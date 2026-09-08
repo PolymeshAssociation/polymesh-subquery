@@ -4,15 +4,17 @@ import {
   AgentGroupMembership,
   TickerExternalAgentHistory,
 } from '../../../types';
+import { decodeEvent } from '../../../decode';
 import { getAssetId, getPaginatedData } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { blockId, block } = extractArgs(event);
+  const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
-  const group = params[2].toJSON();
-  const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = await getAssetId(params[1], block);
+  const group = agId.toJSON();
+  const permissions = JSON.stringify(rawPermissions.toJSON());
+  const assetId = await getAssetId(rawAssetId, block);
 
   await AgentGroupEntity.create({
     id: `${assetId}/${group}`,
@@ -23,11 +25,12 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
-  const group = params[2].toJSON();
-  const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = await getAssetId(params[1], block);
+  const group = agId.toJSON();
+  const permissions = JSON.stringify(rawPermissions.toJSON());
+  const assetId = await getAssetId(rawAssetId, block);
 
   const ag = await AgentGroupEntity.get(`${assetId}/${group}`);
   ag.permissions = permissions;
@@ -59,12 +62,13 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 };
 
 export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { did: rawDid, assetId: rawAssetId, agentGroup } = decodeEvent(event);
 
-  const did = params[0].toString();
-  const assetId = await getAssetId(params[1], block);
+  const did = rawDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
 
-  const group = params[2].toJSON() as AgentGroup;
+  const group = agentGroup.toJSON() as AgentGroup;
 
   const promises = [
     addExternalAgentHistory(
@@ -87,11 +91,12 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid, agentGroup } = decodeEvent(event);
 
-  const did = params[2].toString();
-  const group = params[3].toJSON() as AgentGroup;
-  const assetId = await getAssetId(params[1], block);
+  const did = agentDid.toString();
+  const group = agentGroup.toJSON() as AgentGroup;
+  const assetId = await getAssetId(rawAssetId, block);
 
   const promises = [
     removeMember(did, assetId),
@@ -115,9 +120,11 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 };
 
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const did = params[2].toString();
-  const assetId = await getAssetId(params[1], block);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid } = decodeEvent(event);
+
+  const did = agentDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
 
   const promises = [
     removeMember(did, assetId),

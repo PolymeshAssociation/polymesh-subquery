@@ -1,5 +1,6 @@
 import { AnyTuple, Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import { Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
@@ -19,6 +20,7 @@ import {
   padId,
   rawAssetHolderToAssetHolder,
   removeIfIncludes,
+  specVersionOf,
 } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
 import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
@@ -173,6 +175,14 @@ const createInstructionParty = async (
   await Promise.all(promises);
 };
 
+/**
+ * Reads a `settlement.InstructionAutomaticallyAffirmed` from its raw parameters.
+ *
+ * Takes parameters rather than the event because the 6.1.0 to 6.3.1 re-scan feeds it sibling
+ * `EventRecord`s from the same block, for which there is no `SubstrateEvent` to decode. Its
+ * shape is registered as `settlement.InstructionAutomaticallyAffirmed` and is covered by the
+ * metadata contract test like any other.
+ */
 const mapAutomaticAffirmation = async (
   params: Codec[],
   block: SubstrateBlock,
@@ -230,19 +240,19 @@ const mapAutomaticAffirmation = async (
  */
 export const handleInstructionCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { blockId, params, block, extrinsic, eventIdx, blockEventId } = args;
+  const { blockId, block, extrinsic, eventIdx, blockEventId } = args;
   const address = getSignerAddress(extrinsic);
 
-  const [
-    rawCreator,
-    rawVenueId,
-    rawInstructionId,
-    rawSettlementType,
-    rawTradeDate,
-    rawValueDate,
-    rawLegs,
-    rawOptMemo,
-  ] = params;
+  const {
+    did: rawCreator,
+    venueId: rawVenueId,
+    instructionId: rawInstructionId,
+    settlementType: rawSettlementType,
+    tradeDate: rawTradeDate,
+    valueDate: rawValueDate,
+    legs: rawLegs,
+    memo: rawOptMemo,
+  } = decodeEvent(event);
 
   const creator = getTextValue(rawCreator);
 
@@ -255,8 +265,11 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    *
    * NOTE - For Polymesh private, the spec version starts from 1.0.0
    */
-  const specName = api.runtimeVersion.specName.toString();
-  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
+  /**
+   * Events from 6.0.0 were updated to support NFT and OffChain instructions. The parameter
+   * count did not change, so this is a payload branch rather than a positional one
+   */
+  if (specVersionOf(block) >= 6_000_000) {
     legs = await getSettlementLeg(rawLegs, block, blockId);
   } else {
     legs = await getLegsValue(rawLegs, block);
@@ -325,7 +338,9 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     instructionCreatedEvent.save(),
   ];
 
-  if (shouldRescanAutomaticAffirmations(specName, block.specVersion)) {
+  if (
+    shouldRescanAutomaticAffirmations(api.runtimeVersion.specName.toString(), block.specVersion)
+  ) {
     const automaticAffirmationPromises = [];
     block.events.forEach((event, eventIndex) => {
       if (event.event.method === EventIdEnum.InstructionAutomaticallyAffirmed) {
@@ -355,10 +370,10 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
  *   - InstructionAffirmed
  */
 export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, blockId, block, blockEventId } = extractArgs(event);
+  const { extrinsic, eventIdx, blockId, block, blockEventId } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
-  const [, rawPortfolio, rawInstructionId] = params;
+  const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const { identity, account, portfolio } = await getPortfolioOrAccount(
@@ -414,9 +429,9 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
  * Maps the event - `settlement.AffirmationWithdrawn`
  */
 export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
+  const { eventIdx, blockId, block, blockEventId } = extractArgs(event);
 
-  const [, rawPortfolio, rawInstructionId] = params;
+  const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const { identity, account, portfolio } = await getPortfolioOrAccount(
@@ -463,22 +478,13 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.InstructionAutomaticallyAffirmed
  */
 export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise<void> => {
-  const {
-    params,
-    block,
-    blockId,
-    block: { specVersion },
-    eventIdx,
-    blockEventId,
-  } = extractArgs(event);
-
-  const specName = api.runtimeVersion.specName.toString();
+  const { params, block, blockId, eventIdx, blockEventId } = extractArgs(event);
 
   /**
    * Till spec version 6.3.1, InstructionAutomaticallyAffirmed was emitted before InstructionCreated event
    * The below logic handles the case after 6.3.1 when ordering was correct and we can safely assume instruction exists here
    */
-  if (specVersion >= 6003001 || specName === 'polymesh_private_dev') {
+  if (specVersionOf(block) >= 6_003_001) {
     const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
       params,
       block,
@@ -494,8 +500,8 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.InstructionRejected`
  */
 export const handleInstructionRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
+  const { eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
@@ -543,8 +549,8 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionUnlocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [, rawInstructionId] = params;
+  const { extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { instructionId: rawInstructionId } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
   const instructionId = processInstructionId(rawInstructionId);
@@ -574,8 +580,8 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
  * Maps the event - `settlement.SettlementManuallyExecuted`
  */
 export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
+  const { eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const manuallyExecutedEvent = InstructionEvent.create({
     id: blockEventId,
@@ -595,8 +601,8 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
 export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawInstructionId, rawDispatchError] = params;
+  const { eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { instructionId: rawInstructionId, error: rawDispatchError } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const instruction = await getInstruction(instructionId);
@@ -622,8 +628,12 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
 };
 
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId, expiryOpt] = params;
+  const { blockId, eventIdx, blockEventId } = extractArgs(event);
+  const {
+    did: rawIdentityId,
+    instructionId: rawInstructionId,
+    expiry: expiryOpt,
+  } = decodeEvent(event);
 
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
@@ -658,8 +668,9 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
 };
 
 export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
+  const { blockId, eventIdx, blockEventId } = extractArgs(event);
+  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
+
   const identityId = getTextValue(rawIdentityId);
   const instructionId = getTextValue(rawInstructionId);
 
@@ -684,8 +695,9 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
  * Maps the event - `settlement.InstructionMediators`
  */
 export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawInstructionId, rawIdentityIds] = params;
+  const { blockId, eventIdx, blockEventId } = extractArgs(event);
+  const { instructionId: rawInstructionId, mediators: rawIdentityIds } = decodeEvent(event);
+
   const instructionId = processInstructionId(rawInstructionId);
   const identityIds = getStringArrayValue(rawIdentityIds);
 
@@ -723,8 +735,15 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.ReceiptClaimed`
  */
 export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId, rawLegId, rawReceiptUid, rawSigner, rawMetadata] = params;
+  const { blockId, eventIdx, blockEventId } = extractArgs(event);
+  const {
+    did: rawIdentityId,
+    instructionId: rawInstructionId,
+    legId: rawLegId,
+    receiptUid: rawReceiptUid,
+    signer: rawSigner,
+    metadata: rawMetadata,
+  } = decodeEvent(event);
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
   const legId = getNumberValue(rawLegId);
@@ -790,8 +809,8 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 };
 
 export const handleFundsTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
-  const [, rawFromHolder, rawToHolder, rawFund] = params;
+  const { extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { fromHolder: rawFromHolder, toHolder: rawToHolder, fund: rawFund } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
 
