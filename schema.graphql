@@ -1790,6 +1790,27 @@ type Block @entity {
 }
 
 """
+A runtime upgrade the indexer observed, one row per spec version.
+
+Written from `system.CodeUpdated`, which the runtime emits for every upgrade. Two things read
+it: upgrade detection itself, which was module level mutable state and so held a separate copy
+per worker thread, and any handler that needs the block a spec version started at.
+"""
+type ChainUpgrade @entity {
+  "Zero padded spec version, so lexical order matches numeric order"
+  id: ID!
+  specVersionId: Int! @index(unique: true)
+  """
+  Transaction version the upgrade shipped. A bump here means the call encoding changed, which is
+  what distinguishes a major upgrade from a routine one
+  """
+  transactionVersion: Int!
+  "The block `system.CodeUpdated` was emitted in"
+  firstBlock: Block!
+  datetime: Date!
+}
+
+"""
 Represents external data included into the chain. Virtually all user actions, as well as runtime operations are extrinsics
 
 Usually extrinsics are signed. When the block author includes data, e.g. `timestamp.set` then the signature is implied. This is indicated with `signed = 0`

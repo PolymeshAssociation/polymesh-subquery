@@ -64,10 +64,13 @@ import { Codec } from '@polkadot/types/types';
 (globalThis as any).store = {
   get: jest.fn().mockResolvedValue(undefined),
   getByField: jest.fn().mockResolvedValue([]),
+  getByFields: jest.fn().mockResolvedValue([]),
+  getOneByField: jest.fn().mockResolvedValue(undefined),
   set: jest.fn().mockResolvedValue(undefined),
   remove: jest.fn().mockResolvedValue(undefined),
   bulkCreate: jest.fn().mockResolvedValue(undefined),
   bulkUpdate: jest.fn().mockResolvedValue(undefined),
+  bulkRemove: jest.fn().mockResolvedValue(undefined),
 };
 
 // Mock the global `logger` if needed
