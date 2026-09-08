@@ -35,6 +35,23 @@ CREATE INDEX IF NOT EXISTS data_event_module_id_event_id_event_arg_2 ON events (
 -- it reads exists in `schema.graphql`.
 CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from attributes #>> '{2,value,did}'));
 
+-- Denormalised filter columns on `events`. These would be `@index` in schema.graphql, but
+-- `@subql/node` caps an entity at 10 indexes (`indexCountLimit`, not configurable) and Event is
+-- already at the cap. Kept here, as `master` had them.
+CREATE INDEX IF NOT EXISTS data_event_claim_type ON events (claim_type);
+CREATE INDEX IF NOT EXISTS data_event_claim_scope ON events (claim_scope);
+CREATE INDEX IF NOT EXISTS data_event_claim_issuer ON events (claim_issuer);
+CREATE INDEX IF NOT EXISTS data_event_corporate_action_ticker ON events (corporate_action_ticker);
+CREATE INDEX IF NOT EXISTS data_event_fundraiser_offering_asset ON events (fundraiser_offering_asset);
+
+-- Plain indexes that would otherwise be `@index` in schema.graphql but cannot be: `@subql/node`
+-- caps an entity at 10 indexes (`indexCountLimit`, not configurable), and PolyxEntry is already
+-- at the cap with its foreign keys and the three `@compositeIndexes`. These three back the
+-- counterparty ("movements touching X"), era (reward/slash-per-era) and day-bucket queries.
+CREATE INDEX IF NOT EXISTS data_polyx_entry_counterparty_address ON polyx_entries (counterparty_address);
+CREATE INDEX IF NOT EXISTS data_polyx_entry_era_index ON polyx_entries (era_index);
+CREATE INDEX IF NOT EXISTS data_polyx_entry_date ON polyx_entries (date);
+
 -- Legacy views, dropped if an older deployment left them behind.
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;

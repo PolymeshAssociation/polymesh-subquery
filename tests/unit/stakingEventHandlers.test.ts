@@ -8,8 +8,9 @@
  * Pre-8.x chain:
  * - Bonded/Unbonded/Rewarded: [did, account, amount] (3 params with DID)
  *
- * Note: The extract8xStakingAmount utility function is comprehensively tested in
- * mapPolyxTransaction.test.ts. This file focuses on is8xChain detection logic.
+ * Note: `extract8xStakingAmount` is covered in `extract8xStakingAmount.test.ts` and the pre-v8
+ * reward-destination (A15) resolution in `rewardDestinationA15.test.ts`. This file focuses on
+ * `is8xChain` detection logic.
  */
 
 import { is8xChain } from '../../src/utils/common';

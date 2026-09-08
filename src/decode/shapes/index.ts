@@ -13,9 +13,11 @@
  * Importing this module registers every shape, so it is imported for its side effects.
  */
 import './asset';
+import './balances';
 import './externalAgents';
 import './identity';
 import './settlement';
+import './staking';
 
 export * from './consts';
 export * from './registry';

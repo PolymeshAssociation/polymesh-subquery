@@ -54,28 +54,36 @@ const filters: Record<string, Record<string, string[]>> = {
     TransferWithData: [],
   },
   balances: {
+    // POLYX ledger (docs/implementation/02-polyx-ledger.md). Every balances movement writes a
+    // PolyxEntry per account-side plus a running AccountBalance, from mapPolyxLedger.ts.
     AccountBalanceBurned: ['handleBalanceBurned'],
     BalanceSet: ['handleBalanceSet'],
     Burned: ['handleBalanceBurned'],
-    Deposit: ['handleBalanceDeposit'],
-    DustLost: [],
+    BurnedDebt: [], // issuance only — no account side
+    BurnedHeld: ['handleBalanceBurnedHeld'],
+    Deposit: ['handleBalanceMinted'],
+    DustLost: ['handleDustLost'],
     Endowed: ['handleBalanceEndowed'],
     Frozen: ['handleBalanceFrozen'],
+    Held: ['handleBalanceHeld'],
     Issued: [],
     Locked: ['handleBalanceLocked'],
     Minted: ['handleBalanceMinted'],
+    MintedCredit: [], // issuance only — no account side
     Rescinded: [],
+    Released: ['handleBalanceReleased'],
     Reserved: ['handleBalanceReserved'],
     ReserveRepatriated: ['handleReserveRepatriated'],
     Restored: ['handleBalanceMinted'],
     Slashed: ['handleBalanceBurned'],
-    // handleBalanceSuspended does not exist yet — it arrives with the POLYX ledger work
-    // (docs/implementation/02-polyx-ledger.md), which rewrites mapPolyxTransaction.ts wholesale
-    Suspended: [],
-    Thawed: [],
+    Suspended: ['handleBalanceSuspended'], // A3 — the handler did not exist before
+    Thawed: ['handleBalanceThawed'],
     TotalIssuanceForced: [],
     Transfer: ['handleBalanceTransfer'],
-    TransferWithMemo: ['handleBalanceTransfer'],
+    TransferAndHold: ['handleTransferAndHold'],
+    TransferOnHold: ['handleTransferOnHold'],
+    TransferWithMemo: ['handleBalanceTransferWithMemo'], // A2 — memo enrichment only, never its own entry
+    Unexpected: [], // anomaly marker; consider IndexerAnomaly
     Unlocked: ['handleBalanceUnlocked'],
     Unreserved: ['handleBalanceUnreserved'],
     Upgraded: [],
@@ -238,7 +246,7 @@ const filters: Record<string, Record<string, string[]>> = {
     UserPortfolios: [],
   },
   protocolFee: {
-    FeeCharged: ['handleFeeCharged'],
+    FeeCharged: ['handleTransactionFeeCharged'],
   },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
@@ -285,14 +293,15 @@ const filters: Record<string, Record<string, string[]>> = {
     MinimumBondThresholdUpdated: [],
     Nominated: ['handleStakingEvent'],
     OldSlashingReportDiscarded: [],
-    PayoutStarted: [],
+    // supplies the `eraIndex` that `Rewarded` lacks; consumed by the POLYX ledger's handleReward
+    PayoutStarted: ['handlePayoutStarted'],
     PermissionedIdentityAdded: [],
     PermissionedIdentityRemoved: [],
     Reward: ['handleStakingEvent', 'handleReward'],
     Rewarded: ['handleStakingEvent', 'handleReward'],
     RewardPaymentSchedulingInterrupted: [],
-    Slash: ['handleStakingEvent'],
-    Slashed: ['handleStakingEvent'],
+    Slash: ['handleStakingEvent', 'handleStakingSlash'],
+    Slashed: ['handleStakingEvent', 'handleStakingSlash'],
     SlashReported: [],
     SlashingAllowedForChanged: [],
     SnapshotTargetsSizeExceeded: [],

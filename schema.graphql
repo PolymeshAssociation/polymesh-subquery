@@ -1935,12 +1935,15 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
-  claimType: String @index(unique: false)
-  claimScope: String @index(unique: false)
-  claimIssuer: String @index(unique: false)
+  # The five denormalised filter columns below are indexed in db/compat.sql, not with `@index`:
+  # `@subql/node` caps an entity at 10 indexes and Event is at that cap with its foreign keys,
+  # eventIdx/extrinsicIdx/specVersionId, moduleId/eventId and the `[moduleId, eventId]` composite.
+  claimType: String
+  claimScope: String
+  claimIssuer: String
   claimExpiry: String
-  corporateActionTicker: String @index(unique: false)
-  fundraiserOfferingAsset: String @index(unique: false)
+  corporateActionTicker: String
+  fundraiserOfferingAsset: String
   transferTo: String
   extrinsic: Extrinsic
 }
@@ -3041,39 +3044,156 @@ type Migration @entity {
   processedBlock: Int!
 }
 
-"""
-Represents possible all possible balance types
-"""
-enum BalanceTypeEnum {
+# ---------------------------------------------------------------------------
+# POLYX ledger (plan 02). PolyxEntry + AccountBalance replace PolyxTransaction
+# and BalanceTypeEnum, which are removed once the reconciliation harness is
+# green. Until then both models exist side by side.
+# ---------------------------------------------------------------------------
+
+"The two balance pools an account holds on chain. `Bonded`/`Unbonded`/`Locked` are not pools and are not represented here."
+enum PolyxPool {
   Free
   Reserved
-  Bonded
-  Unbonded
-  Locked
+}
+
+"Which side of a movement an entry records."
+enum EntryDirection {
+  Debit
+  Credit
+}
+
+"Why POLYX is held in `reserved` under the v8 fungible-Holds API."
+enum HoldReason {
+  Staking
+  Session
+  Preimage
+  Revive
+  Unknown
+}
+
+"What an entry's movement represents. Denormalised onto the entry so aggregation does not need to traverse relations."
+enum MovementKind {
+  Transfer
+  Endowment
+  Fee
+  Tip
+  TreasuryDisbursement
+  TreasuryReimbursement
+  StakingReward
+  Slash
+  Mint
+  Burn
+  DustLost
+  ReserveRepatriation
+  Hold
+  Release
+  BalanceSetAdjustment
+}
+
+type KindTotal @jsonField {
+  "a `MovementKind` value — jsonField members cannot be enum-typed, same as `Scope.type` etc."
+  kind: String!
+  totalAbs: BigInt!
+  net: BigInt!
+  count: Int!
+}
+
+type LockEntry @jsonField {
+  lockId: String!
+  amount: BigInt!
+  reasons: String
+}
+
+type HoldEntry @jsonField {
+  "a `HoldReason` value — jsonField members cannot be enum-typed"
+  reason: String!
+  amount: BigInt!
 }
 
 """
-Represents transactions involving POLYX
+One row per (account, movement side). Append-only.
+Sibling entries of one on-chain movement share `movementId`.
 """
-type PolyxTransaction @entity {
+type PolyxEntry @entity @compositeIndexes(fields: [["account", "date"], ["account", "kind"], ["kind", "date"]]) {
+  "padId(block)/padId(eventIdx)/side  — D4"
   id: ID!
-  identityId: String
-  address: String @index(unique: false)
-  toId: String
-  toAddress: String @index(unique: false)
+  movementId: String! @index
+
+  account: Account!
+  identity: Identity
+  "indexed in db/compat.sql — the schema is at the platform's 10-index-per-entity cap"
+  counterpartyAddress: String
+  counterpartyIdentity: Identity
+
+  pool: PolyxPool!
+  "signed: negative = debit, positive = credit. SUM = net delta"
   amount: BigInt!
-  type: BalanceTypeEnum!
-  moduleId: ModuleIdEnum
-  moduleIdText: String
-  callId: CallIdEnum
-  callIdText: String
-  eventId: EventIdEnum
-  eventIdText: String
+  "unsigned. SUM = gross volume"
+  amountAbs: BigInt!
+
+  kind: MovementKind!
+  "materialised — sign(amount) is not groupable (§8b)"
+  direction: EntryDirection!
+  holdReason: HoldReason
   memo: String
+
+  "balance after this entry — powers charts with no aggregation"
+  freeAfter: BigInt!
+  reservedAfter: BigInt!
+  frozenAfter: BigInt!
+
+  "denormalised — aggregation cannot traverse relations"
+  moduleId: ModuleIdEnum
+  callId: CallIdEnum
+  eventId: EventIdEnum!
+  specVersionId: Int!
+  "materialised time buckets — no date_trunc grouping exists (§8b). Indexed via the `[kind, date]` / `[account, date]` composites and a standalone index in db/compat.sql"
+  date: Date!
+  "indexed in db/compat.sql — the schema is at the platform's 10-index-per-entity cap"
+  eraIndex: Int
+
+  "relation is `createdEvent` to avoid colliding with the denormalised `eventId` enum column, same as `AssetTransaction`"
+  createdEvent: Event!
   extrinsic: Extrinsic
-  datetime: Date!
   eventIdx: Int!
+  datetime: Date!
   createdBlock: Block!
+}
+
+"""
+Materialised POLYX balance for one account. Versioned on `historical: 'height'`,
+so `accountBalance(id: X, blockHeight: N)` gives the balance at block N.
+"""
+type AccountBalance @entity {
+  "address"
+  id: ID!
+  account: Account!
+  identity: Identity @index
+
+  free: BigInt!
+  reserved: BigInt!
+  "MAX over active locks — maintained from `locks`, never summed"
+  frozen: BigInt!
+  total: BigInt!
+  "free - frozen, floored at 0"
+  transferable: BigInt!
+  bonded: BigInt!
+  otherReserved: BigInt!
+
+  "lifetime totals — free, this row is already versioned on these blocks"
+  totalReceived: BigInt!
+  totalSent: BigInt!
+  totalFeesPaid: BigInt!
+  totalRewards: BigInt!
+  totalSlashed: BigInt!
+  movementCount: Int!
+  lifetimeByKind: [KindTotal]
+
+  "per-lock detail — required because frozen is a MAX"
+  locks: [LockEntry]
+  "v8 only; SUM = reserved"
+  holds: [HoldEntry]
+
   updatedBlock: Block!
 }
 

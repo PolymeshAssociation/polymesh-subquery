@@ -4,6 +4,7 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { Account, EventIdEnum, StakingEvent } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { is8xChain } from '../../../utils/common';
+import { resolveLegacyRewardDestination } from '../../../utils/staking';
 import { extractArgs } from '../common';
 
 const bondedUnbondedOrReward = new Set([
@@ -107,10 +108,10 @@ const get8xStakingEventDetails = (eventId: EventIdEnum, params: Codec[]): Stakin
   return { stashAccount };
 };
 
-const getLegacyStakingEventDetails = (
+const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[]
-): StakingEventDetails => {
+): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
   const stashAccount = getTextValue(rawAccount);
   const details: StakingEventDetails = {
@@ -121,8 +122,11 @@ const getLegacyStakingEventDetails = (
   if (bondedUnbondedOrReward.has(eventId)) {
     details.amount = getBigIntValue(params[2]);
 
-    if (eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) {
-      details.rewardDestination = 'LegacyUnknown';
+    if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
+      // A15 — the pre-v8 event names only the stash; read the payee from chain storage.
+      const resolved = await resolveLegacyRewardDestination(stashAccount);
+      details.rewardDestination = resolved.rewardDestination;
+      details.rewardDestinationAccount = resolved.rewardDestinationAccount;
     }
   }
 
@@ -143,7 +147,7 @@ const getStakingEventDetails = async (
   } else if (is8xChain(block)) {
     details = get8xStakingEventDetails(eventId, params);
   } else {
-    details = getLegacyStakingEventDetails(eventId, params);
+    details = await getLegacyStakingEventDetails(eventId, params);
   }
 
   if (details.stashAccount && !details.identityId) {

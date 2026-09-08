@@ -13,5 +13,6 @@ export * from './multisigs';
 export * from './portfolios';
 export * from './proposals';
 export * from './settlements';
+export * from './staking';
 export * from './stos';
 export * from './transferManagers';

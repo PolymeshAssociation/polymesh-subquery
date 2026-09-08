@@ -33,7 +33,14 @@ const SCHEMA_PATH = join(ROOT, 'schema.graphql');
 const ARITY_DIR = join(ROOT, 'tests', 'fixtures', 'event-arity');
 
 /** The pallets whose event shapes the decode layer registers, and so the ones worth capturing */
-const CAPTURED_MODULES = ['asset', 'externalAgents', 'identity', 'settlement'];
+const CAPTURED_MODULES = [
+  'asset',
+  'balances',
+  'externalAgents',
+  'identity',
+  'settlement',
+  'staking',
+];
 
 export interface RuntimeSnapshot {
   specName: string;
