@@ -19,16 +19,24 @@ fi
 
 npm run build ## This creates the project.yaml file
 
-(npm run sql || (sleep 3 && kill "$$")) &
+if [[ "${START_NODE:-true}" == "true" ]]; then
+  (npm run sql || (sleep 3 && kill "$$")) &
+fi
 
-npm run migrations
+if [[ "${RUN_MIGRATIONS:-true}" == "true" ]]; then
+  npm run migrations
+fi
 
-# Allow configuring node memory. It should be no more than 75% of available RAM.
-# Defaults to 3 GB (expecting at least 4 GB available).
-NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
+if [[ "${START_NODE:-true}" == "true" ]]; then
+  # Allow configuring node memory. It should be no more than 75% of available RAM.
+  # Defaults to 3 GB (expecting at least 4 GB available).
+  NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
 
-NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
-	/bin/run --disable-historical=false \
-	--db-schema=public "$@" &
-child=$!
-wait "$child"
+  NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
+	  /bin/run --disable-historical=false \
+	  --db-schema=public "$@" &
+  child=$!
+  wait "$child"
+else
+  wait
+fi
