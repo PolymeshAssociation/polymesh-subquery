@@ -237,7 +237,9 @@ describe('handleExtrinsic', () => {
       toJSON: () => ({ primaryKey: DID }),
     });
 
-    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }));
+    // A different block from the case above: account resolution is cached per block, negatives
+    // included, so the same address cannot answer differently within one block
+    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL, blockNumber: 4243 }));
 
     expect(saved('Account')).toMatchObject([
       {
