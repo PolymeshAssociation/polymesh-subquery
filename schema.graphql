@@ -1773,8 +1773,8 @@ type Block @entity {
   id: ID!
   blockId: Int! @index(unique: true)
   parentId: Int!
-  hash: String! # a hash value
-  parentHash: String!
+  hash: String! @index(unique: true) # a hash value
+  parentHash: String! @index(unique: false)
   stateRoot: String!
   extrinsicsRoot: String!
   countExtrinsics: Int!
@@ -1818,15 +1818,15 @@ Usually extrinsics are signed. When the block author includes data, e.g. `timest
 type Extrinsic @entity {
   id: ID!
   block: Block! @index(unique: false)
-  extrinsicIdx: Int!
+  extrinsicIdx: Int! @index(unique: false)
   extrinsicLength: Int!
-  signed: Int!
+  signed: Int! @index(unique: false)
   "`signedbyAddress` is now deprecated in favour of `signed`"
   signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
-  address: String
-  moduleId: ModuleIdEnum!
+  address: String @index(unique: false)
+  moduleId: ModuleIdEnum! @index
   moduleIdText: String!
-  callId: CallIdEnum!
+  callId: CallIdEnum! @index
   callIdText: String!
   paramsTxt: String!
   success: Int! @index(unique: false)
@@ -1919,27 +1919,28 @@ type EvmAccountMapping @entity {
 """
 Information of a chain state transition on. For most use cases a more specific entity should be queried
 """
-type Event @entity {
+type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   id: ID!
-  block: Block!
-  eventIdx: Int!
-  extrinsicIdx: Int
-  specVersionId: Int!
-  moduleId: ModuleIdEnum!
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  extrinsicIdx: Int @index(unique: false)
+  specVersionId: Int! @index(unique: false)
+  moduleId: ModuleIdEnum! @index
   moduleIdText: String!
-  eventId: EventIdEnum!
+  eventId: EventIdEnum! @index
   eventIdText: String!
   attributesTxt: String!
+  "Indexed in `db/compat.sql` as `left(event_arg_0, 100)`, which no directive can express"
   eventArg_0: String
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
-  claimType: String
-  claimScope: String
-  claimIssuer: String
+  claimType: String @index(unique: false)
+  claimScope: String @index(unique: false)
+  claimIssuer: String @index(unique: false)
   claimExpiry: String
-  corporateActionTicker: String
-  fundraiserOfferingAsset: String
+  corporateActionTicker: String @index(unique: false)
+  fundraiserOfferingAsset: String @index(unique: false)
   transferTo: String
   extrinsic: Extrinsic
 }
@@ -2230,7 +2231,8 @@ type Authorization @entity {
   toKey: String @index(unique: false)
   data: String
   expiry: Date @index(unique: false)
-  status: AuthorizationStatusEnum!
+  "Indexed because `repairAuthorizationsAfterUpgrade` reads every pending row, and `store.getByFields` refuses to filter on a column with no index"
+  status: AuthorizationStatusEnum! @index
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
