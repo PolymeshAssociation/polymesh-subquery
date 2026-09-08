@@ -64,7 +64,11 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     const resolved = resolveEthTransact(extrinsic);
 
     callIdText = resolved?.callId ?? camelToSnakeCase(extrinsic.extrinsic.method.method);
-    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown);
+    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: args.block,
+      eventIdx,
+    });
   }
 
   return {

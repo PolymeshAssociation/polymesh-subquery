@@ -1,12 +1,15 @@
 import { SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import { TickerExternalAgent } from '../../../types';
 import { getAssetId, getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const callerId = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { did, assetId: rawAssetId } = decodeEvent(event);
+
+  const callerId = getTextValue(did);
+  const assetId = await getAssetId(rawAssetId, block);
 
   await TickerExternalAgent.create({
     id: `${assetId}/${callerId}`,
@@ -21,8 +24,10 @@ export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<v
 };
 
 export const handleExternalAgentRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-  const agent = params[2].toString();
-  const assetId = await getAssetId(params[1], block);
-  await TickerExternalAgent.remove(`${assetId}/${agent}`);
+  const { block } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+
+  await TickerExternalAgent.remove(`${assetId}/${agentDid.toString()}`);
 };

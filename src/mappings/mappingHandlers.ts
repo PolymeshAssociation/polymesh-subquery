@@ -1,23 +1,17 @@
 import { SubstrateEvent } from '@subql/types';
 import { logError } from '../utils';
+import { getBlockContext } from './blockContext';
 import { mapExternalAgentAction } from './entities';
 import { mapBlock } from './entities/block/mapBlock';
 import mapChainUpgrade from './entities/block/mapChainUpgrade';
-import { handleToolingEvent } from './entities/events/mapEvent';
 import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
+import { handleToolingEvent } from './entities/events/mapEvent';
 import genesisHandler from './migrations/genesisHandler';
-
-let lastBlockHash = '';
-let lastEventIdx = -1;
-let startupHandled = false;
 
 export async function handleGenesis(): Promise<void> {
   // this is need to populate subquery version on startup
-  if (!startupHandled) {
-    await handleStartup();
-    startupHandled = true;
-  }
+  await handleStartup();
   await genesisHandler().catch(e => logError(e));
 }
 
@@ -30,30 +24,35 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
 
 export async function handleStartup(): Promise<void> {
   /**
-   * This handles the insertion of new SQ version on every restart
+   * This handles the insertion of new SQ version on every restart.
+   *
+   * `mapSubqueryVersion` is itself once-per-process and checks the table before writing, so this
+   * is called unconditionally rather than gated by a second flag out here
    */
   await mapSubqueryVersion().catch(e => logError(e));
 }
 
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
-  if (!startupHandled) {
-    await handleStartup();
-    startupHandled = true;
-  }
+  await handleStartup();
 
+  const context = getBlockContext(substrateEvent.block);
   const promises = [];
 
-  const blockHash = substrateEvent.block.hash.toHex();
-  if (lastBlockHash !== blockHash) {
-    lastBlockHash = blockHash;
-    lastEventIdx = -1;
+  if (!context.blockWritten) {
+    context.blockWritten = true;
 
-    const block = mapBlock(substrateEvent.block);
-    promises.push(block.save());
+    /**
+     * The `Block` row is written from here rather than from a block handler, so a block that
+     * produced no handled event gets no row. See the `Block` docstring in `schema.graphql`
+     */
+    promises.push(mapBlock(substrateEvent.block).save());
   }
 
-  if (substrateEvent?.extrinsic?.idx > lastEventIdx) {
-    lastEventIdx = substrateEvent?.extrinsic?.idx;
+  const extrinsicIdx = substrateEvent.extrinsic?.idx;
+
+  if (extrinsicIdx !== undefined && !context.handledExtrinsics.has(extrinsicIdx)) {
+    context.handledExtrinsics.add(extrinsicIdx);
+
     promises.push(handleExtrinsic(substrateEvent.extrinsic));
   }
 

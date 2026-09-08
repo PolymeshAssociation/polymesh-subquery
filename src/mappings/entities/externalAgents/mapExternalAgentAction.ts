@@ -92,6 +92,14 @@ const assetIdFromCorporateAction: AssetIdFromParams = async (
  * External agent authorized extrinsics are defined as those that call "ensure_agent_permissioned"
  * meaning they are extrinsics that can only be called if you are an external agent of the Asset.
  */
+/**
+ * Still positional, deliberately.
+ *
+ * This table locates the asset id in events from roughly twenty pallets, most of which are not
+ * migrated to the decode layer yet - `statistics`, `sto`, `complianceManager`, `nft` and the
+ * rest. Reading it by name would mean registering shapes for all of them here rather than as
+ * each domain is migrated, so it moves when they do.
+ */
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
 

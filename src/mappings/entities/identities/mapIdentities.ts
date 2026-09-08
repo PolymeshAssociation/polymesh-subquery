@@ -1,4 +1,5 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import {
   Account,
   AccountHistory,
@@ -140,7 +141,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     blockEventId,
   } = getEventParams(args);
 
-  const [rawDid, rawAddress] = args.params;
+  const { did: rawDid, primaryKey: rawAddress } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
   const address = getTextValue(rawAddress);
@@ -214,7 +215,7 @@ export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void
     const attributes = JSON.parse(args.attributesTxt);
     [{ value: parentDid }, { value: childDid }] = attributes;
   } else {
-    const [rawParentDid, rawChildDid] = args.params;
+    const { did: rawParentDid, childDid: rawChildDid } = decodeEvent(event);
 
     parentDid = getTextValue(rawParentDid);
     childDid = getTextValue(rawChildDid);
@@ -237,9 +238,7 @@ export const handleChildDidUnlinked = async (event: SubstrateEvent): Promise<voi
     const attributes = JSON.parse(args.attributesTxt);
     [, , { value: childDid }] = attributes;
   } else {
-    const [, , rawChildDid] = args.params;
-
-    childDid = getTextValue(rawChildDid);
+    childDid = getTextValue(decodeEvent(event).childDid);
   }
 
   await ChildIdentity.remove(childDid);
@@ -316,7 +315,8 @@ export const handleSecondaryKeysPermissionsUpdated = async (
   const args = extractArgs(event);
   let address;
 
-  const [, rawSignerDetails, , rawUpdatedPermissions] = args.params;
+  const { account: rawSignerDetails, updatedPermissions: rawUpdatedPermissions } =
+    decodeEvent(event);
 
   if (rawSignerDetails instanceof Map) {
     // for chain version < 5.0.0
@@ -348,8 +348,8 @@ export const handleSecondaryKeysPermissionsUpdated = async (
 type MeshAccount = string | { account: string };
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const [, rawAccounts] = args.params;
+  const { signers: rawAccounts } = decodeEvent(event);
+
   const accounts = rawAccounts.toJSON() as MeshAccount[];
 
   const removePromises = accounts.map(account => {
@@ -369,10 +369,9 @@ export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise
 };
 
 export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const [, rawAccount] = args.params;
+  const { signer: rawSigner } = decodeEvent(event);
 
-  const account = rawAccount.toJSON() as MeshAccount;
+  const account = rawSigner.toJSON() as MeshAccount;
 
   let address;
   if (typeof account === 'string') {
@@ -387,10 +386,9 @@ export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId, params } = extractArgs(event);
+  const { blockId, eventId } = extractArgs(event);
 
-  const [rawDid] = params;
-  const did = getTextValue(rawDid);
+  const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
@@ -402,10 +400,9 @@ export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<
 };
 
 export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId, params } = extractArgs(event);
+  const { blockId, eventId } = extractArgs(event);
 
-  const [rawDid] = params;
-  const did = getTextValue(rawDid);
+  const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
@@ -421,7 +418,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
   const { eventId, createdBlockId: blockId, datetime } = getEventParams(args);
 
   const promises = [];
-  const [rawDid, rawAccounts] = args.params;
+  const { did: rawDid, secondaryKeys: rawAccounts } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
   const accounts = JSON.parse(rawAccounts.toString());
@@ -473,10 +470,10 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   const args = extractArgs(event);
   const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
-  const [rawDid, , newKey] = args.params;
+  const { did: rawDid, newPrimaryKey: rawNewKey } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
-  const address = getTextValue(newKey);
+  const address = getTextValue(rawNewKey);
 
   const identity = await getIdentity(did);
   const [account, permissions] = await Promise.all([
@@ -538,7 +535,8 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   const args = extractArgs(event);
   const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
 
-  const [, rawAccount] = args.params;
+  const { account: rawAccount } = decodeEvent(event);
+
   const address = getTextValue(rawAccount);
 
   const accountEntity = await Account.get(address);
@@ -557,9 +555,12 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
 };
 
 export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-
-  const [rawDid, rawCustomClaimTypeId, rawName] = params;
+  const { blockId } = extractArgs(event);
+  const {
+    did: rawDid,
+    customClaimTypeId: rawCustomClaimTypeId,
+    name: rawName,
+  } = decodeEvent(event);
 
   const identityId = getTextValue(rawDid);
   const id = getNumberValue(rawCustomClaimTypeId);

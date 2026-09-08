@@ -1,8 +1,9 @@
 import { AnyTuple } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { FunctionPropertyNames } from '@subql/types-core';
-import { Asset, EventIdEnum, ModuleIdEnum } from '../../types';
+import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 import { padId } from '../../utils';
+import { recordAnomaly } from '../../utils/anomaly';
 
 export type Attributes<T> = Omit<
   T,
@@ -34,12 +35,43 @@ export const getAsset = async (assetId: string): Promise<Asset> => {
   return asset;
 };
 
+/**
+ * Context that lets an unmapped chain value be recorded as an `IndexerAnomaly` instead of
+ * silently becoming `Unknown`. Optional so a caller with no block in hand still type checks,
+ * but every call site inside a handler has one and should pass it.
+ */
+export interface EnumContext {
+  /** Name of the schema enum, so the anomaly says which enum is missing the value */
+  enumName: string;
+  block: SubstrateBlock;
+  eventIdx?: number;
+}
+
 export function toEnum<T extends Record<string, string>>(
   enumType: T,
   value: string,
-  fallback: T[keyof T]
+  fallback: T[keyof T],
+  context?: EnumContext
 ): T[keyof T] {
-  return Object.values(enumType).includes(value) ? (value as T[keyof T]) : fallback;
+  if (Object.values(enumType).includes(value)) {
+    return value as T[keyof T];
+  }
+
+  if (context) {
+    /**
+     * Dropped deliberately: `toEnum` is on a synchronous path and the row is a diagnostic.
+     * See `recordAnomaly`
+     */
+    void recordAnomaly({
+      kind: AnomalyKind.UnknownEnumValue,
+      detail: `${context.enumName} has no member "${value}"; recorded as "${fallback}"`,
+      block: context.block,
+      eventIdx: context.eventIdx,
+      dedupeKey: `${context.enumName}/${value}`,
+    });
+  }
+
+  return fallback;
 }
 
 export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
@@ -55,9 +87,17 @@ export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
   return {
     blockId,
     blockEventId,
-    eventId: toEnum(EventIdEnum, eventId, EventIdEnum.Unknown),
+    eventId: toEnum(EventIdEnum, eventId, EventIdEnum.Unknown, {
+      enumName: 'EventIdEnum',
+      block: event.block,
+      eventIdx: event.idx,
+    }),
     eventIdText: eventId,
-    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown),
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown, {
+      enumName: 'ModuleIdEnum',
+      block: event.block,
+      eventIdx: event.idx,
+    }),
     moduleIdText: moduleId,
     params: event.event.data as unknown as AnyTuple,
     eventIdx: event.idx,

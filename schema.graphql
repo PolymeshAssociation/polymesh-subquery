@@ -1773,8 +1773,8 @@ type Block @entity {
   id: ID!
   blockId: Int! @index(unique: true)
   parentId: Int!
-  hash: String! # a hash value
-  parentHash: String!
+  hash: String! @index(unique: true) # a hash value
+  parentHash: String! @index(unique: false)
   stateRoot: String!
   extrinsicsRoot: String!
   countExtrinsics: Int!
@@ -1790,6 +1790,27 @@ type Block @entity {
 }
 
 """
+A runtime upgrade the indexer observed, one row per spec version.
+
+Written from `system.CodeUpdated`, which the runtime emits for every upgrade. Two things read
+it: upgrade detection itself, which was module level mutable state and so held a separate copy
+per worker thread, and any handler that needs the block a spec version started at.
+"""
+type ChainUpgrade @entity {
+  "Zero padded spec version, so lexical order matches numeric order"
+  id: ID!
+  specVersionId: Int! @index(unique: true)
+  """
+  Transaction version the upgrade shipped. A bump here means the call encoding changed, which is
+  what distinguishes a major upgrade from a routine one
+  """
+  transactionVersion: Int!
+  "The block `system.CodeUpdated` was emitted in"
+  firstBlock: Block!
+  datetime: Date!
+}
+
+"""
 Represents external data included into the chain. Virtually all user actions, as well as runtime operations are extrinsics
 
 Usually extrinsics are signed. When the block author includes data, e.g. `timestamp.set` then the signature is implied. This is indicated with `signed = 0`
@@ -1797,15 +1818,15 @@ Usually extrinsics are signed. When the block author includes data, e.g. `timest
 type Extrinsic @entity {
   id: ID!
   block: Block! @index(unique: false)
-  extrinsicIdx: Int!
+  extrinsicIdx: Int! @index(unique: false)
   extrinsicLength: Int!
-  signed: Int!
+  signed: Int! @index(unique: false)
   "`signedbyAddress` is now deprecated in favour of `signed`"
   signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
-  address: String
-  moduleId: ModuleIdEnum!
+  address: String @index(unique: false)
+  moduleId: ModuleIdEnum! @index
   moduleIdText: String!
-  callId: CallIdEnum!
+  callId: CallIdEnum! @index
   callIdText: String!
   paramsTxt: String!
   success: Int! @index(unique: false)
@@ -1898,29 +1919,76 @@ type EvmAccountMapping @entity {
 """
 Information of a chain state transition on. For most use cases a more specific entity should be queried
 """
-type Event @entity {
+type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   id: ID!
-  block: Block!
-  eventIdx: Int!
-  extrinsicIdx: Int
-  specVersionId: Int!
-  moduleId: ModuleIdEnum!
+  block: Block! @index(unique: false)
+  eventIdx: Int! @index(unique: false)
+  extrinsicIdx: Int @index(unique: false)
+  specVersionId: Int! @index(unique: false)
+  moduleId: ModuleIdEnum! @index
   moduleIdText: String!
-  eventId: EventIdEnum!
+  eventId: EventIdEnum! @index
   eventIdText: String!
   attributesTxt: String!
+  "Indexed in `db/compat.sql` as `left(event_arg_0, 100)`, which no directive can express"
   eventArg_0: String
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
-  claimType: String
-  claimScope: String
-  claimIssuer: String
+  claimType: String @index(unique: false)
+  claimScope: String @index(unique: false)
+  claimIssuer: String @index(unique: false)
   claimExpiry: String
-  corporateActionTicker: String
-  fundraiserOfferingAsset: String
+  corporateActionTicker: String @index(unique: false)
+  fundraiserOfferingAsset: String @index(unique: false)
   transferTo: String
   extrinsic: Extrinsic
+}
+
+"""
+What the indexer could not decode or resolve.
+
+Every value here names a specific failure the indexer would otherwise have swallowed - a
+decoder that did not match the block's shape, an enum value the schema does not know, a
+referenced entity that was never written.
+"""
+enum AnomalyKind {
+  "An event carried a different number of parameters than the decoder registered for its spec version declares"
+  ArityMismatch
+  "A named field lookup found no field of that name in the block's own metadata"
+  FieldNotFound
+  "No legacy decoder covers the spec version of the block the event was emitted in"
+  NoDecoderForSpecVersion
+  "A chain value did not match any member of the schema enum it maps to, and fell back to the `Unknown` member"
+  UnknownEnumValue
+  "A handler resolved a relation to an entity that does not exist in the index"
+  MissingReferencedEntity
+  "An accumulated balance disagreed with the same balance read from chain state"
+  BalanceReconciliationDrift
+  "A handler threw. The index is missing whatever that handler would have written"
+  HandlerError
+}
+
+"""
+Recorded whenever the indexer could not decode or resolve something.
+
+This table is a defect list, not a log. Every row is either a genuine chain oddity worth
+documenting or an indexer bug worth fixing, so a full resync that leaves it empty is the
+acceptance signal. Query `(kind, moduleId, eventId)` distinct to review them.
+"""
+type IndexerAnomaly @entity {
+  "`blockId/eventIdx/seq`, each part zero padded so lexical order matches emission order"
+  id: ID!
+  kind: AnomalyKind! @index
+  "The pallet the event came from, where the anomaly is attributable to one"
+  moduleId: ModuleIdEnum @index
+  "The event the anomaly is attributable to, where there is one"
+  eventId: EventIdEnum @index
+  "What was expected against what was seen - an arity, a field name, an entity id"
+  detail: String!
+  specVersionId: Int! @index
+  block: Block!
+  createdAt: Date!
 }
 
 """
@@ -2163,7 +2231,8 @@ type Authorization @entity {
   toKey: String @index(unique: false)
   data: String
   expiry: Date @index(unique: false)
-  status: AuthorizationStatusEnum!
+  "Indexed because `repairAuthorizationsAfterUpgrade` reads every pending row, and `store.getByFields` refuses to filter on a column with no index"
+  status: AuthorizationStatusEnum! @index
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!

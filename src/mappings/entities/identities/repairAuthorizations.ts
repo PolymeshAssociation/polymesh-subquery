@@ -1,6 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import { Authorization, AuthorizationStatusEnum } from '../../../types';
-import { getAssetIdForLegacyTicker, getPaginatedData, is7xChain, padId } from '../../../utils';
+import { getAllByFields, getAssetIdForLegacyTicker, is7xChain, padId } from '../../../utils';
 
 /**
  * Chain authorization types whose payloads the asset-id migration rewrote.
@@ -84,11 +84,9 @@ export const repairAuthorizationsAfterUpgrade = async (block: SubstrateBlock): P
 
   const blockId = padId(block.block.header.number.toString());
 
-  const pending = await getPaginatedData<Authorization, 'status'>(
-    'Authorization',
-    'status',
-    AuthorizationStatusEnum.Pending
-  );
+  const pending = await getAllByFields<Authorization>('Authorization', [
+    ['status', '=', AuthorizationStatusEnum.Pending],
+  ]);
 
   const stale = pending.filter(needsAssetIdRepair);
 

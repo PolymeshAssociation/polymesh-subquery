@@ -19,6 +19,7 @@
     "codegen": "./node_modules/.bin/subql codegen",
     "typecheck": "yarn codegen && tsc --noEmit -p tsconfig.test.json",
     "check-handlers": "ts-node scripts/check-handlers.ts",
+    "sync-metadata": "ts-node scripts/sync-metadata.ts",
     "commit": "npx git-cz",
     "start:docker": "docker compose pull && docker compose up --remove-orphans",
     "stop:docker": "docker compose down -v",

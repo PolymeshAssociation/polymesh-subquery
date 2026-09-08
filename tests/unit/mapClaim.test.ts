@@ -64,7 +64,12 @@ const mockClaimEvent = (
       section: 'identity',
       data,
       meta: {
-        fields: data.map(() => ({ typeName: { isSome: true, unwrap: () => mockCodec('Dummy') } })),
+        // Polymesh declares its events as tuples, so metadata carries a type per field and
+        // `name` is `None`. That is what sends the decode layer to the registered shape table
+        fields: data.map(() => ({
+          name: { isSome: false },
+          typeName: { isSome: true, unwrap: () => mockCodec('Dummy') },
+        })),
       },
     },
   } as unknown as SubstrateEvent;
@@ -241,14 +246,18 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     expect(claims[id].revokeDate).toBeUndefined();
   });
 
-  it('logs an error instead of silently returning when a revocation matches no row', async () => {
+  it('records an anomaly instead of silently returning when a revocation matches no row', async () => {
     await handleClaimRevoked(
       mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '1000' })
     );
 
-    expect((globalThis as any).logger.error).toHaveBeenCalledWith(
-      expect.stringContaining(ISSUER_A)
-    );
+    const anomalies = storeSet()
+      .mock.calls.filter(([entity]) => entity === 'IndexerAnomaly')
+      .map(([, , row]) => row);
+
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]).toMatchObject({ kind: 'MissingReferencedEntity' });
+    expect(anomalies[0].detail).toContain(ISSUER_A);
     expect(Object.keys(claims)).toHaveLength(0);
   });
 });

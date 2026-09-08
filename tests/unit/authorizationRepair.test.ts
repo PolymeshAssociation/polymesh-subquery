@@ -135,7 +135,7 @@ describe('needsAssetIdRepair', () => {
 describe('repairAuthorizationsAfterUpgrade', () => {
   beforeEach(() => {
     globalAny.chainId = '0xnotstaging';
-    jest.spyOn(globalAny.store, 'getByField').mockResolvedValue([]);
+    jest.spyOn(globalAny.store, 'getByFields').mockResolvedValue([]);
     jest.spyOn(globalAny.store, 'bulkUpdate').mockResolvedValue(undefined);
   });
 
@@ -143,7 +143,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
     jest.restoreAllMocks();
   });
 
-  const withRows = (rows: Authorization[]) => globalAny.store.getByField.mockResolvedValue(rows);
+  const withRows = (rows: Authorization[]) => globalAny.store.getByFields.mockResolvedValue(rows);
 
   it('derives the migrated asset id without reading chain state', async () => {
     withRows([makeRow()]);
@@ -195,7 +195,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
     // the v6 -> v7 `ticker_migrations` is what rewrote the payloads, so 6.x is still ticker-only
     await repairAuthorizationsAfterUpgrade(makeBlock(6002000));
 
-    expect(globalAny.store.getByField).not.toHaveBeenCalled();
+    expect(globalAny.store.getByFields).not.toHaveBeenCalled();
     expect(globalAny.store.bulkUpdate).not.toHaveBeenCalled();
   });
 
