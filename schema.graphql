@@ -1924,6 +1924,52 @@ type Event @entity {
 }
 
 """
+What the indexer could not decode or resolve.
+
+Every value here names a specific failure the indexer would otherwise have swallowed - a
+decoder that did not match the block's shape, an enum value the schema does not know, a
+referenced entity that was never written.
+"""
+enum AnomalyKind {
+  "An event carried a different number of parameters than the decoder registered for its spec version declares"
+  ArityMismatch
+  "A named field lookup found no field of that name in the block's own metadata"
+  FieldNotFound
+  "No legacy decoder covers the spec version of the block the event was emitted in"
+  NoDecoderForSpecVersion
+  "A chain value did not match any member of the schema enum it maps to, and fell back to the `Unknown` member"
+  UnknownEnumValue
+  "A handler resolved a relation to an entity that does not exist in the index"
+  MissingReferencedEntity
+  "An accumulated balance disagreed with the same balance read from chain state"
+  BalanceReconciliationDrift
+  "A handler threw. The index is missing whatever that handler would have written"
+  HandlerError
+}
+
+"""
+Recorded whenever the indexer could not decode or resolve something.
+
+This table is a defect list, not a log. Every row is either a genuine chain oddity worth
+documenting or an indexer bug worth fixing, so a full resync that leaves it empty is the
+acceptance signal. Query `(kind, moduleId, eventId)` distinct to review them.
+"""
+type IndexerAnomaly @entity {
+  "`blockId/eventIdx/seq`, each part zero padded so lexical order matches emission order"
+  id: ID!
+  kind: AnomalyKind! @index
+  "The pallet the event came from, where the anomaly is attributable to one"
+  moduleId: ModuleIdEnum @index
+  "The event the anomaly is attributable to, where there is one"
+  eventId: EventIdEnum @index
+  "What was expected against what was seen - an arity, a field name, an entity id"
+  detail: String!
+  specVersionId: Int! @index
+  block: Block!
+  createdAt: Date!
+}
+
+"""
 Represents which permissions an account may have over an Identity's assets
 """
 type AssetPermissions @jsonField {

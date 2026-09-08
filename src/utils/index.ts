@@ -1,4 +1,5 @@
 export * from './common';
+export * from './anomaly';
 export * from './claims';
 export * from './assets';
 export * from './accounts';

@@ -28,9 +28,15 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown),
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown, {
+      enumName: 'ModuleIdEnum',
+      block: extrinsic.block,
+    }),
     moduleIdText: moduleId,
-    callId: toEnum(CallIdEnum, callId, CallIdEnum.unknown),
+    callId: toEnum(CallIdEnum, callId, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: extrinsic.block,
+    }),
     callIdText: callId,
     paramsTxt,
     success: extrinsic.success ? 1 : 0,
@@ -52,9 +58,15 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     created.address = resolved.fromAddress;
     created.ethAddress = resolved.fromEthAddress;
     created.ethTxHash = resolved.ethTxHash;
-    created.moduleId = toEnum(ModuleIdEnum, resolved.moduleId, ModuleIdEnum.unknown);
+    created.moduleId = toEnum(ModuleIdEnum, resolved.moduleId, ModuleIdEnum.unknown, {
+      enumName: 'ModuleIdEnum',
+      block: extrinsic.block,
+    });
     created.moduleIdText = resolved.moduleId;
-    created.callId = toEnum(CallIdEnum, resolved.callId, CallIdEnum.unknown);
+    created.callId = toEnum(CallIdEnum, resolved.callId, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: extrinsic.block,
+    });
     created.callIdText = resolved.callId;
     created.paramsTxt = resolved.paramsTxt;
     created.nonce = Number(resolved.tx.nonce);
