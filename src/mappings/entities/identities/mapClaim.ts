@@ -21,11 +21,18 @@ import { serializeLikeHarvester } from '../../serializeLikeHarvester';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
+/**
+ * Reads `event.event.data` through `extractArgs`'s `AnyTuple` cast rather than directly, so
+ * `Codec` resolves through the same module path `serializeLikeHarvester` expects. Reading it
+ * bare surfaces the `@polkadot/types-codec` CJS/ESM dual-declaration hazard noted in
+ * docs/implementation/12-types-and-ci.md — `subql build`'s stricter resolution catches it even
+ * though `tsc --noEmit` does not.
+ */
 const extractHarvesterArgs = (event: SubstrateEvent) => {
-  const args = event.event.data;
+  const { params } = extractArgs(event);
   const types = metadataTypeNames(event);
 
-  return args.map((arg, i) => ({
+  return params.map((arg, i) => ({
     value: serializeLikeHarvester(arg, types[i], logFoundType),
   }));
 };
