@@ -24,8 +24,8 @@
  *   yarn sync-metadata --endpoint wss://… --check    exit non-zero when the schema is behind
  */
 import { Metadata, TypeRegistry } from '@polkadot/types';
-import { readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import project from '../project';
 
 const ROOT = join(__dirname, '..');
@@ -101,7 +101,7 @@ export const snapshotFromMetadata = (
     }
   }
 
-  snapshot.modules.sort();
+  snapshot.modules.sort((a, b) => a.localeCompare(b));
 
   return snapshot;
 };
@@ -208,7 +208,7 @@ export const withAddedMembers = (body: string, additions: string[]): string => {
 
   const merged = [...new Set([...carried, ...additions])].sort((a, b) => a.localeCompare(b));
 
-  return `${declared.replace(/\s*$/, '')}\n\n${ADDED_HEADING}\n${merged
+  return `${declared.trimEnd()}\n\n${ADDED_HEADING}\n${merged
     .map(member => `  ${member}`)
     .join('\n')}`;
 };
@@ -301,11 +301,17 @@ export const eventDrift = (fixture: ArityFixture, snapshot: RuntimeSnapshot): Ev
     }
   }
 
+  const byName = (a: string, b: string) => a.localeCompare(b);
+
+  added.sort(byName);
+  removed.sort(byName);
+  reshaped.sort(byName);
+
   return {
     againstSpecVersion: fixture.specVersion,
-    added: added.sort(),
-    removed: removed.sort(),
-    reshaped: reshaped.sort(),
+    added,
+    removed,
+    reshaped,
   };
 };
 
@@ -361,7 +367,7 @@ export const unhandledEvents = (snapshot: RuntimeSnapshot): string[] => {
         .map(eventId => `${section.toLowerCase()}.${eventId}`)
         .filter(key => !handled.has(key))
     )
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
 };
 
 const readFixtures = (): ArityFixture[] =>
