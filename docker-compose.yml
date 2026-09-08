@@ -6,7 +6,9 @@ services:
     ports:
       - 5999:5432
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # PostgreSQL 18+ images store data in a major-version subdirectory, so the mount is the
+      # parent `/var/lib/postgresql` (not `…/data`). See docker-library/postgres#1259.
+      - db-data:/var/lib/postgresql
     environment:
       POSTGRES_PASSWORD: postgres
     healthcheck:
