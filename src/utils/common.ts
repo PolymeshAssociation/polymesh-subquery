@@ -290,11 +290,18 @@ export const is7Dot3Chain = (block: SubstrateBlock) => {
   return specVersion >= 7003000 || (specName === 'polymesh_private_dev' && specVersion >= 2001000);
 };
 
-export const is8xChain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
+/**
+ * Whether a spec version is 8.x or later.
+ *
+ * Split out from `is8xChain` because upgrade detection compares the version the chain came
+ * *from*, for which there is no block to hand.
+ */
+export const is8xSpecVersion = (specVersion: number): boolean => {
   const specName = api.runtimeVersion.specName.toString();
   return specVersion >= 8000000 || (specName === 'polymesh_private_dev' && specVersion >= 2002000);
 };
+
+export const is8xChain = (block: SubstrateBlock) => is8xSpecVersion(block.specVersion);
 
 /**
  * Extracts the amount from 8.x chain staking event parameters.

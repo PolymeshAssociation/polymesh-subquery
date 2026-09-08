@@ -2,6 +2,7 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { ChainUpgrade } from '../../../types';
 import { padId } from '../../../utils';
 import { repairAuthorizationsAfterUpgrade } from '../identities/repairAuthorizations';
+import { retireChildIdentitiesAtV8 } from '../identities/retireChildIdentities';
 import { handleMultiSigProposalDeleted } from '../multiSig/mapMultiSigProposal';
 
 /** Zero padded so `orderBy: id` on the table is numeric order over spec versions */
@@ -54,6 +55,12 @@ export interface ChainUpgradeCrossing {
  */
 const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> => {
   const { previousTransactionVersion, transactionVersion, block } = crossing;
+
+  /**
+   * Keyed on the spec version rather than the transaction version: what it repairs is a storage
+   * migration, which is tied to the runtime release and not to the call encoding
+   */
+  await retireChildIdentitiesAtV8(crossing);
 
   if (transactionVersion === previousTransactionVersion) {
     logger.info('Transaction version was not changed for the chain upgrade');
