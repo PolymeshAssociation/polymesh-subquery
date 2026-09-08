@@ -57,6 +57,21 @@ const describeArities = (entries: readonly EventShape[]): string =>
     .join(' or ');
 
 /**
+ * A single shape covering every spec version from genesis - the common case for an event
+ * that has never changed shape. `registerShape(m, e, stable([...]))` reads as "this is what it
+ * has always looked like."
+ */
+export const stable = (fields: readonly string[]): EventShape[] => [{ from: 0, fields }];
+
+/**
+ * A single shape from genesis up to and including `to` - the common case for an event the chain
+ * removed at a later spec version, with no shape change before then.
+ */
+export const discontinuedAt = (to: number, fields: readonly string[]): EventShape[] => [
+  { from: 0, to, fields },
+];
+
+/**
  * Declares the parameters an event carries.
  *
  * Called once per event at module load. Registering two shapes for the same spec range is

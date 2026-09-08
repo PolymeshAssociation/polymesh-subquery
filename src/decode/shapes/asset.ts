@@ -1,5 +1,5 @@
 import { LAST_V5, V6 } from './consts';
-import { registerShape } from './registry';
+import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
  * `asset` pallet parameter shapes.
@@ -43,33 +43,19 @@ registerShape('asset', 'AssetCreated', [
   },
 ]);
 
-registerShape('asset', 'AssetRenamed', [{ from: 0, fields: ['did', 'assetId', 'name'] }]);
-registerShape('asset', 'FundingRoundSet', [
-  { from: 0, fields: ['did', 'assetId', 'fundingRound'] },
-]);
-registerShape('asset', 'DocumentAdded', [
-  { from: 0, fields: ['did', 'assetId', 'documentId', 'document'] },
-]);
-registerShape('asset', 'DocumentRemoved', [{ from: 0, fields: ['did', 'assetId', 'documentId'] }]);
-registerShape('asset', 'IdentifiersUpdated', [
-  { from: 0, fields: ['did', 'assetId', 'identifiers'] },
-]);
-registerShape('asset', 'DivisibilityChanged', [
-  { from: 0, fields: ['did', 'assetId', 'divisible'] },
-]);
-registerShape('asset', 'AssetFrozen', [{ from: 0, fields: ['did', 'assetId'] }]);
-registerShape('asset', 'AssetUnfrozen', [{ from: 0, fields: ['did', 'assetId'] }]);
-registerShape('asset', 'AssetOwnershipTransferred', [
-  { from: 0, fields: ['did', 'assetId', 'previousOwnerDid'] },
-]);
-registerShape('asset', 'AssetMediatorsAdded', [
-  { from: 0, fields: ['did', 'assetId', 'mediators'] },
-]);
-registerShape('asset', 'AssetMediatorsRemoved', [
-  { from: 0, fields: ['did', 'assetId', 'mediators'] },
-]);
-registerShape('asset', 'PreApprovedAsset', [{ from: 0, fields: ['did', 'assetId'] }]);
-registerShape('asset', 'RemovePreApprovedAsset', [{ from: 0, fields: ['did', 'assetId'] }]);
+registerShape('asset', 'AssetRenamed', stable(['did', 'assetId', 'name']));
+registerShape('asset', 'FundingRoundSet', stable(['did', 'assetId', 'fundingRound']));
+registerShape('asset', 'DocumentAdded', stable(['did', 'assetId', 'documentId', 'document']));
+registerShape('asset', 'DocumentRemoved', stable(['did', 'assetId', 'documentId']));
+registerShape('asset', 'IdentifiersUpdated', stable(['did', 'assetId', 'identifiers']));
+registerShape('asset', 'DivisibilityChanged', stable(['did', 'assetId', 'divisible']));
+registerShape('asset', 'AssetFrozen', stable(['did', 'assetId']));
+registerShape('asset', 'AssetUnfrozen', stable(['did', 'assetId']));
+registerShape('asset', 'AssetOwnershipTransferred', stable(['did', 'assetId', 'previousOwnerDid']));
+registerShape('asset', 'AssetMediatorsAdded', stable(['did', 'assetId', 'mediators']));
+registerShape('asset', 'AssetMediatorsRemoved', stable(['did', 'assetId', 'mediators']));
+registerShape('asset', 'PreApprovedAsset', stable(['did', 'assetId']));
+registerShape('asset', 'RemovePreApprovedAsset', stable(['did', 'assetId']));
 
 registerShape('asset', 'AssetBalanceUpdated', [
   {
@@ -78,29 +64,32 @@ registerShape('asset', 'AssetBalanceUpdated', [
   },
 ]);
 
-registerShape('asset', 'Transfer', [
-  { from: 0, to: LAST_V5, fields: ['did', 'assetId', 'fromHolder', 'toHolder', 'amount'] },
-]);
-registerShape('asset', 'Issued', [
-  {
-    from: 0,
-    to: LAST_V5,
-    fields: ['did', 'assetId', 'beneficiaryDid', 'amount', 'fundingRound', 'totalFundingAmount'],
-  },
-]);
-registerShape('asset', 'Redeemed', [
-  { from: 0, to: LAST_V5, fields: ['did', 'assetId', 'beneficiaryDid', 'amount'] },
-]);
+registerShape(
+  'asset',
+  'Transfer',
+  discontinuedAt(LAST_V5, ['did', 'assetId', 'fromHolder', 'toHolder', 'amount'])
+);
+registerShape(
+  'asset',
+  'Issued',
+  discontinuedAt(LAST_V5, [
+    'did',
+    'assetId',
+    'beneficiaryDid',
+    'amount',
+    'fundingRound',
+    'totalFundingAmount',
+  ])
+);
+registerShape(
+  'asset',
+  'Redeemed',
+  discontinuedAt(LAST_V5, ['did', 'assetId', 'beneficiaryDid', 'amount'])
+);
 
-registerShape('asset', 'TickerRegistered', [{ from: 0, fields: ['did', 'ticker', 'expiry'] }]);
+registerShape('asset', 'TickerRegistered', stable(['did', 'ticker', 'expiry']));
 // Deprecated at 6.0.0
-registerShape('asset', 'ClassicTickerClaimed', [
-  { from: 0, to: LAST_V5, fields: ['did', 'ticker'] },
-]);
-registerShape('asset', 'TickerTransferred', [
-  { from: 0, fields: ['did', 'ticker', 'previousOwnerDid'] },
-]);
-registerShape('asset', 'TickerLinkedToAsset', [{ from: 0, fields: ['did', 'ticker', 'assetId'] }]);
-registerShape('asset', 'TickerUnlinkedFromAsset', [
-  { from: 0, fields: ['did', 'ticker', 'assetId'] },
-]);
+registerShape('asset', 'ClassicTickerClaimed', discontinuedAt(LAST_V5, ['did', 'ticker']));
+registerShape('asset', 'TickerTransferred', stable(['did', 'ticker', 'previousOwnerDid']));
+registerShape('asset', 'TickerLinkedToAsset', stable(['did', 'ticker', 'assetId']));
+registerShape('asset', 'TickerUnlinkedFromAsset', stable(['did', 'ticker', 'assetId']));

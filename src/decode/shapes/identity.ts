@@ -1,5 +1,5 @@
 import { LAST_V7 } from './consts';
-import { registerShape } from './registry';
+import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
  * `identity` pallet parameter shapes.
@@ -13,47 +13,48 @@ import { registerShape } from './registry';
  * The three child-identity events and `AssetDidRegistered` do not exist in the v8 runtime, so
  * their ranges close at the last 7.x spec version.
  */
-registerShape('identity', 'DidCreated', [
-  { from: 0, fields: ['did', 'primaryKey', 'secondaryKeys'] },
-]);
-registerShape('identity', 'SecondaryKeysAdded', [{ from: 0, fields: ['did', 'secondaryKeys'] }]);
-registerShape('identity', 'SecondaryKeysRemoved', [{ from: 0, fields: ['did', 'signers'] }]);
-registerShape('identity', 'SecondaryKeyLeftIdentity', [{ from: 0, fields: ['did', 'account'] }]);
+registerShape('identity', 'DidCreated', stable(['did', 'primaryKey', 'secondaryKeys']));
+registerShape('identity', 'SecondaryKeysAdded', stable(['did', 'secondaryKeys']));
+registerShape('identity', 'SecondaryKeysRemoved', stable(['did', 'signers']));
+registerShape('identity', 'SecondaryKeyLeftIdentity', stable(['did', 'account']));
 // Absent from the v8 runtime
-registerShape('identity', 'SignerLeft', [{ from: 0, to: LAST_V7, fields: ['did', 'signer'] }]);
-registerShape('identity', 'SecondaryKeyPermissionsUpdated', [
-  { from: 0, fields: ['did', 'account', 'previousPermissions', 'updatedPermissions'] },
-]);
-registerShape('identity', 'SecondaryKeysFrozen', [{ from: 0, fields: ['did'] }]);
-registerShape('identity', 'SecondaryKeysUnfrozen', [{ from: 0, fields: ['did'] }]);
-registerShape('identity', 'PrimaryKeyUpdated', [
-  { from: 0, fields: ['did', 'previousPrimaryKey', 'newPrimaryKey'] },
-]);
-registerShape('identity', 'ClaimAdded', [{ from: 0, fields: ['did', 'claim'] }]);
-registerShape('identity', 'ClaimRevoked', [{ from: 0, fields: ['did', 'claim'] }]);
-registerShape('identity', 'CustomClaimTypeAdded', [
-  { from: 0, fields: ['did', 'customClaimTypeId', 'name'] },
-]);
+registerShape('identity', 'SignerLeft', discontinuedAt(LAST_V7, ['did', 'signer']));
+registerShape(
+  'identity',
+  'SecondaryKeyPermissionsUpdated',
+  stable(['did', 'account', 'previousPermissions', 'updatedPermissions'])
+);
+registerShape('identity', 'SecondaryKeysFrozen', stable(['did']));
+registerShape('identity', 'SecondaryKeysUnfrozen', stable(['did']));
+registerShape(
+  'identity',
+  'PrimaryKeyUpdated',
+  stable(['did', 'previousPrimaryKey', 'newPrimaryKey'])
+);
+registerShape('identity', 'ClaimAdded', stable(['did', 'claim']));
+registerShape('identity', 'ClaimRevoked', stable(['did', 'claim']));
+registerShape('identity', 'CustomClaimTypeAdded', stable(['did', 'customClaimTypeId', 'name']));
 
-registerShape('identity', 'AuthorizationAdded', [
-  {
-    from: 0,
-    fields: ['fromDid', 'toDid', 'toKey', 'authId', 'authorizationData', 'expiry'],
-  },
-]);
+registerShape(
+  'identity',
+  'AuthorizationAdded',
+  stable(['fromDid', 'toDid', 'toKey', 'authId', 'authorizationData', 'expiry'])
+);
 
 const authorizationOutcome = ['toDid', 'toKey', 'authId'];
 
-registerShape('identity', 'AuthorizationRevoked', [{ from: 0, fields: authorizationOutcome }]);
-registerShape('identity', 'AuthorizationRejected', [{ from: 0, fields: authorizationOutcome }]);
-registerShape('identity', 'AuthorizationConsumed', [{ from: 0, fields: authorizationOutcome }]);
+registerShape('identity', 'AuthorizationRevoked', stable(authorizationOutcome));
+registerShape('identity', 'AuthorizationRejected', stable(authorizationOutcome));
+registerShape('identity', 'AuthorizationConsumed', stable(authorizationOutcome));
 
-registerShape('identity', 'ChildDidCreated', [
-  { from: 0, to: LAST_V7, fields: ['did', 'childDid', 'account'] },
-]);
-registerShape('identity', 'ChildDidUnlinked', [
-  { from: 0, to: LAST_V7, fields: ['did', 'parentDid', 'childDid'] },
-]);
-registerShape('identity', 'AssetDidRegistered', [
-  { from: 0, to: LAST_V7, fields: ['did', 'ticker'] },
-]);
+registerShape(
+  'identity',
+  'ChildDidCreated',
+  discontinuedAt(LAST_V7, ['did', 'childDid', 'account'])
+);
+registerShape(
+  'identity',
+  'ChildDidUnlinked',
+  discontinuedAt(LAST_V7, ['did', 'parentDid', 'childDid'])
+);
+registerShape('identity', 'AssetDidRegistered', discontinuedAt(LAST_V7, ['did', 'ticker']));
