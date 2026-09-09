@@ -72,10 +72,16 @@ interface Tally {
   seen: Set<string>;
 }
 
-/** Stashes named by the `staking.Reward`/`Rewarded` events in a block. */
+/** A codec-ish value: only its `.toString()` (SS58 address / hex) is read here. */
+type Stringable = { toString(): string };
+
+/**
+ * Stashes named by the `staking.Reward`/`Rewarded` events in a block. The stash is the first
+ * parameter on ≤7.x (`(stash, amount)`) and the second from 7.x (`(identityId, stash, amount)`).
+ */
 const rewardedStashes = (
-  events: { event: { section: string; method: string; data: unknown[] } }[]
-) =>
+  events: { event: { section: string; method: string; data: Stringable[] } }[]
+): string[] =>
   events
     .filter(
       record =>
@@ -83,7 +89,7 @@ const rewardedStashes = (
     )
     .map(record => {
       const data = record.event.data;
-      return (data.length >= 3 ? data[1] : data[0])?.toString();
+      return (data.length >= 3 ? data[1] : data[0])?.toString() ?? '';
     });
 
 /** Reads one block's reward payees and folds them into the running tally. */
