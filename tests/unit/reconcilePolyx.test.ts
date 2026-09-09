@@ -6,7 +6,10 @@
  */
 
 import { SubstrateBlock } from '@subql/types';
-import { reconcileAccount } from '../../src/mappings/entities/identities/reconcilePolyx';
+import {
+  __resetOnChainCache,
+  reconcileAccount,
+} from '../../src/mappings/entities/identities/reconcilePolyx';
 
 const ADDR = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
@@ -53,11 +56,9 @@ const setDerived = (row: Partial<Record<string, bigint | any[]>>) => {
 const setChain = (free: string, reserved: string, frozen: string) => {
   (globalThis as any).api.query = {
     system: {
-      account: jest
-        .fn()
-        .mockResolvedValue({
-          data: { free: codec(free), reserved: codec(reserved), frozen: codec(frozen) },
-        }),
+      account: jest.fn().mockResolvedValue({
+        data: { free: codec(free), reserved: codec(reserved), frozen: codec(frozen) },
+      }),
     },
   };
 };
@@ -68,6 +69,7 @@ const anomalies = () =>
     .map(([, , row]) => row);
 
 beforeEach(() => {
+  __resetOnChainCache();
   db = {};
   storeGet().mockImplementation((entity: string, id: string) => Promise.resolve(db[entity]?.[id]));
   storeSet().mockImplementation((entity: string, id: string, data: any) => {
@@ -76,10 +78,22 @@ beforeEach(() => {
   });
 });
 
+// Values are in base units (6 decimals); drifts here are far above the MIN_DRIFT (100 POLYX) floor.
+const P = (polyx: number): bigint => BigInt(polyx) * BigInt(1_000_000);
+
 describe('reconcileAccount', () => {
   it('does nothing when the derived balance agrees with chain state', async () => {
-    setDerived({ free: BigInt(1000), total: BigInt(1000), transferable: BigInt(1000) });
-    setChain('1000', '0', '0');
+    setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
+    setChain(P(1000).toString(), '0', '0');
+
+    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('ignores sub-100-POLYX drift (weight-fee gap / mid-block sample noise)', async () => {
+    setDerived({ free: P(1000) + BigInt(50_000_000), total: P(1000) });
+    setChain(P(1000).toString(), '0', '0');
 
     await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
 
@@ -87,44 +101,43 @@ describe('reconcileAccount', () => {
   });
 
   it('records a drift anomaly and corrects each pool independently', async () => {
-    setDerived({ free: BigInt(900), reserved: BigInt(100), total: BigInt(1000) });
-    setChain('1000', '50', '0');
+    setDerived({ free: P(900), reserved: P(100), total: P(1000) });
+    setChain(P(1000).toString(), P(50).toString(), '0');
 
     await reconcileAccount(ADDR, '0000009000', block(9000), { force: true, eventIdx: 3 });
 
     expect(anomalies()).toHaveLength(1);
     expect(anomalies()[0]).toMatchObject({ kind: 'BalanceReconciliationDrift' });
-    expect(anomalies()[0].detail).toContain('free 900 vs 1000');
-    expect(anomalies()[0].detail).toContain('reserved 100 vs 50');
+    expect(anomalies()[0].detail).toContain(`free ${P(900)} vs ${P(1000)}`);
 
     expect(db['AccountBalance'][ADDR]).toMatchObject({
-      free: BigInt(1000),
-      reserved: BigInt(50),
-      total: BigInt(1050),
+      free: P(1000),
+      reserved: P(50),
+      total: P(1050),
     });
   });
 
-  it('corrects frozen via a reconciled lock so it stays a MAX going forward', async () => {
-    setDerived({ free: BigInt(1000), frozen: BigInt(0), transferable: BigInt(1000) });
-    setChain('1000', '0', '400');
+  it('corrects frozen by pinning the staking lock, so later staking events adjust a real base', async () => {
+    setDerived({ free: P(1000), frozen: BigInt(0), transferable: P(1000) });
+    setChain(P(1000).toString(), '0', P(400).toString());
 
     await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
 
     expect(db['AccountBalance'][ADDR]).toMatchObject({
-      frozen: BigInt(400),
-      transferable: BigInt(600),
-      locks: [{ lockId: 'reconciled', amount: BigInt(400), reasons: undefined }],
+      frozen: P(400),
+      transferable: P(600),
+      locks: [{ lockId: 'staking ', amount: P(400), reasons: 'staking' }],
     });
   });
 
   it('only samples every Nth block unless forced', async () => {
     setDerived({ free: BigInt(1) });
-    setChain('999', '0', '0');
+    setChain(P(999).toString(), '0', '0');
 
-    await reconcileAccount(ADDR, '0000009001', block(9001)); // 9001 % 500 != 0
+    await reconcileAccount(ADDR, '0000009001', block(9001)); // 9001 % 2000 != 0
     expect(anomalies()).toHaveLength(0);
 
-    await reconcileAccount(ADDR, '0000009000', block(9000)); // 9000 % 500 == 0
+    await reconcileAccount(ADDR, '0000008000', block(8000)); // 8000 % 2000 == 0
     expect(anomalies()).toHaveLength(1);
   });
 });

@@ -18,6 +18,7 @@ import { resolveLegacyRewardDestination } from '../../../utils/staking';
 import { getAccountKeyType, getOrCreateAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
+import { getAccountId, systematicIssuers } from '../../consts';
 import { reconcileAccount } from './reconcilePolyx';
 
 /**
@@ -1056,20 +1057,20 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   });
 };
 
+const treasuryPalletAccount = (): string =>
+  getAccountId(systematicIssuers.treasury.accountId, api.registry.chainSS58);
+
 export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const [rawIdentity, rawBalance] = args.params;
-  const { specVersion } = args.block;
+  const [, rawBalance] = args.params;
 
-  // Until 5.4.1 the event reported 80% of the amount actually taken from the payer.
-  const reported = getBigIntValue(rawBalance);
-  const amount = specVersion < 5004001 ? (reported * BigInt(125)) / BigInt(100) : reported;
-
-  const treasury = await identityPrimaryAccount(getTextValue(rawIdentity));
-
+  // `TreasuryReimbursement(payerDid, amount)` — the amount routed to the treasury out of a fee.
+  // The payer's full fee is already debited by `protocolFee.FeeCharged` /
+  // `transactionPayment.TransactionFeePaid`, so this is the treasury's credit, not a refund to
+  // the payer. (The pre-5.4.1 author split is not emitted and stays outside the ledger.)
   await postTransition(args, {
-    to: treasury ? { address: treasury, pool: PolyxPool.Free } : undefined,
-    amount,
+    to: { address: treasuryPalletAccount(), pool: PolyxPool.Free },
+    amount: getBigIntValue(rawBalance),
     kind: MovementKind.TreasuryReimbursement,
   });
 };
@@ -1141,25 +1142,36 @@ const rewardRecipient = async (
   decoded: Record<string, Codec>,
   stash: string | undefined,
   is8x: boolean
-): Promise<string | undefined> => {
+): Promise<{ recipient: string; restaked: boolean } | undefined> => {
   if (!stash) {
     return undefined;
   }
 
   if (is8x) {
+    // v8: `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
     const dest = optionalField(decoded, 'dest');
     const json = dest?.toJSON() as string | Record<string, unknown> | undefined;
 
     if (json && typeof json === 'object') {
-      return ((json.account ?? json.Account) as string | undefined) ?? stash;
+      return {
+        recipient: ((json.account ?? json.Account) as string | undefined) ?? stash,
+        restaked: false,
+      };
     }
 
-    return stash;
+    return { recipient: stash, restaked: false };
   }
 
-  const { rewardDestinationAccount } = await resolveLegacyRewardDestination(stash);
+  const { rewardDestination, rewardDestinationAccount } = await resolveLegacyRewardDestination(
+    stash
+  );
 
-  return rewardDestinationAccount ?? stash;
+  // Pre-v8 `Staked` auto-restakes: the reward lands in `free` and is immediately locked, and no
+  // `staking.Bonded` is emitted for it — so the lock has to be raised here.
+  return {
+    recipient: rewardDestinationAccount ?? stash,
+    restaked: rewardDestination === 'Staked',
+  };
 };
 
 /**
@@ -1176,11 +1188,13 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
   const stash = stakingStash(decoded);
   const amount = amountOf(decoded);
   const eraIndex = currentPayoutEra(args.blockId);
-  const recipient = await rewardRecipient(decoded, stash, is8xChain(args.block));
+  const resolved = await rewardRecipient(decoded, stash, is8xChain(args.block));
 
-  if (!recipient) {
+  if (!resolved) {
     return;
   }
+
+  const { recipient, restaked } = resolved;
 
   // If a `balances` deposit for this reward was already recorded as a plain mint, relabel it.
   const mints = await findBlockEntries(args.blockId, recipient, amount, [MovementKind.Mint]);
@@ -1197,19 +1211,22 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
       balance.totalRewards += amount;
       await balance.save();
     }
-
-    return;
+  } else {
+    await postTransition(
+      args,
+      {
+        to: { address: recipient, pool: PolyxPool.Free },
+        amount,
+        kind: MovementKind.StakingReward,
+      },
+      { eraIndex }
+    );
   }
 
-  await postTransition(
-    args,
-    {
-      to: { address: recipient, pool: PolyxPool.Free },
-      amount,
-      kind: MovementKind.StakingReward,
-    },
-    { eraIndex }
-  );
+  // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
+  if (restaked) {
+    await adjustLock(recipient, STAKING_LOCK_ID, amount, args.blockId, 'staking');
+  }
 };
 
 /** `staking.Slash` / `Slashed` — `staker/Free → ∅`, a real movement at both eras. */

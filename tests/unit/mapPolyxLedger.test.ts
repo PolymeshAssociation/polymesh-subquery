@@ -29,7 +29,10 @@ import {
   handleWithdrawn,
   handleDustLost,
   handleReserveRepatriated,
+  handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
+import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
+import { __resetPayeeCache } from '../../src/utils/staking';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -130,8 +133,10 @@ const clone = (value: Row): Row => {
 };
 
 beforeEach(() => {
+  __resetPayeeCache();
   db = {};
   blockHeight = 1_000_000;
+  (globalThis as any).api.registry = { chainSS58: 42 };
 
   storeGet().mockImplementation((entity: string, id: string) => {
     if (entity === 'Account') {
@@ -297,6 +302,25 @@ describe('Event → pool transition', () => {
 
     expect(entries()).toHaveLength(1);
     expect(balance(ALICE)?.free).toBe(BigInt(-9));
+  });
+
+  it('TreasuryReimbursement credits the treasury pallet account, not the fee payer', async () => {
+    const payerDid = '0x8015a1702789fedf8474a042af07ba6a37f94e8d24b4eed89414e6eb79df084e';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+
+    await handleTreasuryReimbursement(
+      tupleEvent('treasury', 'TreasuryReimbursement', [payerDid, '400'], 4_000_000)
+    );
+
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({
+      accountId: treasury,
+      direction: EntryDirection.Credit,
+      kind: MovementKind.TreasuryReimbursement,
+      amount: BigInt(400),
+    });
+    expect(entries()[0].accountId).not.toBe(payerDid);
+    expect(balance(treasury)?.free).toBe(BigInt(400));
   });
 });
 
@@ -464,6 +488,26 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
     expect(reward?.accountId).toBe(PAYEE);
     expect(reward?.accountId).not.toBe(ALICE);
     expect(balance(PAYEE)?.free).toBe(BigInt(900));
+
+    (globalThis as any).api.query = {};
+  });
+
+  it('pre-v8 Reward with a Staked payee credits free AND raises the staking lock', async () => {
+    (globalThis as any).api.query = {
+      staking: {
+        payee: jest.fn().mockResolvedValue({ toJSON: () => 'Staked' }),
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+    };
+
+    await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '500'], 7_004_001));
+
+    expect(balance(ALICE)).toMatchObject({
+      free: BigInt(500),
+      frozen: BigInt(500), // restaked — locked in the same step
+      bonded: BigInt(500),
+      transferable: BigInt(0),
+    });
 
     (globalThis as any).api.query = {};
   });

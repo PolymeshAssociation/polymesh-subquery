@@ -6,6 +6,19 @@ export interface LegacyRewardDestination {
 }
 
 /**
+ * Per-stash cache of a resolved payee. `staking.payee(stash)` is a chain-storage read on every
+ * reward, and a validator's set of ~20 stashes is re-queried every era for the whole genesis
+ * replay — the dominant RPC cost of the sweep against a remote node. A payee changes very rarely
+ * (an explicit `staking.setPayee`), and the in-flight reconciler corrects any `frozen` drift a
+ * stale entry could cause within ~1 era, so a plain process-lifetime cache is the right trade.
+ * Only successful resolutions are cached — a transient read failure must be retried, not pinned.
+ */
+const payeeCache = new Map<string, LegacyRewardDestination>();
+
+/** Test hook — the cache is process-lifetime, so a suite that re-mocks `staking.payee` must clear it. */
+export const __resetPayeeCache = (): void => payeeCache.clear();
+
+/**
  * Resolves where a pre-v8 staking reward for `stash` was actually paid.
  *
  * Defect A15: the pre-8.x `Reward`/`Rewarded` event carries only the stash and the amount. A
@@ -19,30 +32,49 @@ export interface LegacyRewardDestination {
 export const resolveLegacyRewardDestination = async (
   stash: string
 ): Promise<LegacyRewardDestination> => {
+  const cached = payeeCache.get(stash);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const payee = await api.query.staking.payee(stash);
     const json = payee.toJSON() as string | Record<string, unknown> | null;
 
-    if (json === 'Staked' || json === 'Stash') {
-      return { rewardDestination: json, rewardDestinationAccount: stash };
-    }
+    // `RewardDestination` renders either as a bare string (`"Staked"`) or, via `.toJSON()`, as a
+    // single-key object with the variant name lower-cased (`{ staked: null }`, `{ account: "0x…" }`).
+    const variant = (
+      typeof json === 'string' ? json : Object.keys(json ?? {})[0] ?? ''
+    ).toLowerCase();
+    const value =
+      json && typeof json === 'object' ? (json as Record<string, unknown>)[variant] : undefined;
 
-    if (json === 'Controller') {
+    let result: LegacyRewardDestination;
+
+    if (variant === 'staked' || variant === 'stash') {
+      result = {
+        rewardDestination: variant === 'staked' ? 'Staked' : 'Stash',
+        rewardDestinationAccount: stash,
+      };
+    } else if (variant === 'controller') {
       const controller = (await api.query.staking.bonded(stash)).toJSON() as string | null;
 
-      return {
+      result = {
         rewardDestination: 'Controller',
         rewardDestinationAccount: controller ?? undefined,
       };
+    } else if (variant === 'account') {
+      result = {
+        rewardDestination: 'Account',
+        rewardDestinationAccount: typeof value === 'string' ? value : undefined,
+      };
+    } else {
+      result = { rewardDestination: 'None' };
     }
 
-    if (json && typeof json === 'object') {
-      const account = (json.account ?? json.Account) as string | undefined;
+    payeeCache.set(stash, result);
 
-      return { rewardDestination: 'Account', rewardDestinationAccount: account };
-    }
-
-    return { rewardDestination: typeof json === 'string' ? json : 'None' };
+    return result;
   } catch {
     // A pruned node, or a runtime with no `staking.payee` storage — fall back to the placeholder.
     return { rewardDestination: 'LegacyUnknown' };

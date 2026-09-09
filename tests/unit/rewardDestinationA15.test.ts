@@ -13,6 +13,7 @@
 
 import { SubstrateEvent } from '@subql/types';
 import { handleStakingEvent } from '../../src/mappings/entities/events/mapStakingEvent';
+import { __resetPayeeCache } from '../../src/utils/staking';
 
 const STASH = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const PAYEE = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -59,6 +60,7 @@ const savedStakingEvent = () =>
     .at(-1);
 
 beforeEach(() => {
+  __resetPayeeCache();
   (globalThis as any).api.runtimeVersion.specName = { toString: () => 'polymesh' };
   (globalThis as any).api.query = {};
 });
@@ -91,6 +93,21 @@ describe('A15 — pre-v8 reward destination', () => {
 
   it('resolves Staked/Stash to the stash itself', async () => {
     mockPayee('Staked');
+
+    await handleStakingEvent(
+      rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1500')], 7_004_001)
+    );
+
+    expect(savedStakingEvent()).toMatchObject({
+      rewardDestination: 'Staked',
+      rewardDestinationAccount: STASH,
+    });
+  });
+
+  it('resolves the object form staking.payee returns via .toJSON() ({ staked: null }) to the stash', async () => {
+    // `RewardDestination::Staked` renders as the lower-cased single-key object `{ staked: null }`
+    // through `.toJSON()`, not the bare string `"Staked"`.
+    mockPayee({ staked: null });
 
     await handleStakingEvent(
       rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1500')], 7_004_001)
