@@ -26,6 +26,8 @@ enum ModuleIdEnum {
   authoritydiscovery
   grandpa
   historical
+  mmr
+  mmrleaf
   imonline
   randomnesscollectiveflip
   sudo
@@ -352,6 +354,10 @@ enum EventIdEnum {
   CurrencyMigrated
   SnapshotTargetsSizeExceeded
   SnapshotVotersSizeExceeded
+
+  ## validators ##
+  AutomaticPayoutFinished
+  ValidatorPayoutFailed
 
   ## offences ##
   Offence
