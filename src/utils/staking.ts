@@ -1,9 +1,73 @@
+import type { AnyJson } from '@polkadot/types/types';
+
+/**
+ * The chain's own `RewardDestination` variants, plus the placeholder recorded when the payee
+ * cannot be read at all.
+ *
+ * Spelled out rather than derived from `PalletStakingRewardDestination['type']`: `src/index.ts`
+ * loads both `polymesh-types` and `@polkadot/types-augment`, and each declares that interface
+ * into `@polkadot/types/lookup`. The duplicate declaration collapses `type` to a bare `string`
+ * (the conflict is in `node_modules`, so `skipLibCheck` hides it) — `is*`/`as*` survive it,
+ * `type` does not — so deriving the union would silently widen it back to `string`.
+ */
+export type RewardDestinationName =
+  | 'Staked'
+  | 'Stash'
+  | 'Controller'
+  | 'Account'
+  | 'None'
+  | 'LegacyUnknown';
+
 export interface LegacyRewardDestination {
-  /** `Staked` | `Stash` | `Controller` | `Account` | `None` | `LegacyUnknown` (read failed) */
-  rewardDestination: string;
+  rewardDestination: RewardDestinationName;
   /** The account the reward was actually paid to, where it can be resolved */
   rewardDestinationAccount?: string;
 }
+
+/** `.toJSON()` camel-cases the variant name; this maps it back to the name the index records. */
+const rewardDestinationByVariant: Record<string, RewardDestinationName> = {
+  staked: 'Staked',
+  stash: 'Stash',
+  controller: 'Controller',
+  account: 'Account',
+  none: 'None',
+};
+
+/**
+ * Reads a decoded `RewardDestination` — from storage or from an event parameter — out of its
+ * `.toJSON()` form.
+ *
+ * `.toJSON()` rather than the generated `Option<PalletStakingRewardDestination>` accessors,
+ * deliberately: the generated types describe one metadata snapshot — the current one — while
+ * both callers read blocks from runtimes that predate it, and `api` decodes against the block's
+ * own registry. `.unwrap()` written against today's `OptionQuery` throws on a block where the
+ * entry decodes as a bare `RewardDestination`, and that throw lands in a `catch` that would turn
+ * every reward into `LegacyUnknown`. `.toJSON()` is the one accessor whose output is the same
+ * either way: `null`, a bare string (`"Staked"` — when every variant of that runtime's type is a
+ * unit variant), or a single-key object with the variant camel-cased (`{ staked: null }`,
+ * `{ account: "0x…" }`).
+ *
+ * An unrecognised variant resolves to `None` — no destination account is claimed for it.
+ */
+export const readRewardDestination = (
+  json: AnyJson
+): { destination: RewardDestinationName; account?: string } => {
+  let variant = '';
+  let value: AnyJson = null;
+
+  if (typeof json === 'string') {
+    variant = json;
+  } else if (json && typeof json === 'object' && !Array.isArray(json)) {
+    [variant = ''] = Object.keys(json);
+    value = json[variant] ?? null;
+  }
+
+  const destination = rewardDestinationByVariant[variant.toLowerCase()] ?? 'None';
+
+  return destination === 'Account' && typeof value === 'string'
+    ? { destination, account: value }
+    : { destination };
+};
 
 /**
  * Per-stash cache of a resolved payee. `staking.payee(stash)` is a chain-storage read on every
@@ -39,34 +103,26 @@ export const resolveLegacyRewardDestination = async (
 
   try {
     const payee = await api.query.staking.payee(stash);
-    const json = payee.toJSON() as string | Record<string, unknown> | null;
-
-    // `RewardDestination` renders either as a bare string (`"Staked"`) or, via `.toJSON()`, as a
-    // single-key object with the variant name lower-cased (`{ staked: null }`, `{ account: "0x…" }`).
-    const variant = (
-      typeof json === 'string' ? json : Object.keys(json ?? {})[0] ?? ''
-    ).toLowerCase();
-    const value =
-      json && typeof json === 'object' ? (json as Record<string, unknown>)[variant] : undefined;
+    const { destination, account } = readRewardDestination(payee.toJSON());
 
     let result: LegacyRewardDestination;
 
-    if (variant === 'staked' || variant === 'stash') {
+    if (destination === 'Staked' || destination === 'Stash') {
       result = {
-        rewardDestination: variant === 'staked' ? 'Staked' : 'Stash',
+        rewardDestination: destination,
         rewardDestinationAccount: stash,
       };
-    } else if (variant === 'controller') {
-      const controller = (await api.query.staking.bonded(stash)).toJSON() as string | null;
+    } else if (destination === 'Controller') {
+      const controller = (await api.query.staking.bonded(stash)).toJSON();
 
       result = {
         rewardDestination: 'Controller',
-        rewardDestinationAccount: controller ?? undefined,
+        rewardDestinationAccount: typeof controller === 'string' ? controller : undefined,
       };
-    } else if (variant === 'account') {
+    } else if (destination === 'Account') {
       result = {
         rewardDestination: 'Account',
-        rewardDestinationAccount: typeof value === 'string' ? value : undefined,
+        rewardDestinationAccount: account,
       };
     } else {
       result = { rewardDestination: 'None' };

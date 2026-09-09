@@ -4,7 +4,11 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { Account, EventIdEnum, StakingEvent } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { is8xChain } from '../../../utils/common';
-import { resolveLegacyRewardDestination } from '../../../utils/staking';
+import {
+  readRewardDestination,
+  resolveLegacyRewardDestination,
+  RewardDestinationName,
+} from '../../../utils/staking';
 import { extractArgs } from '../common';
 
 const bondedUnbondedOrReward = new Set([
@@ -14,50 +18,25 @@ const bondedUnbondedOrReward = new Set([
   EventIdEnum.Rewarded, // from 7.x Reward was renamed to Rewarded
 ]);
 
-type RewardDestinationDetails = {
-  type: string;
-  account?: string;
-};
-
 type StakingEventDetails = {
   amount?: bigint;
   stashAccount?: string;
   nominatedValidators?: string[];
   identityId?: string;
-  rewardDestination?: string;
+  rewardDestination?: RewardDestinationName;
   rewardDestinationAccount?: string;
 };
 
-const getRewardDestinationDetails = (destParam: Codec): RewardDestinationDetails => {
-  const json = destParam.toJSON() as string | Record<string, unknown>;
-
-  if (typeof json === 'string') {
-    return { type: json };
-  }
-
-  const variant = Object.keys(json)[0] ?? 'Unknown';
-
-  const value = json[variant];
-
-  if (variant === 'Account') {
-    return {
-      type: variant,
-      account: typeof value === 'string' ? value : undefined,
-    };
-  }
-
-  return { type: variant };
-};
-
 const getRewardDestinationAccount = (
-  destinationDetails: RewardDestinationDetails,
+  destination: RewardDestinationName,
+  account?: string,
   stashAccount?: string
 ): string | undefined => {
-  if (destinationDetails.type === 'Account') {
-    return destinationDetails.account;
+  if (destination === 'Account') {
+    return account;
   }
 
-  if (destinationDetails.type === 'Staked' || destinationDetails.type === 'Stash') {
+  if (destination === 'Staked' || destination === 'Stash') {
     return stashAccount;
   }
 
@@ -88,13 +67,13 @@ const get8xStakingEventDetails = (eventId: EventIdEnum, params: Codec[]): Stakin
   const stashAccount = getTextValue(rawAccount);
 
   if (eventId === EventIdEnum.Rewarded) {
-    const destinationDetails = getRewardDestinationDetails(rawSecondParam);
+    const { destination, account } = readRewardDestination(rawSecondParam.toJSON());
 
     return {
       stashAccount,
       amount: getBigIntValue(rawThirdParam),
-      rewardDestination: destinationDetails.type,
-      rewardDestinationAccount: getRewardDestinationAccount(destinationDetails, stashAccount),
+      rewardDestination: destination,
+      rewardDestinationAccount: getRewardDestinationAccount(destination, account, stashAccount),
     };
   }
 

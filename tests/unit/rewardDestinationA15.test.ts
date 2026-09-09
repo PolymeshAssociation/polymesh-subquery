@@ -134,7 +134,7 @@ describe('A15 — pre-v8 reward destination', () => {
     await handleStakingEvent(
       rewardEvent(
         'Rewarded',
-        [codec(STASH), { toJSON: () => ({ Account: PAYEE }) }, codec('3000')],
+        [codec(STASH), { toJSON: () => ({ account: PAYEE }) }, codec('3000')],
         8_000_000
       )
     );
@@ -147,6 +147,20 @@ describe('A15 — pre-v8 reward destination', () => {
   it('v8 resolves Staked/Stash to the stash itself', async () => {
     await handleStakingEvent(
       rewardEvent('Rewarded', [codec(STASH), { toJSON: () => 'Staked' }, codec('4000')], 8_000_000)
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Staked');
+    expect(row.rewardDestinationAccount).toBe(STASH);
+  });
+
+  it('v8 resolves the object form of a Staked payee to the stash', async () => {
+    await handleStakingEvent(
+      rewardEvent(
+        'Rewarded',
+        [codec(STASH), { toJSON: () => ({ staked: null }) }, codec('4500')],
+        8_000_000
+      )
     );
 
     const row = savedStakingEvent();
