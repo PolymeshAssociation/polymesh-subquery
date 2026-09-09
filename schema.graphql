@@ -778,6 +778,11 @@ enum EventIdEnum {
   UpgradeFailed
   UpgradeStarted
 
+  ## stateTrieMigration ##
+  Migrated
+  AutoMigrationFinished
+  Halted
+
   "`Approval` is now active for assets pallet"
   Approval
   
