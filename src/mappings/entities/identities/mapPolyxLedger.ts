@@ -100,6 +100,9 @@ const startOfUtcDay = (datetime: Date): Date =>
 
 const floorZero = (value: bigint): bigint => (value > BigInt(0) ? value : BigInt(0));
 
+/** `Math.max` for `bigint`, which `Math.max` itself cannot take. */
+const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
+
 /**
  * `frozen` from an on-chain `AccountData`: `{ free, reserved, frozen, flags }` on v8,
  * `{ free, reserved, miscFrozen, feeFrozen }` (frozen is the max of the two) on ≤ v7.4.
@@ -112,7 +115,7 @@ export const accountDataFrozen = (data: Record<string, Codec>): bigint => {
   const misc = getBigIntValue(data.miscFrozen);
   const fee = getBigIntValue(data.feeFrozen);
 
-  return misc > fee ? misc : fee;
+  return maxBig(misc, fee);
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -217,8 +220,8 @@ export const recomputeDerived = (balance: AccountBalance): void => {
   const stakingHold = holds.find(hold => hold.reason === HoldReason.Staking)?.amount ?? BigInt(0);
   const stakingLock = locks.find(lock => lock.lockId === STAKING_LOCK_ID)?.amount ?? BigInt(0);
 
-  balance.frozen = locks.reduce((max, lock) => (lock.amount > max ? lock.amount : max), BigInt(0));
-  balance.bonded = stakingHold > stakingLock ? stakingHold : stakingLock;
+  balance.frozen = locks.reduce((max, lock) => maxBig(max, lock.amount), BigInt(0));
+  balance.bonded = maxBig(stakingHold, stakingLock);
   balance.otherReserved = floorZero(balance.reserved - stakingHold);
   balance.total = balance.free + balance.reserved;
   balance.transferable = floorZero(balance.free - balance.frozen);
@@ -267,32 +270,15 @@ interface Transition {
 
 const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
 
-/**
- * Writes the entries for one pool transition and advances every touched `AccountBalance`.
- *
- * Sibling entries of one movement share `movementId` (the block/event id). Each entry carries the
- * balance-after snapshot, so Balance History is a pure index scan.
- */
-export const postTransition = async (
-  args: HandlerArgs,
-  transition: Transition,
-  options: { eraIndex?: number } = {}
-): Promise<void> => {
-  if (!transition.from && !transition.to) {
-    return;
-  }
+interface MovementSide {
+  endpoint: Endpoint;
+  direction: EntryDirection;
+  counterparty?: string;
+}
 
-  const { blockId, block, eventIdx, blockEventId } = args;
-  const datetime = block.timestamp;
-  const params = getEventParams(args);
-  const date = startOfUtcDay(datetime);
-
-  const isInternal =
-    transition.from !== undefined &&
-    transition.to !== undefined &&
-    transition.from.address === transition.to.address;
-
-  const sides: Array<{ endpoint: Endpoint; direction: EntryDirection; counterparty?: string }> = [];
+/** The one or two account-sides a transition touches, each paired with its counterparty. */
+const movementSides = (transition: Transition): MovementSide[] => {
+  const sides: MovementSide[] = [];
 
   if (transition.from?.address) {
     sides.push({
@@ -310,80 +296,141 @@ export const postTransition = async (
     });
   }
 
-  for (const side of sides) {
-    const { address, pool } = side.endpoint;
-    const signed =
-      side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
+  return sides;
+};
 
-    const account = await ledgerAccount(address, blockId, datetime);
-    const balance = await loadBalance(address, account.identityId, blockId);
+/** The lifetime aggregate a movement kind feeds, if any. */
+const LIFETIME_TOTAL: Partial<
+  Record<MovementKind, 'totalFeesPaid' | 'totalRewards' | 'totalSlashed'>
+> = {
+  [MovementKind.Fee]: 'totalFeesPaid',
+  [MovementKind.StakingReward]: 'totalRewards',
+  [MovementKind.Slash]: 'totalSlashed',
+};
 
-    if (pool === PolyxPool.Free) {
-      balance.free += signed;
+/** Advances the running `AccountBalance` for one side of a movement (pools + aggregates). */
+const advanceBalance = (
+  balance: AccountBalance,
+  side: MovementSide,
+  transition: Transition,
+  signed: bigint,
+  isInternal: boolean
+): void => {
+  if (side.endpoint.pool === PolyxPool.Free) {
+    balance.free += signed;
+  } else {
+    balance.reserved += signed;
+  }
+
+  if (!isInternal) {
+    if (side.direction === EntryDirection.Credit) {
+      balance.totalReceived += transition.amount;
     } else {
-      balance.reserved += signed;
+      balance.totalSent += transition.amount;
     }
+  }
 
-    if (!isInternal) {
-      if (side.direction === EntryDirection.Credit) {
-        balance.totalReceived += transition.amount;
-      } else {
-        balance.totalSent += transition.amount;
-      }
-    }
+  const lifetimeTotal = LIFETIME_TOTAL[transition.kind];
+  if (lifetimeTotal) {
+    balance[lifetimeTotal] += transition.amount;
+  }
 
-    if (transition.kind === MovementKind.Fee) {
-      balance.totalFeesPaid += transition.amount;
-    } else if (transition.kind === MovementKind.StakingReward) {
-      balance.totalRewards += transition.amount;
-    } else if (transition.kind === MovementKind.Slash) {
-      balance.totalSlashed += transition.amount;
-    }
+  bumpLifetimeByKind(balance, transition.kind, side.direction, transition.amount);
+  balance.movementCount += 1;
+  recomputeDerived(balance);
+};
 
-    bumpLifetimeByKind(balance, transition.kind, side.direction, transition.amount);
-    balance.movementCount += 1;
-    recomputeDerived(balance);
-    balance.updatedBlockId = blockId;
+interface TransitionContext {
+  args: HandlerArgs;
+  transition: Transition;
+  options: { eraIndex?: number };
+  isInternal: boolean;
+  date: Date;
+  params: ReturnType<typeof getEventParams>;
+}
 
-    await balance.save();
+/** Advances one account, writes its `PolyxEntry`, and reconciles it. */
+const writeMovementSide = async (
+  side: MovementSide,
+  { args, transition, options, isInternal, date, params }: TransitionContext
+): Promise<void> => {
+  const { blockId, block, eventIdx, blockEventId } = args;
+  const { address, pool } = side.endpoint;
+  const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
 
-    const counterpartyAccount = side.counterparty
-      ? await Account.get(side.counterparty)
-      : undefined;
+  const account = await ledgerAccount(address, blockId, block.timestamp);
+  const balance = await loadBalance(address, account.identityId, blockId);
 
-    await PolyxEntry.create({
-      id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}${
-        side.direction === EntryDirection.Debit ? 'd' : 'c'
-      }`,
-      movementId: blockEventId,
-      accountId: address,
-      identityId: account.identityId,
-      counterpartyAddress: side.counterparty,
-      counterpartyIdentityId: counterpartyAccount?.identityId,
-      pool,
-      amount: signed,
-      amountAbs: transition.amount,
-      kind: transition.kind,
-      direction: side.direction,
-      holdReason: transition.holdReason,
-      memo: transition.memo,
-      freeAfter: balance.free,
-      reservedAfter: balance.reserved,
-      frozenAfter: balance.frozen,
-      moduleId: params.moduleId,
-      callId: params.callId,
-      eventId: params.eventId,
-      specVersionId: block.specVersion,
-      date,
-      eraIndex: options.eraIndex,
-      createdEventId: blockEventId,
-      extrinsicId: params.extrinsicId,
-      eventIdx,
-      datetime,
-      createdBlockId: blockId,
-    }).save();
+  advanceBalance(balance, side, transition, signed, isInternal);
+  balance.updatedBlockId = blockId;
+  await balance.save();
 
-    await reconcileAccount(address, blockId, block, { eventIdx });
+  const counterpartyAccount = side.counterparty ? await Account.get(side.counterparty) : undefined;
+
+  await PolyxEntry.create({
+    id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}${
+      side.direction === EntryDirection.Debit ? 'd' : 'c'
+    }`,
+    movementId: blockEventId,
+    accountId: address,
+    identityId: account.identityId,
+    counterpartyAddress: side.counterparty,
+    counterpartyIdentityId: counterpartyAccount?.identityId,
+    pool,
+    amount: signed,
+    amountAbs: transition.amount,
+    kind: transition.kind,
+    direction: side.direction,
+    holdReason: transition.holdReason,
+    memo: transition.memo,
+    freeAfter: balance.free,
+    reservedAfter: balance.reserved,
+    frozenAfter: balance.frozen,
+    moduleId: params.moduleId,
+    callId: params.callId,
+    eventId: params.eventId,
+    specVersionId: block.specVersion,
+    date,
+    eraIndex: options.eraIndex,
+    createdEventId: blockEventId,
+    extrinsicId: params.extrinsicId,
+    eventIdx,
+    datetime: block.timestamp,
+    createdBlockId: blockId,
+  }).save();
+
+  await reconcileAccount(address, blockId, block, { eventIdx });
+};
+
+/**
+ * Writes the entries for one pool transition and advances every touched `AccountBalance`.
+ *
+ * Sibling entries of one movement share `movementId` (the block/event id). Each entry carries the
+ * balance-after snapshot, so Balance History is a pure index scan.
+ */
+export const postTransition = async (
+  args: HandlerArgs,
+  transition: Transition,
+  options: { eraIndex?: number } = {}
+): Promise<void> => {
+  if (!transition.from && !transition.to) {
+    return;
+  }
+
+  const isInternal =
+    transition.from?.address !== undefined && transition.from.address === transition.to?.address;
+
+  const context: TransitionContext = {
+    args,
+    transition,
+    options,
+    isInternal,
+    date: startOfUtcDay(args.block.timestamp),
+    params: getEventParams(args),
+  };
+
+  for (const side of movementSides(transition)) {
+    await writeMovementSide(side, context);
   }
 };
 
@@ -923,6 +970,39 @@ export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
 // BalanceSet — a checkpoint, not a movement (resolves A1 structurally)
 // ---------------------------------------------------------------------------------------------
 
+interface PoolDelta {
+  pool: PolyxPool;
+  delta: bigint;
+}
+
+const signOf = (delta: bigint): EntryDirection =>
+  delta > BigInt(0) ? EntryDirection.Credit : EntryDirection.Debit;
+
+/** Sets each pool to its new absolute value, returning the non-zero deltas the set produced. */
+const applyBalanceSet = (
+  balance: AccountBalance,
+  newFree: bigint,
+  newReserved: bigint | undefined
+): PoolDelta[] => {
+  const deltas: PoolDelta[] = [];
+
+  const freeDelta = newFree - balance.free;
+  balance.free = newFree;
+  if (freeDelta !== BigInt(0)) {
+    deltas.push({ pool: PolyxPool.Free, delta: freeDelta });
+  }
+
+  if (newReserved !== undefined) {
+    const reservedDelta = newReserved - balance.reserved;
+    balance.reserved = newReserved;
+    if (reservedDelta !== BigInt(0)) {
+      deltas.push({ pool: PolyxPool.Reserved, delta: reservedDelta });
+    }
+  }
+
+  return deltas;
+};
+
 /**
  * `BalanceSet` *sets* `free` (and, pre-v8, `reserved`) to an absolute value — it is not a
  * movement of that size. The old model recorded the set value as a delta, corrupting every
@@ -943,21 +1023,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   const account = await ledgerAccount(who, blockId, datetime);
   const balance = await loadBalance(who, account.identityId, blockId);
 
-  const deltas: Array<{ pool: PolyxPool; delta: bigint }> = [];
-
-  const freeDelta = newFree - balance.free;
-  balance.free = newFree;
-  if (freeDelta !== BigInt(0)) {
-    deltas.push({ pool: PolyxPool.Free, delta: freeDelta });
-  }
-
-  if (newReserved !== undefined) {
-    const reservedDelta = newReserved - balance.reserved;
-    balance.reserved = newReserved;
-    if (reservedDelta !== BigInt(0)) {
-      deltas.push({ pool: PolyxPool.Reserved, delta: reservedDelta });
-    }
-  }
+  const deltas = applyBalanceSet(balance, newFree, newReserved);
 
   if (deltas.length > 0) {
     balance.movementCount += 1;
@@ -965,7 +1031,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
       bumpLifetimeByKind(
         balance,
         MovementKind.BalanceSetAdjustment,
-        delta > BigInt(0) ? EntryDirection.Credit : EntryDirection.Debit,
+        signOf(delta),
         delta > BigInt(0) ? delta : -delta
       );
     }
@@ -990,7 +1056,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
       amount: delta,
       amountAbs: delta > BigInt(0) ? delta : -delta,
       kind: MovementKind.BalanceSetAdjustment,
-      direction: delta > BigInt(0) ? EntryDirection.Credit : EntryDirection.Debit,
+      direction: signOf(delta),
       holdReason: undefined,
       memo: undefined,
       freeAfter: balance.free,

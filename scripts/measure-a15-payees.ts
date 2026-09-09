@@ -63,6 +63,71 @@ const rewardBlocksAfter = async (
   return [...new Set(nodes.map(n => Number(n.blockHeight)))].slice(0, limit);
 };
 
+interface Tally {
+  toStash: number;
+  elsewhere: number;
+  none: number;
+  errors: number;
+  nonStash: string[];
+  seen: Set<string>;
+}
+
+/** Stashes named by the `staking.Reward`/`Rewarded` events in a block. */
+const rewardedStashes = (
+  events: { event: { section: string; method: string; data: unknown[] } }[]
+) =>
+  events
+    .filter(
+      record =>
+        record.event.section === 'staking' && ['Reward', 'Rewarded'].includes(record.event.method)
+    )
+    .map(record => {
+      const data = record.event.data;
+      return (data.length >= 3 ? data[1] : data[0])?.toString();
+    });
+
+/** Reads one block's reward payees and folds them into the running tally. */
+const tallyBlock = async (api: ApiPromise, block: number, tally: Tally): Promise<void> => {
+  const hash = await api.rpc.chain.getBlockHash(block);
+  const specVersion = (await api.rpc.state.getRuntimeVersion(hash)).specVersion.toNumber();
+
+  if (specVersion >= V8) {
+    return;
+  }
+
+  let events;
+  try {
+    events = await api.query.system.events.at(hash);
+  } catch {
+    tally.errors += 1;
+    return;
+  }
+
+  const at = await api.at(hash);
+
+  for (const stash of rewardedStashes(events as never)) {
+    if (!stash || tally.seen.has(stash)) {
+      continue;
+    }
+    tally.seen.add(stash);
+
+    try {
+      const payee = (await at.query.staking.payee(stash)).toString();
+
+      if (payee === 'Staked' || payee === 'Stash') {
+        tally.toStash += 1;
+      } else if (payee === 'None') {
+        tally.none += 1;
+      } else {
+        tally.elsewhere += 1;
+        tally.nonStash.push(`  block ${block} (spec ${specVersion}) ${stash} -> ${payee}`);
+      }
+    } catch {
+      tally.errors += 1;
+    }
+  }
+};
+
 const main = async (): Promise<void> => {
   const rpc = argOf('rpc');
   const dictionary = argOf('dictionary');
@@ -86,66 +151,22 @@ const main = async (): Promise<void> => {
     typesBundle: typesBundle as never,
   });
 
-  const seen = new Set<string>();
-  let toStash = 0;
-  let elsewhere = 0;
-  let none = 0;
-  let errors = 0;
-  const nonStash: string[] = [];
+  const tally: Tally = {
+    toStash: 0,
+    elsewhere: 0,
+    none: 0,
+    errors: 0,
+    nonStash: [],
+    seen: new Set<string>(),
+  };
 
   for (const anchor of anchors) {
     for (const block of await rewardBlocksAfter(dictionary, anchor, perAnchor)) {
-      const hash = await api.rpc.chain.getBlockHash(block);
-      const specVersion = (await api.rpc.state.getRuntimeVersion(hash)).specVersion.toNumber();
-
-      if (specVersion >= V8) {
-        continue;
-      }
-
-      let events;
-      try {
-        events = await api.query.system.events.at(hash);
-      } catch {
-        errors += 1;
-        continue;
-      }
-
-      const at = await api.at(hash);
-
-      const stashes = events
-        .filter(
-          record =>
-            record.event.section === 'staking' &&
-            ['Reward', 'Rewarded'].includes(record.event.method)
-        )
-        .map(record => {
-          const data = record.event.data;
-          return (data.length >= 3 ? data[1] : data[0]).toString();
-        });
-
-      for (const stash of stashes) {
-        if (!stash || seen.has(stash)) {
-          continue;
-        }
-        seen.add(stash);
-
-        try {
-          const payee = (await at.query.staking.payee(stash)).toString();
-
-          if (payee === 'Staked' || payee === 'Stash') {
-            toStash += 1;
-          } else if (payee === 'None') {
-            none += 1;
-          } else {
-            elsewhere += 1;
-            nonStash.push(`  block ${block} (spec ${specVersion}) ${stash} -> ${payee}`);
-          }
-        } catch {
-          errors += 1;
-        }
-      }
+      await tallyBlock(api, block, tally);
     }
   }
+
+  const { toStash, elsewhere, none, errors, nonStash } = tally;
 
   await api.disconnect();
 

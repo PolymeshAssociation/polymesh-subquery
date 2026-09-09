@@ -398,7 +398,7 @@ describe('properties the one-column model could not satisfy', () => {
 
     await handleBalanceFrozen(balancesEvent('Frozen', { who: ALICE, amount: '400' }));
 
-    expect(entries().length).toBe(entriesAfterMint); // no new entry
+    expect(entries()).toHaveLength(entriesAfterMint); // no new entry
     expect(balance(ALICE)).toMatchObject({
       free: BigInt(1000),
       reserved: BigInt(0),
@@ -429,7 +429,7 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
 
     await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
 
-    expect(entries().length).toBe(beforeEntries); // no movement row
+    expect(entries()).toHaveLength(beforeEntries); // no movement row
     expect(balance(ALICE)).toMatchObject({
       free: BigInt(10000), // unchanged — pre-v8 bonding moves nothing
       frozen: BigInt(4000),
@@ -455,7 +455,7 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
       balancesEvent('Bonded', { stash: ALICE, amount: '4000' }, { specVersion: 8_000_000 })
     );
 
-    expect(entries().length).toBe(beforeEntries);
+    expect(entries()).toHaveLength(beforeEntries);
     expect(balance(ALICE)).toMatchObject({
       free: BigInt(10000),
       frozen: BigInt(0),

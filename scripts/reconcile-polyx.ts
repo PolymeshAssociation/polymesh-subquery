@@ -157,13 +157,12 @@ const chainAt = async (api: ApiPromise, address: string, block: number): Promise
   };
   const d = info.data;
   const big = (v?: { toString(): string }) => BigInt(v?.toString() ?? '0');
-  const misc = big(d.miscFrozen);
-  const fee = big(d.feeFrozen);
+  const legacyFrozen = big(d.miscFrozen) > big(d.feeFrozen) ? big(d.miscFrozen) : big(d.feeFrozen);
 
   return {
     free: big(d.free),
     reserved: big(d.reserved),
-    frozen: d.frozen !== undefined ? big(d.frozen) : misc > fee ? misc : fee,
+    frozen: d.frozen !== undefined ? big(d.frozen) : legacyFrozen,
   };
 };
 
@@ -249,9 +248,9 @@ const classify = (mismatches: Mismatch[]): string => {
     if (constant) {
       verdict = `constant drift of ${deltas[0]} from block ${firstDrift.block} — one missed event`;
     } else if (growing) {
-      verdict = `growing drift (${deltas[0]} → ${
-        deltas[deltas.length - 1]
-      }) — a systematically mis-signed event`;
+      verdict = `growing drift (${deltas[0]} → ${deltas.at(
+        -1
+      )}) — a systematically mis-signed event`;
     } else {
       verdict = `irregular drift — needs manual inspection`;
     }
@@ -297,6 +296,48 @@ const saveCheckpoint = (cp: Checkpoint): void =>
     JSON.stringify(cp, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v), 2)
   );
 
+interface ProbeContext {
+  db: DataSource;
+  api: ApiPromise;
+  head: number;
+  checkpoint: Checkpoint;
+  done: Set<string>;
+}
+
+/** Compares one account against chain state at one side of one boundary, checkpointing the result. */
+const probeOne = async (
+  { db, api, head, checkpoint, done }: ProbeContext,
+  sample: Sample,
+  boundary: number,
+  side: 'before' | 'after',
+  block: number
+): Promise<void> => {
+  if (block > head) {
+    return;
+  }
+
+  const key = `${sample.address}|${boundary}|${side}`;
+  if (done.has(key)) {
+    return;
+  }
+
+  try {
+    const [derived, summed, onChain] = await Promise.all([
+      derivedAt(db, sample.address, block),
+      summedAt(db, sample.address, block),
+      chainAt(api, sample.address, block),
+    ]);
+
+    checkpoint.mismatches.push(...compare(sample, boundary, side, block, derived, onChain, summed));
+  } catch (e) {
+    console.warn(`skip ${key}: ${(e as Error).message}`);
+  }
+
+  done.add(key);
+  checkpoint.done = [...done];
+  saveCheckpoint(checkpoint);
+};
+
 const main = async (): Promise<void> => {
   const rpc = argOf('rpc');
   if (!rpc) {
@@ -312,7 +353,7 @@ const main = async (): Promise<void> => {
   const head = (await api.rpc.chain.getHeader()).number.toNumber();
 
   const checkpoint = loadCheckpoint(rpc);
-  const done = new Set(checkpoint.done);
+  const context: ProbeContext = { db, api, head, checkpoint, done: new Set(checkpoint.done) };
 
   const samples = await sampleAccounts(db, { high, typical });
   console.log(
@@ -321,37 +362,8 @@ const main = async (): Promise<void> => {
 
   for (const sample of samples) {
     for (const boundary of BOUNDARIES) {
-      for (const [side, block] of [
-        ['before', boundary - 1],
-        ['after', boundary + 1],
-      ] as const) {
-        if (block > head) {
-          continue;
-        }
-
-        const key = `${sample.address}|${boundary}|${side}`;
-        if (done.has(key)) {
-          continue;
-        }
-
-        try {
-          const [derived, summed, onChain] = await Promise.all([
-            derivedAt(db, sample.address, block),
-            summedAt(db, sample.address, block),
-            chainAt(api, sample.address, block),
-          ]);
-
-          checkpoint.mismatches.push(
-            ...compare(sample, boundary, side, block, derived, onChain, summed)
-          );
-        } catch (e) {
-          console.warn(`skip ${key}: ${(e as Error).message}`);
-        }
-
-        done.add(key);
-        checkpoint.done = [...done];
-        saveCheckpoint(checkpoint);
-      }
+      await probeOne(context, sample, boundary, 'before', boundary - 1);
+      await probeOne(context, sample, boundary, 'after', boundary + 1);
     }
   }
 
