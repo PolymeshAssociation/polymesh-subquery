@@ -38,7 +38,7 @@ import {
   specVersionOf,
 } from '../../../utils';
 import { processInstructionId } from '../settlements/mapSettlement';
-import { extractArgs, getAsset } from './../common';
+import { extractArgs, getAsset, getAssetOrAnomaly } from './../common';
 
 export const createFunding = (
   blockId: string,
@@ -622,7 +622,16 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const asset = await getAsset(assetId);
+  const asset = await getAssetOrAnomaly(assetId, {
+    block,
+    eventIdx,
+    eventId: EventIdEnum.Transfer,
+  });
+
+  if (!asset) {
+    return;
+  }
+
   const transferAmount = getBigIntValue(rawAmount);
   const promises: Promise<void>[] = [];
 
