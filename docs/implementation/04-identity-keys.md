@@ -19,7 +19,7 @@ Models key membership as an explicit, time-bounded relationship instead of a mut
 - **G5 — `MultiSig` is not linked to its `Account`**, despite a multisig *being* an account. *(Fixed: `MultiSig.account`, `MultiSigAdmin.admin`.)*
 - **G6/A11 — `ChildIdentity` holds rows for a feature the chain deleted** in a silent v8 storage migration **[V]**. *(Already handled in [09](./09-infrastructure.md) — `retireChildIdentitiesAtV8`.)*
 - **G16 — signer keys and account role are not modelled** **[V]**. `MultiSigSigner.signerValue` is unindexed and unjoinable to `Account`, and `Account` records the key's cryptographic shape (`keyType`) but not its role in the identity system, even though the chain's `KeyRecord` distinguishes primary / secondary / multisig-signer keys and the indexer reads that via `resolveKeyIdentity` before discarding it. *(Fixed: `Account.keyRole: KeyRoleEnum`, `MultiSigSigner.signerAccount: Account`.)*
-- **`MultiSig.creator` means two different things** **[V]**. `genesisHandler.ts` (`handleMultiSigs`) fills it from `multiSig.adminDid` storage — the current **admin** — for genesis-seeded rows; `mapMultiSig.ts` (`handleMultiSigCreated`) fills it from the `MultiSigCreated` event's DID param — the **creator at creation time** — for everything after. These are different facts that can disagree. This phase documents it (a `schema.graphql` docstring) rather than silently picking one; whether to split into `creator` / `admin` / joined-identity fields is an open question for the team.
+- **`MultiSig.creator` conflated creator and admin** **[V]**. `genesisHandler.ts` filled it from `multiSig.adminDid` storage — the current **admin** — for genesis-seeded rows; `mapMultiSig.ts` fills it from the `MultiSigCreated` event's `callerDid` — the **creator** — for everything after. *(Fixed — see "MultiSig identity relationships" below.)*
 
 ---
 
@@ -87,10 +87,10 @@ type Account @entity {
 type MultiSig @entity {
   id: ID!                        # address
   account: Account! @index(unique: true)          # relation, not a bare string (was: address)
-  creator: Identity!             # KNOWN AMBIGUITY — see docstring / Problem
-  creatorAccount: Account!       # kept as-is
+  creator: Identity              # NULLABLE — MultiSigCreated.callerDid only; null for genesis rows
+  creatorAccount: Account        # NULLABLE — the event's caller account; null for genesis rows
   signaturesRequired: Int!
-  admins: [MultiSigAdmin!] @derivedFrom(field: "multisig")
+  admins: [MultiSigAdmin!] @derivedFrom(field: "multisig")   # the admin relationship lives here
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
 }
 
@@ -121,6 +121,32 @@ type MultiSigSigner @entity {
 | `MultiSig.address` | Replaced by the `account` relation. |
 
 **Safe to remove `secondaryAccounts`** — verified the SDK reads secondary keys from **chain** (`polymeshApi.query.identity`, `src/api/entities/Identity/index.ts:865+` on `origin/develop`), not from middleware **[V]**.
+
+### MultiSig identity relationships — resolved by chain research
+
+A multisig has **four distinct identity relationships**, verified against `multiSig` pallet storage
+(`types-lookup` / `augment-api-query`, chain 8.0.1):
+
+| Relationship | Chain source | Mutable? | This index |
+|---|---|---|---|
+| **creator** — dispatched `create_multisig` | `MultiSigCreated.callerDid` event param **only** (no storage) | no, but unrecoverable if not observed | `MultiSig.creator` — **nullable**, event-only; null for genesis rows |
+| **admin** — "primary key of this identity has admin control" | `multiSig.adminDid: Option<IdentityId>`; `add_admin`/`remove_admin` | yes | `MultiSigAdmin` rows (`MultiSig.admins`), status-tracked |
+| **paying** — "primary key of this identity pays the proposal fees" | `multiSig.payingDid: Option<IdentityId>`; only a `MultiSigRemovedPayingDid` event | yes | **not indexed** — newly-found gap, see below |
+| **joined** — the multisig account attached to an identity as a key | `identity.keyRecords(multisigAddr)` → `SecondaryKey(did)` | yes (unlink/rejoin) | `Account.identity` on the multisig's own account (commit 6) |
+
+Pre-7.x `create_multisig` set `MultiSigToIdentity` (renamed `adminDid` at 7.0) to the caller, so
+creator and admin coincided — that is where the old single `creator` field came from. Post-7.x they
+are independent.
+
+**Change:** `MultiSig.creator` / `creatorAccount` become nullable and are populated **only** from
+`MultiSigCreated`. `genesisHandler.handleMultiSigs` stops writing `creator` from `adminDid` and
+instead always seeds a `MultiSigAdmin` row from `adminDid` / `multiSigToIdentity` (it previously
+skipped that on the pre-7 path — a bug).
+
+**Newly-found gap (not fixed here):** `multiSig.payingDid` is entirely unindexed — `project.ts` has
+`MultiSigRemovedPayingDid: []` and there is no "paying did set" event, so forward population needs a
+storage read on `MultiSigCreated` / `join_identity`. Belongs with the multisig event-shape sweep
+(`defect-log.md`).
 
 ### `ChildIdentity`
 

@@ -142,7 +142,11 @@ type MultiSig @entity {
 }
 ```
 
-`MultiSigAdmin.identityId` becomes `admin: Identity!`, matching `creator`.
+`MultiSigAdmin.identityId` becomes `admin: Identity!`. `MultiSig.creator` becomes nullable and
+event-only (`MultiSigCreated.callerDid`); it previously doubled as the admin pointer for
+genesis-seeded rows (from `multiSig.adminDid` storage). A multisig has four separate identity
+relationships — creator, admin (`adminDid`), paying (`payingDid`), and the identity it is joined to
+(`keyRecords`) — see [`../implementation/04-identity-keys.md`](../implementation/04-identity-keys.md).
 
 **Entity change:** `+1` (`IdentityKey`), `−1` (`AccountHistory`), `Permissions` collapses into the jsonField already used. Net zero, with full key history gained.
 

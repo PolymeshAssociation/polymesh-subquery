@@ -70,6 +70,15 @@ describe('createMultiSig', () => {
     });
     expect(multiSig).not.toHaveProperty('address');
   });
+
+  it('leaves creator null when it is not known (the genesis seed path)', async () => {
+    await createMultiSig(MULTISIG, undefined, undefined, 3, '0000000', datetime);
+
+    const multiSig = db[`MultiSig:${MULTISIG}`];
+    expect(multiSig.creatorId).toBeUndefined();
+    expect(multiSig.creatorAccountId).toBeUndefined();
+    expect(multiSig.accountId).toBe(MULTISIG); // still linked to its account
+  });
 });
 
 describe('createMultiSigSigner', () => {

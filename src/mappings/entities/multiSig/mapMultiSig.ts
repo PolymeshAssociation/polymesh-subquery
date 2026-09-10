@@ -26,8 +26,8 @@ import { MultiSigSignerProps } from '../../../types/models/MultiSigSigner';
  */
 export const createMultiSig = async (
   address: string,
-  creatorId: string,
-  creatorAccountId: string,
+  creatorId: string | undefined,
+  creatorAccountId: string | undefined,
   signaturesRequired: number,
   blockId: string,
   datetime: Date

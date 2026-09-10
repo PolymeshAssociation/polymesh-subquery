@@ -3400,21 +3400,19 @@ type MultiSig @entity {
   "The multisig's own account — `account.address` is the multisig address, `id` is the same string"
   account: Account! @index(unique: true)
   """
-  KNOWN AMBIGUITY: this field's value comes from two different sources and the two can disagree.
+  The identity that dispatched `create_multisig` (the `MultiSigCreated` event's `callerDid`).
 
-  - Rows seeded at genesis (`genesisHandler.ts`, `handleMultiSigs`) take it from
-    `multiSig.adminDid` storage — the identity currently *administering* the multisig.
-  - Rows created from a `MultiSigCreated` event afterwards (`mapMultiSig.ts`, `handleMultiSigCreated`)
-    take it from the event's own DID param — the identity that *created* the multisig, at creation
-    time.
-
-  Admin control and creator are separate facts (a multisig can change admins without changing
-  creator, and the identity it is joined to is a third fact, now reachable as `account.identity`).
-  Whether to split this into `creator` / `admin` / joined-identity fields is an open question — see
-  the PR.
+  NULL for a multisig that existed at genesis: the chain keeps no `creator` storage (only
+  `multiSig.adminDid` and `multiSig.payingDid`), so for a row not observed being created the
+  creator is unrecoverable. Do NOT read this as "who controls it" — that is `admins`, which is
+  mutable (`multiSig.adminDid`, changed via `add_admin` / `remove_admin`) — nor as "which identity
+  it acts for", which is `account.identity` (the multisig joined to an identity as a key). Those
+  are three separate facts; pre-7.x `create_multisig` happened to set all of creator-and-admin at
+  once, which is where the old conflation came from.
   """
-  creator: Identity!
-  creatorAccount: Account!
+  creator: Identity
+  "The account that dispatched `create_multisig` (the event's `caller`). NULL for genesis rows."
+  creatorAccount: Account
   signaturesRequired: Int!
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
   proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
@@ -3437,7 +3435,7 @@ Represents a MultiSig admin
 type MultiSigAdmin @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
-  "The administering identity — a relation, matching `MultiSig.creator` (defect G5)"
+  "The administering identity — from `multiSig.adminDid` (genesis) or `MultiSigAddedAdmin` (defect G5)"
   admin: Identity! @index(unique: false)
   status: MultiSigAdminStatusEnum!
   createdBlock: Block!

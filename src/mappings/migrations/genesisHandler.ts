@@ -1,7 +1,6 @@
 import {
   Block,
   EventIdEnum,
-  Identity,
   KeyRole,
   KeyRoleEnum,
   MultiSigSignerStatusEnum,
@@ -178,13 +177,13 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
       {
         args: [rawAddress],
       },
-      rawCreator,
+      rawAdminDid,
     ] = multiSigEntry;
-    const creator = rawCreator.toString();
+    // `adminDid` (7.x+) / `multiSigToIdentity` (pre-7) storage — the *administering* identity, not
+    // the creator. The chain keeps no creator storage, so a genesis-seeded `MultiSig.creator` is
+    // left null and only the admin relationship is recovered.
+    const adminDid = rawAdminDid.toString();
     const multiSigAddress = rawAddress.toString();
-
-    const creatorIdentity = await Identity.get(creator);
-    const creatorAccount = creatorIdentity?.primaryAccount || '';
 
     const [signaturesRequired, signerEntries] = await Promise.all([
       api.query.multiSig.multiSigSignsRequired(multiSigAddress),
@@ -194,16 +193,16 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
     multiSigInserts.push(
       createMultiSig(
         multiSigAddress,
-        creator,
-        creatorAccount,
+        undefined,
+        undefined,
         +signaturesRequired.toString(),
         genesisBlock,
         datetime
       )
     );
 
-    if (is7xChainAtGenesis) {
-      createMultiSigAdmin(multiSigAddress, creator, genesisBlock);
+    if (adminDid.length) {
+      multiSigInserts.push(createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock));
     }
 
     signerEntries.forEach(
