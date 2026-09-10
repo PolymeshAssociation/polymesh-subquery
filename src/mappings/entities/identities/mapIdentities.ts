@@ -1,5 +1,11 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { decodeEvent } from '../../../decode';
+import {
+  decodeEvent,
+  legacyPermissionsUpdatedAddress,
+  legacyRemovedAddresses,
+  legacySecondaryKeyEntries,
+  legacySignerLeftAddress,
+} from '../../../decode';
 import {
   Account,
   AccountHistory,
@@ -9,6 +15,7 @@ import {
   Event,
   EventIdEnum,
   Identity,
+  KeyRole,
   Permissions,
   PermissionsJson,
   PortfolioPermissions,
@@ -24,6 +31,7 @@ import {
 } from '../../../utils';
 import { getAccountKeyType } from '../../../utils/accounts';
 import { Attributes, extractArgs } from './../common';
+import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 
 const createHistoryEntry = async (
@@ -203,6 +211,13 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   );
 
   await Promise.all([permissions, account, defaultPortfolio]);
+
+  // The primary key's membership record — a primary key always has full permission, so no
+  // `permissions` snapshot is kept.
+  await openIdentityKey(
+    { identityId: did, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    blockId
+  );
 };
 
 export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -312,20 +327,12 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
 export const handleSecondaryKeysPermissionsUpdated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const args = extractArgs(event);
-  let address;
+  const { blockId, eventId, eventIdx } = extractArgs(event);
 
   const { account: rawSignerDetails, updatedPermissions: rawUpdatedPermissions } =
     decodeEvent(event);
 
-  if (rawSignerDetails instanceof Map) {
-    // for chain version < 5.0.0
-    const signer = rawSignerDetails.get('signer').toString();
-    address = JSON.parse(signer).account;
-  } else {
-    // for chain version >= 5.0.0
-    address = getTextValue(rawSignerDetails);
-  }
+  const address = legacyPermissionsUpdatedAddress(rawSignerDetails);
   const updatedPermissions = JSON.parse(rawUpdatedPermissions.toString());
 
   const permissions = await Permissions.get(address);
@@ -340,49 +347,50 @@ export const handleSecondaryKeysPermissionsUpdated = async (
   permissions.portfolios = portfolios;
   permissions.transactions = transactions;
   permissions.transactionGroups = transactionGroups;
-  permissions.updatedBlockId = args.blockId;
+  permissions.updatedBlockId = blockId;
 
   await permissions.save();
+
+  // A permissions change is a new membership interval: close the current one, open a fresh one
+  // carrying the new permissions, so the change is first-class history rather than an overwrite.
+  await rotateIdentityKey(
+    {
+      address,
+      role: KeyRole.Secondary,
+      reason: eventId,
+      eventIdx,
+      permissions: { assets, portfolios, transactions, transactionGroups },
+    },
+    blockId
+  );
 };
 
-type MeshAccount = string | { account: string };
-
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventId } = extractArgs(event);
   const { signers: rawAccounts } = decodeEvent(event);
 
-  const accounts = rawAccounts.toJSON() as MeshAccount[];
+  const addresses = legacyRemovedAddresses(rawAccounts);
 
-  const removePromises = accounts.map(account => {
-    let address;
-    if (typeof account === 'string') {
-      // for chain version >= 5.0.0
-      address = account;
-    } else {
-      // for chain version < 5.0.0
-      ({ account: address } = account);
-    }
-
-    return [Account.remove(address), Permissions.remove(address)];
-  });
-
-  await Promise.all(removePromises.flat());
+  await Promise.all(
+    addresses.flatMap(address => [
+      Account.remove(address),
+      Permissions.remove(address),
+      closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
+    ])
+  );
 };
 
 export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventId } = extractArgs(event);
   const { signer: rawSigner } = decodeEvent(event);
 
-  const account = rawSigner.toJSON() as MeshAccount;
+  const address = legacySignerLeftAddress(rawSigner);
 
-  let address;
-  if (typeof account === 'string') {
-    // for chain version >= 5.0.0
-    address = account;
-  } else {
-    // for chain version < 5.0.0
-    ({ account: address } = account);
-  }
-
-  await Promise.all([Account.remove(address), Permissions.remove(address)]);
+  await Promise.all([
+    Account.remove(address),
+    Permissions.remove(address),
+    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
+  ]);
 };
 
 export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
@@ -415,27 +423,16 @@ export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promis
 
 export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime } = getEventParams(args);
+  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
 
   const promises = [];
   const { did: rawDid, secondaryKeys: rawAccounts } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
-  const accounts = JSON.parse(rawAccounts.toString());
 
   const { id: identityId } = await getIdentity(did);
 
-  accounts.forEach((accountWithPermissions: any) => {
-    const { permissions, ...rest } = accountWithPermissions;
-    let address;
-    if ('key' in rest) {
-      // for chain version >= 5.0.0
-      address = rest.key;
-    } else if ('signer' in rest) {
-      // for chain version < 5.0.0
-      address = rest.signer.account;
-    }
-
+  legacySecondaryKeyEntries(rawAccounts).forEach(({ address, permissions }) => {
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(
@@ -459,6 +456,17 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
           datetime,
         },
         blockId
+      ),
+      openIdentityKey(
+        {
+          identityId,
+          address,
+          role: KeyRole.Secondary,
+          permissions: { assets, portfolios, transactions, transactionGroups },
+          addedReason: eventId,
+          eventIdx,
+        },
+        blockId
       )
     );
   });
@@ -468,7 +476,13 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
 
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
+  const {
+    eventId,
+    createdBlockId: blockId,
+    datetime,
+    blockEventId,
+    eventIdx,
+  } = getEventParams(args);
 
   const { did: rawDid, newPrimaryKey: rawNewKey } = decodeEvent(event);
 
@@ -528,7 +542,19 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
       transactionGroups,
       transactions,
     }),
+    // close the old primary's membership interval
+    closeIdentityKeys(
+      { address: account.id, role: KeyRole.Primary, removedReason: eventId },
+      blockId
+    ),
   ]);
+
+  // ...and open the new primary's. The rotation record G3 asks for: both rows stay queryable, the
+  // old row's `validToBlock` equals the new one's `validFromBlock`.
+  await openIdentityKey(
+    { identityId: identity.id, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    blockId
+  );
 };
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
@@ -551,6 +577,7 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
     accountEntity.save(),
     Permissions.remove(address),
     createHistoryEntry(eventId, did, address, blockId, datetime, blockEventId),
+    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
   ]);
 };
 

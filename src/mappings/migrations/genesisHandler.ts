@@ -2,6 +2,7 @@ import {
   Block,
   EventIdEnum,
   Identity,
+  KeyRole,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
@@ -18,6 +19,7 @@ import {
   createIdentity,
   createPermissions,
 } from '../entities/identities/mapIdentities';
+import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
   createMultiSig,
@@ -95,7 +97,7 @@ const handleGenesisDids = async (datetime: Date) => {
     });
 
     if (primaryKey.length) {
-      [primaryKey, ...secondaryKeys].forEach(key => {
+      [primaryKey, ...secondaryKeys].forEach((key, keyIndex) => {
         accountInserts.push(
           createPermissions(
             {
@@ -114,6 +116,20 @@ const handleGenesisDids = async (datetime: Date) => {
               eventId: EventIdEnum.DidCreated,
               address: key,
               datetime,
+            },
+            genesisBlock
+          )
+        );
+        // The membership interval opened at genesis. `eventIdx` disambiguates keys of one identity
+        // seeded in the genesis block.
+        accountInserts.push(
+          openIdentityKey(
+            {
+              identityId: did,
+              address: key,
+              role: keyIndex === 0 ? KeyRole.Primary : KeyRole.Secondary,
+              addedReason: EventIdEnum.DidCreated,
+              eventIdx: keyIndex,
             },
             genesisBlock
           )

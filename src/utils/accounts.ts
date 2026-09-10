@@ -5,7 +5,7 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity, createPermissions } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity } from '../types';
+import { Account, EventIdEnum, Identity, IdentityKey, KeyRole } from '../types';
 import { extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
@@ -215,6 +215,23 @@ export const getOrCreateAccount = async (
   });
 
   await account.save();
+
+  // The membership interval, so a key discovered lazily from chain state has the same
+  // `IdentityKey` history as one seen through a `DidCreated` / `SecondaryKeysAdded` event.
+  const existingKey = await IdentityKey.get(`${did}/${address}/${blockId}/${padId('0')}`);
+
+  if (!existingKey) {
+    await IdentityKey.create({
+      id: `${did}/${address}/${blockId}/${padId('0')}`,
+      identityId: did,
+      accountId: address,
+      role: kind === 'primaryKey' ? KeyRole.Primary : KeyRole.Secondary,
+      validFromBlockId: blockId,
+      addedReason: eventId,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    }).save();
+  }
 
   return account;
 };

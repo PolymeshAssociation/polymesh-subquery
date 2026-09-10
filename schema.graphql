@@ -2057,6 +2057,8 @@ type Account @entity {
   evmAddress: String @index(unique: false)
   identity: Identity
   permissions: Permissions
+  "Every `IdentityKey` membership interval this account has held, current and historical"
+  keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   eventId: EventIdEnum!
   datetime: Date!
   createdBlock: Block!
@@ -2106,6 +2108,50 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   children: [ChildIdentity!]! @derivedFrom(field: "parent")
+  "Every key membership this Identity has held, current and historical — see `IdentityKey`"
+  keys: [IdentityKey!]! @derivedFrom(field: "identity")
+}
+
+"""
+The role a key holds inside an Identity.
+
+Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles are modelled on
+`Account.keyRole` (a separate enum) rather than here, and further membership roles may be added.
+"""
+enum KeyRole {
+  Primary
+  Secondary
+}
+
+"""
+One row per `(identity, account, role)` membership interval — an append-only key-rotation history.
+
+A key joining an identity opens a row (`validFromBlock` set, `validToBlock` null). A key leaving,
+being rotated out, or having its permissions changed closes the row (`validToBlock`,
+`removedReason`) and, for a permissions change or rotation, opens a fresh one. The currently active
+membership for an account is the row with `validToBlockId: { isNull: true }` (`Boolean` cannot be
+indexed on the Postgres in use, so the null-FK filter is the query form).
+
+Replaces `Identity.primaryAccount`/`secondaryAccounts` as the source of truth for key membership,
+and subsumes `AccountHistory`, which had untyped columns and no validity interval.
+"""
+type IdentityKey @entity
+  @compositeIndexes(fields: [["identity", "role"], ["account", "validToBlock"]]) {
+  id: ID!
+  identity: Identity! @index
+  account: Account! @index
+  role: KeyRole!
+  "Permissions granted to the key for this interval. Null for a primary key, which always has full permission"
+  permissions: PermissionsJson
+  validFromBlock: Block!
+  "Null while the membership is active. Filter `validToBlockId: { isNull: true }` for current keys"
+  validToBlock: Block @index
+  "The event that opened this membership interval"
+  addedReason: EventIdEnum!
+  "The event that closed it — null while active"
+  removedReason: EventIdEnum
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
