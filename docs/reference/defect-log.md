@@ -358,7 +358,7 @@ It matters because POLYX rows are used for accounting. A ledger that cannot say 
 
 `new Date("2021-11-05T13:56:36")` yields **local** time in most runtimes, so the value shifts by the reader's own offset and shifts differently for different readers. No error, no signal. For `tradeDate`, `valueDate`, `expiry` and record dates, an unmarked hour can change an entitlement.
 
-**Fix (D8):** `timestamptz`, so the wire form is `2021-11-05T13:56:36+00:00`. No schema field changes and no new fields. Note the conversion clause matters — `ALTER COLUMN … TYPE timestamptz USING … AT TIME ZONE 'UTC'` — because without it Postgres reads existing values in the *server's* zone and bakes in the error being fixed.
+**Fix (D8, revised 2026-09-10 — documentation only).** The original decision was to convert the columns to `timestamptz` in `db/compat.sql` so the wire form carries `+00:00`. Revised: SubQuery's only temporal scalar is `Date` → `timestamp without time zone`, with no directive to change it; the `compat.sql` `ALTER` is an unconditional breaking change for exact-string-equality consumers and a generated artifact to maintain, while the stored instant is already correct. Neither consumer was shown to compare datetime strings, so the proportionate fix is a **schema docstring** — one on `Block.datetime` covering every `Date` field, plus one-liners on the entitlement-critical fields (`Instruction.tradeDate`/`valueDate`, the `expiry` fields, `AssetDocument.filedAt`, `DistributionPayment.datetime`) — telling consumers to parse as UTC (`new Date(value + 'Z')`). Implemented in Phase 7. The `timestamptz` conversion stays available as a mechanical resync-window follow-up if a consumer is later found to need the suffix.
 
 ---
 

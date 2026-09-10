@@ -1794,6 +1794,14 @@ type Block @entity {
   countExtrinsicsError: Int!
   countExtrinsicsSuccess: Int!
   countEvents: Int!
+  """
+  Block timestamp. UTC — but this applies to EVERY `Date`/`datetime` field in the API:
+  SubQuery types `Date` as Postgres `timestamp without time zone`, so it is serialised
+  with no zone marker (`"2021-11-05T13:56:36"`). A consumer calling `new Date(value)`
+  in most runtimes gets *local* time, shifting it silently by its own offset. Parse
+  every datetime as UTC — `new Date(value + 'Z')`, or `dayjs.utc(value)`. See
+  docs/architecture-review.md §10.1 (decision D8).
+  """
   datetime: Date!
   specVersionId: Int!
   events: [Event] @derivedFrom(field: "block")
@@ -2225,7 +2233,9 @@ type Sto @entity {
   raisingTicker: String
   raisingPortfolio: Portfolio!
   creator: Identity!
+  "Offering opens. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   start: Date
+  "Offering closes. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   end: Date
   tiers: [FundraiserTierJson!]!
   status: StoStatus!
@@ -2279,6 +2289,7 @@ type Authorization @entity {
   toId: String @index(unique: false)
   toKey: String @index(unique: false)
   data: String
+  "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date @index(unique: false)
   "Indexed because `repairAuthorizationsAfterUpgrade` reads every pending row, and `store.getByFields` refuses to filter on a column with no index"
   status: AuthorizationStatusEnum! @index
@@ -2458,7 +2469,14 @@ type Instruction @entity {
   endBlock: Int
   "`endAfterBlock` is applicable only when `type` is `SettleManual`"
   endAfterBlock: Int
+  """
+  The trade date, as reported by the chain. UTC, but serialised with no timezone
+  marker: a consumer receives `"2021-11-05T13:56:36"` and `new Date(...)` parses it
+  as *local* time, shifting it silently by the reader's offset. Parse as UTC — e.g.
+  `new Date(value + 'Z')`. See docs/architecture-review.md §10.1.
+  """
   tradeDate: Date
+  "The value date, as reported by the chain. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   valueDate: Date
   memo: String
   "DID of the mediators"
@@ -2553,7 +2571,7 @@ type InstructionAffirmation @entity {
   isMediator: Boolean!
   isAutomaticallyAffirmed: Boolean!
   status: AffirmStatusEnum!
-  "If `expiry` is present the time should be check top ensure the affirmation is still valid. Applicable for mediator affirmations"
+  "If `expiry` is present the time should be checked to ensure the affirmation is still valid. Applicable for mediator affirmations. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   "`offChainReceipt` is only applicable when affirmation"
   offChainReceipt: OffChainReceipt
@@ -2640,6 +2658,7 @@ type DistributionPayment @entity {
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
+  "When the benefit was claimed. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
@@ -3008,6 +3027,7 @@ type AssetDocument @entity {
   link: String!
   contentHash: ContentHash
   type: String
+  "When the document was filed. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   filedAt: Date
   asset: Asset! @index(unique: false)
   createdBlock: Block!
@@ -3117,7 +3137,7 @@ type AssetMetadata @entity {
   value: String
   "true while the value is Locked or LockedUntil"
   isLocked: Boolean!
-  "value expiry, when the detail carried one"
+  "Value expiry, when the detail carried one. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdBlock: Block!
   updatedBlock: Block!
@@ -3756,6 +3776,7 @@ type TickerReservation @entity {
   ticker: String!
   asset: Asset
   identity: Identity! @index(unique: false)
+  "When the ticker reservation lapses. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdBlock: Block!
   updatedBlock: Block!

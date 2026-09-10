@@ -366,15 +366,15 @@ Every `Date` field in the schema — 27 of them — holds UTC and serializes wit
 
 SubQuery maps `Date` to Postgres `timestamp without time zone`, and PostGraphile serializes that verbatim. A consumer calling `new Date("2021-11-05T13:56:36")` in a browser gets **local** time in most runtimes — so the value shifts by the reader's offset, and it shifts differently for different readers. Nothing errors. For a securities index where a `tradeDate`, `valueDate`, `expiry` or record date can decide an entitlement, an unmarked hour is not cosmetic.
 
-**D8: the columns become `timestamptz`.** The serialized form becomes `2021-11-05T13:56:36+00:00`, which every ISO-8601 parser reads as the instant it is. No schema field changes, no new fields, no consumer field migration — only the string changes. It is breaking for anything doing exact string equality on a datetime, which is accepted under D1.
+**D8, as originally decided:** the columns become `timestamptz`, so the serialized form becomes `2021-11-05T13:56:36+00:00`. Mechanically a `compat.sql` concern, since SubQuery generates the DDL: `ALTER TABLE <t> ALTER COLUMN <c> TYPE timestamptz USING <c> AT TIME ZONE 'UTC'` (the `USING … AT TIME ZONE 'UTC'` clause is load-bearing — without it Postgres reads existing values in the server's zone and bakes in the error being fixed).
 
-Mechanically this is a `compat.sql` concern rather than a schema one, since SubQuery generates the DDL:
+**D8, revised 2026-09-10 — documentation only; the columns stay `Date`.** SubQuery's only temporal scalar is `Date`, and it generates `timestamp without time zone`; there is no scalar or directive for `timestamptz`, and `@dbType` only covers `Int`/`BigInt`/`Float`/`ID`/`String`. The only place to change the type is an unconditional `compat.sql` `ALTER`, which:
 
-```sql
-ALTER TABLE <t> ALTER COLUMN <c> TYPE timestamptz USING <c> AT TIME ZONE 'UTC';
-```
+- is a **breaking change** for any consumer doing exact string comparison on a datetime (`"…:36"` → `"…:36+00:00"`), for the same class of value that is otherwise already correct — the stored *instant* is right; only the wire string omits the marker;
+- adds a generated artifact (the ~29-statement `ALTER` block) that has to be kept in sync with the schema on every field addition;
+- is only ever exercised at a full resync, so its correctness is asserted rather than tested by CI.
 
-The `USING … AT TIME ZONE 'UTC'` clause is load-bearing: without it Postgres interprets the existing values in the **server's** timezone, which would bake in exactly the error being fixed. Under D5 the database is rebuilt from genesis anyway, so this applies to a fresh schema rather than a migration — but the clause should be written regardless, because `compat.sql` is re-applied on every deploy (§4.1) and must be correct if it ever meets existing data.
+Neither the SDK nor the portal was shown to compare datetime strings, so the concrete harm is a consumer that parses `new Date(value)` and gets local time. The proportionate fix for that is a **schema docstring**: one on `Block.datetime` stating the rule for every `Date` field in the API, plus one-liners on the entitlement-critical fields (`tradeDate`, `valueDate`, the `expiry` fields, `filedAt`, the distribution dates), each saying "parse as UTC — `new Date(value + 'Z')`". Non-breaking, nothing generated, and it puts the fix where the reader looks. If a consumer is later found to depend on the `+00:00` suffix, the `timestamptz` conversion is a mechanical follow-up during a resync window.
 
 ### 10.2 The epoch integer — open, deliberately
 
@@ -509,7 +509,7 @@ Cheapest work in the plan and it makes every later tier safer to write. No schem
 22. **POLYX ledger**: `PolyxEntry` + `AccountBalance` replacing `PolyxTransaction` and `BalanceTypeEnum`.
 23. **Genesis balance seeding** — hard prerequisite for 22; `genesisHandler` currently seeds no balances at all. Extract into the shared `src/seed/` module that plan [10](./implementation/10-partial-index.md) also uses, rather than writing it twice.
 24. `IdentityKey` replacing `AccountHistory`; `Nft`, `AssetAllowance`, `AssetMetadata`. **`Nft` is also the fix for the slowest blocks** (§13).
-25. `timestamptz` on every date column, and padded numeric ids (D8, D12). Both are trivial *during* the resync and awkward after it, so they must not be deferred past this tier.
+25. Timezone-ambiguous datetimes and lexicographic numeric ids (D8, D12). D8 was revised to documentation-only (schema docstrings — see §10.1); D12 (padded numeric ids) is a real schema change that is trivial *during* the resync and awkward after it, so it must not be deferred past this tier.
 26. **POLYX reconciliation harness** against public archive endpoints (D11) — the acceptance test for 22, not a follow-up to it.
 
 **Tier 4 — coverage**
@@ -524,4 +524,4 @@ Cheapest work in the plan and it makes every later tier safer to write. No schem
 **Not on the roadmap — considered and rejected**
 - Retiring `padId` via `@dbType`. The padded composite id is load-bearing for deterministic pagination in both consumers; see the correction in §8b.
 - **Upsert-everywhere as the answer to partial indexing.** It removes the stall and keeps the wrong number — §12.
-- **An epoch-integer timestamp alongside `timestamptz`, schema-wide.** Not rejected; *undecided*, and deliberately so. §10.2.
+- **An epoch-integer timestamp as a second representation of every datetime, schema-wide.** Not rejected; *undecided*, and deliberately so. §10.2. (Independent of D8's revision to documentation-only.)
