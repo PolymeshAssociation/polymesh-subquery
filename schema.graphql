@@ -1946,16 +1946,6 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
-  # The five denormalised filter columns below are indexed in db/compat.sql, not with `@index`:
-  # `@subql/node` caps an entity at 10 indexes and Event is at that cap with its foreign keys,
-  # eventIdx/extrinsicIdx/specVersionId, moduleId/eventId and the `[moduleId, eventId]` composite.
-  claimType: String
-  claimScope: String
-  claimIssuer: String
-  claimExpiry: String
-  corporateActionTicker: String
-  fundraiserOfferingAsset: String
-  transferTo: String
   extrinsic: Extrinsic
 }
 

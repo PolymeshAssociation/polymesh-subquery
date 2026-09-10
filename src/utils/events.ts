@@ -87,6 +87,3 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     blockEventId,
   };
 };
-
-export const extractTransferTo = (args: any[]) =>
-  JSONStringifyExceptStringAndNull(args[3]?.value?.did);

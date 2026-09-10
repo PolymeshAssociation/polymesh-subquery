@@ -62,7 +62,3 @@ export const getOfferingAsset = (item: Codec): string => {
   const fundraiser = JSON.parse(item.toString());
   return hexToString(extractValue(fundraiser, 'offering_asset'));
 };
-
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const extractOfferingAsset = (args: any[]) =>
-  extractString(args[3]?.value, 'offering_asset');

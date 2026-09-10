@@ -35,14 +35,10 @@ CREATE INDEX IF NOT EXISTS data_event_module_id_event_id_event_arg_2 ON events (
 -- it reads exists in `schema.graphql`.
 CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from attributes #>> '{2,value,did}'));
 
--- Denormalised filter columns on `events`. These would be `@index` in schema.graphql, but
--- `@subql/node` caps an entity at 10 indexes (`indexCountLimit`, not configurable) and Event is
--- already at the cap. Kept here, as `master` had them.
-CREATE INDEX IF NOT EXISTS data_event_claim_type ON events (claim_type);
-CREATE INDEX IF NOT EXISTS data_event_claim_scope ON events (claim_scope);
-CREATE INDEX IF NOT EXISTS data_event_claim_issuer ON events (claim_issuer);
-CREATE INDEX IF NOT EXISTS data_event_corporate_action_ticker ON events (corporate_action_ticker);
-CREATE INDEX IF NOT EXISTS data_event_fundraiser_offering_asset ON events (fundraiser_offering_asset);
+-- (The denormalised `claim_type` / `claim_scope` / `claim_issuer` / `corporate_action_ticker` /
+-- `fundraiser_offering_asset` / `transfer_to` columns on `events` and their indexes were dropped —
+-- a harvester-era carry-over, empty or wrong on the vast majority of events, and the same facts
+-- live on the `Claim` / corporate-action / STO entities. See docs/implementation/09-infrastructure.md.)
 
 -- Plain indexes that would otherwise be `@index` in schema.graphql but cannot be: `@subql/node`
 -- caps an entity at 10 indexes (`indexCountLimit`, not configurable), and PolyxEntry is already
