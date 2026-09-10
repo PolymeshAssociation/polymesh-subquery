@@ -190,6 +190,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   const value = getFirstValueFromJson(rawUpdateReason);
 
   const { assetId, ids } = await getNftId(rawNftId, block);
+  // NftHolder.nftIds is [BigInt] (G10); getNftId still yields JS numbers
+  const bigIds = ids.map(BigInt);
 
   const asset = await getAsset(assetId);
   asset.updatedBlockId = blockId;
@@ -203,7 +205,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
 
     // the whole-array rollup, kept for the SDK and still buffered per block
     const nftHolder = await getNftHolder(assetId, did, blockId);
-    nftHolder.nftIds.push(...ids);
+    nftHolder.nftIds.push(...bigIds);
     nftHolder.updatedBlockId = blockId;
     await bufferHolder(blockId, nftHolder);
 
@@ -216,7 +218,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     asset.totalSupply -= BigInt(ids.length);
 
     const nftHolder = await getNftHolder(assetId, did, blockId);
-    nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
+    nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !bigIds.includes(heldId));
     nftHolder.updatedBlockId = blockId;
     await bufferHolder(blockId, nftHolder);
 
@@ -229,8 +231,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       getNftHolder(assetId, fromDid, blockId),
       getNftHolder(assetId, toDid, blockId),
     ]);
-    fromRollup.nftIds = fromRollup.nftIds.filter(id => !ids.includes(id));
-    toRollup.nftIds.push(...ids);
+    fromRollup.nftIds = fromRollup.nftIds.filter(id => !bigIds.includes(id));
+    toRollup.nftIds.push(...bigIds);
     fromRollup.updatedBlockId = blockId;
     toRollup.updatedBlockId = blockId;
 

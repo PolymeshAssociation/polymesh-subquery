@@ -41,7 +41,6 @@ import {
   isMigratedAssetId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
-  specVersionOf,
 } from '../../../utils';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly } from './../common';
@@ -248,14 +247,6 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     fundingRound: rawFundingRoundName,
   } = decoded;
 
-  /**
-   * Investor uniqueness was removed at 6.0.0 and the parameter went with it, so only the pre-6
-   * shape declares `disableIu`. Reading it on a later event would throw, which is why the
-   * version check is here rather than a `?.`
-   */
-  const isUniquenessRequired =
-    specVersionOf(block) < 6_000_000 && !getBooleanValue(decoded.disableIu);
-
   const ownerId = getTextValue(rawOwnerDid);
 
   const ticker =
@@ -314,7 +305,6 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     fundingRound,
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
-    isUniquenessRequired,
     holderCount: 0,
     identifiers,
     ownerId,

@@ -2913,7 +2913,7 @@ type NftHolder @entity {
   id: ID! #assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
-  nftIds: [Int]
+  nftIds: [BigInt]
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -3012,8 +3012,8 @@ type AssetDocument @entity {
 Represents a tokenized Asset on the Polymesh chain. The central data structure for the ecosystem
 """
 type Asset @entity {
-  id: ID! # ticker
-  "the chain's own asset id — equal to `id` on 7.x+, the blake2-hashed legacy ticker before that"
+  id: ID! # assetId
+  "the chain's own asset id — equal to `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
   assetId: String! @index(unique: true)
   ticker: String @index(unique: false)
   name: String @index(unique: false)
@@ -3022,7 +3022,6 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  isUniquenessRequired: Boolean!
   "number of holders with a non-zero balance — maintained where `Holding` rows cross zero"
   holderCount: Int!
   identifiers: [SecurityIdentifier]!

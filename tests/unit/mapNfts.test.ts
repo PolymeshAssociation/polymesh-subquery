@@ -102,7 +102,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     expect(db['Nft'][`${ASSET}/0000000002`].burnedBlockId).toBeUndefined();
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(3);
     // rollup still maintained
-    expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([1, 2, 3]);
+    expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(1), BigInt(2), BigInt(3)]);
   });
 
   it('moves the Nft row on transfer and adjusts both Holding.nftCount values', async () => {
