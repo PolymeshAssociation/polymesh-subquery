@@ -93,6 +93,15 @@ the historical `_block_range` close). Applying the test moves `ProposalVote`,
 
 ## Commit sequence
 
+> **Status 2026‑09‑11 — implemented.** 7.3 `15fd13c`, 7.4 `2867ab3`, 7.5 `addc94d`, 7.6 `15f3511`
+> on `redesign/07-schema-invariants`. Full unit gate green (496 tests), `yarn build` green. Not
+> resynced — the seed‑event FK and the `datetime` removal from live queries still need a genesis
+> resync to validate. **Two pieces were split out of 7.5 to follow‑ups:** the standalone
+> `eventIdx` / `extrinsicIdx` removal (~22 entities — several are written and some queried, needs a
+> per‑entity consumer check), and threading the real `createdEventId` through the asset‑holder
+> resolution chain (`getOrCreateAccount` / `ledgerAccount` fall back to the block's first event for
+> lazily‑discovered accounts). Both are tracked in the session decisions log.
+
 > **Revised 2026‑09‑10 after review.** Nullable‑first (add relations, then populate, then remove
 > the old fields) was the original staging. It does not work: SubQuery auto‑indexes every
 > entity‑typed field and caps an entity at 10 indexes; `Asset` and `EvmTransaction` are at 10
