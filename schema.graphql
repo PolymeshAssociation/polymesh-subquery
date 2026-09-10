@@ -2030,20 +2030,6 @@ type PortfolioPermissions @jsonField {
 }
 
 """
-Represents an Account's permissions. The primary key for an Identity always has full permission
-"""
-type Permissions @entity {
-  id: ID!
-  assets: AssetPermissions
-  portfolios: PortfolioPermissions
-  transactions: TransactionPermissions
-  transactionGroups: [String]!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
 Represents a public/private key pair. Most actions must be signed by an appropriately permissioned Account
 
 Before an Account can sign most Extrinsics it must first be attached to an Identity
@@ -2056,7 +2042,6 @@ type Account @entity {
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
   identity: Identity
-  permissions: Permissions
   "Every `IdentityKey` membership interval this account has held, current and historical"
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig (defect G5)"
@@ -2068,27 +2053,14 @@ type Account @entity {
 }
 
 """
-Represents permissions to be saved in account history
+An account's permissions for one `IdentityKey` membership interval — the `Permissions` entity
+collapsed into the jsonField that already carried the same four fields (defect G4).
 """
 type PermissionsJson @jsonField {
   assets: AssetPermissions
   portfolios: PortfolioPermissions
   transactions: TransactionPermissions
   transactionGroups: [String]!
-}
-
-"""
-Represents historical data of identities assigned to an account
-"""
-type AccountHistory @entity {
-  id: ID!
-  account: String!
-  identity: String!
-  eventId: EventIdEnum!
-  permissions: PermissionsJson
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """

@@ -2,7 +2,7 @@ import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
 import { getKeyRecordCache } from '../mappings/blockContext';
-import { createIdentity, createPermissions } from '../mappings/entities/identities/mapIdentities';
+import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
 import { Account, EventIdEnum, Identity, IdentityKey, KeyRole } from '../types';
@@ -193,21 +193,11 @@ export const getOrCreateAccount = async (
     );
   }
 
-  await createPermissions(
-    {
-      datetime,
-      transactionGroups: [],
-    },
-    address,
-    blockId
-  );
-
   const account = Account.create({
     id: address,
     eventId: EventIdEnum.AccountCreated,
     datetime,
     identityId: did,
-    permissionsId: address,
     address,
     ...getAccountKeyType(address),
     createdBlockId: blockId,

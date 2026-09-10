@@ -1,14 +1,10 @@
 import { Codec } from '@polkadot/types/types';
 import { Account } from '../../src/types';
 import { getOrCreateAccount } from '../../src/utils/accounts';
-import {
-  createIdentity,
-  createPermissions,
-} from '../../src/mappings/entities/identities/mapIdentities';
+import { createIdentity } from '../../src/mappings/entities/identities/mapIdentities';
 
 jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
   createIdentity: jest.fn(),
-  createPermissions: jest.fn(),
 }));
 
 const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -141,14 +137,13 @@ describe('getOrCreateAccount for a multisig signer key', () => {
   });
 
   /**
-   * A signer key has no identity and no permissions, so there is nothing for an `Account` to
-   * carry. What must not happen is the old behaviour: reading the multisig address out of the key
-   * record and creating an `Identity` keyed by it.
+   * A signer key has no identity, so there is nothing for an `Account` to carry. What must not
+   * happen is the old behaviour: reading the multisig address out of the key record and creating
+   * an `Identity` keyed by it.
    */
   it('indexes no account, and above all no identity keyed by the multisig address', async () => {
     await expect(getOrCreateAccount(ADDRESS, freshBlockId(), datetime)).resolves.toBeUndefined();
 
     expect(createIdentity).not.toHaveBeenCalled();
-    expect(createPermissions).not.toHaveBeenCalled();
   });
 });

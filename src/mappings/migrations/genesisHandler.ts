@@ -14,11 +14,7 @@ import {
   padId,
 } from '../../utils';
 import { getAccountId, systematicIssuers } from '../consts';
-import {
-  createAccount,
-  createIdentity,
-  createPermissions,
-} from '../entities/identities/mapIdentities';
+import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
@@ -99,20 +95,9 @@ const handleGenesisDids = async (datetime: Date) => {
     if (primaryKey.length) {
       [primaryKey, ...secondaryKeys].forEach((key, keyIndex) => {
         accountInserts.push(
-          createPermissions(
-            {
-              datetime,
-              transactionGroups: [],
-            },
-            key,
-            genesisBlock
-          )
-        );
-        accountInserts.push(
           createAccount(
             {
               identityId: did,
-              permissionsId: key,
               eventId: EventIdEnum.DidCreated,
               address: key,
               datetime,

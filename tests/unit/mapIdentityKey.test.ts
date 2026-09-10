@@ -82,6 +82,27 @@ describe('openIdentityKey', () => {
     expect(rows()[0].validToBlockId).toBeUndefined();
     expect(rows()[0].removedReason).toBeUndefined();
   });
+
+  it('carries the granted permissions on the row itself (G4 — no separate Permissions entity)', async () => {
+    const permissions = {
+      transactions: { type: 'These', values: ['identity.add_claim'] },
+      transactionGroups: [],
+    };
+
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: KeyRole.Secondary,
+        permissions,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 1,
+      },
+      '0000004'
+    );
+
+    expect(rows()[0].permissions).toEqual(permissions);
+  });
 });
 
 describe('closeIdentityKeys', () => {
