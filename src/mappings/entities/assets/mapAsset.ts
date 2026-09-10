@@ -18,6 +18,7 @@ import {
   SecurityIdentifier,
 } from '../../../types';
 import {
+  accountHolder,
   AssetHolderDetails,
   bytesToString,
   camelToSnakeCase,
@@ -894,6 +895,42 @@ export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
   allowance.updatedBlockId = blockId;
 
   await allowance.save();
+};
+
+export const handleCreatedAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
+  const {
+    assetId: rawAssetId,
+    from: rawFrom,
+    to: rawTo,
+    amount: rawAmount,
+    memo: rawMemo,
+    pendingTransferId: rawPending,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  await getAsset(assetId);
+
+  // `pendingTransferId` is an InstructionId — the pending transfer is an already-modelled
+  // Instruction, so this is a plain relation, no new state machine
+  const instructionId = rawPending?.isEmpty ? undefined : getTextValue(rawPending);
+
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId,
+      fromHolder: accountHolder(undefined, getTextValue(rawFrom)),
+      toHolder: accountHolder(undefined, getTextValue(rawTo)),
+      amount: getBigIntValue(rawAmount),
+      instructionId,
+      instructionMemo: rawMemo?.isEmpty ? undefined : bytesToString(rawMemo),
+    },
+    blockEventId,
+    EventIdEnum.CreatedAssetTransfer,
+    extrinsic
+  );
 };
 
 export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void> => {

@@ -95,6 +95,29 @@ registerShape('asset', 'AllowanceSpent', [
   { from: V8, fields: ['owner', 'spender', 'assetId', 'amountSpent', 'remainingAllowance'] },
 ]);
 
+// the v8 account-side transfer path — `pendingTransferId` links to an existing Instruction
+registerShape('asset', 'CreatedAssetTransfer', [
+  { from: V8, fields: ['assetId', 'from', 'to', 'amount', 'memo', 'pendingTransferId'] },
+]);
+
+// asset metadata (defect G13) and asset-type events. Arity has been stable across the tags
+// walked in docs/reference/event-shape-verification.md; only `Ticker → AssetId` at 7.x, which
+// `getAssetId` already absorbs.
+registerShape('asset', 'SetAssetMetadataValue', stable(['did', 'assetId', 'value', 'detail']));
+registerShape('asset', 'SetAssetMetadataValueDetails', stable(['did', 'assetId', 'detail']));
+registerShape(
+  'asset',
+  'RegisterAssetMetadataLocalType',
+  stable(['did', 'assetId', 'name', 'localKeyId', 'spec'])
+);
+registerShape('asset', 'RegisterAssetMetadataGlobalType', stable(['name', 'globalKeyId', 'spec']));
+registerShape('asset', 'LocalMetadataKeyDeleted', stable(['did', 'assetId', 'localKeyId']));
+registerShape('asset', 'MetadataValueDeleted', stable(['did', 'assetId', 'key']));
+registerShape('asset', 'GlobalMetadataSpecUpdated', stable(['name', 'spec']));
+registerShape('asset', 'AssetTypeChanged', stable(['did', 'assetId', 'assetType']));
+registerShape('asset', 'CustomAssetTypeExists', stable(['did', 'typeId', 'name']));
+registerShape('asset', 'CustomAssetTypeRegistered', stable(['did', 'typeId', 'name']));
+
 registerShape('asset', 'TickerRegistered', stable(['did', 'ticker', 'expiry']));
 // Deprecated at 6.0.0
 registerShape('asset', 'ClassicTickerClaimed', discontinuedAt(LAST_V5, ['did', 'ticker']));

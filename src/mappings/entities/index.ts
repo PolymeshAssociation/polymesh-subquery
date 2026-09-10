@@ -1,4 +1,5 @@
 export * from './assets/mapAsset';
+export * from './assets/mapAssetMetadata';
 export * from './identities/mapAuthorization';
 export * from './block/mapBlock';
 export * from './events/mapBridgeEvent';
