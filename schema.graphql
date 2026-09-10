@@ -2357,35 +2357,6 @@ type Portfolio @entity {
   createdEvent: Event!
 }
 
-enum PortfolioMovementTypeEnum {
-  Fungible
-  NonFungible
-}
-
-"""
-Represents a transfer of fungible assets between a single identities portfolios.
-
-Note: transfers between identities are known as `Settlements`
-"""
-type PortfolioMovement @entity {
-  id: ID!
-  from: Portfolio @index(unique: false)
-  fromAccount: String @index(unique: false)
-  to: Portfolio @index(unique: false)
-  toAccount: String @index(unique: false)
-  identity: Identity @index(unique: false)
-  type: PortfolioMovementTypeEnum!
-  asset: Asset!
-  "the number of fungible tokens transferred. Defined if type == Fungible"
-  amount: BigInt
-  "the IDs of non-fungible tokens transferred. Defined if type == NonFungible"
-  nftIds: [BigInt]
-  memo: String
-  address: String!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
 """
 Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
 
@@ -3075,6 +3046,12 @@ type AssetTransaction @entity {
   instruction: Instruction
   "`instructionMemo` will only be present for the cases where memo is provided for the instruction which got executed"
   instructionMemo: String
+  "true when both sides belong to one Identity (a portfolio movement, or a settlement same-DID fast path); null for issuance and redemption. Not indexed — filter by plain equality"
+  isInternalTransfer: Boolean
+  "note attached to a portfolio movement or a settlement.transferFunds call"
+  memo: String
+  "the account that signed the extrinsic, for movements initiated directly by an account"
+  address: String
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!

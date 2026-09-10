@@ -39,6 +39,34 @@ export const portfolioHolder = (identityId: string, number: number): PortfolioDe
   holderKind: HolderKind.Portfolio,
 });
 
+/**
+ * Whether a movement is internal to one Identity — the shared classifier for
+ * `AssetTransaction.isInternalTransfer`.
+ *
+ * Presence is checked before DID equality, and the order matters:
+ *
+ * - a missing `from` holder is an issuance, a missing `to` holder a redemption — neither is a
+ *   transfer between two holders, so both return `undefined` rather than a boolean;
+ * - a holder that is *present* but whose DID never resolved (an account with no known Identity)
+ *   is not an absent holder. It classifies `false` — we cannot prove it is the same Identity,
+ *   but it must never fall through to the issuance/redemption case and be recorded as one.
+ *
+ * `ControllerTransfer` is the case `eventId` alone cannot decide: nothing on chain stops its
+ * source and destination resolving to the same DID, so it is classified here like any other.
+ */
+export const classifyInternalTransfer = (
+  fromHolder: AssetHolderDetails | undefined,
+  toHolder: AssetHolderDetails | undefined
+): boolean | undefined => {
+  if (!fromHolder || !toHolder) {
+    return undefined;
+  }
+  if (!fromHolder.identityId || !toHolder.identityId) {
+    return false;
+  }
+  return fromHolder.identityId === toHolder.identityId;
+};
+
 export interface MeshPortfolio {
   did: string;
   kind:

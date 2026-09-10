@@ -22,6 +22,7 @@ import {
   AssetHolderDetails,
   bytesToString,
   camelToSnakeCase,
+  classifyInternalTransfer,
   coerceHexToString,
   emptyDid,
   getAssetId,
@@ -73,7 +74,14 @@ export const createAssetTransaction = (
   datetime: Date,
   details: Pick<
     AssetTransaction,
-    'assetId' | 'amount' | 'fundingRound' | 'nftIds' | 'instructionId' | 'instructionMemo'
+    | 'assetId'
+    | 'amount'
+    | 'fundingRound'
+    | 'nftIds'
+    | 'instructionId'
+    | 'instructionMemo'
+    | 'memo'
+    | 'address'
   > & { fromHolder?: AssetHolderDetails; toHolder?: AssetHolderDetails },
   blockEventId: string,
   eventId?: EventIdEnum,
@@ -124,6 +132,9 @@ export const createAssetTransaction = (
     ...details,
     // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
+    // classified on holder presence first, DID equality second — an unresolved holder is
+    // present, not absent, and must never read as an issuance/redemption
+    isInternalTransfer: classifyInternalTransfer(details.fromHolder, details.toHolder),
     fromPortfolioId,
     fromAccount,
     fromIdentityId,
