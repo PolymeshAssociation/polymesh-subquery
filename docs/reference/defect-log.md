@@ -322,6 +322,8 @@ The same shape applies anywhere a chain-assigned numeric identifier is stored as
 
 **Implemented in Phase 7** (`feat!: 🎸 zero-pad chain-assigned numeric ids`). A shared `padNumericId` helper ([`src/utils/common.ts`](../../src/utils/common.ts)) is applied at construction and at every lookup for the four bare chain-integer ids — `Instruction.id`, `Venue.id`, `Proposal.id`, `Authorization.id` — and for the FK columns that reference them (`Instruction.venueId`, `Sto.venueId`, `AssetTransaction.instructionId`, and the derived `Leg` / `InstructionParty` / `InstructionAffirmation` / `InstructionEvent` ids). `ID` / `ID_DESC` / `ID_ASC` ordering on those connections is now total and chronological. Composite ids (`Sto`, `Distribution`, `MultiSigProposal`) are out of scope — their leading segment is already a padded/fixed-width key under D4.
 
+Two follow-ups from that commit: (1) `padNumericId` in `getFundraiserDetails` threw `padStart is not a function` because `venue_id` comes through `JSON.parse` as a number — fixed by `String(...)` coercion (`fix: 🐛 coerce venue_id to a string before padding it`), and the STO path gained its first unit test. (2) `handleSnapshotTaken` was calling `Proposal.get(pip.id)` with a **number** from `params[2].toJSON()`; routing it through `padNumericId(String(pip.id))` incidentally fixed that. Both are the same class — a `Codec.toJSON()`-derived numeric treated as a string — and a wider sweep is warranted (`getTextValue`'s return type is declared `string` while it returns `undefined` at runtime, which hides these).
+
 ---
 
 ### A15. Pre-v8 staking rewards are not attributable to the account that received them — CONFIRMED
@@ -360,7 +362,7 @@ It matters because POLYX rows are used for accounting. A ledger that cannot say 
 
 `new Date("2021-11-05T13:56:36")` yields **local** time in most runtimes, so the value shifts by the reader's own offset and shifts differently for different readers. No error, no signal. For `tradeDate`, `valueDate`, `expiry` and record dates, an unmarked hour can change an entitlement.
 
-**Fix (D8, revised twice 2026-09-10).** Original: convert every `Date` column to `timestamptz` in `db/compat.sql`. First revision: documentation only — a parse-as-UTC schema docstring on `Block.datetime` and the entitlement-critical fields, because a schema-wide `ALTER` is an unconditional breaking change for exact-string-equality consumers plus a generated artifact, and the stored instant is already correct. Second revision: **D13** removes the `datetime` copy from the 16 domain entities, leaving `Block.datetime` the only timestamp in the schema — so *that one column* is converted to `timestamptz` (no inconsistency, and the time-range id-range pattern needs a plain btree on it anyway). Both land in Phase 7; see [`../implementation/13-entity-provenance.md`](../implementation/13-entity-provenance.md).
+**Fix (D8, revised 2026-09-10 → documentation only).** The original decision was to convert every `Date` column to `timestamptz` in `db/compat.sql`. Revised: SubQuery's only temporal scalar is `Date` → `timestamp without time zone`, no directive; a `compat.sql` `ALTER` is an unconditional breaking change for exact-string-equality consumers plus a generated artifact, and the stored instant is already correct. So: a parse-as-UTC docstring on `Block.datetime` (covering every `Date` field) and the entitlement-critical fields (`tradeDate`, `valueDate`, the `expiry` fields, `filedAt`, `start`/`end`). Nothing is converted — a "convert only `Block.datetime`" middle position was dropped because ~13 named `Date` columns survive D13, so it just reintroduces the inconsistency. See [`../implementation/13-entity-provenance.md`](../implementation/13-entity-provenance.md).
 
 ---
 
@@ -376,7 +378,7 @@ It matters because POLYX rows are used for accounting. A ledger that cannot say 
 
 `db/compat.sql` carries `CREATE INDEX data_block_datetime_timestamp ON blocks (((datetime)::timestamp(0) without time zone))`. Postgres uses an expression index only when the query repeats the expression exactly; PostGraphile's generated SQL for a `datetime` filter compares the **bare** column (`where ("datetime" >= $2)`). Measured against a live indexer DB with seq scans penalised: `WHERE datetime >= …` → `Seq Scan`; `WHERE datetime::timestamp(0) >= …` → `Bitmap Index Scan`. So the index serves nothing the GraphQL API can ask, and the `compat.sql` comment claiming the cast "is what the query layer compares against" is wrong.
 
-**Fix (D13, Phase 7 commit 7.6).** Replace with a plain btree on `datetime` — which the block-range→id-range lookup that serves time-range queries after D13 removes `createdBlock` actually needs. Convert the column to `timestamptz` in the same commit (A16 second revision).
+**Fix (D13, Phase 7 commit 7.6).** Replace with a plain btree on `datetime` — which the block-range→id-range lookup that serves time-range queries after D13 removes `createdBlock` actually needs. The column type is not touched (A16 stays documentation-only).
 
 ---
 
