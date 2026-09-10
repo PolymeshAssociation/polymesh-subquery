@@ -33,6 +33,7 @@ import {
   getStringArrayValue,
   getTextValue,
   is7xChain,
+  isMigratedAssetId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
   specVersionOf,
@@ -181,7 +182,8 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 
   const ownerId = getTextValue(rawOwnerDid);
 
-  const ticker = is7xChain(block) ? undefined : serializeTicker(rawAssetId);
+  const ticker =
+    is7xChain(block) || isMigratedAssetId(rawAssetId) ? undefined : serializeTicker(rawAssetId);
 
   /**
    * Name isn't present on the old events so we need to query storage.

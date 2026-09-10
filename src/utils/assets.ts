@@ -112,11 +112,29 @@ export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise
   return u8aToHex(rawBytes);
 };
 
+/**
+ * Whether a raw asset identifier is already a migrated 16-byte asset ID, rather than a legacy
+ * ticker.
+ *
+ * The public chain switched `asset` events from carrying a 12-byte `Ticker` to a 16-byte
+ * `PolymeshPrimitivesAssetAssetId` at v7.0.0. The spec-version gate below would be enough if the
+ * block always reported its true runtime — but `@subql/node` has been seen serving the
+ * *pre-upgrade* spec for a long run of blocks after v7.0.0 actually activated (testnet: ~169k
+ * blocks reported as spec 6003050 instead of 7000003, block 15,978,579 onward). A byte-length
+ * test is immune to that: a `Ticker` is `[u8; 12]`, so any `0x`-prefixed value that decodes to
+ * 16 bytes is unambiguously a migrated asset ID whatever spec the block claims.
+ */
+export const isMigratedAssetId = (value: string | Codec): boolean => {
+  const hex = typeof value === 'string' ? value : value.toString();
+
+  return hexHasPrefix(hex) && hexStripPrefix(hex).length === 32;
+};
+
 export const getAssetId = async (
   assetId: string | Codec,
   block: SubstrateBlock
 ): Promise<string> => {
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(assetId) || is7xChain(block)) {
     return typeof assetId === 'string' ? assetId : assetId.toString();
   }
 
@@ -138,7 +156,7 @@ export const getAssetIdWithTicker = async (
 ): Promise<AssetIdWithTicker> => {
   let assetId: string;
   let ticker: string;
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(assetIdOrTicker) || is7xChain(block)) {
     assetId = typeof assetIdOrTicker === 'string' ? assetIdOrTicker : assetIdOrTicker.toString();
 
     const asset = await Asset.get(assetId);
