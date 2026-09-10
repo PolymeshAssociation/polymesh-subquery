@@ -147,10 +147,9 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     // A fresh `Claim.create` fully replaces any row at this id, so a re-issue after
     // revocation implicitly clears `revokeDate` — stated here rather than left implicit.
     revokeDate: undefined,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    customClaimTypeId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+    customClaimTypeId,
   }).save();
 };
 

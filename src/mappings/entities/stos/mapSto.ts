@@ -28,7 +28,7 @@ const getOfferingAsset = (
 };
 
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   let rawStoId: Codec;
   let rawStoName: Codec;
   let rawFundraiserDetails: Codec;
@@ -53,8 +53,8 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
     stoId,
     name,
     ...fundraiserDetails,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -73,7 +73,7 @@ export const handleStoClosed = async (event: SubstrateEvent): Promise<void> => {
 export const handleFundraiserOffchainFundingEnabled = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, block, blockId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawOfferingAsset, rawStoId, rawOffChainTicker] = params;
   const offeringAssetId = await getAssetId(rawOfferingAsset, block);
   const stoId = getNumberValue(rawStoId);
@@ -84,13 +84,13 @@ export const handleFundraiserOffchainFundingEnabled = async (
   if (sto) {
     sto.offChainFundingEnabled = true;
     sto.offChainFundingToken = offChainTicker;
-    sto.updatedBlockId = blockId;
+    sto.updatedEventId = blockEventId;
     await sto.save();
   }
 };
 
 const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
-  const { params, extrinsic, block, blockId } = extractArgs(event);
+  const { params, extrinsic, block, blockEventId } = extractArgs(event);
   let rawStoId: Codec;
 
   if (is7Dot3Chain(block)) {
@@ -115,12 +115,12 @@ const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus):
       sto.status = StoStatus.ClosedEarly;
     }
   }
-  sto.updatedBlockId = blockId;
+  sto.updatedEventId = blockEventId;
   await sto.save();
 };
 
 export const handleFundraiserWindowModified = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block } = extractArgs(event);
+  const { params, extrinsic, block, blockEventId } = extractArgs(event);
   const offeringAssetId = await getOfferingAsset(block, params, extrinsic);
 
   let rawStoId: Codec;
@@ -140,13 +140,13 @@ export const handleFundraiserWindowModified = async (event: SubstrateEvent): Pro
   if (sto) {
     sto.start = getDateValue(rawStart);
     sto.end = getDateValue(rawEnd);
-    sto.updatedBlockId = blockId;
+    sto.updatedEventId = blockEventId;
     await sto.save();
   }
 };
 
 export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block, blockEventId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   let rawInvestor: Codec;
   let rawStoId: Codec;
@@ -223,7 +223,7 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
     raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
     datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };

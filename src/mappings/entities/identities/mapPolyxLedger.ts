@@ -125,7 +125,7 @@ export const accountDataFrozen = (data: Record<string, Codec>): bigint => {
 export const emptyBalance = (
   address: string,
   identityId: string | undefined,
-  blockId: string
+  blockEventId: string
 ): AccountBalance =>
   AccountBalance.create({
     id: address,
@@ -147,7 +147,7 @@ export const emptyBalance = (
     lifetimeByKind: [],
     locks: [],
     holds: [],
-    updatedBlockId: blockId,
+    updatedEventId: blockEventId,
   });
 
 export const loadBalance = async (
@@ -328,7 +328,7 @@ const writeMovementSide = async (
   const balance = await loadBalance(address, account.identityId, blockId);
 
   advanceBalance(balance, side, transition, signed, isInternal);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = blockEventId;
   await balance.save();
 
   const counterpartyAccount = side.counterparty ? await Account.get(side.counterparty) : undefined;
@@ -359,10 +359,10 @@ const writeMovementSide = async (
     date,
     eraIndex: options.eraIndex,
     createdEventId: blockEventId,
+    blockId,
     extrinsicId: params.extrinsicId,
     eventIdx,
     datetime: block.timestamp,
-    createdBlockId: blockId,
   }).save();
 
   await reconcileAccount(address, blockId, block, { eventIdx });
@@ -409,7 +409,7 @@ const adjustHold = async (
   address: string,
   reason: HoldReason,
   delta: bigint,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
 
@@ -428,7 +428,7 @@ const adjustHold = async (
 
   balance.holds = holds.filter(hold => hold.amount > BigInt(0));
   recomputeDerived(balance);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = blockEventId;
 
   await balance.save();
 };
@@ -451,7 +451,7 @@ export const adjustLock = async (
   address: string,
   lockId: string,
   delta: bigint,
-  blockId: string,
+  blockEventId: string,
   reasons?: string
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
@@ -474,7 +474,7 @@ export const adjustLock = async (
 
   balance.locks = locks.filter(lock => lock.amount > BigInt(0));
   recomputeDerived(balance);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = blockEventId;
 
   await balance.save();
 };
@@ -484,13 +484,13 @@ export const setLock = async (
   address: string,
   lockId: string,
   amount: bigint,
-  blockId: string,
+  blockEventId: string,
   reasons?: string
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
   const current = balance?.locks?.find(lock => lock.lockId === lockId)?.amount ?? BigInt(0);
 
-  await adjustLock(address, lockId, amount - current, blockId, reasons);
+  await adjustLock(address, lockId, amount - current, blockEventId, reasons);
 };
 
 /**
@@ -504,22 +504,22 @@ export const setLock = async (
 const syncStakingLock = async (
   stash: string,
   fallbackDelta: bigint,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const total = await readStakingLock(stash);
 
   if (total === undefined) {
-    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, blockId, 'staking');
+    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, blockEventId, 'staking');
     return;
   }
 
-  await setLock(stash, STAKING_LOCK_ID, total, blockId, 'staking');
+  await setLock(stash, STAKING_LOCK_ID, total, blockEventId, 'staking');
 };
 
 const lockHandler =
   (lockId: string, sign: bigint) =>
   async (event: SubstrateEvent): Promise<void> => {
-    const { blockId, block } = extractArgs(event);
+    const { blockId, block, blockEventId } = extractArgs(event);
     const decoded = decodeEvent(event);
     const who = holder(decoded);
 
@@ -532,7 +532,7 @@ const lockHandler =
     const balance = await loadBalance(who, undefined, blockId);
     await balance.save();
 
-    await adjustLock(who, lockId, sign * amountOf(decoded), blockId);
+    await adjustLock(who, lockId, sign * amountOf(decoded), blockEventId);
   };
 
 /**
@@ -564,7 +564,7 @@ export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void
       ((await AccountBalance.get(who))?.locks ?? []).some(lock => lock.lockId === STAKING_LOCK_ID);
 
     if (who && hasStakingLock) {
-      await setLock(who, STAKING_LOCK_ID, BigInt(0), args.blockId, 'staking');
+      await setLock(who, STAKING_LOCK_ID, BigInt(0), args.blockEventId, 'staking');
       return;
     }
   }
@@ -674,7 +674,7 @@ const findBlockEntries = async (
 
   const rows = await PolyxEntry.getByFields(
     [
-      ['createdBlockId', '=', blockId],
+      ['blockId', '=', blockId],
       ['accountId', '=', account],
     ],
     { limit: 100 }
@@ -833,7 +833,7 @@ export const handleBalanceHeld = async (event: SubstrateEvent): Promise<void> =>
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, amount, args.blockId);
+  await adjustHold(who, reason, amount, args.blockEventId);
 };
 
 export const handleBalanceReleased = async (event: SubstrateEvent): Promise<void> => {
@@ -852,7 +852,7 @@ export const handleBalanceReleased = async (event: SubstrateEvent): Promise<void
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, -amount, args.blockId);
+  await adjustHold(who, reason, -amount, args.blockEventId);
 };
 
 export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<void> => {
@@ -870,7 +870,7 @@ export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<vo
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, -amount, args.blockId);
+  await adjustHold(who, reason, -amount, args.blockEventId);
 };
 
 export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void> => {
@@ -891,8 +891,8 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
   });
 
   if (reason) {
-    await adjustHold(from, reason, -amount, args.blockId);
-    await adjustHold(to, reason, amount, args.blockId);
+    await adjustHold(from, reason, -amount, args.blockEventId);
+    await adjustHold(to, reason, amount, args.blockEventId);
   }
 };
 
@@ -914,7 +914,7 @@ export const handleTransferAndHold = async (event: SubstrateEvent): Promise<void
   });
 
   if (reason) {
-    await adjustHold(to, reason, amount, args.blockId);
+    await adjustHold(to, reason, amount, args.blockEventId);
   }
 };
 
@@ -1061,7 +1061,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   }
 
   recomputeDerived(balance);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = blockEventId;
   await balance.save();
 
   const params = getEventParams(args);
@@ -1092,10 +1092,10 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
       date,
       eraIndex: undefined,
       createdEventId: blockEventId,
+      blockId,
       extrinsicId: params.extrinsicId,
       eventIdx,
       datetime,
-      createdBlockId: blockId,
     }).save();
   }
 
@@ -1326,7 +1326,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 
   // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
   if (restaked) {
-    await syncStakingLock(recipient, amount, args.blockId);
+    await syncStakingLock(recipient, amount, args.blockEventId);
   }
 };
 
@@ -1348,7 +1348,7 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
 
   // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
   if (stash && !is8xChain(args.block)) {
-    await syncStakingLock(stash, -amountOf(decoded), args.blockId);
+    await syncStakingLock(stash, -amountOf(decoded), args.blockEventId);
   }
 };
 
@@ -1378,7 +1378,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
   }
 
   await ensureBalanceRow(stash, args.blockId, args.block.timestamp);
-  await syncStakingLock(stash, amountOf(decoded), args.blockId);
+  await syncStakingLock(stash, amountOf(decoded), args.blockEventId);
 };
 
 /**
@@ -1404,5 +1404,5 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await syncStakingLock(stash, -amountOf(decoded), args.blockId);
+  await syncStakingLock(stash, -amountOf(decoded), args.blockEventId);
 };

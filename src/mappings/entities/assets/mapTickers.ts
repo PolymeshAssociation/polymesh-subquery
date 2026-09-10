@@ -16,7 +16,7 @@ const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
 export const handleClassicTickerClaimed = async (
   event: SubstrateEvent
 ): Promise<TickerReservation> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { did, ticker: rawTicker } = decodeEvent(event);
 
   const identityId = getTextValue(did);
@@ -30,8 +30,8 @@ export const handleClassicTickerClaimed = async (
       ticker,
       assetId: null,
       identityId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
     await reservation.save();
   }
@@ -40,7 +40,7 @@ export const handleClassicTickerClaimed = async (
 };
 
 export const handleTickerRegistered = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { did, ticker: rawTicker, expiry: rawExpiry } = decodeEvent(event);
 
   const identityId = getTextValue(did);
@@ -53,7 +53,7 @@ export const handleTickerRegistered = async (event: SubstrateEvent): Promise<voi
   if (reservation) {
     reservation.identityId = identityId;
     reservation.expiry = expiry;
-    reservation.updatedBlockId = blockId;
+    reservation.updatedEventId = blockEventId;
     await reservation.save();
   } else {
     await TickerReservation.create({
@@ -61,14 +61,14 @@ export const handleTickerRegistered = async (event: SubstrateEvent): Promise<voi
       ticker,
       identityId,
       expiry,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 };
 
 export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
   const ticker = serializeTicker(rawTicker);
@@ -76,15 +76,15 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
   const [asset, reservation] = await Promise.all([getAsset(assetId), getTickerReservation(ticker)]);
 
   asset.ticker = ticker;
-  asset.updatedBlockId = blockId;
-  reservation.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
+  reservation.updatedEventId = blockEventId;
   reservation.assetId = asset.id;
 
   await Promise.all([asset.save(), reservation.save()]);
 };
 
 export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
   const ticker = serializeTicker(rawTicker);
@@ -93,17 +93,17 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
 
   if (asset.ticker === ticker) {
     asset.ticker = undefined;
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
   }
 
   reservation.assetId = null;
-  reservation.updatedBlockId = blockId;
+  reservation.updatedEventId = blockEventId;
 
   await Promise.all([asset.save(), reservation.save()]);
 };
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { did: rawDid, ticker: rawTicker } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
@@ -117,7 +117,7 @@ export const handleTickerTransferred = async (event: SubstrateEvent): Promise<vo
   }
 
   reservation.identityId = did;
-  reservation.updatedBlockId = blockId;
+  reservation.updatedEventId = blockEventId;
 
   await reservation.save();
 };

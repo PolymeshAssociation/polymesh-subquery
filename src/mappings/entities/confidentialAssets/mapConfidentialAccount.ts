@@ -6,21 +6,20 @@ import { extractArgs, HandlerArgs } from '../common';
 const createEncryptionKey = (
   encryptionKey: string,
   creatorId: string,
-  { eventIdx, blockId, blockEventId }: Pick<HandlerArgs, 'eventIdx' | 'blockId' | 'blockEventId'>
+  { eventIdx, blockEventId }: Pick<HandlerArgs, 'eventIdx' | 'blockId' | 'blockEventId'>
 ): Promise<void> =>
   ConfidentialEncryptionKey.create({
     id: encryptionKey,
     encryptionKey,
     creatorId,
     eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
 export const handleConfidentialAccountRegistered = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { params, eventIdx, blockId, blockEventId } = args;
+  const { params, eventIdx, blockEventId } = args;
 
   const [rawDid, rawAccount, rawEncryptionKey] = params;
 
@@ -35,9 +34,8 @@ export const handleConfidentialAccountRegistered = async (event: SubstrateEvent)
       encryptionKey,
       creatorId,
       eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save(),
     createEncryptionKey(encryptionKey, creatorId, args),
   ]);

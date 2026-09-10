@@ -5,7 +5,7 @@ import { getAssetId, getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { eventIdx, block, blockEventId } = extractArgs(event);
   const { did, assetId: rawAssetId } = decodeEvent(event);
 
   const callerId = getTextValue(did);
@@ -17,9 +17,8 @@ export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<v
     callerId,
     eventIdx,
     datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 

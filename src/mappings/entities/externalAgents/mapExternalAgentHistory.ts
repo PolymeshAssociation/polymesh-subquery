@@ -9,7 +9,7 @@ import { getAllByFields, getAssetId } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
   const group = agId.toJSON();
@@ -19,13 +19,13 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
   await AgentGroupEntity.create({
     id: `${assetId}/${group}`,
     permissions,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { eventIdx, block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
   const group = agId.toJSON();
@@ -50,9 +50,8 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
         datetime: block.timestamp,
         type: 'AgentPermissionsChanged',
         permissions,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
         createdEventId: blockEventId,
+        updatedEventId: blockEventId,
       }).save()
     );
   }
@@ -83,7 +82,7 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
 
   // Only keep track of membership for custom agent groups.
   if (isCustom(group)) {
-    promises.push(addAgentGroupMembership(blockId, assetId, group, did));
+    promises.push(addAgentGroupMembership(blockEventId, assetId, group, did));
   }
   await Promise.all(promises);
 };
@@ -112,13 +111,13 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 
   // Only keep track of membership for custom agent groups.
   if (isCustom(group)) {
-    promises.push(addAgentGroupMembership(blockId, assetId, group, did));
+    promises.push(addAgentGroupMembership(blockEventId, assetId, group, did));
   }
   await Promise.all(promises);
 };
 
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
-  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { eventIdx, block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agentDid } = decodeEvent(event);
 
   const did = agentDid.toString();
@@ -133,9 +132,8 @@ export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
       eventIdx,
       datetime: block.timestamp,
       type: 'AgentRemoved',
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save(),
   ];
 
@@ -164,14 +162,13 @@ const addExternalAgentHistory = async (
     datetime: block.timestamp,
     type,
     permissions,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 const addAgentGroupMembership = (
-  blockId: string,
+  blockEventId: string,
   assetId: string,
   group: CustomAG,
   did: string
@@ -180,8 +177,8 @@ const addAgentGroupMembership = (
     id: `${assetId}/${group.custom}/${did}`,
     member: did,
     groupId: `${assetId}/${group.custom}`,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 

@@ -47,7 +47,7 @@ const setDerived = (row: Partial<Record<string, bigint | any[]>>) => {
       movementCount: 0,
       locks: [],
       holds: [],
-      updatedBlockId: '0',
+      updatedEventId: '0000000000/0000000000',
       ...row,
     },
   };

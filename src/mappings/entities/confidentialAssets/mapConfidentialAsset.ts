@@ -23,7 +23,7 @@ export const getMediators = (item: Codec): MediatorKey[] => {
 };
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, eventIdx, blockEventId } = extractArgs(event);
 
   const [rawDid, rawAssetId, rawMediators, rawAuditors, rawName, rawSymbol, rawDecimals, rawData] =
     params;
@@ -42,14 +42,13 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
     auditors: getStringArrayValue(rawAuditors),
     totalSupply: BigInt(0),
     eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawMediators, rawAuditors] = params;
 
@@ -58,14 +57,14 @@ export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Pro
   if (asset) {
     asset.mediators = getMediators(rawMediators);
     asset.auditors = getStringArrayValue(rawAuditors);
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
 
     await asset.save();
   }
 };
 
 export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, , rawTotalSupply] = params;
 
@@ -73,7 +72,7 @@ export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Prom
 
   if (asset) {
     asset.totalSupply = getBigIntValue(rawTotalSupply);
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
 
     await asset.save();
   }
@@ -82,7 +81,7 @@ export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Prom
 export const handleConfidentialAccountAssetRegistered = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, eventIdx, blockEventId } = extractArgs(event);
 
   const [, rawAccount, rawAssetId] = params;
 
@@ -94,8 +93,7 @@ export const handleConfidentialAccountAssetRegistered = async (
     accountId,
     assetId,
     eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };

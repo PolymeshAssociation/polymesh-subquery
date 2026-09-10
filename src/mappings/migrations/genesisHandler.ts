@@ -15,7 +15,7 @@ import {
   legacyQuery,
   padId,
 } from '../../utils';
-import { getAccountId, systematicIssuers } from '../consts';
+import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
 import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
@@ -58,7 +58,7 @@ const insertGenesisBlock = async (datetime: Date) =>
  * point their `createdEvent` / `updatedEvent` at it, so those relations stay non-null without an
  * origin-discriminator column.
  */
-export const seedEventId = `${genesisBlock}/${padId('0')}`;
+export const seedEventId = SEED_EVENT_ID;
 
 /**
  * Writes the seed `Event`. Must run after `insertGenesisBlock` (`Event.block` is non-null) and
@@ -131,7 +131,7 @@ const handleGenesisDids = async (datetime: Date) => {
               address: key,
               datetime,
             },
-            genesisBlock
+            SEED_EVENT_ID
           )
         );
         // The membership interval opened at genesis. `eventIdx` disambiguates keys of one identity
@@ -145,7 +145,7 @@ const handleGenesisDids = async (datetime: Date) => {
               addedReason: EventIdEnum.DidCreated,
               eventIdx: keyIndex,
             },
-            genesisBlock
+            SEED_EVENT_ID
           )
         );
       });
@@ -166,16 +166,15 @@ const handleGenesisDids = async (datetime: Date) => {
         eventId: EventIdEnum.DidCreated,
         datetime,
       },
-      genesisBlock
+      SEED_EVENT_ID
     ),
     createPortfolio(
       {
         identityId: did,
         number: 0,
         eventIdx: 0,
-        createdEventId: `${genesisBlock}/${padId('0')}`,
       },
-      genesisBlock
+      SEED_EVENT_ID
     ),
   ];
 
@@ -225,12 +224,15 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
         undefined,
         +signaturesRequired.toString(),
         genesisBlock,
-        datetime
+        datetime,
+        SEED_EVENT_ID
       )
     );
 
     if (adminDid.length) {
-      multiSigInserts.push(createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock));
+      multiSigInserts.push(
+        createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock, SEED_EVENT_ID)
+      );
     }
 
     signerEntries.forEach(
@@ -260,7 +262,8 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
             signerValue,
             MultiSigSignerStatusEnum.Approved,
             genesisBlock,
-            datetime
+            datetime,
+            SEED_EVENT_ID
           )
         );
       }

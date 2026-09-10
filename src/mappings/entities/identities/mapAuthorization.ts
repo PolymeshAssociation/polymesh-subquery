@@ -35,7 +35,7 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     }
 
     auth.status = authorizationEventStatusMapping.get(eventId);
-    auth.updatedBlockId = blockId;
+    auth.updatedEventId = blockEventId;
 
     await auth.save();
   } else {
@@ -53,9 +53,8 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
       data: JSON.stringify(getFirstValueFromJson(decoded.authorizationData)),
       expiry: getDateValue(decoded.expiry),
       status: AuthorizationStatusEnum.Pending,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 }

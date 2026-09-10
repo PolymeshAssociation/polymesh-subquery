@@ -35,9 +35,8 @@ export async function mapExternalAgentAction(event: SubstrateEvent): Promise<voi
       palletName: moduleId,
       eventId,
       callerId: getTextValue(params[0]),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 }

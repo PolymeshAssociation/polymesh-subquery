@@ -74,9 +74,9 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
       nftId: BigInt(2),
       portfolioId: `${DID_A}/0`,
       identityId: DID_A,
-      mintedBlockId: '0000000500',
+      createdEventId: '0000000500/0000000001',
     });
-    expect(db['Nft'][`${ASSET}/0000000002`].burnedBlockId).toBeUndefined();
+    expect(db['Nft'][`${ASSET}/0000000002`].burnedEventId).toBeUndefined();
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(3);
     // rollup still maintained
     expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(1), BigInt(2), BigInt(3)]);
@@ -117,7 +117,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     );
     await flushNftBuffer();
 
-    expect(db['Nft'][`${ASSET}/0000000009`].burnedBlockId).toBe('0000000500');
+    expect(db['Nft'][`${ASSET}/0000000009`].burnedEventId).toBeDefined();
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(0);
     expect(db['Asset'][ASSET].totalSupply).toBe(BigInt(0));
   });

@@ -176,7 +176,15 @@ export const resolveKeyRole = async (address: string, blockId: string): Promise<
 export const getOrCreateAccount = async (
   address: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  /**
+   * The event this account is being created in response to. An account discovered lazily
+   * (through a chain read, or as a side effect of an unrelated handler) has no single causing
+   * event — callers that have the real one pass it; the rest fall back to the block's first
+   * event. D13's block-granularity caveat on `updatedEvent` applies. Threading the real id
+   * through the asset-holder resolution chain is a follow-up.
+   */
+  createdEventId = `${blockId}/${padId('0')}`
 ): Promise<Account | undefined> => {
   const existing = await Account.get(address);
 
@@ -208,19 +216,16 @@ export const getOrCreateAccount = async (
   if (!identity) {
     await createIdentity(
       { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
-      blockId
+      createdEventId
     );
 
     // The default portfolio, so a later `identity.DidCreated` for this DID finds it — its handler
     // only creates portfolio 0 when it creates the identity, and this path got there first.
-    await createPortfolio(
-      { identityId: did, number: 0, eventIdx: 0, createdEventId: `${blockId}/${padId('0')}` },
-      blockId
-    );
+    await createPortfolio({ identityId: did, number: 0, eventIdx: 0 }, createdEventId);
   } else if (kind === 'primaryKey' && identity.primaryAccount !== address) {
     await createIdentity(
       { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
-      blockId
+      createdEventId
     );
   }
 
@@ -232,8 +237,8 @@ export const getOrCreateAccount = async (
     address,
     keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
     ...getAccountKeyType(address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId,
+    updatedEventId: createdEventId,
   });
 
   await account.save();
@@ -250,8 +255,8 @@ export const getOrCreateAccount = async (
       role: kind === 'primaryKey' ? KeyRole.Primary : KeyRole.Secondary,
       validFromBlockId: blockId,
       addedReason: eventId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId,
+      updatedEventId: createdEventId,
     }).save();
   }
 
@@ -271,9 +276,10 @@ export const getOrCreateAccount = async (
 export const ledgerAccount = async (
   address: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  createdEventId = `${blockId}/${padId('0')}`
 ): Promise<Account> => {
-  const resolved = await getOrCreateAccount(address, blockId, datetime);
+  const resolved = await getOrCreateAccount(address, blockId, datetime, createdEventId);
 
   if (resolved) {
     return resolved;
@@ -288,8 +294,8 @@ export const ledgerAccount = async (
     datetime,
     keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId,
+    updatedEventId: createdEventId,
   });
 
   await account.save();

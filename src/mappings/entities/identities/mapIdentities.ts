@@ -48,22 +48,25 @@ const getIdentity = async (did: string): Promise<Identity> => {
 
 export const createAccount = async (
   args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
-  blockId: string
+  blockEventId: string
 ): Promise<void> =>
   Account.create({
     id: args.address,
     ...args,
     ...getAccountKeyType(args.address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
-export const createIdentity = async (args: Attributes<Identity>, blockId: string): Promise<void> =>
+export const createIdentity = async (
+  args: Attributes<Identity>,
+  blockEventId: string
+): Promise<void> =>
   Identity.create({
     id: args.did,
     ...args,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 /**
  * Creates an Identity if already not present. It also creates default Portfolio for that Identity
@@ -89,7 +92,7 @@ export const createIdentityIfNotExists = async (
         secondaryKeysFrozen: false,
         datetime: block.timestamp,
       },
-      blockId
+      blockEventId
     );
 
     await createPortfolio(
@@ -97,9 +100,8 @@ export const createIdentityIfNotExists = async (
         identityId: did,
         number: 0,
         eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 };
@@ -107,13 +109,7 @@ export const createIdentityIfNotExists = async (
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
-  const {
-    eventId,
-    createdBlockId: blockId,
-    datetime,
-    eventIdx,
-    blockEventId,
-  } = getEventParams(args);
+  const { eventId, datetime, eventIdx, blockEventId } = getEventParams(args);
 
   const { did: rawDid, primaryKey: rawAddress } = decodeEvent(event);
 
@@ -124,14 +120,14 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   const identity = await Identity.get(did);
   if (identity) {
     identity.primaryAccount = address;
-    identity.updatedBlockId = blockId;
+    identity.updatedEventId = blockEventId;
     identity.eventId = eventId;
     identity.datetime = datetime;
     await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
 
-    portfolio.updatedBlockId = blockId;
+    portfolio.updatedEventId = blockEventId;
     defaultPortfolio = portfolio.save();
   } else {
     await createIdentity(
@@ -142,7 +138,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
         eventId,
         datetime,
       },
-      blockId
+      blockEventId
     );
 
     defaultPortfolio = createPortfolio(
@@ -150,9 +146,8 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
         identityId: did,
         number: 0,
         eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 
@@ -164,7 +159,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
       address,
       datetime,
     },
-    blockId
+    blockEventId
   );
 
   await Promise.all([account, defaultPortfolio]);
@@ -173,13 +168,13 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   // `permissions` snapshot is kept.
   await openIdentityKey(
     { identityId: did, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
-    blockId
+    blockEventId
   );
 };
 
 export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { createdBlockId, updatedBlockId } = getEventParams(args);
+  const { blockEventId } = getEventParams(args);
 
   let childDid: string, parentDid: string;
 
@@ -197,8 +192,8 @@ export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void
     id: childDid,
     parentId: parentDid,
     childId: childDid,
-    createdBlockId,
-    updatedBlockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -310,7 +305,7 @@ export const handleSecondaryKeysPermissionsUpdated = async (
 };
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId } = extractArgs(event);
+  const { eventId, blockEventId } = extractArgs(event);
   const { signers: rawAccounts } = decodeEvent(event);
 
   const addresses = legacyRemovedAddresses(rawAccounts);
@@ -318,46 +313,46 @@ export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise
   await Promise.all(
     addresses.flatMap(address => [
       Account.remove(address),
-      closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
+      closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
     ])
   );
 };
 
 export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId } = extractArgs(event);
+  const { eventId, blockEventId } = extractArgs(event);
   const { signer: rawSigner } = decodeEvent(event);
 
   const address = legacySignerLeftAddress(rawSigner);
 
   await Promise.all([
     Account.remove(address),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
+    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
   ]);
 };
 
 export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId } = extractArgs(event);
+  const { eventId, blockEventId } = extractArgs(event);
 
   const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
   identity.secondaryKeysFrozen = true;
-  identity.updatedBlockId = blockId;
+  identity.updatedEventId = blockEventId;
   identity.eventId = eventId;
 
   await identity.save();
 };
 
 export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId } = extractArgs(event);
+  const { eventId, blockEventId } = extractArgs(event);
 
   const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
   identity.secondaryKeysFrozen = false;
-  identity.updatedBlockId = blockId;
+  identity.updatedEventId = blockEventId;
   identity.eventId = eventId;
 
   await identity.save();
@@ -365,7 +360,7 @@ export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promis
 
 export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdEventId: blockEventId, datetime, eventIdx } = getEventParams(args);
 
   const promises = [];
   const { did: rawDid, secondaryKeys: rawAccounts } = decodeEvent(event);
@@ -386,7 +381,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
           eventId,
           datetime,
         },
-        blockId
+        blockEventId
       ),
       openIdentityKey(
         {
@@ -397,7 +392,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
           addedReason: eventId,
           eventIdx,
         },
-        blockId
+        blockEventId
       )
     );
   });
@@ -407,7 +402,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
 
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, eventIdx } = getEventParams(args);
+  const { eventId, createdEventId: blockEventId, datetime, eventIdx } = getEventParams(args);
 
   const { did: rawDid, newPrimaryKey: rawNewKey } = decodeEvent(event);
 
@@ -418,14 +413,14 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   const account = await Account.get(identity.primaryAccount);
 
   identity.primaryAccount = address;
-  identity.updatedBlockId = blockId;
+  identity.updatedEventId = blockEventId;
   identity.eventId = eventId;
 
   // unlink the old primary key from the identity — `keyRole` rides the same write
   account.identityId = undefined;
   account.keyRole = KeyRoleEnum.Unlinked;
   account.eventId = eventId;
-  account.updatedBlockId = blockId;
+  account.updatedEventId = blockEventId;
 
   await Promise.all([
     createAccount(
@@ -436,14 +431,14 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
         eventId,
         datetime,
       },
-      blockId
+      blockEventId
     ),
     identity.save(),
     account.save(),
     // close the old primary's membership interval — the rotation history lives on `IdentityKey`
     closeIdentityKeys(
       { address: account.id, role: KeyRole.Primary, removedReason: eventId },
-      blockId
+      blockEventId
     ),
   ]);
 
@@ -451,12 +446,12 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   // old row's `validToBlock` equals the new one's `validFromBlock`.
   await openIdentityKey(
     { identityId: identity.id, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
-    blockId
+    blockEventId
   );
 };
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockId } = extractArgs(event);
+  const { eventId, blockEventId } = extractArgs(event);
 
   const { account: rawAccount } = decodeEvent(event);
 
@@ -467,16 +462,16 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   accountEntity.identityId = undefined;
   accountEntity.keyRole = KeyRoleEnum.Unlinked;
   accountEntity.eventId = eventId;
-  accountEntity.updatedBlockId = blockId;
+  accountEntity.updatedEventId = blockEventId;
 
   await Promise.all([
     accountEntity.save(),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockId),
+    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
   ]);
 };
 
 export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const {
     did: rawDid,
     customClaimTypeId: rawCustomClaimTypeId,
@@ -494,8 +489,8 @@ export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promi
       id: `${id}`,
       name,
       identityId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 };

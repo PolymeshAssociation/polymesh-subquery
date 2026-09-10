@@ -40,7 +40,7 @@ const getVenue = async (venueId: string): Promise<Venue> => {
 };
 
 export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { did, venueId, details, venueType } = decodeEvent(event);
 
   await Venue.create({
@@ -49,37 +49,37 @@ export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> =
     details: bytesToString(details),
     type: getTextValue(venueType),
     signers: [],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { venueId, details } = decodeEvent(event);
 
   const venue = await getVenue(processVenueId(venueId));
 
   venue.details = bytesToString(details);
-  venue.updatedBlockId = blockId;
+  venue.updatedEventId = blockEventId;
 
   await venue.save();
 };
 
 export const handleVenueTypeUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { venueId, venueType } = decodeEvent(event);
 
   const venue = await getVenue(processVenueId(venueId));
 
   venue.type = getTextValue(venueType);
-  venue.updatedBlockId = blockId;
+  venue.updatedEventId = blockEventId;
 
   await venue.save();
 };
 
 export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { venueId, signers: rawSigners, updateType: rawUpdateType } = decodeEvent(event);
 
   const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
@@ -94,7 +94,7 @@ export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<
     signers.map(signer => removeIfIncludes(venue.signers, signer));
   }
 
-  venue.updatedBlockId = blockId;
+  venue.updatedEventId = blockEventId;
 
   await venue.save();
 };

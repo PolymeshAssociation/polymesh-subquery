@@ -80,8 +80,7 @@ describe('confidential account handlers', () => {
         encryptionKey: ENCRYPTION_KEY,
         creatorId: TEST_DID,
         eventIdx: 2,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        updatedEventId: blockEventId,
         createdEventId: blockEventId,
       })
     );
@@ -172,7 +171,7 @@ describe('confidential asset handlers', () => {
       '42',
       expect.objectContaining({
         auditors: [ENCRYPTION_KEY, MEDIATOR_ENCRYPTION_KEY],
-        updatedBlockId: blockId,
+        updatedEventId: blockEventId,
       })
     );
   });
@@ -193,7 +192,7 @@ describe('confidential asset handlers', () => {
     expect(storeSet()).toHaveBeenCalledWith(
       'ConfidentialAsset',
       '42',
-      expect.objectContaining({ totalSupply: BigInt(5000), updatedBlockId: blockId })
+      expect.objectContaining({ totalSupply: BigInt(5000), updatedEventId: blockEventId })
     );
   });
 
@@ -269,7 +268,7 @@ describe('confidential settlement handlers', () => {
         legCount: 2,
         status: 'Pending',
         eventIdx: 2,
-        createdBlockId: blockId,
+        updatedEventId: blockEventId,
         createdEventId: blockEventId,
       })
     );
@@ -297,7 +296,7 @@ describe('confidential settlement handlers', () => {
     expect(storeSet()).toHaveBeenCalledWith(
       'ConfidentialSettlement',
       SETTLEMENT_REF,
-      expect.objectContaining({ status: 'Executed', updatedBlockId: blockId })
+      expect.objectContaining({ status: 'Executed', updatedEventId: blockEventId })
     );
   });
 
@@ -358,7 +357,7 @@ describe('confidential settlement handlers', () => {
         id: `${SETTLEMENT_REF}/0/Sender`,
         status: 'Affirmed',
         eventIdx: 1,
-        updatedBlockId: '0000000001',
+        updatedEventId: blockEventId,
       };
       storeGet().mockResolvedValueOnce(existing);
 
@@ -367,7 +366,7 @@ describe('confidential settlement handlers', () => {
       expect(storeSet()).toHaveBeenCalledWith(
         'ConfidentialLegAffirmation',
         `${SETTLEMENT_REF}/0/Sender`,
-        expect.objectContaining({ status: 'Finalized', eventIdx: 2, updatedBlockId: blockId })
+        expect.objectContaining({ status: 'Finalized', eventIdx: 2, updatedEventId: blockEventId })
       );
     });
   });
@@ -392,7 +391,7 @@ describe('confidential curve tree leaf handler', () => {
         tree,
         leafIndex: BigInt(7),
         value: COMMITMENT,
-        createdBlockId: blockId,
+        updatedEventId: blockEventId,
       })
     );
   });
@@ -404,7 +403,7 @@ describe('confidential curve tree leaf handler', () => {
       leafIndex: BigInt(7),
       value: '0x00',
       eventIdx: 1,
-      updatedBlockId: '0000000001',
+      updatedEventId: blockEventId,
     };
     storeGet().mockResolvedValueOnce(existing);
 
@@ -415,7 +414,7 @@ describe('confidential curve tree leaf handler', () => {
     expect(storeSet()).toHaveBeenCalledWith(
       'ConfidentialCurveTreeLeaf',
       'Asset/7',
-      expect.objectContaining({ value: COMMITMENT, eventIdx: 2, updatedBlockId: blockId })
+      expect.objectContaining({ value: COMMITMENT, eventIdx: 2, updatedEventId: blockEventId })
     );
   });
 });

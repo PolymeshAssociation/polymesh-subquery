@@ -63,9 +63,8 @@ export const createFunding = (
     amount: issuedAmount,
     totalFundingAmount,
     datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -145,16 +144,15 @@ export const createAssetTransaction = (
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
     datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const getAssetHolder = async (
   assetId: string,
   did: string,
-  blockId: string
+  blockEventId: string
 ): Promise<AssetHolder> => {
   const id = `${assetId}/${did}`;
 
@@ -166,8 +164,8 @@ export const getAssetHolder = async (
       identityId: did,
       assetId,
       amount: BigInt(0),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
     await assetHolder.save();
   }
@@ -183,7 +181,7 @@ const holdingId = (assetId: string, holder: AssetHolderDetails): string =>
 export const getHolding = async (
   assetId: string,
   holder: AssetHolderDetails,
-  blockId: string
+  blockEventId: string
 ): Promise<Holding> => {
   const id = holdingId(assetId, holder);
 
@@ -199,8 +197,8 @@ export const getHolding = async (
       identityId: holder.identityId || undefined,
       amount: BigInt(0),
       nftCount: 0,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
 
@@ -220,23 +218,23 @@ export const getHolding = async (
 export const applyHoldingDelta = async (
   asset: Asset,
   holder: AssetHolderDetails,
-  blockId: string,
+  blockEventId: string,
   delta: bigint,
   promises: Promise<void>[]
 ): Promise<void> => {
-  const holding = await getHolding(asset.id, holder, blockId);
+  const holding = await getHolding(asset.id, holder, blockEventId);
   holding.amount += delta;
-  holding.updatedBlockId = blockId;
+  holding.updatedEventId = blockEventId;
   promises.push(holding.save());
 
   if (!holder.identityId) {
     return;
   }
 
-  const rollup = await getAssetHolder(asset.id, holder.identityId, blockId);
+  const rollup = await getAssetHolder(asset.id, holder.identityId, blockEventId);
   const before = rollup.amount;
   rollup.amount += delta;
-  rollup.updatedBlockId = blockId;
+  rollup.updatedEventId = blockEventId;
   promises.push(rollup.save());
 
   if (before <= BigInt(0) && rollup.amount > BigInt(0)) {
@@ -247,7 +245,7 @@ export const applyHoldingDelta = async (
 };
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { block, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { block, eventIdx, blockEventId } = extractArgs(event);
   const decoded = decodeEvent(event);
   const {
     assetId: rawAssetId,
@@ -324,27 +322,26 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
     eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, name: rawName } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.name = bytesToString(rawName);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, fundingRound: rawFundingRound } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -352,13 +349,13 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
   const asset = await getAsset(assetId);
 
   asset.fundingRound = bytesToString(rawFundingRound);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, documentId: rawDocId, document: rawDoc } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -372,8 +369,8 @@ export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> 
     documentId,
     ...docDetails,
     assetId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -388,27 +385,27 @@ export const handleDocumentRemoved = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, identifiers: rawIdentifiers } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isDivisible = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
@@ -431,11 +428,11 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
 
   const asset = await getAsset(assetId);
   asset.totalSupply += issuedAmount;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
-  const assetIssuer = await getAssetHolder(assetId, issuerDid, blockId);
+  const assetIssuer = await getAssetHolder(assetId, issuerDid, blockEventId);
   assetIssuer.amount += issuedAmount;
-  assetIssuer.updatedBlockId = blockId;
+  assetIssuer.updatedEventId = blockEventId;
 
   const assetTransaction = AssetTransaction.create({
     id: blockEventId,
@@ -448,9 +445,8 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     fundingRound,
     extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   });
 
   const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
@@ -472,7 +468,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const {
     assetId: rawAssetId,
     beneficiaryDid: rawBeneficiaryDid,
@@ -485,11 +481,11 @@ export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
 
   const asset = await getAsset(assetId);
   asset.totalSupply -= issuedAmount;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
-  const assetRedeemer = await getAssetHolder(assetId, issuerDid, blockId);
+  const assetRedeemer = await getAssetHolder(assetId, issuerDid, blockEventId);
   assetRedeemer.amount -= issuedAmount;
-  assetRedeemer.updatedBlockId = blockId;
+  assetRedeemer.updatedEventId = blockEventId;
 
   const promises = [asset.save(), assetRedeemer.save()];
 
@@ -497,40 +493,40 @@ export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
 };
 
 export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isFrozen = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isFrozen = false;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { did: rawNewOwnerDid, assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.ownerId = getTextValue(rawNewOwnerDid);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
@@ -576,20 +572,20 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   if (fromHolder && toHolder) {
     const asset = await getAsset(assetId);
     asset.totalTransfers += BigInt(1);
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
     promises.push(asset.save());
 
     const [fromHolder, toHolder] = await Promise.all([
-      getAssetHolder(assetId, fromDid, blockId),
-      getAssetHolder(assetId, toDid, blockId),
+      getAssetHolder(assetId, fromDid, blockEventId),
+      getAssetHolder(assetId, toDid, blockEventId),
     ]);
 
     fromHolder.amount = fromHolder.amount - transferAmount;
-    fromHolder.updatedBlockId = blockId;
+    fromHolder.updatedEventId = blockEventId;
     promises.push(fromHolder.save());
 
     toHolder.amount = toHolder.amount + transferAmount;
-    toHolder.updatedBlockId = blockId;
+    toHolder.updatedEventId = blockEventId;
     promises.push(toHolder.save());
 
     // For old `Transfer` events, `InstructionExecuted` event was separately emitted in the same block
@@ -713,13 +709,13 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
   if (!rawFromHolder.isEmpty) {
     fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
-    await applyHoldingDelta(asset, fromHolder, blockId, -transferAmount, promises);
+    await applyHoldingDelta(asset, fromHolder, blockEventId, -transferAmount, promises);
   }
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
     toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
-    await applyHoldingDelta(asset, toHolder, blockId, transferAmount, promises);
+    await applyHoldingDelta(asset, toHolder, blockEventId, transferAmount, promises);
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);
@@ -748,7 +744,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   ) {
     // one save persists the supply/transfer deltas and any holderCount change applyHoldingDelta
     // made to this same in-memory Asset
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
     promises.push(asset.save());
   }
 
@@ -790,7 +786,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 };
 
 export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { did, assetId: rawAssetId, mediators: rawMediators } = decodeEvent(event);
 
   const addedById = getTextValue(did);
@@ -803,8 +799,8 @@ export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<
       identityId: mediator,
       assetId,
       addedById,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save()
   );
 
@@ -824,7 +820,7 @@ export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promis
 };
 
 export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { did, assetId: rawAssetId } = decodeEvent(event);
 
   const identityId = getTextValue(did);
@@ -834,8 +830,8 @@ export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<voi
     id: `${assetId}/${identityId}`,
     assetId,
     identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -854,11 +850,12 @@ const getAssetAllowance = async (
   ownerId: string,
   spenderId: string,
   blockId: string,
-  block: SubstrateEvent['block']
+  block: SubstrateEvent['block'],
+  blockEventId: string
 ): Promise<AssetAllowance> => {
   await Promise.all([
-    getOrCreateAccount(ownerId, blockId, block.timestamp),
-    getOrCreateAccount(spenderId, blockId, block.timestamp),
+    getOrCreateAccount(ownerId, blockId, block.timestamp, blockEventId),
+    getOrCreateAccount(spenderId, blockId, block.timestamp, blockEventId),
   ]);
 
   const id = `${assetId}/${ownerId}/${spenderId}`;
@@ -872,14 +869,14 @@ const getAssetAllowance = async (
       spenderId,
       amount: BigInt(0),
       totalSpent: BigInt(0),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     })
   );
 };
 
 export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { blockId, block, blockEventId } = extractArgs(event);
   const {
     owner: rawOwner,
     spender: rawSpender,
@@ -893,11 +890,12 @@ export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
     getTextValue(rawOwner),
     getTextValue(rawSpender),
     blockId,
-    block
+    block,
+    blockEventId
   );
 
   allowance.amount = getBigIntValue(rawAmount);
-  allowance.updatedBlockId = blockId;
+  allowance.updatedEventId = blockEventId;
 
   await allowance.save();
 };
@@ -940,7 +938,7 @@ export const handleCreatedAssetTransfer = async (event: SubstrateEvent): Promise
 };
 
 export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { blockId, block, blockEventId } = extractArgs(event);
   const {
     owner: rawOwner,
     spender: rawSpender,
@@ -955,14 +953,15 @@ export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void>
     getTextValue(rawOwner),
     getTextValue(rawSpender),
     blockId,
-    block
+    block,
+    blockEventId
   );
 
   // take the chain's own remaining value rather than subtracting — subtraction drifts if any
   // AllowanceSpent is ever missed or reordered
   allowance.amount = getBigIntValue(rawRemaining);
   allowance.totalSpent += getBigIntValue(rawAmountSpent);
-  allowance.updatedBlockId = blockId;
+  allowance.updatedEventId = blockEventId;
 
   await allowance.save();
 };

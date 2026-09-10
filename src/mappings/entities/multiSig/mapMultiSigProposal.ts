@@ -26,8 +26,7 @@ import {
 import { extractArgs } from '../common';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, extrinsic, eventIdx, block, blockEventId, extrinsicId } =
-    extractArgs(event);
+  const { params, extrinsic, eventIdx, block, blockEventId, extrinsicId } = extractArgs(event);
 
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
@@ -101,10 +100,9 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     extrinsicIdx: extrinsic?.idx,
     datetime: block.timestamp,
     status: MultiSigProposalStatusEnum.Active,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    extrinsicId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+    extrinsicId,
   }).save();
 };
 
@@ -112,7 +110,7 @@ const handleMultiSigProposalStatus = async (
   rawMultiSigAddress: Codec,
   rawProposalId: Codec,
   status: MultiSigProposalStatusEnum,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
@@ -120,20 +118,20 @@ const handleMultiSigProposalStatus = async (
   const proposal = await MultiSigProposal.get(`${multisigId}/${proposalId}`);
 
   proposal.status = status;
-  proposal.updatedBlockId = blockId;
+  proposal.updatedEventId = blockEventId;
 
   await proposal.save();
 };
 
 export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   if (is7xChain(block)) {
     const [, rawMultiSigAddress, rawProposalId] = params;
     await handleMultiSigProposalStatus(
       rawMultiSigAddress,
       rawProposalId,
       MultiSigProposalStatusEnum.Approved,
-      blockId
+      blockEventId
     );
   } else {
     await handleMultiSigVoteApproved(event);
@@ -141,18 +139,18 @@ export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Pro
 };
 
 export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawProposalId] = params;
   await handleMultiSigProposalStatus(
     rawMultiSigAddress,
     rawProposalId,
     MultiSigProposalStatusEnum.Rejected,
-    blockId
+    blockEventId
   );
 };
 
 export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
 
@@ -168,14 +166,14 @@ export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Pro
     status = MultiSigProposalStatusEnum.Failed;
   }
 
-  await handleMultiSigProposalStatus(rawMultiSigAddress, rawProposalId, status, blockId);
+  await handleMultiSigProposalStatus(rawMultiSigAddress, rawProposalId, status, blockEventId);
 };
 
 const handleMultiSigProposalVoteAction = async (
   event: SubstrateEvent,
   action: MultiSigProposalVoteActionEnum
 ) => {
-  const { params, blockId, eventIdx, block, extrinsicIdx, blockEventId } = extractArgs(event);
+  const { params, eventIdx, block, extrinsicIdx, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -209,9 +207,8 @@ const handleMultiSigProposalVoteAction = async (
       datetime: block.timestamp,
       eventIdx,
       extrinsicIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
 
@@ -233,9 +230,10 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
 };
 
 // triggered on major chain upgrades only
-export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
-  const blockId = padId(block.block.header.number.toString());
-
+export const handleMultiSigProposalDeleted = async (
+  block: SubstrateBlock,
+  blockEventId: string
+): Promise<void> => {
   const activeProposals = await getAllByFields<MultiSigProposal>('MultiSigProposal', [
     ['status', '=', MultiSigProposalStatusEnum.Active],
   ]);
@@ -263,7 +261,7 @@ export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Prom
   if (deletedProposals.length) {
     deletedProposals.forEach(proposal => {
       proposal.status = MultiSigProposalStatusEnum.Deleted;
-      proposal.updatedBlockId = blockId;
+      proposal.updatedEventId = blockEventId;
     });
     await store.bulkUpdate('MultiSigProposal', deletedProposals);
   }

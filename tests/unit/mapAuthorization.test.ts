@@ -52,7 +52,7 @@ describe('handleAuthorization — AuthorizationRetryLimitReached', () => {
     // looked up by the zero-padded id (D12), not the raw chain sequence "42"
     expect(get).toHaveBeenCalledWith('0000000042');
     expect(row.status).toBe(AuthorizationStatusEnum.RetryLimitReached);
-    expect(row.updatedBlockId).toBe('0005000000');
+    expect(row.updatedEventId).toBe('0005000000/0000000003');
     expect(save).toHaveBeenCalled();
   });
 

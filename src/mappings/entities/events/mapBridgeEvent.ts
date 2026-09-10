@@ -9,7 +9,7 @@ import { extractArgs } from '../common';
 export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
   const {
     params,
-    blockId,
+
     eventIdx,
     block: { timestamp: datetime },
     blockEventId,
@@ -26,8 +26,7 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
     txHash: extractString(rest, 'tx_hash'),
     eventIdx,
     datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 }

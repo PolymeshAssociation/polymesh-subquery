@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { AccountBalance, AnomalyKind } from '../../../types';
-import { getBigIntValue } from '../../../utils';
+import { getBigIntValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { accountDataFrozen, recomputeDerived, STAKING_LOCK_ID } from './mapPolyxLedger';
 
@@ -103,6 +103,10 @@ export const reconcileAccount = async (
     return;
   }
 
+  // the reconcile is provoked by whatever event was being processed; the block is the honest
+  // granularity when the caller did not pass an event index
+  const blockEventId = `${blockId}/${padId(String(eventIdx ?? 0))}`;
+
   const balance = await AccountBalance.get(address);
 
   if (!balance) {
@@ -151,7 +155,7 @@ export const reconcileAccount = async (
       ? [{ lockId: STAKING_LOCK_ID, amount: onChain.frozen, reasons: 'staking' }]
       : [];
   recomputeDerived(balance);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = blockEventId;
 
   await balance.save();
 };
