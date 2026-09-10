@@ -12,6 +12,8 @@ import {
   CallIdEnum,
   EventIdEnum,
   Funding,
+  HolderKind,
+  Holding,
   SecurityIdentifier,
 } from '../../../types';
 import {
@@ -157,6 +159,77 @@ export const getAssetHolder = async (
   }
 
   return assetHolder;
+};
+
+const holdingId = (assetId: string, holder: AssetHolderDetails): string =>
+  holder.holderKind === HolderKind.Account
+    ? `${assetId}/${holder.account}`
+    : `${assetId}/${getPortfolioId(holder)}`;
+
+export const getHolding = async (
+  assetId: string,
+  holder: AssetHolderDetails,
+  blockId: string
+): Promise<Holding> => {
+  const id = holdingId(assetId, holder);
+
+  let holding = await Holding.get(id);
+
+  if (!holding) {
+    holding = Holding.create({
+      id,
+      assetId,
+      holderKind: holder.holderKind,
+      portfolioId: holder.holderKind === HolderKind.Portfolio ? getPortfolioId(holder) : undefined,
+      accountId: holder.holderKind === HolderKind.Account ? holder.account : undefined,
+      identityId: holder.identityId || undefined,
+      amount: BigInt(0),
+      nftCount: 0,
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    });
+  }
+
+  return holding;
+};
+
+/**
+ * Applies a fungible delta to one holder: the portfolio/account-grain `Holding` row it is the
+ * primary truth for, and the identity-grain `AssetHolder` rollup kept alongside (plan 03
+ * recommendation (b) — the SDK queries the rollup directly, and one row version per touched
+ * block is cheap). `Asset.holderCount` follows the rollup crossing zero.
+ *
+ * The rollup and `holderCount` are only touched when the holder resolves to a DID — an
+ * account-grain holder with no known Identity still gets its `Holding` row, and must not be
+ * folded into a DID rollup it does not belong to.
+ */
+export const applyHoldingDelta = async (
+  asset: Asset,
+  holder: AssetHolderDetails,
+  blockId: string,
+  delta: bigint,
+  promises: Promise<void>[]
+): Promise<void> => {
+  const holding = await getHolding(asset.id, holder, blockId);
+  holding.amount += delta;
+  holding.updatedBlockId = blockId;
+  promises.push(holding.save());
+
+  if (!holder.identityId) {
+    return;
+  }
+
+  const rollup = await getAssetHolder(asset.id, holder.identityId, blockId);
+  const before = rollup.amount;
+  rollup.amount += delta;
+  rollup.updatedBlockId = blockId;
+  promises.push(rollup.save());
+
+  if (before <= BigInt(0) && rollup.amount > BigInt(0)) {
+    asset.holderCount += 1;
+  } else if (before > BigInt(0) && rollup.amount <= BigInt(0)) {
+    asset.holderCount = Math.max(0, asset.holderCount - 1);
+  }
 };
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -546,19 +619,6 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   await Promise.all(promises);
 };
 
-const updateAssetHolderAmount = async (
-  assetId: string,
-  identityId: string,
-  blockId: string,
-  delta: bigint,
-  promises: Promise<void>[]
-): Promise<void> => {
-  const holder = await getAssetHolder(assetId, identityId, blockId);
-  holder.amount += delta;
-  holder.updatedBlockId = blockId;
-  promises.push(holder.save());
-};
-
 type UpdateReasonResult = {
   eventId: EventIdEnum;
   fundingRoundName?: string;
@@ -645,19 +705,13 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
   if (!rawFromHolder.isEmpty) {
     fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
-    await updateAssetHolderAmount(
-      assetId,
-      fromHolder.identityId,
-      blockId,
-      -transferAmount,
-      promises
-    );
+    await applyHoldingDelta(asset, fromHolder, blockId, -transferAmount, promises);
   }
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
     toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
-    await updateAssetHolderAmount(assetId, toHolder.identityId, blockId, transferAmount, promises);
+    await applyHoldingDelta(asset, toHolder, blockId, transferAmount, promises);
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);
@@ -678,7 +732,14 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   if (assetDelta.totalTransfers !== undefined) {
     asset.totalTransfers += assetDelta.totalTransfers;
   }
-  if (assetDelta.totalSupply !== undefined || assetDelta.totalTransfers !== undefined) {
+  if (
+    assetDelta.totalSupply !== undefined ||
+    assetDelta.totalTransfers !== undefined ||
+    fromHolder ||
+    toHolder
+  ) {
+    // one save persists the supply/transfer deltas and any holderCount change applyHoldingDelta
+    // made to this same in-memory Asset
     asset.updatedBlockId = blockId;
     promises.push(asset.save());
   }
