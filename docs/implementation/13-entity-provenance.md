@@ -93,14 +93,16 @@ the historical `_block_range` close). Applying the test moves `ProposalVote`,
 
 ## Commit sequence
 
-> **Status 2026‑09‑11 — implemented.** 7.3 `15fd13c`, 7.4 `2867ab3`, 7.5 `addc94d`, 7.6 `15f3511`
-> on `redesign/07-schema-invariants`. Full unit gate green (496 tests), `yarn build` green. Not
-> resynced — the seed‑event FK and the `datetime` removal from live queries still need a genesis
-> resync to validate. **Two pieces were split out of 7.5 to follow‑ups:** the standalone
-> `eventIdx` / `extrinsicIdx` removal (~22 entities — several are written and some queried, needs a
-> per‑entity consumer check), and threading the real `createdEventId` through the asset‑holder
-> resolution chain (`getOrCreateAccount` / `ledgerAccount` fall back to the block's first event for
-> lazily‑discovered accounts). Both are tracked in the session decisions log.
+> **Status 2026‑09‑11 — implemented.** 7.3 `15fd13c`, 7.4 `2867ab3`, 7.5 `addc94d`, 7.6 `15f3511`,
+> 7.7 `2e76ac1` on `redesign/07-schema-invariants`. Full unit gate green (496 tests), `yarn build`
+> green. Not resynced — the seed‑event FK and the `datetime`/`eventIdx` removal from live queries
+> still need a genesis resync to validate. **One piece is a deliberate follow‑up:** threading the
+> real `createdEventId` through the asset‑holder resolution chain — `getOrCreateAccount` /
+> `ledgerAccount` fall back to the block's first event (`${blockId}/0000000000`) for an account
+> discovered lazily. The instant is right; the precise event is approximate. `AssetTransaction`'s
+> "scheduled transaction" signal (was `extrinsicIdx` null) is now a null check on
+> `createdEvent { extrinsic }`; an explicit `isScheduled: Boolean!` is a clean additive change if a
+> consumer is shown to need it.
 
 > **Revised 2026‑09‑10 after review.** Nullable‑first (add relations, then populate, then remove
 > the old fields) was the original staging. It does not work: SubQuery auto‑indexes every
@@ -160,14 +162,22 @@ the historical `_block_range` close). Applying the test moves `ProposalVote`,
   `findBlockEntries` filters on it instead of `createdBlockId`.
 - Fixture / unit tests updated in the same commit for every handler touched.
 
-### 7.5 — `feat!: 🎸 remove the remaining Block-and-index copies` *(breaking, lighter)*
+### 7.5 — `feat!: 🎸 remove the remaining Block-and-index copies` *(breaking)*
 
-- Schema: remove standalone `datetime`, `eventIdx`, `extrinsicIdx` from every domain entity; keep on
-  the raw `Event` / `Extrinsic` and the `PolyxEntry` id part. Keep `createdBlock` / `updatedBlock`
-  on **`EvmAccountMapping` only** (no event on any path).
+- Schema: remove standalone `datetime` from the 14 domain entities that carry the block-copy.
 - Drop `Identity.eventId` (provably constant). Keep `Account.eventId`, flagged for a mainnet check.
 - `EvmTransaction`: drop `block` / `createdBlock` / `updatedBlock` / `datetime`; keep `extrinsic`.
 - Fix every handler / test still writing a removed field.
+
+### 7.7 — `feat!: 🎸 remove the standalone eventIdx / extrinsicIdx copies` *(breaking)*
+
+- Schema: `eventIdx` off 20 domain entities, `extrinsicIdx` off `AssetTransaction` /
+  `MultiSigProposal` / `MultiSigProposalVote`. Keep on the raw `Event` / `Extrinsic` and as a local
+  wherever an id is built from it (`IdentityKey`, multi-row `InstructionEvent` ids, `PolyxEntry`
+  side ids, the seed `Event`).
+- `Claim.eventIdx`'s `@index` goes with the field. `AssetTransaction.extrinsicIdx`'s "null for
+  scheduled tx" docstring signal becomes a null check on `createdEvent { extrinsic }` — no
+  `isScheduled` boolean added speculatively (no consumer queries it).
 
 ### 7.6 — `feat: 🎸 index tuning for the provenance rework` *(compat.sql; not breaking)*
 
