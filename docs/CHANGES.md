@@ -70,7 +70,9 @@ The chain's numeric instruction sequence is stored as a `String`, so `orderBy: [
 
 ### 2.3 A15 — pre-v8 staking rewards are unattributable **[V]**
 
-`mapStakingEvent.ts` records `rewardDestination: 'LegacyUnknown'` for every pre-8.x reward, because the event carried only the stash. Where a staker set a payee other than their stash, the index cannot say which account received the POLYX. The v8 path is correct.
+`mapStakingEvent.ts` records `rewardDestination: 'LegacyUnknown'` for every pre-8.x reward, because the event carried only the stash. Where a staker set a payee other than their stash, the index cannot say which account received the POLYX.
+
+> **Correction (PR #350).** "The v8 path is correct" **[V]** was wrong — the v8 `getRewardDestinationDetails` matched the variant against `'Account'` while `Enum#toJSON()` camel-cases it, so the object form (`{ account: … }`, `{ staked: null }`) never resolved. Fixed and consolidated into `readRewardDestination`.
 
 `LegacyUnknown` is an honest placeholder rather than a wrong value — this is a **coverage** gap, not a correctness one. It matters because these rows are used for accounting, where "looks complete and is not" is the expensive failure.
 

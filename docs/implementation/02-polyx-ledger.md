@@ -192,7 +192,9 @@ Because `api.query` targets the block being indexed **[V]** (and `.at` is unsupp
 
 [`mapStakingEvent.ts:110-130`](../../src/mappings/entities/events/mapStakingEvent.ts#L110) records `rewardDestination: 'LegacyUnknown'` for every pre-8.x `Reward`/`Rewarded`, because the event carries only the **stash** and the amount. Where a staker set a payee other than their stash — `Controller`, or an explicit `Account` — the index cannot say which account received the POLYX. Defect A15.
 
-The v8 path is correct: `get8xStakingEventDetails` decodes the `RewardDestination` variant and resolves `rewardDestinationAccount` for `Account`, `Staked` and `Stash` **[V]**.
+The v8 path decodes the `RewardDestination` variant and resolves `rewardDestinationAccount` for `Account`, `Staked` and `Stash`.
+
+> **Correction (PR #350).** This paragraph previously said the v8 path was correct **[V]**. It was not: `getRewardDestinationDetails` compared the variant key against `'Account'`, but `Enum#toJSON()` camel-cases it (`{ account: … }`), so the object form never matched — a v8 `Rewarded` with an explicit `Account` or an object-form `Staked` payee stored `rewardDestination` lower-cased with no account. Both paths now share `readRewardDestination` in `utils/staking.ts`, which normalises the bare-string and camel-cased-object forms.
 
 `LegacyUnknown` is an honest placeholder, not a wrong value — but it means a pre-v8 reward cannot be reconciled against the receiving account's balance, and it is invisible to anyone who does not know what the string means.
 
