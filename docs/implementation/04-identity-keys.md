@@ -148,6 +148,14 @@ skipped that on the pre-7 path — a bug).
 storage read on `MultiSigCreated` / `join_identity`. Belongs with the multisig event-shape sweep
 (`defect-log.md`).
 
+### Open questions — resolved by chain research
+
+| Question | Answer |
+|---|---|
+| `MultiSigSigner.signerAccount` nullable or non-null? | **Nullable — forced, not a preference.** `multiSig.multiSigSigners` is keyed by `AccountId32` in v8, but `SignerTypeEnum` is `Account \| Identity` and pre-7.x `Signatory` signers could be an identity (the `is7xChain` branch in `getMultiSigSigners` still parses both). A relation cannot point at an identity, and the index replays from genesis, so a non-null `signerAccount` would be impossible for those rows. `signerValue` stays canonical. |
+| Should `KeyRoleEnum.Unlinked` split? | **No — the chain has no finer distinction.** `KeyRecord` is a closed three-variant enum (`PrimaryKey` / `SecondaryKey` / `MultiSigSignerKey`); every other address is simply `None`. Pallet addresses, system pots, brand-new addresses and deliberately-detached keys are indistinguishable *from chain state*. A future split (`SystemAccount` for known `PalletId`-derived addresses via `systematicIssuers`, `Detached` for an address with a closed `IdentityKey` interval and no open one, `Unlinked` for the rest) would be an **indexer-side heuristic over data the index already has** — worth doing only if a consumer asks. The enum is left open (nothing marks it exhaustive) so that stays cheap. |
+| Should `MultiSig.creator` split into `creator` / `admin` / joined-identity? | **Yes — done** (see "MultiSig identity relationships" above). The chain models them as separate, independently-`Option`al, mostly-mutable relationships, plus a fourth (`payingDid`). `creator` is now nullable and event-only; `admin` is `MultiSig.admins`; joined-identity is `account.identity`; `payingDid` is a noted gap. |
+
 ### `ChildIdentity`
 
 Already retired at the v8 boundary in [09](./09-infrastructure.md) (`retireChildIdentitiesAtV8`, driven off the persisted `ChainUpgrade` comparison). No further work here.
