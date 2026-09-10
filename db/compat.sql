@@ -10,13 +10,16 @@ ADD COLUMN IF NOT EXISTS attributes JSONB GENERATED ALWAYS AS (attributes_txt::j
 ALTER TABLE extrinsics
 ADD COLUMN IF NOT EXISTS params JSONB GENERATED ALWAYS AS (params_txt::jsonb) STORED NULL;
 
--- A plain `datetime` index an older deployment may have left behind. The expression index below
--- is what serves the queries that used it.
+-- `data_block_datetime_timestamp` was an expression index on `((datetime)::timestamp(0) without
+-- time zone)`. Nothing could use it: PostGraphile compares the bare column, and Postgres uses an
+-- expression index only when the query repeats the expression exactly (defect A18, verified
+-- against a live indexer). It is replaced with a plain btree on `datetime` — which the
+-- block-range -> id-range time filter that serves "everything since <date>" queries after D13
+-- removed `createdBlock` actually needs. `data_block_datetime` is an even older plain index an
+-- ancient deployment may have left behind under a different name.
 DROP INDEX IF EXISTS data_block_datetime;
-
--- Expression index. `@index` indexes a column; this one indexes the value cast to a
--- second-resolution timestamp, which is what the query layer compares against.
-CREATE INDEX IF NOT EXISTS data_block_datetime_timestamp ON blocks (((datetime)::timestamp(0) without time zone));
+DROP INDEX IF EXISTS data_block_datetime_timestamp;
+CREATE INDEX IF NOT EXISTS data_block_datetime ON blocks (datetime);
 
 -- Unique composite indexes. `@compositeIndexes` declares a composite index but has no `unique`
 -- argument, so uniqueness across two columns can only be stated here.
@@ -47,6 +50,15 @@ CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from at
 CREATE INDEX IF NOT EXISTS data_polyx_entry_counterparty_address ON polyx_entries (counterparty_address);
 CREATE INDEX IF NOT EXISTS data_polyx_entry_era_index ON polyx_entries (era_index);
 CREATE INDEX IF NOT EXISTS data_polyx_entry_date ON polyx_entries (date);
+
+-- Chronological ordering key for `multi_sig_proposals` (D13 / §14b). The relation column SubQuery
+-- auto-creates is GiST `(created_event_id, _block_range)` under historical mode and cannot return
+-- rows in order; `MultiSigProposal.id` is `multisigAddress/proposalId`, which cannot carry
+-- chronological order either. `multiSigProposals` is a portal-consumed connection, so it gets a
+-- plain btree here. This is the one entity that needs it — every other consumed connection either
+-- has a `padId(block)/padId(eventIdx)` id (order by `ID_DESC`, no index) or was zero-padded in
+-- 7.2 (`Instruction` / `Venue` / `Proposal` / `Authorization`).
+CREATE INDEX IF NOT EXISTS data_multi_sig_proposal_created_event_id ON multi_sig_proposals (created_event_id);
 
 -- Legacy views, dropped if an older deployment left them behind.
 DROP VIEW IF EXISTS data_block;
