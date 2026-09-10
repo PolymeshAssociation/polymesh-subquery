@@ -18,7 +18,11 @@ const identityKeyId = (
   address: string,
   fromBlockId: string,
   eventIdx: number
-): string => `${identityId}/${address}/${fromBlockId}/${padId(`${eventIdx}`)}`;
+): string => {
+  const paddedEventIdx = padId(String(eventIdx));
+
+  return `${identityId}/${address}/${fromBlockId}/${paddedEventIdx}`;
+};
 
 interface OpenArgs {
   identityId: string;
