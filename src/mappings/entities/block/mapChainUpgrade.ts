@@ -118,7 +118,6 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
     specVersionId: specVersion,
     transactionVersion,
     firstBlockId: blockId,
-    datetime: block.timestamp,
   }).save();
 
   if (previous.specVersion === specVersion) {

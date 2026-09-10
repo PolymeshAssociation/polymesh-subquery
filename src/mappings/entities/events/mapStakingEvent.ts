@@ -141,7 +141,6 @@ const getStakingEventDetails = async (
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   const { eventId, params, extrinsic, blockEventId, block } = extractArgs(event);
-  const datetime = block.timestamp as Date;
   const details = await getStakingEventDetails(eventId, params as Codec[], block);
 
   let transactionId;
@@ -154,7 +153,6 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     eventId,
     ...details,
     transactionId,
-    datetime,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

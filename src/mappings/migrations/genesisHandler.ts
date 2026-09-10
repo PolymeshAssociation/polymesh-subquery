@@ -88,7 +88,7 @@ export const insertSeedEvent = async (): Promise<void> =>
  * - Permission - adds in default whole permissions for the primary account
  * - Account - adds entry for the primary account
  */
-const handleGenesisDids = async (datetime: Date) => {
+const handleGenesisDids = async () => {
   const ss58Format = api.registry.chainSS58;
 
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
@@ -129,7 +129,6 @@ const handleGenesisDids = async (datetime: Date) => {
               keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
               eventId: EventIdEnum.DidCreated,
               address: key,
-              datetime,
             },
             SEED_EVENT_ID
           )
@@ -163,8 +162,6 @@ const handleGenesisDids = async (datetime: Date) => {
         did,
         primaryAccount: accountId,
         secondaryKeysFrozen: false,
-        eventId: EventIdEnum.DidCreated,
-        datetime,
       },
       SEED_EVENT_ID
     ),
@@ -320,7 +317,7 @@ export default async (): Promise<void> => {
   await insertGenesisBlock(datetime);
   await insertSeedEvent();
 
-  await Promise.all([handleGenesisDids(datetime), handleMultiSigs(datetime)]);
+  await Promise.all([handleGenesisDids(), handleMultiSigs(datetime)]);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);

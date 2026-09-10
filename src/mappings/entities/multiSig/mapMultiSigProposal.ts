@@ -21,12 +21,11 @@ import {
   getTextValue,
   is7xChain,
   legacyQuery,
-  padId,
 } from '../../../utils';
 import { extractArgs } from '../common';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, block, blockEventId, extrinsicId } = extractArgs(event);
+  const { params, extrinsic, eventIdx, blockEventId, extrinsicId } = extractArgs(event);
 
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
@@ -98,7 +97,6 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     params: proposalParams,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
-    datetime: block.timestamp,
     status: MultiSigProposalStatusEnum.Active,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
@@ -204,7 +202,6 @@ const handleMultiSigProposalVoteAction = async (
       proposalId,
       signerId,
       action,
-      datetime: block.timestamp,
       eventIdx,
       extrinsicIdx,
       createdEventId: blockEventId,

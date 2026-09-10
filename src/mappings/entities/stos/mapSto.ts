@@ -222,7 +222,6 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
     raisingAssetType,
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
     raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
-    datetime: block.timestamp,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

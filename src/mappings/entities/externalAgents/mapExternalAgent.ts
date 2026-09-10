@@ -16,7 +16,6 @@ export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<v
     assetId,
     callerId,
     eventIdx,
-    datetime: block.timestamp,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

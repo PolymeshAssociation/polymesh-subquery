@@ -1830,7 +1830,6 @@ type ChainUpgrade @entity {
   transactionVersion: Int!
   "The block `system.CodeUpdated` was emitted in"
   firstBlock: Block!
-  datetime: Date!
 }
 
 """
@@ -1889,7 +1888,6 @@ type EvmTransaction @entity {
   "Same ID as the `Extrinsic` that carried this transaction"
   id: ID!
   extrinsic: Extrinsic!
-  block: Block! @index(unique: false)
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String! @index(unique: false)
   "0 for legacy, 1 for EIP-2930, 2 for EIP-1559"
@@ -1918,9 +1916,6 @@ type EvmTransaction @entity {
   "An Ethereum transaction always succeeds at the extrinsic level. This flags the ones that reverted"
   reverted: Boolean! @index(unique: false)
   revertReason: String
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2069,7 +2064,6 @@ type Account @entity {
   "Set when this account is a multisig — the account IS the multisig (defect G5)"
   multiSig: MultiSig @derivedFrom(field: "account")
   eventId: EventIdEnum!
-  datetime: Date!
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2095,8 +2089,6 @@ type Identity @entity {
   did: String! @index(unique: true)
   primaryAccount: String! @index(unique: false)
   secondaryKeysFrozen: Boolean!
-  eventId: EventIdEnum!
-  datetime: Date!
   createdEvent: Event!
   updatedEvent: Event!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
@@ -2166,7 +2158,6 @@ type BridgeEvent @entity {
   txHash: String! @index(unique: false)
   eventIdx: Int!
   createdEvent: Event!
-  datetime: Date!
   updatedEvent: Event!
 }
 
@@ -2183,7 +2174,6 @@ type StakingEvent @entity {
   rewardDestinationAccount: String
   nominatedValidators: [String!]
   transactionId: String
-  datetime: Date! @index
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2320,7 +2310,6 @@ type Investment @entity {
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
-  datetime: Date!
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2333,7 +2322,6 @@ type TickerExternalAgent @entity {
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
   eventIdx: Int!
-  datetime: Date!
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2347,7 +2335,6 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  datetime: Date!
   type: String!
   permissions: String
   eventIdx: Int!
@@ -2656,8 +2643,6 @@ type DistributionPayment @entity {
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
-  "When the benefit was claimed. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
-  datetime: Date!
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3102,7 +3087,6 @@ type AssetTransaction @entity {
   memo: String
   "the account that signed the extrinsic, for movements initiated directly by an account"
   address: String
-  datetime: Date!
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3186,7 +3170,6 @@ type Funding @entity {
   fundingRound: String! @index(unique: false)
   amount: BigInt!
   totalFundingAmount: BigInt!
-  datetime: Date!
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3331,7 +3314,6 @@ type PolyxEntry @entity @compositeIndexes(fields: [["account", "date"], ["accoun
   createdEvent: Event!
   extrinsic: Extrinsic
   eventIdx: Int!
-  datetime: Date!
   "denormalised block id — `findBlockEntries` filters `= blockId` and `getByFields` has no range op (D13)"
   blockId: String! @index
 }
@@ -3528,7 +3510,6 @@ type MultiSigProposal @entity {
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!
-  datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int
   params: MultiSigProposalParams!
@@ -3554,7 +3535,6 @@ type MultiSigProposalVote @entity {
   proposal: MultiSigProposal! @index(unique: false)
   signer: MultiSigSigner! @index(unique: false)
   action: MultiSigProposalVoteActionEnum
-  datetime: Date!
   eventIdx: Int!
   extrinsicIdx: Int!
   updatedEvent: Event!

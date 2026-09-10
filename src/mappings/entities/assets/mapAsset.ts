@@ -62,7 +62,6 @@ export const createFunding = (
     fundingRound,
     amount: issuedAmount,
     totalFundingAmount,
-    datetime,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -143,7 +142,6 @@ export const createAssetTransaction = (
     toIdentityId,
     eventIdx,
     extrinsicIdx: extrinsic?.idx,
-    datetime,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -444,7 +442,6 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     amount: issuedAmount,
     fundingRound,
     extrinsicIdx: extrinsic?.idx,
-    datetime: block.timestamp,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });

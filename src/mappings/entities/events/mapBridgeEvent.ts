@@ -7,13 +7,7 @@ import { extractArgs } from '../common';
  * Subscribes to bridge events
  */
 export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
-  const {
-    params,
-
-    eventIdx,
-    block: { timestamp: datetime },
-    blockEventId,
-  } = extractArgs(event);
+  const { params, eventIdx, blockEventId } = extractArgs(event);
   const [rawDid, rawBridgeDetails] = params;
 
   const { recipient, amount, ...rest } = JSON.parse(rawBridgeDetails.toString());
@@ -25,7 +19,6 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
     amount: BigInt(amount) / BigInt(1000000),
     txHash: extractString(rest, 'tx_hash'),
     eventIdx,
-    datetime,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

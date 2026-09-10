@@ -362,7 +362,6 @@ const writeMovementSide = async (
     blockId,
     extrinsicId: params.extrinsicId,
     eventIdx,
-    datetime: block.timestamp,
   }).save();
 
   await reconcileAccount(address, blockId, block, { eventIdx });
@@ -1095,7 +1094,6 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
       blockId,
       extrinsicId: params.extrinsicId,
       eventIdx,
-      datetime,
     }).save();
   }
 

@@ -215,7 +215,7 @@ export const getOrCreateAccount = async (
 
   if (!identity) {
     await createIdentity(
-      { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
+      { did, primaryAccount: address, secondaryKeysFrozen: false },
       createdEventId
     );
 
@@ -224,7 +224,7 @@ export const getOrCreateAccount = async (
     await createPortfolio({ identityId: did, number: 0, eventIdx: 0 }, createdEventId);
   } else if (kind === 'primaryKey' && identity.primaryAccount !== address) {
     await createIdentity(
-      { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
+      { did, primaryAccount: address, secondaryKeysFrozen: false },
       createdEventId
     );
   }
@@ -232,7 +232,6 @@ export const getOrCreateAccount = async (
   const account = Account.create({
     id: address,
     eventId: EventIdEnum.AccountCreated,
-    datetime,
     identityId: did,
     address,
     keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
@@ -291,7 +290,6 @@ export const ledgerAccount = async (
     id: address,
     address,
     eventId: EventIdEnum.AccountCreated,
-    datetime,
     keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
     createdEventId,
