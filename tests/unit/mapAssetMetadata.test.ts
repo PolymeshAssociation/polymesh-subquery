@@ -5,7 +5,6 @@
  * extrinsic (the register-and-set path), and only an unrecognised wrapper is recorded and dropped.
  */
 
-import { SubstrateEvent } from '@subql/types';
 import {
   handleAssetTypeChanged,
   handleLocalMetadataKeyDeleted,
@@ -14,58 +13,26 @@ import {
   handleSetAssetMetadataValue,
 } from '../../src/mappings/entities/assets/mapAssetMetadata';
 import { handleCreatedAssetTransfer } from '../../src/mappings/entities/assets/mapAsset';
+import { codec, MockDb, mockStore, storeSet, tupleEvent } from './helpers';
 
 const ASSET = '0xasset000000000000000000000000000';
 
-const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
-const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
-const storeRemove = (): jest.Mock => (globalThis as any).store.remove as jest.Mock;
-
-const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
-  isEmpty: opts.isEmpty ?? false,
-  toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
-  toJSON: () => value,
-});
-
-const unnamedMeta = (values: unknown[]) => ({
-  fields: values.map(() => ({
-    name: { isSome: false },
-    typeName: { isSome: true, unwrap: () => codec('Dummy') },
-  })),
-});
-
-/** An `EventRecord`-shaped sibling event in the same extrinsic. */
-const siblingRecord = (
-  method: string,
-  values: ReturnType<typeof codec>[],
-  extrinsicIdx: number
-) => ({
-  phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => extrinsicIdx } },
-  event: { section: 'asset', method, data: values, meta: unnamedMeta(values) },
-});
-
-const tupleEvent = (
-  method: string,
-  values: ReturnType<typeof codec>[],
-  extrinsic?: unknown,
-  events: unknown[] = []
-): SubstrateEvent =>
-  ({
+const metaEvent = (method: string, data: unknown[], extrinsic?: unknown, events: unknown[] = []) =>
+  tupleEvent({
+    section: 'asset',
+    method,
+    data,
+    blockNumber: '700',
     idx: events.length,
     extrinsic,
-    block: {
-      block: { header: { number: { toString: () => '700' } } },
-      specVersion: 8000000,
-      timestamp: new Date('2026-04-01T00:00:00Z'),
-      events,
-    },
-    event: {
-      section: 'asset',
-      method,
-      data: values,
-      meta: unnamedMeta(values),
-    },
-  } as unknown as SubstrateEvent);
+    events,
+  });
+
+/** An `EventRecord`-shaped sibling event in the same extrinsic. */
+const siblingRecord = (method: string, values: unknown[], extrinsicIdx: number) => ({
+  phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => extrinsicIdx } },
+  event: metaEvent(method, values).event,
+});
 
 const setMetadataExtrinsic = (key: unknown) => ({
   idx: 4,
@@ -76,27 +43,15 @@ const setMetadataExtrinsic = (key: unknown) => ({
 });
 
 describe('asset metadata', () => {
-  let db: Record<string, Record<string, any>>;
+  let db: MockDb;
 
   beforeEach(() => {
-    db = { Asset: { [ASSET]: { id: ASSET, type: 'EquityCommon' } } };
-    storeGet().mockImplementation((entity: string, id: string) =>
-      Promise.resolve(db[entity]?.[id])
-    );
-    storeSet().mockImplementation((entity: string, id: string, data: any) => {
-      (db[entity] ??= {})[id] = { ...data };
-      return Promise.resolve();
-    });
-    storeRemove().mockImplementation((entity: string, id: string) => {
-      delete db[entity]?.[id];
-      return Promise.resolve();
-    });
-    (globalThis as any).api.query = {};
+    db = mockStore({ Asset: { [ASSET]: { id: ASSET, type: 'EquityCommon' } } });
   });
 
   it('registers a local metadata key with its name', async () => {
     await handleRegisterAssetMetadataLocalType(
-      tupleEvent('RegisterAssetMetadataLocalType', [
+      metaEvent('RegisterAssetMetadataLocalType', [
         codec('0xdid'),
         codec(ASSET),
         codec('Prospectus'),
@@ -115,7 +70,7 @@ describe('asset metadata', () => {
 
   it('sets the value + lock, reading the key from the extrinsic', async () => {
     await handleSetAssetMetadataValue(
-      tupleEvent(
+      metaEvent(
         'SetAssetMetadataValue',
         [
           codec('0xdid'),
@@ -137,7 +92,7 @@ describe('asset metadata', () => {
     // the setter is dispatched by registerAndSetLocalAssetMetadata, not setAssetMetadata, so the
     // key is not in args[1]; the RegisterAssetMetadataLocalType event fired earlier in the same
     // extrinsic carries the new local key id (3)
-    const event = tupleEvent(
+    const event = metaEvent(
       'SetAssetMetadataValue',
       [codec('0xdid'), codec(ASSET), codec('ipfs://new'), codec(null, { isEmpty: true })],
       {
@@ -165,7 +120,7 @@ describe('asset metadata', () => {
 
   it('records an anomaly and writes nothing only when neither the extrinsic nor a sibling resolves the key', async () => {
     await handleSetAssetMetadataValue(
-      tupleEvent('SetAssetMetadataValue', [
+      metaEvent('SetAssetMetadataValue', [
         codec('0xdid'),
         codec(ASSET),
         codec('x'),
@@ -191,7 +146,7 @@ describe('asset metadata', () => {
     };
 
     await handleMetadataValueDeleted(
-      tupleEvent('MetadataValueDeleted', [codec('0xdid'), codec(ASSET), codec({ local: 1 })])
+      metaEvent('MetadataValueDeleted', [codec('0xdid'), codec(ASSET), codec({ local: 1 })])
     );
 
     expect(db['AssetMetadata'][`${ASSET}/Local/1`]).toMatchObject({
@@ -205,7 +160,7 @@ describe('asset metadata', () => {
     db['AssetMetadata'] = { [`${ASSET}/Local/1`]: { id: `${ASSET}/Local/1` } };
 
     await handleLocalMetadataKeyDeleted(
-      tupleEvent('LocalMetadataKeyDeleted', [codec('0xdid'), codec(ASSET), codec('1')])
+      metaEvent('LocalMetadataKeyDeleted', [codec('0xdid'), codec(ASSET), codec('1')])
     );
 
     expect(db['AssetMetadata'][`${ASSET}/Local/1`]).toBeUndefined();
@@ -213,7 +168,7 @@ describe('asset metadata', () => {
 
   it('AssetTypeChanged updates Asset.type', async () => {
     await handleAssetTypeChanged(
-      tupleEvent('AssetTypeChanged', [codec('0xdid'), codec(ASSET), codec('Derivative')])
+      metaEvent('AssetTypeChanged', [codec('0xdid'), codec(ASSET), codec('Derivative')])
     );
 
     expect(db['Asset'][ASSET].type).toBe('Derivative');
@@ -221,23 +176,15 @@ describe('asset metadata', () => {
 });
 
 describe('handleCreatedAssetTransfer', () => {
-  let db: Record<string, Record<string, any>>;
+  let db: MockDb;
 
   beforeEach(() => {
-    db = { Asset: { [ASSET]: { id: ASSET } } };
-    storeGet().mockImplementation((entity: string, id: string) =>
-      Promise.resolve(db[entity]?.[id])
-    );
-    storeSet().mockImplementation((entity: string, id: string, data: any) => {
-      (db[entity] ??= {})[id] = { ...data };
-      return Promise.resolve();
-    });
-    (globalThis as any).api.query = {};
+    db = mockStore({ Asset: { [ASSET]: { id: ASSET } } });
   });
 
   it('writes an account-side AssetTransaction and links the pending instruction', async () => {
     await handleCreatedAssetTransfer(
-      tupleEvent(
+      metaEvent(
         'CreatedAssetTransfer',
         [
           codec(ASSET),
@@ -265,7 +212,7 @@ describe('handleCreatedAssetTransfer', () => {
 
   it('leaves instruction null when there is no pending transfer id', async () => {
     await handleCreatedAssetTransfer(
-      tupleEvent('CreatedAssetTransfer', [
+      metaEvent('CreatedAssetTransfer', [
         codec(ASSET),
         codec('5From000000000000000000000000000000000000000000000'),
         codec('5To00000000000000000000000000000000000000000000000'),

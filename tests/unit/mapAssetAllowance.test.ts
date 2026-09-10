@@ -4,57 +4,26 @@
  * `amountSpent`, so a missed or reordered event cannot accumulate drift.
  */
 
-import { SubstrateEvent } from '@subql/types';
 import { handleAllowanceSpent, handleApproval } from '../../src/mappings/entities/assets/mapAsset';
+import { codec, MockDb, mockStore, tupleEvent } from './helpers';
 
 const ASSET = '0xasset0000000000000000000000000a';
 const OWNER = '5Owner00000000000000000000000000000000000000000000';
 const SPENDER = '5Spender000000000000000000000000000000000000000000';
 
-const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
-const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
-
-const codec = (value: string) => ({ toString: () => value, toJSON: () => value });
-
-const allowanceEvent = (method: 'Approval' | 'AllowanceSpent', values: string[]): SubstrateEvent =>
-  ({
-    idx: 0,
-    block: {
-      block: { header: { number: { toString: () => '800' } } },
-      specVersion: 8000000,
-      timestamp: new Date('2026-03-01T00:00:00Z'),
-    },
-    event: {
-      section: 'asset',
-      method,
-      data: values.map(codec),
-      meta: {
-        fields: values.map(() => ({
-          name: { isSome: false },
-          typeName: { isSome: true, unwrap: () => codec('Dummy') },
-        })),
-      },
-    },
-  } as unknown as SubstrateEvent);
+const allowanceEvent = (method: 'Approval' | 'AllowanceSpent', values: string[]) =>
+  tupleEvent({ section: 'asset', method, data: values.map(v => codec(v)), blockNumber: '800' });
 
 describe('asset allowances', () => {
-  let db: Record<string, Record<string, any>>;
+  let db: MockDb;
 
   beforeEach(() => {
-    db = {
+    db = mockStore({
       Account: {
         [OWNER]: { id: OWNER, address: OWNER, identityId: '0x01' },
         [SPENDER]: { id: SPENDER, address: SPENDER, identityId: '0x02' },
       },
-    };
-    storeGet().mockImplementation((entity: string, id: string) =>
-      Promise.resolve(db[entity]?.[id])
-    );
-    storeSet().mockImplementation((entity: string, id: string, data: any) => {
-      (db[entity] ??= {})[id] = { ...data };
-      return Promise.resolve();
     });
-    (globalThis as any).api.query = {};
   });
 
   const id = `${ASSET}/${OWNER}/${SPENDER}`;

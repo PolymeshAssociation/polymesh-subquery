@@ -6,18 +6,23 @@
  * first, DID equality second, or an unresolved sender is silently recorded as an issuance.
  */
 
-import { SubstrateEvent } from '@subql/types';
 import { accountHolder, classifyInternalTransfer, portfolioHolder } from '../../src/utils';
 import { createAssetTransaction } from '../../src/mappings/entities/assets/mapAsset';
 import { handlePortfolioMovement } from '../../src/mappings/entities/identities/mapPortfolio';
+import {
+  codec,
+  MockDb,
+  mockStore,
+  portfolioCodec,
+  storeGet,
+  storeSet,
+  tupleEvent,
+} from './helpers';
 
 const DID_A = '0x0a'.padEnd(66, '0');
 const DID_B = '0x0b'.padEnd(66, '0');
 const ASSET = '0xasset000000000000000000000000000';
 const ADDR = '5Signer0000000000000000000000000000000000000000000';
-
-const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
-const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 
 describe('classifyInternalTransfer', () => {
   it('is true only when both holders resolve to the same DID', () => {
@@ -74,18 +79,12 @@ describe('createAssetTransaction — isInternalTransfer', () => {
 });
 
 describe('handlePortfolioMovement → AssetTransaction', () => {
-  let db: Record<string, Record<string, any>>;
+  let db: MockDb;
 
-  const codec = (value: unknown) => ({
-    toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
-    toJSON: () => value,
-  });
-
-  const portfolioCodec = (did: string, number: number) =>
-    codec({ did, kind: number ? { user: number } : { default: null } });
-
-  const movementEvent = (): SubstrateEvent =>
-    ({
+  const movementEvent = () =>
+    tupleEvent({
+      section: 'portfolio',
+      method: 'MovedBetweenPortfolios',
       idx: 2,
       extrinsic: {
         idx: 0,
@@ -94,35 +93,18 @@ describe('handlePortfolioMovement → AssetTransaction', () => {
           method: { method: 'movePortfolioFunds', section: 'portfolio' },
         },
       },
-      block: {
-        block: { header: { number: { toString: () => '1000' } } },
-        specVersion: 8000000,
-        timestamp: new Date('2026-05-01T00:00:00Z'),
-      },
-      event: {
-        section: 'portfolio',
-        method: 'MovedBetweenPortfolios',
-        data: [
-          codec(DID_A),
-          portfolioCodec(DID_A, 0),
-          portfolioCodec(DID_A, 1),
-          codec(ASSET),
-          codec('750'),
-          codec('rebalance'),
-        ],
-      },
-    } as unknown as SubstrateEvent);
+      data: [
+        codec(DID_A),
+        portfolioCodec(DID_A, 0),
+        portfolioCodec(DID_A, 1),
+        codec(ASSET),
+        codec('750'),
+        codec('rebalance'),
+      ],
+    });
 
   beforeEach(() => {
-    db = {};
-    storeGet().mockImplementation((entity: string, id: string) =>
-      Promise.resolve(db[entity]?.[id])
-    );
-    storeSet().mockImplementation((entity: string, id: string, data: any) => {
-      (db[entity] ??= {})[id] = { ...data };
-      return Promise.resolve();
-    });
-    (globalThis as any).api.query = {};
+    db = mockStore();
   });
 
   it('writes exactly one internal-transfer AssetTransaction with matching identities', async () => {

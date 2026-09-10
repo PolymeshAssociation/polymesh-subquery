@@ -19,14 +19,14 @@ import { extractArgs, getAsset } from '../common';
 
 type MetadataKey = { scope: MetadataScope; keyId: string };
 
-/** `{ Local: n } | { Global: n }`, from an event param or an extrinsic arg. */
+/** `{ Local: n } | { Global: n }`, from an event param or an extrinsic arg. The `n` is a `u64`. */
 const parseMetadataKey = (raw: unknown): MetadataKey | undefined => {
-  const obj = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>;
+  const obj = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, number | string>;
   if (obj && ('local' in obj || 'Local' in obj)) {
-    return { scope: MetadataScope.Local, keyId: String(obj.local ?? obj.Local) };
+    return { scope: MetadataScope.Local, keyId: `${obj.local ?? obj.Local}` };
   }
   if (obj && ('global' in obj || 'Global' in obj)) {
-    return { scope: MetadataScope.Global, keyId: String(obj.global ?? obj.Global) };
+    return { scope: MetadataScope.Global, keyId: `${obj.global ?? obj.Global}` };
   }
   return undefined;
 };

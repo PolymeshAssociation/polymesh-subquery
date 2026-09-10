@@ -5,64 +5,33 @@
  * isInternalTransfer: true, matching their v6+ successor's shape.
  */
 
-import { SubstrateEvent } from '@subql/types';
 import {
   handleFungibleTokensMovedBetweenPortfolios,
   handleNftsMovedBetweenPortfolios,
 } from '../../src/mappings/entities/identities/mapPortfolio';
+import { codec, MockDb, mockStore, portfolioCodec, tupleEvent } from './helpers';
 
 const DID = '0x0a'.padEnd(66, '0');
 const ADDR = '5Signer0000000000000000000000000000000000000000000';
 
-const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
-const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
-
-const codec = (value: unknown) => ({
-  toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
-  toJSON: () => value,
-});
-
-const portfolioCodec = (did: string, number: number) =>
-  codec({ did, kind: number ? { user: number } : { default: null } });
-
-const v5Event = (method: string, data: ReturnType<typeof codec>[]): SubstrateEvent =>
-  ({
-    idx: 0,
+const v5Event = (method: string, data: unknown[]) =>
+  tupleEvent({
+    section: 'portfolio',
+    method,
+    data,
+    specVersion: 5_003_001,
+    blockNumber: '7786536',
     extrinsic: {
       idx: 0,
       extrinsic: { signer: codec(ADDR), method: { section: 'portfolio', method: 'moveFunds' } },
     },
-    block: {
-      block: { header: { number: { toString: () => '7786536' } } },
-      specVersion: 5003001,
-      timestamp: new Date('2022-01-01T00:00:00Z'),
-    },
-    event: {
-      section: 'portfolio',
-      method,
-      data,
-      meta: {
-        fields: data.map(() => ({
-          name: { isSome: false },
-          typeName: { isSome: true, unwrap: () => codec('Dummy') },
-        })),
-      },
-    },
-  } as unknown as SubstrateEvent);
+  });
 
 describe('v5-era portfolio movement events', () => {
-  let db: Record<string, Record<string, any>>;
+  let db: MockDb;
 
   beforeEach(() => {
-    db = {};
-    storeGet().mockImplementation((entity: string, id: string) =>
-      Promise.resolve(db[entity]?.[id])
-    );
-    storeSet().mockImplementation((entity: string, id: string, data: any) => {
-      (db[entity] ??= {})[id] = { ...data };
-      return Promise.resolve();
-    });
-    (globalThis as any).api.query = {};
+    db = mockStore();
   });
 
   it('FungibleTokensMovedBetweenPortfolios writes an internal-transfer AssetTransaction', async () => {
