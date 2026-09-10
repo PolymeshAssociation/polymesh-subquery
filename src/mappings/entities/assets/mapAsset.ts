@@ -6,6 +6,7 @@ import {
   Asset,
   AssetDocument,
   AssetHolder,
+  AssetAllowance,
   AssetMandatoryMediator,
   AssetPreApproval,
   AssetTransaction,
@@ -30,6 +31,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
+  getOrCreateAccount,
   getPortfolioId,
   getSecurityIdentifiers,
   getStringArrayValue,
@@ -839,4 +841,85 @@ export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promi
   const assetId = await getAssetId(rawAssetId, block);
 
   await AssetPreApproval.remove(`${assetId}/${identityId}`);
+};
+
+const getAssetAllowance = async (
+  assetId: string,
+  ownerId: string,
+  spenderId: string,
+  blockId: string,
+  block: SubstrateEvent['block']
+): Promise<AssetAllowance> => {
+  await Promise.all([
+    getOrCreateAccount(ownerId, blockId, block.timestamp),
+    getOrCreateAccount(spenderId, blockId, block.timestamp),
+  ]);
+
+  const id = `${assetId}/${ownerId}/${spenderId}`;
+
+  return (
+    (await AssetAllowance.get(id)) ??
+    AssetAllowance.create({
+      id,
+      assetId,
+      ownerId,
+      spenderId,
+      amount: BigInt(0),
+      totalSpent: BigInt(0),
+      createdBlockId: blockId,
+      updatedBlockId: blockId,
+    })
+  );
+};
+
+export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, block } = extractArgs(event);
+  const {
+    owner: rawOwner,
+    spender: rawSpender,
+    assetId: rawAssetId,
+    amount: rawAmount,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const allowance = await getAssetAllowance(
+    assetId,
+    getTextValue(rawOwner),
+    getTextValue(rawSpender),
+    blockId,
+    block
+  );
+
+  allowance.amount = getBigIntValue(rawAmount);
+  allowance.updatedBlockId = blockId;
+
+  await allowance.save();
+};
+
+export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, block } = extractArgs(event);
+  const {
+    owner: rawOwner,
+    spender: rawSpender,
+    assetId: rawAssetId,
+    amountSpent: rawAmountSpent,
+    remainingAllowance: rawRemaining,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const allowance = await getAssetAllowance(
+    assetId,
+    getTextValue(rawOwner),
+    getTextValue(rawSpender),
+    blockId,
+    block
+  );
+
+  // take the chain's own remaining value rather than subtracting — subtraction drifts if any
+  // AllowanceSpent is ever missed or reordered
+  allowance.amount = getBigIntValue(rawRemaining);
+  allowance.totalSpent += getBigIntValue(rawAmountSpent);
+  allowance.updatedBlockId = blockId;
+
+  await allowance.save();
 };

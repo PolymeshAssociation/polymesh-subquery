@@ -12,6 +12,8 @@ const dictionary = process.env.NETWORK_DICTIONARY || '';
 
 const filters: Record<string, Record<string, string[]>> = {
   asset: {
+    AllowanceSpent: ['handleAllowanceSpent'],
+    Approval: ['handleApproval'],
     AssetAffirmationExemption: [],
     AssetBalanceUpdated: ['handleAssetBalanceUpdated'],
     AssetCreated: ['handleAssetCreated'],

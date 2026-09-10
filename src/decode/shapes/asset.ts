@@ -1,4 +1,4 @@
-import { LAST_V5, V6 } from './consts';
+import { LAST_V5, V6, V8 } from './consts';
 import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
@@ -86,6 +86,14 @@ registerShape(
   'Redeemed',
   discontinuedAt(LAST_V5, ['did', 'assetId', 'beneficiaryDid', 'amount'])
 );
+
+// v8 account-level asset layer (defect G11). AccountId-keyed, so no `did` parameter.
+registerShape('asset', 'Approval', [
+  { from: V8, fields: ['owner', 'spender', 'assetId', 'amount'] },
+]);
+registerShape('asset', 'AllowanceSpent', [
+  { from: V8, fields: ['owner', 'spender', 'assetId', 'amountSpent', 'remainingAllowance'] },
+]);
 
 registerShape('asset', 'TickerRegistered', stable(['did', 'ticker', 'expiry']));
 // Deprecated at 6.0.0

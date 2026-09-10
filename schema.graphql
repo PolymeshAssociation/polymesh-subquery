@@ -3083,6 +3083,23 @@ type AssetTransaction @entity {
 }
 
 """
+An ERC20-style spending allowance one account has granted another over an asset (defect G11).
+v8 account-level layer — keyed by `AccountId`, outside the identity/portfolio model.
+"""
+type AssetAllowance @entity {
+  id: ID! # assetId/owner/spender
+  asset: Asset! @index(unique: false)
+  owner: Account! @index(unique: false)
+  spender: Account! @index(unique: false)
+  "remaining allowance — taken from the chain's own computed value, never derived by subtraction"
+  amount: BigInt!
+  "lifetime total spent against this allowance"
+  totalSpent: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
 Represents an investment into an Asset
 """
 type Funding @entity {
