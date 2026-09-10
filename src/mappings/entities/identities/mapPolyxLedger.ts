@@ -1144,14 +1144,22 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
 const identityPrimaryAccount = async (did: string | undefined): Promise<string | undefined> =>
   did ? (await Identity.get(did))?.primaryAccount : undefined;
 
+const treasuryPalletAccount = (): string =>
+  getAccountId(systematicIssuers.treasury.accountId, api.registry.chainSS58);
+
 export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const [rawFromDid, rawToDid, rawTo, rawBalance] = args.params;
+  const [, rawToDid, rawTo, rawBalance] = args.params;
 
+  // `TreasuryDisbursement(authorizingDid, targetDid, targetAccount?, amount)`. The first param is
+  // the committee that authorised the spend, **not** the source of funds — `treasury.disbursement`
+  // always moves POLYX out of the treasury pallet account (the mirror of the reimbursement
+  // handler's credit). Debiting `authorizingDid`'s primary key instead left the treasury drifting
+  // high forever and the committee account low (defect: the block-352,843 disbursements).
+  //
   // (IdentityId, IdentityId, AccountId, Balance) from 5.0.0; (IdentityId, IdentityId, Balance) before
   const hasToAddress = args.params.length >= 4;
   const amount = getBigIntValue(hasToAddress ? rawBalance : rawTo);
-  const fromAddress = await identityPrimaryAccount(getTextValue(rawFromDid));
   const toAddress =
     (hasToAddress ? getTextValue(rawTo) : undefined) ??
     (await identityPrimaryAccount(getTextValue(rawToDid)));
@@ -1164,24 +1172,28 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   );
 
   if (existingTransfer) {
-    // `treasury.disbursement` to an identity emits both `Transfer` and `TreasuryDisbursement`;
-    // relabel the transfer rather than double-counting.
-    existingTransfer.kind = MovementKind.TreasuryDisbursement;
-    await existingTransfer.save();
+    // From 5.0.0 `treasury.disbursement` also emits `balances.Transfer{treasury → recipient}`;
+    // relabel both sides of it rather than writing a second movement.
+    const siblings = await PolyxEntry.getByFields(
+      [['movementId', '=', existingTransfer.movementId]],
+      { limit: 10 }
+    );
+
+    for (const sibling of siblings) {
+      sibling.kind = MovementKind.TreasuryDisbursement;
+      await sibling.save();
+    }
 
     return;
   }
 
   await postTransition(args, {
-    from: fromAddress ? { address: fromAddress, pool: PolyxPool.Free } : undefined,
+    from: { address: treasuryPalletAccount(), pool: PolyxPool.Free },
     to: toAddress ? { address: toAddress, pool: PolyxPool.Free } : undefined,
     amount,
     kind: MovementKind.TreasuryDisbursement,
   });
 };
-
-const treasuryPalletAccount = (): string =>
-  getAccountId(systematicIssuers.treasury.accountId, api.registry.chainSS58);
 
 export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);

@@ -30,6 +30,7 @@ import {
   handleWithdrawn,
   handleDustLost,
   handleReserveRepatriated,
+  handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
@@ -323,6 +324,35 @@ describe('Event → pool transition', () => {
     });
     expect(entries()[0].accountId).not.toBe(payerDid);
     expect(balance(treasury)?.free).toBe(BigInt(400));
+  });
+
+  it('TreasuryDisbursement debits the treasury pallet account, not the authorising committee', async () => {
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const recipientDid = '0x8015a1702789fedf8474a042af07ba6a37f94e8d24b4eed89414e6eb79df084e';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+
+    // pre-5.0.0 shape carries no recipient account and no paired balances.Transfer
+    await handleTreasuryDisbursement(
+      tupleEvent(
+        'treasury',
+        'TreasuryDisbursement',
+        [committeeDid, recipientDid, BOB, '4014'],
+        3010
+      )
+    );
+
+    const debit = entries().find(r => r.direction === EntryDirection.Debit);
+    const credit = entries().find(r => r.direction === EntryDirection.Credit);
+
+    expect(debit).toMatchObject({
+      accountId: treasury,
+      kind: MovementKind.TreasuryDisbursement,
+      amount: BigInt(-4014),
+    });
+    expect(credit?.accountId).toBe(BOB);
+    expect(entries().some(r => r.accountId === committeeDid)).toBe(false);
+    expect(balance(treasury)?.free).toBe(BigInt(-4014));
+    expect(balance(BOB)?.free).toBe(BigInt(4014));
   });
 });
 
