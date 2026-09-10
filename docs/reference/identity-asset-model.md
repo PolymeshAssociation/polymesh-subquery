@@ -58,6 +58,8 @@ SubQuery historical mode makes the first answerable by `blockHeight` on `Identit
 
 A multisig **is** an account — it holds POLYX, holds assets, signs. But `MultiSig.address: String!` is a bare string with no relation to `Account`, so the multisig's balance and its multisig-ness cannot be traversed in one query. Meanwhile `MultiSigAdmin.identityId: String!` is a string while `MultiSig.creator: Identity!` is a relation — inconsistent within the same cluster.
 
+See also **G16**: the signer *inside* a multisig, and any account's role in the identity system generally, are unmodelled for the same reason.
+
 ### G6 — Child identities: feature removed at v8, stale rows retained **[V]**
 
 `ChildDidCreated` exists at v7.4.0 (`pallets/identity/src/keys.rs`, `lib.rs`) and is **absent at v8.0.0**; no child-identity call or event survives in the v8 runtime.
@@ -69,6 +71,14 @@ This generalises to a pattern worth naming: **when a chain feature is removed, t
 ### G7 — Unhandled identity events
 
 Registered with an empty handler list: `AuthorizationRetryLimitReached`, `CddClaimsInvalidated`, `CddRequirementForPrimaryKeyUpdated`. `CddClaimsInvalidated` in particular is a compliance-relevant state change.
+
+### G16 — Signer keys and account role are not modelled **[V]**
+
+`MultiSigSigner.signerValue: String!` is unindexed and cannot be joined to `Account`, so "which multisigs does this account sign for?" is a sequential scan — even though a signer key *is* an account (G5 for the multisig itself; this is the signer inside it).
+
+Separately, `Account` records `keyType` (`substrate` / `ethereum` — the cryptographic shape) but nothing about the key's *role*. A bare `Account` with no identity is ambiguous: `ledgerAccount` builds the same shape for the treasury pot, the block-reward pot, and a multisig signer key, even though the chain's `KeyRecord` (`PrimaryKey` / `SecondaryKey` / `MultiSigSignerKey`) distinguishes them and the indexer already reads that distinction via `resolveKeyIdentity` before discarding it.
+
+Fix: `Account.keyRole: KeyRoleEnum` (`PrimaryKey` / `SecondaryKey` / `MultiSigSigner` / `Unlinked`), derived in one place from the key record; `MultiSigSigner.signerAccount: Account` (nullable — `SignerTypeEnum` also has `Identity` on pre-7.x, so `signerValue` stays canonical). Together they make `Account (signer) → MultiSigSigner → MultiSig → Account (multisig) → Identity` one joinable path.
 
 ## 1.3 From scratch
 

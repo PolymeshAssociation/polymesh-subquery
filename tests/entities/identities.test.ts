@@ -45,8 +45,8 @@ describe('accounts', () => {
             nodes {
               address
               identityId
+              keyRole
               eventId
-              permissionsId
               createdBlockId
               datetime
             }
@@ -60,7 +60,7 @@ describe('accounts', () => {
     expect(result?.data).toMatchSnapshot();
   });
 
-  it('should return filtered accounts along with their permissions', async () => {
+  it('should return filtered accounts along with their key assignments and permissions', async () => {
     const result = await query({
       query: gql`
         query {
@@ -76,8 +76,8 @@ describe('accounts', () => {
               id
               address
               identityId
+              keyRole
               eventId
-              permissionsId
               createdBlockId
               datetime
               identity {
@@ -85,11 +85,14 @@ describe('accounts', () => {
                 primaryAccount
                 secondaryKeysFrozen
               }
-              permissions {
-                assets
-                portfolios
-                transactions
-                transactionGroups
+              keyAssignments(orderBy: [VALID_FROM_BLOCK_ID_ASC]) {
+                nodes {
+                  role
+                  validFromBlockId
+                  validToBlockId
+                  addedReason
+                  permissions
+                }
               }
             }
           }
@@ -103,22 +106,22 @@ describe('accounts', () => {
   });
 });
 
-describe('permissions', () => {
-  it('should return permissions for a given account address', async () => {
+describe('identityKeys', () => {
+  it("returns a key's permissions on the IdentityKey row (the Permissions entity is gone, G4)", async () => {
     const address = '5EYxLuFdbD99jn2BsZ3f1rMoa3raDB8TAnTLX3VMXhQoJyrv';
     const res = await query({
       query: gql`
       query {
-        permissions(filter: { id: { equalTo: "${address}"}}, orderBy: ID_ASC) {
+        identityKeys(filter: { accountId: { equalTo: "${address}" } }, orderBy: VALID_FROM_BLOCK_ID_ASC) {
           nodes {
             id
-            assets
-            portfolios
-            transactions
-            transactionGroups
-            createdBlockId
-            updatedBlockId
-            datetime
+            identityId
+            role
+            permissions
+            validFromBlockId
+            validToBlockId
+            addedReason
+            removedReason
           }
         }
       }

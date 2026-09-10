@@ -3399,6 +3399,20 @@ type MultiSig @entity {
   id: ID!
   "The multisig's own account — `account.address` is the multisig address, `id` is the same string"
   account: Account! @index(unique: true)
+  """
+  KNOWN AMBIGUITY: this field's value comes from two different sources and the two can disagree.
+
+  - Rows seeded at genesis (`genesisHandler.ts`, `handleMultiSigs`) take it from
+    `multiSig.adminDid` storage — the identity currently *administering* the multisig.
+  - Rows created from a `MultiSigCreated` event afterwards (`mapMultiSig.ts`, `handleMultiSigCreated`)
+    take it from the event's own DID param — the identity that *created* the multisig, at creation
+    time.
+
+  Admin control and creator are separate facts (a multisig can change admins without changing
+  creator, and the identity it is joined to is a third fact, now reachable as `account.identity`).
+  Whether to split this into `creator` / `admin` / joined-identity fields is an open question — see
+  the PR.
+  """
   creator: Identity!
   creatorAccount: Account!
   signaturesRequired: Int!
