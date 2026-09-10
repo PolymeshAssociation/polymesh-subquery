@@ -2059,6 +2059,8 @@ type Account @entity {
   permissions: Permissions
   "Every `IdentityKey` membership interval this account has held, current and historical"
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
+  "Set when this account is a multisig — the account IS the multisig (defect G5)"
+  multiSig: MultiSig @derivedFrom(field: "account")
   eventId: EventIdEnum!
   datetime: Date!
   createdBlock: Block!
@@ -3396,10 +3398,15 @@ enum SignerTypeEnum {
 
 """
 Represents a MultiSig
+
+A multisig *is* an account — it holds POLYX, holds assets, and signs — so it is linked to its
+`Account` row rather than carrying a bare address string (defect G5). The account's address is the
+`MultiSig` id.
 """
 type MultiSig @entity {
   id: ID!
-  address: String! @index(unique: true)
+  "The multisig's own account — `account.address` is the multisig address, `id` is the same string"
+  account: Account! @index(unique: true)
   creator: Identity!
   creatorAccount: Account!
   signaturesRequired: Int!
@@ -3424,7 +3431,8 @@ Represents a MultiSig admin
 type MultiSigAdmin @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
-  identityId: String!
+  "The administering identity — a relation, matching `MultiSig.creator` (defect G5)"
+  admin: Identity! @index(unique: false)
   status: MultiSigAdminStatusEnum!
   createdBlock: Block!
   updatedBlock: Block!

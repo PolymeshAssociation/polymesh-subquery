@@ -15,25 +15,34 @@ import {
   getTextValue,
   is7xChain,
 } from '../../../utils';
+import { ledgerAccount } from '../../../utils/accounts';
 import { Attributes, extractArgs } from '../common';
 import { MultiSigSignerProps } from '../../../types/models/MultiSigSigner';
 
-export const createMultiSig = (
+/**
+ * Creates a `MultiSig` and, first, the `Account` row it links to — a multisig is an account
+ * (defect G5). The multisig address is both the `Account` id and the `MultiSig` id.
+ */
+export const createMultiSig = async (
   address: string,
   creatorId: string,
   creatorAccountId: string,
   signaturesRequired: number,
-  blockId: string
-): Promise<void> =>
-  MultiSig.create({
+  blockId: string,
+  datetime: Date
+): Promise<void> => {
+  await ledgerAccount(address, blockId, datetime);
+
+  await MultiSig.create({
     id: `${address}`,
-    address,
+    accountId: address,
     creatorId,
     creatorAccountId,
     signaturesRequired,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
+};
 
 export const createMultiSigSigner = (
   multiSigAddress: string,
@@ -54,13 +63,13 @@ export const createMultiSigSigner = (
 
 export const createMultiSigAdmin = (
   multisigId: string,
-  identityId: string,
+  adminId: string,
   blockId: string
 ): Promise<void> =>
   MultiSigAdmin.create({
-    id: `${multisigId}/${identityId}`,
+    id: `${multisigId}/${adminId}`,
     multisigId,
-    identityId,
+    adminId,
     status: MultiSigAdminStatusEnum.Authorized,
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -120,7 +129,8 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
     creator,
     creatorAccountId,
     signaturesRequired,
-    blockId
+    blockId,
+    block.timestamp
   );
 
   const signerParams: MultiSigSignerProps[] = signers.map(

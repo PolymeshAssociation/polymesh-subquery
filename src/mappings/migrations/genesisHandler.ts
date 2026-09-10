@@ -175,7 +175,7 @@ const handleGenesisDids = async (datetime: Date) => {
 /**
  * This method adds all the MultiSigs and their signers present in the genesis block
  */
-const handleMultiSigs = async (): Promise<void> => {
+const handleMultiSigs = async (datetime: Date): Promise<void> => {
   let multiSigEntries;
   const is7xChainAtGenesis = 'adminDid' in api.query.multiSig;
   if (is7xChainAtGenesis) {
@@ -210,7 +210,8 @@ const handleMultiSigs = async (): Promise<void> => {
         creator,
         creatorAccount,
         +signaturesRequired.toString(),
-        genesisBlock
+        genesisBlock,
+        datetime
       )
     );
 
@@ -297,7 +298,11 @@ export default async (): Promise<void> => {
   const timestamp = await api.query.timestamp.now();
   const datetime = new Date(+timestamp.toString());
 
-  await Promise.all([insertGenesisBlock(datetime), handleGenesisDids(datetime), handleMultiSigs()]);
+  await Promise.all([
+    insertGenesisBlock(datetime),
+    handleGenesisDids(datetime),
+    handleMultiSigs(datetime),
+  ]);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);

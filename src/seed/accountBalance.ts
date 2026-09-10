@@ -4,9 +4,9 @@ import { getBigIntValue } from '../utils';
 import {
   accountDataFrozen,
   emptyBalance,
-  ledgerAccount,
   recomputeDerived,
 } from '../mappings/entities/identities/mapPolyxLedger';
+import { ledgerAccount } from '../utils/accounts';
 
 /**
  * Snapshots `system.account` into `AccountBalance` rows.

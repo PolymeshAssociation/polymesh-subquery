@@ -235,3 +235,39 @@ export const getOrCreateAccount = async (
 
   return account;
 };
+
+/**
+ * The `Account` an address belongs to, falling back to a bare row when the chain has no key
+ * record for it.
+ *
+ * `getOrCreateAccount` covers every address the chain attaches to an identity. An address that is
+ * not a key — a multisig account, a pallet or system address (the treasury pot, the block-reward
+ * pot, …) — still needs an `Account` row, because non-null relations point at one
+ * (`MultiSig.account`, `PolyxEntry.account`, `AccountBalance.account`) and the account-page query
+ * is keyed on it. The bare row carries only the address and its key type.
+ */
+export const ledgerAccount = async (
+  address: string,
+  blockId: string,
+  datetime: Date
+): Promise<Account> => {
+  const resolved = await getOrCreateAccount(address, blockId, datetime);
+
+  if (resolved) {
+    return resolved;
+  }
+
+  const account = Account.create({
+    id: address,
+    address,
+    eventId: EventIdEnum.AccountCreated,
+    datetime,
+    ...getAccountKeyType(address),
+    createdBlockId: blockId,
+    updatedBlockId: blockId,
+  });
+
+  await account.save();
+
+  return account;
+};
