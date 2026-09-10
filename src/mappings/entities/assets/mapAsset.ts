@@ -226,8 +226,11 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     identifiers = getSecurityIdentifiers(rawIdentifiers);
   }
 
+  const assetId = await getAssetId(rawAssetId, block);
+
   await Asset.create({
-    id: await getAssetId(rawAssetId, block),
+    id: assetId,
+    assetId,
     ticker,
     name,
     type: assetType,
@@ -236,6 +239,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
     isUniquenessRequired,
+    holderCount: 0,
     identifiers,
     ownerId,
     totalSupply: BigInt(0),

@@ -2919,6 +2919,40 @@ type NftHolder @entity {
 }
 
 """
+Discriminates the grain a `Holding` is keyed at: a portfolio (identity model) or a v8
+account-level holder.
+"""
+enum HolderKind {
+  Portfolio
+  Account
+}
+
+"""
+One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
+account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
+`NftHolder`, kept as maintained rollups), never stored as primary truth.
+"""
+type Holding
+  @entity
+  @compositeIndexes(fields: [["asset", "identity"], ["portfolio", "asset"]]) {
+  id: ID! # assetId/portfolioId  or  assetId/address
+  asset: Asset!
+  holderKind: HolderKind!
+  "set when `holderKind` is `Portfolio`"
+  portfolio: Portfolio
+  "set when `holderKind` is `Account` (v8 account-level holder)"
+  account: Account
+  "denormalised — makes the identity rollup a groupBy, not a join. Null when the holder account has no known identity"
+  identity: Identity
+  "fungible balance held"
+  amount: BigInt!
+  "count of non-fungible tokens held; the ids live on `Nft`"
+  nftCount: Int!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
 Represents a hash of a document
 """
 type ContentHash @jsonField {
@@ -2949,6 +2983,8 @@ Represents a tokenized Asset on the Polymesh chain. The central data structure f
 """
 type Asset @entity {
   id: ID! # ticker
+  "the chain's own asset id — equal to `id` on 7.x+, the blake2-hashed legacy ticker before that"
+  assetId: String! @index(unique: true)
   ticker: String @index(unique: false)
   name: String @index(unique: false)
   isNftCollection: Boolean!
@@ -2957,10 +2993,13 @@ type Asset @entity {
   isDivisible: Boolean!
   isFrozen: Boolean!
   isUniquenessRequired: Boolean!
+  "number of holders with a non-zero balance — maintained where `Holding` rows cross zero"
+  holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!
   documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
+  holdings: [Holding!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
