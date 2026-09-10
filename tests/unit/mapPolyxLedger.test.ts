@@ -32,7 +32,7 @@ import {
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
-import { __resetPayeeCache } from '../../src/utils/staking';
+import { __resetControllerCache, __resetPayeeCache } from '../../src/utils/staking';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -134,6 +134,7 @@ const clone = (value: Row): Row => {
 
 beforeEach(() => {
   __resetPayeeCache();
+  __resetControllerCache();
   db = {};
   blockHeight = 1_000_000;
   (globalThis as any).api.registry = { chainSS58: 42 };
@@ -510,6 +511,64 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
     });
 
     (globalThis as any).api.query = {};
+  });
+
+  describe('the staking lock is read from staking.ledger.total, not accumulated', () => {
+    const mockLedger = (total: string, bonded: string | null = null) => {
+      (globalThis as any).api.query = {
+        staking: {
+          payee: jest.fn().mockResolvedValue({ toJSON: () => 'Staked' }),
+          bonded: jest.fn().mockResolvedValue({ toJSON: () => bonded }),
+          ledger: jest.fn().mockResolvedValue({ toJSON: () => ({ total, active: total }) }),
+        },
+      };
+    };
+
+    afterEach(() => {
+      (globalThis as any).api.query = {};
+    });
+
+    it('v7 Bonded pins the lock to ledger.total, ignoring the event amount', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      mockLedger('4200'); // chain: 4200 bonded (4000 + a compounded 200 the event never carried)
+
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
+
+      expect(balance(ALICE)).toMatchObject({ frozen: BigInt(4200), bonded: BigInt(4200) });
+    });
+
+    it('a restaked Staked reward pins the lock to ledger.total (capped below the gross reward)', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      mockLedger('4000000000000'); // at the max-bond cap
+
+      await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '900'], 7_004_001));
+
+      // free still takes the whole reward; the lock is whatever the ledger says, not += 900
+      expect(balance(ALICE)).toMatchObject({
+        free: BigInt(10900),
+        frozen: BigInt('4000000000000'),
+      });
+    });
+
+    it('v7 Withdrawn pins the lock to the reduced ledger.total', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      mockLedger('4000');
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
+
+      mockLedger('2500');
+      await handleWithdrawn(tupleEvent('staking', 'Withdrawn', [ALICE, '1500'], 7_004_001));
+
+      expect(balance(ALICE)?.frozen).toBe(BigInt(2500));
+    });
+
+    it('falls back to the delta accumulator when the ledger cannot be read', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      (globalThis as any).api.query = {}; // no staking.ledger
+
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
+
+      expect(balance(ALICE)?.frozen).toBe(BigInt(4000));
+    });
   });
 
   it('staking Reward is ∅ → stash/Free with the era from the preceding PayoutStarted', async () => {

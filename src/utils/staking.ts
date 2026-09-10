@@ -136,3 +136,47 @@ export const resolveLegacyRewardDestination = async (
     return { rewardDestination: 'LegacyUnknown' };
   }
 };
+
+/**
+ * Cache of `stash -> controller`. `staking.ledger` is keyed by the controller, not the stash, so
+ * a `bonded(stash)` read is needed before every ledger read. `set_controller` is very rare, so a
+ * process-lifetime cache is safe; a stale entry only matters if the controller changed, and the
+ * in-flight reconciler corrects the resulting `frozen` drift.
+ */
+const controllerCache = new Map<string, string>();
+
+/** Test hook — the cache is process-lifetime, so a suite re-mocking `staking.bonded` must clear it. */
+export const __resetControllerCache = (): void => controllerCache.clear();
+
+/**
+ * The pre-v8 staking lock on `stash`, read from chain: `staking.ledger(controller).total`
+ * (bonded active + everything still unlocking), which is exactly the value `pallet-staking`
+ * passes to `Currency::set_lock`, so it is what `miscFrozen` reports.
+ *
+ * Read rather than accumulated from `Bonded` / `Withdrawn` / restaked-`Reward` deltas: the deltas
+ * do not see the max-bond cap, the rounding of a compounded `RewardDestination::Staked` reward,
+ * or a slash — each of which leaves the accumulator drifting from the real lock.
+ *
+ * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
+ * the caller keeps its delta accumulator as the fallback. A killed ledger (fully withdrawn)
+ * reads back as `0`.
+ */
+export const readStakingLock = async (stash: string): Promise<bigint | undefined> => {
+  try {
+    let controller = controllerCache.get(stash);
+
+    if (!controller) {
+      const bonded = (await api.query.staking.bonded(stash)).toJSON();
+      controller = typeof bonded === 'string' ? bonded : stash;
+      controllerCache.set(stash, controller);
+    }
+
+    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
+      total?: string | number;
+    } | null;
+
+    return ledger ? BigInt(ledger.total ?? 0) : BigInt(0);
+  } catch {
+    return undefined;
+  }
+};

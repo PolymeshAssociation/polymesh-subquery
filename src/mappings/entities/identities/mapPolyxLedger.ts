@@ -14,7 +14,7 @@ import {
 } from '../../../types';
 import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
 import { camelToSnakeCase, is8xChain, snakeToCamelCase } from '../../../utils/common';
-import { resolveLegacyRewardDestination } from '../../../utils/staking';
+import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/staking';
 import { getAccountKeyType, getOrCreateAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
@@ -525,6 +525,29 @@ export const setLock = async (
   const current = balance?.locks?.find(lock => lock.lockId === lockId)?.amount ?? BigInt(0);
 
   await adjustLock(address, lockId, amount - current, blockId, reasons);
+};
+
+/**
+ * Sets the pre-v8 `'staking '` lock on `stash` to `staking.ledger.total` read from chain.
+ *
+ * The chain read is authoritative — it already accounts for the max-bond cap, the rounding of a
+ * compounded `Staked` reward, unbonding chunks, and slashes. When the ledger cannot be read the
+ * `fallbackDelta` keeps the old accumulator behaviour so the reconciler still has a base to work
+ * from.
+ */
+const syncStakingLock = async (
+  stash: string,
+  fallbackDelta: bigint,
+  blockId: string
+): Promise<void> => {
+  const total = await readStakingLock(stash);
+
+  if (total === undefined) {
+    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, blockId, 'staking');
+    return;
+  }
+
+  await setLock(stash, STAKING_LOCK_ID, total, blockId, 'staking');
 };
 
 const lockHandler =
@@ -1291,7 +1314,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 
   // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
   if (restaked) {
-    await adjustLock(recipient, STAKING_LOCK_ID, amount, args.blockId, 'staking');
+    await syncStakingLock(recipient, amount, args.blockId);
   }
 };
 
@@ -1299,16 +1322,22 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const decoded = decodeEvent(event);
+  const stash = stakingStash(decoded);
 
   await postTransition(
     args,
     {
-      from: { address: stakingStash(decoded), pool: PolyxPool.Free },
+      from: { address: stash, pool: PolyxPool.Free },
       amount: amountOf(decoded),
       kind: MovementKind.Slash,
     },
     { eraIndex: currentPayoutEra(args.blockId) }
   );
+
+  // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
+  if (stash && !is8xChain(args.block)) {
+    await syncStakingLock(stash, -amountOf(decoded), args.blockId);
+  }
 };
 
 const ensureBalanceRow = async (
@@ -1337,7 +1366,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
   }
 
   await ensureBalanceRow(stash, args.blockId, args.block.timestamp);
-  await adjustLock(stash, STAKING_LOCK_ID, amountOf(decoded), args.blockId, 'staking');
+  await syncStakingLock(stash, amountOf(decoded), args.blockId);
 };
 
 /**
@@ -1363,5 +1392,5 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await adjustLock(stash, STAKING_LOCK_ID, -amountOf(decoded), args.blockId);
+  await syncStakingLock(stash, -amountOf(decoded), args.blockId);
 };
