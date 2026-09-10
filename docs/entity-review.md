@@ -157,9 +157,9 @@ This is the best-modelled domain in the schema: an explicit lifecycle event tabl
 
 Minor: `InstructionParty.portfolios: [Int]` is an array of numbers, not relations, so portfolio joins aren't possible from a party.
 
-**One real defect, added 2026-09-01 (A14).** `Instruction.id` is the chain's own numeric sequence stored as a `String` **[V]**, so `orderBy: [ID_DESC]` sorts it lexicographically — `9999` ranks above `14712`. The list is ordered, stable, pages correctly, and puts the newest settlement about a hundred and ninety pages in. Nothing surfaces it. Fixed by D12 (zero-pad chain-assigned numeric ids); the interim workaround for a consumer is to order on `createdEventId`, which is padded on both halves and equivalent to id order.
+**One real defect, added 2026-09-01 (A14).** `Instruction.id` is the chain's own numeric sequence stored as a `String` **[V]**, so `orderBy: [ID_DESC]` sorted it lexicographically — `9999` ranked above `14712`. The list was ordered, stable, paged correctly, and put the newest settlement about a hundred and ninety pages in. Nothing surfaced it.
 
-The same shape applies to any chain-assigned numeric identifier stored as text, so it is worth sweeping the schema for others rather than fixing `Instruction` alone.
+**Resolved in Phase 7 (D12).** The schema sweep found four bare chain-integer ids — `Instruction.id`, `Venue.id`, `Proposal.id`, `Authorization.id` — all now zero-padded to 10 digits via a shared `padNumericId` helper, at construction and at every lookup, along with the FK columns that reference them. `ID` ordering on those connections is total and chronological. Composite ids (`Sto`, `Distribution`, `MultiSigProposal`) were ruled out — their leading segment is already a padded/fixed-width key under D4.
 
 ---
 

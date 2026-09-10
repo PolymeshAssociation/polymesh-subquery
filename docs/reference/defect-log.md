@@ -320,6 +320,8 @@ The failure is the quiet kind: the list is ordered, stable, and pages correctly 
 
 The same shape applies anywhere a chain-assigned numeric identifier is stored as text. **Fix:** zero-pad chain-assigned numeric ids the way `createdBlockId` and `createdEventId` already are (D12), so a lexicographic sort is also a numeric one.
 
+**Implemented in Phase 7** (`feat!: 🎸 zero-pad chain-assigned numeric ids`). A shared `padNumericId` helper ([`src/utils/common.ts`](../../src/utils/common.ts)) is applied at construction and at every lookup for the four bare chain-integer ids — `Instruction.id`, `Venue.id`, `Proposal.id`, `Authorization.id` — and for the FK columns that reference them (`Instruction.venueId`, `Sto.venueId`, `AssetTransaction.instructionId`, and the derived `Leg` / `InstructionParty` / `InstructionAffirmation` / `InstructionEvent` ids). `ID` / `ID_DESC` / `ID_ASC` ordering on those connections is now total and chronological. Composite ids (`Sto`, `Distribution`, `MultiSigProposal`) are out of scope — their leading segment is already a padded/fixed-width key under D4.
+
 ---
 
 ### A15. Pre-v8 staking rewards are not attributable to the account that received them — CONFIRMED

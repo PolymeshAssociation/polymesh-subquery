@@ -40,6 +40,7 @@ import {
   getTextValue,
   is7xChain,
   isMigratedAssetId,
+  padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
 } from '../../../utils';
@@ -659,7 +660,10 @@ export const processUpdateReason = (
       instructionId: number | null;
       instructionMemo: `0x${string}` | null;
     };
-    const instructionId = details.instructionId ? details.instructionId.toString() : null;
+    // FK to the padded `Instruction.id` (D12) — must carry the same zero-padding
+    const instructionId = details.instructionId
+      ? padNumericId(details.instructionId.toString())
+      : null;
     const instructionMemo = details.instructionMemo
       ? coerceHexToString(details.instructionMemo)
       : null;
@@ -913,8 +917,9 @@ export const handleCreatedAssetTransfer = async (event: SubstrateEvent): Promise
   await getAsset(assetId);
 
   // `pendingTransferId` is an InstructionId — the pending transfer is an already-modelled
-  // Instruction, so this is a plain relation, no new state machine
-  const instructionId = rawPending?.isEmpty ? undefined : getTextValue(rawPending);
+  // Instruction, so this is a plain relation, no new state machine. Zero-pad it (D12) to match
+  // the padded `Instruction.id`.
+  const instructionId = rawPending?.isEmpty ? undefined : padNumericId(getTextValue(rawPending));
 
   await createAssetTransaction(
     blockId,

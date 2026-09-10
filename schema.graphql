@@ -2283,6 +2283,7 @@ enum AuthorizationStatusEnum {
 Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
 """
 type Authorization @entity {
+  "The chain's numeric authorization sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
@@ -2409,6 +2410,7 @@ Represents a place to trade assets. This allows for additional mediation and con
 e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
 """
 type Venue @entity {
+  "The chain's numeric venue sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID! # venueId
   owner: Identity!
   type: String!
@@ -2455,11 +2457,10 @@ and no movement of assets will occur.
 """
 type Instruction @entity {
   """
-  The chain's numeric instruction sequence, stored as text. Because it is not
-  zero-padded, `orderBy: [ID_ASC/DESC]` sorts it lexicographically ("9999"
-  outranks "14712"), not numerically. Order by `createdEventId` for a
-  chronological list — its halves are padded, so that ordering is total and
-  matches id-assignment order.
+  The chain's numeric instruction sequence, stored as text and zero-padded to 10
+  digits (D12), so `orderBy: [ID_ASC/DESC]` is a total order that matches
+  id-assignment (chronological) order. Filter by a literal id with the padded
+  form, e.g. `id: { equalTo: "0000014712" }`.
   """
   id: ID!
   status: InstructionStatusEnum!
@@ -2709,6 +2710,7 @@ type Proposer @jsonField {
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
+  "The chain's numeric PIP sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   proposer: Proposer!
   state: ProposalStateEnum!

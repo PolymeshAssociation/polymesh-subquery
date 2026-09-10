@@ -11,6 +11,7 @@ import {
   getPortfolioId,
   getTextValue,
   padId,
+  padNumericId,
   portfolioHolder,
   rawAssetHolderToAssetHolder,
 } from '../../../utils';
@@ -252,7 +253,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
         readonly instructionMemo: Codec;
       };
 
-      instructionId = getTextValue(details.instructionId);
+      // FK to the padded `Instruction.id` (D12) — must carry the same zero-padding
+      instructionId = padNumericId(getTextValue(details.instructionId));
       instructionMemo = bytesToString(details.instructionMemo);
     } else {
       eventId = EventIdEnum.ControllerTransfer;

@@ -7,6 +7,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getTextValue,
+  padNumericId,
   serializeAccount,
 } from '../../../utils';
 import { extractArgs } from '../common';
@@ -24,7 +25,7 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
   const decoded = decodeEvent(event);
 
   if (authorizationEventStatusMapping.has(eventId)) {
-    const authId = getTextValue(decoded.authId);
+    const authId = padNumericId(getTextValue(decoded.authId));
     const auth = await Authorization.get(authId);
 
     // The row is absent only for an authorization created before the index start; a terminal
@@ -42,7 +43,7 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
 
     // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
     await createIdentityIfNotExists(fromId, blockId, eventId, eventIdx, block, blockEventId);
-    const authId = getTextValue(decoded.authId);
+    const authId = padNumericId(getTextValue(decoded.authId));
     await Authorization.create({
       id: authId,
       fromId,

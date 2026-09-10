@@ -324,7 +324,7 @@ And the portal no longer branches on `paddedIds` at all: on `origin/main` the fl
 - **Keep the padded composite id scheme.** Removing padding without replacing the ordering key would silently reintroduce non-deterministic intra-block ordering in both consumers.
 - `@dbType` cannot solve this: a numeric `Block.id` still gives no ordering *within* a block, which is exactly the failure the SDK comment describes. Composite ids must stay strings.
 - Any new entity in this review that consumers will paginate (`PolyxEntry`, `Holding`, `IdentityKey`) **must** carry a padded, block-then-index composite id for the same reason — including the deterministic sub-index flagged in `reference/polyx-balance-model.md` §7.6 Q9.
-- `@dbType` remains a minor, optional win for purely-numeric non-composite ids only. Low priority; not worth a breaking FK migration on its own.
+- `@dbType` is **not** used for the bare chain-assigned numeric ids (`Instruction`, `Venue`, `Proposal`, `Authorization`). D12 (implemented in Phase 7) zero-pads them as `String` ids instead — `padNumericId` in [`src/utils/common.ts`](../src/utils/common.ts), applied at construction and every lookup — so a lexicographic `ID` sort is also a numeric one, without a column-type change.
 
 **`@jsonField(indexed: false)`** — nesting and index control on JSON types. Relevant to the `locks` / `holds` / `lifetimeByKind` proposals, where the arrays are read whole and never filtered on.
 
@@ -346,7 +346,7 @@ The three instances **[V]**:
 |---|---|---|
 | The SDK's `polyxTransactions` (already fixed upstream) | `createdBlockId` alone | Same-block rows in arbitrary order; pages repeat and skip. This is *why* the padded composite id exists — D4 |
 | `getPaginatedData` ([`common.ts:325`](../src/utils/common.ts#L325)) | `orderBy` set to the **filter column** | Every row in the set holds the same value, so the order is arbitrary. Internal — affects settlement legs, agent memberships, transfer compliances. Plan [11](./implementation/11-throughput.md) §11.3 |
-| `Instruction.id` | the chain's numeric sequence, stored as `String` | `ID_DESC` sorts `9999` before `14712`. Stable, paged, ordered — and wrong. D12 |
+| `Instruction.id` | the chain's numeric sequence, stored as `String` | `ID_DESC` sorted `9999` before `14712`. Stable, paged, ordered — and wrong. **D12, implemented in Phase 7:** `Instruction` / `Venue` / `Proposal` / `Authorization` ids are now zero-padded to 10 digits, so `ID` ordering on those connections is total and chronological |
 
 The third deserves a note, because it is the most deceptive. The list *works*: it is ordered, it is stable, it pages correctly, and it puts the newest instruction about a hundred and ninety pages in. Nothing on screen or in the response suggests anything is amiss. The workaround available to a consumer is to order by `createdEventId` — padded on both halves, total, and equivalent to id order because ids are assigned in creation order — but that requires knowing the id column is a trap.
 

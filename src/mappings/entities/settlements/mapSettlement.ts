@@ -18,6 +18,7 @@ import {
   getTextValue,
   is7xChain,
   padId,
+  padNumericId,
   rawAssetHolderToAssetHolder,
   removeIfIncludes,
   specVersionOf,
@@ -133,8 +134,14 @@ const updateLegs = async (
   return store.bulkUpdate('Leg', updatedLegs);
 };
 
+/**
+ * The chain's instruction id is a bare numeric sequence. Zero-pad it (D12 / A14) so
+ * `Instruction.id` and every FK that references it (`Leg`, `InstructionParty`,
+ * `InstructionAffirmation`, `InstructionEvent`, `AssetTransaction.instructionId`) sort
+ * numerically under `ID_DESC`. Every construction and every lookup routes through here.
+ */
 export const processInstructionId = (id: Codec): string => {
-  return getTextValue(id);
+  return padNumericId(getTextValue(id));
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
@@ -281,7 +288,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   const instruction = Instruction.create({
     id: instructionId,
     status: InstructionStatusEnum.Created,
-    venueId: getTextValue(rawVenueId),
+    venueId: padNumericId(getTextValue(rawVenueId)),
     ...typeDetails,
     tradeDate: getDateValue(rawTradeDate),
     valueDate: getDateValue(rawValueDate),
@@ -672,11 +679,11 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
   const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const identityId = getTextValue(rawIdentityId);
-  const instructionId = getTextValue(rawInstructionId);
+  const instructionId = processInstructionId(rawInstructionId);
 
   const affirmationWithdrawnEvent = InstructionEvent.create({
     id: blockEventId,
-    instructionId: processInstructionId(rawInstructionId),
+    instructionId,
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
     eventIdx,
     identity: identityId,

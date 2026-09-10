@@ -1,3 +1,4 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
 import {
@@ -6,16 +7,24 @@ import {
   getBooleanValue,
   getProposerValue,
   getTextValue,
+  padNumericId,
   serializeAccount,
 } from '../../../utils';
 import { extractArgs } from '../common';
+
+/**
+ * A PIP id is a bare numeric sequence. Zero-pad it (D12 / A14) so `Proposal.id` and
+ * `ProposalVote.proposalId` sort numerically under `ID_DESC`. Every construction and every
+ * lookup routes through here.
+ */
+const processPipId = (rawPipId: Codec): string => padNumericId(getTextValue(rawPipId));
 
 export const handleProposalCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
 
   await Proposal.create({
-    id: getTextValue(rawPipId),
+    id: processPipId(rawPipId),
     proposer: getProposerValue(rawProposer),
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
@@ -34,7 +43,7 @@ export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise
   const { params, blockId } = extractArgs(event);
   const [, rawPipId, rawState] = params;
 
-  const pipId = getTextValue(rawPipId);
+  const pipId = processPipId(rawPipId);
   const proposal = await Proposal.get(pipId);
 
   proposal.state = getTextValue(rawState) as ProposalStateEnum;
@@ -48,7 +57,7 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
   const [, rawAccount, rawPipId, rawVote, rawWeight] = params;
 
   const account = serializeAccount(rawAccount);
-  const pipId = getTextValue(rawPipId);
+  const pipId = processPipId(rawPipId);
   const vote = getBooleanValue(rawVote);
   const weight = getBigIntValue(rawWeight);
 
@@ -97,7 +106,7 @@ export const handleSnapshotTaken = async (event: SubstrateEvent): Promise<void> 
   const promises = [];
   pips.forEach(pip => {
     const job = async () => {
-      const proposal = await Proposal.get(pip.id);
+      const proposal = await Proposal.get(padNumericId(String(pip.id)));
       proposal.snapshotted = true;
       proposal.updatedBlockId = blockId;
       return proposal.save();

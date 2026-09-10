@@ -10,6 +10,7 @@ import {
   extractValue,
   getDateValue,
   hexToString,
+  padNumericId,
 } from './common';
 import { getPortfolioId, meshPortfolioToAssetHolder } from './portfolios';
 
@@ -54,7 +55,8 @@ export const getFundraiserDetails = async (
     offChainFundingEnabled: false,
     raisingTicker,
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
-    venueId: extractString(rest, 'venue_id'),
+    // FK to the padded `Venue.id` (D12) — must carry the same zero-padding
+    venueId: padNumericId(extractString(rest, 'venue_id')),
   };
 };
 

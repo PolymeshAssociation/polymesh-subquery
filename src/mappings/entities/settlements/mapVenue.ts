@@ -7,6 +7,7 @@ import {
   bytesToString,
   getBooleanValue,
   getTextValue,
+  padNumericId,
   removeIfIncludes,
 } from '../../../utils';
 import { extractArgs } from '../common';
@@ -20,6 +21,13 @@ import { extractArgs } from '../common';
  */
 export const extractVenueSigners = (rawSigners: Iterable<Codec>): string[] =>
   Array.from(rawSigners).map(signer => signer.toString());
+
+/**
+ * The chain's venue id is a bare numeric sequence. Zero-pad it (D12 / A14) so `Venue.id` and
+ * the FKs that reference it (`Instruction.venueId`, `Sto.venueId`) sort numerically under
+ * `ID_DESC`. Every construction and every lookup routes through here.
+ */
+export const processVenueId = (venueId: Codec): string => padNumericId(getTextValue(venueId));
 
 const getVenue = async (venueId: string): Promise<Venue> => {
   const venue = await Venue.get(venueId);
@@ -36,7 +44,7 @@ export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> =
   const { did, venueId, details, venueType } = decodeEvent(event);
 
   await Venue.create({
-    id: getTextValue(venueId),
+    id: processVenueId(venueId),
     ownerId: getTextValue(did),
     details: bytesToString(details),
     type: getTextValue(venueType),
@@ -50,7 +58,7 @@ export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<
   const { blockId } = extractArgs(event);
   const { venueId, details } = decodeEvent(event);
 
-  const venue = await getVenue(getTextValue(venueId));
+  const venue = await getVenue(processVenueId(venueId));
 
   venue.details = bytesToString(details);
   venue.updatedBlockId = blockId;
@@ -62,7 +70,7 @@ export const handleVenueTypeUpdated = async (event: SubstrateEvent): Promise<voi
   const { blockId } = extractArgs(event);
   const { venueId, venueType } = decodeEvent(event);
 
-  const venue = await getVenue(getTextValue(venueId));
+  const venue = await getVenue(processVenueId(venueId));
 
   venue.type = getTextValue(venueType);
   venue.updatedBlockId = blockId;
@@ -76,7 +84,7 @@ export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<
 
   const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
 
-  const venue = await getVenue(getTextValue(venueId));
+  const venue = await getVenue(processVenueId(venueId));
 
   const updateType = getBooleanValue(rawUpdateType);
 
