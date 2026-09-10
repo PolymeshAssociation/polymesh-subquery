@@ -221,7 +221,7 @@ export const getOrCreateAccount = async (
 
     // The default portfolio, so a later `identity.DidCreated` for this DID finds it — its handler
     // only creates portfolio 0 when it creates the identity, and this path got there first.
-    await createPortfolio({ identityId: did, number: 0, eventIdx: 0 }, createdEventId);
+    await createPortfolio({ identityId: did, number: 0 }, createdEventId);
   } else if (kind === 'primaryKey' && identity.primaryAccount !== address) {
     await createIdentity(
       { did, primaryAccount: address, secondaryKeysFrozen: false },

@@ -25,7 +25,7 @@ import {
 import { extractArgs } from '../common';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, blockEventId, extrinsicId } = extractArgs(event);
+  const { params, extrinsic, blockEventId, extrinsicId } = extractArgs(event);
 
   const [rawDid, rawMultiSigAddress, rawProposalId] = params;
 
@@ -95,8 +95,6 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     approvalCount: 0,
     rejectionCount: 0,
     params: proposalParams,
-    eventIdx,
-    extrinsicIdx: extrinsic?.idx,
     status: MultiSigProposalStatusEnum.Active,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
@@ -171,7 +169,7 @@ const handleMultiSigProposalVoteAction = async (
   event: SubstrateEvent,
   action: MultiSigProposalVoteActionEnum
 ) => {
-  const { params, eventIdx, block, extrinsicIdx, blockEventId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
 
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -202,8 +200,6 @@ const handleMultiSigProposalVoteAction = async (
       proposalId,
       signerId,
       action,
-      eventIdx,
-      extrinsicIdx,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     });

@@ -38,7 +38,7 @@ export const getEncryptedLegs = (item: Codec): string[] => {
 };
 
 export const handleConfidentialSettlementCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [rawSettlementRef, rawMemo, rawAssetRootBlock, rawLegs] = params;
 
@@ -51,7 +51,6 @@ export const handleConfidentialSettlementCreated = async (event: SubstrateEvent)
     assetRootBlock: getNumberValue(rawAssetRootBlock),
     legCount: encryptedLegs.length,
     status: ConfidentialSettlementStatusEnum.Pending,
-    eventIdx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -152,7 +151,7 @@ const getPartyStatus = (eventId: EventIdEnum): PartyStatus => {
  * affirmation status of each party for a settlement leg
  */
 export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockEventId } = extractArgs(event);
+  const { params, eventId, blockEventId } = extractArgs(event);
 
   const [rawLegRef, rawKeyIndex] = params;
 
@@ -171,7 +170,6 @@ export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): 
 
   if (affirmation) {
     affirmation.status = status;
-    affirmation.eventIdx = eventIdx;
     affirmation.updatedEventId = blockEventId;
 
     await affirmation.save();
@@ -183,7 +181,6 @@ export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): 
       party,
       keyIndex,
       status,
-      eventIdx,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     }).save();

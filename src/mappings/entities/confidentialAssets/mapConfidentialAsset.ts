@@ -23,7 +23,7 @@ export const getMediators = (item: Codec): MediatorKey[] => {
 };
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [rawDid, rawAssetId, rawMediators, rawAuditors, rawName, rawSymbol, rawDecimals, rawData] =
     params;
@@ -41,7 +41,6 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
     mediators: getMediators(rawMediators),
     auditors: getStringArrayValue(rawAuditors),
     totalSupply: BigInt(0),
-    eventIdx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -81,7 +80,7 @@ export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Prom
 export const handleConfidentialAccountAssetRegistered = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAccount, rawAssetId] = params;
 
@@ -92,7 +91,6 @@ export const handleConfidentialAccountAssetRegistered = async (
     id: `${assetId}/${accountId}`,
     accountId,
     assetId,
-    eventIdx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

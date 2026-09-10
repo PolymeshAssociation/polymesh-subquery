@@ -97,7 +97,6 @@ export const createIdentityIfNotExists = async (
       {
         identityId: did,
         number: 0,
-        eventIdx,
       },
       blockEventId
     );
@@ -139,7 +138,6 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
       {
         identityId: did,
         number: 0,
-        eventIdx,
       },
       blockEventId
     );

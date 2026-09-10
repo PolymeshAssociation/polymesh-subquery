@@ -169,7 +169,6 @@ const handleGenesisDids = async () => {
       {
         identityId: did,
         number: 0,
-        eventIdx: 0,
       },
       SEED_EVENT_ID
     ),

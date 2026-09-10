@@ -25,7 +25,7 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
 };
 
 export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { eventIdx, block, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
   const group = agId.toJSON();
@@ -46,7 +46,6 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
         id: `${blockEventId}/${member.member}`,
         assetId,
         identityId: member.member,
-        eventIdx,
         type: 'AgentPermissionsChanged',
         permissions,
         createdEventId: blockEventId,
@@ -116,7 +115,7 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
 };
 
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
-  const { eventIdx, block, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agentDid } = decodeEvent(event);
 
   const did = agentDid.toString();
@@ -128,7 +127,6 @@ export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
       id: `${blockEventId}/${did}`,
       assetId,
       identityId: did,
-      eventIdx,
       type: 'AgentRemoved',
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
@@ -156,7 +154,6 @@ const addExternalAgentHistory = async (
     id: `${blockEventId}/${did}`,
     assetId,
     identityId: did,
-    eventIdx,
     type,
     permissions,
     createdEventId: blockEventId,

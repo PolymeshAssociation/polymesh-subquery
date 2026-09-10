@@ -140,8 +140,6 @@ export const createAssetTransaction = (
     toPortfolioId,
     toAccount,
     toIdentityId,
-    eventIdx,
-    extrinsicIdx: extrinsic?.idx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -243,7 +241,7 @@ export const applyHoldingDelta = async (
 };
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { block, eventIdx, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const decoded = decodeEvent(event);
   const {
     assetId: rawAssetId,
@@ -319,7 +317,6 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
-    eventIdx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -409,7 +406,7 @@ export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<
 };
 
 export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, extrinsic, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId } = extractArgs(event);
   const {
     assetId: rawAssetId,
     beneficiaryDid: rawBeneficiaryDid,
@@ -438,10 +435,8 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
     toIdentityId: issuerDid,
     eventId: EventIdEnum.Issued,
-    eventIdx,
     amount: issuedAmount,
     fundingRound,
-    extrinsicIdx: extrinsic?.idx,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });

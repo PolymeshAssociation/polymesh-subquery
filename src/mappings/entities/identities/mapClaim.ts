@@ -133,7 +133,6 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 
   await Claim.create({
     id: getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
-    eventIdx,
     targetId: target,
     issuerId: claimIssuer,
     issuanceDate,

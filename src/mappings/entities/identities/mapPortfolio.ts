@@ -67,7 +67,6 @@ export const createPortfolioIfNotExists = async (
         identityId,
         number,
         name: '',
-        eventIdx,
       },
       blockEventId
     );
@@ -75,7 +74,7 @@ export const createPortfolioIfNotExists = async (
 };
 
 export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -86,7 +85,6 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
   if (portfolio) {
     // If the Portfolio was initially created by createPortfolioIfNotExists we update it as if it were newly created.
     portfolio.name = name;
-    portfolio.eventIdx = eventIdx;
     portfolio.updatedEventId = blockEventId;
     portfolio.createdEventId = blockEventId;
 
@@ -97,7 +95,6 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
         identityId: ownerId,
         number,
         name,
-        eventIdx,
       },
       blockEventId
     );

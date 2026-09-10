@@ -79,7 +79,6 @@ describe('confidential account handlers', () => {
         account: ACCOUNT_KEY,
         encryptionKey: ENCRYPTION_KEY,
         creatorId: TEST_DID,
-        eventIdx: 2,
         updatedEventId: blockEventId,
         createdEventId: blockEventId,
       })
@@ -267,7 +266,6 @@ describe('confidential settlement handlers', () => {
         assetRootBlock: 1200,
         legCount: 2,
         status: 'Pending',
-        eventIdx: 2,
         updatedEventId: blockEventId,
         createdEventId: blockEventId,
       })
@@ -356,7 +354,6 @@ describe('confidential settlement handlers', () => {
       const existing = {
         id: `${SETTLEMENT_REF}/0/Sender`,
         status: 'Affirmed',
-        eventIdx: 1,
         updatedEventId: blockEventId,
       };
       storeGet().mockResolvedValueOnce(existing);
@@ -366,7 +363,7 @@ describe('confidential settlement handlers', () => {
       expect(storeSet()).toHaveBeenCalledWith(
         'ConfidentialLegAffirmation',
         `${SETTLEMENT_REF}/0/Sender`,
-        expect.objectContaining({ status: 'Finalized', eventIdx: 2, updatedEventId: blockEventId })
+        expect.objectContaining({ status: 'Finalized', updatedEventId: blockEventId })
       );
     });
   });
@@ -402,7 +399,6 @@ describe('confidential curve tree leaf handler', () => {
       tree: 'Asset',
       leafIndex: BigInt(7),
       value: '0x00',
-      eventIdx: 1,
       updatedEventId: blockEventId,
     };
     storeGet().mockResolvedValueOnce(existing);
@@ -414,7 +410,7 @@ describe('confidential curve tree leaf handler', () => {
     expect(storeSet()).toHaveBeenCalledWith(
       'ConfidentialCurveTreeLeaf',
       'Asset/7',
-      expect.objectContaining({ value: COMMITMENT, eventIdx: 2, updatedEventId: blockEventId })
+      expect.objectContaining({ value: COMMITMENT, updatedEventId: blockEventId })
     );
   });
 });
