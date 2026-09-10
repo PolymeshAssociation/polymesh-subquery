@@ -16,6 +16,7 @@ import './asset';
 import './balances';
 import './externalAgents';
 import './identity';
+import './portfolio';
 import './settlement';
 import './staking';
 

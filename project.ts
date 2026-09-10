@@ -237,7 +237,9 @@ const filters: Record<string, Record<string, string[]>> = {
   portfolio: {
     AllowIdentityToCreatePortfolios: [],
     FundsMovedBetweenPortfolios: ['handleFundsMovedBetweenPortfolios'],
+    FungibleTokensMovedBetweenPortfolios: ['handleFungibleTokensMovedBetweenPortfolios'],
     MovedBetweenPortfolios: ['handlePortfolioMovement'],
+    NFTsMovedBetweenPortfolios: ['handleNftsMovedBetweenPortfolios'],
     PortfolioCreated: ['handlePortfolioCreated'],
     PortfolioCustodianChanged: ['handlePortfolioCustodianChanged'],
     PortfolioDeleted: ['handlePortfolioDeleted'],

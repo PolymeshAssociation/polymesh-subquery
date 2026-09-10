@@ -1,4 +1,5 @@
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import { EventIdEnum, Portfolio } from '../../../types';
 import {
   AssetHolderDetails,
@@ -270,4 +271,86 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
     block,
     extrinsic,
   });
+};
+
+/**
+ * `portfolio.FungibleTokensMovedBetweenPortfolios` — a v5.4.3-only event (defect A8). Emitted
+ * from `unchecked_move_funds` and removed at v6.0.0; `MovedBetweenPortfolios` is not emitted
+ * alongside it, so without this the movement is not indexed at all. Measured: 0 on mainnet,
+ * 0 on testnet — registered for completeness and testnet parity.
+ */
+export const handleFungibleTokensMovedBetweenPortfolios = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const {
+    fromPortfolio: rawFrom,
+    toPortfolio: rawTo,
+    ticker: rawTicker,
+    amount: rawAmount,
+    memo: rawMemo,
+  } = decodeEvent(event);
+
+  const fromHolder = rawPortfolioToAssetHolder(rawFrom);
+  const toHolder = rawPortfolioToAssetHolder(rawTo);
+  if ('account' in fromHolder || 'account' in toHolder) {
+    return;
+  }
+
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId: await getAssetId(rawTicker, block),
+      fromHolder,
+      toHolder,
+      amount: getBigIntValue(rawAmount),
+      memo: bytesToString(rawMemo),
+      address: getSignerAddress(extrinsic),
+    },
+    blockEventId,
+    EventIdEnum.FungibleTokensMovedBetweenPortfolios,
+    extrinsic
+  );
+};
+
+/**
+ * `portfolio.NFTsMovedBetweenPortfolios` — the non-fungible sibling of the above, 5 args
+ * (an `NFTs` collection rather than a ticker/amount pair). Measured: 0 on mainnet, 1 on testnet
+ * (block 7,786,536).
+ */
+export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): Promise<void> => {
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const {
+    fromPortfolio: rawFrom,
+    toPortfolio: rawTo,
+    nfts: rawNfts,
+    memo: rawMemo,
+  } = decodeEvent(event);
+
+  const fromHolder = rawPortfolioToAssetHolder(rawFrom);
+  const toHolder = rawPortfolioToAssetHolder(rawTo);
+  if ('account' in fromHolder || 'account' in toHolder) {
+    return;
+  }
+
+  const nfts = rawNfts.toJSON() as { ticker?: string; assetId?: string; ids: number[] };
+
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId: await getAssetId(nfts.ticker ?? nfts.assetId, block),
+      fromHolder,
+      toHolder,
+      nftIds: nfts.ids.map(BigInt),
+      memo: bytesToString(rawMemo),
+      address: getSignerAddress(extrinsic),
+    },
+    blockEventId,
+    EventIdEnum.NFTsMovedBetweenPortfolios,
+    extrinsic
+  );
 };
