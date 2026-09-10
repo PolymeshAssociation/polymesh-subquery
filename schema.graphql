@@ -2257,6 +2257,8 @@ enum AuthorizationStatusEnum {
   Consumed
   Rejected
   Revoked
+  "The chain gave up re-offering the authorization after too many failed accept attempts"
+  RetryLimitReached
 }
 
 """
