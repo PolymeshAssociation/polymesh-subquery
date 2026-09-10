@@ -19,7 +19,6 @@ describe('assets', () => {
               fundingRound
               isDivisible
               isFrozen
-              isUniquenessRequired
               identifiers
               ownerDid: ownerId
               totalSupply
