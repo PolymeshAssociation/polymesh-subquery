@@ -301,10 +301,12 @@ Smallest of the remaining pallet-shaped gaps and the cheapest to close: one enti
 6. **PIP lifecycle** — enactment timing unknown.
 7. **Subsidies** — smallest remaining pallet-shaped gap, cheapest to close.
 
-## Three structural observations
+## Four structural observations
 
 **Settlement is the template.** It is the only domain with a first-class lifecycle event table (`InstructionEvent`), typed error capture, and denormalisation choices documented in the schema. Every gap above is a place where a domain lacks one of those three things. Adopting the settlement pattern domain-by-domain would be a coherent programme rather than a list of fixes.
 
 **A registered event with no handler is invisible in review.** `project.ts` lists ~150 events as `[]`, and `schema.graphql`'s `EventIdEnum` implies coverage that does not exist. Nothing surfaces the difference. The metadata-sync script (`architecture-review.md` §3) should emit an "in enum, registered, not handled" report — it is the cheapest way to stop this list regrowing. The `relayer` pallet (§15) is the clearest case: its calls are in `CallIdEnum` and it has no handler and no entity.
 
 **An id that will be sorted must sort correctly.** Three findings turn out to be one — the padded composite id (D4), `getPaginatedData` ordering by its filter column (A13), and `Instruction.id` sorting lexicographically (A14). Each produces a list that is ordered, stable, paged, and wrong, with nothing to indicate it. This is a schema-review rule rather than a domain: *if a column is going to be sorted, its sort order must agree with its meaning.* `architecture-review.md` §9 states it once.
+
+**Provenance is recorded three times per entity, and the copies disagree.** 64 entities carry `createdBlock`, 17 a standalone `datetime` that is always `createdEvent.block.datetime`, 21 a standalone `eventIdx` that is always `createdEvent.eventIdx` — plus many carry a direct `Event` relation on top. The rule (D13, `architecture-review.md` §14b): a domain entity records provenance as a relation to the `Event` that caused it and carries no field derivable from that relation. `createdEvent` / `updatedEvent` replace the block-and-index copies on ~60 entities; genesis/seeded rows point at a synthetic seed `Event` rather than a discriminator column. Folded into Phase 7 — see [`implementation/13-entity-provenance.md`](./implementation/13-entity-provenance.md).

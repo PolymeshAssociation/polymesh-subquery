@@ -374,7 +374,9 @@ SubQuery maps `Date` to Postgres `timestamp without time zone`, and PostGraphile
 - adds a generated artifact (the ~29-statement `ALTER` block) that has to be kept in sync with the schema on every field addition;
 - is only ever exercised at a full resync, so its correctness is asserted rather than tested by CI.
 
-Neither the SDK nor the portal was shown to compare datetime strings, so the concrete harm is a consumer that parses `new Date(value)` and gets local time. The proportionate fix for that is a **schema docstring**: one on `Block.datetime` stating the rule for every `Date` field in the API, plus one-liners on the entitlement-critical fields (`tradeDate`, `valueDate`, the `expiry` fields, `filedAt`, the distribution dates), each saying "parse as UTC — `new Date(value + 'Z')`". Non-breaking, nothing generated, and it puts the fix where the reader looks. If a consumer is later found to depend on the `+00:00` suffix, the `timestamptz` conversion is a mechanical follow-up during a resync window.
+Neither the SDK nor the portal was shown to compare datetime strings, so the concrete harm is a consumer that parses `new Date(value)` and gets local time. The proportionate fix for that is a **schema docstring**: one on `Block.datetime` stating the rule for every `Date` field in the API, plus one-liners on the entitlement-critical fields (`tradeDate`, `valueDate`, the `expiry` fields, `filedAt`, the distribution dates), each saying "parse as UTC — `new Date(value + 'Z')`". Non-breaking, nothing generated, and it puts the fix where the reader looks.
+
+**D8, second revision — `Block.datetime` alone becomes `timestamptz`.** D13 (§14b) removes the `datetime` *copy* from the 16 domain entities that carry it, so `Block.datetime` is left as the only timestamp in the whole schema. At that point the objection to a partial conversion — an inconsistent schema where some datetimes carry `+00:00` and some do not — no longer applies: there is one. So Phase 7 commit 7.6 converts it (`ALTER TABLE blocks ALTER COLUMN datetime TYPE timestamptz USING datetime AT TIME ZONE 'UTC'`) in the same commit that replaces the dead `data_block_datetime_timestamp` expression index (A18) with the plain btree the block-range→id-range time filter needs. Verify it survives an indexer restart at the resync — the SubQuery migration service shows no column-type reconciliation, but that is inferred.
 
 ### 10.2 The epoch integer — open, deliberately
 
@@ -469,6 +471,23 @@ Individual blocks take minutes — reproducibly, on both testnet and mainnet, wi
 
 ---
 
+## 14b. Provenance is a relation, not a copy (D13)
+
+The schema records where an entity came from in six overlapping ways — `createdBlock`/`updatedBlock`, `createdEvent`/`event`, `eventIdx`/`extrinsicIdx`, `block`/`blockId`/`extrinsic`, `datetime`, and scalar locator ids — that mostly duplicate each other. 64 entities carry `createdBlock`, 17 carry a standalone `datetime` that is always `createdEvent.block.datetime`, and 21 carry a standalone `eventIdx` that is always `createdEvent.eventIdx`. Same fact, stored two or three times, copies free to disagree.
+
+> **A domain entity records provenance as a relation to the `Event` (or `Extrinsic`) that caused it, and carries no field derivable from that relation.**
+
+- Event-backed append-only rows: `createdEvent` only. Mutable rows: `createdEvent` + `updatedEvent`, where `updatedEvent` is the event that changed *this row*.
+- `createdBlock` / `updatedBlock` / standalone `datetime` / standalone `eventIdx` / `extrinsicIdx` come off every domain entity. Time lives on `Block`; position lives on `Event` / `Extrinsic`. One exception: `EvmAccountMapping`, whose pallet emits no event on any path.
+- Genesis and storage-seeded rows point at one synthetic seed `Event` (`seeding` / `Seeded`) written in the block before the start block, rather than an origin-discriminator column — a discriminator is a second source of truth the virtual FKs of historical mode cannot enforce. This also fixes A17 (the dangling `createdEventId` genesis already writes).
+- `Extrinsic.events` is added so the raw event/extrinsic relationship is navigable both ways.
+
+**Ordering after this.** The automatic index SubQuery puts on a relation column is GiST `(col, _block_range)` under historical mode and cannot return rows in order; `id` gets a plain btree **[V]**. So order by `id` where the id is `padId(block)/padId(eventIdx)` (it equals `createdEventId`), and add a btree on `created_event_id` in `compat.sql` only for a domain-keyed entity a live consumer pages in time order. Combined with §9 and D12 that is at most `Claim` and `MultiSigProposal`, and the three hardcoded portal orderings move to `ID_DESC`.
+
+**Cost.** ~215 type errors across ~37 handler and test files — the largest schema change in the programme, and it points ~60 provenance joins at `events`, the hottest table (§14's caution about the join *target*). Staged across four commits in Phase 7; full plan and the resolved open decisions in [`implementation/13-entity-provenance.md`](./implementation/13-entity-provenance.md).
+
+---
+
 ## 15. Sequencing
 
 Breaking changes are approved (see [`README.md`](./README.md) decision log), so the model work no longer needs additive staging. The binding constraint is now **backfill**, not schema compatibility: every item in Tiers 3–4 requires a genesis replay.
@@ -509,7 +528,7 @@ Cheapest work in the plan and it makes every later tier safer to write. No schem
 22. **POLYX ledger**: `PolyxEntry` + `AccountBalance` replacing `PolyxTransaction` and `BalanceTypeEnum`.
 23. **Genesis balance seeding** — hard prerequisite for 22; `genesisHandler` currently seeds no balances at all. Extract into the shared `src/seed/` module that plan [10](./implementation/10-partial-index.md) also uses, rather than writing it twice.
 24. `IdentityKey` replacing `AccountHistory`; `Nft`, `AssetAllowance`, `AssetMetadata`. **`Nft` is also the fix for the slowest blocks** (§13).
-25. Timezone-ambiguous datetimes and lexicographic numeric ids (D8, D12). D8 was revised to documentation-only (schema docstrings — see §10.1); D12 (padded numeric ids) is a real schema change that is trivial *during* the resync and awkward after it, so it must not be deferred past this tier.
+25. Timezone-ambiguous datetimes and lexicographic numeric ids (D8, D12), and the entity-provenance rework (D13, §14b). All three land in Phase 7. D12 (padded numeric ids) and D13 (provenance relations, ~215 type errors) are real schema changes, trivial *during* the resync and awkward after it. D8 reduces to docstrings plus the single-column `Block.datetime` → `timestamptz` conversion that D13 makes possible. D13 touches every domain, so it lands after the domain plans 02–08 rather than blocking them.
 26. **POLYX reconciliation harness** against public archive endpoints (D11) — the acceptance test for 22, not a follow-up to it.
 
 **Tier 4 — coverage**

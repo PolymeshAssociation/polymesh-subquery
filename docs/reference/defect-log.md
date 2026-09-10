@@ -360,7 +360,33 @@ It matters because POLYX rows are used for accounting. A ledger that cannot say 
 
 `new Date("2021-11-05T13:56:36")` yields **local** time in most runtimes, so the value shifts by the reader's own offset and shifts differently for different readers. No error, no signal. For `tradeDate`, `valueDate`, `expiry` and record dates, an unmarked hour can change an entitlement.
 
-**Fix (D8, revised 2026-09-10 — documentation only).** The original decision was to convert the columns to `timestamptz` in `db/compat.sql` so the wire form carries `+00:00`. Revised: SubQuery's only temporal scalar is `Date` → `timestamp without time zone`, with no directive to change it; the `compat.sql` `ALTER` is an unconditional breaking change for exact-string-equality consumers and a generated artifact to maintain, while the stored instant is already correct. Neither consumer was shown to compare datetime strings, so the proportionate fix is a **schema docstring** — one on `Block.datetime` covering every `Date` field, plus one-liners on the entitlement-critical fields (`Instruction.tradeDate`/`valueDate`, the `expiry` fields, `AssetDocument.filedAt`, `DistributionPayment.datetime`) — telling consumers to parse as UTC (`new Date(value + 'Z')`). Implemented in Phase 7. The `timestamptz` conversion stays available as a mechanical resync-window follow-up if a consumer is later found to need the suffix.
+**Fix (D8, revised twice 2026-09-10).** Original: convert every `Date` column to `timestamptz` in `db/compat.sql`. First revision: documentation only — a parse-as-UTC schema docstring on `Block.datetime` and the entitlement-critical fields, because a schema-wide `ALTER` is an unconditional breaking change for exact-string-equality consumers plus a generated artifact, and the stored instant is already correct. Second revision: **D13** removes the `datetime` copy from the 16 domain entities, leaving `Block.datetime` the only timestamp in the schema — so *that one column* is converted to `timestamptz` (no inconsistency, and the time-range id-range pattern needs a plain btree on it anyway). Both land in Phase 7; see [`../implementation/13-entity-provenance.md`](../implementation/13-entity-provenance.md).
+
+---
+
+### A17. Genesis writes a `createdEventId` for an `Event` row that never exists — CONFIRMED **[V]**
+
+`src/mappings/migrations/genesisHandler.ts` inserts a synthetic `Block` at id `0000000000` but no `Event` row, then calls `createPortfolio` with `createdEventId: '0000000000/0000000000'`. That foreign key has always pointed at nothing. Nothing catches it: historical mode emits *virtual* foreign keys (a PostGraphile smart comment, not a DB constraint — `getVirtualFkTag` in `@subql/node-core`), so Postgres never validates the reference and `portfolio.createdEvent` resolves null against a schema that declares it non-null.
+
+**Fix (D13, Phase 7).** Write the row. `genesisHandler` inserts one synthetic `Event` at `0000000000/0000000000` (`moduleId: seeding`, `eventId: Seeded`) before any entity insert, and every seeded entity points at it. This is also the mechanism that lets `createdEvent` be non-null on `Account` / `Identity` / `Portfolio` after D13 removes their `createdBlock`.
+
+---
+
+### A18. `data_block_datetime_timestamp` is an expression index nothing can use — CONFIRMED **[V]**
+
+`db/compat.sql` carries `CREATE INDEX data_block_datetime_timestamp ON blocks (((datetime)::timestamp(0) without time zone))`. Postgres uses an expression index only when the query repeats the expression exactly; PostGraphile's generated SQL for a `datetime` filter compares the **bare** column (`where ("datetime" >= $2)`). Measured against a live indexer DB with seq scans penalised: `WHERE datetime >= …` → `Seq Scan`; `WHERE datetime::timestamp(0) >= …` → `Bitmap Index Scan`. So the index serves nothing the GraphQL API can ask, and the `compat.sql` comment claiming the cast "is what the query layer compares against" is wrong.
+
+**Fix (D13, Phase 7 commit 7.6).** Replace with a plain btree on `datetime` — which the block-range→id-range lookup that serves time-range queries after D13 removes `createdBlock` actually needs. Convert the column to `timestamptz` in the same commit (A16 second revision).
+
+---
+
+### A19. `Leg.addresses` drives an N×M rewrite and a spurious update — CONFIRMED **[V]**
+
+`Leg` is the one settlement entity that looks mutable and is not: `from` / `to` / `amount` / `assetId` / `nftIds` are never touched after creation. Only `addresses` changes, and `updateLegs` (`src/mappings/entities/settlements/mapSettlement.ts`) fetches **every** leg of the instruction and appends the same signer to each — so it is instruction-level data replicated across N legs. It is a hangover: `Leg.addresses` predates `InstructionParty` / `InstructionAffirmation` (July 2024, "Revamp settlements related entities"), which answer "who is involved" properly; `InstructionAffirmation.account` and `InstructionEvent.account` already carry the address per party and per event.
+
+Two defects while it stands: (1) `leg.updatedBlockId = blockId` sits **outside** the `if (address)` guard, and `getSignerAddress` returns `undefined` on the scheduled/unsigned execution paths — those events rewrite every leg with no content change; (2) on the ordinary path an instruction with N legs and M affirmations writes N×M leg row versions.
+
+**Fix (D13, Phase 7).** Commit 7.5 moves the `updatedEvent` write inside the `if (address)` guard, killing (1). Dropping `addresses` entirely and drafting `Leg` as append-only (fixing (2)) is gated on confirming no consumer selects `Leg.addresses` — `legs` is an SDK-consumed connection — and is tracked as a follow-up.
 
 ---
 
