@@ -17,20 +17,23 @@ registerShape(
   stable(['did', 'venueId', 'signers', 'updateType'])
 );
 
-registerShape(
-  'settlement',
-  'InstructionCreated',
-  stable([
-    'did',
-    'venueId',
-    'instructionId',
-    'settlementType',
-    'tradeDate',
-    'valueDate',
-    'legs',
-    'memo',
-  ])
-);
+registerShape('settlement', 'InstructionCreated', [
+  {
+    from: 0,
+    fields: [
+      'did',
+      'venueId',
+      'instructionId',
+      'settlementType',
+      'tradeDate',
+      'valueDate',
+      'legs',
+      'memo',
+    ],
+    // `memo` was added after the v3.x era; early testnet/mainnet blocks emit 7 params.
+    optionalFrom: 7,
+  },
+]);
 
 const portfolioAffirmation = ['did', 'portfolio', 'instructionId'];
 

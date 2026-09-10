@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum } from '../types';
 import { recordAnomaly } from '../utils/anomaly';
-import { DecodeError, FieldNotFound } from './errors';
+import { DecodeError, FieldNotFound, NoDecoderForSpecVersion } from './errors';
 import { DecodedEvent, namedFields } from './field';
 import { resolveShape } from './shapes';
 import { normaliseSpecVersion } from './specVersion';
@@ -78,6 +78,50 @@ const guard = (event: SubstrateEvent, decoded: Record<string, Codec>): DecodedEv
     },
   });
 
+/** One Polymesh release line on the public spec-version scale (`v6.x` is `6_000_000..6_999_999`). */
+const ONE_RELEASE_LINE = 1_000_000;
+
+/**
+ * The shape for a tuple-style event, tolerating a stale block spec version.
+ *
+ * `@subql/node` occasionally reports the *previous* runtime's spec version for the one block a
+ * runtime upgrade takes effect on (seen at the v5→v6 boundary: `AssetBalanceUpdated` decoded as
+ * spec `5004003` and crashed the worker, though the block ran `6000001`). `api.runtimeVersion` is
+ * read from the block's own runtime, so when the reported version resolves no decoder, retry with
+ * it once — but only when it is newer and within one release line, so neither a correct reported
+ * version nor a stale/HEAD `api.runtimeVersion` can pull in a wildly wrong shape.
+ */
+const resolveShapeTolerant = (
+  section: string,
+  method: string,
+  reportedSpecVersion: number,
+  arity: number
+): ReturnType<typeof resolveShape> => {
+  try {
+    return resolveShape(section, method, reportedSpecVersion, arity);
+  } catch (error) {
+    if (!(error instanceof NoDecoderForSpecVersion)) {
+      throw error;
+    }
+
+    let fromRuntime: number;
+    try {
+      fromRuntime = normaliseSpecVersion(api.runtimeVersion.specVersion.toNumber());
+    } catch {
+      throw error;
+    }
+
+    if (
+      fromRuntime <= reportedSpecVersion ||
+      fromRuntime - reportedSpecVersion > ONE_RELEASE_LINE
+    ) {
+      throw error;
+    }
+
+    return resolveShape(section, method, fromRuntime, arity);
+  }
+};
+
 /**
  * An event's parameters keyed by name.
  *
@@ -103,7 +147,7 @@ export const decodeEvent = (event: SubstrateEvent): DecodedEvent => {
   const { section, method, data } = event.event;
 
   try {
-    const shape = resolveShape(
+    const shape = resolveShapeTolerant(
       section,
       method,
       normaliseSpecVersion(event.block.specVersion),

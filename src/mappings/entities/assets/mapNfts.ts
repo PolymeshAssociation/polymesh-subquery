@@ -14,12 +14,55 @@ import {
 import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction } from './mapAsset';
 
+/**
+ * `NftHolder.nftIds` is a JSON array, and under historical mode every `.save()` writes a new
+ * versioned row carrying the whole array. A bulk mint — hundreds of `NFTPortfolioUpdated` for one
+ * holder in one block — turned that into Σ(1..n) array serialisations and poisoned the store
+ * cache with 30k-element arrays. So holder mutations are buffered per block and each holder is
+ * saved once, when the block changes (or `flushNftBuffer` is called from the block handler).
+ * Nothing inside the indexer reads `NftHolder` — it is written for external queries only — so a
+ * holder being at most one block-handler interval stale is acceptable.
+ */
+let bufferedBlock: string | undefined;
+const bufferedHolders = new Map<string, NftHolder>();
+
+export const flushNftBuffer = async (): Promise<void> => {
+  if (bufferedHolders.size === 0) {
+    return;
+  }
+
+  await Promise.all([...bufferedHolders.values()].map(holder => holder.save()));
+  bufferedHolders.clear();
+  bufferedBlock = undefined;
+};
+
+/** Test hook. */
+export const __resetNftBuffer = (): void => {
+  bufferedHolders.clear();
+  bufferedBlock = undefined;
+};
+
+const bufferHolder = async (blockId: string, holder: NftHolder): Promise<void> => {
+  if (blockId !== bufferedBlock) {
+    await flushNftBuffer();
+    bufferedBlock = blockId;
+  }
+
+  bufferedHolders.set(holder.id, holder);
+};
+
 export const getNftHolder = async (
   assetId: string,
   did: string,
   blockId: string
 ): Promise<NftHolder> => {
   const id = `${assetId}/${did}`;
+
+  // A holder mutated earlier in this same block lives in the buffer, not yet in the store.
+  const buffered = bufferedBlock === blockId ? bufferedHolders.get(id) : undefined;
+  if (buffered) {
+    return buffered;
+  }
 
   let nftHolder = await NftHolder.get(id);
 
@@ -88,7 +131,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
 
     const nftHolder = await getNftHolder(assetId, did, blockId);
     nftHolder.nftIds.push(...ids);
-    promises.push(nftHolder.save());
+    nftHolder.updatedBlockId = blockId;
+    await bufferHolder(blockId, nftHolder);
   } else if (reason === 'redeemed') {
     eventId = EventIdEnum.RedeemedNFT;
     asset.totalSupply -= BigInt(ids.length);
@@ -96,7 +140,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     const nftHolder = await getNftHolder(assetId, did, blockId);
     nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
     nftHolder.updatedBlockId = blockId;
-    promises.push(nftHolder.save());
+    await bufferHolder(blockId, nftHolder);
   } else if (reason === 'transferred' || reason === 'controllerTransfer') {
     const [fromHolder, toHolder] = await Promise.all([
       getNftHolder(assetId, fromDid, blockId),
@@ -104,8 +148,11 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     ]);
     fromHolder.nftIds = fromHolder.nftIds.filter(id => !ids.includes(id));
     toHolder.nftIds.push(...ids);
+    fromHolder.updatedBlockId = blockId;
+    toHolder.updatedBlockId = blockId;
 
-    promises.push(fromHolder.save(), toHolder.save());
+    await bufferHolder(blockId, fromHolder);
+    await bufferHolder(blockId, toHolder);
 
     asset.totalTransfers += BigInt(1);
 

@@ -219,6 +219,64 @@ describe('decodeEvent, tuple events', () => {
       NoDecoderForSpecVersion
     );
   });
+
+  describe('stale block spec version at a runtime-upgrade boundary', () => {
+    const setRuntimeSpec = (value: number): void => {
+      (api.runtimeVersion.specVersion as any).toNumber = () => value;
+    };
+
+    afterEach(() => setRuntimeSpec(8_000_000));
+
+    it('falls back to api.runtimeVersion when the reported version resolves no decoder', () => {
+      // `AssetBalanceUpdated` is registered from v6.0.0; the block reports a stale v5 spec but
+      // the block actually ran v6.0.1.
+      setRuntimeSpec(6_000_001);
+
+      const decoded = decodeEvent(
+        tupleEvent(
+          'asset',
+          'AssetBalanceUpdated',
+          ['0xdid', '0xasset', '100', '0xfrom', '0xto', '{"transferred":null}'],
+          5_999_999
+        )
+      );
+
+      expect(decoded.assetId.toString()).toBe('0xasset');
+      expect(decoded.updateReason.toString()).toBe('{"transferred":null}');
+    });
+
+    it('still throws when api.runtimeVersion is not newer than the reported version', () => {
+      setRuntimeSpec(5_999_999);
+
+      expect(() =>
+        decodeEvent(
+          tupleEvent(
+            'asset',
+            'AssetBalanceUpdated',
+            ['0xdid', '0xasset', '100', '0xfrom', '0xto', '{"transferred":null}'],
+            5_999_999
+          )
+        )
+      ).toThrow(NoDecoderForSpecVersion);
+    });
+
+    it('does not reach for a shape more than one release line ahead of the reported version', () => {
+      // A stale boundary spec is at most one release line off; a HEAD `api.runtimeVersion`
+      // against an old block must not decode it with a much later shape.
+      setRuntimeSpec(8_000_000);
+
+      expect(() =>
+        decodeEvent(
+          tupleEvent(
+            'asset',
+            'AssetBalanceUpdated',
+            ['0xdid', '0xasset', '100', '0xfrom', '0xto', '{"transferred":null}'],
+            5_999_999
+          )
+        )
+      ).toThrow(NoDecoderForSpecVersion);
+    });
+  });
 });
 
 /**

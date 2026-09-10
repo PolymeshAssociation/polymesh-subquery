@@ -33,12 +33,13 @@ import {
   getStringArrayValue,
   getTextValue,
   is7xChain,
+  isMigratedAssetId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
   specVersionOf,
 } from '../../../utils';
 import { processInstructionId } from '../settlements/mapSettlement';
-import { extractArgs, getAsset } from './../common';
+import { extractArgs, getAsset, getAssetOrAnomaly } from './../common';
 
 export const createFunding = (
   blockId: string,
@@ -181,7 +182,8 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
 
   const ownerId = getTextValue(rawOwnerDid);
 
-  const ticker = is7xChain(block) ? undefined : serializeTicker(rawAssetId);
+  const ticker =
+    is7xChain(block) || isMigratedAssetId(rawAssetId) ? undefined : serializeTicker(rawAssetId);
 
   /**
    * Name isn't present on the old events so we need to query storage.
@@ -622,7 +624,16 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const asset = await getAsset(assetId);
+  const asset = await getAssetOrAnomaly(assetId, {
+    block,
+    eventIdx,
+    eventId: EventIdEnum.Transfer,
+  });
+
+  if (!asset) {
+    return;
+  }
+
   const transferAmount = getBigIntValue(rawAmount);
   const promises: Promise<void>[] = [];
 

@@ -4,6 +4,11 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { Account, EventIdEnum, StakingEvent } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { is8xChain } from '../../../utils/common';
+import {
+  readRewardDestination,
+  resolveLegacyRewardDestination,
+  RewardDestinationName,
+} from '../../../utils/staking';
 import { extractArgs } from '../common';
 
 const bondedUnbondedOrReward = new Set([
@@ -13,50 +18,25 @@ const bondedUnbondedOrReward = new Set([
   EventIdEnum.Rewarded, // from 7.x Reward was renamed to Rewarded
 ]);
 
-type RewardDestinationDetails = {
-  type: string;
-  account?: string;
-};
-
 type StakingEventDetails = {
   amount?: bigint;
   stashAccount?: string;
   nominatedValidators?: string[];
   identityId?: string;
-  rewardDestination?: string;
+  rewardDestination?: RewardDestinationName;
   rewardDestinationAccount?: string;
 };
 
-const getRewardDestinationDetails = (destParam: Codec): RewardDestinationDetails => {
-  const json = destParam.toJSON() as string | Record<string, unknown>;
-
-  if (typeof json === 'string') {
-    return { type: json };
-  }
-
-  const variant = Object.keys(json)[0] ?? 'Unknown';
-
-  const value = json[variant];
-
-  if (variant === 'Account') {
-    return {
-      type: variant,
-      account: typeof value === 'string' ? value : undefined,
-    };
-  }
-
-  return { type: variant };
-};
-
 const getRewardDestinationAccount = (
-  destinationDetails: RewardDestinationDetails,
+  destination: RewardDestinationName,
+  account?: string,
   stashAccount?: string
 ): string | undefined => {
-  if (destinationDetails.type === 'Account') {
-    return destinationDetails.account;
+  if (destination === 'Account') {
+    return account;
   }
 
-  if (destinationDetails.type === 'Staked' || destinationDetails.type === 'Stash') {
+  if (destination === 'Staked' || destination === 'Stash') {
     return stashAccount;
   }
 
@@ -87,13 +67,13 @@ const get8xStakingEventDetails = (eventId: EventIdEnum, params: Codec[]): Stakin
   const stashAccount = getTextValue(rawAccount);
 
   if (eventId === EventIdEnum.Rewarded) {
-    const destinationDetails = getRewardDestinationDetails(rawSecondParam);
+    const { destination, account } = readRewardDestination(rawSecondParam.toJSON());
 
     return {
       stashAccount,
       amount: getBigIntValue(rawThirdParam),
-      rewardDestination: destinationDetails.type,
-      rewardDestinationAccount: getRewardDestinationAccount(destinationDetails, stashAccount),
+      rewardDestination: destination,
+      rewardDestinationAccount: getRewardDestinationAccount(destination, account, stashAccount),
     };
   }
 
@@ -107,10 +87,10 @@ const get8xStakingEventDetails = (eventId: EventIdEnum, params: Codec[]): Stakin
   return { stashAccount };
 };
 
-const getLegacyStakingEventDetails = (
+const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[]
-): StakingEventDetails => {
+): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
   const stashAccount = getTextValue(rawAccount);
   const details: StakingEventDetails = {
@@ -121,8 +101,11 @@ const getLegacyStakingEventDetails = (
   if (bondedUnbondedOrReward.has(eventId)) {
     details.amount = getBigIntValue(params[2]);
 
-    if (eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) {
-      details.rewardDestination = 'LegacyUnknown';
+    if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
+      // A15 — the pre-v8 event names only the stash; read the payee from chain storage.
+      const resolved = await resolveLegacyRewardDestination(stashAccount);
+      details.rewardDestination = resolved.rewardDestination;
+      details.rewardDestinationAccount = resolved.rewardDestinationAccount;
     }
   }
 
@@ -143,7 +126,7 @@ const getStakingEventDetails = async (
   } else if (is8xChain(block)) {
     details = get8xStakingEventDetails(eventId, params);
   } else {
-    details = getLegacyStakingEventDetails(eventId, params);
+    details = await getLegacyStakingEventDetails(eventId, params);
   }
 
   if (details.stashAccount && !details.identityId) {

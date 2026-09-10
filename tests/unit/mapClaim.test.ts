@@ -260,4 +260,21 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     expect(anomalies[0].detail).toContain(ISSUER_A);
     expect(Object.keys(claims)).toHaveLength(0);
   });
+
+  it('silently skips a stripped ClaimRevoked with a zero issuer (no anomaly)', async () => {
+    await handleClaimRevoked(
+      mockClaimEvent('ClaimRevoked', {
+        issuer: '0x0000000000000000000000000000000000000000000000000000000000000000',
+        cddId: 'cdd-1',
+        dateValue: '0',
+      })
+    );
+
+    const anomalies = storeSet()
+      .mock.calls.filter(([entity]) => entity === 'IndexerAnomaly')
+      .map(([, , row]) => row);
+
+    expect(anomalies).toHaveLength(0);
+    expect(Object.keys(claims)).toHaveLength(0);
+  });
 });

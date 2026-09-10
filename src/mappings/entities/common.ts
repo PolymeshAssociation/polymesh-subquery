@@ -36,6 +36,32 @@ export const getAsset = async (assetId: string): Promise<Asset> => {
 };
 
 /**
+ * `getAsset`, but records a `MissingReferencedEntity` anomaly and returns `undefined` instead of
+ * throwing. For handlers where a missing asset is a data gap to note, not a reason to fail the
+ * whole block — e.g. an `AssetBalanceUpdated` whose `AssetCreated` was skipped upstream.
+ */
+export const getAssetOrAnomaly = async (
+  assetId: string,
+  context: { block: SubstrateBlock; eventIdx?: number; eventId?: EventIdEnum }
+): Promise<Asset | undefined> => {
+  const asset = await Asset.get(assetId);
+
+  if (asset) {
+    return asset;
+  }
+
+  await recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `Asset ${assetId} was not found — its creation event was not indexed`,
+    block: context.block,
+    eventIdx: context.eventIdx,
+    eventId: context.eventId,
+  });
+
+  return undefined;
+};
+
+/**
  * Context that lets an unmapped chain value be recorded as an `IndexerAnomaly` instead of
  * silently becoming `Unknown`. Optional so a caller with no block in hand still type checks,
  * but every call site inside a handler has one and should pass it.

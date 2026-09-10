@@ -1,11 +1,16 @@
+import { Metadata, TypeRegistry } from '@polkadot/types';
+import metadataHex from '@polkadot/types-support/metadata/static-substrate';
 import {
   applyEnumUpdates,
+  arityFixtureFor,
   ArityFixture,
   enumMembers,
   eventDrift,
   findEnumBlock,
   planEnumUpdates,
   RuntimeSnapshot,
+  sectionId,
+  snapshotFromMetadata,
   unhandledEvents,
   withAddedMembers,
 } from '../../scripts/sync-metadata';
@@ -36,9 +41,65 @@ const snapshot = (overrides: Partial<RuntimeSnapshot> = {}): RuntimeSnapshot => 
   specName: 'polymesh',
   specVersion: 8_000_000,
   modules: ['system', 'balances'],
-  events: { Balances: { BalanceSet: 2, TransferWithMemo: 4 } },
-  calls: { Balances: ['set_balance'] },
+  events: { balances: { BalanceSet: 2, TransferWithMemo: 4 } },
+  calls: { balances: ['set_balance'] },
   ...overrides,
+});
+
+describe('snapshotFromMetadata', () => {
+  const registry = new TypeRegistry();
+  const metadata = new Metadata(registry, metadataHex);
+
+  registry.setMetadata(metadata);
+
+  const real = snapshotFromMetadata(registry, metadata, 'substrate', 1);
+
+  it('keys a section the way the arity fixtures spell it, not the way metadata spells it', () => {
+    expect(real.events.balances).toBeDefined();
+    expect(real.events.Balances).toBeUndefined();
+  });
+
+  it('lowercases the first letter only, so a multi-word pallet keeps its camelCase', () => {
+    expect(Object.keys(real.events)).toContain('transactionPayment');
+    expect(Object.keys(real.calls)).toContain('electionProviderMultiPhase');
+  });
+
+  it('still spells modules the way ModuleIdEnum does, fully lowercased', () => {
+    expect(real.modules).toContain('transactionpayment');
+  });
+
+  /**
+   * The regression this file exists for: a fixture captured from a runtime has to read back
+   * against that same runtime as no drift at all. Keyed by the metadata spelling instead, every
+   * event in the fixture reads as removed - 81 of them, against mainnet.
+   */
+  it('produces a fixture that reads back against its own runtime as no drift', () => {
+    const fixture: ArityFixture = {
+      specVersion: 1,
+      source: 'substrate static metadata',
+      modules: { balances: real.events.balances },
+    };
+    const drift = eventDrift(fixture, real);
+
+    expect([drift.added, drift.removed, drift.reshaped]).toEqual([[], [], []]);
+  });
+});
+
+describe('sectionId', () => {
+  it('maps a metadata pallet name onto the api section name', () => {
+    expect(sectionId('ExternalAgents')).toBe('externalAgents');
+    expect(sectionId('Asset')).toBe('asset');
+  });
+});
+
+describe('arityFixtureFor', () => {
+  it('captures a pallet it was asked for, rather than writing an empty fixture', () => {
+    const captured = arityFixtureFor(
+      snapshot({ events: { asset: { AssetCreated: 8 }, notCaptured: { Whatever: 1 } } })
+    );
+
+    expect(captured.modules).toEqual({ asset: { AssetCreated: 8 } });
+  });
 });
 
 describe('enum parsing', () => {
@@ -72,7 +133,7 @@ describe('planEnumUpdates', () => {
   it('sorts additions so two runs over the same runtime produce the same file', () => {
     const updates = planEnumUpdates(
       SCHEMA,
-      snapshot({ events: { Balances: { Zebra: 1, Apple: 1, BalanceSet: 2 } } })
+      snapshot({ events: { balances: { Zebra: 1, Apple: 1, BalanceSet: 2 } } })
     );
 
     expect(updates.EventIdEnum.added).toEqual(['Apple', 'Zebra']);
@@ -118,23 +179,23 @@ describe('eventDrift', () => {
   const fixture: ArityFixture = {
     specVersion: 7_004_001,
     source: 'test',
-    modules: { Balances: { BalanceSet: 4, Gone: 1 } },
+    modules: { balances: { BalanceSet: 4, Gone: 1 } },
   };
 
   it('names an event whose parameter count changed, which positional decoding cannot see', () => {
-    expect(eventDrift(fixture, snapshot()).reshaped).toEqual(['Balances.BalanceSet: 4 -> 2']);
+    expect(eventDrift(fixture, snapshot()).reshaped).toEqual(['balances.BalanceSet: 4 -> 2']);
   });
 
   it('names an event the runtime added since the fixture was captured', () => {
-    expect(eventDrift(fixture, snapshot()).added).toEqual(['Balances.TransferWithMemo']);
+    expect(eventDrift(fixture, snapshot()).added).toEqual(['balances.TransferWithMemo']);
   });
 
   it('names an event the runtime no longer has', () => {
-    expect(eventDrift(fixture, snapshot()).removed).toEqual(['Balances.Gone']);
+    expect(eventDrift(fixture, snapshot()).removed).toEqual(['balances.Gone']);
   });
 
   it('reports nothing when the runtime matches the fixture', () => {
-    const same = snapshot({ events: { Balances: { BalanceSet: 4, Gone: 1 } } });
+    const same = snapshot({ events: { balances: { BalanceSet: 4, Gone: 1 } } });
     const drift = eventDrift(fixture, same);
 
     expect([drift.added, drift.removed, drift.reshaped]).toEqual([[], [], []]);

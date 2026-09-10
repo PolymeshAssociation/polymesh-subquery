@@ -158,7 +158,7 @@ Verified emissions **[V]** (`pallets/balances/src/lib.rs` @ v7.4.0, `types-looku
 - **`BalanceSet`** — a **checkpoint**. Set `AccountBalance.free`/`reserved` absolutely; write one `BalanceSetAdjustment` entry recording the delta so the ledger still reconciles. Resolves A1 structurally.
 - **`Locked`/`Unlocked`/`Frozen`/`Thawed`** — update `AccountBalance.locks` only; recompute `frozen = MAX(active locks)`. No entry.
 - **`Issued`/`Rescinded`/`TotalIssuanceForced`/`MintedCredit`/`BurnedDebt`** — total-issuance only, no account side. **[I]** Consider a `TotalIssuance` entity; out of scope here.
-- **`Upgraded`** — account flag migration, no amount.
+- **`Upgraded`** — account flag / lock→hold migration marker, no amount of its own (the paired `Held` / `Unlocked` carry it).
 - **`TransferWithMemo`** — memo enrichment of the paired `Transfer`, never its own entry (resolves A2 option (b)).
 
 ### Staking — era-dependent, and inverted at v8 **[V]**
@@ -166,7 +166,9 @@ Verified emissions **[V]** (`pallets/balances/src/lib.rs` @ v7.4.0, `types-looku
 - **≤ v7.4**: bonding is `set_lock(STAKING_ID, …)` — **no balance moves**. `Bonded`/`Unbonded`/`Withdrawn` update `locks` only. This is the correction to A6: the current `type: Bonded` rows assert movements that never happened.
 - **v8**: bonding is a Hold. The balance effect arrives via `balances.Held{reason:Staking}` / `Released`; the `staking.*` events become ledger state only. Recording both would double count.
 
-**[I]** Confirm the `staking.Bonded` ↔ `balances.Held{reason:Staking}` pairing within one extrinsic against a real v8 block before relying on it.
+**[V]** Pairing confirmed on testnet — `bondExtra` / `withdrawUnbonded` / `dest:Staked` payouts all emit the `Held` / `Released` in the same extrinsic (or `Initialization` phase) as the `staking.*` event; `rebond` correctly emits `Bonded` with no `Held`. See [`../reference/polyx-reconciliation.md`](../reference/polyx-reconciliation.md).
+
+- **v5–v7 → v8 lock→hold migration**: a no-extrinsic `pallet_balances` storage migration in two passes. Pass 1 emits `Upgraded` + `Held{Staking}` (→ `handleBalanceHeld` moves `free → reserved`); pass 2 emits `Unlocked` for the lingering `"staking "` lock. `handleBalanceUnlocked` clears that lock on a v8 `Unlocked` that covers it, so `frozen` tracks the chain across the ~400k-block window where the account carries both lock and hold.
 
 ### Genesis
 
@@ -192,7 +194,9 @@ Because `api.query` targets the block being indexed **[V]** (and `.at` is unsupp
 
 [`mapStakingEvent.ts:110-130`](../../src/mappings/entities/events/mapStakingEvent.ts#L110) records `rewardDestination: 'LegacyUnknown'` for every pre-8.x `Reward`/`Rewarded`, because the event carries only the **stash** and the amount. Where a staker set a payee other than their stash — `Controller`, or an explicit `Account` — the index cannot say which account received the POLYX. Defect A15.
 
-The v8 path is correct: `get8xStakingEventDetails` decodes the `RewardDestination` variant and resolves `rewardDestinationAccount` for `Account`, `Staked` and `Stash` **[V]**.
+The v8 path decodes the `RewardDestination` variant and resolves `rewardDestinationAccount` for `Account`, `Staked` and `Stash`.
+
+> **Correction (PR #350).** This paragraph previously said the v8 path was correct **[V]**. It was not: `getRewardDestinationDetails` compared the variant key against `'Account'`, but `Enum#toJSON()` camel-cases it (`{ account: … }`), so the object form never matched — a v8 `Rewarded` with an explicit `Account` or an object-form `Staked` payee stored `rewardDestination` lower-cased with no account. Both paths now share `readRewardDestination` in `utils/staking.ts`, which normalises the bare-string and camel-cased-object forms.
 
 `LegacyUnknown` is an honest placeholder, not a wrong value — but it means a pre-v8 reward cannot be reconciled against the receiving account's balance, and it is invisible to anyone who does not know what the string means.
 
@@ -283,7 +287,7 @@ Register the eight missing v8 events (A9) and give the two empty ones handlers:
 
 - **Unit, per row of the transition table:** fixture → expected `(fromPool, toPool, kind, amount)`.
 - **Unit:** `Reserved` then `Unreserved` returns `free`/`reserved` to their starting values — the property the current model cannot satisfy.
-- **Unit:** v7 `Bonded` produces **no** entry and raises `frozen`; v8 `Held{Staking}` produces `Free → Reserved`.
+- **Unit:** v7 `Bonded` produces **no** entry and raises `frozen`; v8 `Held{Staking}` produces `Free → Reserved`; a v8 `Unlocked` covering the `"staking "` lock clears it (the lock→hold migration) while a smaller `Unlocked` does not.
 - **Unit:** `BalanceSet` sets absolutely and does not corrupt subsequent totals.
 - **Unit:** two overlapping locks of 100 and 150 give `frozen = 150`, not 250.
 - **Integration:** after resync, `SUM(amount) WHERE toPool=X` minus `SUM WHERE fromPool=X` equals `AccountBalance` for a sample of accounts.

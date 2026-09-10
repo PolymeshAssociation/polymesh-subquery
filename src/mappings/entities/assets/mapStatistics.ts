@@ -19,6 +19,7 @@ import {
   getAllByFields,
   getTransferManagerValue,
   is7xChain,
+  isMigratedAssetId,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 
@@ -28,7 +29,7 @@ export const getAssetIdForStatisticsEvent = (
 ): Promise<string> => {
   let assetId: string;
 
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(item) || is7xChain(block)) {
     assetId = item.toString();
   } else {
     const scope = JSON.parse(item.toString());

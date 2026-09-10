@@ -33,16 +33,23 @@ const SCHEMA_PATH = join(ROOT, 'schema.graphql');
 const ARITY_DIR = join(ROOT, 'tests', 'fixtures', 'event-arity');
 
 /** The pallets whose event shapes the decode layer registers, and so the ones worth capturing */
-const CAPTURED_MODULES = ['asset', 'externalAgents', 'identity', 'settlement'];
+const CAPTURED_MODULES = [
+  'asset',
+  'balances',
+  'externalAgents',
+  'identity',
+  'settlement',
+  'staking',
+];
 
 export interface RuntimeSnapshot {
   specName: string;
   specVersion: number;
   /** Lowercased pallet names, as `event.section.toLowerCase()` reports them */
   modules: string[];
-  /** Pallet name (as the chain spells it) to event name to parameter count */
+  /** Section id (`ExternalAgents` -> `externalAgents`) to event name to parameter count */
   events: Record<string, Record<string, number>>;
-  /** Pallet name to snake_cased call names */
+  /** Section id to snake_cased call names */
   calls: Record<string, string[]>;
 }
 
@@ -55,6 +62,15 @@ export interface ArityFixture {
 /** `camelToSnakeCase` from `src/utils/common`, repeated so this script pulls in no runtime code */
 const snakeCase = (value: string): string =>
   value[0].toLowerCase() + value.slice(1).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+
+/**
+ * A pallet name as `@polkadot/api` reports `event.section`: `ExternalAgents` -> `externalAgents`.
+ *
+ * Metadata spells pallet names in PascalCase. Every other producer and consumer of a section here
+ * - the arity fixtures, `CAPTURED_MODULES`, `project.ts` - uses the api spelling, so the metadata
+ * spelling is normalised once, on the way in, and never leaks past `snapshotFromMetadata`.
+ */
+export const sectionId = (name: string): string => name[0].toLowerCase() + name.slice(1);
 
 // ---------------------------------------------------------------------------------------------
 // Reading metadata
@@ -81,7 +97,7 @@ export const snapshotFromMetadata = (
   };
 
   for (const pallet of metadata.asLatest.pallets) {
-    const section = pallet.name.toString();
+    const section = sectionId(pallet.name.toString());
 
     snapshot.modules.push(section.toLowerCase());
 

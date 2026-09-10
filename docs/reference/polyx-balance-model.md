@@ -305,8 +305,8 @@ This is the correction to audit A6: pre-v8 these must not produce `PolyxMovement
 | `DustLost{account,amount}` | `account/Free` | ∅ | DustLost |
 | `BalanceSet{who,free}` | — | — | checkpoint |
 | `Issued` / `Rescinded` / `TotalIssuanceForced` / `MintedCredit` / `BurnedDebt` | — | — | **total-issuance only, no account side** — track on a separate `TotalIssuance` entity, not the account ledger |
-| `Locked` / `Unlocked` / `Frozen` / `Thawed` | — | — | `BalanceLock` only, no movement |
-| `Upgraded{who}` | — | — | no amount; account flag migration only |
+| `Locked` / `Unlocked` / `Frozen` / `Thawed` | — | — | `BalanceLock` only, no movement. A v8 `Unlocked` covering the `"staking "` lock is the lock→hold migration — it clears that lock, not the generic one |
+| `Upgraded{who}` | — | — | no amount; account flag / lock→hold migration marker |
 
 ### 4.4 v8 staking
 
@@ -314,7 +314,7 @@ This is the correction to audit A6: pre-v8 these must not produce `PolyxMovement
 
 This resolves the A6 `Withdrawn` bug structurally: it is no longer a credit to a fictional `Unbonded` pool, it is a staking-ledger transition whose balance effect is the paired `Released`.
 
-**[I]** The exact pairing of `staking.Bonded` with `balances.Held{reason:Staking}` within one extrinsic should be confirmed against a real v8 block before relying on it for backfill.
+**[V]** Pairing confirmed against real testnet v8 blocks (`bondExtra`, `withdrawUnbonded`, `dest:Staked` payouts all carry the paired `Held`/`Released`; `rebond` carries none, correctly). The v5–v7 `set_lock("staking ")` → v8 `Staking` hold conversion is a no-extrinsic two-pass `pallet_balances` storage migration: pass 1 emits `Upgraded` + `Held{Staking}`, pass 2 emits `Unlocked` for the lock. `handleBalanceHeld` covers the hold side unchanged; `handleBalanceUnlocked` clears the `"staking "` lock on the migration `Unlocked`. See [`polyx-reconciliation.md`](./polyx-reconciliation.md).
 
 ---
 

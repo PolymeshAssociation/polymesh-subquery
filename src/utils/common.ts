@@ -377,15 +377,3 @@ export const getAllByFields = async <T extends Entity>(
     offset += page.length;
   }
 };
-
-/**
- * @deprecated Single-field adapter for `getAllByFields`.
- *
- * Only `mapPolyxTransaction` still calls this, and the POLYX ledger phase deletes that file
- * along with the `PolyxTransaction` entity. It goes with it.
- */
-export const getPaginatedData = async <T extends Entity, F extends keyof T>(
-  entityName: string,
-  field: F,
-  param: T[F]
-): Promise<T[]> => getAllByFields<T>(entityName, [[field, '=', param]]);

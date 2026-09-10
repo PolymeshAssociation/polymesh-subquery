@@ -11,6 +11,7 @@ import {
 } from '../../../types';
 import {
   END_OF_TIME,
+  emptyDid,
   extractClaimInfo,
   getAssetIdWithTicker,
   getTextValue,
@@ -172,6 +173,13 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
   }
 
   const target = getTextValue(decodeEvent(event).did);
+
+  // Some early-chain revocations emit a stripped `ClaimRevoked` with a zero issuer and a `NoData`
+  // claim — there is no indexed claim these could match, and it is not a real attributable
+  // revocation, so it is skipped rather than recorded as a missing-entity anomaly.
+  if (!claimIssuer || claimIssuer === emptyDid) {
+    return;
+  }
 
   const id = getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId);
 
