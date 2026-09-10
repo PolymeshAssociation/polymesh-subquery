@@ -1,8 +1,10 @@
 import {
   Block,
+  Event,
   EventIdEnum,
   KeyRole,
   KeyRoleEnum,
+  ModuleIdEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
@@ -49,6 +51,32 @@ const insertGenesisBlock = async (datetime: Date) =>
     countExtrinsicsUnsigned: 0,
     extrinsicsRoot: '',
     stateRoot: '',
+  }).save();
+
+/**
+ * The id of the one synthetic seed `Event` (decision D13). Genesis- and storage-seeded rows
+ * point their `createdEvent` / `updatedEvent` at it, so those relations stay non-null without an
+ * origin-discriminator column.
+ */
+export const seedEventId = `${genesisBlock}/${padId('0')}`;
+
+/**
+ * Writes the seed `Event`. Must run after `insertGenesisBlock` (`Event.block` is non-null) and
+ * before any entity insert. Fixes defect A17: `createPortfolio` has always been called with
+ * `createdEventId: '0000000000/0000000000'` for a row that did not exist — historical mode's
+ * foreign keys are virtual, so Postgres never caught the dangling reference.
+ */
+export const insertSeedEvent = async (): Promise<void> =>
+  Event.create({
+    id: seedEventId,
+    blockId: genesisBlock,
+    eventIdx: 0,
+    specVersionId: 3000,
+    moduleId: ModuleIdEnum.seeding,
+    moduleIdText: 'seeding',
+    eventId: EventIdEnum.Seeded,
+    eventIdText: 'Seeded',
+    attributesTxt: '[]',
   }).save();
 
 /**
@@ -285,11 +313,11 @@ export default async (): Promise<void> => {
   const timestamp = await api.query.timestamp.now();
   const datetime = new Date(+timestamp.toString());
 
-  await Promise.all([
-    insertGenesisBlock(datetime),
-    handleGenesisDids(datetime),
-    handleMultiSigs(datetime),
-  ]);
+  // the genesis block and the seed Event must exist before anything points a relation at them
+  await insertGenesisBlock(datetime);
+  await insertSeedEvent();
+
+  await Promise.all([handleGenesisDids(datetime), handleMultiSigs(datetime)]);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);

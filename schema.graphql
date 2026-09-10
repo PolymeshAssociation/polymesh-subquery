@@ -76,6 +76,8 @@ enum ModuleIdEnum {
 
   "unknown module value is populated for modules not yet implemented by Polymesh SubQuery"
   unknown
+  "Synthetic module for the one seed Event written before the indexer's start block (D13). Not a chain module — permanently in sync-metadata's `notInRuntime` list, like `unknown`."
+  seeding
 }
 
 """
@@ -865,6 +867,8 @@ enum EventIdEnum {
 
   "Unknown event value is populated for events not yet implemented by Polymesh SubQuery"
   Unknown
+  "The one synthetic seed Event written at `0000000000/0000000000` before the indexer's start block (D13). Every genesis/storage-seeded row points its `createdEvent` at this. Not a chain event."
+  Seeded
 }
 
 """
@@ -1860,6 +1864,8 @@ type Extrinsic @entity {
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String @index(unique: false)
   specVersionId: Int!
+  "Every event this extrinsic emitted, in event order. The reverse of `Event.extrinsic` (D13)."
+  events: [Event] @derivedFrom(field: "extrinsic")
 }
 
 """
