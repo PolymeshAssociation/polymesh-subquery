@@ -501,6 +501,22 @@ const project: SubstrateProject = {
         handlers,
       },
     },
+    {
+      kind: SubstrateDatasourceKind.Runtime,
+      startBlock,
+      mapping: {
+        file: './dist/index.js',
+        handlers: [
+          {
+            kind: SubstrateHandlerKind.Block,
+            handler: 'handleBlock',
+            // Only to flush the NftHolder write buffer; a coarse cadence keeps the per-block
+            // overhead negligible while bounding how stale a buffered holder can get.
+            filter: { modulo: 100 },
+          },
+        ],
+      },
+    },
   ],
 };
 

@@ -1,4 +1,4 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { logError } from '../utils';
 import { getBlockContext } from './blockContext';
 import { mapExternalAgentAction } from './entities';
@@ -7,6 +7,7 @@ import mapChainUpgrade from './entities/block/mapChainUpgrade';
 import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
 import { handleToolingEvent } from './entities/events/mapEvent';
+import { flushNftBuffer } from './entities/assets/mapNfts';
 import genesisHandler from './migrations/genesisHandler';
 
 export async function handleGenesis(): Promise<void> {
@@ -20,6 +21,16 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
    * In case of major chain upgrade, we need to process some entities
    */
   await mapChainUpgrade(substrateEvent).catch(e => logError(e));
+}
+
+/**
+ * Runs on a coarse block cadence (see `project.ts`). Its only job is to flush the per-block
+ * `NftHolder` write buffer so a bulk mint's last block is not left pending until the next NFT
+ * event — which, in a quiet period, could be a long way off.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function handleBlock(_block: SubstrateBlock): Promise<void> {
+  await flushNftBuffer().catch(e => logError(e));
 }
 
 export async function handleStartup(): Promise<void> {
