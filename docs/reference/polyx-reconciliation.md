@@ -29,6 +29,33 @@ correct, not an under-count.
 Pre-v8 (≤ v7.4) bonding is `set_lock(STAKING_ID, …)` and moves no balance: `Bonded`/`Withdrawn`
 maintain `AccountBalance.locks` only, `frozen = MAX(active locks)`, still no `PolyxEntry`.
 
+### The v5–v7 lock → v8 hold storage migration
+
+`pallet_balances` converts every pre-v8 `set_lock("staking ", …)` into a `RuntimeHoldReason::Staking`
+hold. It runs in **two passes**, each emitting events per account but in no extrinsic of the
+staker's own:
+
+| Pass | Block (testnet) | Phase | Events per migrated account |
+|---|---|---|---|
+| 1 | 24,733,771 | `Initialization` | `Upgraded{who}`, `Held{Staking, ledger.total}` |
+| 2 | 25,152,593 | a permissionless `balances` extrinsic | `Upgraded{who}` (if new), `Unlocked{who, lock}`, `Held{Staking, …}` (if new) |
+
+Between the two passes the account carries **both** the old `"staking "` lock and the new hold
+on-chain — `frozen` stays at the lock amount until pass 2's `Unlocked` drops it. Probed on
+`5C7kNpSv…`:
+
+```
+b24730485 spec7004001  free 5938e9  reserved 0       frozen 5103e9  lock 5103e9  hold —
+b24733771 spec8000000  free  835e9  reserved 5103e9  frozen 5103e9  lock 5103e9  hold 5103e9   (pass 1: Held, lock kept)
+b25152593 spec8000020  free  835e9  reserved 5207e9  frozen 0       lock —       hold 5207e9   (pass 2: Unlocked)
+```
+
+The indexer needs no special handling for the hold side — `handleBalanceHeld` turns pass 1's
+`Held` into the `free → reserved` movement exactly as for any other hold. The lock side is the
+one addition: `handleBalanceUnlocked` treats a v8 `Unlocked` that covers the account's `"staking "`
+lock as this migration and clears that lock (rather than the generic `"balances"` one), so
+`frozen` tracks the chain across the two-pass window.
+
 ---
 
 ## Measured — defect A15, the pre-v8 reward-destination gap

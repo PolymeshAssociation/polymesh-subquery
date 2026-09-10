@@ -22,6 +22,7 @@ import {
   handleBalanceSuspended,
   handleBalanceThawed,
   handleBalanceTransfer,
+  handleBalanceUnlocked,
   handleBalanceUnreserved,
   handleBonded,
   handlePayoutStarted,
@@ -471,6 +472,59 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
       free: BigInt(6000),
       reserved: BigInt(4000),
       bonded: BigInt(4000),
+    });
+  });
+
+  describe('the v5–v7 lock → v8 hold storage migration', () => {
+    it('a v8 Held{Staking} moves the bonded amount free → reserved, lock still standing', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+
+      // pass 1 of the migration — Held with no paired Deposit
+      await handleBalanceHeld(
+        balancesEvent('Held', { reason: 'Staking', who: ALICE, amount: '4000' })
+      );
+
+      expect(balance(ALICE)).toMatchObject({
+        free: BigInt(6000),
+        reserved: BigInt(4000),
+        frozen: BigInt(4000), // the "staking " lock is deliberately kept — chain frozen is still 4000
+        bonded: BigInt(4000),
+      });
+    });
+
+    it('a v8 Unlocked that covers the staking lock clears it (pass 2)', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+      await handleBalanceHeld(
+        balancesEvent('Held', { reason: 'Staking', who: ALICE, amount: '4000' })
+      );
+
+      await handleBalanceUnlocked(
+        balancesEvent('Unlocked', { who: ALICE, amount: '4000' }, { specVersion: 8_000_000 })
+      );
+
+      expect(balance(ALICE)).toMatchObject({
+        free: BigInt(6000),
+        reserved: BigInt(4000),
+        frozen: BigInt(0), // lock gone
+        bonded: BigInt(4000), // still bonded, now via the hold
+        transferable: BigInt(6000),
+      });
+      expect(balance(ALICE)?.locks ?? []).toHaveLength(0);
+    });
+
+    it('a pre-v8 Unlocked leaves the staking lock alone (generic "balances" lock only)', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+
+      await handleBalanceUnlocked(
+        balancesEvent('Unlocked', { who: ALICE, amount: '10' }, { specVersion: 7_004_001 })
+      );
+
+      expect(balance(ALICE)?.locks?.find((l: any) => l.lockId === 'staking ')?.amount).toBe(
+        BigInt(4000)
+      );
     });
   });
 

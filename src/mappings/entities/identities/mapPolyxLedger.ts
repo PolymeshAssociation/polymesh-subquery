@@ -569,9 +569,43 @@ const lockHandler =
     await adjustLock(who, lockId, sign * amountOf(decoded), blockId);
   };
 
-/** `balances.Locked` / `Unlocked` — the `LockableCurrency` floor on `free`. */
+/**
+ * `balances.Locked` / `Unlocked` — the `LockableCurrency` floor on `free`.
+ *
+ * v8 adds one more source of `Unlocked`: the lock → hold storage migration. Polymesh holds a
+ * pre-v8 bond as `Currency::set_lock("staking ", …)`, and v8 converts it to a `Staking` hold,
+ * emitting per account — across two migration passes, in no extrinsic of the staker's own —
+ * `balances.Upgraded`, the paired `balances.Held{Staking}` (which `handleBalanceHeld` already
+ * turns into the `free → reserved` movement), and `balances.Unlocked{who, amount}` for the lock
+ * removal. Only the lock side is left to do here. Post-v8 nothing re-creates a `'staking '`
+ * `Currency` lock (new bonds are holds), so an account that still carries one on a v8 block has
+ * an un-migrated pre-v8 lock and the `Unlocked` it sees is that migration removing it — clear the
+ * `'staking '` lock rather than the generic `'balances'` one. Without this the pre-v8 staking lock
+ * lingers and `frozen` over-reports for the ~420k blocks between the hold appearing (pass 1) and
+ * the chain dropping the lock (pass 2).
+ */
 export const handleBalanceLocked = lockHandler('balances', BigInt(1));
-export const handleBalanceUnlocked = lockHandler('balances', BigInt(-1));
+
+const unlockGeneric = lockHandler('balances', BigInt(-1));
+
+export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
+  if (is8xChain(args.block)) {
+    const who = holder(decodeEvent(event));
+    const hasStakingLock =
+      !!who &&
+      ((await AccountBalance.get(who))?.locks ?? []).some(lock => lock.lockId === STAKING_LOCK_ID);
+
+    if (who && hasStakingLock) {
+      await setLock(who, STAKING_LOCK_ID, BigInt(0), args.blockId, 'staking');
+      return;
+    }
+  }
+
+  await unlockGeneric(event);
+};
+
 /** `balances.Frozen` / `Thawed` — the upstream `fungible` freeze, also a floor on `free`. */
 export const handleBalanceFrozen = lockHandler('freeze', BigInt(1));
 export const handleBalanceThawed = lockHandler('freeze', BigInt(-1));
