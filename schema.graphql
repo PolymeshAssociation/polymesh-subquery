@@ -2098,7 +2098,6 @@ type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
   primaryAccount: String! @index(unique: false)
-  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
   eventId: EventIdEnum!
   datetime: Date!
@@ -2108,7 +2107,13 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   children: [ChildIdentity!]! @derivedFrom(field: "parent")
-  "Every key membership this Identity has held, current and historical — see `IdentityKey`"
+  """
+  Every key membership this Identity has held, current and historical — see `IdentityKey`.
+
+  Replaces the removed `secondaryAccounts` field, which derived from `Account.identity` and so
+  wrongly listed the primary key alongside the secondaries (defect G1). Current secondary keys are
+  `keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })`.
+  """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
 }
 

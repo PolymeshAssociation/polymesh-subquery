@@ -172,6 +172,38 @@ describe('rotateIdentityKey', () => {
   });
 });
 
+describe('G1 — active secondary keys exclude the primary', () => {
+  it('a primary and a secondary on one identity filter apart by role', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: PRIMARY,
+        role: KeyRole.Primary,
+        addedReason: EventIdEnum.DidCreated,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: KeyRole.Secondary,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+
+    const activeSecondary = rows().filter(
+      r => r.identityId === DID && r.role === KeyRole.Secondary && r.validToBlockId == null
+    );
+
+    expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);
+    expect(activeSecondary.some(r => r.accountId === PRIMARY)).toBe(false);
+  });
+});
+
 describe('add → remove → re-add', () => {
   it('produces a two-interval history with the first closed before the second opens', async () => {
     await openIdentityKey(

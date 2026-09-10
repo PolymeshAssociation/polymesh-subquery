@@ -132,7 +132,7 @@ describe('permissions', () => {
 });
 
 describe('identities', () => {
-  it('should return identity details along with accounts and their permissions', async () => {
+  it('lists current secondary keys via IdentityKey without the primary key (G1)', async () => {
     const res = await query({
       query: gql`
       query {
@@ -151,22 +151,20 @@ describe('identities', () => {
             createdBlockId
             updatedBlockId
             datetime
-            createdBlockId
-            updatedBlockId
-            secondaryAccounts(orderBy: [ADDRESS_ASC]) {
+            keys(
+              filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } }
+              orderBy: [ACCOUNT_ID_ASC]
+            ) {
               nodes {
-                address
-                eventId
-                createdBlockId
-                permissions {
-                  assets
-                  portfolios
-                  transactions
-                  transactionGroups
+                role
+                addedReason
+                validToBlockId
+                account {
+                  address
+                  eventId
                   createdBlockId
-                  updatedBlockId
-                  datetime
                 }
+                permissions
               }
             }
           }
@@ -176,6 +174,15 @@ describe('identities', () => {
     });
 
     expect(res?.errors).toBeFalsy();
+
+    const [identity] = (res?.data as any).identities.nodes;
+    const keys = identity.keys.nodes;
+
+    // every returned membership is an active secondary key...
+    expect(keys.every((k: any) => k.role === 'Secondary')).toBe(true);
+    expect(keys.every((k: any) => k.validToBlockId === null)).toBe(true);
+    // ...and the primary key is never among them — the G1 regression
+    expect(keys.some((k: any) => k.account.address === identity.primaryAccount)).toBe(false);
 
     expect(res?.data).toMatchSnapshot();
   });
