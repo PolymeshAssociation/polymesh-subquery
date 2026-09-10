@@ -5,7 +5,7 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity, IdentityKey, KeyRole } from '../types';
+import { Account, EventIdEnum, Identity, IdentityKey, KeyRole, KeyRoleEnum } from '../types';
 import { extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
@@ -100,6 +100,27 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
 };
 
 /**
+ * `Account.keyRole` for a key-record resolution — the single place the mapping is defined.
+ *
+ * The enum is treated as open: `undefined` (no key record) and the multisig account itself both
+ * fold into `Unlinked` today, and could be split later without touching this switch's callers.
+ */
+export const keyRoleFor = (resolution: KeyRecordResolution | undefined): KeyRoleEnum => {
+  if (!resolution) {
+    return KeyRoleEnum.Unlinked;
+  }
+
+  switch (resolution.kind) {
+    case 'primaryKey':
+      return KeyRoleEnum.PrimaryKey;
+    case 'secondaryKey':
+      return KeyRoleEnum.SecondaryKey;
+    case 'multiSigSigner':
+      return KeyRoleEnum.MultiSigSigner;
+  }
+};
+
+/**
  * The chain's key record for `address`, read at most once per block.
  *
  * `api` is bound to the block being indexed and serves its end-of-block state, so this answer is
@@ -128,6 +149,16 @@ const resolveKeyRecord = async (
 
   return resolution;
 };
+
+/**
+ * The `Account.keyRole` the chain's key record gives an address, read at most once per block.
+ *
+ * The one derivation path for the field: identity and multisig handlers, `getOrCreateAccount`,
+ * `ledgerAccount`, and the genesis/seed scan all resolve `keyRole` through this or `keyRoleFor`,
+ * so a role is never accumulated from events and cannot go stale relative to `keyRecords`.
+ */
+export const resolveKeyRole = async (address: string, blockId: string): Promise<KeyRoleEnum> =>
+  keyRoleFor(await resolveKeyRecord(address, blockId));
 
 /**
  * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
@@ -199,6 +230,7 @@ export const getOrCreateAccount = async (
     datetime,
     identityId: did,
     address,
+    keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
     ...getAccountKeyType(address),
     createdBlockId: blockId,
     updatedBlockId: blockId,
@@ -247,11 +279,14 @@ export const ledgerAccount = async (
     return resolved;
   }
 
+  // The bare path is reached only when the key record is absent (a pallet/pot → `Unlinked`) or
+  // names a multisig (`MultiSigSigner`); a primary/secondary key was already handled above.
   const account = Account.create({
     id: address,
     address,
     eventId: EventIdEnum.AccountCreated,
     datetime,
+    keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
     createdBlockId: blockId,
     updatedBlockId: blockId,

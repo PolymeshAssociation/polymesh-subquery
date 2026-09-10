@@ -3,6 +3,7 @@ import {
   EventIdEnum,
   Identity,
   KeyRole,
+  KeyRoleEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
@@ -98,6 +99,7 @@ const handleGenesisDids = async (datetime: Date) => {
           createAccount(
             {
               identityId: did,
+              keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
               eventId: EventIdEnum.DidCreated,
               address: key,
               datetime,
@@ -230,7 +232,8 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
             signerType,
             signerValue,
             MultiSigSignerStatusEnum.Approved,
-            genesisBlock
+            genesisBlock,
+            datetime
           )
         );
       }

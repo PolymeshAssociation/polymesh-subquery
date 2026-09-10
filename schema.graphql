@@ -2030,6 +2030,22 @@ type PortfolioPermissions @jsonField {
 }
 
 """
+The role a key plays in the identity system, from the chain's own `KeyRecord`.
+
+Distinct from `Account.keyType` (the cryptographic shape of the key). Treated as an OPEN set —
+`Unlinked` currently covers pallet addresses, system pots, and deliberately-detached keys as one
+label, and may be split later. A multisig's own account reads `PrimaryKey` / `SecondaryKey` per
+its key record; multisig-ness is the `MultiSig` row keyed by the same address, not this field.
+"""
+enum KeyRoleEnum {
+  PrimaryKey
+  SecondaryKey
+  MultiSigSigner
+  "Pallet / system address, or a key with no current key record"
+  Unlinked
+}
+
+"""
 Represents a public/private key pair. Most actions must be signed by an appropriately permissioned Account
 
 Before an Account can sign most Extrinsics it must first be attached to an Identity
@@ -2039,6 +2055,8 @@ type Account @entity {
   address: String! @index(unique: true)
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
+  "The key's role in the identity system, from the chain's `KeyRecord` — mutable, maintained on every key-link/unlink write"
+  keyRole: KeyRoleEnum! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
   identity: Identity
@@ -3428,7 +3446,14 @@ type MultiSigSigner @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
   signerType: SignerTypeEnum!
+  """
+  The canonical signer value. Kept as the source of truth: `SignerTypeEnum` is `Account | Identity`
+  and pre-7.x runtimes allowed identity signers, which a relation cannot point at, and the index
+  replays history from genesis.
+  """
   signerValue: String!
+  "The signer's account — set only when `signerType` is `Account`; a signer key is an account (G16)"
+  signerAccount: Account @index(unique: false)
   status: MultiSigSignerStatusEnum!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "signer")
   createdBlock: Block!

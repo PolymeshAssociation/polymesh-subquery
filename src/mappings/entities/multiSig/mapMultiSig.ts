@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
+  KeyRoleEnum,
   MultiSig,
   MultiSigAdmin,
   MultiSigAdminStatusEnum,
@@ -44,22 +45,58 @@ export const createMultiSig = async (
   }).save();
 };
 
-export const createMultiSigSigner = (
+/**
+ * The `Account` id for `MultiSigSigner.signerAccount`, creating the account row if it is new.
+ *
+ * Only `Account` signers get one — `SignerTypeEnum` also has `Identity` on pre-7.x runtimes,
+ * which a relation cannot point at, so `signerValue` stays canonical and this returns undefined
+ * for those. A signer key is an account with no identity of its own, so `ledgerAccount` gives it
+ * a bare row; `keyRole` is set to `MultiSigSigner` from here because the event is proof of the
+ * role even before the chain writes the key record (which happens when the signer accepts). The
+ * genesis/seed scan later confirms it authoritatively from `multiSig.multiSigSigners`.
+ */
+export const linkSignerAccount = async (
+  signerType: SignerTypeEnum,
+  signerValue: string,
+  blockId: string,
+  datetime: Date
+): Promise<string | undefined> => {
+  if (signerType !== SignerTypeEnum.Account) {
+    return undefined;
+  }
+
+  const account = await ledgerAccount(signerValue, blockId, datetime);
+
+  if (account.keyRole !== KeyRoleEnum.MultiSigSigner) {
+    account.keyRole = KeyRoleEnum.MultiSigSigner;
+    account.updatedBlockId = blockId;
+    await account.save();
+  }
+
+  return signerValue;
+};
+
+export const createMultiSigSigner = async (
   multiSigAddress: string,
   signerType: SignerTypeEnum,
   signerValue: string,
   status: MultiSigSignerStatusEnum,
-  blockId: string
-): Promise<void> =>
-  MultiSigSigner.create({
+  blockId: string,
+  datetime: Date
+): Promise<void> => {
+  const signerAccountId = await linkSignerAccount(signerType, signerValue, blockId, datetime);
+
+  await MultiSigSigner.create({
     id: `${multiSigAddress}/${signerType}/${signerValue}`,
     multisigId: multiSigAddress,
     signerType,
     signerValue,
+    signerAccountId,
     status,
     createdBlockId: blockId,
     updatedBlockId: blockId,
   }).save();
+};
 
 export const createMultiSigAdmin = (
   multisigId: string,
@@ -133,17 +170,25 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
     block.timestamp
   );
 
-  const signerParams: MultiSigSignerProps[] = signers.map(
-    ({ signerType, signerValue }) =>
-      ({
-        id: `${multiSigAddress}/${signerType}/${signerValue}`,
-        multisigId: multiSigAddress,
-        signerType,
-        signerValue,
-        status: MultiSigSignerStatusEnum.Authorized,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      } satisfies MultiSigSignerProps)
+  const signerParams: MultiSigSignerProps[] = await Promise.all(
+    signers.map(
+      async ({ signerType, signerValue }) =>
+        ({
+          id: `${multiSigAddress}/${signerType}/${signerValue}`,
+          multisigId: multiSigAddress,
+          signerType,
+          signerValue,
+          signerAccountId: await linkSignerAccount(
+            signerType,
+            signerValue,
+            blockId,
+            block.timestamp
+          ),
+          status: MultiSigSignerStatusEnum.Authorized,
+          createdBlockId: blockId,
+          updatedBlockId: blockId,
+        } satisfies MultiSigSignerProps)
+    )
   );
 
   const promises = [multiSigPromise, store.bulkCreate('MultiSigSigner', signerParams)];
@@ -185,15 +230,15 @@ export const handleMultiSigSignerAuthorized = async (event: SubstrateEvent): Pro
   const { params, blockId, block } = extractArgs(event);
 
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params, block);
-  await MultiSigSigner.create({
-    id: `${multisigId}/${signerType}/${signerValue}`,
+
+  await createMultiSigSigner(
     multisigId,
     signerType,
     signerValue,
-    status: MultiSigSignerStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+    MultiSigSignerStatusEnum.Authorized,
+    blockId,
+    block.timestamp
+  );
 };
 
 export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Promise<void> => {
@@ -201,17 +246,25 @@ export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Pr
 
   const signerDetails = getMultiSigSignersDetails(params, block);
 
-  const signerParams: MultiSigSignerProps[] = signerDetails.map(
-    ({ multisigId, signerType, signerValue }) =>
-      ({
-        id: `${multisigId}/${signerType}/${signerValue}`,
-        multisigId,
-        signerType,
-        signerValue,
-        status: MultiSigSignerStatusEnum.Authorized,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
-      } satisfies MultiSigSignerProps)
+  const signerParams: MultiSigSignerProps[] = await Promise.all(
+    signerDetails.map(
+      async ({ multisigId, signerType, signerValue }) =>
+        ({
+          id: `${multisigId}/${signerType}/${signerValue}`,
+          multisigId,
+          signerType,
+          signerValue,
+          signerAccountId: await linkSignerAccount(
+            signerType,
+            signerValue,
+            blockId,
+            block.timestamp
+          ),
+          status: MultiSigSignerStatusEnum.Authorized,
+          createdBlockId: blockId,
+          updatedBlockId: blockId,
+        } satisfies MultiSigSignerProps)
+    )
   );
 
   await store.bulkCreate('MultiSigSigner', signerParams);

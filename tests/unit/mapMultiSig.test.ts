@@ -2,9 +2,18 @@
  * `MultiSig` is linked to its own `Account` row (defect G5): a multisig is an account, so
  * `createMultiSig` creates the account first and points `MultiSig.account` at it, and
  * `MultiSigAdmin` names its `admin` identity by relation rather than a bare string.
+ *
+ * `MultiSigSigner.signerAccount` (G16): a signer key is an account too, so an `Account` signer
+ * gets a relation to its row (with `keyRole = MultiSigSigner`); an `Identity` signer, which only
+ * pre-7.x runtimes allowed, keeps `signerValue` as the canonical value and a null `signerAccount`.
  */
 
-import { MultiSigAdminStatusEnum } from '../../src/types';
+import {
+  KeyRoleEnum,
+  MultiSigAdminStatusEnum,
+  MultiSigSignerStatusEnum,
+  SignerTypeEnum,
+} from '../../src/types';
 
 const ledgerAccount = jest.fn();
 jest.mock('../../src/utils/accounts', () => ({
@@ -14,9 +23,11 @@ jest.mock('../../src/utils/accounts', () => ({
 import {
   createMultiSig,
   createMultiSigAdmin,
+  createMultiSigSigner,
 } from '../../src/mappings/entities/multiSig/mapMultiSig';
 
 const MULTISIG = '5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z';
+const SIGNER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 const CREATOR_DID = '0x01'.padEnd(66, '0');
 const CREATOR_ACCOUNT = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const datetime = new Date('2024-01-01T00:00:00.000Z');
@@ -27,8 +38,14 @@ let db: Record<string, Row>;
 beforeEach(() => {
   db = {};
   ledgerAccount.mockReset().mockImplementation((address: string) => {
-    db[`Account:${address}`] = { id: address, address };
-    return Promise.resolve(db[`Account:${address}`]);
+    const row: Row = {
+      id: address,
+      address,
+      keyRole: KeyRoleEnum.Unlinked,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    db[`Account:${address}`] = row;
+    return Promise.resolve(row);
   });
   (store.set as jest.Mock).mockImplementation((entity: string, id: string, data: Row) => {
     db[`${entity}:${id}`] = { ...data };
@@ -52,6 +69,43 @@ describe('createMultiSig', () => {
       signaturesRequired: 2,
     });
     expect(multiSig).not.toHaveProperty('address');
+  });
+});
+
+describe('createMultiSigSigner', () => {
+  it('sets signerAccount and forces keyRole = MultiSigSigner for an Account signer', async () => {
+    await createMultiSigSigner(
+      MULTISIG,
+      SignerTypeEnum.Account,
+      SIGNER,
+      MultiSigSignerStatusEnum.Authorized,
+      '0000002',
+      datetime
+    );
+
+    expect(ledgerAccount).toHaveBeenCalledWith(SIGNER, '0000002', datetime);
+    expect(db[`Account:${SIGNER}`].keyRole).toBe(KeyRoleEnum.MultiSigSigner);
+
+    const signer = db[`MultiSigSigner:${MULTISIG}/${SignerTypeEnum.Account}/${SIGNER}`];
+    expect(signer.signerValue).toBe(SIGNER);
+    expect(signer.signerAccountId).toBe(SIGNER);
+  });
+
+  it('leaves signerAccount null for an Identity signer (pre-7.x) and touches no account', async () => {
+    await createMultiSigSigner(
+      MULTISIG,
+      SignerTypeEnum.Identity,
+      CREATOR_DID,
+      MultiSigSignerStatusEnum.Authorized,
+      '0000002',
+      datetime
+    );
+
+    expect(ledgerAccount).not.toHaveBeenCalled();
+
+    const signer = db[`MultiSigSigner:${MULTISIG}/${SignerTypeEnum.Identity}/${CREATOR_DID}`];
+    expect(signer.signerValue).toBe(CREATOR_DID);
+    expect(signer.signerAccountId).toBeUndefined();
   });
 });
 

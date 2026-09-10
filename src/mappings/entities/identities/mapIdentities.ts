@@ -15,6 +15,7 @@ import {
   EventIdEnum,
   Identity,
   KeyRole,
+  KeyRoleEnum,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
@@ -158,6 +159,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   const account = createAccount(
     {
       identityId: did,
+      keyRole: KeyRoleEnum.PrimaryKey,
       eventId,
       address,
       datetime,
@@ -380,6 +382,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
         {
           address,
           identityId,
+          keyRole: KeyRoleEnum.SecondaryKey,
           eventId,
           datetime,
         },
@@ -418,8 +421,9 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   identity.updatedBlockId = blockId;
   identity.eventId = eventId;
 
-  // unlink the old primary key from the identity
+  // unlink the old primary key from the identity — `keyRole` rides the same write
   account.identityId = undefined;
+  account.keyRole = KeyRoleEnum.Unlinked;
   account.eventId = eventId;
   account.updatedBlockId = blockId;
 
@@ -428,6 +432,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
       {
         address,
         identityId: identity.id,
+        keyRole: KeyRoleEnum.PrimaryKey,
         eventId,
         datetime,
       },
@@ -460,6 +465,7 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   const accountEntity = await Account.get(address);
 
   accountEntity.identityId = undefined;
+  accountEntity.keyRole = KeyRoleEnum.Unlinked;
   accountEntity.eventId = eventId;
   accountEntity.updatedBlockId = blockId;
 
