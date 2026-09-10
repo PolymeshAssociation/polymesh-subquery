@@ -8,6 +8,7 @@ import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
 import { handleToolingEvent } from './entities/events/mapEvent';
 import { flushNftBuffer } from './entities/assets/mapNfts';
+import { reconcileBlock } from './entities/identities/reconcilePolyx';
 import genesisHandler from './migrations/genesisHandler';
 
 export async function handleGenesis(): Promise<void> {
@@ -24,12 +25,11 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
 }
 
 /**
- * Runs on a coarse block cadence (see `project.ts`). Its only job is to flush the per-block
- * `NftHolder` write buffer so a bulk mint's last block is not left pending until the next NFT
- * event — which, in a quiet period, could be a long way off.
+ * Runs at the end of every block. Flushes the POLYX reconcile queue (only populated on sample
+ * blocks / forced checkpoints) and the NftHolder write buffer. Both early-return when idle.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function handleBlock(_block: SubstrateBlock): Promise<void> {
+export async function handleBlock(block: SubstrateBlock): Promise<void> {
+  await reconcileBlock(block).catch(e => logError(e));
   await flushNftBuffer().catch(e => logError(e));
 }
 

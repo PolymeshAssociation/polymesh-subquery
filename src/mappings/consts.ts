@@ -47,3 +47,11 @@ export const systematicIssuers = {
  * the `--timeout` option for the subquery container needs to be increased accordingly (based on number of blocks to be processed)
  */
 export const MAX_PERMISSIBLE_BLOCKS = 1000000;
+
+/**
+ * The id of the synthetic seed `Event` (decision D13). Genesis- and storage-seeded rows point
+ * their `createdEvent` / `updatedEvent` at it, so those relations stay non-null with no
+ * origin-discriminator column. `genesisHandler` writes the row; kept here so seed helpers can
+ * reference it without importing the handler (circular).
+ */
+export const SEED_EVENT_ID = '0000000000/0000000000';

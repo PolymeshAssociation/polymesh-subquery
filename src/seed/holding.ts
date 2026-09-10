@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SEED_EVENT_ID } from '../mappings/consts';
 import { Asset, AssetHolder, HolderKind, Holding } from '../types';
 import {
   getAssetIdForLegacyTicker,
@@ -82,8 +83,8 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
         identityId,
         amount,
         nftCount: 0,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        createdEventId: SEED_EVENT_ID,
+        updatedEventId: SEED_EVENT_ID,
       })
     );
 
@@ -95,8 +96,8 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
         identityId,
         assetId,
         amount: BigInt(0),
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        createdEventId: SEED_EVENT_ID,
+        updatedEventId: SEED_EVENT_ID,
       });
     rollup.amount += amount;
     rollups.set(rollupId, rollup);
@@ -113,7 +114,7 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
     [...holderCounts].map(async ([assetId, count]) => {
       const asset = await Asset.get(assetId);
       asset.holderCount = count;
-      asset.updatedBlockId = blockId;
+      asset.updatedEventId = SEED_EVENT_ID;
       return asset;
     })
   );

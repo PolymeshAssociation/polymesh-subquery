@@ -45,12 +45,14 @@ describe('handleAuthorization — AuthorizationRetryLimitReached', () => {
   it('marks the authorization RetryLimitReached', async () => {
     const save = jest.fn().mockResolvedValue(undefined);
     const row: any = { id: AUTH_ID, status: AuthorizationStatusEnum.Pending, save };
-    jest.spyOn(Authorization, 'get').mockResolvedValue(row);
+    const get = jest.spyOn(Authorization, 'get').mockResolvedValue(row);
 
     await handleAuthorization(retryLimitEvent());
 
+    // looked up by the zero-padded id (D12), not the raw chain sequence "42"
+    expect(get).toHaveBeenCalledWith('0000000042');
     expect(row.status).toBe(AuthorizationStatusEnum.RetryLimitReached);
-    expect(row.updatedBlockId).toBe('0005000000');
+    expect(row.updatedEventId).toBe('0005000000/0000000003');
     expect(save).toHaveBeenCalled();
   });
 

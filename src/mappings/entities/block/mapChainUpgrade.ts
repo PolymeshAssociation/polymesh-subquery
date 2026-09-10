@@ -46,6 +46,8 @@ export interface ChainUpgradeCrossing {
   previousTransactionVersion: number;
   transactionVersion: number;
   block: SubstrateBlock;
+  /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites (D13). */
+  blockEventId: string;
 }
 
 /**
@@ -54,7 +56,7 @@ export interface ChainUpgradeCrossing {
  * Kept as a list so a later phase adds to it without touching the detection above.
  */
 const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> => {
-  const { previousTransactionVersion, transactionVersion, block } = crossing;
+  const { previousTransactionVersion, transactionVersion, block, blockEventId } = crossing;
 
   /**
    * Keyed on the spec version rather than the transaction version: what it repairs is a storage
@@ -72,8 +74,8 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
     `Major chain upgrade found: transaction version ${previousTransactionVersion} -> ${transactionVersion}`
   );
 
-  await handleMultiSigProposalDeleted(block);
-  await repairAuthorizationsAfterUpgrade(block);
+  await handleMultiSigProposalDeleted(block, blockEventId);
+  await repairAuthorizationsAfterUpgrade(block, blockEventId);
 };
 
 /**
@@ -90,6 +92,7 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
   const block = substrateEvent.block;
   const { specVersion } = block;
   const blockId = padId(block.block.header.number.toString());
+  const blockEventId = `${blockId}/${padId(String(substrateEvent.idx ?? 0))}`;
 
   const latest = await getLatestChainUpgrade();
 
@@ -115,7 +118,6 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
     specVersionId: specVersion,
     transactionVersion,
     firstBlockId: blockId,
-    datetime: block.timestamp,
   }).save();
 
   if (previous.specVersion === specVersion) {
@@ -128,5 +130,6 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
     previousTransactionVersion: previous.transactionVersion,
     transactionVersion,
     block,
+    blockEventId,
   });
 };

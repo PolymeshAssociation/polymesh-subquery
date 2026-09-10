@@ -16,6 +16,23 @@ export const padId = (id: string): string => {
   return id.padStart(blockIdLength, '0');
 };
 
+/**
+ * Zero-pad a bare chain-assigned numeric id (an instruction / venue / PIP / authorization
+ * sequence stored as a `String` id) so a lexicographic `orderBy: ID_DESC` is also a numeric
+ * one — otherwise `"9999"` ranks above `"14712"` (defect A14 / decision D12). This is `padId`
+ * with an intent-revealing name: the same 10-digit width covers any chain sequence for the
+ * life of the chain, and it must be applied at both construction and every lookup so stored
+ * ids and the FK references to them stay consistent.
+ *
+ * `undefined` passes through (a nullable FK such as `Instruction.venueId` stays absent), mirroring
+ * `getTextValue`, which this is almost always composed with.
+ */
+export function padNumericId(id: string): string;
+export function padNumericId(id: string | undefined): string | undefined;
+export function padNumericId(id: string | undefined): string | undefined {
+  return id === undefined ? undefined : padId(id);
+}
+
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
   if (arg !== undefined && arg !== null && typeof arg !== 'string') {

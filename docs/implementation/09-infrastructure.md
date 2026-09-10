@@ -161,16 +161,7 @@ frees the `Event` index budget the `@subql/node` 10-index cap was pressing again
 
 **Consider `@fullText`** on `Event.eventArg_0..3` — currently served by `left(col, 100)` expression indexes, which is a prefix match, not a search. **[I]** Measure before switching; a GIN index has a different write cost.
 
-**`compat.sql` also owns the `timestamptz` conversion (D8)**, since SubQuery generates the DDL for `Date` columns and there is no directive for it. Under D5 this runs against a freshly built schema, but write the `USING` clause regardless — `compat.sql` is re-applied on every deploy and must be correct if it ever meets existing data:
-
-```sql
--- D8: Date columns are UTC but serialize with no zone marker, so a consumer parsing
--- "2021-11-05T13:56:36" gets local time. USING ... AT TIME ZONE 'UTC' is mandatory:
--- without it Postgres reads existing values in the server's zone, baking in the bug.
-ALTER TABLE blocks ALTER COLUMN datetime TYPE timestamptz USING datetime AT TIME ZONE 'UTC';
-```
-
-Generate the statements from `schema.graphql`'s `Date` fields rather than hand-listing 27 columns — it is the same "generated artifacts are generated" argument as §9.6.
+**~~`compat.sql` also owns the `timestamptz` conversion (D8).~~** **D8 was revised to documentation-only (2026-09-10 — see [`../README.md`](../README.md) decision log and [`../architecture-review.md`](../architecture-review.md) §10.1).** The `Date` columns stay `timestamp without time zone`; the timezone ambiguity is addressed by a schema docstring on `Block.datetime` (covering every `Date` field) plus one-liners on the entitlement-critical fields, telling consumers to parse as UTC. No column-type change, no generator script. The one `compat.sql` change in this area is separate: Phase 7.6 replaces the dead `data_block_datetime_timestamp` expression index (A18 — an expression index no generated query can use) with a plain btree on `blocks.datetime`, and adds one `created_event_id` btree on `multi_sig_proposals` (D13, plan [13](./13-entity-provenance.md)).
 
 ---
 

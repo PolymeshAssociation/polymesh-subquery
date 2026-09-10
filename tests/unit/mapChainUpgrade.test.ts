@@ -61,7 +61,6 @@ describe('mapChainUpgrade', () => {
         specVersionId: 8_000_000,
         transactionVersion: 5,
         firstBlockId: '0000001234',
-        datetime: new Date('2024-06-01T00:00:00.000Z'),
       },
     ]);
   });

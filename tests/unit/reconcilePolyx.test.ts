@@ -1,14 +1,17 @@
 /**
  * In-flight POLYX reconciliation (D11). Every Nth block for touched accounts, and always after a
  * `BalanceSet` / `DustLost`, the derived `AccountBalance` is checked against `system.account` at
- * the block being indexed. On a mismatch it records a `BalanceReconciliationDrift` anomaly and
- * corrects the derived value so the drift cannot compound.
+ * the block being indexed. `reconcileAccount` only queues the account during event handling;
+ * `reconcileBlock` (run from the block handler) does the compare-and-correct once, against the
+ * block's final derived state. On a mismatch it records a `BalanceReconciliationDrift` anomaly
+ * and corrects the derived value so the drift cannot compound.
  */
 
 import { SubstrateBlock } from '@subql/types';
 import {
   __resetOnChainCache,
   reconcileAccount,
+  reconcileBlock,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
 
 const ADDR = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -24,6 +27,15 @@ const block = (height: number): SubstrateBlock =>
     timestamp: new Date('2024-01-01T00:00:00Z'),
     specVersion: 8_000_000,
   } as unknown as SubstrateBlock);
+
+/** Queue a reconcile and immediately flush it, as the block handler would at end-of-block. */
+const reconcile = async (
+  height: number,
+  opts: { force?: boolean; eventIdx?: number } = {}
+): Promise<void> => {
+  await reconcileAccount(ADDR, '0000000000', block(height), opts);
+  await reconcileBlock(block(height));
+};
 
 let db: Record<string, Record<string, any>>;
 
@@ -47,7 +59,7 @@ const setDerived = (row: Partial<Record<string, bigint | any[]>>) => {
       movementCount: 0,
       locks: [],
       holds: [],
-      updatedBlockId: '0',
+      updatedEventId: '0000000000/0000000000',
       ...row,
     },
   };
@@ -81,12 +93,12 @@ beforeEach(() => {
 // Values are in base units (6 decimals); drifts here are far above the MIN_DRIFT (100 POLYX) floor.
 const P = (polyx: number): bigint => BigInt(polyx) * BigInt(1_000_000);
 
-describe('reconcileAccount', () => {
+describe('reconcileAccount / reconcileBlock', () => {
   it('does nothing when the derived balance agrees with chain state', async () => {
     setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
     setChain(P(1000).toString(), '0', '0');
 
-    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+    await reconcile(9000, { force: true });
 
     expect(anomalies()).toHaveLength(0);
   });
@@ -95,7 +107,7 @@ describe('reconcileAccount', () => {
     setDerived({ free: P(1000) + BigInt(50_000_000), total: P(1000) });
     setChain(P(1000).toString(), '0', '0');
 
-    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+    await reconcile(9000, { force: true });
 
     expect(anomalies()).toHaveLength(0);
   });
@@ -104,7 +116,7 @@ describe('reconcileAccount', () => {
     setDerived({ free: P(900), reserved: P(100), total: P(1000) });
     setChain(P(1000).toString(), P(50).toString(), '0');
 
-    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true, eventIdx: 3 });
+    await reconcile(9000, { force: true, eventIdx: 3 });
 
     expect(anomalies()).toHaveLength(1);
     expect(anomalies()[0]).toMatchObject({ kind: 'BalanceReconciliationDrift' });
@@ -121,7 +133,7 @@ describe('reconcileAccount', () => {
     setDerived({ free: P(1000), frozen: BigInt(0), transferable: P(1000) });
     setChain(P(1000).toString(), '0', P(400).toString());
 
-    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+    await reconcile(9000, { force: true });
 
     expect(db['AccountBalance'][ADDR]).toMatchObject({
       frozen: P(400),
@@ -134,10 +146,32 @@ describe('reconcileAccount', () => {
     setDerived({ free: BigInt(1) });
     setChain(P(999).toString(), '0', '0');
 
-    await reconcileAccount(ADDR, '0000009001', block(9001)); // 9001 % 2000 != 0
+    await reconcile(9001); // 9001 % 2000 != 0 -> nothing queued
     expect(anomalies()).toHaveLength(0);
 
-    await reconcileAccount(ADDR, '0000008000', block(8000)); // 8000 % 2000 == 0
+    await reconcile(8000); // 8000 % 2000 == 0
     expect(anomalies()).toHaveLength(1);
+  });
+
+  it('reconciles once at end-of-block, not after each event (no mid-block overshoot)', async () => {
+    // a %2000 block; the derived balance is already correct once every event has been applied
+    setDerived({ free: P(1000), reserved: P(200), total: P(1200) });
+    setChain(P(1000).toString(), P(200).toString(), '0');
+
+    await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 1 });
+    await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 5 });
+    await reconcileBlock(block(8000));
+
+    expect(anomalies()).toHaveLength(0);
+    expect(db['AccountBalance'][ADDR]).toMatchObject({ free: P(1000), reserved: P(200) });
+  });
+
+  it('flushes nothing for a block that never queued (block handler runs every block)', async () => {
+    setDerived({ free: BigInt(1) });
+    setChain(P(999).toString(), '0', '0');
+
+    await reconcileBlock(block(8000)); // no reconcileAccount call first
+
+    expect(anomalies()).toHaveLength(0);
   });
 });

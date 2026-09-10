@@ -116,7 +116,7 @@ const detailFrom = (rawDetail: unknown): { isLocked: boolean; expiry: Date | und
 const upsertMetadata = async (
   assetId: string,
   key: MetadataKey,
-  blockId: string,
+  blockEventId: string,
   apply: (row: AssetMetadata) => void
 ): Promise<void> => {
   const id = metadataId(assetId, key);
@@ -128,8 +128,8 @@ const upsertMetadata = async (
       scope: key.scope,
       keyId: key.keyId,
       isLocked: false,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
 
   if (key.scope === MetadataScope.Global && !row.name) {
@@ -137,14 +137,14 @@ const upsertMetadata = async (
   }
 
   apply(row);
-  row.updatedBlockId = blockId;
+  row.updatedEventId = blockEventId;
   await row.save();
 };
 
 export const handleRegisterAssetMetadataLocalType = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, name: rawName, localKeyId: rawKeyId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -153,7 +153,7 @@ export const handleRegisterAssetMetadataLocalType = async (
   await upsertMetadata(
     assetId,
     { scope: MetadataScope.Local, keyId: getTextValue(rawKeyId) },
-    blockId,
+    blockEventId,
     row => {
       row.name = bytesToString(rawName);
     }
@@ -163,7 +163,7 @@ export const handleRegisterAssetMetadataLocalType = async (
 export const handleRegisterAssetMetadataGlobalType = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { name: rawName, globalKeyId: rawKeyId, spec: rawSpec } = decodeEvent(event);
 
   const id = getTextValue(rawKeyId);
@@ -172,18 +172,18 @@ export const handleRegisterAssetMetadataGlobalType = async (
     GlobalMetadataKey.create({
       id,
       name: bytesToString(rawName),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
 
   row.name = bytesToString(rawName);
   row.spec = rawSpec.isEmpty ? undefined : JSON.stringify(rawSpec.toJSON());
-  row.updatedBlockId = blockId;
+  row.updatedEventId = blockEventId;
   await row.save();
 };
 
 export const handleGlobalMetadataSpecUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { name: rawName, spec: rawSpec } = decodeEvent(event);
 
   // the event carries the name, not the id; match on the indexed name
@@ -191,13 +191,13 @@ export const handleGlobalMetadataSpecUpdated = async (event: SubstrateEvent): Pr
   const [match] = await GlobalMetadataKey.getByName(name, { limit: 1, offset: 0 });
   if (match) {
     match.spec = rawSpec.isEmpty ? undefined : JSON.stringify(rawSpec.toJSON());
-    match.updatedBlockId = blockId;
+    match.updatedEventId = blockEventId;
     await match.save();
   }
 };
 
 export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, value: rawValue, detail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -215,7 +215,7 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
 
   const { isLocked, expiry } = detailFrom(rawDetail?.isEmpty ? null : rawDetail?.toJSON());
 
-  await upsertMetadata(assetId, key, blockId, row => {
+  await upsertMetadata(assetId, key, blockEventId, row => {
     row.value = bytesToString(rawValue);
     row.isLocked = isLocked;
     row.expiry = expiry;
@@ -223,7 +223,7 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
 };
 
 export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, detail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -234,7 +234,7 @@ export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent):
 
   const { isLocked, expiry } = detailFrom(rawDetail?.toJSON());
 
-  await upsertMetadata(assetId, key, blockId, row => {
+  await upsertMetadata(assetId, key, blockEventId, row => {
     row.isLocked = isLocked;
     row.expiry = expiry;
   });
@@ -251,7 +251,7 @@ export const handleLocalMetadataKeyDeleted = async (event: SubstrateEvent): Prom
 };
 
 export const handleMetadataValueDeleted = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, key: rawKey } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -265,25 +265,25 @@ export const handleMetadataValueDeleted = async (event: SubstrateEvent): Promise
     row.value = undefined;
     row.isLocked = false;
     row.expiry = undefined;
-    row.updatedBlockId = blockId;
+    row.updatedEventId = blockEventId;
     await row.save();
   }
 };
 
 export const handleAssetTypeChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, assetType: rawType } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
 
   asset.type = await getAssetType(rawType);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
   await asset.save();
 };
 
 const upsertCustomAssetType = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
   const { typeId: rawTypeId, name: rawName } = decodeEvent(event);
 
   const id = getNumberValue(rawTypeId).toString();
@@ -296,8 +296,8 @@ const upsertCustomAssetType = async (event: SubstrateEvent): Promise<void> => {
   await CustomAssetType.create({
     id,
     name: bytesToString(rawName),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 

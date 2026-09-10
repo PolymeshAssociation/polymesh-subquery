@@ -24,7 +24,7 @@ const treeForEventId = (eventId: EventIdEnum): ConfidentialCurveTreeEnum => {
 export const handleConfidentialCurveTreeLeafUpdated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, eventId, blockEventId } = extractArgs(event);
 
   const [rawLeafIndex, rawLeafValue] = params;
 
@@ -38,8 +38,7 @@ export const handleConfidentialCurveTreeLeafUpdated = async (
 
   if (leaf) {
     leaf.value = value;
-    leaf.eventIdx = eventIdx;
-    leaf.updatedBlockId = blockId;
+    leaf.updatedEventId = blockEventId;
 
     await leaf.save();
   } else {
@@ -48,10 +47,8 @@ export const handleConfidentialCurveTreeLeafUpdated = async (
       tree,
       leafIndex,
       value,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 };

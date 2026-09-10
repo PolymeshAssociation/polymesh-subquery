@@ -16,8 +16,7 @@ import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
  * Subscribes to the events related to external agents
  */
 export async function mapExternalAgentAction(event: SubstrateEvent): Promise<void> {
-  const { moduleId, eventId, blockId, block, params, extrinsic, eventIdx, blockEventId } =
-    extractArgs(event);
+  const { moduleId, eventId, blockId, block, params, extrinsic, blockEventId } = extractArgs(event);
 
   const assetId = await mgr.getAssetIdForEvent(
     moduleId,
@@ -30,14 +29,12 @@ export async function mapExternalAgentAction(event: SubstrateEvent): Promise<voi
   if (assetId) {
     await TickerExternalAgentAction.create({
       id: blockEventId,
-      eventIdx,
       assetId,
       palletName: moduleId,
       eventId,
       callerId: getTextValue(params[0]),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 }

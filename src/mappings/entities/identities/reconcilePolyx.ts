@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { AccountBalance, AnomalyKind } from '../../../types';
-import { getBigIntValue } from '../../../utils';
+import { getBigIntValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { accountDataFrozen, recomputeDerived, STAKING_LOCK_ID } from './mapPolyxLedger';
 
@@ -13,28 +13,23 @@ import { accountDataFrozen, recomputeDerived, STAKING_LOCK_ID } from './mapPolyx
  * `system.account` there — every Nth block for accounts touched in that block, and always after
  * a `BalanceSet` or `DustLost`.
  *
+ * The compare-and-correct is deferred to `reconcileBlock`, run from the block handler after every
+ * event handler. Doing it per-event compared a *partial* mid-block balance against end-of-block
+ * `system.account`, and on a `%N` block that pays several validators it corrected to those
+ * end-of-block values and then let the block's remaining payout events apply on top — drifting
+ * each account by one reward amount per correction.
+ *
  * On a mismatch it records a `BalanceReconciliationDrift` anomaly **and corrects** the derived
- * value, so drift from one missed or mis-signed event cannot compound into every later balance.
- * The offline harness (`scripts/reconcile-polyx.ts`) is what answers "is the history right"; this
- * is the going-forward safety net.
+ * value, so drift from one missed or mis-signed event cannot compound. The offline harness
+ * (`scripts/reconcile-polyx.ts`) is what answers "is the history right"; this is the safety net.
  */
 
-/**
- * Sample rate for the routine check. `BalanceSet`/`DustLost` always reconcile regardless.
- * Each sampled account costs one `system.account` RPC read; against a remote node this is the
- * dominant cost of the genesis sweep, so the interval is coarse. The safety net still catches a
- * mis-mapped event well before it can compound — a real defect drifts by thousands of POLYX and
- * shows up at the next sample; the offline harness is what proves the history exact.
- */
 const RECONCILE_EVERY_N_BLOCKS = 2000;
 
 /**
- * Ignore drift below this (100 POLYX, 6 decimals). Two things produce sub-POLYX noise that is not
- * a handler defect: the pre-v5.4 weight fee, which older Substrate charges with no event at all
- * (so the ledger cannot see it and the balance runs a little high until this corrects it); and a
- * sample landing mid-block on an account touched more than once, where the partial derived state
- * is compared against the block's final on-chain state. A real mis-mapped or missed event drifts
- * by thousands of POLYX. The offline harness sums with no threshold and catches slow accumulation.
+ * Ignore drift below this (100 POLYX). The pre-v5.4 weight fee is charged with no event, so the
+ * ledger runs a little high until this corrects it; a real mis-mapped or missed event drifts by
+ * thousands of POLYX. The offline harness sums with no threshold and catches slow accumulation.
  */
 const MIN_DRIFT = BigInt(100_000_000);
 
@@ -51,19 +46,24 @@ interface OnChain {
   frozen: bigint;
 }
 
-/**
- * `system.account` is end-of-block state, so within one block it is the same no matter how many
- * times or how late it is read. An account touched N times in a sampled block would otherwise
- * cost N identical RPC reads; this memoises the read for the current block (the compare and
- * correct still run every call, so the last one — with the most complete derived state — wins).
- */
 let onChainCacheBlock = -1;
 const onChainCache = new Map<string, OnChain>();
 
-/** Test hook — the cache is keyed only by block height, so a suite reusing one height must clear it. */
+/**
+ * Accounts to reconcile at the end of the current block. `reconcileAccount` only registers the
+ * intent during event handling; `reconcileBlock` does the read/compare/correct once per account,
+ * against the block's fully-applied derived balance. Value is the first provoking event index,
+ * kept for the anomaly's provenance.
+ */
+let pendingBlock = -1;
+const pending = new Map<string, number | undefined>();
+
+/** Test hook — clears both the per-block RPC memo and the pending-reconcile queue. */
 export const __resetOnChainCache = (): void => {
   onChainCacheBlock = -1;
   onChainCache.clear();
+  pendingBlock = -1;
+  pending.clear();
 };
 
 const readOnChain = async (address: string, blockHeight: number): Promise<OnChain> => {
@@ -93,9 +93,15 @@ const readOnChain = async (address: string, blockHeight: number): Promise<OnChai
   return onChain;
 };
 
+/**
+ * Registers `address` to be reconciled at the end of `block`. A no-op unless the block is a
+ * sample point (every Nth) or the caller forced it (a `BalanceSet` / `DustLost` checkpoint).
+ * `_blockId` is unused — `reconcileBlock` derives it from the block — but kept so the call sites
+ * do not change.
+ */
 export const reconcileAccount = async (
   address: string,
-  blockId: string,
+  _blockId: string,
   block: SubstrateBlock,
   { force = false, eventIdx }: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
@@ -103,14 +109,49 @@ export const reconcileAccount = async (
     return;
   }
 
-  const balance = await AccountBalance.get(address);
+  const height = blockNumber(block);
+  if (height !== pendingBlock) {
+    pendingBlock = height;
+    pending.clear();
+  }
 
+  if (!pending.has(address) || pending.get(address) === undefined) {
+    pending.set(address, eventIdx);
+  }
+};
+
+/**
+ * Runs every reconciliation queued for `block`. Called from the block handler, so the derived
+ * `AccountBalance` is the block's final state and lines up with end-of-block `system.account`.
+ */
+export const reconcileBlock = async (block: SubstrateBlock): Promise<void> => {
+  if (blockNumber(block) !== pendingBlock || pending.size === 0) {
+    return;
+  }
+
+  const queued = [...pending.entries()];
+  pending.clear();
+  pendingBlock = -1;
+
+  const blockId = padId(String(blockNumber(block)));
+
+  for (const [address, eventIdx] of queued) {
+    await reconcileOne(address, blockId, block, eventIdx);
+  }
+};
+
+const reconcileOne = async (
+  address: string,
+  blockId: string,
+  block: SubstrateBlock,
+  eventIdx: number | undefined
+): Promise<void> => {
+  const balance = await AccountBalance.get(address);
   if (!balance) {
     return;
   }
 
   let onChain: OnChain;
-
   try {
     onChain = await readOnChain(address, blockNumber(block));
   } catch {
@@ -119,7 +160,6 @@ export const reconcileAccount = async (
   }
 
   const drifts: string[] = [];
-
   if (abs(balance.free - onChain.free) >= MIN_DRIFT) {
     drifts.push(`free ${balance.free} vs ${onChain.free}`);
   }
@@ -141,9 +181,6 @@ export const reconcileAccount = async (
     eventIdx,
   });
 
-  // Correct the derived value so the drift cannot compound. `frozen` is corrected by pinning the
-  // staking lock (which is nearly all of any pre-v8 account's frozen amount) to the on-chain
-  // value, so later `staking.*` events keep adjusting a realistic base rather than starting over.
   balance.free = onChain.free;
   balance.reserved = onChain.reserved;
   balance.locks =
@@ -151,7 +188,7 @@ export const reconcileAccount = async (
       ? [{ lockId: STAKING_LOCK_ID, amount: onChain.frozen, reasons: 'staking' }]
       : [];
   recomputeDerived(balance);
-  balance.updatedBlockId = blockId;
+  balance.updatedEventId = `${blockId}/${padId(String(eventIdx ?? 0))}`;
 
   await balance.save();
 };

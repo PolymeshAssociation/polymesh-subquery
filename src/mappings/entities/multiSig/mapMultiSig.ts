@@ -30,9 +30,10 @@ export const createMultiSig = async (
   creatorAccountId: string | undefined,
   signaturesRequired: number,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId: string
 ): Promise<void> => {
-  await ledgerAccount(address, blockId, datetime);
+  await ledgerAccount(address, blockId, datetime, blockEventId);
 
   await MultiSig.create({
     id: `${address}`,
@@ -40,8 +41,8 @@ export const createMultiSig = async (
     creatorId,
     creatorAccountId,
     signaturesRequired,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -59,17 +60,18 @@ export const linkSignerAccount = async (
   signerType: SignerTypeEnum,
   signerValue: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId: string
 ): Promise<string | undefined> => {
   if (signerType !== SignerTypeEnum.Account) {
     return undefined;
   }
 
-  const account = await ledgerAccount(signerValue, blockId, datetime);
+  const account = await ledgerAccount(signerValue, blockId, datetime, blockEventId);
 
   if (account.keyRole !== KeyRoleEnum.MultiSigSigner) {
     account.keyRole = KeyRoleEnum.MultiSigSigner;
-    account.updatedBlockId = blockId;
+    account.updatedEventId = blockEventId;
     await account.save();
   }
 
@@ -82,9 +84,16 @@ export const createMultiSigSigner = async (
   signerValue: string,
   status: MultiSigSignerStatusEnum,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId: string
 ): Promise<void> => {
-  const signerAccountId = await linkSignerAccount(signerType, signerValue, blockId, datetime);
+  const signerAccountId = await linkSignerAccount(
+    signerType,
+    signerValue,
+    blockId,
+    datetime,
+    blockEventId
+  );
 
   await MultiSigSigner.create({
     id: `${multiSigAddress}/${signerType}/${signerValue}`,
@@ -93,23 +102,24 @@ export const createMultiSigSigner = async (
     signerValue,
     signerAccountId,
     status,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const createMultiSigAdmin = (
   multisigId: string,
   adminId: string,
-  blockId: string
+  blockId: string,
+  blockEventId: string
 ): Promise<void> =>
   MultiSigAdmin.create({
     id: `${multisigId}/${adminId}`,
     multisigId,
     adminId,
     status: MultiSigAdminStatusEnum.Authorized,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
 const getMultiSigSignerDetails = (
@@ -142,17 +152,17 @@ const handleMultiSigSignerStatus = async (
   event: SubstrateEvent,
   status: MultiSigSignerStatusEnum
 ): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params, block);
   const multiSigSigner = await MultiSigSigner.get(`${multisigId}/${signerType}/${signerValue}`);
   multiSigSigner.status = status;
-  multiSigSigner.updatedBlockId = blockId;
+  multiSigSigner.updatedEventId = blockEventId;
   await multiSigSigner.save();
 };
 
 export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockId, block, blockEventId } = extractArgs(event);
   const [rawDid, rawMultiSigAddress, rawCreator, rawSigners, rawSignaturesRequired] = params;
 
   const creator = getTextValue(rawDid);
@@ -167,7 +177,8 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
     creatorAccountId,
     signaturesRequired,
     blockId,
-    block.timestamp
+    block.timestamp,
+    blockEventId
   );
 
   const signerParams: MultiSigSignerProps[] = await Promise.all(
@@ -182,11 +193,12 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
             signerType,
             signerValue,
             blockId,
-            block.timestamp
+            block.timestamp,
+            blockEventId
           ),
           status: MultiSigSignerStatusEnum.Authorized,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         } satisfies MultiSigSignerProps)
     )
   );
@@ -194,24 +206,24 @@ export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void
   const promises = [multiSigPromise, store.bulkCreate('MultiSigSigner', signerParams)];
 
   if (!is7xChain(block)) {
-    promises.push(createMultiSigAdmin(multiSigAddress, creator, blockId));
+    promises.push(createMultiSigAdmin(multiSigAddress, creator, blockId, blockEventId));
   }
 
   await Promise.all(promises);
 };
 
 export const handleMultiSigAddedAdmin = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockId, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawAdminDid] = params;
 
   const admin = getTextValue(rawAdminDid);
   const multisigId = getTextValue(rawMultiSigAddress);
 
-  await createMultiSigAdmin(multisigId, admin, blockId);
+  await createMultiSigAdmin(multisigId, admin, blockId, blockEventId);
 };
 
 export const handleMultiSigRemovedAdmin = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawMultiSigAddress, rawAdminDid] = params;
 
   const admin = getTextValue(rawAdminDid);
@@ -221,13 +233,13 @@ export const handleMultiSigRemovedAdmin = async (event: SubstrateEvent): Promise
 
   if (multiSigAdmin) {
     multiSigAdmin.status = MultiSigAdminStatusEnum.Removed;
-    multiSigAdmin.updatedBlockId = blockId;
+    multiSigAdmin.updatedEventId = blockEventId;
     await multiSigAdmin.save();
   }
 };
 
 export const handleMultiSigSignerAuthorized = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockId, block, blockEventId } = extractArgs(event);
 
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(params, block);
 
@@ -237,12 +249,13 @@ export const handleMultiSigSignerAuthorized = async (event: SubstrateEvent): Pro
     signerValue,
     MultiSigSignerStatusEnum.Authorized,
     blockId,
-    block.timestamp
+    block.timestamp,
+    blockEventId
   );
 };
 
 export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockId, block, blockEventId } = extractArgs(event);
 
   const signerDetails = getMultiSigSignersDetails(params, block);
 
@@ -258,11 +271,12 @@ export const handleMultiSigSignersAuthorized = async (event: SubstrateEvent): Pr
             signerType,
             signerValue,
             blockId,
-            block.timestamp
+            block.timestamp,
+            blockEventId
           ),
           status: MultiSigSignerStatusEnum.Authorized,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         } satisfies MultiSigSignerProps)
     )
   );
@@ -279,7 +293,7 @@ export const handleMultiSigSignerRemoved = async (event: SubstrateEvent): Promis
 };
 
 export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const signerDetails = getMultiSigSignersDetails(params, block);
 
@@ -292,7 +306,7 @@ export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promi
   const existingSigners = multiSigSigners.filter(multiSigSigner => multiSigSigner);
   existingSigners.forEach(multiSigSigner => {
     multiSigSigner.status = MultiSigSignerStatusEnum.Removed;
-    multiSigSigner.updatedBlockId = blockId;
+    multiSigSigner.updatedEventId = blockEventId;
   });
 
   await Promise.all(existingSigners.map(existingSigner => existingSigner.save()));
@@ -301,7 +315,7 @@ export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promi
 export const handleMultiSigSignaturesRequiredChanged = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawMultiSigAddress, rawSignaturesRequired] = params;
 
@@ -311,7 +325,7 @@ export const handleMultiSigSignaturesRequiredChanged = async (
   const multiSig = await MultiSig.get(multiSigAddress);
 
   multiSig.signaturesRequired = signaturesRequired;
-  multiSig.updatedBlockId = blockId;
+  multiSig.updatedEventId = blockEventId;
 
   await multiSig.save();
 };
