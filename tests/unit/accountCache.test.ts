@@ -1,10 +1,10 @@
 import { Codec } from '@polkadot/types/types';
 import { Account } from '../../src/types';
 import { getOrCreateAccount } from '../../src/utils/accounts';
+import { createIdentity } from '../../src/mappings/entities/identities/mapIdentities';
 
 jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
   createIdentity: jest.fn(),
-  createPermissions: jest.fn(),
 }));
 
 const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -13,6 +13,18 @@ const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 const keyRecords = () => (api.query as any).identity.keyRecords as jest.Mock;
 
 const emptyRecord = { isEmpty: true } as unknown as Codec;
+
+const MULTISIG = '5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z';
+
+/** A key record naming `MULTISIG` as the multisig this address signs for. */
+const multiSigSignerRecord = {
+  isEmpty: false,
+  unwrap: () => ({
+    isPrimaryKey: false,
+    isSecondaryKey: false,
+    asMultiSigSignerKey: { toString: () => MULTISIG },
+  }),
+} as unknown as Codec;
 
 const datetime = new Date('2024-01-01T00:00:00.000Z');
 
@@ -63,7 +75,7 @@ describe('getOrCreateAccount block cache', () => {
     expect(keyRecords()).toHaveBeenCalledTimes(2);
   });
 
-  it('serves a known account from the cache without reading the store again', async () => {
+  it('serves a known account from the store without reading the chain', async () => {
     const existing = { id: ADDRESS, identityId: '0xdid' } as unknown as Account;
     (Account.get as jest.Mock).mockResolvedValue(existing);
 
@@ -74,7 +86,64 @@ describe('getOrCreateAccount block cache', () => {
 
     expect(first).toBe(existing);
     expect(second).toBe(existing);
-    expect(Account.get).toHaveBeenCalledTimes(1);
     expect(keyRecords()).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The `Account` row can change partway through a block - a handler links or unlinks a key - so
+   * only the chain read is cached. Caching the row shadowed writes made by the handlers that ran
+   * between two lookups of the same address.
+   */
+  it('sees a row another handler wrote after a negative was already cached', async () => {
+    const blockId = freshBlockId();
+
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toBeUndefined();
+
+    const written = { id: ADDRESS, identityId: '0xdid' } as unknown as Account;
+    (Account.get as jest.Mock).mockResolvedValue(written);
+
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toBe(written);
+    // still only the one chain read: that answer cannot change within the block
+    expect(keyRecords()).toHaveBeenCalledTimes(1);
+  });
+
+  it('sees an identity another handler unlinked in the same block', async () => {
+    const blockId = freshBlockId();
+
+    (Account.get as jest.Mock).mockResolvedValue({
+      id: ADDRESS,
+      identityId: '0xdid',
+    } as unknown as Account);
+
+    const before = await getOrCreateAccount(ADDRESS, blockId, datetime);
+    expect(before?.identityId).toBe('0xdid');
+
+    (Account.get as jest.Mock).mockResolvedValue({
+      id: ADDRESS,
+      identityId: undefined,
+    } as unknown as Account);
+
+    const after = await getOrCreateAccount(ADDRESS, blockId, datetime);
+    expect(after?.identityId).toBeUndefined();
+  });
+});
+
+describe('getOrCreateAccount for a multisig signer key', () => {
+  beforeEach(() => {
+    (api as any).query = {
+      identity: { keyRecords: jest.fn().mockResolvedValue(multiSigSignerRecord) },
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(undefined);
+  });
+
+  /**
+   * A signer key has no identity, so there is nothing for an `Account` to carry. What must not
+   * happen is the old behaviour: reading the multisig address out of the key record and creating
+   * an `Identity` keyed by it.
+   */
+  it('indexes no account, and above all no identity keyed by the multisig address', async () => {
+    await expect(getOrCreateAccount(ADDRESS, freshBlockId(), datetime)).resolves.toBeUndefined();
+
+    expect(createIdentity).not.toHaveBeenCalled();
   });
 });

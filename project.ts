@@ -166,8 +166,11 @@ const filters: Record<string, Record<string, string[]>> = {
     AuthorizationAdded: ['handleAuthorization'],
     AuthorizationConsumed: ['handleAuthorization'],
     AuthorizationRejected: ['handleAuthorization'],
-    AuthorizationRetryLimitReached: [],
+    AuthorizationRetryLimitReached: ['handleAuthorization'],
     AuthorizationRevoked: ['handleAuthorization'],
+    // CddClaimsInvalidated is a CDD-claims concern (it invalidates the CDD claims issued by a
+    // provider whose own CDD was revoked), not a key concern, and is absent from the v8 runtime.
+    // It belongs with plan 01 (claims); left unhandled here deliberately.
     CddClaimsInvalidated: [],
     CddRequirementForPrimaryKeyUpdated: [],
     ChildDidCreated: ['handleChildDidCreated'],

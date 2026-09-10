@@ -29,6 +29,13 @@
  *       --rpc wss://mainnet-rpc.polymesh.network \
  *       [--sample 80] [--high 30] [--typical 30] [--reset]
  */
+// Chain-type augmentation, in the order `src/index.ts` loads it: `types-lookup` supplies the
+// types `augment-api` imports, and `@polkadot/api-augment` is deliberately not loaded alongside
+// (docs/implementation/12-types-and-ci.md §12.2). `tsconfig.test.json` already pulls this in via
+// `src/**/*`, but a script is also run and edited on its own, so it declares what it depends on.
+import '@polkadot/types-augment';
+import '@polymeshassociation/polymesh-types/polkadot/types-lookup';
+import '@polymeshassociation/polymesh-types/polkadot/augment-api';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -152,10 +159,9 @@ const summedAt = async (
 const chainAt = async (api: ApiPromise, address: string, block: number): Promise<Triple> => {
   const hash = await api.rpc.chain.getBlockHash(block);
   const at = await api.at(hash);
-  const info = (await at.query.system.account(address)) as unknown as {
-    data: Record<string, { toString(): string }>;
-  };
-  const d = info.data;
+  const info = await at.query.system.account(address);
+  // The balance fields only: `frozen` is `miscFrozen`/`feeFrozen` on older runtimes.
+  const d = info.data as unknown as Record<string, { toString(): string }>;
   const big = (v?: { toString(): string }) => BigInt(v?.toString() ?? '0');
   const legacyFrozen = big(d.miscFrozen) > big(d.feeFrozen) ? big(d.miscFrozen) : big(d.feeFrozen);
 

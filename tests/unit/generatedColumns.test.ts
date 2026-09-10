@@ -2,9 +2,7 @@ import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
 import { JSONStringifyExceptStringAndNull } from '../../src/utils/common';
 import { extractClaimInfo } from './../../src/utils/claims';
-import { extractCorporateActionTicker } from './../../src/utils/distributions';
-import { extractEventArgs, extractTransferTo } from './../../src/utils/events';
-import { extractOfferingAsset } from './../../src/utils/stos';
+import { extractEventArgs } from './../../src/utils/events';
 
 test('JSONStringifyExceptStringAndNull', () => {
   expect(JSONStringifyExceptStringAndNull('hello')).toBe('hello');
@@ -207,47 +205,4 @@ test('extractClaimInfo', () => {
     jurisdiction: undefined,
     customClaimTypeId: '1',
   });
-});
-
-test('extractCorporateActionTicker', () => {
-  expect(extractCorporateActionTicker([{ value: 'foo' }, { value: { ticker: 'STONK' } }])).toBe(
-    'STONK'
-  );
-
-  expect(
-    extractCorporateActionTicker([{ value: 'foo' }, { value: {} }, { value: { ticker: 'STONK' } }])
-  ).toBe('STONK');
-
-  expect(extractCorporateActionTicker([])).toBe(null);
-});
-
-test('extractOfferingAsset', () => {
-  expect(
-    extractOfferingAsset([
-      { value: 'foo' },
-      { value: {} },
-      { value: 'something_else' },
-      { value: { offering_asset: 'STONK' } },
-    ])
-  ).toBe('STONK');
-
-  expect(extractOfferingAsset([])).toBe(undefined);
-});
-
-test('extractTransferTo', () => {
-  expect(
-    extractTransferTo([
-      { value: 'foo' },
-      { value: {} },
-      { value: 'something_else' },
-      {
-        value: {
-          did: '0x9a8cf83420fcb598e04bc085303b90a640afa45f75a7548e508170ff291f2779',
-          kind: { Default: null },
-        },
-      },
-    ])
-  ).toBe('0x9a8cf83420fcb598e04bc085303b90a640afa45f75a7548e508170ff291f2779');
-
-  expect(extractTransferTo([])).toBe(undefined);
 });

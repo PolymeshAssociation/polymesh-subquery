@@ -1,7 +1,8 @@
 import {
   Block,
   EventIdEnum,
-  Identity,
+  KeyRole,
+  KeyRoleEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
@@ -13,11 +14,8 @@ import {
   padId,
 } from '../../utils';
 import { getAccountId, systematicIssuers } from '../consts';
-import {
-  createAccount,
-  createIdentity,
-  createPermissions,
-} from '../entities/identities/mapIdentities';
+import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
+import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
   createMultiSig,
@@ -95,25 +93,29 @@ const handleGenesisDids = async (datetime: Date) => {
     });
 
     if (primaryKey.length) {
-      [primaryKey, ...secondaryKeys].forEach(key => {
-        accountInserts.push(
-          createPermissions(
-            {
-              datetime,
-              transactionGroups: [],
-            },
-            key,
-            genesisBlock
-          )
-        );
+      [primaryKey, ...secondaryKeys].forEach((key, keyIndex) => {
         accountInserts.push(
           createAccount(
             {
               identityId: did,
-              permissionsId: key,
+              keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
               eventId: EventIdEnum.DidCreated,
               address: key,
               datetime,
+            },
+            genesisBlock
+          )
+        );
+        // The membership interval opened at genesis. `eventIdx` disambiguates keys of one identity
+        // seeded in the genesis block.
+        accountInserts.push(
+          openIdentityKey(
+            {
+              identityId: did,
+              address: key,
+              role: keyIndex === 0 ? KeyRole.Primary : KeyRole.Secondary,
+              addedReason: EventIdEnum.DidCreated,
+              eventIdx: keyIndex,
             },
             genesisBlock
           )
@@ -159,7 +161,7 @@ const handleGenesisDids = async (datetime: Date) => {
 /**
  * This method adds all the MultiSigs and their signers present in the genesis block
  */
-const handleMultiSigs = async (): Promise<void> => {
+const handleMultiSigs = async (datetime: Date): Promise<void> => {
   let multiSigEntries;
   const is7xChainAtGenesis = 'adminDid' in api.query.multiSig;
   if (is7xChainAtGenesis) {
@@ -175,13 +177,13 @@ const handleMultiSigs = async (): Promise<void> => {
       {
         args: [rawAddress],
       },
-      rawCreator,
+      rawAdminDid,
     ] = multiSigEntry;
-    const creator = rawCreator.toString();
+    // `adminDid` (7.x+) / `multiSigToIdentity` (pre-7) storage — the *administering* identity, not
+    // the creator. The chain keeps no creator storage, so a genesis-seeded `MultiSig.creator` is
+    // left null and only the admin relationship is recovered.
+    const adminDid = rawAdminDid.toString();
     const multiSigAddress = rawAddress.toString();
-
-    const creatorIdentity = await Identity.get(creator);
-    const creatorAccount = creatorIdentity?.primaryAccount || '';
 
     const [signaturesRequired, signerEntries] = await Promise.all([
       api.query.multiSig.multiSigSignsRequired(multiSigAddress),
@@ -191,15 +193,16 @@ const handleMultiSigs = async (): Promise<void> => {
     multiSigInserts.push(
       createMultiSig(
         multiSigAddress,
-        creator,
-        creatorAccount,
+        undefined,
+        undefined,
         +signaturesRequired.toString(),
-        genesisBlock
+        genesisBlock,
+        datetime
       )
     );
 
-    if (is7xChainAtGenesis) {
-      createMultiSigAdmin(multiSigAddress, creator, genesisBlock);
+    if (adminDid.length) {
+      multiSigInserts.push(createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock));
     }
 
     signerEntries.forEach(
@@ -228,7 +231,8 @@ const handleMultiSigs = async (): Promise<void> => {
             signerType,
             signerValue,
             MultiSigSignerStatusEnum.Approved,
-            genesisBlock
+            genesisBlock,
+            datetime
           )
         );
       }
@@ -281,7 +285,11 @@ export default async (): Promise<void> => {
   const timestamp = await api.query.timestamp.now();
   const datetime = new Date(+timestamp.toString());
 
-  await Promise.all([insertGenesisBlock(datetime), handleGenesisDids(datetime), handleMultiSigs()]);
+  await Promise.all([
+    insertGenesisBlock(datetime),
+    handleGenesisDids(datetime),
+    handleMultiSigs(datetime),
+  ]);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);
