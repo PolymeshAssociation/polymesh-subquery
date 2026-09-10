@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { EventIdEnum, NftHolder } from '../../../types';
+import { EventIdEnum, HolderKind, Nft, NftHolder } from '../../../types';
 import {
   AssetHolderDetails,
   bytesToString,
@@ -8,11 +8,83 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
+  getPortfolioId,
   getTextValue,
+  padId,
+  portfolioHolder,
   rawAssetHolderToAssetHolder,
 } from '../../../utils';
 import { extractArgs, getAsset } from './../common';
-import { createAssetTransaction } from './mapAsset';
+import { createAssetTransaction, getHolding } from './mapAsset';
+
+const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
+
+const locationOf = (
+  holder: AssetHolderDetails | undefined
+): Pick<Nft, 'portfolioId' | 'accountId' | 'identityId'> => ({
+  portfolioId: holder?.holderKind === HolderKind.Portfolio ? getPortfolioId(holder) : undefined,
+  accountId: holder?.holderKind === HolderKind.Account ? holder.account : undefined,
+  identityId: holder?.identityId || undefined,
+});
+
+const mintNft = (
+  assetId: string,
+  nftId: number,
+  holder: AssetHolderDetails,
+  blockId: string
+): Promise<void> =>
+  Nft.create({
+    id: nftRowId(assetId, nftId),
+    assetId,
+    nftId: BigInt(nftId),
+    ...locationOf(holder),
+    metadata: [],
+    mintedBlockId: blockId,
+    updatedBlockId: blockId,
+  }).save();
+
+/** Moves a token to a new location. A miss means the row predates the seed — reconciliation covers it. */
+const moveNft = async (
+  assetId: string,
+  nftId: number,
+  holder: AssetHolderDetails,
+  blockId: string
+): Promise<void> => {
+  const nft = await Nft.get(nftRowId(assetId, nftId));
+  if (!nft) {
+    return;
+  }
+  Object.assign(nft, locationOf(holder));
+  nft.updatedBlockId = blockId;
+  return nft.save();
+};
+
+/** Marks a token burned. The row stays queryable; `burnedBlockId: { isNull: true }` filters it out. */
+const burnNft = async (assetId: string, nftId: number, blockId: string): Promise<void> => {
+  const nft = await Nft.get(nftRowId(assetId, nftId));
+  if (!nft) {
+    return;
+  }
+  nft.burnedBlockId = blockId;
+  nft.updatedBlockId = blockId;
+  return nft.save();
+};
+
+const adjustNftCount = async (
+  assetId: string,
+  holder: AssetHolderDetails | undefined,
+  blockId: string,
+  delta: number,
+  promises: Promise<void>[]
+): Promise<void> => {
+  if (!holder) {
+    return;
+  }
+  const holding = await getHolding(assetId, holder, blockId);
+  holding.nftCount += delta;
+  holding.updatedBlockId = blockId;
+  promises.push(holding.save());
+};
 
 /**
  * `NftHolder.nftIds` is a JSON array, and under historical mode every `.save()` writes a new
@@ -129,10 +201,16 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     eventId = EventIdEnum.IssuedNFT;
     asset.totalSupply += BigInt(ids.length);
 
+    // the whole-array rollup, kept for the SDK and still buffered per block
     const nftHolder = await getNftHolder(assetId, did, blockId);
     nftHolder.nftIds.push(...ids);
     nftHolder.updatedBlockId = blockId;
     await bufferHolder(blockId, nftHolder);
+
+    // per-token rows — N small inserts instead of one lengthening array rewrite
+    const holder = toHolder ?? portfolioHolder(did, 0);
+    ids.forEach(nftId => promises.push(mintNft(assetId, nftId, holder, blockId)));
+    await adjustNftCount(assetId, holder, blockId, ids.length, promises);
   } else if (reason === 'redeemed') {
     eventId = EventIdEnum.RedeemedNFT;
     asset.totalSupply -= BigInt(ids.length);
@@ -141,18 +219,27 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !ids.includes(heldId));
     nftHolder.updatedBlockId = blockId;
     await bufferHolder(blockId, nftHolder);
+
+    // one single-column update per token instead of an n-element array filter
+    const holder = fromHolder ?? portfolioHolder(did, 0);
+    ids.forEach(nftId => promises.push(burnNft(assetId, nftId, blockId)));
+    await adjustNftCount(assetId, holder, blockId, -ids.length, promises);
   } else if (reason === 'transferred' || reason === 'controllerTransfer') {
-    const [fromHolder, toHolder] = await Promise.all([
+    const [fromRollup, toRollup] = await Promise.all([
       getNftHolder(assetId, fromDid, blockId),
       getNftHolder(assetId, toDid, blockId),
     ]);
-    fromHolder.nftIds = fromHolder.nftIds.filter(id => !ids.includes(id));
-    toHolder.nftIds.push(...ids);
-    fromHolder.updatedBlockId = blockId;
-    toHolder.updatedBlockId = blockId;
+    fromRollup.nftIds = fromRollup.nftIds.filter(id => !ids.includes(id));
+    toRollup.nftIds.push(...ids);
+    fromRollup.updatedBlockId = blockId;
+    toRollup.updatedBlockId = blockId;
 
-    await bufferHolder(blockId, fromHolder);
-    await bufferHolder(blockId, toHolder);
+    await bufferHolder(blockId, fromRollup);
+    await bufferHolder(blockId, toRollup);
+
+    ids.forEach(nftId => promises.push(moveNft(assetId, nftId, toHolder, blockId)));
+    await adjustNftCount(assetId, fromHolder, blockId, -ids.length, promises);
+    await adjustNftCount(assetId, toHolder, blockId, ids.length, promises);
 
     asset.totalTransfers += BigInt(1);
 

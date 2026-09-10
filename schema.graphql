@@ -2928,6 +2928,36 @@ enum HolderKind {
 }
 
 """
+One key/value pair of an NFT's on-chain metadata.
+"""
+type NftMetadataEntry @jsonField {
+  key: String!
+  value: String!
+}
+
+"""
+One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
+The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
+has it been?") is answered here.
+"""
+type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
+  id: ID! # assetId/padId(nftId)
+  "the collection this token belongs to"
+  asset: Asset!
+  "BigInt everywhere — resolves G10"
+  nftId: BigInt!
+  "current location; exactly one of portfolio / account is set while the token is in circulation"
+  portfolio: Portfolio
+  account: Account
+  identity: Identity
+  metadata: [NftMetadataEntry]
+  mintedBlock: Block!
+  "null = still in circulation. Filter `burnedBlockId: { isNull: true }` — Boolean cannot be indexed"
+  burnedBlock: Block
+  updatedBlock: Block!
+}
+
+"""
 One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
 account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
 `NftHolder`, kept as maintained rollups), never stored as primary truth.
@@ -3000,6 +3030,7 @@ type Asset @entity {
   documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   holdings: [Holding!]! @derivedFrom(field: "asset")
+  nfts: [Nft!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
