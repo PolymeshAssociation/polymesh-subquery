@@ -178,11 +178,11 @@ export const getOrCreateAccount = async (
   blockId: string,
   datetime: Date,
   /**
-   * The event this account is being created in response to. An account discovered lazily
-   * (through a chain read, or as a side effect of an unrelated handler) has no single causing
-   * event — callers that have the real one pass it; the rest fall back to the block's first
-   * event. D13's block-granularity caveat on `updatedEvent` applies. Threading the real id
-   * through the asset-holder resolution chain is a follow-up.
+   * The event this account is being created in response to. Every asset-holder-resolution call
+   * site (`meshAssetHolderToAssetHolder` and up) now threads its real `blockEventId` through; the
+   * fallback below covers the few callers that still don't have one to give — an account
+   * discovered by a genuinely event-less path (the genesis/seed scan) has no single causing event
+   * at all. D13's block-granularity caveat on `updatedEvent` applies either way.
    */
   createdEventId = `${blockId}/${padId('0')}`
 ): Promise<Account | undefined> => {

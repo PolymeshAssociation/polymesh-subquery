@@ -539,7 +539,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   let toDid: string;
 
   if (!rawFromHolder.isEmpty) {
-    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId);
     fromDid = fromHolder.identityId;
     if (fromDid === emptyDid) {
       return; // We ignore the transfer case when Asset tokens are issued
@@ -549,7 +549,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId);
     toDid = toHolder.identityId;
     if (toDid === emptyDid) {
       toDid = null;
@@ -700,13 +700,13 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   let fromHolder: AssetHolderDetails | undefined;
 
   if (!rawFromHolder.isEmpty) {
-    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId);
     await applyHoldingDelta(asset, fromHolder, blockEventId, -transferAmount, promises);
   }
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId);
     await applyHoldingDelta(asset, toHolder, blockEventId, transferAmount, promises);
   }
 

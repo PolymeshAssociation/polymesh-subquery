@@ -90,10 +90,11 @@ const processOnChainLeg = async (
   legType: LegTypeEnum,
   legIndex: number,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  blockEventId?: string
 ): Promise<LegDetails> => {
-  const fromData = await extractAssetHolder(legValue.sender, block, blockId);
-  const toData = await extractAssetHolder(legValue.receiver, block, blockId);
+  const fromData = await extractAssetHolder(legValue.sender, block, blockId, blockEventId);
+  const toData = await extractAssetHolder(legValue.receiver, block, blockId, blockEventId);
 
   let from: string, to: string;
   let fromAccount: string | undefined, toAccount: string | undefined;
@@ -143,7 +144,8 @@ const processOnChainLeg = async (
 export const getSettlementLeg = async (
   item: Codec,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  blockEventId?: string
 ): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
@@ -160,7 +162,14 @@ export const getSettlementLeg = async (
       legDetails.push(processOffChainLeg(legValue, legIndex));
     } else {
       legDetails.push(
-        await processOnChainLeg(legValue, legType as LegTypeEnum, legIndex, block, blockId)
+        await processOnChainLeg(
+          legValue,
+          legType as LegTypeEnum,
+          legIndex,
+          block,
+          blockId,
+          blockEventId
+        )
       );
     }
 
@@ -204,10 +213,11 @@ export const getSettlementTypeDetails = (
 export const getPortfolioOrAccount = async (
   rawItem: Codec,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  blockEventId?: string
 ): Promise<{ identity: string; account?: string; portfolio?: number }> => {
   const item = JSON.parse(rawItem.toString());
-  const data = await extractAssetHolder(item, block, blockId);
+  const data = await extractAssetHolder(item, block, blockId, blockEventId);
   let account: string | undefined;
   let portfolio: number | undefined;
   let identityId: string;
