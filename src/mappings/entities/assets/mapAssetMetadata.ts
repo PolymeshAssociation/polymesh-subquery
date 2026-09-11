@@ -3,9 +3,11 @@ import { decodeEvent } from '../../../decode';
 import {
   AnomalyKind,
   AssetMetadata,
+  CallIdEnum,
   CustomAssetType,
   GlobalMetadataKey,
   MetadataScope,
+  MultiSigProposal,
 } from '../../../types';
 import {
   bytesToString,
@@ -22,13 +24,55 @@ type MetadataKey = { scope: MetadataScope; keyId: string };
 /** `{ Local: n } | { Global: n }`, from an event param or an extrinsic arg. The `n` is a `u64`. */
 const parseMetadataKey = (raw: unknown): MetadataKey | undefined => {
   const obj = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, number | string>;
+  // `toHuman()` formats a `u64` with thousands separators ("1,234"); `toJSON()` and `getTextValue`
+  // do not. Strip them so the same key id round-trips to the same `AssetMetadata` row regardless
+  // of which path below resolved it.
+  const keyId = (id: number | string): string => `${id}`.replace(/,/g, '');
   if (obj && ('local' in obj || 'Local' in obj)) {
-    return { scope: MetadataScope.Local, keyId: `${obj.local ?? obj.Local}` };
+    return { scope: MetadataScope.Local, keyId: keyId(obj.local ?? obj.Local) };
   }
   if (obj && ('global' in obj || 'Global' in obj)) {
-    return { scope: MetadataScope.Global, keyId: `${obj.global ?? obj.Global}` };
+    return { scope: MetadataScope.Global, keyId: keyId(obj.global ?? obj.Global) };
   }
   return undefined;
+};
+
+/** The fields of a block `EventRecord` this module reads — avoids the CJS/ESM `EventRecord` clash. */
+type BlockEventRecord = {
+  event: { section: string; method: string };
+  phase: { isApplyExtrinsic: boolean; asApplyExtrinsic: { toNumber: () => number } };
+};
+
+const isFromExtrinsic = (record: BlockEventRecord, extrinsicIdx: number | undefined): boolean =>
+  extrinsicIdx !== undefined &&
+  record.phase.isApplyExtrinsic &&
+  record.phase.asApplyExtrinsic.toNumber() === extrinsicIdx;
+
+/**
+ * `event`'s 0-based position among `SetAssetMetadataValue` / `...ValueDetails` siblings dispatched
+ * by the same extrinsic. A batch or multisig proposal runs its calls in order and each
+ * `setAssetMetadata(Details)` call fires exactly one such event, so this ordinal lines up with
+ * that call's own position among the batch's/proposal's `setAssetMetadata(Details)` entries —
+ * needed because more than one can target the *same* asset (set now, tighten the lock later),
+ * where matching by `asset_id` alone cannot tell them apart.
+ */
+const metadataSiblingOrdinal = (event: SubstrateEvent): number => {
+  const events = event.block.events as unknown as BlockEventRecord[];
+  const extrinsicIdx = event.extrinsic?.idx;
+
+  let ordinal = 0;
+  for (let i = 0; i < event.idx; i += 1) {
+    const record = events[i];
+    if (
+      record?.event.section === 'asset' &&
+      (record.event.method === 'SetAssetMetadataValue' ||
+        record.event.method === 'SetAssetMetadataValueDetails') &&
+      isFromExtrinsic(record, extrinsicIdx)
+    ) {
+      ordinal += 1;
+    }
+  }
+  return ordinal;
 };
 
 /**
@@ -36,11 +80,15 @@ const parseMetadataKey = (raw: unknown): MetadataKey | undefined => {
  * either the call args or a sibling event, in that order:
  *
  * 1. a direct `asset.setAssetMetadata` / `setAssetMetadataDetails` call — the key is `args[1]`;
- * 2. `asset.registerAndSetLocalAssetMetadata`, which registers the key and sets its value in one
+ * 2. the same call, batched alongside others in one `utility.batch*` extrinsic (e.g. `createAsset`
+ *    + `setAssetMetadata` for a new asset's initial metadata) — see `metadataKeyFromBatch`;
+ * 3. the same call, executed via `multiSig.approve` of a previously-created proposal — see
+ *    `metadataKeyFromMultiSigProposal`;
+ * 4. `asset.registerAndSetLocalAssetMetadata`, which registers the key and sets its value in one
  *    call and so emits `RegisterAssetMetadataLocalType` in the same extrinsic, just before this
  *    event — that carries the new key id.
  *
- * Only when neither resolves (an unrecognised wrapper) is the row dropped with an anomaly.
+ * Only when none resolves (an unrecognised wrapper) is the row dropped with an anomaly.
  */
 const metadataKeyFromExtrinsic = (
   extrinsic: SubstrateExtrinsic | undefined
@@ -55,16 +103,102 @@ const metadataKeyFromExtrinsic = (
   return parseMetadataKey(extrinsic.extrinsic.args[1]?.toJSON());
 };
 
-/** The fields of a block `EventRecord` this module reads — avoids the CJS/ESM `EventRecord` clash. */
-type BlockEventRecord = {
-  event: { section: string; method: string };
-  phase: { isApplyExtrinsic: boolean; asApplyExtrinsic: { toNumber: () => number } };
+/** One call as `Extrinsic.toHuman().method` shapes it — named, snake_case args. */
+type HumanCall = { section: string; method: string; args: Record<string, unknown> };
+
+const isSetMetadataCall = (call: HumanCall): boolean =>
+  call.section === 'asset' &&
+  (call.method === 'setAssetMetadata' || call.method === 'setAssetMetadataDetails');
+
+/** Every `utility` call that dispatches a `Vec<Call>` in order, including the legacy/forced forms. */
+const BATCH_METHODS = [
+  'batch',
+  'batchAll',
+  'batchAtomic',
+  'batchOptimistic',
+  'forceBatch',
+  'batchOld',
+];
+
+/**
+ * `asset.setAssetMetadata(Details)` batched alongside other calls in one `utility.batch*`
+ * extrinsic. The outer, signed extrinsic is `utility.*`, not `asset.*`, so `metadataKeyFromExtrinsic`
+ * never matches it — and there is commonly no sibling registration event either, since this usually
+ * sets a pre-existing global key rather than registering a new local one. The matching call is
+ * picked by ordinal among the batch's own `setAssetMetadata(Details)` entries (`metadataSiblingOrdinal`)
+ * and then checked against `assetId` as a consistency guard, so a mismatch (an unexpected call
+ * order) falls through to the anomaly rather than writing the wrong asset's key.
+ *
+ * Pre-7.0 history is out of reach here: `asset_id` never matches a batched call's legacy `ticker`
+ * arg, so those fall straight through to the anomaly, same as today.
+ */
+const metadataKeyFromBatch = (event: SubstrateEvent, assetId: string): MetadataKey | undefined => {
+  const extrinsic = event.extrinsic;
+  if (!extrinsic) {
+    return undefined;
+  }
+
+  const method = extrinsic.extrinsic.method;
+  if (method.section !== 'utility' || !BATCH_METHODS.includes(method.method)) {
+    return undefined;
+  }
+
+  const human = extrinsic.extrinsic.toHuman() as { method?: { args?: { calls?: HumanCall[] } } };
+  const call = (human.method?.args?.calls ?? []).filter(isSetMetadataCall)[
+    metadataSiblingOrdinal(event)
+  ];
+
+  return call?.args.asset_id === assetId ? parseMetadataKey(call.args.key) : undefined;
 };
 
-const isFromExtrinsic = (record: BlockEventRecord, extrinsicIdx: number | undefined): boolean =>
-  extrinsicIdx !== undefined &&
-  record.phase.isApplyExtrinsic &&
-  record.phase.asApplyExtrinsic.toNumber() === extrinsicIdx;
+/**
+ * The same call, executed via `multiSig.approve` of a proposal created earlier. The call never
+ * appears on the `approve` extrinsic itself, and `multiSig.proposals` storage is cleared once a
+ * proposal executes — but the indexer already captured it at `ProposalAdded` time:
+ * `MultiSigProposal.params.proposals` holds the module/call/args of the proposed call (flattened
+ * one level if the proposal was itself a batch — a batch-of-batches proposal is not unwrapped
+ * further and falls through to the anomaly), keyed `${multisig}/${proposalId}`, exactly what
+ * `approve`'s own args carry. Matched the same way as `metadataKeyFromBatch`: by ordinal, then
+ * checked against `assetId`.
+ */
+const metadataKeyFromMultiSigProposal = async (
+  event: SubstrateEvent,
+  assetId: string
+): Promise<MetadataKey | undefined> => {
+  const extrinsic = event.extrinsic;
+  if (!extrinsic) {
+    return undefined;
+  }
+
+  const method = extrinsic.extrinsic.method;
+  if (method.section !== 'multiSig' || method.method !== 'approve') {
+    return undefined;
+  }
+
+  const [rawMultiSig, rawProposalId] = extrinsic.extrinsic.args;
+  if (!rawMultiSig || !rawProposalId) {
+    return undefined;
+  }
+
+  // `.toString()` directly, not `getTextValue`/`getNumberValue` — `extrinsic.extrinsic.args`
+  // resolves through the `@polkadot/types-codec` cjs build, a distinct (if structurally
+  // identical) `Codec` from the esm one those helpers are typed against.
+  const proposal = await MultiSigProposal.get(
+    `${rawMultiSig.toString()}/${Number(rawProposalId.toString())}`
+  );
+
+  const call = (proposal?.params.proposals ?? []).filter(
+    p =>
+      p.call === CallIdEnum.set_asset_metadata || p.call === CallIdEnum.set_asset_metadata_details
+  )[metadataSiblingOrdinal(event)];
+
+  if (!call) {
+    return undefined;
+  }
+
+  const args = JSON.parse(call.args) as Record<string, unknown>;
+  return args.asset_id === assetId ? parseMetadataKey(args.key) : undefined;
+};
 
 /**
  * The key id from a `RegisterAssetMetadata{Local,Global}Type` emitted earlier in the same
@@ -96,8 +230,14 @@ const metadataKeyFromSiblingRegistration = (event: SubstrateEvent): MetadataKey 
     : { scope: MetadataScope.Global, keyId: getTextValue(decoded.globalKeyId) };
 };
 
-const resolveMetadataKey = (event: SubstrateEvent): MetadataKey | undefined =>
-  metadataKeyFromExtrinsic(event.extrinsic) ?? metadataKeyFromSiblingRegistration(event);
+const resolveMetadataKey = async (
+  event: SubstrateEvent,
+  assetId: string
+): Promise<MetadataKey | undefined> =>
+  metadataKeyFromExtrinsic(event.extrinsic) ??
+  metadataKeyFromBatch(event, assetId) ??
+  (await metadataKeyFromMultiSigProposal(event, assetId)) ??
+  metadataKeyFromSiblingRegistration(event);
 
 const metadataId = (assetId: string, key: MetadataKey): string =>
   `${assetId}/${key.scope}/${key.keyId}`;
@@ -201,12 +341,12 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
   const { assetId: rawAssetId, value: rawValue, detail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const key = resolveMetadataKey(event);
+  const key = await resolveMetadataKey(event, assetId);
 
   if (!key) {
     await recordAnomaly({
       kind: AnomalyKind.MissingReferencedEntity,
-      detail: `SetAssetMetadataValue for asset ${assetId} could not resolve its metadata key from the extrinsic or a sibling registration event`,
+      detail: `SetAssetMetadataValue for asset ${assetId} could not resolve its metadata key from the extrinsic, a batch, a multisig proposal, or a sibling registration event`,
       block,
       eventIdx: event.idx,
     });
@@ -227,7 +367,7 @@ export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent):
   const { assetId: rawAssetId, detail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const key = resolveMetadataKey(event);
+  const key = await resolveMetadataKey(event, assetId);
   if (!key) {
     return;
   }
