@@ -11,6 +11,7 @@ import {
   handleMetadataValueDeleted,
   handleRegisterAssetMetadataLocalType,
   handleSetAssetMetadataValue,
+  handleSetAssetMetadataValueDetails,
 } from '../../src/mappings/entities/assets/mapAssetMetadata';
 import { handleCreatedAssetTransfer } from '../../src/mappings/entities/assets/mapAsset';
 import { codec, MockDb, mockStore, storeSet, tupleEvent } from './helpers';
@@ -39,6 +40,33 @@ const setMetadataExtrinsic = (key: unknown) => ({
   extrinsic: {
     method: { section: 'asset', method: 'setAssetMetadata' },
     args: [codec(ASSET), codec(key)],
+  },
+});
+
+/** A `utility.batch*` extrinsic wrapping the given calls — `toHuman()` is all the resolver reads. */
+const batchExtrinsic = (
+  method: string,
+  calls: { section: string; method: string; args: Record<string, unknown> }[]
+) => ({
+  idx: 1,
+  extrinsic: {
+    method: { section: 'utility', method },
+    toHuman: () => ({ method: { args: { calls } } }),
+  },
+});
+
+const setMetadataCall = (assetId: string, key: unknown, method = 'setAssetMetadata') => ({
+  section: 'asset',
+  method,
+  args: { asset_id: assetId, key, value: 'ipfs://batched', detail: null },
+});
+
+/** A `multiSig.approve(multisig, proposalId, weight)` extrinsic. */
+const multiSigApproveExtrinsic = (multisig: string, proposalId: string) => ({
+  idx: 1,
+  extrinsic: {
+    method: { section: 'multiSig', method: 'approve' },
+    args: [codec(multisig), codec(proposalId)],
   },
 });
 
@@ -116,6 +144,191 @@ describe('asset metadata', () => {
       value: 'ipfs://new',
     });
     expect(storeSet().mock.calls.some(([entity]) => entity === 'IndexerAnomaly')).toBe(false);
+  });
+
+  it('recovers the key from a setAssetMetadata call batched in a utility.batchAll extrinsic', async () => {
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('blob:cf'), codec(null, { isEmpty: true })],
+        batchExtrinsic('batchAll', [
+          { section: 'asset', method: 'createAsset', args: {} },
+          setMetadataCall(ASSET, { Global: '5' }),
+        ])
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/5`]).toMatchObject({
+      scope: 'Global',
+      keyId: '5',
+      value: 'blob:cf',
+    });
+    expect(storeSet().mock.calls.some(([entity]) => entity === 'IndexerAnomaly')).toBe(false);
+  });
+
+  it('matches the right call by ordinal (not first-match) when a batch sets metadata for two different assets', async () => {
+    const OTHER = '0xother00000000000000000000000000';
+    db['Asset'][OTHER] = { id: OTHER, type: 'EquityCommon' };
+
+    // one SetAssetMetadataValue for OTHER already fired earlier in the same extrinsic — the event
+    // under test is the batch's *second* metadata call, not its first
+    const priorEventForOther = siblingRecord(
+      'SetAssetMetadataValue',
+      [codec('0xdid'), codec(OTHER), codec('blob:other'), codec(null, { isEmpty: true })],
+      1
+    );
+
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('blob:mine'), codec(null, { isEmpty: true })],
+        batchExtrinsic('batch', [
+          setMetadataCall(OTHER, { Global: '9' }),
+          setMetadataCall(ASSET, { Global: '5' }),
+        ]),
+        [priorEventForOther]
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/5`]).toMatchObject({ value: 'blob:mine' });
+    expect(db['AssetMetadata'][`${OTHER}/Global/9`]).toBeUndefined();
+  });
+
+  it('matches the right call by ordinal when a batch sets two different keys on the same asset (asset_id alone cannot disambiguate)', async () => {
+    const priorEventForFirstKey = siblingRecord(
+      'SetAssetMetadataValue',
+      [codec('0xdid'), codec(ASSET), codec('blob:first'), codec(null, { isEmpty: true })],
+      1
+    );
+
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('blob:second'), codec(null, { isEmpty: true })],
+        batchExtrinsic('batchAll', [
+          setMetadataCall(ASSET, { Global: '1' }),
+          setMetadataCall(ASSET, { Global: '2' }),
+        ]),
+        [priorEventForFirstKey]
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/2`]).toMatchObject({ value: 'blob:second' });
+    expect(db['AssetMetadata'][`${ASSET}/Global/1`]).toBeUndefined();
+  });
+
+  it('resolves a setAssetMetadataDetails call batched alongside a setAssetMetadata call', async () => {
+    db['AssetMetadata'] = {
+      [`${ASSET}/Global/5`]: {
+        id: `${ASSET}/Global/5`,
+        assetId: ASSET,
+        scope: 'Global',
+        keyId: '5',
+      },
+    };
+    const priorEventForValue = siblingRecord(
+      'SetAssetMetadataValue',
+      [codec('0xdid'), codec(ASSET), codec('blob:cf'), codec(null, { isEmpty: true })],
+      1
+    );
+
+    await handleSetAssetMetadataValueDetails(
+      metaEvent(
+        'SetAssetMetadataValueDetails',
+        [codec('0xdid'), codec(ASSET), codec({ expire: null, lockStatus: 'Locked' })],
+        batchExtrinsic('batchAll', [
+          setMetadataCall(ASSET, { Global: '5' }),
+          setMetadataCall(ASSET, { Global: '5' }, 'setAssetMetadataDetails'),
+        ]),
+        [priorEventForValue]
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/5`]).toMatchObject({ isLocked: true });
+  });
+
+  it('recovers the key with the comma toHuman() puts in a 4+ digit key id', async () => {
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('blob:big'), codec(null, { isEmpty: true })],
+        batchExtrinsic('batchAll', [setMetadataCall(ASSET, { Global: '1,234' })])
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/1234`]).toMatchObject({ value: 'blob:big' });
+  });
+
+  it('recovers the key from a proposal executed via multiSig.approve', async () => {
+    db['MultiSigProposal'] = {
+      '5MultiSig/16': {
+        id: '5MultiSig/16',
+        params: {
+          isBatch: false,
+          isBridge: false,
+          proposals: [
+            {
+              module: 'asset',
+              call: 'set_asset_metadata',
+              args: JSON.stringify({ asset_id: ASSET, key: { Global: '5' }, value: 'ipfs://cid' }),
+            },
+          ],
+        },
+      },
+    };
+
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('ipfs://cid'), codec(null, { isEmpty: true })],
+        multiSigApproveExtrinsic('5MultiSig', '16')
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/5`]).toMatchObject({
+      scope: 'Global',
+      keyId: '5',
+      value: 'ipfs://cid',
+    });
+  });
+
+  it('falls through to an anomaly when multiSig.approve references a proposal that was never indexed', async () => {
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('x'), codec(null, { isEmpty: true })],
+        multiSigApproveExtrinsic('5Unknown', '99')
+      )
+    );
+
+    expect(db['AssetMetadata']).toBeUndefined();
+    expect(storeSet().mock.calls.some(([entity]) => entity === 'IndexerAnomaly')).toBe(true);
+  });
+
+  it('falls through to an anomaly when the approved proposal carries no metadata call', async () => {
+    db['MultiSigProposal'] = {
+      '5MultiSig/17': {
+        id: '5MultiSig/17',
+        params: {
+          isBatch: false,
+          isBridge: false,
+          proposals: [
+            { module: 'asset', call: 'create_asset', args: JSON.stringify({ asset_name: 'X' }) },
+          ],
+        },
+      },
+    };
+
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [codec('0xdid'), codec(ASSET), codec('x'), codec(null, { isEmpty: true })],
+        multiSigApproveExtrinsic('5MultiSig', '17')
+      )
+    );
+
+    expect(db['AssetMetadata']).toBeUndefined();
+    expect(storeSet().mock.calls.some(([entity]) => entity === 'IndexerAnomaly')).toBe(true);
   });
 
   it('records an anomaly and writes nothing only when neither the extrinsic nor a sibling resolves the key', async () => {

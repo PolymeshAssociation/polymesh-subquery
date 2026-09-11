@@ -207,7 +207,12 @@ const mapAutomaticAffirmation = async (
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawHolder, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(rawHolder, block, blockId);
+  const { identity, account, portfolio } = await getPortfolioOrAccount(
+    rawHolder,
+    block,
+    blockId,
+    blockEventId
+  );
 
   const automaticAffirmationEvent = InstructionEvent.create({
     id: blockEventId,
@@ -283,7 +288,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    * count did not change, so this is a payload branch rather than a positional one
    */
   if (specVersionOf(block) >= 6_000_000) {
-    legs = await getSettlementLeg(rawLegs, block, blockId);
+    legs = await getSettlementLeg(rawLegs, block, blockId, blockEventId);
   } else {
     legs = await getLegsValue(rawLegs, block);
   }
@@ -389,7 +394,8 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   const { identity, account, portfolio } = await getPortfolioOrAccount(
     rawPortfolio,
     block,
-    blockId
+    blockId,
+    blockEventId
   );
 
   const partyId = getPartyId(instructionId, identity, account, false);
@@ -445,7 +451,8 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
   const { identity, account, portfolio } = await getPortfolioOrAccount(
     rawPortfolio,
     block,
-    blockId
+    blockId,
+    blockEventId
   );
 
   const partyId = getPartyId(instructionId, identity, account, false);
@@ -803,8 +810,8 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
   const { fromHolder: rawFromHolder, toHolder: rawToHolder, fund: rawFund } = decodeEvent(event);
 
   const [fromHolder, toHolder] = await Promise.all([
-    rawAssetHolderToAssetHolder(rawFromHolder, block, blockId),
-    rawAssetHolderToAssetHolder(rawToHolder, block, blockId),
+    rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId),
+    rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId),
   ]);
 
   const { description, memo } = JSON.parse(rawFund.toString());

@@ -175,13 +175,13 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   let toDid: string;
 
   if (!rawFromHolder.isEmpty) {
-    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId);
     fromDid = fromHolder.identityId;
   }
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId);
     toDid = toHolder.identityId;
   }
 
