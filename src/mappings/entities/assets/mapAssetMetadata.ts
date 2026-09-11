@@ -111,14 +111,14 @@ const isSetMetadataCall = (call: HumanCall): boolean =>
   (call.method === 'setAssetMetadata' || call.method === 'setAssetMetadataDetails');
 
 /** Every `utility` call that dispatches a `Vec<Call>` in order, including the legacy/forced forms. */
-const BATCH_METHODS = [
+const BATCH_METHODS = new Set([
   'batch',
   'batchAll',
   'batchAtomic',
   'batchOptimistic',
   'forceBatch',
   'batchOld',
-];
+]);
 
 /**
  * `asset.setAssetMetadata(Details)` batched alongside other calls in one `utility.batch*`
@@ -139,7 +139,7 @@ const metadataKeyFromBatch = (event: SubstrateEvent, assetId: string): MetadataK
   }
 
   const method = extrinsic.extrinsic.method;
-  if (method.section !== 'utility' || !BATCH_METHODS.includes(method.method)) {
+  if (method.section !== 'utility' || !BATCH_METHODS.has(method.method)) {
     return undefined;
   }
 
