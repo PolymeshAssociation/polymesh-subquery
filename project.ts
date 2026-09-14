@@ -137,14 +137,16 @@ const filters: Record<string, Record<string, string[]>> = {
   // never deployed to a production chain. Events are only indexed into the generic events table
   confidentialAsset: {},
   corporateAction: {
-    CAInitiated: [],
-    CALinkedToDoc: [],
-    CARemoved: [],
-    DefaultTargetIdentitiesChanged: [],
-    DefaultWithholdingTaxChanged: [],
-    DidWithholdingTaxChanged: [],
-    MaxDetailsLengthChanged: [],
-    RecordDateChanged: [],
+    CAInitiated: ['handleCaInitiated'],
+    CALinkedToDoc: ['handleCaLinkedToDoc'],
+    CARemoved: ['handleCaRemoved'],
+    DefaultTargetIdentitiesChanged: ['handleDefaultTargetIdentitiesChanged'],
+    DefaultWithholdingTaxChanged: ['handleDefaultWithholdingTaxChanged'],
+    DidWithholdingTaxChanged: ['handleDidWithholdingTaxChanged'],
+    MaxDetailsLengthChanged: [], // chain config, no entity
+    RecordDateChanged: ['handleRecordDateChanged'],
+    // pre-6.0 CAA transfers — superseded by external agents, not indexed
+    // CAATransferred: [],
   },
   corporateBallot: {
     Created: [],

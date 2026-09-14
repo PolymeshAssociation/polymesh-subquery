@@ -2642,6 +2642,73 @@ type DistributionPayment @entity {
 }
 
 """
+The kind of benefit or notice a `CorporateAction` represents
+"""
+enum CorporateActionKind {
+  PredictableBenefit
+  UnpredictableBenefit
+  IssuerNotice
+  Reorganization
+  Other
+}
+
+"""
+Whether `CorporateAction.targetIdentities` names the holders it applies to, or the holders it excludes
+"""
+enum TargetTreatment {
+  Include
+  Exclude
+}
+
+"""
+A per-DID withholding tax override, as set by `corporateAction.DidWithholdingTaxChanged`
+"""
+type DidTax @jsonField {
+  did: String!
+  tax: BigInt!
+}
+
+"""
+A corporate action on an Asset — a dividend, benefit, or issuer notice. Defines the record date,
+target holders and withholding tax that a linked `Distribution` or `CorporateBallot` is subject to
+"""
+type CorporateAction @entity @compositeIndexes(fields: [["asset", "kind"]]) {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  localId: Int!
+  kind: CorporateActionKind!
+  declarationDate: Date!
+  "Set once `checkpoint.RecordDateChanged` resolves the record date to an existing checkpoint"
+  recordDate: Date
+  checkpoint: Checkpoint
+  details: String
+  "null = applies to every holder, subject to `targetTreatment`"
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  documents: [String!]
+  isRemoved: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Asset-level corporate action defaults — `corporateAction.DefaultTargetIdentitiesChanged`,
+`DefaultWithholdingTaxChanged` and `DidWithholdingTaxChanged` set these ahead of any specific CA
+"""
+type CorporateActionDefaultConfig @entity {
+  id: ID! # assetId
+  asset: Asset! @index
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {
