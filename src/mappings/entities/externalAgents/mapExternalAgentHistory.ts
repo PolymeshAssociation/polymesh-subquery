@@ -2,7 +2,8 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
-  TickerExternalAgentHistory,
+  AgentHistoryType,
+  AssetAgentHistory,
 } from '../../../types';
 import { decodeEvent } from '../../../decode';
 import { getAllByFields, getAssetId } from '../../../utils';
@@ -18,6 +19,7 @@ export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> =
 
   await AgentGroupEntity.create({
     id: `${assetId}/${group}`,
+    assetId,
     permissions,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
@@ -42,11 +44,11 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 
   for (const member of members) {
     promises.push(
-      TickerExternalAgentHistory.create({
-        id: `${blockEventId}/${member.member}`,
+      AssetAgentHistory.create({
+        id: `${blockEventId}/${member.memberId}`,
         assetId,
-        identityId: member.member,
-        type: 'AgentPermissionsChanged',
+        identityId: member.memberId,
+        type: AgentHistoryType.AgentPermissionsChanged,
         permissions,
         createdEventId: blockEventId,
         updatedEventId: blockEventId,
@@ -73,7 +75,7 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
       eventIdx,
       did,
       block,
-      'AgentAdded',
+      AgentHistoryType.AgentAdded,
       blockEventId
     ),
   ];
@@ -102,7 +104,7 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
       eventIdx,
       did,
       block,
-      'AgentPermissionsChanged',
+      AgentHistoryType.GroupChanged,
       blockEventId
     ),
   ];
@@ -123,11 +125,11 @@ export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
 
   const promises = [
     removeMember(did, assetId),
-    TickerExternalAgentHistory.create({
+    AssetAgentHistory.create({
       id: `${blockEventId}/${did}`,
       assetId,
       identityId: did,
-      type: 'AgentRemoved',
+      type: AgentHistoryType.AgentRemoved,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     }).save(),
@@ -143,14 +145,14 @@ const addExternalAgentHistory = async (
   eventIdx: number,
   did: string,
   block: SubstrateBlock,
-  type: 'AgentAdded' | 'AgentPermissionsChanged',
+  type: AgentHistoryType.AgentAdded | AgentHistoryType.GroupChanged,
   blockEventId: string
 ): Promise<void> => {
   const permissions = await permissionsFromAgentGroup(assetId, group, async n => {
     const ag = await AgentGroupEntity.get(`${assetId}/${n}`);
     return ag.permissions;
   });
-  await TickerExternalAgentHistory.create({
+  await AssetAgentHistory.create({
     id: `${blockEventId}/${did}`,
     assetId,
     identityId: did,
@@ -169,7 +171,7 @@ const addAgentGroupMembership = (
 ): Promise<void> => {
   return AgentGroupMembership.create({
     id: `${assetId}/${group.custom}/${did}`,
-    member: did,
+    memberId: did,
     groupId: `${assetId}/${group.custom}`,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
@@ -178,7 +180,7 @@ const addAgentGroupMembership = (
 
 const removeMember = async (did: string, assetId: string) => {
   const memberships = await getAllByFields<AgentGroupMembership>('AgentGroupMembership', [
-    ['member', '=', did],
+    ['memberId', '=', did],
   ]);
 
   const memberIds = memberships

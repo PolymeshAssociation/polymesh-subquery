@@ -5,22 +5,22 @@ const { query } = getApolloClient();
 
 const ticker = '12TICKER';
 
-describe('tickerExternalAgent', () => {
+describe('assetAgent', () => {
   it('should return the time block and event index when an agent was added to a ticker', async () => {
     const q = {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgents(
+          assetAgents(
             filter: {
               assetId: { equalTo: $ticker }
-              callerId: {
+              identityId: {
                 equalTo: "${eveDid}"
               }
             }
           ) {
             nodes {
-              callerDid: callerId
+              identityDid: identityId
               datetime
               createdBlockId
               eventIdx
@@ -40,10 +40,10 @@ describe('tickerExternalAgent', () => {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgents(
+          assetAgents(
             filter: {
               assetId: { equalTo: $ticker }
-              callerId: {
+              identityId: {
                 equalTo: "${bobDid}"
               }
             }, orderBy: ID_ASC
@@ -61,15 +61,15 @@ describe('tickerExternalAgent', () => {
     const subquery = await query(q);
 
     expect(subquery?.errors).toBeFalsy();
-    expect(subquery?.data?.tickerExternalAgents.nodes).toEqual([]);
+    expect(subquery?.data?.assetAgents.nodes).toEqual([]);
   });
   it('should return empty when the agent is not found', async () => {
     const res = await query({
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgents(
-            filter: { assetId: { equalTo: $ticker }, callerId: { equalTo: "bogus" } }
+          assetAgents(
+            filter: { assetId: { equalTo: $ticker }, identityId: { equalTo: "bogus" } }
             orderBy: ID_ASC
           ) {
             nodes {
@@ -83,6 +83,6 @@ describe('tickerExternalAgent', () => {
     });
 
     expect(res?.errors).toBeFalsy();
-    expect(res?.data?.tickerExternalAgents.nodes).toEqual([]);
+    expect(res?.data?.assetAgents.nodes).toEqual([]);
   });
 });

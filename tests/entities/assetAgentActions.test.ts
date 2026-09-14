@@ -5,13 +5,13 @@ const { query } = getApolloClient();
 
 const ticker = '12TICKER';
 
-describe('tickerExternalAgentActions', () => {
+describe('assetAgentActions', () => {
   it('should return the transactions for ticker', async () => {
     const q = {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(filter: { assetId: { equalTo: $ticker } }, orderBy: ID_ASC) {
+          assetAgentActions(filter: { assetId: { equalTo: $ticker } }, orderBy: ID_ASC) {
             totalCount
             nodes {
               palletName
@@ -33,7 +33,7 @@ describe('tickerExternalAgentActions', () => {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(
+          assetAgentActions(
             filter: { assetId: { equalTo: $ticker }, eventId: { equalTo: FundraiserFrozen } }
           ) {
             nodes {
@@ -56,7 +56,7 @@ describe('tickerExternalAgentActions', () => {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(
+          assetAgentActions(
             filter: { assetId: { equalTo: $ticker }, palletName: { equalTo: "compliancemanager" } }
           ) {
             nodes {
@@ -80,7 +80,7 @@ describe('tickerExternalAgentActions', () => {
       variables: { ticker },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentActions(
+          assetAgentActions(
             filter: {
               assetId: { equalTo: $ticker }
               callerId: {

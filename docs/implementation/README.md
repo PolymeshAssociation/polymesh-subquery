@@ -18,7 +18,7 @@ Event shapes for every domain below are verified in [`../reference/event-shape-v
 | [05](./05-movement-ledger.md) | Movement ledger | `PortfolioMovement` → `AssetTransaction` | 03 |
 | [06](./06-corporate-actions.md) | Corporate actions | `CorporateAction`, `Checkpoint`, `CorporateBallot` | — *(low priority, D6)* |
 | [07](./07-staking.md) | Staking | `StakingPosition`, `Nomination`, era tracking | 02 |
-| [08](./08-external-agents.md) | External agents | Merge the three `TickerExternalAgent*` entities | — |
+| [08](./08-external-agents.md) | External agents | Rename `TickerExternalAgent*` → `AssetAgent*`, merging the membership + history write path | — |
 | [09](./09-infrastructure.md) | Infrastructure | `IndexerAnomaly`, `ChainUpgrade`, decode layer, index consolidation | — |
 | [10](./10-partial-index.md) | Partial index | `IndexOrigin`, chain-state seeding at an arbitrary start block | 09, and reuses seeders from 02/03 |
 | [11](./11-throughput.md) | Throughput | Slow blocks, chain-read minimisation, non-total internal paging | 09 |

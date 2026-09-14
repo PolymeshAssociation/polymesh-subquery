@@ -2179,8 +2179,12 @@ type StakingEvent @entity {
 
 """
 Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
+
+`caller` (who invoked the action), not `identity` — deliberately asymmetric with `AssetAgent.identity`
+(who is an agent). This entity answers "what did this agent do", a different question from
+membership, which `AssetAgent` / `AssetAgentHistory` answer
 """
-type TickerExternalAgentAction @entity {
+type AssetAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
@@ -2313,26 +2317,46 @@ type Investment @entity {
 }
 
 """
-Represents an Identity authorized to perform actions on behalf of a company
+Current agent membership for an Asset — an Identity authorized to perform actions on its behalf
+
+`permissions` stays JSON-in-a-string rather than the `PermissionsJson` jsonField: that type's
+shape (`assets`/`portfolios`/`transactions`/`transactionGroups`, each a flat `{type, values}`) was
+built for the secondary-key permission model. An `AgentGroup`'s `ExtrinsicPermissions` is a
+different, richer on-chain structure (`Whole | These<PalletPermissions> | Except<PalletPermissions>`,
+nesting per-pallet dispatchable names) that does not fit it without a lossy flattening — typing it
+correctly is a separate modeling exercise, deferred rather than forced into the wrong shape here
 """
-type TickerExternalAgent @entity {
-  id: ID! # assetId/callerId
+type AssetAgent @entity @compositeIndexes(fields: [["asset", "identity"]]) {
+  id: ID! # assetId/did
   asset: Asset! @index(unique: false)
-  caller: Identity! @index(unique: false)
+  identity: Identity! @index(unique: false)
+  group: AgentGroup
+  permissions: String
   updatedEvent: Event!
   createdEvent: Event!
 }
 
 """
-Represents a change in the status of an external agent.
+Represents all possible kinds of `AssetAgentHistory` row
 
-"AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
+"AgentAdded" and "AgentPermissionsChanged" carry `permissions`; `AgentRemoved` and `GroupChanged` may not
 """
-type TickerExternalAgentHistory @entity {
+enum AgentHistoryType {
+  AgentAdded
+  AgentRemoved
+  AgentPermissionsChanged
+  GroupChanged
+}
+
+"""
+Append-only membership and permission history for an Asset's agents
+"""
+type AssetAgentHistory @entity {
   id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  type: String!
+  type: AgentHistoryType!
+  "JSON-in-a-string, not the PermissionsJson jsonField — see the docstring on AssetAgent.permissions"
   permissions: String
   updatedEvent: Event!
   createdEvent: Event!
@@ -2343,6 +2367,7 @@ Represents a set of agents authorized to perform actions for a given Asset
 """
 type AgentGroup @entity {
   id: ID! #assetId/group_id
+  asset: Asset! @index
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
   createdEvent: Event!
@@ -2354,7 +2379,7 @@ Represent membership in a group. Tracks which members belong to which groups
 """
 type AgentGroupMembership @entity {
   id: ID! #assetId/group_id/member
-  member: String! @index(unique: false)
+  member: Identity! @index(unique: false)
   group: AgentGroup! @index(unique: false)
   createdEvent: Event!
   updatedEvent: Event!
