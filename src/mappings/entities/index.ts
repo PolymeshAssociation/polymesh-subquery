@@ -33,5 +33,6 @@ export * from './stos/mapSto';
 export * from './block/mapSubqueryVersion';
 export * from './externalAgents/mapExternalAgent';
 export * from './externalAgents/mapExternalAgentHistory';
+export * from './relayer/mapSubsidy';
 export * from './assets/mapTransferManager';
 export * from './assets/mapTickers';

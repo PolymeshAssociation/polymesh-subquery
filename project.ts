@@ -257,6 +257,18 @@ const filters: Record<string, Record<string, string[]>> = {
   protocolFee: {
     FeeCharged: ['handleTransactionFeeCharged'],
   },
+  relayer: {
+    // deprecated from 8.0.0 chain version — superseded by the Subsidy events below
+    AuthorizedPayingKey: ['handleSubsidyApproved'],
+    AcceptedPayingKey: ['handleSubsidyAccepted'],
+    RemovedPayingKey: ['handleSubsidyRemoved'],
+    UpdatedPolyxLimit: ['handlePolyxLimitUpdated'],
+    ApprovedSubsidy: ['handleSubsidyApproved'],
+    AcceptedSubsidy: ['handleSubsidyAccepted'],
+    RemovedPendingSubsidy: ['handleSubsidyRemoved'],
+    RemovedSubsidy: ['handleSubsidyRemoved'],
+    SubsidyDebited: ['handleSubsidyDebited'],
+  },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
     FailedToExecuteInstruction: ['handleFailedToExecuteInstruction'],

@@ -2784,6 +2784,28 @@ type CorporateBallotVote @entity {
 }
 
 """
+A standing fee-paying relationship from the `relayer` pallet: `payingAccount` pays transaction and
+protocol fees on `beneficiaryAccount`'s behalf, up to `allowance`. Renamed from "paying key" to
+"subsidy" at chain v8.0.0 — this entity covers both eras (id `userKey/payingKey`)
+"""
+type Subsidy @entity {
+  id: ID! # userKey/payingKey
+  "the subsidised key"
+  beneficiaryAccount: Account! @index
+  "pays the fees"
+  payingAccount: Account! @index
+  "current POLYX limit (remaining)"
+  allowance: BigInt!
+  "cumulative `SubsidyDebited` (v8+ only; 0 for pre-v8 history)"
+  totalDebited: BigInt!
+  "false = approved/authorized but not yet accepted"
+  isAccepted: Boolean!
+  isRemoved: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {
