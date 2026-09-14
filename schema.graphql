@@ -2984,19 +2984,6 @@ enum TransferRestrictionTypeEnum {
 }
 
 """
-deprecated in favor of `TransferCompliance`
-"""
-type TransferManager @entity {
-  id: ID! # assetId/transferManagerType/value
-  asset: Asset! @index(unique: false)
-  type: TransferRestrictionTypeEnum!
-  value: Int!
-  exemptedEntities: [String]!
-  createdEvent: Event!
-  updatedEvent: Event!
-}
-
-"""
 Represents all known stat types
 """
 enum StatOpTypeEnum {
@@ -3222,7 +3209,6 @@ type Asset @entity {
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
-  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   updatedEvent: Event!

@@ -340,10 +340,12 @@ const filters: Record<string, Record<string, string[]>> = {
     SetAssetTransferCompliance: ['handleSetTransferCompliance'],
     StatTypesAdded: ['handleStatTypeAdded'],
     StatTypesRemoved: ['handleStatTypeRemoved'],
-    TransferManagerAdded: ['handleTransferManagerAdded', 'handleStatisticTransferManagerAdded'],
-    TransferManagerRemoved: ['handleTransferManagerRemoved'],
-    ExemptionsAdded: ['handleExemptionsAdded', 'handleTransferManagerExemptionsAdded'],
-    ExemptionsRemoved: ['handleExemptionsRemoved', 'handleTransferManagerExemptionsRemoved'],
+    // TransferManager (deprecated, retired) is gone; these still feed StatType /
+    // TransferComplianceExemption for the pre-v5 percentage/count restriction model
+    TransferManagerAdded: ['handleStatisticTransferManagerAdded'],
+    TransferManagerRemoved: [],
+    ExemptionsAdded: ['handleTransferManagerExemptionsAdded'],
+    ExemptionsRemoved: ['handleTransferManagerExemptionsRemoved'],
     TransferConditionExemptionsAdded: ['handleStatisticExemptionsAdded'],
     TransferConditionExemptionsRemoved: ['handleStatisticExemptionsRemoved'],
   },

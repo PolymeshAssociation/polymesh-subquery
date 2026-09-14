@@ -5,7 +5,6 @@ import {
   ClaimTypeEnum,
   Compliance,
   TransferComplianceExemption,
-  TransferManager,
   TransferRestrictionTypeEnum,
 } from '../types';
 import { getAssetId } from './assets';
@@ -39,11 +38,13 @@ export const getComplianceValue = (
 };
 
 /**
- * Parses AssetTransferManager
+ * Parses AssetTransferManager into the `{ type, value }` shape `StatType` /
+ * `TransferComplianceExemption` derive from — the retired `TransferManager` entity used to be the
+ * third consumer of this shape
  */
 export const getTransferManagerValue = (
   manager: Codec
-): Pick<TransferManager, 'type' | 'value'> => {
+): { type: TransferRestrictionTypeEnum; value: number } => {
   const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
 
   if (countTransferManager) {
