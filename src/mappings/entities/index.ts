@@ -10,6 +10,7 @@ export * from './confidentialAssets/mapConfidentialAccount';
 export * from './confidentialAssets/mapConfidentialAsset';
 export * from './confidentialAssets/mapConfidentialCurveTree';
 export * from './confidentialAssets/mapConfidentialSettlement';
+export * from './assets/mapCheckpoint';
 export * from './assets/mapCorporateAction';
 export * from './assets/mapCorporateActions';
 export * from './events/mapEvent';

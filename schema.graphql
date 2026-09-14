@@ -2709,6 +2709,42 @@ type CorporateActionDefaultConfig @entity {
 }
 
 """
+A balance-at-record-date snapshot for an Asset, from `checkpoint.CheckpointCreated`. Makes a
+linked `CorporateAction`'s distribution amounts verifiable
+"""
+type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
+  id: ID! # assetId/checkpointId
+  asset: Asset! @index
+  checkpointId: Int!
+  totalSupply: BigInt!
+  datetime: Date!
+  "Set when created by a `CheckpointSchedule` rather than manually"
+  schedule: CheckpointSchedule
+  createdEvent: Event!
+}
+
+"""
+A recurring checkpoint schedule for an Asset, from `checkpoint.ScheduleCreated`. The pre-v6
+period-based model (`period`/`start`/`remaining`) and the v6+ explicit-timestamp model
+(`pendingCheckpoints`) are mutually exclusive on one row, era implicit in which is null
+"""
+type CheckpointSchedule @entity {
+  id: ID! # assetId/scheduleId
+  asset: Asset! @index
+  scheduleId: Int!
+  "v6+ — explicit list of scheduled checkpoint timestamps (`ScheduleCheckpoints.pending`)"
+  pendingCheckpoints: [Date!]
+  "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
+  period: String
+  start: Date
+  remaining: Int
+  nextCheckpointAt: Date
+  "null while active"
+  removedEvent: Event
+  createdEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {

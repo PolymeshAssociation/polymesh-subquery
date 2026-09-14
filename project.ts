@@ -117,10 +117,10 @@ const filters: Record<string, Record<string, string[]>> = {
     Removed: ['handleDistributionRemoved'],
   },
   checkpoint: {
-    CheckpointCreated: [],
-    MaximumSchedulesComplexityChanged: [],
-    ScheduleCreated: [],
-    ScheduleRemoved: [],
+    CheckpointCreated: ['handleCheckpointCreated'],
+    MaximumSchedulesComplexityChanged: [], // chain config, no entity
+    ScheduleCreated: ['handleScheduleCreated'],
+    ScheduleRemoved: ['handleScheduleRemoved'],
   },
   complianceManager: {
     AssetCompliancePaused: ['handleAssetCompliancePaused'],
