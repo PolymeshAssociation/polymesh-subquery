@@ -13,6 +13,7 @@ export * from './confidentialAssets/mapConfidentialSettlement';
 export * from './assets/mapCheckpoint';
 export * from './assets/mapCorporateAction';
 export * from './assets/mapCorporateActions';
+export * from './assets/mapCorporateBallot';
 export * from './events/mapEvent';
 export * from './externalAgents/mapExternalAgentAction';
 export * from './block/mapExtrinsic';

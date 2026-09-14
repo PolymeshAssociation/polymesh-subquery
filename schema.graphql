@@ -2745,6 +2745,45 @@ type CheckpointSchedule @entity {
 }
 
 """
+A shareholder ballot on a `CorporateAction`, from `corporateBallot.Created`
+"""
+type CorporateBallot @entity {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  corporateAction: CorporateAction!
+  startDate: Date!
+  endDate: Date!
+  "title, motions"
+  meta: String
+  "ranked-choice voting enabled"
+  rcv: Boolean!
+  isRemoved: Boolean!
+  votes: [CorporateBallotVote!]! @derivedFrom(field: "ballot")
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Per-motion vote weights cast in a `CorporateBallot`
+"""
+type BallotVoteEntry @jsonField {
+  power: BigInt!
+  fallback: Int
+}
+
+"""
+One identity's vote in a `CorporateBallot`, from `corporateBallot.VoteCast`
+"""
+type CorporateBallotVote @entity {
+  id: ID! # padId(block)/padId(eventIdx)
+  ballot: CorporateBallot! @index
+  voter: Identity! @index
+  "per-motion weights, in motion order"
+  votes: [BallotVoteEntry]
+  createdEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {

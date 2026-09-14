@@ -149,12 +149,12 @@ const filters: Record<string, Record<string, string[]>> = {
     // CAATransferred: [],
   },
   corporateBallot: {
-    Created: [],
-    MetaChanged: [],
-    RangeChanged: [],
-    RCVChanged: [],
-    Removed: [],
-    VoteCast: [],
+    Created: ['handleBallotCreated'],
+    MetaChanged: ['handleBallotMetaChanged'],
+    RangeChanged: ['handleBallotRangeChanged'],
+    RCVChanged: ['handleBallotRcvChanged'],
+    Removed: ['handleBallotRemoved'],
+    VoteCast: ['handleBallotVoteCast'],
   },
   externalAgents: {
     AgentAdded: ['handleExternalAgentAdded', 'handleAgentAdded'],
