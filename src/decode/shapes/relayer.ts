@@ -1,5 +1,5 @@
 import { LAST_V7, V8 } from './consts';
-import { discontinuedAt, registerShape } from './registry';
+import { discontinuedAt, introducedAt, registerShape, registerShapes } from './registry';
 
 /**
  * `relayer` pallet parameter shapes.
@@ -31,18 +31,13 @@ registerShape('relayer', 'UpdatedPolyxLimit', [
   { from: V8, fields: ['userKey', 'payingKey', 'remaining', 'oldRemaining'] },
 ]);
 
-registerShape('relayer', 'ApprovedSubsidy', [
-  { from: V8, fields: ['userKey', 'payingKey', 'initialPolyxLimit'] },
-]);
-registerShape('relayer', 'AcceptedSubsidy', [
-  { from: V8, fields: ['userKey', 'payingKey', 'initialPolyxLimit'] },
-]);
-registerShape('relayer', 'RemovedSubsidy', [
-  { from: V8, fields: ['userKey', 'payingKey', 'amount'] },
-]);
-registerShape('relayer', 'RemovedPendingSubsidy', [
-  { from: V8, fields: ['userKey', 'payingKey', 'amount'] },
-]);
-registerShape('relayer', 'SubsidyDebited', [
-  { from: V8, fields: ['userKey', 'payingKey', 'amount'] },
-]);
+registerShapes(
+  'relayer',
+  ['ApprovedSubsidy', 'AcceptedSubsidy'],
+  introducedAt(V8, ['userKey', 'payingKey', 'initialPolyxLimit'])
+);
+registerShapes(
+  'relayer',
+  ['RemovedSubsidy', 'RemovedPendingSubsidy', 'SubsidyDebited'],
+  introducedAt(V8, ['userKey', 'payingKey', 'amount'])
+);

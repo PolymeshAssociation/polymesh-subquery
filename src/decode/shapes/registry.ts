@@ -72,6 +72,14 @@ export const discontinuedAt = (to: number, fields: readonly string[]): EventShap
 ];
 
 /**
+ * A single shape from `from` onward, open-ended - the common case for an event the chain
+ * introduced partway through its history, with no shape change since.
+ */
+export const introducedAt = (from: number, fields: readonly string[]): EventShape[] => [
+  { from, fields },
+];
+
+/**
  * Declares the parameters an event carries.
  *
  * Called once per event at module load. Registering two shapes for the same spec range is
@@ -86,6 +94,19 @@ export const registerShape = (
   const key = shapeKey(moduleId, eventId);
 
   shapes.set(key, [...(shapes.get(key) ?? []), ...entries]);
+};
+
+/**
+ * `registerShape` for several event ids that all carry the same shape - a rename or a group of
+ * events introduced together often share one. `registerShapes(m, [e1, e2], entries)` reads as
+ * "these all look like this," and keeps the shared shape written once instead of repeated per id.
+ */
+export const registerShapes = (
+  moduleId: string,
+  eventIds: readonly string[],
+  entries: readonly EventShape[]
+): void => {
+  eventIds.forEach(eventId => registerShape(moduleId, eventId, entries));
 };
 
 /** Every registered shape, keyed by `moduleId.eventId`. Read by the metadata contract test */
