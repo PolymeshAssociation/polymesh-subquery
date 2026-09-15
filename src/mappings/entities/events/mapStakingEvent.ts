@@ -13,6 +13,7 @@ import {
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { currentPayoutEra } from '../identities/mapPolyxLedger';
+import { refreshPositionFromLedger } from './mapStakingPosition';
 
 const bondedUnbondedOrReward = new Set([
   EventIdEnum.Bonded,
@@ -119,7 +120,8 @@ const get8xStakingEventDetails = (
 
 const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
-  params: Codec[]
+  params: Codec[],
+  blockId: string
 ): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
   const stashAccount = getTextValue(rawAccount);
@@ -133,7 +135,7 @@ const getLegacyStakingEventDetails = async (
 
     if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
       // A15 — the pre-v8 event names only the stash; read the payee from chain storage.
-      const resolved = await resolveLegacyRewardDestination(stashAccount);
+      const resolved = await resolveLegacyRewardDestination(stashAccount, blockId);
       details.rewardDestination = resolved.rewardDestination;
       details.rewardDestinationAccount = resolved.rewardDestinationAccount;
     }
@@ -158,7 +160,8 @@ const getStakingEventDetails = async (
   params: Codec[],
   event: SubstrateEvent,
   block: SubstrateBlock,
-  eventIdx: number
+  eventIdx: number,
+  blockId: string
 ): Promise<StakingEventDetails> => {
   let details: StakingEventDetails;
 
@@ -176,7 +179,7 @@ const getStakingEventDetails = async (
     // one on the way to a branch that never uses the result.
     details = get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx);
   } else {
-    details = await getLegacyStakingEventDetails(eventId, params);
+    details = await getLegacyStakingEventDetails(eventId, params, blockId);
   }
 
   if (details.stashAccount && !details.identityId) {
@@ -191,7 +194,14 @@ const getStakingEventDetails = async (
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
   const { eventId, params, extrinsic, blockId, blockEventId, block, eventIdx } = extractArgs(event);
-  const details = await getStakingEventDetails(eventId, params as Codec[], event, block, eventIdx);
+  const details = await getStakingEventDetails(
+    eventId,
+    params as Codec[],
+    event,
+    block,
+    eventIdx,
+    blockId
+  );
 
   let transactionId;
   if (extrinsic) {
@@ -211,10 +221,26 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
       if (details.rewardDestinationAccount !== undefined) {
         position.rewardDestinationAccountId = details.rewardDestinationAccount;
       }
+
+      // S1: a `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
+      // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
+      // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
+      // and fell further behind the real active bond every era. Other destinations pay out to a
+      // free balance and leave the ledger alone, so they need no read.
+      if (details.rewardDestination === 'Staked' && details.stashAccount) {
+        await refreshPositionFromLedger(position, details.stashAccount, blockId);
+      }
+
       position.updatedEventId = blockEventId;
       await position.save();
     } else if (slashEvents.has(eventId)) {
       position.totalSlashed += details.amount;
+
+      // S1: `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
+      if (details.stashAccount) {
+        await refreshPositionFromLedger(position, details.stashAccount, blockId);
+      }
+
       position.updatedEventId = blockEventId;
       await position.save();
     }

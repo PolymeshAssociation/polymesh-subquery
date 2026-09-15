@@ -14,7 +14,7 @@ import {
   reconcileAccount,
   reconcileBlock,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
-import { __resetControllerCache } from '../../src/utils/staking';
+import { __resetStakingCaches } from '../../src/utils/staking';
 
 const ADDR = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
@@ -115,7 +115,7 @@ const anomalies = () =>
 
 beforeEach(() => {
   __resetOnChainCache();
-  __resetControllerCache();
+  __resetStakingCaches();
   db = {};
   storeGet().mockImplementation((entity: string, id: string) => Promise.resolve(db[entity]?.[id]));
   storeSet().mockImplementation((entity: string, id: string, data: any) => {

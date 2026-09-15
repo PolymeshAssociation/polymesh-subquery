@@ -190,3 +190,101 @@ describe('handleStakingEvent', () => {
     expect(row).toMatchObject({ positionId: ALICE });
   });
 });
+
+/**
+ * S1 — `StakingPosition.bonded`/`unbonding` are a view onto `staking.ledger`, but two events
+ * rewrite that ledger without emitting `Bonded`/`Unbonded`/`Withdrawn`: a compounded
+ * (`RewardDestination::Staked`) reward, which `make_payout` adds straight onto `active`/`total`,
+ * and a slash, which `do_slash` subtracts. Refreshing only on the three registered events left the
+ * position falling further behind the real bond every era.
+ */
+describe('a ledger change with no Bonded event still refreshes the position (S1)', () => {
+  const mockLedger = (active: string) => {
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        ledger: jest.fn().mockResolvedValue({
+          toJSON: () => ({ total: active, active, unlocking: [] }),
+        }),
+      },
+    };
+  };
+
+  it('a compounded Staked reward re-reads the ledger', async () => {
+    const db = mockStore();
+
+    mockLedger('4000');
+    await handlePositionBonded(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+    expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(4000));
+
+    // the payout compounded 150 into the bond; only `Rewarded` is emitted
+    mockLedger('4150');
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'Rewarded',
+        fields: { stash: ALICE, dest: 'Staked', amount: '150' },
+        blockNumber: '1001',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      bonded: BigInt(4150),
+      totalRewarded: BigInt(150),
+    });
+  });
+
+  it('a slash re-reads the ledger', async () => {
+    const db = mockStore();
+
+    mockLedger('4000');
+    await handlePositionBonded(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+
+    mockLedger('3600');
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'Slashed',
+        fields: { staker: ALICE, amount: '400' },
+        blockNumber: '1001',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      bonded: BigInt(3600),
+      totalSlashed: BigInt(400),
+    });
+  });
+
+  it('a reward paid out to a free balance does not re-read the ledger', async () => {
+    const db = mockStore();
+
+    mockLedger('4000');
+    await handlePositionBonded(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+
+    const ledgerRead = (globalThis as any).api.query.staking.ledger as jest.Mock;
+    ledgerRead.mockClear();
+
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'Rewarded',
+        fields: { stash: ALICE, dest: 'Stash', amount: '150' },
+        blockNumber: '1001',
+      })
+    );
+
+    expect(ledgerRead).not.toHaveBeenCalled();
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      bonded: BigInt(4000),
+      totalRewarded: BigInt(150),
+    });
+  });
+});

@@ -38,7 +38,7 @@ import {
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
-import { __resetControllerCache, __resetPayeeCache } from '../../src/utils/staking';
+import { __resetStakingCaches } from '../../src/utils/staking';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -176,8 +176,7 @@ const clone = (value: Row): Row => {
 };
 
 beforeEach(() => {
-  __resetPayeeCache();
-  __resetControllerCache();
+  __resetStakingCaches();
   db = {};
   blockHeight = 1_000_000;
   (globalThis as any).api.registry = { chainSS58: 42 };

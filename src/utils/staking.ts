@@ -70,17 +70,46 @@ export const readRewardDestination = (
 };
 
 /**
- * Per-stash cache of a resolved payee. `staking.payee(stash)` is a chain-storage read on every
- * reward, and a validator's set of ~20 stashes is re-queried every era for the whole genesis
- * replay — the dominant RPC cost of the sweep against a remote node. A payee changes very rarely
- * (an explicit `staking.setPayee`), and the in-flight reconciler corrects any `frozen` drift a
- * stale entry could cause within ~1 era, so a plain process-lifetime cache is the right trade.
+ * Per-block caches of the two chain reads every staking path starts with: `staking.payee(stash)`
+ * and `staking.bonded(stash)`.
+ *
+ * **Block scoped, not process lifetime (F6).** `set_payee` and `set_controller` emit no event, so
+ * there is nothing a longer-lived entry could be invalidated on, and both went stale silently and
+ * permanently: a changed payee kept crediting later rewards to the old destination, and a changed
+ * controller made `staking.ledger(oldController)` read empty — which `readStakingLock` reports as
+ * a bond of 0, clearing the stash's staking lock, and which `StakingPosition` reports as
+ * `bonded: 0`. Worse, the answer depended on where the process happened to start, since each
+ * worker and each restart began with an empty map.
+ *
+ * Keyed by block, the read repeats at most once per block per stash. That still collapses the
+ * repeated reads within a payout block, which is where they cluster, and bounds staleness to
+ * nothing: `api` targets the block being indexed, so an entry can only be read back within the
+ * block it was true for.
+ *
  * Only successful resolutions are cached — a transient read failure must be retried, not pinned.
  */
-const payeeCache = new Map<string, LegacyRewardDestination>();
+let cacheBlock: string | undefined;
+let payeeCache = new Map<string, LegacyRewardDestination>();
+let controllerCache = new Map<string, string>();
 
-/** Test hook — the cache is process-lifetime, so a suite that re-mocks `staking.payee` must clear it. */
-export const __resetPayeeCache = (): void => payeeCache.clear();
+const cachesFor = (
+  blockId: string
+): { payees: Map<string, LegacyRewardDestination>; controllers: Map<string, string> } => {
+  if (cacheBlock !== blockId) {
+    cacheBlock = blockId;
+    payeeCache = new Map();
+    controllerCache = new Map();
+  }
+
+  return { payees: payeeCache, controllers: controllerCache };
+};
+
+/** Test hook — a suite re-mocking `staking.payee` / `staking.bonded` within one block must clear. */
+export const __resetStakingCaches = (): void => {
+  cacheBlock = undefined;
+  payeeCache = new Map();
+  controllerCache = new Map();
+};
 
 /**
  * Resolves where a pre-v8 staking reward for `stash` was actually paid.
@@ -94,9 +123,11 @@ export const __resetPayeeCache = (): void => payeeCache.clear();
  * why it is done now rather than deferred.
  */
 export const resolveLegacyRewardDestination = async (
-  stash: string
+  stash: string,
+  blockId: string
 ): Promise<LegacyRewardDestination> => {
-  const cached = payeeCache.get(stash);
+  const payees = cachesFor(blockId).payees;
+  const cached = payees.get(stash);
   if (cached) {
     return cached;
   }
@@ -128,7 +159,7 @@ export const resolveLegacyRewardDestination = async (
       result = { rewardDestination: 'None' };
     }
 
-    payeeCache.set(stash, result);
+    payees.set(stash, result);
 
     return result;
   } catch {
@@ -138,30 +169,33 @@ export const resolveLegacyRewardDestination = async (
 };
 
 /**
- * Cache of `stash -> controller`. `staking.ledger` is keyed by the controller, not the stash, so
- * a `bonded(stash)` read is needed before every ledger read. `set_controller` is very rare, so a
- * process-lifetime cache is safe; a stale entry only matters if the controller changed, and the
- * in-flight reconciler corrects the resulting `frozen` drift.
+ * `staking.bonded(stash)` — the controller key `staking.ledger` is stored under.
+ *
+ * Exported so `StakingPosition.controller` (`mapStakingPosition.ts`) can reuse the same resolution
+ * `readStakingLedger` already pays for, instead of a second `staking.bonded` read.
+ *
+ * Falls back to the stash — the common case, where stash and controller are the same account —
+ * but **does not cache that fallback**: `bonded(stash)` is also empty for a stash that has not
+ * bonded yet, and pinning `stash` as its answer would keep it wrong for the rest of the block
+ * (F6). Only a controller the chain actually named is cached.
  */
-const controllerCache = new Map<string, string>();
+export const resolveController = async (stash: string, blockId: string): Promise<string> => {
+  const controllers = cachesFor(blockId).controllers;
+  const cached = controllers.get(stash);
 
-/** Test hook — the cache is process-lifetime, so a suite re-mocking `staking.bonded` must clear it. */
-export const __resetControllerCache = (): void => controllerCache.clear();
-
-/**
- * Exported so `StakingPosition.controller` (`mapStakingPosition.ts`) can reuse the same cached
- * resolution `readStakingLedger` already pays for, instead of a second `staking.bonded` read.
- */
-export const resolveController = async (stash: string): Promise<string> => {
-  let controller = controllerCache.get(stash);
-
-  if (!controller) {
-    const bonded = (await api.query.staking.bonded(stash)).toJSON();
-    controller = typeof bonded === 'string' ? bonded : stash;
-    controllerCache.set(stash, controller);
+  if (cached) {
+    return cached;
   }
 
-  return controller;
+  const bonded = (await api.query.staking.bonded(stash)).toJSON();
+
+  if (typeof bonded !== 'string') {
+    return stash;
+  }
+
+  controllers.set(stash, bonded);
+
+  return bonded;
 };
 
 export interface StakingLedgerSnapshot {
@@ -184,10 +218,11 @@ export interface StakingLedgerSnapshot {
  * back as all-zero, not `undefined`.
  */
 export const readStakingLedger = async (
-  stash: string
+  stash: string,
+  blockId: string
 ): Promise<StakingLedgerSnapshot | undefined> => {
   try {
-    const controller = await resolveController(stash);
+    const controller = await resolveController(stash, blockId);
     const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
       total?: string | number;
       active?: string | number;
@@ -223,8 +258,10 @@ export const readStakingLedger = async (
  * `undefined` when the ledger cannot be read — the caller keeps its delta accumulator as the
  * fallback.
  */
-export const readStakingLock = async (stash: string): Promise<bigint | undefined> =>
-  (await readStakingLedger(stash))?.total;
+export const readStakingLock = async (
+  stash: string,
+  blockId: string
+): Promise<bigint | undefined> => (await readStakingLedger(stash, blockId))?.total;
 
 /**
  * The era `StakersElected` just elected, read from `staking.currentEra()` — **not**

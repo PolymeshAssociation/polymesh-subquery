@@ -631,16 +631,16 @@ export const setLock = async (
 const syncStakingLock = async (
   stash: string,
   fallbackDelta: bigint,
-  blockEventId: string
+  args: HandlerArgs
 ): Promise<void> => {
-  const total = await readStakingLock(stash);
+  const total = await readStakingLock(stash, args.blockId);
 
   if (total === undefined) {
-    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, blockEventId, 'staking');
+    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, args.blockEventId, 'staking');
     return;
   }
 
-  await setLock(stash, STAKING_LOCK_ID, total, blockEventId, 'staking');
+  await setLock(stash, STAKING_LOCK_ID, total, args.blockEventId, 'staking');
 };
 
 const lockHandler =
@@ -1528,7 +1528,8 @@ const stakingStash = (decoded: Record<string, Codec>): string | undefined =>
 const rewardRecipient = async (
   decoded: Record<string, Codec>,
   stash: string | undefined,
-  is8x: boolean
+  is8x: boolean,
+  blockId: string
 ): Promise<{ recipient: string; restaked: boolean } | undefined> => {
   if (!stash) {
     return undefined;
@@ -1550,7 +1551,8 @@ const rewardRecipient = async (
   }
 
   const { rewardDestination, rewardDestinationAccount } = await resolveLegacyRewardDestination(
-    stash
+    stash,
+    blockId
   );
 
   // Pre-v8 `Staked` auto-restakes: the reward lands in `free` and is immediately locked, and no
@@ -1575,7 +1577,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
   const stash = stakingStash(decoded);
   const amount = amountOf(decoded);
   const eraIndex = currentPayoutEra(args.blockId);
-  const resolved = await rewardRecipient(decoded, stash, is8xChain(args.block));
+  const resolved = await rewardRecipient(decoded, stash, is8xChain(args.block), args.blockId);
 
   if (!resolved) {
     return;
@@ -1604,7 +1606,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 
   // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
   if (restaked) {
-    await syncStakingLock(recipient, amount, args.blockEventId);
+    await syncStakingLock(recipient, amount, args);
   }
 };
 
@@ -1646,7 +1648,7 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
     await adjustHold(stash, HoldReason.Staking, -amount, args.blockEventId);
   } else {
     // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
-    await syncStakingLock(stash, -amount, args.blockEventId);
+    await syncStakingLock(stash, -amount, args);
   }
 };
 
@@ -1676,7 +1678,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
   }
 
   await ensureBalanceRow(stash, args.blockId, args.block.timestamp);
-  await syncStakingLock(stash, amountOf(decoded), args.blockEventId);
+  await syncStakingLock(stash, amountOf(decoded), args);
 };
 
 /**
@@ -1702,5 +1704,5 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await syncStakingLock(stash, -amountOf(decoded), args.blockEventId);
+  await syncStakingLock(stash, -amountOf(decoded), args);
 };

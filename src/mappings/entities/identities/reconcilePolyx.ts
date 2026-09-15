@@ -118,7 +118,7 @@ const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnCh
     reserved: getBigIntValue(data.reserved),
     frozen: accountDataFrozen(data),
     holds: is8x ? await readChainHolds(address) : undefined,
-    stakingLock: is8x ? undefined : await readStakingLock(address),
+    stakingLock: is8x ? undefined : await readStakingLock(address, padId(String(blockHeight))),
   };
 
   onChainCache.set(address, onChain);
