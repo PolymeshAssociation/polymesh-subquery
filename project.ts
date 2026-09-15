@@ -301,7 +301,9 @@ const filters: Record<string, Record<string, string[]>> = {
     VenueUnauthorized: [],
   },
   staking: {
-    Bonded: ['handleStakingEvent', 'handleBonded'],
+    // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
+    // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
+    Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
     Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
@@ -331,9 +333,9 @@ const filters: Record<string, Record<string, string[]>> = {
     StakersElected: [],
     StakingElection: [],
     StakingElectionFailed: [],
-    Unbonded: ['handleStakingEvent', 'handleUnbonded'],
+    Unbonded: ['handlePositionUnbonded', 'handleStakingEvent', 'handleUnbonded'],
     ValidatorPrefsSet: [],
-    Withdrawn: ['handleWithdrawn'],
+    Withdrawn: ['handleWithdrawn', 'handlePositionWithdrawn'],
   },
   statistics: {
     AssetStatsUpdated: [],

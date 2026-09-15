@@ -149,6 +149,69 @@ const controllerCache = new Map<string, string>();
 export const __resetControllerCache = (): void => controllerCache.clear();
 
 /**
+ * Exported so `StakingPosition.controller` (`mapStakingPosition.ts`) can reuse the same cached
+ * resolution `readStakingLedger` already pays for, instead of a second `staking.bonded` read.
+ */
+export const resolveController = async (stash: string): Promise<string> => {
+  let controller = controllerCache.get(stash);
+
+  if (!controller) {
+    const bonded = (await api.query.staking.bonded(stash)).toJSON();
+    controller = typeof bonded === 'string' ? bonded : stash;
+    controllerCache.set(stash, controller);
+  }
+
+  return controller;
+};
+
+export interface StakingLedgerSnapshot {
+  /** `active` + everything still unlocking — what `Currency::set_lock`/the v8 hold amount matches */
+  total: bigint;
+  /** currently bonded, earning rewards — excludes chunks already in the unbonding queue */
+  active: bigint;
+  /** chunks queued by `unbond`, not yet withdrawable via `withdraw_unbonded` */
+  unlocking: { amount: bigint; era: number }[];
+}
+
+/**
+ * `staking.ledger(controller)`, read once and shared by every caller that needs a piece of it —
+ * `readStakingLock` (the whole-lock `total`, for the balance ledger) and `StakingPosition`'s
+ * `bonded`/`unbonding`/`unlocking` split (`active` vs the queued chunks) would otherwise each
+ * issue the same chain read.
+ *
+ * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
+ * callers keep their delta accumulator as the fallback. A killed ledger (fully withdrawn) reads
+ * back as all-zero, not `undefined`.
+ */
+export const readStakingLedger = async (
+  stash: string
+): Promise<StakingLedgerSnapshot | undefined> => {
+  try {
+    const controller = await resolveController(stash);
+    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
+      total?: string | number;
+      active?: string | number;
+      unlocking?: { value?: string | number; era?: number }[];
+    } | null;
+
+    if (!ledger) {
+      return { total: BigInt(0), active: BigInt(0), unlocking: [] };
+    }
+
+    return {
+      total: BigInt(ledger.total ?? 0),
+      active: BigInt(ledger.active ?? 0),
+      unlocking: (ledger.unlocking ?? []).map(({ value, era }) => ({
+        amount: BigInt(value ?? 0),
+        era: Number(era ?? 0),
+      })),
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * The pre-v8 staking lock on `stash`, read from chain: `staking.ledger(controller).total`
  * (bonded active + everything still unlocking), which is exactly the value `pallet-staking`
  * passes to `Currency::set_lock`, so it is what `miscFrozen` reports.
@@ -157,26 +220,8 @@ export const __resetControllerCache = (): void => controllerCache.clear();
  * do not see the max-bond cap, the rounding of a compounded `RewardDestination::Staked` reward,
  * or a slash — each of which leaves the accumulator drifting from the real lock.
  *
- * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
- * the caller keeps its delta accumulator as the fallback. A killed ledger (fully withdrawn)
- * reads back as `0`.
+ * `undefined` when the ledger cannot be read — the caller keeps its delta accumulator as the
+ * fallback.
  */
-export const readStakingLock = async (stash: string): Promise<bigint | undefined> => {
-  try {
-    let controller = controllerCache.get(stash);
-
-    if (!controller) {
-      const bonded = (await api.query.staking.bonded(stash)).toJSON();
-      controller = typeof bonded === 'string' ? bonded : stash;
-      controllerCache.set(stash, controller);
-    }
-
-    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
-      total?: string | number;
-    } | null;
-
-    return ledger ? BigInt(ledger.total ?? 0) : BigInt(0);
-  } catch {
-    return undefined;
-  }
-};
+export const readStakingLock = async (stash: string): Promise<bigint | undefined> =>
+  (await readStakingLedger(stash))?.total;

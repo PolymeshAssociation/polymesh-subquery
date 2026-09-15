@@ -2178,6 +2178,41 @@ type StakingEvent @entity {
 }
 
 """
+An unbonding chunk still in the queue, not yet withdrawable — `staking.ledger(controller).unlocking`
+"""
+type UnlockChunk @jsonField {
+  amount: BigInt!
+  era: Int!
+}
+
+"""
+Current staking position for a stash — how much is bonded/unbonding, and with whom. `bonded`
+mirrors the same `staking.ledger`/hold read `AccountBalance.bonded`/`.locks`/`.holds` already
+track (`readStakingLock` in `src/utils/staking.ts`) — this is a second view onto the same number,
+not an independently accumulated one, so the two cannot drift apart
+"""
+type StakingPosition @entity {
+  id: ID! # stash address
+  stash: Account! @index
+  controller: Account
+  identity: Identity @index
+  "currently bonded (active in the staking ledger), same source as AccountBalance.bonded"
+  bonded: BigInt!
+  "in the unbonding queue, not yet withdrawable"
+  unbonding: BigInt!
+  "unbonding chunks with their unlock eras"
+  unlocking: [UnlockChunk]
+  rewardDestination: String
+  rewardDestinationAccount: Account
+  isValidator: Boolean!
+  isChilled: Boolean!
+  totalRewarded: BigInt!
+  totalSlashed: BigInt!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
 
 `caller` (who invoked the action), not `identity` — deliberately asymmetric with `AssetAgent.identity`

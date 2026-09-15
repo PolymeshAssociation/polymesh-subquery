@@ -28,6 +28,7 @@ export * from './pips/mapProposal';
 export * from './settlements/mapSettlement';
 export * from './settlements/mapVenue';
 export * from './events/mapStakingEvent';
+export * from './events/mapStakingPosition';
 export * from './assets/mapStatistics';
 export * from './stos/mapSto';
 export * from './block/mapSubqueryVersion';
