@@ -241,7 +241,7 @@ export const applyHoldingDelta = async (
 };
 
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
+  const { block, blockEventId, eventIdx } = extractArgs(event);
   const decoded = decodeEvent(event);
   const {
     assetId: rawAssetId,
@@ -273,7 +273,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
   // an explicit encoding of what was previously an implicit `Codec` coercion, not a behaviour
   // change.
   const [assetType, rawName, rawFundingRound] = await Promise.all([
-    getAssetType(rawType),
+    getAssetType(rawType, block, eventIdx),
     rawAssetName ?? api.query.asset.assetNames(rawAssetId.toU8a()),
     rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId.toU8a()),
   ]);

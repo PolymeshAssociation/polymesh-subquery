@@ -9,14 +9,22 @@ import { accountDataFrozen, recomputeDerived, STAKING_LOCK_ID } from './mapPolyx
  * In-flight reconciliation (D11).
  *
  * `api.query` targets the block being indexed, and `.at` is unsupported, so authoritative state
- * can only be read for the current block. This compares the derived `AccountBalance` against
- * `system.account` there — every Nth block for accounts touched in that block, and always after
- * a `BalanceSet` or `DustLost`.
+ * can only be read while that block is current — which for `@subql/node` is true for the *whole*
+ * pass over a block (block handler, then that block's own init/extrinsic/finalize events all
+ * share the same api context), but is no longer true once the next block starts. The block
+ * handler itself runs *before* its own block's events (confirmed against
+ * `@subql/node`'s `indexBlockData`), so it cannot see that block's final derived state — only the
+ * previous block's.
  *
- * The compare-and-correct is deferred to `reconcileBlock`, run from the block handler after every
- * event handler. Doing it per-event compared a *partial* mid-block balance against end-of-block
- * `system.account`, and on a `%N` block that pays several validators it corrected to those
- * end-of-block values and then let the block's remaining payout events apply on top — drifting
+ * `reconcileAccount`, called from event handlers, therefore reads `system.account` **immediately**
+ * (the api context is still correctly bound to the account's own block at that point) and queues
+ * the snapshot. `reconcileBlock`, called from the block handler, runs one block later: by the time
+ * block K+1's handler fires, block K's own events have all finished, so the derived
+ * `AccountBalance` matches the on-chain snapshot captured back in K — without needing to re-read
+ * chain state through K+1's (wrong) api context. Comparing per-event, or re-reading on-chain state
+ * at flush time, both compare against the wrong side: a *partial* mid-block balance against
+ * already-final `system.account` on a `%N` block that pays several validators corrects to that
+ * end-of-block value and then lets the block's remaining payout events apply on top — drifting
  * each account by one reward amount per correction.
  *
  * On a mismatch it records a `BalanceReconciliationDrift` anomaly **and corrects** the derived
@@ -49,14 +57,21 @@ interface OnChain {
 let onChainCacheBlock = -1;
 const onChainCache = new Map<string, OnChain>();
 
+interface PendingEntry {
+  /** First provoking event index, kept for the anomaly's provenance. */
+  eventIdx: number | undefined;
+  /** The block the snapshot was captured in — not the block `reconcileBlock` later runs in. */
+  block: SubstrateBlock;
+  onChain: OnChain;
+}
+
 /**
- * Accounts to reconcile at the end of the current block. `reconcileAccount` only registers the
- * intent during event handling; `reconcileBlock` does the read/compare/correct once per account,
- * against the block's fully-applied derived balance. Value is the first provoking event index,
- * kept for the anomaly's provenance.
+ * Accounts queued to reconcile, with their on-chain snapshot already captured (read while `api`
+ * was still correctly bound to their block). `reconcileBlock`, called one block later, only needs
+ * to wait for the derived side to catch up — see the module docstring.
  */
 let pendingBlock = -1;
-const pending = new Map<string, number | undefined>();
+const pending = new Map<string, PendingEntry>();
 
 /** Test hook — clears both the per-block RPC memo and the pending-reconcile queue. */
 export const __resetOnChainCache = (): void => {
@@ -94,10 +109,13 @@ const readOnChain = async (address: string, blockHeight: number): Promise<OnChai
 };
 
 /**
- * Registers `address` to be reconciled at the end of `block`. A no-op unless the block is a
- * sample point (every Nth) or the caller forced it (a `BalanceSet` / `DustLost` checkpoint).
- * `_blockId` is unused — `reconcileBlock` derives it from the block — but kept so the call sites
- * do not change.
+ * Registers `address` to be reconciled once this block's own events have finished (see the module
+ * docstring). A no-op unless the block is a sample point (every Nth) or the caller forced it (a
+ * `BalanceSet` / `DustLost` checkpoint). `_blockId` is unused — `reconcileOne` derives it from the
+ * block — but kept so the call sites do not change.
+ *
+ * Reads `system.account` right away, while `api` is still correctly bound to `block` — by the
+ * time `reconcileBlock` runs, `api` will be bound to a later block instead.
  */
 export const reconcileAccount = async (
   address: string,
@@ -115,17 +133,34 @@ export const reconcileAccount = async (
     pending.clear();
   }
 
-  if (!pending.has(address) || pending.get(address) === undefined) {
-    pending.set(address, eventIdx);
+  const existing = pending.get(address);
+  if (existing) {
+    // Fill in a real event index if the queueing call so far only had a forced, event-less one.
+    if (existing.eventIdx === undefined && eventIdx !== undefined) {
+      existing.eventIdx = eventIdx;
+    }
+    return;
   }
+
+  let onChain: OnChain;
+  try {
+    onChain = await readOnChain(address, height);
+  } catch {
+    // A pruned node or a transient RPC error is not a ledger defect.
+    return;
+  }
+
+  pending.set(address, { eventIdx, block, onChain });
 };
 
 /**
- * Runs every reconciliation queued for `block`. Called from the block handler, so the derived
- * `AccountBalance` is the block's final state and lines up with end-of-block `system.account`.
+ * Runs every reconciliation queued by the previous block. Called from the block handler, which
+ * (per `@subql/node`'s handler order) runs after the previous block's own events have finished but
+ * before this block's — so the derived `AccountBalance` now reflects the previous block's final
+ * state, matching the on-chain snapshot `reconcileAccount` captured back then.
  */
-export const reconcileBlock = async (block: SubstrateBlock): Promise<void> => {
-  if (blockNumber(block) !== pendingBlock || pending.size === 0) {
+export const reconcileBlock = async (): Promise<void> => {
+  if (pending.size === 0) {
     return;
   }
 
@@ -133,31 +168,21 @@ export const reconcileBlock = async (block: SubstrateBlock): Promise<void> => {
   pending.clear();
   pendingBlock = -1;
 
-  const blockId = padId(String(blockNumber(block)));
-
-  for (const [address, eventIdx] of queued) {
-    await reconcileOne(address, blockId, block, eventIdx);
+  for (const [address, entry] of queued) {
+    await reconcileOne(address, entry);
   }
 };
 
 const reconcileOne = async (
   address: string,
-  blockId: string,
-  block: SubstrateBlock,
-  eventIdx: number | undefined
+  { eventIdx, block, onChain }: PendingEntry
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
   if (!balance) {
     return;
   }
 
-  let onChain: OnChain;
-  try {
-    onChain = await readOnChain(address, blockNumber(block));
-  } catch {
-    // A pruned node or a transient RPC error is not a ledger defect.
-    return;
-  }
+  const blockId = padId(String(blockNumber(block)));
 
   const drifts: string[] = [];
   if (abs(balance.free - onChain.free) >= MIN_DRIFT) {

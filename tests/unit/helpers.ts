@@ -10,6 +10,8 @@ export const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.M
 export const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 export const storeRemove = (): jest.Mock => (globalThis as any).store.remove as jest.Mock;
 export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
+export const storeBulkCreate = (): jest.Mock => (globalThis as any).store.bulkCreate as jest.Mock;
+export const storeBulkUpdate = (): jest.Mock => (globalThis as any).store.bulkUpdate as jest.Mock;
 
 /** Minimal Codec stand-in — handlers only read `toString` / `toJSON` / `isEmpty`. */
 export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
@@ -89,6 +91,30 @@ export const mockGetByFields = (db: MockDb, entityName: string): void => {
 
     return Promise.resolve(rows);
   });
+};
+
+/**
+ * Wires `store.bulkCreate`/`store.bulkUpdate` to write each entity in the array into the same
+ * in-memory `db` `mockStore` writes to — by default `setupJest.ts` mocks both as no-ops, so a
+ * handler that switched from individual `.save()` calls to a bulk write would otherwise leave a
+ * test's `db.<Entity>[id]` assertions seeing nothing.
+ */
+export const mockBulkWrites = (db: MockDb, entityName: string): void => {
+  const writeAll = (name: string, rows: { id: string }[]) => {
+    if (name !== entityName) {
+      return Promise.resolve();
+    }
+
+    db[entityName] ??= {};
+    rows.forEach(row => {
+      db[entityName][row.id] = { ...row };
+    });
+
+    return Promise.resolve();
+  };
+
+  storeBulkCreate().mockImplementation(writeAll);
+  storeBulkUpdate().mockImplementation(writeAll);
 };
 
 /** Field metadata for a Polymesh tuple event — unnamed, so decode falls to the shape table. */

@@ -1,9 +1,10 @@
 /**
  * In-flight POLYX reconciliation (D11). Every Nth block for touched accounts, and always after a
- * `BalanceSet` / `DustLost`, the derived `AccountBalance` is checked against `system.account` at
- * the block being indexed. `reconcileAccount` only queues the account during event handling;
- * `reconcileBlock` (run from the block handler) does the compare-and-correct once, against the
- * block's final derived state. On a mismatch it records a `BalanceReconciliationDrift` anomaly
+ * `BalanceSet` / `DustLost`, `reconcileAccount` reads `system.account` immediately (during event
+ * handling, while `api` is still bound to that block) and queues the snapshot. `reconcileBlock`,
+ * run from the *next* block's handler — the block handler runs before its own block's events, so
+ * only the previous block's derived state is final by then — does the compare-and-correct against
+ * that already-captured snapshot. On a mismatch it records a `BalanceReconciliationDrift` anomaly
  * and corrects the derived value so the drift cannot compound.
  */
 
@@ -28,13 +29,17 @@ const block = (height: number): SubstrateBlock =>
     specVersion: 8_000_000,
   } as unknown as SubstrateBlock);
 
-/** Queue a reconcile and immediately flush it, as the block handler would at end-of-block. */
+/**
+ * Queue a reconcile (as an event handler would, mid-block) then flush it (as the *next* block's
+ * handler would). `reconcileBlock` takes no block argument — it always flushes whatever the
+ * previous block queued, regardless of which block is current when it's called.
+ */
 const reconcile = async (
   height: number,
   opts: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
   await reconcileAccount(ADDR, '0000000000', block(height), opts);
-  await reconcileBlock(block(height));
+  await reconcileBlock();
 };
 
 let db: Record<string, Record<string, any>>;
@@ -153,24 +158,38 @@ describe('reconcileAccount / reconcileBlock', () => {
     expect(anomalies()).toHaveLength(1);
   });
 
-  it('reconciles once at end-of-block, not after each event (no mid-block overshoot)', async () => {
+  it('reconciles once per block, not after each event (no mid-block overshoot)', async () => {
     // a %2000 block; the derived balance is already correct once every event has been applied
     setDerived({ free: P(1000), reserved: P(200), total: P(1200) });
     setChain(P(1000).toString(), P(200).toString(), '0');
 
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 1 });
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 5 });
-    await reconcileBlock(block(8000));
+    await reconcileBlock();
 
     expect(anomalies()).toHaveLength(0);
     expect(db['AccountBalance'][ADDR]).toMatchObject({ free: P(1000), reserved: P(200) });
   });
 
-  it('flushes nothing for a block that never queued (block handler runs every block)', async () => {
+  it('flushes nothing when nothing was queued (block handler runs every block)', async () => {
     setDerived({ free: BigInt(1) });
     setChain(P(999).toString(), '0', '0');
 
-    await reconcileBlock(block(8000)); // no reconcileAccount call first
+    await reconcileBlock(); // no reconcileAccount call first
+
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('captures the on-chain snapshot at queue time, not at flush time', async () => {
+    // Queue during block 8000 while chain state is X; chain state changes before the flush
+    // (block 8001's handler, once `api` is bound to a later block) — the flush must still compare
+    // against the snapshot taken back in 8000, not re-read current chain state.
+    setDerived({ free: P(1000), total: P(1000) });
+    setChain(P(1000).toString(), '0', '0');
+    await reconcileAccount(ADDR, '0000008000', block(8000), { force: true });
+
+    setChain(P(5000).toString(), '0', '0'); // chain moved on; must not affect this flush
+    await reconcileBlock();
 
     expect(anomalies()).toHaveLength(0);
   });

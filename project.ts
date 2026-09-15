@@ -536,10 +536,11 @@ const project: SubstrateProject = {
           {
             kind: SubstrateHandlerKind.Block,
             handler: 'handleBlock',
-            // End-of-block: flushes the POLYX reconcile queue (only populated on %2000 / forced
-            // blocks) and the NftHolder write buffer. Both early-return when there is nothing to do.
-            // `modulo: 1` is required — the reconcile flush reads `system.account` and must run in
-            // the same block that queued it.
+            // Runs before this block's own events. Flushes what the PREVIOUS block queued: the
+            // POLYX reconcile queue (only populated on %2000 / forced blocks, and read from chain
+            // at queue time, not here) and the NftHolder write buffer. Both early-return when
+            // there is nothing to do. `modulo: 1` is required — a gap would skip flushing whatever
+            // a skipped block queued.
             filter: { modulo: 1 },
           },
         ],

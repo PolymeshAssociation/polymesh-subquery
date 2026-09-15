@@ -25,11 +25,13 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
 }
 
 /**
- * Runs at the end of every block. Flushes the POLYX reconcile queue (only populated on sample
- * blocks / forced checkpoints) and the NftHolder write buffer. Both early-return when idle.
+ * Runs before this block's own events (`@subql/node` calls the block handler first). Flushes what
+ * the *previous* block queued: the POLYX reconcile queue (only populated on sample blocks / forced
+ * checkpoints) and the NftHolder write buffer. Both early-return when idle.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
-  await reconcileBlock(block).catch(e => logError(e));
+  await reconcileBlock().catch(e => logError(e));
   await flushNftBuffer().catch(e => logError(e));
 }
 

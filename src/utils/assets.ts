@@ -2,7 +2,8 @@ import { Codec } from '@polkadot/types/types';
 import { hexAddPrefix, hexHasPrefix, hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
-import { Asset, AssetDocument, SecurityIdentifier } from '../types';
+import { AnomalyKind, Asset, AssetDocument, CustomAssetType, SecurityIdentifier } from '../types';
+import { recordAnomaly } from './anomaly';
 import {
   coerceHexToString,
   extractString,
@@ -19,25 +20,56 @@ export interface AssetIdWithTicker {
   ticker?: string;
 }
 
-export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
+/**
+ * `CustomAssetTypeRegistered`/`Exists` already index every custom type's name into
+ * `CustomAssetType`, so the common case reads that instead of the chain. A chain read only
+ * remains as a fallback for the case that shouldn't happen — a type used before its registration
+ * was indexed (e.g. a not-yet-supported partial-resync starting after that registration) —
+ * recorded as an anomaly rather than silently trusted.
+ */
+export const getCustomType = async (
+  rawCustomId: Codec,
+  block: SubstrateBlock,
+  eventIdx?: number
+): Promise<string> => {
+  const id = getNumberValue(rawCustomId).toString();
+  const existing = await CustomAssetType.get(id);
+
+  if (existing) {
+    return existing.name;
+  }
+
+  // Dropped deliberately: an anomaly row is a diagnostic, not something worth failing the
+  // handler over. See `recordAnomaly`.
+  void recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `CustomAssetType ${id} was used before its registration was indexed`,
+    block,
+    eventIdx,
+  });
+
   // `customTypes` keys on `CustomAssetTypeId` (u32), not a raw `Codec`
   const customType = await api.query.asset.customTypes(getNumberValue(rawCustomId));
   return hexToString(customType.toString());
 };
 
-export const getAssetType = async (item: Codec): Promise<string> => {
+export const getAssetType = async (
+  item: Codec,
+  block: SubstrateBlock,
+  eventIdx?: number
+): Promise<string> => {
   const anyItem: any = item;
 
   if (anyItem.isNonFungible) {
     const nftType = anyItem.asNonFungible;
     if (nftType.type === 'Custom') {
-      return getCustomType(nftType.asCustom);
+      return getCustomType(nftType.asCustom, block, eventIdx);
     }
 
     return nftType.type;
   } else {
     if (anyItem.isCustom) {
-      return getCustomType(anyItem.asCustom);
+      return getCustomType(anyItem.asCustom, block, eventIdx);
     }
 
     return getTextValue(item);
