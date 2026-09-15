@@ -913,6 +913,18 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(memos.filter(m => m === 'early-2')).toHaveLength(2);
   });
 
+  it('a BalanceSet naming no account writes nothing, rather than an Account keyed undefined', async () => {
+    // `ledgerAccount` creates and saves whatever id it is handed, so an undecodable `who` used to
+    // produce a phantom Account/AccountBalance/PolyxEntry keyed `undefined`. strictNullChecks
+    // flags this call; the runtime never did.
+    await handleBalanceSet(balancesEvent('BalanceSet', { free: '5000' }));
+
+    expect(db['Account']).toBeUndefined();
+    expect(db['AccountBalance']).toBeUndefined();
+    expect(entries()).toHaveLength(0);
+    expect(Object.keys(db['IndexerAnomaly'] ?? {})).toHaveLength(1);
+  });
+
   it('F12: relabelling an entry moves its lifetimeByKind totals with it', async () => {
     const [deposit, rewarded] = extrinsicEvents(2_000_500, [
       ['balances', 'Deposit', { who: ALICE, amount: '900' }],

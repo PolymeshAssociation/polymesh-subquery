@@ -79,12 +79,13 @@ interface PendingEntry {
 let pendingBlock = -1;
 const pending = new Map<string, PendingEntry>();
 
-/** Test hook — clears both the per-block RPC memo and the pending-reconcile queue. */
+/** Test hook — clears the per-block RPC memo, the pending queue and the liveness counters. */
 export const __resetOnChainCache = (): void => {
   onChainCacheBlock = -1;
   onChainCache.clear();
   pendingBlock = -1;
   pending.clear();
+  __resetReconcileCounters();
 };
 
 /**
@@ -172,6 +173,37 @@ export const reconcileAccount = async (
 };
 
 /**
+ * How many accounts this process has actually compared against chain state, and how many of those
+ * drifted.
+ *
+ * A liveness signal, not a statistic. This mechanism spent its whole life returning early on a
+ * guard that could never pass, and the resulting empty `IndexerAnomaly` table was read as "the
+ * ledger reconciles" when it actually meant "nothing was ever checked" — the two are
+ * indistinguishable from the drift count alone. Logging the denominator makes a dead reconciler
+ * obvious in the sync log: `compared=0` after a run that indexed millions of blocks is a defect
+ * report, whereas `compared=12043 drifted=0` is the result that was being claimed.
+ */
+let comparedCount = 0;
+let driftedCount = 0;
+let lastReportedAt = 0;
+
+/** Report roughly once per sample interval's worth of comparisons, so the log stays readable. */
+const REPORT_EVERY = 500;
+
+/** Test hook — the counters are process-lifetime. */
+export const __resetReconcileCounters = (): void => {
+  comparedCount = 0;
+  driftedCount = 0;
+  lastReportedAt = 0;
+};
+
+/** The running liveness tally, for assertions after a resync. */
+export const reconcileStats = (): { compared: number; drifted: number } => ({
+  compared: comparedCount,
+  drifted: driftedCount,
+});
+
+/**
  * Runs every reconciliation queued by the previous block. Called from the block handler, which
  * (per `@subql/node`'s handler order) runs after the previous block's own events have finished but
  * before this block's — so the derived `AccountBalance` now reflects the previous block's final
@@ -189,6 +221,13 @@ export const reconcileBlock = async (): Promise<void> => {
   for (const [address, entry] of queued) {
     await reconcileOne(address, entry);
   }
+
+  if (comparedCount - lastReportedAt >= REPORT_EVERY) {
+    lastReportedAt = comparedCount;
+    logger.info(
+      `POLYX reconciliation: compared=${comparedCount} drifted=${driftedCount} (D11 in-flight check)`
+    );
+  }
 };
 
 const reconcileOne = async (
@@ -201,6 +240,10 @@ const reconcileOne = async (
   }
 
   const blockId = padId(String(blockNumber(block)));
+
+  // Counted here, where a derived balance is genuinely measured against chain state — not at
+  // queue time, which says only that a comparison was intended.
+  comparedCount += 1;
 
   const drifts: string[] = [];
   if (abs(balance.free - onChain.free) >= MIN_DRIFT) {
@@ -216,6 +259,8 @@ const reconcileOne = async (
   if (drifts.length === 0) {
     return;
   }
+
+  driftedCount += 1;
 
   await recordAnomaly({
     kind: AnomalyKind.BalanceReconciliationDrift,

@@ -13,6 +13,7 @@ import {
   __resetOnChainCache,
   reconcileAccount,
   reconcileBlock,
+  reconcileStats,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
 import { __resetStakingCaches } from '../../src/utils/staking';
 
@@ -241,6 +242,43 @@ describe('reconcileAccount / reconcileBlock', () => {
     await reconcileBlock(); // no reconcileAccount call first
 
     expect(anomalies()).toHaveLength(0);
+  });
+
+  /**
+   * The positive control the review asked for. This mechanism spent its whole life returning early
+   * on a guard that could never pass, and the empty anomaly table that produced was read as "the
+   * ledger reconciles". `compared` is the denominator that tells those two apart.
+   */
+  it('counts the comparisons it actually performs, not just the drifts it finds', async () => {
+    setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
+    setChain(P(1000).toString(), '0', '0');
+
+    expect(reconcileStats()).toEqual({ compared: 0, drifted: 0 });
+
+    await reconcile(9000, { force: true });
+
+    // agreed, so no anomaly — but the check demonstrably ran
+    expect(anomalies()).toHaveLength(0);
+    expect(reconcileStats()).toEqual({ compared: 1, drifted: 0 });
+  });
+
+  it('counts a drift as both compared and drifted', async () => {
+    setDerived({ free: P(900), total: P(900) });
+    setChain(P(1000).toString(), '0', '0');
+
+    await reconcile(9000, { force: true });
+
+    expect(reconcileStats()).toEqual({ compared: 1, drifted: 1 });
+  });
+
+  it('does not count a queued account whose comparison never happened', async () => {
+    // queued, but the balance row does not exist, so nothing is measured
+    setChain(P(1000).toString(), '0', '0');
+    db['AccountBalance'] = {};
+
+    await reconcile(9000, { force: true });
+
+    expect(reconcileStats()).toEqual({ compared: 0, drifted: 0 });
   });
 
   it('captures the on-chain snapshot at queue time, not at flush time', async () => {

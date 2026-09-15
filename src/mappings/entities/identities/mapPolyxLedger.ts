@@ -4,6 +4,7 @@ import { decodeEvent } from '../../../decode';
 import {
   Account,
   AccountBalance,
+  AnomalyKind,
   EntryDirection,
   EventIdEnum,
   HoldEntry,
@@ -15,6 +16,7 @@ import {
   PolyxPool,
 } from '../../../types';
 import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { camelToSnakeCase, is8xChain, snakeToCamelCase } from '../../../utils/common';
 import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/staking';
 import { ledgerAccount } from '../../../utils/accounts';
@@ -1056,6 +1058,10 @@ export const handleBalanceHeld = async (event: SubstrateEvent): Promise<void> =>
   const amount = amountOf(decoded);
   const reason = holdReasonOf(decoded) ?? HoldReason.Unknown;
 
+  if (!who) {
+    return;
+  }
+
   await postTransition(args, {
     from: { address: who, pool: PolyxPool.Free },
     to: { address: who, pool: PolyxPool.Reserved },
@@ -1075,6 +1081,10 @@ export const handleBalanceReleased = async (event: SubstrateEvent): Promise<void
   const amount = amountOf(decoded);
   const reason = holdReasonOf(decoded) ?? HoldReason.Unknown;
 
+  if (!who) {
+    return;
+  }
+
   await postTransition(args, {
     from: { address: who, pool: PolyxPool.Reserved },
     to: { address: who, pool: PolyxPool.Free },
@@ -1093,6 +1103,10 @@ export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<vo
   const who = holder(decoded);
   const amount = amountOf(decoded);
   const reason = holdReasonOf(decoded) ?? HoldReason.Unknown;
+
+  if (!who) {
+    return;
+  }
 
   await postTransition(args, {
     from: { address: who, pool: PolyxPool.Reserved },
@@ -1283,6 +1297,20 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   const newFree = getBigIntValue(optionalField(decoded, 'free'));
   const rawReserved = optionalField(decoded, 'reserved');
   const newReserved = rawReserved !== undefined ? getBigIntValue(rawReserved) : undefined;
+
+  if (!who) {
+    // `ledgerAccount` would otherwise create and save an `Account` keyed `undefined`, and this
+    // handler would go on to write an `AccountBalance` and `PolyxEntry` rows against it. A
+    // `BalanceSet` naming nothing is a decode failure, not an account.
+    void recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `balances.${args.eventId} carried no account to set a balance on`,
+      block,
+      eventIdx,
+    });
+
+    return;
+  }
 
   const account = await ledgerAccount(who, blockId, datetime);
   const balance = await loadBalance(who, account.identityId, blockId);
