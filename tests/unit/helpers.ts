@@ -9,6 +9,7 @@ import { SubstrateEvent } from '@subql/types';
 export const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 export const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 export const storeRemove = (): jest.Mock => (globalThis as any).store.remove as jest.Mock;
+export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
 
 /** Minimal Codec stand-in — handlers only read `toString` / `toJSON` / `isEmpty`. */
 export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
@@ -54,6 +55,40 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
   (globalThis as any).api.registry = { chainSS58: 12 };
 
   return { identity: { keyRecords: jest.fn().mockResolvedValue({ isEmpty: true }) } };
+};
+
+/**
+ * Wires `store.getByFields` — used by `getAllByFields` — to read live from the same in-memory
+ * `db` `mockStore` writes to, with a working `.save()` on each returned row. `store.get`'s wiring
+ * above gives `Entity.get(id).save()` this for free; `store.getByFields` is a different store
+ * primitive and needs it done explicitly for any handler that fetches a set and mutates it (the
+ * "replace by diff" pattern — close rows no longer present, leave matching ones alone).
+ *
+ * Ignores the filter expression and returns every row for `entityName` — fine for a test db
+ * seeded with only the rows one query cares about; a handler diffing a mixed set needs its own
+ * filtering, same as production code does after the store read.
+ */
+export const mockGetByFields = (db: MockDb, entityName: string): void => {
+  storeGetByFields().mockImplementation((name: string) => {
+    if (name !== entityName) {
+      return Promise.resolve([]);
+    }
+
+    const rows = Object.values(db[entityName] ?? {}).map((raw: object) => {
+      const row: any = { ...raw };
+
+      row.save = () => {
+        const data = { ...row };
+        delete data.save;
+        db[entityName][row.id] = data;
+        return Promise.resolve();
+      };
+
+      return row;
+    });
+
+    return Promise.resolve(rows);
+  });
 };
 
 /** Field metadata for a Polymesh tuple event — unnamed, so decode falls to the shape table. */

@@ -18,3 +18,24 @@ registerShape('staking', 'Rewarded', discontinuedAt(LAST_V7, ['identityId', 'sta
 registerShape('staking', 'Withdrawn', discontinuedAt(LAST_V7, ['stash', 'amount']));
 registerShape('staking', 'Slash', discontinuedAt(LAST_V7, ['stash', 'amount']));
 registerShape('staking', 'Slashed', discontinuedAt(LAST_V7, ['stash', 'amount']));
+
+/**
+ * Verified against `pallets/staking/src/pallet/mod.rs` at v7.4.0: at that version Polymesh's own
+ * custom `staking` pallet already carried the full validator/nomination surface later split into
+ * the dedicated `validators` pallet at v8.0.0 — `Nominated`'s shape is unchanged across that
+ * split (`nominatorIdentity, stash, targets`, same order both sides), only the module and the
+ * struct-vs-tuple encoding change.
+ */
+registerShape(
+  'staking',
+  'Nominated',
+  discontinuedAt(LAST_V7, ['nominatorIdentity', 'stash', 'targets'])
+);
+
+/**
+ * Same v7.4.0 source: `Chilled { stash }` and `Kicked { nominator, stash }` both exist there,
+ * shape-identical to their v8 counterparts — missing here, a pre-v8 `Chilled`/`Kicked` would
+ * throw `NoDecoderForSpecVersion` unhandled.
+ */
+registerShape('staking', 'Chilled', discontinuedAt(LAST_V7, ['stash']));
+registerShape('staking', 'Kicked', discontinuedAt(LAST_V7, ['nominator', 'stash']));

@@ -2206,10 +2206,28 @@ type StakingPosition @entity {
   rewardDestinationAccount: Account
   isValidator: Boolean!
   isChilled: Boolean!
+  nominations: [Nomination!]! @derivedFrom(field: "position")
   totalRewarded: BigInt!
   totalSlashed: BigInt!
   createdEvent: Event!
   updatedEvent: Event!
+}
+
+"""
+One identity's nomination of one validator, from `staking.Nominated` (pre-v8) /
+`validators.Nominated` (v8+). A `nominate` call replaces the whole target set — the previous
+open rows for targets no longer nominated are closed, rows for targets already nominated are left
+untouched, and rows for newly-added targets are created
+"""
+type Nomination @entity @compositeIndexes(fields: [["position", "eraIndex"]]) {
+  id: ID! # stash/validator/padId(blockId)
+  position: StakingPosition! @index
+  validator: Account! @index
+  "the era active when the nomination was submitted — nominations apply going forward, not to a specific past era"
+  eraIndex: Int
+  validFromEvent: Event!
+  "null = still nominated"
+  validToEvent: Event
 }
 
 """
