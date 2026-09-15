@@ -51,18 +51,16 @@ describe('seedAccountBalances', () => {
     (globalThis as any).api.query = {
       system: {
         account: {
-          entries: jest
-            .fn()
-            .mockResolvedValue([
-              accountEntry(A, {
-                free: '1000000',
-                reserved: '250',
-                miscFrozen: '400',
-                feeFrozen: '100',
-              }),
-              accountEntry(B, { free: '5000', reserved: '0' }),
-              accountEntry('5zeroBalance', { free: '0', reserved: '0' }),
-            ]),
+          entries: jest.fn().mockResolvedValue([
+            accountEntry(A, {
+              free: '1000000',
+              reserved: '250',
+              miscFrozen: '400',
+              feeFrozen: '100',
+            }),
+            accountEntry(B, { free: '5000', reserved: '0' }),
+            accountEntry('5zeroBalance', { free: '0', reserved: '0' }),
+          ]),
         },
       },
     };
@@ -87,12 +85,64 @@ describe('seedAccountBalances', () => {
     });
   });
 
-  it('records a genesis freeze as a single lock so frozen stays a MAX going forward', async () => {
-    await seedAccountBalances({ blockId: '0000000000', datetime: new Date(0) });
+  /**
+   * F7 — the seeded freeze used to go in wholesale under a `'genesis'` lock. `bonded` reads the
+   * `'staking '` lock, so a seeded staker was never bonded; and since `frozen` is the MAX over
+   * locks, the `'genesis'` entry kept `frozen` pinned at the seeded amount forever, including
+   * after the staker unbonded.
+   */
+  describe('attributing the seeded freeze', () => {
+    it('leaves an unattributable freeze under a neutral lock, never the staking one', async () => {
+      await seedAccountBalances({ blockId: '0000000000', datetime: new Date(0) });
 
-    expect(db['AccountBalance'][A].locks).toEqual([
-      { lockId: 'genesis', amount: BigInt(400), reasons: undefined },
-    ]);
-    expect(db['AccountBalance'][B].locks).toEqual([]);
+      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: BigInt(400) }]);
+      expect(db['AccountBalance'][A].bonded).toBe(BigInt(0));
+      expect(db['AccountBalance'][B].locks).toEqual([]);
+    });
+
+    it('pre-v8: files the bonded part as the staking lock, the rest as residual', async () => {
+      (globalThis as any).api.query.staking = {
+        bonded: jest.fn().mockResolvedValue(codec(null as unknown as string)),
+        ledger: jest
+          .fn()
+          .mockResolvedValue({ toJSON: () => ({ total: '300', active: '300', unlocking: [] }) }),
+      };
+
+      await seedAccountBalances({ blockId: '0000000000', datetime: new Date(0) });
+
+      expect(db['AccountBalance'][A].locks).toEqual([
+        { lockId: 'staking ', amount: BigInt(300), reasons: 'staking' },
+        { lockId: 'residual', amount: BigInt(400) },
+      ]);
+      // the bond is now visible as bonded, and frozen is still the MAX
+      expect(db['AccountBalance'][A]).toMatchObject({
+        bonded: BigInt(300),
+        frozen: BigInt(400),
+      });
+    });
+
+    it('v8: takes holds from chain, so a seeded bond is bonded and otherReserved is right', async () => {
+      (globalThis as any).api.query.balances = {
+        holds: jest.fn().mockResolvedValue({
+          toJSON: () => [
+            { id: { staking: 'Staking' }, amount: '200' },
+            { id: { preimage: 'Preimage' }, amount: '50' },
+          ],
+        }),
+      };
+
+      await seedAccountBalances({ blockId: '0000000000', datetime: new Date(0) });
+
+      expect(db['AccountBalance'][A]).toMatchObject({
+        reserved: BigInt(250),
+        bonded: BigInt(200),
+        otherReserved: BigInt(50),
+      });
+      expect(db['AccountBalance'][A].holds).toEqual([
+        { reason: 'Staking', amount: BigInt(200) },
+        { reason: 'Preimage', amount: BigInt(50) },
+      ]);
+      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: BigInt(400) }]);
+    });
   });
 });
