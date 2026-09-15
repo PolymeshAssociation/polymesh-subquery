@@ -30,6 +30,7 @@ export * from './settlements/mapVenue';
 export * from './events/mapNomination';
 export * from './events/mapStakingEvent';
 export * from './events/mapStakingPosition';
+export * from './events/mapValidator';
 export * from './assets/mapStatistics';
 export * from './stos/mapSto';
 export * from './block/mapSubqueryVersion';

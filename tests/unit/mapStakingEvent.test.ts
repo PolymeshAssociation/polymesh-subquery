@@ -81,4 +81,44 @@ describe('handleStakingEvent', () => {
       rewardDestinationAccount: BOB,
     });
   });
+
+  it('SlashReported logs the reported validator, not an anomaly, at either era', async () => {
+    const db = mockStore();
+
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'SlashReported',
+        fields: { validator: ALICE, fraction: 100_000, slashEra: 12 },
+      })
+    );
+
+    expect(Object.values(db.StakingEvent)[0]).toMatchObject({ stashAccount: ALICE });
+    expect(db.IndexerAnomaly ?? {}).toEqual({});
+
+    await handleStakingEvent(
+      tupleEvent({
+        section: 'staking',
+        method: 'SlashReported',
+        data: [codec(ALICE), codec(100_000), codec(12)],
+        specVersion: 7_004_001,
+        idx: 1,
+      })
+    );
+
+    expect(Object.values(db.StakingEvent)).toHaveLength(2);
+    expect(db.IndexerAnomaly ?? {}).toEqual({});
+  });
+
+  it('v8 Bonded/Unbonded still decode amount through the named-field path', async () => {
+    const db = mockStore();
+
+    await handleStakingEvent(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+
+    const [row] = Object.values(db.StakingEvent) as any[];
+
+    expect(row).toMatchObject({ stashAccount: ALICE, amount: BigInt(4000) });
+  });
 });

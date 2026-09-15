@@ -39,3 +39,25 @@ registerShape(
  */
 registerShape('staking', 'Chilled', discontinuedAt(LAST_V7, ['stash']));
 registerShape('staking', 'Kicked', discontinuedAt(LAST_V7, ['nominator', 'stash']));
+
+/**
+ * Same v7.4.0 source: `ValidatorPrefsSet` and the identity-permissioning surface were already
+ * shape-identical to their v8 counterparts even before the `validators` pallet split off — the
+ * fields below match `PalletStakingValidatorPrefs` / the `validators` module's v8 shapes exactly.
+ */
+registerShape('staking', 'ValidatorPrefsSet', discontinuedAt(LAST_V7, ['stash', 'prefs']));
+registerShape(
+  'staking',
+  'PermissionedIdentityAdded',
+  discontinuedAt(LAST_V7, ['governanceCouncillDid', 'validatorsIdentity'])
+);
+registerShape(
+  'staking',
+  'PermissionedIdentityRemoved',
+  discontinuedAt(LAST_V7, ['governanceCouncillDid', 'validatorsIdentity'])
+);
+registerShape(
+  'staking',
+  'SlashReported',
+  discontinuedAt(LAST_V7, ['validator', 'fraction', 'slashEra'])
+);

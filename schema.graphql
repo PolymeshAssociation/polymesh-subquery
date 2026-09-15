@@ -2231,6 +2231,24 @@ type Nomination @entity @compositeIndexes(fields: [["position", "eraIndex"]]) {
 }
 
 """
+A validator stash. `isPermissioned` is set from `PermissionedIdentityAdded`/`Removed`, which name
+an Identity, not a stash — so it only updates rows that already exist for that identity at the
+time the event fires; a stash bonded *after* its identity is permissioned won't retroactively
+pick up the flag until its own `Validator` row is next touched
+"""
+type Validator @entity {
+  id: ID! # stash address
+  account: Account! @index
+  identity: Identity @index
+  commission: BigInt
+  blocked: Boolean!
+  isPermissioned: Boolean!
+  isActive: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
 
 `caller` (who invoked the action), not `identity` — deliberately asymmetric with `AssetAgent.identity`

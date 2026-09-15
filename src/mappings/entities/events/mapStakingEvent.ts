@@ -138,6 +138,17 @@ const getLegacyStakingEventDetails = async (
   return details;
 };
 
+/**
+ * `SlashReported` is a validator-offence *report* — a possible future slash, not the movement
+ * itself (`Slash`/`Slashed` cover that, handled above). No entity field for it yet (per
+ * docs/implementation/07-staking.md), so it's logged the same way `Slash`/`Slashed` are: a
+ * `StakingEvent` row naming the validator. Shape-identical pre/post v8 (verified against
+ * `pallets/staking/src/pallet/mod.rs` at v7.4.0), so one `decodeEvent` call covers both eras.
+ */
+const getSlashReportedDetails = (decoded: DecodedEvent): StakingEventDetails => ({
+  stashAccount: getTextValue(decoded.validator),
+});
+
 const getStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[],
@@ -149,6 +160,8 @@ const getStakingEventDetails = async (
 
   if ([EventIdEnum.Slash, EventIdEnum.Slashed].includes(eventId)) {
     details = getSlashEventDetails(params);
+  } else if (eventId === EventIdEnum.SlashReported) {
+    details = getSlashReportedDetails(decodeEvent(event));
   } else if (eventId === EventIdEnum.Nominated) {
     details = getNominatedEventDetails(params);
   } else if (is8xChain(block)) {
