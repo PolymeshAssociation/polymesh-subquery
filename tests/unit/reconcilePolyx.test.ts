@@ -14,20 +14,27 @@ import {
   reconcileAccount,
   reconcileBlock,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
+import { __resetControllerCache } from '../../src/utils/staking';
 
 const ADDR = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
 const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 
-const codec = (v: string) => ({ toString: () => v });
+const codec = (v: unknown) => ({
+  toString: () => (typeof v === 'string' ? v : JSON.stringify(v)),
+  toJSON: () => v,
+});
 
-const block = (height: number): SubstrateBlock =>
+const block = (height: number, specVersion = 8_000_000): SubstrateBlock =>
   ({
     block: { header: { number: { toString: () => String(height) } } },
     timestamp: new Date('2024-01-01T00:00:00Z'),
-    specVersion: 8_000_000,
+    specVersion,
   } as unknown as SubstrateBlock);
+
+/** A pre-v8 block, where a bond is a `'staking '` lock rather than a `Staking` hold. */
+const v7Block = (height: number): SubstrateBlock => block(height, 7_000_000);
 
 /**
  * Queue a reconcile (as an event handler would, mid-block) then flush it (as the *next* block's
@@ -70,12 +77,33 @@ const setDerived = (row: Partial<Record<string, bigint | any[]>>) => {
   };
 };
 
-const setChain = (free: string, reserved: string, frozen: string) => {
+const setChain = (
+  free: string,
+  reserved: string,
+  frozen: string,
+  /**
+   * The freeze breakdown the correction rebuilds `locks`/`holds` from: `holds` is v8's
+   * `balances.holds(who)` (each `id` a composite `RuntimeHoldReason`), `ledgerTotal` is pre-v8's
+   * `staking.ledger(controller).total`.
+   */
+  { holds = [], ledgerTotal }: { holds?: unknown[]; ledgerTotal?: string } = {}
+) => {
   (globalThis as any).api.query = {
     system: {
       account: jest.fn().mockResolvedValue({
         data: { free: codec(free), reserved: codec(reserved), frozen: codec(frozen) },
       }),
+    },
+    balances: {
+      holds: jest.fn().mockResolvedValue(codec(holds)),
+    },
+    staking: {
+      bonded: jest.fn().mockResolvedValue(codec(null)),
+      ledger: jest
+        .fn()
+        .mockResolvedValue(
+          codec(ledgerTotal === undefined ? null : { total: ledgerTotal, active: ledgerTotal })
+        ),
     },
   };
 };
@@ -87,6 +115,7 @@ const anomalies = () =>
 
 beforeEach(() => {
   __resetOnChainCache();
+  __resetControllerCache();
   db = {};
   storeGet().mockImplementation((entity: string, id: string) => Promise.resolve(db[entity]?.[id]));
   storeSet().mockImplementation((entity: string, id: string, data: any) => {
@@ -134,16 +163,50 @@ describe('reconcileAccount / reconcileBlock', () => {
     });
   });
 
-  it('corrects frozen by pinning the staking lock, so later staking events adjust a real base', async () => {
-    setDerived({ free: P(1000), frozen: BigInt(0), transferable: P(1000) });
-    setChain(P(1000).toString(), '0', P(400).toString());
+  it('rebuilds v8 holds from chain, so bonded and otherReserved stay consistent', async () => {
+    // F4: the correction used to file the whole frozen amount under the `'staking '` lock on every
+    // chain version, and never touched `holds` — so on v8 `bonded` counted an unrelated freeze,
+    // `SUM(holds)` no longer matched the corrected `reserved`, and the next `Unlocked` (which
+    // reads a `'staking '` lock on a v8 account as an un-migrated pre-v8 lock) wiped `frozen`.
+    setDerived({ free: P(1000), reserved: BigInt(0), total: P(1000) });
+    setChain(P(1000).toString(), P(700).toString(), P(50).toString(), {
+      holds: [
+        { id: { staking: 'Staking' }, amount: P(600).toString() },
+        { id: { preimage: 'Preimage' }, amount: P(100).toString() },
+      ],
+    });
 
     await reconcile(9000, { force: true });
 
     expect(db['AccountBalance'][ADDR]).toMatchObject({
-      frozen: P(400),
-      transferable: P(600),
-      locks: [{ lockId: 'staking ', amount: P(400), reasons: 'staking' }],
+      reserved: P(700),
+      bonded: P(600),
+      otherReserved: P(100),
+      frozen: P(50),
+      holds: [
+        { reason: 'Staking', amount: P(600) },
+        { reason: 'Preimage', amount: P(100) },
+      ],
+    });
+    // never the staking lock on v8 — `handleBalanceUnlocked` would clear it
+    expect(db['AccountBalance'][ADDR].locks).toEqual([{ lockId: 'residual', amount: P(50) }]);
+  });
+
+  it('pins the pre-v8 staking lock to ledger.total and files the remainder as residual', async () => {
+    setDerived({ free: P(1000), frozen: BigInt(0), transferable: P(1000) });
+    setChain(P(1000).toString(), '0', P(500).toString(), { ledgerTotal: P(400).toString() });
+
+    await reconcileAccount(ADDR, '0000009000', v7Block(9000), { force: true });
+    await reconcileBlock();
+
+    expect(db['AccountBalance'][ADDR]).toMatchObject({
+      frozen: P(500),
+      bonded: P(400),
+      transferable: P(500),
+      locks: [
+        { lockId: 'staking ', amount: P(400), reasons: 'staking' },
+        { lockId: 'residual', amount: P(500) },
+      ],
     });
   });
 

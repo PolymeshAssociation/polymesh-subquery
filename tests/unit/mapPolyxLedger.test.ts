@@ -22,6 +22,7 @@ import {
   handleBalanceSuspended,
   handleBalanceThawed,
   handleBalanceTransfer,
+  handleBalanceTransferWithMemo,
   handleBalanceUnlocked,
   handleBalanceUnreserved,
   handleBonded,
@@ -30,6 +31,9 @@ import {
   handleWithdrawn,
   handleDustLost,
   handleReserveRepatriated,
+  handleStakingSlash,
+  handleTransactionFeeCharged,
+  handleTransferAndHold,
   handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
@@ -43,10 +47,16 @@ const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
 
-const mockCodec = (value: string) => ({
-  toString: () => value,
+/**
+ * `toString()` is `stringify(toJSON())` in polkadot-js, so a composite enum such as v8's
+ * `RuntimeHoldReason` stringifies to `'{"staking":"Staking"}'`, not `'Staking'`. Mirroring that
+ * here is what lets a fixture carry the shape the chain really emits — a plain string mock hid
+ * the hold-reason defect (F8) entirely.
+ */
+const mockCodec = (value: unknown) => ({
+  toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
   toJSON: () => value,
-  toU8a: () => Buffer.from(value),
+  toU8a: () => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)),
 });
 
 let blockHeight = 1_000_000;
@@ -55,7 +65,7 @@ let blockHeight = 1_000_000;
 const structEvent = (
   section: string,
   method: string,
-  fields: Record<string, string>,
+  fields: Record<string, unknown>,
   { specVersion = 8_000_000, atHeight }: { specVersion?: number; atHeight?: number } = {}
 ): SubstrateEvent => {
   if (atHeight === undefined) {
@@ -86,9 +96,40 @@ const structEvent = (
 
 const balancesEvent = (
   method: string,
-  fields: Record<string, string>,
+  fields: Record<string, unknown>,
   opts: { specVersion?: number; atHeight?: number } = {}
 ): SubstrateEvent => structEvent('balances', method, fields, opts);
+
+/**
+ * The shape a v8 `RuntimeHoldReason` really decodes to: a composite enum, the pallet's own reason
+ * nested under the pallet name. Confirmed against live mainnet (`8000020`) and testnet (`8001010`)
+ * metadata, where `createType('RuntimeHoldReason', { Staking: 'Staking' }).toString()` is
+ * `'{"staking":"Staking"}'`.
+ */
+const STAKING_HOLD_REASON = { staking: 'Staking' };
+
+/**
+ * A run of events emitted by one extrinsic, in order, sharing a block — which is what the
+ * cross-event pairings key on. Each gets its own event index so their entries do not collide.
+ */
+const extrinsicEvents = (
+  height: number,
+  emitted: [section: string, method: string, fields: Record<string, unknown>][],
+  { specVersion = 8_000_000 }: { specVersion?: number } = {}
+): SubstrateEvent[] =>
+  emitted.map(([section, method, fields], index) => {
+    const event = structEvent(section, method, fields, { atHeight: height, specVersion });
+
+    (event as { idx: number }).idx = index;
+    (event as { extrinsic?: unknown }).extrinsic = {
+      idx: 1,
+      // `getEventParams` resolves the call, and the eth-transact check walks into it
+      extrinsic: { method: { section: 'utility', method: 'batchAll' } },
+      success: true,
+    };
+
+    return event;
+  });
 
 /** A tuple-style event (pre-v8 Polymesh pallet): the block metadata carries no field names. */
 const tupleEvent = (
@@ -155,7 +196,19 @@ beforeEach(() => {
     return Promise.resolve();
   });
 
-  storeGetByFields().mockResolvedValue([]);
+  /**
+   * A real `getByFields` over the in-memory rows, not a blanket `[]`. Every cross-event pairing in
+   * this module (endowment ⇄ transfer, deposit ⇄ endowment, withdrawal ⇄ fee, deposit ⇄ reward)
+   * reads back entries written earlier in the same block, so stubbing it empty meant none of those
+   * paths were ever exercised.
+   */
+  storeGetByFields().mockImplementation((entity: string, filter: [string, string, unknown][]) =>
+    Promise.resolve(
+      Object.values(db[entity] ?? {})
+        .filter(row => filter.every(([field, op, value]) => op === '=' && row[field] === value))
+        .map(clone)
+    )
+  );
 });
 
 const entries = (): Row[] => Object.values(db['PolyxEntry'] ?? {});
@@ -248,6 +301,30 @@ describe('Event → pool transition', () => {
       bonded: BigInt(900),
     });
     expect(entries().every(r => r.holdReason === HoldReason.Staking)).toBe(true);
+  });
+
+  it('Held{Staking}: decodes the real v8 composite RuntimeHoldReason, not just a bare string', async () => {
+    // F8: `{ staking: 'Staking' }` stringifies to `'{"staking":"Staking"}'`, which matched no
+    // HoldReason member — so every v8 hold landed as `Unknown` and `bonded` was always 0.
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
+    );
+
+    expect(balance(ALICE)).toMatchObject({
+      reserved: BigInt(900),
+      bonded: BigInt(900),
+      otherReserved: BigInt(0),
+    });
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(900) }]);
+    expect(entries().every(r => r.holdReason === HoldReason.Staking)).toBe(true);
+  });
+
+  it('Held: an unrecognised hold reason still decodes as Unknown', async () => {
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: { somethingNew: 'Whatever' }, who: ALICE, amount: '5' })
+    );
+
+    expect(entries().every(r => r.holdReason === HoldReason.Unknown)).toBe(true);
   });
 
   it('Released{Staking}: who/Reserved → who/Free, unwinding the hold', async () => {
@@ -681,5 +758,176 @@ describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
       eraIndex: 742,
     });
     expect(balance(ALICE)).toMatchObject({ free: BigInt(333), totalRewards: BigInt(333) });
+  });
+});
+
+/**
+ * Defects found by review against the chain source and live v8 blocks, each of which the ledger
+ * used to get wrong in a way no fixture reproduced.
+ */
+describe('v8 pairings the chain emits but the ledger double-counted', () => {
+  it('F9: a fee is debited once, not twice (Withdraw then TransactionFeePaid)', async () => {
+    const [withdraw, feePaid] = extrinsicEvents(2_000_100, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '500' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '500', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(withdraw);
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-500));
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee, amountAbs: BigInt(500) });
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(500));
+  });
+
+  it('F9: an over-estimated fee nets to the amount actually charged', async () => {
+    // withdraw the 500 estimate, refund 200, charge 300
+    const [withdraw, refund, feePaid] = extrinsicEvents(2_000_200, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '500' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '200' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '300', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(withdraw);
+    await handleBalanceMinted(refund);
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-300));
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(300));
+    expect(entries().every(r => r.kind === MovementKind.Fee)).toBe(true);
+  });
+
+  it('F9: a protocol fee on a runtime that emits no Withdraw still posts its own debit', async () => {
+    await handleTransactionFeeCharged(
+      structEvent(
+        'protocolFee',
+        'FeeCharged',
+        { who: ALICE, amount: '250' },
+        { specVersion: 7_000_000 }
+      )
+    );
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-250));
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee });
+  });
+
+  it('N2: an account created by a deposit is credited once (Deposit then Endowed)', async () => {
+    const [deposit, endowed] = extrinsicEvents(2_000_300, [
+      ['balances', 'Deposit', { who: BOB, amount: '1000' }],
+      ['balances', 'Endowed', { who: BOB, amount: '1000' }],
+    ]);
+
+    await handleBalanceMinted(deposit);
+    await handleBalanceEndowed(endowed);
+
+    expect(balance(BOB)?.free).toBe(BigInt(1000));
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({
+      kind: MovementKind.Endowment,
+      direction: EntryDirection.Credit,
+    });
+  });
+
+  it('F2: TransferAndHold moves the `transferred` amount, not 0', async () => {
+    await handleTransferAndHold(
+      balancesEvent('TransferAndHold', {
+        reason: STAKING_HOLD_REASON,
+        source: ALICE,
+        dest: BOB,
+        transferred: '750',
+      })
+    );
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-750));
+    expect(balance(BOB)).toMatchObject({ reserved: BigInt(750), bonded: BigInt(750) });
+  });
+
+  it('F10: a v8 staking slash comes out of the Staking hold, not free', async () => {
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1000' })
+    );
+    await handleStakingSlash(structEvent('staking', 'Slashed', { staker: ALICE, amount: '400' }));
+
+    expect(balance(ALICE)).toMatchObject({
+      // only the hold moved free; the slash left it alone
+      free: BigInt(-1000),
+      reserved: BigInt(600),
+      bonded: BigInt(600),
+      totalSlashed: BigInt(400),
+    });
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(600) }]);
+  });
+
+  it('F3: two equal transfers to one new account both credit it', async () => {
+    const [endowed, first, second] = extrinsicEvents(2_000_400, [
+      ['balances', 'Endowed', { who: BOB, amount: '100' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '100' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '100' }],
+    ]);
+
+    await handleBalanceEndowed(endowed);
+    await handleBalanceTransfer(first);
+    await handleBalanceTransfer(second);
+
+    expect(balance(BOB)?.free).toBe(BigInt(200));
+    expect(balance(ALICE)?.free).toBe(BigInt(-200));
+  });
+
+  it('F11: a memo lands on both sides of its movement, and equal transfers keep their own', async () => {
+    const [firstTransfer, firstMemo, secondTransfer, secondMemo] = extrinsicEvents(2_000_600, [
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '10' }],
+      ['balances', 'TransferWithMemo', { from: ALICE, to: BOB, amount: '10', memo: 'invoice-1' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '10' }],
+      ['balances', 'TransferWithMemo', { from: ALICE, to: BOB, amount: '10', memo: 'invoice-2' }],
+    ]);
+
+    await handleBalanceTransfer(firstTransfer);
+    await handleBalanceTransferWithMemo(firstMemo);
+    await handleBalanceTransfer(secondTransfer);
+    await handleBalanceTransferWithMemo(secondMemo);
+
+    const memos = entries().map(r => r.memo);
+
+    // both sides of both movements, each movement keeping its own memo
+    expect(memos.filter(m => m === 'invoice-1')).toHaveLength(2);
+    expect(memos.filter(m => m === 'invoice-2')).toHaveLength(2);
+  });
+
+  it('F11: a memo arriving before its Transfer is queued per movement, not overwritten', async () => {
+    const [firstMemo, secondMemo, firstTransfer, secondTransfer] = extrinsicEvents(2_000_700, [
+      ['balances', 'TransferWithMemo', { from: ALICE, to: BOB, amount: '10', memo: 'early-1' }],
+      ['balances', 'TransferWithMemo', { from: ALICE, to: BOB, amount: '10', memo: 'early-2' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '10' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '10' }],
+    ]);
+
+    await handleBalanceTransferWithMemo(firstMemo);
+    await handleBalanceTransferWithMemo(secondMemo);
+    await handleBalanceTransfer(firstTransfer);
+    await handleBalanceTransfer(secondTransfer);
+
+    const memos = entries().map(r => r.memo);
+
+    expect(memos.filter(m => m === 'early-1')).toHaveLength(2);
+    expect(memos.filter(m => m === 'early-2')).toHaveLength(2);
+  });
+
+  it('F12: relabelling an entry moves its lifetimeByKind totals with it', async () => {
+    const [deposit, rewarded] = extrinsicEvents(2_000_500, [
+      ['balances', 'Deposit', { who: ALICE, amount: '900' }],
+      ['staking', 'Rewarded', { stash: ALICE, dest: 'Stash', amount: '900' }],
+    ]);
+
+    await handleBalanceMinted(deposit);
+    await handleReward(rewarded);
+
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.StakingReward });
+    expect(balance(ALICE)).toMatchObject({ free: BigInt(900), totalRewards: BigInt(900) });
+    expect(balance(ALICE)?.lifetimeByKind).toEqual([
+      { kind: MovementKind.StakingReward, totalAbs: BigInt(900), net: BigInt(900), count: 1 },
+    ]);
   });
 });

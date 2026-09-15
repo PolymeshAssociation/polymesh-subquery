@@ -3,7 +3,14 @@ import { SubstrateBlock } from '@subql/types';
 import { AccountBalance, AnomalyKind } from '../../../types';
 import { getBigIntValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { accountDataFrozen, recomputeDerived, STAKING_LOCK_ID } from './mapPolyxLedger';
+import { is8xChain } from '../../../utils/common';
+import { readStakingLock } from '../../../utils/staking';
+import {
+  accountDataFrozen,
+  applyChainFreezes,
+  ChainFreezes,
+  readChainHolds,
+} from './mapPolyxLedger';
 
 /**
  * In-flight reconciliation (D11).
@@ -48,10 +55,9 @@ const blockNumber = (block: SubstrateBlock): number => Number(block.block.header
 const shouldSample = (block: SubstrateBlock, force: boolean): boolean =>
   force || blockNumber(block) % RECONCILE_EVERY_N_BLOCKS === 0;
 
-interface OnChain {
+interface OnChain extends ChainFreezes {
   free: bigint;
   reserved: bigint;
-  frozen: bigint;
 }
 
 let onChainCacheBlock = -1;
@@ -81,7 +87,16 @@ export const __resetOnChainCache = (): void => {
   pending.clear();
 };
 
-const readOnChain = async (address: string, blockHeight: number): Promise<OnChain> => {
+/**
+ * Everything the correction needs, read while `api` is still bound to `block`.
+ *
+ * `holds` (v8) and the staking lock (pre-v8) are read here rather than at correction time for the
+ * same reason `free`/`reserved` are: by then `api` targets a later block. Which one is read is
+ * decided by the chain version, so exactly one chain read is added per sampled account.
+ */
+const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnChain> => {
+  const blockHeight = blockNumber(block);
+
   if (blockHeight !== onChainCacheBlock) {
     onChainCacheBlock = blockHeight;
     onChainCache.clear();
@@ -96,11 +111,14 @@ const readOnChain = async (address: string, blockHeight: number): Promise<OnChai
   // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen` on
   // older runtimes, so only this inner shape is read spec-agnostically.
   const data = info.data as unknown as Record<string, Codec>;
+  const is8x = is8xChain(block);
 
   const onChain: OnChain = {
     free: getBigIntValue(data.free),
     reserved: getBigIntValue(data.reserved),
     frozen: accountDataFrozen(data),
+    holds: is8x ? await readChainHolds(address) : undefined,
+    stakingLock: is8x ? undefined : await readStakingLock(address),
   };
 
   onChainCache.set(address, onChain);
@@ -144,7 +162,7 @@ export const reconcileAccount = async (
 
   let onChain: OnChain;
   try {
-    onChain = await readOnChain(address, height);
+    onChain = await readOnChain(address, block);
   } catch {
     // A pruned node or a transient RPC error is not a ledger defect.
     return;
@@ -208,11 +226,9 @@ const reconcileOne = async (
 
   balance.free = onChain.free;
   balance.reserved = onChain.reserved;
-  balance.locks =
-    onChain.frozen > BigInt(0)
-      ? [{ lockId: STAKING_LOCK_ID, amount: onChain.frozen, reasons: 'staking' }]
-      : [];
-  recomputeDerived(balance);
+  // Rebuilds `locks`/`holds` from the same snapshot, so `bonded` and `otherReserved` stay
+  // consistent with the corrected pools — see `applyChainFreezes`.
+  applyChainFreezes(balance, onChain);
   balance.updatedEventId = `${blockId}/${padId(String(eventIdx ?? 0))}`;
 
   await balance.save();
