@@ -1,5 +1,5 @@
 import { LAST_V7 } from './consts';
-import { discontinuedAt, registerShape } from './registry';
+import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
  * `staking` pallet parameter shapes for the pre-v8 (Polymesh custom staking pallet) tuple events.
@@ -61,3 +61,17 @@ registerShape(
   'SlashReported',
   discontinuedAt(LAST_V7, ['validator', 'fraction', 'slashEra'])
 );
+registerShape(
+  'staking',
+  'EraPaid',
+  discontinuedAt(LAST_V7, ['eraIndex', 'validatorPayout', 'remainder'])
+);
+
+/**
+ * `StakersElected` carries no payload in either era (`AugmentedEvent<ApiType, []>`) — the era
+ * index and elected validator set are resolved from chain storage when it fires (see
+ * `mapEra.ts`). `hasNamedFields()` reports `false` for any zero-argument event regardless of era
+ * (`names.length > 0` is never true for an empty array), so even the v8 named-struct era needs an
+ * explicit shape here or `decodeEvent` throws `NoDecoderForSpecVersion`.
+ */
+registerShape('staking', 'StakersElected', stable([]));

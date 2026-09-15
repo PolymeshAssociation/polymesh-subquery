@@ -2173,6 +2173,9 @@ type StakingEvent @entity {
   rewardDestinationAccount: String
   nominatedValidators: [String!]
   transactionId: String
+  "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
+  eraIndex: Int @index
+  position: StakingPosition
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2243,9 +2246,27 @@ type Validator @entity {
   commission: BigInt
   blocked: Boolean!
   isPermissioned: Boolean!
-  isActive: Boolean!
+  "queried by StakersElected to clear the prior era's set — needs its own index (PG 18, see subql-schema-constraints)"
+  isActive: Boolean! @index
   createdEvent: Event!
   updatedEvent: Event!
+}
+
+"""
+One staking era. `StakersElected` carries neither an era index nor the elected validator set —
+both are resolved from chain storage (`staking.activeEra()` / `session.validators()`) when it
+fires, which is also used as the era-start signal (no event marks that directly). `EraPaid` closes
+it out with the payout figures
+"""
+type Era @entity {
+  id: ID! # padId(eraIndex)
+  eraIndex: Int! @index(unique: true)
+  startEvent: Event!
+  "null while the era is still active"
+  endEvent: Event
+  validatorPayout: BigInt
+  remainder: BigInt
+  totalStaked: BigInt
 }
 
 """

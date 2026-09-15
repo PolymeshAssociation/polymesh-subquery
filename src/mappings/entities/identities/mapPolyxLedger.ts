@@ -1222,7 +1222,12 @@ export const handlePayoutStarted = async (event: SubstrateEvent): Promise<void> 
   payoutEraIndex = raw !== undefined ? Number(getTextValue(raw)) : undefined;
 };
 
-const currentPayoutEra = (blockId: string): number | undefined =>
+/**
+ * Exported so `mapStakingEvent.ts` can stamp the same era onto `StakingEvent` rows that
+ * `PolyxEntry` already gets stamped with — one cache, one answer to "what era is this block's
+ * payout for," rather than two that could disagree.
+ */
+export const currentPayoutEra = (blockId: string): number | undefined =>
   payoutEraBlock === blockId ? payoutEraIndex : undefined;
 
 const stakingStash = (decoded: Record<string, Codec>): string | undefined =>

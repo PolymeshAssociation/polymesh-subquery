@@ -2,7 +2,7 @@ import { hexAddPrefix } from '@polkadot/util';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, DecodedEvent } from '../../../decode';
-import { Account, AnomalyKind, EventIdEnum, StakingEvent } from '../../../types';
+import { Account, AnomalyKind, EventIdEnum, StakingEvent, StakingPosition } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
@@ -12,6 +12,7 @@ import {
   RewardDestinationName,
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
+import { currentPayoutEra } from '../identities/mapPolyxLedger';
 
 const bondedUnbondedOrReward = new Set([
   EventIdEnum.Bonded,
@@ -19,6 +20,9 @@ const bondedUnbondedOrReward = new Set([
   EventIdEnum.Reward,
   EventIdEnum.Rewarded, // from 7.x Reward was renamed to Rewarded
 ]);
+
+const rewardEvents = new Set([EventIdEnum.Reward, EventIdEnum.Rewarded]);
+const slashEvents = new Set([EventIdEnum.Slash, EventIdEnum.Slashed]);
 
 type StakingEventDetails = {
   amount?: bigint;
@@ -186,7 +190,7 @@ const getStakingEventDetails = async (
  * Subscribes to staking events
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
-  const { eventId, params, extrinsic, blockEventId, block, eventIdx } = extractArgs(event);
+  const { eventId, params, extrinsic, blockId, blockEventId, block, eventIdx } = extractArgs(event);
   const details = await getStakingEventDetails(eventId, params as Codec[], event, block, eventIdx);
 
   let transactionId;
@@ -194,11 +198,35 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     transactionId = hexAddPrefix(extrinsic.extrinsic.hash.toJSON());
   }
 
+  const position = details.stashAccount
+    ? await StakingPosition.get(details.stashAccount)
+    : undefined;
+
+  if (position && details.amount !== undefined) {
+    if (rewardEvents.has(eventId)) {
+      position.totalRewarded += details.amount;
+      if (details.rewardDestination !== undefined) {
+        position.rewardDestination = details.rewardDestination;
+      }
+      if (details.rewardDestinationAccount !== undefined) {
+        position.rewardDestinationAccountId = details.rewardDestinationAccount;
+      }
+      position.updatedEventId = blockEventId;
+      await position.save();
+    } else if (slashEvents.has(eventId)) {
+      position.totalSlashed += details.amount;
+      position.updatedEventId = blockEventId;
+      await position.save();
+    }
+  }
+
   await StakingEvent.create({
     id: blockEventId,
     eventId,
     ...details,
     transactionId,
+    eraIndex: currentPayoutEra(blockId),
+    positionId: position?.id,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

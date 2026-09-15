@@ -225,3 +225,56 @@ export const readStakingLedger = async (
  */
 export const readStakingLock = async (stash: string): Promise<bigint | undefined> =>
   (await readStakingLedger(stash))?.total;
+
+/**
+ * The era `StakersElected` just elected, read from `staking.currentEra()` — **not**
+ * `staking.activeEra()`. Verified against `pallet-staking`'s `try_trigger_new_era`: the event is
+ * deposited, then `trigger_new_era` increments `CurrentEra` and stores the new era's exposures —
+ * both still within the same block. `ActiveEra` only catches up much later, when the session
+ * pallet actually rotates onto that era (`start_session` → `start_era`, a separate, later block),
+ * so reading `activeEra()` here would still return the *outgoing* era for a session or more.
+ *
+ * `undefined` when the read fails (a pruned node, or a runtime with no current era yet) — the
+ * caller leaves the era unset rather than guessing.
+ */
+export const readCurrentEraIndex = async (): Promise<number | undefined> => {
+  try {
+    const currentEra = (await api.query.staking.currentEra()).toJSON() as number | null;
+
+    return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The validator set `StakersElected` just elected, for `eraIndex` (from `readCurrentEraIndex`
+ * above) — read from `staking.erasStakers(eraIndex)` keys, **not** `session.validators()`.
+ * `trigger_new_era` populates `ErasStakers` (via `store_stakers_info`) for the new era in the same
+ * block `StakersElected` fires; `session.validators()` still reports the *outgoing*,
+ * currently-serving set at that point — the new set only takes over once the session pallet
+ * rotates onto it, later. Enumerating the double-map's keys for a fixed era index is the standard
+ * way to list its validators without reading each `Exposure` value.
+ */
+export const readEraValidators = async (eraIndex: number): Promise<string[] | undefined> => {
+  try {
+    const keys = await api.query.staking.erasStakers.keys(eraIndex);
+
+    return keys.map(key => key.args[1].toString());
+  } catch {
+    return undefined;
+  }
+};
+
+/** Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`. */
+export const readEraTotalStake = async (eraIndex: number): Promise<bigint | undefined> => {
+  try {
+    // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
+    // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
+    // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
+    // type mismatch under the webpack build that `tsc`/jest don't surface.
+    return BigInt((await api.query.staking.erasTotalStake(eraIndex)).toString());
+  } catch {
+    return undefined;
+  }
+};

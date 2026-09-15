@@ -1,5 +1,7 @@
+import { handlePositionBonded } from '../../src/mappings/entities/events/mapStakingPosition';
 import { handleStakingEvent } from '../../src/mappings/entities/events/mapStakingEvent';
-import { codec, mockStore, namedEvent, tupleEvent } from './helpers';
+import { handlePayoutStarted } from '../../src/mappings/entities/identities/mapPolyxLedger';
+import { codec, mockLedgerAccountQuery, mockStore, namedEvent, tupleEvent } from './helpers';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -120,5 +122,71 @@ describe('handleStakingEvent', () => {
     const [row] = Object.values(db.StakingEvent) as any[];
 
     expect(row).toMatchObject({ stashAccount: ALICE, amount: BigInt(4000) });
+  });
+
+  it('stamps eraIndex from the same PayoutStarted cache PolyxEntry already uses, and links the position', async () => {
+    const db = mockStore({
+      StakingPosition: {
+        [ALICE]: {
+          id: ALICE,
+          stashId: ALICE,
+          bonded: BigInt(0),
+          unbonding: BigInt(0),
+          isValidator: false,
+          isChilled: false,
+          totalRewarded: BigInt(0),
+          totalSlashed: BigInt(0),
+        },
+      },
+    });
+
+    await handlePayoutStarted(
+      namedEvent({
+        section: 'staking',
+        method: 'PayoutStarted',
+        fields: { eraIndex: 7, validatorStash: ALICE },
+      })
+    );
+
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'Rewarded',
+        fields: { stash: ALICE, dest: { account: BOB }, amount: '500' },
+        idx: 1,
+      })
+    );
+
+    const [row] = Object.values(db.StakingEvent) as any[];
+
+    expect(row).toMatchObject({ stashAccount: ALICE, eraIndex: 7, positionId: ALICE });
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      totalRewarded: BigInt(500),
+      rewardDestination: 'Account',
+      rewardDestinationAccountId: BOB,
+    });
+  });
+
+  it("links StakingEvent.position on a stash's very first Bonded (project.ts must run handlePositionBonded before handleStakingEvent)", async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: { bonded: jest.fn().mockRejectedValue(new Error('no ledger')) },
+    };
+
+    const event = namedEvent({
+      section: 'staking',
+      method: 'Bonded',
+      fields: { stash: ALICE, amount: '4000' },
+    });
+
+    // project.ts registers `Bonded: ['handlePositionBonded', 'handleStakingEvent', ...]` — in
+    // that order, so the position exists by the time `handleStakingEvent` looks it up.
+    await handlePositionBonded(event);
+    await handleStakingEvent(event);
+
+    const [row] = Object.values(db.StakingEvent) as any[];
+
+    expect(row).toMatchObject({ positionId: ALICE });
   });
 });

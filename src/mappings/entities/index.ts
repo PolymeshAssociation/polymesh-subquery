@@ -27,6 +27,7 @@ export * from './identities/mapPortfolio';
 export * from './pips/mapProposal';
 export * from './settlements/mapSettlement';
 export * from './settlements/mapVenue';
+export * from './events/mapEra';
 export * from './events/mapNomination';
 export * from './events/mapStakingEvent';
 export * from './events/mapStakingPosition';
