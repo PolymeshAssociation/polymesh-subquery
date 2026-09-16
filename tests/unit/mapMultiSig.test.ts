@@ -55,9 +55,17 @@ beforeEach(() => {
 
 describe('createMultiSig', () => {
   it('creates the Account row first and links MultiSig.account to it', async () => {
-    await createMultiSig(MULTISIG, CREATOR_DID, CREATOR_ACCOUNT, 2, '0000001', datetime);
+    await createMultiSig(
+      MULTISIG,
+      CREATOR_DID,
+      CREATOR_ACCOUNT,
+      2,
+      '0000001',
+      datetime,
+      '0000001/0000000000'
+    );
 
-    expect(ledgerAccount).toHaveBeenCalledWith(MULTISIG, '0000001', datetime);
+    expect(ledgerAccount).toHaveBeenCalledWith(MULTISIG, '0000001', datetime, '0000001/0000000000');
     expect(db[`Account:${MULTISIG}`]).toBeDefined();
 
     const multiSig = db[`MultiSig:${MULTISIG}`];
@@ -72,7 +80,15 @@ describe('createMultiSig', () => {
   });
 
   it('leaves creator null when it is not known (the genesis seed path)', async () => {
-    await createMultiSig(MULTISIG, undefined, undefined, 3, '0000000', datetime);
+    await createMultiSig(
+      MULTISIG,
+      undefined,
+      undefined,
+      3,
+      '0000000',
+      datetime,
+      '0000000/0000000000'
+    );
 
     const multiSig = db[`MultiSig:${MULTISIG}`];
     expect(multiSig.creatorId).toBeUndefined();
@@ -89,10 +105,11 @@ describe('createMultiSigSigner', () => {
       SIGNER,
       MultiSigSignerStatusEnum.Authorized,
       '0000002',
-      datetime
+      datetime,
+      '0000002/0000000000'
     );
 
-    expect(ledgerAccount).toHaveBeenCalledWith(SIGNER, '0000002', datetime);
+    expect(ledgerAccount).toHaveBeenCalledWith(SIGNER, '0000002', datetime, '0000002/0000000000');
     expect(db[`Account:${SIGNER}`].keyRole).toBe(KeyRoleEnum.MultiSigSigner);
 
     const signer = db[`MultiSigSigner:${MULTISIG}/${SignerTypeEnum.Account}/${SIGNER}`];
@@ -107,7 +124,8 @@ describe('createMultiSigSigner', () => {
       CREATOR_DID,
       MultiSigSignerStatusEnum.Authorized,
       '0000002',
-      datetime
+      datetime,
+      '0000002/0000000000'
     );
 
     expect(ledgerAccount).not.toHaveBeenCalled();
@@ -120,7 +138,7 @@ describe('createMultiSigSigner', () => {
 
 describe('createMultiSigAdmin', () => {
   it('names the admin identity by relation', async () => {
-    await createMultiSigAdmin(MULTISIG, CREATOR_DID, '0000001');
+    await createMultiSigAdmin(MULTISIG, CREATOR_DID, '0000001', '0000001/0000000000');
 
     const admin = db[`MultiSigAdmin:${MULTISIG}/${CREATOR_DID}`];
     expect(admin).toMatchObject({

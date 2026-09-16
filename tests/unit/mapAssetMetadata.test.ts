@@ -204,7 +204,8 @@ describe('handleCreatedAssetTransfer', () => {
       fromAccount: '5From000000000000000000000000000000000000000000000',
       toAccount: '5To00000000000000000000000000000000000000000000000',
       amount: BigInt(4200),
-      instructionId: '91',
+      // zero-padded to match Instruction.id (D12)
+      instructionId: '0000000091',
       eventId: 'CreatedAssetTransfer',
     });
     expect(row.fromPortfolioId).toBeUndefined();

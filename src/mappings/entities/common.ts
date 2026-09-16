@@ -7,7 +7,13 @@ import { recordAnomaly } from '../../utils/anomaly';
 
 export type Attributes<T> = Omit<
   T,
-  NonNullable<FunctionPropertyNames<T>> | 'id' | 'createdBlockId' | 'updatedBlockId' | '_name'
+  | NonNullable<FunctionPropertyNames<T>>
+  | 'id'
+  | 'createdBlockId'
+  | 'updatedBlockId'
+  | 'createdEventId'
+  | 'updatedEventId'
+  | '_name'
 >;
 
 export interface HandlerArgs {

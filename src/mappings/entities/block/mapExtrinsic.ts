@@ -87,7 +87,6 @@ const createEvmTransaction = (
   return EvmTransaction.create({
     id: extrinsicId,
     extrinsicId,
-    blockId,
     ethTxHash: resolved.ethTxHash,
     ethTxType: tx.txType,
     callKind: resolved.callKind,
@@ -105,9 +104,6 @@ const createEvmTransaction = (
     input: tx.data,
     reverted: resolved.reverted,
     revertReason: resolved.revertReason,
-    datetime: extrinsic.block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
   }).save();
 };
 

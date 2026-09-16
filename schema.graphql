@@ -76,6 +76,8 @@ enum ModuleIdEnum {
 
   "unknown module value is populated for modules not yet implemented by Polymesh SubQuery"
   unknown
+  "Synthetic module for the one seed Event written before the indexer's start block (D13). Not a chain module — permanently in sync-metadata's `notInRuntime` list, like `unknown`."
+  seeding
 }
 
 """
@@ -865,6 +867,8 @@ enum EventIdEnum {
 
   "Unknown event value is populated for events not yet implemented by Polymesh SubQuery"
   Unknown
+  "The one synthetic seed Event written at `0000000000/0000000000` before the indexer's start block (D13). Every genesis/storage-seeded row points its `createdEvent` at this. Not a chain event."
+  Seeded
 }
 
 """
@@ -1794,6 +1798,14 @@ type Block @entity {
   countExtrinsicsError: Int!
   countExtrinsicsSuccess: Int!
   countEvents: Int!
+  """
+  Block timestamp. UTC — but this applies to EVERY `Date`/`datetime` field in the API:
+  SubQuery types `Date` as Postgres `timestamp without time zone`, so it is serialised
+  with no zone marker (`"2021-11-05T13:56:36"`). A consumer calling `new Date(value)`
+  in most runtimes gets *local* time, shifting it silently by its own offset. Parse
+  every datetime as UTC — `new Date(value + 'Z')`, or `dayjs.utc(value)`. See
+  docs/architecture-review.md §10.1 (decision D8).
+  """
   datetime: Date!
   specVersionId: Int!
   events: [Event] @derivedFrom(field: "block")
@@ -1818,7 +1830,6 @@ type ChainUpgrade @entity {
   transactionVersion: Int!
   "The block `system.CodeUpdated` was emitted in"
   firstBlock: Block!
-  datetime: Date!
 }
 
 """
@@ -1852,6 +1863,8 @@ type Extrinsic @entity {
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String @index(unique: false)
   specVersionId: Int!
+  "Every event this extrinsic emitted, in event order. The reverse of `Event.extrinsic` (D13)."
+  events: [Event] @derivedFrom(field: "extrinsic")
 }
 
 """
@@ -1875,7 +1888,6 @@ type EvmTransaction @entity {
   "Same ID as the `Extrinsic` that carried this transaction"
   id: ID!
   extrinsic: Extrinsic!
-  block: Block! @index(unique: false)
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String! @index(unique: false)
   "0 for legacy, 1 for EIP-2930, 2 for EIP-1559"
@@ -1904,9 +1916,6 @@ type EvmTransaction @entity {
   "An Ethereum transaction always succeeds at the extrinsic level. This flags the ones that reverted"
   reverted: Boolean! @index(unique: false)
   revertReason: String
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2055,9 +2064,8 @@ type Account @entity {
   "Set when this account is a multisig — the account IS the multisig (defect G5)"
   multiSig: MultiSig @derivedFrom(field: "account")
   eventId: EventIdEnum!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2081,10 +2089,8 @@ type Identity @entity {
   did: String! @index(unique: true)
   primaryAccount: String! @index(unique: false)
   secondaryKeysFrozen: Boolean!
-  eventId: EventIdEnum!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
@@ -2137,8 +2143,8 @@ type IdentityKey @entity
   addedReason: EventIdEnum!
   "The event that closed it — null while active"
   removedReason: EventIdEnum
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2150,11 +2156,8 @@ type BridgeEvent @entity {
   recipient: String!
   amount: BigInt!
   txHash: String! @index(unique: false)
-  eventIdx: Int!
   createdEvent: Event!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
 }
 
 """
@@ -2170,9 +2173,7 @@ type StakingEvent @entity {
   rewardDestinationAccount: String
   nominatedValidators: [String!]
   transactionId: String
-  datetime: Date! @index
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2185,9 +2186,7 @@ type TickerExternalAgentAction @entity {
   caller: Identity @index(unique: false)
   palletName: String! @index(unique: false)
   eventId: EventIdEnum!
-  eventIdx: Int!
-  createdBlock: Block! @index(unique: false)
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2225,15 +2224,17 @@ type Sto @entity {
   raisingTicker: String
   raisingPortfolio: Portfolio!
   creator: Identity!
+  "Offering opens. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   start: Date
+  "Offering closes. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   end: Date
   tiers: [FundraiserTierJson!]!
   status: StoStatus!
   minimumInvestment: BigInt!
   offChainFundingEnabled: Boolean!
   offChainFundingToken: String
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2273,17 +2274,18 @@ enum AuthorizationStatusEnum {
 Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
 """
 type Authorization @entity {
+  "The chain's numeric authorization sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
   toId: String @index(unique: false)
   toKey: String @index(unique: false)
   data: String
+  "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date @index(unique: false)
   "Indexed because `repairAuthorizationsAfterUpgrade` reads every pending row, and `store.getByFields` refuses to filter on a column with no index"
   status: AuthorizationStatusEnum! @index
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2306,9 +2308,8 @@ type Investment @entity {
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2318,10 +2319,7 @@ type TickerExternalAgent @entity {
   id: ID! # assetId/callerId
   asset: Asset! @index(unique: false)
   caller: Identity! @index(unique: false)
-  eventIdx: Int!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2334,12 +2332,9 @@ type TickerExternalAgentHistory @entity {
   id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  datetime: Date!
   type: String!
   permissions: String
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2350,8 +2345,8 @@ type AgentGroup @entity {
   id: ID! #assetId/group_id
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2361,8 +2356,8 @@ type AgentGroupMembership @entity {
   id: ID! #assetId/group_id/member
   member: String! @index(unique: false)
   group: AgentGroup! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2385,10 +2380,8 @@ type Portfolio @entity {
   number: Int! @index(unique: false)
   name: String
   custodian: Identity
-  eventIdx: Int!
   deletedAt: Date
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2398,14 +2391,15 @@ Represents a place to trade assets. This allows for additional mediation and con
 e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
 """
 type Venue @entity {
+  "The chain's numeric venue sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID! # venueId
   owner: Identity!
   type: String!
   details: String
   instructions: [Instruction!] @derivedFrom(field: "venue")
   signers: [String!]!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2444,11 +2438,10 @@ and no movement of assets will occur.
 """
 type Instruction @entity {
   """
-  The chain's numeric instruction sequence, stored as text. Because it is not
-  zero-padded, `orderBy: [ID_ASC/DESC]` sorts it lexicographically ("9999"
-  outranks "14712"), not numerically. Order by `createdEventId` for a
-  chronological list — its halves are padded, so that ordering is total and
-  matches id-assignment order.
+  The chain's numeric instruction sequence, stored as text and zero-padded to 10
+  digits (D12), so `orderBy: [ID_ASC/DESC]` is a total order that matches
+  id-assignment (chronological) order. Filter by a literal id with the padded
+  form, e.g. `id: { equalTo: "0000014712" }`.
   """
   id: ID!
   status: InstructionStatusEnum!
@@ -2458,7 +2451,14 @@ type Instruction @entity {
   endBlock: Int
   "`endAfterBlock` is applicable only when `type` is `SettleManual`"
   endAfterBlock: Int
+  """
+  The trade date, as reported by the chain. UTC, but serialised with no timezone
+  marker: a consumer receives `"2021-11-05T13:56:36"` and `new Date(...)` parses it
+  as *local* time, shifting it silently by the reader's offset. Parse as UTC — e.g.
+  `new Date(value + 'Z')`. See docs/architecture-review.md §10.1.
+  """
   tradeDate: Date
+  "The value date, as reported by the chain. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   valueDate: Date
   memo: String
   "DID of the mediators"
@@ -2468,8 +2468,7 @@ type Instruction @entity {
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2506,8 +2505,8 @@ type Leg @entity {
   "`nftIds` is only applicable for non-fungible legs"
   nftIds: [BigInt]
   addresses: [String!]!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2522,8 +2521,8 @@ type InstructionParty @entity {
   "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
   portfolios: [Int]
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2535,8 +2534,8 @@ type OffChainReceipt @entity {
   signer: String! @index(unique: false)
   leg: Leg
   metadata: String
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2553,12 +2552,12 @@ type InstructionAffirmation @entity {
   isMediator: Boolean!
   isAutomaticallyAffirmed: Boolean!
   status: AffirmStatusEnum!
-  "If `expiry` is present the time should be check top ensure the affirmation is still valid. Applicable for mediator affirmations"
+  "If `expiry` is present the time should be checked to ensure the affirmation is still valid. Applicable for mediator affirmations. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   "`offChainReceipt` is only applicable when affirmation"
   offChainReceipt: OffChainReceipt
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 enum InstructionEventEnum {
@@ -2597,14 +2596,12 @@ type InstructionEvent @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   event: InstructionEventEnum!
-  eventIdx: Int!
   identity: String @index(unique: false)
   portfolio: Int
   account: String
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2624,8 +2621,8 @@ type Distribution @entity {
   paymentAt: BigInt!
   expiresAt: BigInt
   taxes: BigInt! # withheld tax for CA
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2640,9 +2637,7 @@ type DistributionPayment @entity {
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2655,8 +2650,8 @@ type ProposalVote @entity {
   account: String!
   vote: Boolean!
   weight: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2690,6 +2685,7 @@ type Proposer @jsonField {
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
+  "The chain's numeric PIP sequence, zero-padded to 10 digits (D12) so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   proposer: Proposer!
   state: ProposalStateEnum!
@@ -2701,8 +2697,8 @@ type Proposal @entity {
   snapshotted: Boolean!
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2753,7 +2749,6 @@ e.g. The Identity belongs to an accredited, US citizen
 """
 type Claim @entity {
   id: ID!
-  eventIdx: Int! @index(unique: false)
   target: Identity! @index(unique: false)
   issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
@@ -2766,8 +2761,7 @@ type Claim @entity {
   cddId: String
   customClaimType: CustomClaimType
   revokeDate: BigInt
-  createdBlock: Block! @index(unique: false)
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2780,9 +2774,7 @@ type TrustedClaimIssuer @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   issuer: Identity! @index(unique: false)
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2811,8 +2803,8 @@ type TransferManager @entity {
   type: TransferRestrictionTypeEnum!
   value: Int!
   exemptedEntities: [String]!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2837,8 +2829,8 @@ type StatType @entity {
   claimType: ClaimTypeEnum
   customClaimType: CustomClaimType
   claimIssuer: Identity
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2869,8 +2861,8 @@ type TransferCompliance @entity {
   claimIssuer: Identity
   min: BigInt
   max: BigInt
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2882,8 +2874,8 @@ type TransferComplianceExemption @entity {
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
   exemptedEntityId: String!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2896,8 +2888,8 @@ type Compliance @entity {
   complianceId: Int!
   data: String! # This could be expanded into structured data
   asset: Asset! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2908,8 +2900,8 @@ type AssetHolder @entity {
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   amount: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2920,8 +2912,8 @@ type NftHolder @entity {
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
   nftIds: [BigInt]
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2957,10 +2949,10 @@ type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
   account: Account
   identity: Identity
   metadata: [NftMetadataEntry]
-  mintedBlock: Block!
-  "null = still in circulation. Filter `burnedBlockId: { isNull: true }` — Boolean cannot be indexed"
-  burnedBlock: Block
-  updatedBlock: Block!
+  createdEvent: Event!
+  "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
+  burnedEvent: Event
+  updatedEvent: Event!
 }
 
 """
@@ -2984,8 +2976,8 @@ type Holding
   amount: BigInt!
   "count of non-fungible tokens held; the ids live on `Nft`"
   nftCount: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3008,10 +3000,11 @@ type AssetDocument @entity {
   link: String!
   contentHash: ContentHash
   type: String
+  "When the document was filed. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   filedAt: Date
   asset: Asset! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3043,9 +3036,7 @@ type Asset @entity {
   transferManagers: [TransferManager]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3072,9 +3063,6 @@ type AssetTransaction @entity {
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
   nftIds: [BigInt]
   eventId: EventIdEnum!
-  eventIdx: Int!
-  "`extrinsicIdx` will be null for scheduled transactions"
-  extrinsicIdx: Int
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
   fundingRound: String
   "`instruction` will only be present for the cases where Assets are transferred once instruction is executed"
@@ -3087,9 +3075,7 @@ type AssetTransaction @entity {
   memo: String
   "the account that signed the extrinsic, for movements initiated directly by an account"
   address: String
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3117,10 +3103,10 @@ type AssetMetadata @entity {
   value: String
   "true while the value is Locked or LockedUntil"
   isLocked: Boolean!
-  "value expiry, when the detail carried one"
+  "Value expiry, when the detail carried one. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3132,8 +3118,8 @@ type GlobalMetadataKey @entity {
   name: String! @index(unique: false)
   "JSON of the metadata spec (url / description / typeDef), as last registered or updated"
   spec: String
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3142,8 +3128,8 @@ A registered custom asset type — the `u32` id the chain assigns and the human 
 type CustomAssetType @entity {
   id: ID! # custom type id
   name: String!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3159,8 +3145,8 @@ type AssetAllowance @entity {
   amount: BigInt!
   "lifetime total spent against this allowance"
   totalSpent: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3172,9 +3158,7 @@ type Funding @entity {
   fundingRound: String! @index(unique: false)
   amount: BigInt!
   totalFundingAmount: BigInt!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3183,8 +3167,8 @@ type AssetMandatoryMediator @entity {
   asset: Asset!
   identityId: String! # The chain doesn't validate existence of the DID
   addedBy: Identity!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3317,9 +3301,8 @@ type PolyxEntry @entity @compositeIndexes(fields: [["account", "date"], ["accoun
   "relation is `createdEvent` to avoid colliding with the denormalised `eventId` enum column, same as `AssetTransaction`"
   createdEvent: Event!
   extrinsic: Extrinsic
-  eventIdx: Int!
-  datetime: Date!
-  createdBlock: Block!
+  "denormalised block id — `findBlockEntries` filters `= blockId` and `getByFields` has no range op (D13)"
+  blockId: String! @index
 }
 
 """
@@ -3356,7 +3339,7 @@ type AccountBalance @entity {
   "v8 only; SUM = reserved"
   holds: [HoldEntry]
 
-  updatedBlock: Block!
+  updatedEvent: Event!
 }
 
 """
@@ -3366,8 +3349,8 @@ type ChildIdentity @entity {
   id: ID!
   child: Identity!
   parent: Identity!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3407,8 +3390,8 @@ type MultiSig @entity {
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
   proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
   admins: [MultiSigAdmin!] @derivedFrom(field: "multisig")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3428,8 +3411,8 @@ type MultiSigAdmin @entity {
   "The administering identity — from `multiSig.adminDid` (genesis) or `MultiSigAddedAdmin` (defect G5)"
   admin: Identity! @index(unique: false)
   status: MultiSigAdminStatusEnum!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3458,8 +3441,8 @@ type MultiSigSigner @entity {
   signerAccount: Account @index(unique: false)
   status: MultiSigSignerStatusEnum!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "signer")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3514,13 +3497,9 @@ type MultiSigProposal @entity {
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!
-  datetime: Date!
-  eventIdx: Int!
-  extrinsicIdx: Int
   params: MultiSigProposalParams!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   extrinsic: Extrinsic
   createdEvent: Event!
 }
@@ -3541,11 +3520,7 @@ type MultiSigProposalVote @entity {
   proposal: MultiSigProposal! @index(unique: false)
   signer: MultiSigSigner! @index(unique: false)
   action: MultiSigProposalVoteActionEnum
-  datetime: Date!
-  eventIdx: Int!
-  extrinsicIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3556,8 +3531,8 @@ type CustomClaimType @entity {
   id: ID!
   identity: Identity
   name: String!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 enum AffirmingPartyEnum {
@@ -3607,10 +3582,8 @@ type ConfidentialAccount @entity {
   account: String!
   encryptionKey: String!
   creator: Identity!
-  eventIdx: Int!
   assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3622,9 +3595,7 @@ type ConfidentialEncryptionKey @entity {
   id: ID!
   encryptionKey: String!
   creator: Identity!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3642,10 +3613,8 @@ type ConfidentialAsset @entity {
   auditors: [String!]!
   mediators: [MediatorKey!]!
   totalSupply: BigInt!
-  eventIdx: Int!
   holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3656,9 +3625,7 @@ type ConfidentialAccountAsset @entity {
   id: ID!
   account: ConfidentialAccount! @index(unique: false)
   asset: ConfidentialAsset! @index(unique: false)
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3676,9 +3643,7 @@ type ConfidentialSettlement @entity {
   legCount: Int!
   status: ConfidentialSettlementStatusEnum!
   legs: [ConfidentialLeg!]! @derivedFrom(field: "settlement")
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3694,8 +3659,7 @@ type ConfidentialLeg @entity {
   """
   encryptedData: String!
   affirmations: [ConfidentialLegAffirmation!]! @derivedFrom(field: "leg")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3713,9 +3677,7 @@ type ConfidentialLegAffirmation @entity {
   """
   keyIndex: Int
   status: ConfidentialAffirmationStatusEnum!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3731,9 +3693,7 @@ type ConfidentialCurveTreeLeaf @entity {
   The compressed leaf value commitment (hex)
   """
   value: String!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3744,8 +3704,8 @@ type AssetPreApproval @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3756,7 +3716,8 @@ type TickerReservation @entity {
   ticker: String!
   asset: Asset
   identity: Identity! @index(unique: false)
+  "When the ticker reservation lapses. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }

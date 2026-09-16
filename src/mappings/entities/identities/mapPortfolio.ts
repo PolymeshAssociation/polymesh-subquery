@@ -34,14 +34,14 @@ export const getPortfolio = async ({
 
 export const createPortfolio = (
   attributes: Attributes<Portfolio>,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const { identityId, number } = attributes;
   return Portfolio.create({
     id: `${identityId}/${number}`,
     ...attributes,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -67,16 +67,14 @@ export const createPortfolioIfNotExists = async (
         identityId,
         number,
         name: '',
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 };
 
 export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -87,9 +85,7 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
   if (portfolio) {
     // If the Portfolio was initially created by createPortfolioIfNotExists we update it as if it were newly created.
     portfolio.name = name;
-    portfolio.eventIdx = eventIdx;
-    portfolio.createdBlockId = blockId;
-    portfolio.updatedBlockId = blockId;
+    portfolio.updatedEventId = blockEventId;
     portfolio.createdEventId = blockEventId;
 
     await portfolio.save();
@@ -99,16 +95,14 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
         identityId: ownerId,
         number,
         name,
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 };
 
 export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -118,13 +112,13 @@ export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<voi
   const portfolio = await getPortfolio({ identityId: ownerId, number });
 
   portfolio.name = name;
-  portfolio.updatedBlockId = blockId;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };
 
 export const handlePortfolioDeleted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -132,13 +126,13 @@ export const handlePortfolioDeleted = async (event: SubstrateEvent): Promise<voi
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
   portfolio.deletedAt = block.timestamp;
-  portfolio.updatedBlockId = blockId;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };
 
 export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawPortfolio, rawCustodian] = params;
 
   const portfolioValue = rawPortfolioToAssetHolder(rawPortfolio);
@@ -150,7 +144,7 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
 
   const portfolio = await getPortfolio(portfolioValue);
   portfolio.custodianId = custodian;
-  portfolio.updatedBlockId = blockId;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };

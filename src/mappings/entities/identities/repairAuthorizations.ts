@@ -75,7 +75,10 @@ export const needsAssetIdRepair = (row: {
  * Runs on transaction-version bumps of 7.x and later, and is idempotent - a repaired row no longer
  * holds a 12 byte payload, so it is not a candidate on the next pass.
  */
-export const repairAuthorizationsAfterUpgrade = async (block: SubstrateBlock): Promise<void> => {
+export const repairAuthorizationsAfterUpgrade = async (
+  block: SubstrateBlock,
+  blockEventId: string
+): Promise<void> => {
   if (!is7xChain(block)) {
     logger.info('Authorization payload repair skipped: chain predates asset-id payloads');
 
@@ -100,7 +103,7 @@ export const repairAuthorizationsAfterUpgrade = async (block: SubstrateBlock): P
       const assetId = await getAssetIdForLegacyTicker(legacyTickerOf(row.data));
 
       row.data = withAssetId(row.data, assetId);
-      row.updatedBlockId = blockId;
+      row.updatedEventId = blockEventId;
       repaired.push(row);
     } catch (e) {
       failed += 1;

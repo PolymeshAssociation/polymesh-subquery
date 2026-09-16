@@ -157,9 +157,9 @@ This is the best-modelled domain in the schema: an explicit lifecycle event tabl
 
 Minor: `InstructionParty.portfolios: [Int]` is an array of numbers, not relations, so portfolio joins aren't possible from a party.
 
-**One real defect, added 2026-09-01 (A14).** `Instruction.id` is the chain's own numeric sequence stored as a `String` **[V]**, so `orderBy: [ID_DESC]` sorts it lexicographically — `9999` ranks above `14712`. The list is ordered, stable, pages correctly, and puts the newest settlement about a hundred and ninety pages in. Nothing surfaces it. Fixed by D12 (zero-pad chain-assigned numeric ids); the interim workaround for a consumer is to order on `createdEventId`, which is padded on both halves and equivalent to id order.
+**One real defect, added 2026-09-01 (A14).** `Instruction.id` is the chain's own numeric sequence stored as a `String` **[V]**, so `orderBy: [ID_DESC]` sorted it lexicographically — `9999` ranked above `14712`. The list was ordered, stable, paged correctly, and put the newest settlement about a hundred and ninety pages in. Nothing surfaced it.
 
-The same shape applies to any chain-assigned numeric identifier stored as text, so it is worth sweeping the schema for others rather than fixing `Instruction` alone.
+**Resolved in Phase 7 (D12).** The schema sweep found four bare chain-integer ids — `Instruction.id`, `Venue.id`, `Proposal.id`, `Authorization.id` — all now zero-padded to 10 digits via a shared `padNumericId` helper, at construction and at every lookup, along with the FK columns that reference them. `ID` ordering on those connections is total and chronological. Composite ids (`Sto`, `Distribution`, `MultiSigProposal`) were ruled out — their leading segment is already a padded/fixed-width key under D4.
 
 ---
 
@@ -301,10 +301,12 @@ Smallest of the remaining pallet-shaped gaps and the cheapest to close: one enti
 6. **PIP lifecycle** — enactment timing unknown.
 7. **Subsidies** — smallest remaining pallet-shaped gap, cheapest to close.
 
-## Three structural observations
+## Four structural observations
 
 **Settlement is the template.** It is the only domain with a first-class lifecycle event table (`InstructionEvent`), typed error capture, and denormalisation choices documented in the schema. Every gap above is a place where a domain lacks one of those three things. Adopting the settlement pattern domain-by-domain would be a coherent programme rather than a list of fixes.
 
 **A registered event with no handler is invisible in review.** `project.ts` lists ~150 events as `[]`, and `schema.graphql`'s `EventIdEnum` implies coverage that does not exist. Nothing surfaces the difference. The metadata-sync script (`architecture-review.md` §3) should emit an "in enum, registered, not handled" report — it is the cheapest way to stop this list regrowing. The `relayer` pallet (§15) is the clearest case: its calls are in `CallIdEnum` and it has no handler and no entity.
 
 **An id that will be sorted must sort correctly.** Three findings turn out to be one — the padded composite id (D4), `getPaginatedData` ordering by its filter column (A13), and `Instruction.id` sorting lexicographically (A14). Each produces a list that is ordered, stable, paged, and wrong, with nothing to indicate it. This is a schema-review rule rather than a domain: *if a column is going to be sorted, its sort order must agree with its meaning.* `architecture-review.md` §9 states it once.
+
+**Provenance is recorded three times per entity, and the copies disagree.** 64 entities carry `createdBlock`, 17 a standalone `datetime` that is always `createdEvent.block.datetime`, 21 a standalone `eventIdx` that is always `createdEvent.eventIdx` — plus many carry a direct `Event` relation on top. The rule (D13, `architecture-review.md` §14b): a domain entity records provenance as a relation to the `Event` that caused it and carries no field derivable from that relation. `createdEvent` / `updatedEvent` replace the block-and-index copies on ~60 entities; genesis/seeded rows point at a synthetic seed `Event` rather than a discriminator column. Folded into Phase 7 — see [`implementation/13-entity-provenance.md`](./implementation/13-entity-provenance.md).

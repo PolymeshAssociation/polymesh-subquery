@@ -34,11 +34,15 @@ interface OpenArgs {
   eventIdx: number;
 }
 
-/** Opens a membership interval. `blockId` is the padded block id, which also dates `validFromBlock`. */
+/**
+ * Opens a membership interval. `blockEventId` is `padId(block)/padId(eventIdx)`; its block half
+ * dates `validFromBlock`, and the whole id is the provenance `createdEvent`.
+ */
 export const openIdentityKey = async (
   { identityId, address, role, permissions, addedReason, eventIdx }: OpenArgs,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
+  const blockId = blockEventId.split('/')[0];
   await IdentityKey.create({
     id: identityKeyId(identityId, address, blockId, eventIdx),
     identityId,
@@ -47,8 +51,8 @@ export const openIdentityKey = async (
     permissions,
     validFromBlockId: blockId,
     addedReason,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -70,8 +74,9 @@ interface CloseArgs {
 /** Closes every open interval for an account (optionally of one role); returns the rows it closed. */
 export const closeIdentityKeys = async (
   { address, role, removedReason }: CloseArgs,
-  blockId: string
+  blockEventId: string
 ): Promise<IdentityKey[]> => {
+  const blockId = blockEventId.split('/')[0];
   const open = await openIntervals(address, role);
 
   if (open.length === 0) {
@@ -81,7 +86,7 @@ export const closeIdentityKeys = async (
   open.forEach(row => {
     row.validToBlockId = blockId;
     row.removedReason = removedReason;
-    row.updatedBlockId = blockId;
+    row.updatedEventId = blockEventId;
   });
 
   // `getAllByFields` returns plain rows, not entity instances — updates go back through the store.
@@ -106,9 +111,9 @@ interface RotateArgs {
  */
 export const rotateIdentityKey = async (
   { address, role, reason, eventIdx, permissions, identityId }: RotateArgs,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
-  const [closed] = await closeIdentityKeys({ address, role, removedReason: reason }, blockId);
+  const [closed] = await closeIdentityKeys({ address, role, removedReason: reason }, blockEventId);
 
   const owningIdentity = identityId ?? closed?.identityId;
 
@@ -118,6 +123,6 @@ export const rotateIdentityKey = async (
 
   await openIdentityKey(
     { identityId: owningIdentity, address, role, permissions, addedReason: reason, eventIdx },
-    blockId
+    blockEventId
   );
 };

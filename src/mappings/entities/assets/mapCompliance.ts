@@ -12,27 +12,27 @@ import {
 import { extractArgs, getAsset } from '../common';
 
 export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isCompliancePaused = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId);
   asset.isCompliancePaused = false;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
@@ -51,28 +51,28 @@ export const handleComplianceReset = async (event: SubstrateEvent): Promise<void
   );
 };
 
-const createCompliance = (assetId: string, complianceId: number, data: any, blockId: string) =>
+const createCompliance = (assetId: string, complianceId: number, data: any, blockEventId: string) =>
   Compliance.create({
     id: `${assetId}/${complianceId}`,
     complianceId,
     data,
     assetId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
 export const handleComplianceCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawCompliance] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
   const { complianceId, data } = getComplianceValue(rawCompliance);
 
-  await createCompliance(assetId, complianceId, data, blockId);
+  await createCompliance(assetId, complianceId, data, blockEventId);
 };
 
 export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawCompliances] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -94,8 +94,8 @@ export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<v
         complianceId,
         data,
         assetId,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
       }))
     ),
   ]);
@@ -114,7 +114,7 @@ export const handleComplianceRemoved = async (event: SubstrateEvent): Promise<vo
 export const handleTrustedDefaultClaimIssuerAdded = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawIssuer] = params;
   const assetId = await getAssetId(rawAssetId, block);
@@ -122,12 +122,10 @@ export const handleTrustedDefaultClaimIssuerAdded = async (
 
   await TrustedClaimIssuer.create({
     id: `${assetId}/${issuer}`,
-    eventIdx,
     assetId,
     issuerId: issuer,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 

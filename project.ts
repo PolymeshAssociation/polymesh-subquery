@@ -517,9 +517,11 @@ const project: SubstrateProject = {
           {
             kind: SubstrateHandlerKind.Block,
             handler: 'handleBlock',
-            // Only to flush the NftHolder write buffer; a coarse cadence keeps the per-block
-            // overhead negligible while bounding how stale a buffered holder can get.
-            filter: { modulo: 100 },
+            // End-of-block: flushes the POLYX reconcile queue (only populated on %2000 / forced
+            // blocks) and the NftHolder write buffer. Both early-return when there is nothing to do.
+            // `modulo: 1` is required — the reconcile flush reads `system.account` and must run in
+            // the same block that queued it.
+            filter: { modulo: 1 },
           },
         ],
       },

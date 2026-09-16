@@ -81,12 +81,12 @@ const getStatTypes = (
 
 const upsertStatType = async (
   { assetId, opType, claimType, claimIssuerId, customClaimTypeId }: Attributes<StatType>,
-  blockId: string
+  blockEventId: string
 ) => {
   const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId, customClaimTypeId);
   let statType = await StatType.get(statTypeId);
   if (statType) {
-    statType.updatedBlockId = blockId;
+    statType.updatedEventId = blockEventId;
   } else {
     statType = StatType.create({
       id: statTypeId,
@@ -95,8 +95,8 @@ const upsertStatType = async (
       claimType,
       claimIssuerId,
       customClaimTypeId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
   return statType.save();
@@ -231,7 +231,7 @@ export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleSetTransferCompliance = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawStatisticsScope, rawTransferConditions] = params;
 
@@ -260,14 +260,14 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
       if (transferCompliance) {
         Object.assign(transferCompliance, {
           ...condition,
-          updatedBlockId: blockId,
+          updatedEventId: blockEventId,
         } satisfies Partial<TransferComplianceProps>);
       } else {
         transferCompliance = TransferCompliance.create({
           id: statTypeId,
           ...condition,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         });
       }
       return transferCompliance.save();
@@ -279,7 +279,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 };
 
 export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawExemptKey, rawExemptions] = params;
 
@@ -294,14 +294,14 @@ export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Pro
       const exemptionId = `${assetId}/${opType}/${claimType}/${entity}`;
       let exemption = await TransferComplianceExemption.get(exemptionId);
       if (exemption) {
-        exemption.updatedBlockId = blockId;
+        exemption.updatedEventId = blockEventId;
       } else {
         exemption = TransferComplianceExemption.create({
           id: exemptionId,
           ...exemptKey,
           exemptedEntityId: entity,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         });
       }
       return exemption.save();
@@ -346,7 +346,7 @@ export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent)
 export const handleTransferManagerExemptionsAdded = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
@@ -379,7 +379,7 @@ export const handleTransferManagerExemptionsAdded = async (
     );
 
     if (existingExemption) {
-      existingExemption.updatedBlockId = blockId;
+      existingExemption.updatedEventId = blockEventId;
       return existingExemption.save();
     }
 
@@ -387,8 +387,8 @@ export const handleTransferManagerExemptionsAdded = async (
       id: exemption,
       ...exemptKey,
       exemptedEntityId: exemption,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   });
 

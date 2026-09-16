@@ -1,8 +1,10 @@
 import {
   Block,
+  Event,
   EventIdEnum,
   KeyRole,
   KeyRoleEnum,
+  ModuleIdEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
 } from '../../types';
@@ -13,7 +15,7 @@ import {
   legacyQuery,
   padId,
 } from '../../utils';
-import { getAccountId, systematicIssuers } from '../consts';
+import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
 import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
@@ -52,6 +54,32 @@ const insertGenesisBlock = async (datetime: Date) =>
   }).save();
 
 /**
+ * The id of the one synthetic seed `Event` (decision D13). Genesis- and storage-seeded rows
+ * point their `createdEvent` / `updatedEvent` at it, so those relations stay non-null without an
+ * origin-discriminator column.
+ */
+export const seedEventId = SEED_EVENT_ID;
+
+/**
+ * Writes the seed `Event`. Must run after `insertGenesisBlock` (`Event.block` is non-null) and
+ * before any entity insert. Fixes defect A17: `createPortfolio` has always been called with
+ * `createdEventId: '0000000000/0000000000'` for a row that did not exist — historical mode's
+ * foreign keys are virtual, so Postgres never caught the dangling reference.
+ */
+export const insertSeedEvent = async (): Promise<void> =>
+  Event.create({
+    id: seedEventId,
+    blockId: genesisBlock,
+    eventIdx: 0,
+    specVersionId: 3000,
+    moduleId: ModuleIdEnum.seeding,
+    moduleIdText: 'seeding',
+    eventId: EventIdEnum.Seeded,
+    eventIdText: 'Seeded',
+    attributesTxt: '[]',
+  }).save();
+
+/**
  * This methods inserts all the entries for GC and systematic issuer DIDs
  *
  * For each DID here, it adds an insert in
@@ -60,7 +88,7 @@ const insertGenesisBlock = async (datetime: Date) =>
  * - Permission - adds in default whole permissions for the primary account
  * - Account - adds entry for the primary account
  */
-const handleGenesisDids = async (datetime: Date) => {
+const handleGenesisDids = async () => {
   const ss58Format = api.registry.chainSS58;
 
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
@@ -101,9 +129,8 @@ const handleGenesisDids = async (datetime: Date) => {
               keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
               eventId: EventIdEnum.DidCreated,
               address: key,
-              datetime,
             },
-            genesisBlock
+            SEED_EVENT_ID
           )
         );
         // The membership interval opened at genesis. `eventIdx` disambiguates keys of one identity
@@ -117,7 +144,7 @@ const handleGenesisDids = async (datetime: Date) => {
               addedReason: EventIdEnum.DidCreated,
               eventIdx: keyIndex,
             },
-            genesisBlock
+            SEED_EVENT_ID
           )
         );
       });
@@ -135,19 +162,15 @@ const handleGenesisDids = async (datetime: Date) => {
         did,
         primaryAccount: accountId,
         secondaryKeysFrozen: false,
-        eventId: EventIdEnum.DidCreated,
-        datetime,
       },
-      genesisBlock
+      SEED_EVENT_ID
     ),
     createPortfolio(
       {
         identityId: did,
         number: 0,
-        eventIdx: 0,
-        createdEventId: `${genesisBlock}/${padId('0')}`,
       },
-      genesisBlock
+      SEED_EVENT_ID
     ),
   ];
 
@@ -197,12 +220,15 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
         undefined,
         +signaturesRequired.toString(),
         genesisBlock,
-        datetime
+        datetime,
+        SEED_EVENT_ID
       )
     );
 
     if (adminDid.length) {
-      multiSigInserts.push(createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock));
+      multiSigInserts.push(
+        createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock, SEED_EVENT_ID)
+      );
     }
 
     signerEntries.forEach(
@@ -232,7 +258,8 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
             signerValue,
             MultiSigSignerStatusEnum.Approved,
             genesisBlock,
-            datetime
+            datetime,
+            SEED_EVENT_ID
           )
         );
       }
@@ -285,11 +312,11 @@ export default async (): Promise<void> => {
   const timestamp = await api.query.timestamp.now();
   const datetime = new Date(+timestamp.toString());
 
-  await Promise.all([
-    insertGenesisBlock(datetime),
-    handleGenesisDids(datetime),
-    handleMultiSigs(datetime),
-  ]);
+  // the genesis block and the seed Event must exist before anything points a relation at them
+  await insertGenesisBlock(datetime);
+  await insertSeedEvent();
+
+  await Promise.all([handleGenesisDids(), handleMultiSigs(datetime)]);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);

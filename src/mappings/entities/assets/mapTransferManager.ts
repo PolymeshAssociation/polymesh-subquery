@@ -15,7 +15,7 @@ const getTransferManager = (
   TransferManager.get(getTransferManageId(assetId, restriction));
 
 export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawManager] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -28,8 +28,8 @@ export const handleTransferManagerAdded = async (event: SubstrateEvent): Promise
     type,
     value,
     exemptedEntities: [],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -45,7 +45,7 @@ export const handleTransferManagerRemoved = async (event: SubstrateEvent): Promi
 };
 
 export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -58,14 +58,14 @@ export const handleExemptionsAdded = async (event: SubstrateEvent): Promise<void
     transferManager.exemptedEntities = [
       ...new Set<string>([...parsedExemptions, ...transferManager.exemptedEntities]),
     ];
-    transferManager.updatedBlockId = blockId;
+    transferManager.updatedEventId = blockEventId;
 
     await transferManager.save();
   }
 };
 
 export const handleExemptionsRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -78,7 +78,7 @@ export const handleExemptionsRemoved = async (event: SubstrateEvent): Promise<vo
     transferManager.exemptedEntities = transferManager.exemptedEntities.filter(
       e => !parsedExemptions.includes(e)
     );
-    transferManager.updatedBlockId = blockId;
+    transferManager.updatedEventId = blockEventId;
 
     await transferManager.save();
   }

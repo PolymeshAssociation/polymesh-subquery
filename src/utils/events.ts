@@ -35,8 +35,9 @@ type EventParams = {
   extrinsicId?: string;
   datetime: Date;
   eventIdx: number;
-  createdBlockId: string;
-  updatedBlockId: string;
+  blockId: string;
+  createdEventId: string;
+  updatedEventId: string;
   blockEventId: string;
 };
 
@@ -82,8 +83,9 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     callIdText,
     datetime,
     eventIdx,
-    createdBlockId: padId(blockId),
-    updatedBlockId: padId(blockId),
+    blockId: padId(blockId),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
     blockEventId,
   };
 };

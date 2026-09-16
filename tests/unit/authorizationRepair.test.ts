@@ -36,9 +36,8 @@ const makeRow = (overrides: Partial<Authorization> = {}): Authorization =>
     fromId: '0xfrom',
     toId: '0xtarget',
     status: AuthorizationStatusEnum.Pending,
-    createdBlockId: '0010000000',
-    updatedBlockId: '0010000000',
-    createdEventId: '0010000000/0000',
+    createdEventId: '0010000000/0000000000',
+    updatedEventId: '0010000000/0000000000',
     data: JSON.stringify(LEGACY_TICKER),
     ...overrides,
   });
@@ -148,13 +147,13 @@ describe('repairAuthorizationsAfterUpgrade', () => {
   it('derives the migrated asset id without reading chain state', async () => {
     withRows([makeRow()]);
 
-    await repairAuthorizationsAfterUpgrade(makeBlock());
+    await repairAuthorizationsAfterUpgrade(makeBlock(), '0000123456/0000000000');
 
     const [entity, saved] = globalAny.store.bulkUpdate.mock.calls[0];
     expect(entity).toBe('Authorization');
     // the exact value the chain migration produced for this authorization
     expect(saved[0].data).toBe(JSON.stringify(ASSET_ID));
-    expect(saved[0].updatedBlockId).toBe('0000123456');
+    expect(saved[0].updatedEventId).toBe('0000123456/0000000000');
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
@@ -166,7 +165,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
       }),
     ]);
 
-    await repairAuthorizationsAfterUpgrade(makeBlock());
+    await repairAuthorizationsAfterUpgrade(makeBlock(), '0000123456/0000000000');
 
     const [, saved] = globalAny.store.bulkUpdate.mock.calls[0];
     expect(saved[0].data).toBe(JSON.stringify([ASSET_ID, { full: null }]));
@@ -175,7 +174,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
   it('writes nothing when every row already carries an asset id (idempotent re-run)', async () => {
     withRows([makeRow({ data: JSON.stringify(ASSET_ID) })]);
 
-    await repairAuthorizationsAfterUpgrade(makeBlock());
+    await repairAuthorizationsAfterUpgrade(makeBlock(), '0000123456/0000000000');
 
     expect(globalAny.store.bulkUpdate).not.toHaveBeenCalled();
   });
@@ -184,7 +183,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
     globalAny.chainId = '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee';
     withRows([makeRow()]);
 
-    await repairAuthorizationsAfterUpgrade(makeBlock());
+    await repairAuthorizationsAfterUpgrade(makeBlock(), '0000123456/0000000000');
 
     const [, saved] = globalAny.store.bulkUpdate.mock.calls[0];
     // same blake2 digest, without the version and variant bits forced
@@ -193,7 +192,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
 
   it('does nothing on chains predating the asset-id migration', async () => {
     // the v6 -> v7 `ticker_migrations` is what rewrote the payloads, so 6.x is still ticker-only
-    await repairAuthorizationsAfterUpgrade(makeBlock(6002000));
+    await repairAuthorizationsAfterUpgrade(makeBlock(6002000), '0000123456/0000000000');
 
     expect(globalAny.store.getByFields).not.toHaveBeenCalled();
     expect(globalAny.store.bulkUpdate).not.toHaveBeenCalled();
@@ -202,7 +201,7 @@ describe('repairAuthorizationsAfterUpgrade', () => {
   it('does not touch a row whose ticker differs, guarding the derivation', async () => {
     withRows([makeRow({ data: JSON.stringify('0x543100000000000000000000') })]);
 
-    await repairAuthorizationsAfterUpgrade(makeBlock());
+    await repairAuthorizationsAfterUpgrade(makeBlock(), '0000123456/0000000000');
 
     const [, saved] = globalAny.store.bulkUpdate.mock.calls[0];
     // NUL padded "T1" is a different ticker, and derives to a different asset
