@@ -2,13 +2,13 @@ import { gql } from '@apollo/client/core';
 import { getApolloClient } from '../util';
 const { query } = getApolloClient();
 
-describe('tickerExternalAgentHistory', () => {
+describe('assetAgentHistory', () => {
   it('should return history of each external agent in ticker', async () => {
     const q = {
       variables: { ticker: '12TICKER' },
       query: gql`
         query q($ticker: String!) {
-          tickerExternalAgentHistories(filter: { assetId: { equalTo: $ticker } }, orderBy: ID_ASC) {
+          assetAgentHistories(filter: { assetId: { equalTo: $ticker } }, orderBy: ID_ASC) {
             nodes {
               ticker: assetId
               did: identityId

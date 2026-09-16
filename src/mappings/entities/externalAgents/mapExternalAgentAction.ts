@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../../types';
+import { AssetAgentAction, EventIdEnum, ModuleIdEnum } from '../../../types';
 import {
   getAssetId,
   getExemptKeyValue,
@@ -27,7 +27,7 @@ export async function mapExternalAgentAction(event: SubstrateEvent): Promise<voi
     extrinsic
   );
   if (assetId) {
-    await TickerExternalAgentAction.create({
+    await AssetAgentAction.create({
       id: blockEventId,
       assetId,
       palletName: moduleId,

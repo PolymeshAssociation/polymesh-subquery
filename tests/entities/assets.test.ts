@@ -24,13 +24,6 @@ describe('assets', () => {
               totalSupply
               totalTransfers
               isCompliancePaused
-              transferManagers(orderBy: ID_ASC) {
-                nodes {
-                  type
-                  value
-                  exemptedEntities
-                }
-              }
               compliance(orderBy: ID_ASC) {
                 nodes {
                   id: complianceId

@@ -1,8 +1,13 @@
 # 08 — External agents, compliance, and remaining cleanups
 
-Consolidates the three `TickerExternalAgent*` entities, resolves the dual transfer-restriction model, and covers the small entities not addressed elsewhere.
+Renames the three `TickerExternalAgent*` entities to `Asset`-prefixed names, resolves the dual transfer-restriction model, and covers the small entities not addressed elsewhere.
 
-**Entities:** `AssetAgent`/`AssetAgentHistory` (replacing three), `AgentGroup` (relation fix), `TransferManager` (removed), plus minor fixes.
+**Entities:** `AssetAgent` (renamed from `TickerExternalAgent`) and `AssetAgentHistory` (renamed
+from `TickerExternalAgentHistory`) — what actually *merges* is the two handler modules that write
+them, both firing on the same `externalagents` events. `AssetAgentAction` (renamed from
+`TickerExternalAgentAction`) is a straight rename with an unchanged shape — it answers "what did
+this agent do", a different question from membership, so it stays a separate entity. Plus
+`AgentGroup` (relation fix), `TransferManager` (removed), plus minor fixes.
 
 ---
 
@@ -10,38 +15,45 @@ Consolidates the three `TickerExternalAgent*` entities, resolves the dual transf
 
 ### Problem
 
-- Three entities for one concept: `TickerExternalAgent` (current), `TickerExternalAgentAction` (action log), `TickerExternalAgentHistory` (membership history).
+- Three entities, stale `Ticker`-prefixed naming post-7.x, and two of the three duplicate their
+  write path: `TickerExternalAgent` (current membership) and `TickerExternalAgentHistory`
+  (membership history) both write from handlers that fire on the same `externalagents` events
+  (`AgentAdded`/`AgentRemoved`/`GroupChanged`) — that duplication is what's worth consolidating.
+  `TickerExternalAgentAction` (action log) is a different concern entirely: it is driven from
+  *every* chain event via a 20-pallet lookup table, not from `externalagents`, so it is renamed but
+  kept as its own entity.
 - **G — `AgentGroup` has no `asset` relation.** Its id is `assetId/group_id`, but there is no `asset` field, so "all groups for asset X" requires parsing the id string.
-- `TickerExternalAgentHistory.type: String!` is **untyped** where an enum belongs; `permissions: String` is **JSON-in-a-string** where the existing `PermissionsJson` jsonField belongs.
+- `TickerExternalAgentHistory.type: String!` is **untyped** where an enum belongs.
 - `AgentGroupMembership.member: String!` is not an `Identity` relation.
-- `Ticker`-prefixed naming is stale post-7.x.
 
-### Target schema
+### Target schema (as implemented)
+
+Field provenance is `createdEvent`/`updatedEvent` (Event-grain, per the D13 rework on
+`redesign/07-schema-invariants`) rather than the `createdBlock`/`updatedBlock` this plan originally
+sketched — every other entity in the schema made that same move, so these follow it too. `eventIdx`
+/ `datetime` are not stored as separate copies; they are reachable through `createdEvent`.
 
 ```graphql
 "Current agent membership for an asset."
-type AssetAgent @entity @compositeIndexes(fields: [["assetId", "identityId"]]) {
+type AssetAgent @entity @compositeIndexes(fields: [["asset", "identity"]]) {
   id: ID!                        # assetId/did
   asset: Asset! @index
-  identity: Identity! @index
+  identity: Identity! @index     # was `caller` on TickerExternalAgent
   group: AgentGroup
-  permissions: PermissionsJson
-  createdBlock: Block!
-  updatedBlock: Block!
+  permissions: String            # kept String — see note below
   createdEvent: Event!
+  updatedEvent: Event!
 }
 
 "Append-only membership and permission history."
 type AssetAgentHistory @entity {
-  id: ID!                        # padId(block)/padId(eventIdx)/did  — D4
+  id: ID!                        # blockId/eventIdx/did
   asset: Asset! @index
   identity: Identity! @index
   type: AgentHistoryType!        # was an untyped String
-  permissions: PermissionsJson   # was JSON-in-a-string
-  eventIdx: Int!
-  datetime: Date!
-  createdBlock: Block!
+  permissions: String            # kept String — see note below
   createdEvent: Event!
+  updatedEvent: Event!
 }
 
 enum AgentHistoryType { AgentAdded, AgentRemoved, AgentPermissionsChanged, GroupChanged }
@@ -49,39 +61,57 @@ enum AgentHistoryType { AgentAdded, AgentRemoved, AgentPermissionsChanged, Group
 type AgentGroup @entity {
   id: ID!                        # assetId/groupId
   asset: Asset! @index           # ← was missing entirely
-  groupId: Int!
-  permissions: PermissionsJson   # was String
+  permissions: String            # kept String — see note below
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 type AgentGroupMembership @entity {
   id: ID!                        # assetId/groupId/did
   member: Identity! @index       # was String
   group: AgentGroup! @index
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 ```
 
-`TickerExternalAgentAction` is **kept** but renamed `AssetAgentAction` — it records *what an agent did*, which is a different question from membership, and the SDK queries it **[V]**.
+**`permissions` stays `String` (JSON-in-a-string), not the `PermissionsJson` jsonField this plan
+originally proposed.** `PermissionsJson`'s shape (`assets`/`portfolios`/`transactions`/
+`transactionGroups`, each `{type, values}`) was built for the secondary-key permission model. An
+`AgentGroup`'s on-chain permission set is `ExtrinsicPermissions` (`Whole | These<PalletPermissions>
+| Except<PalletPermissions>`, nesting per-pallet dispatchable names) — a different, richer
+structure that would need a lossy flattening to fit `PermissionsJson`. Typing it correctly (a
+dedicated jsonField shaped for `ExtrinsicPermissions`, or a flattening scheme) is a separate
+modeling exercise, deferred rather than forced into the wrong shape here.
+
+`AssetAgent.group` / `.permissions` are populated by `AgentAdded` but not kept current by
+`GroupChanged` (only `AssetAgentHistory` is updated there) — see the code comment in
+`mapExternalAgent.ts::handleExternalAgentAdded`. Wiring both paths together is a follow-up.
+
+`TickerExternalAgentAction` is **kept** but renamed `AssetAgentAction`, shape unchanged — it
+records *what an agent did*, which is a different question from membership, and the SDK queries it
+**[V]**. `caller` stays `caller` there (not renamed to `identity`) — deliberately asymmetric, see
+the entity's schema docstring.
 
 ### Handler changes
 
 `src/mappings/entities/externalAgents/` — `mapExternalAgent.ts`, `mapExternalAgentAction.ts`, `mapExternalAgentHistory.ts`. Entity targets and field types change; the event handling is already correct. All asset lookups already route through `getAssetId` **[V]**.
 
-`mapExternalAgentAction.ts` has partial `is7Dot3Chain` coverage for the `sto` module's asset-id position **[V]** — move that into the legacy decoder table ([09](./09-infrastructure.md)) rather than leaving it inline.
+`mapExternalAgentAction.ts` has partial `is7Dot3Chain` coverage for the `sto` module's asset-id
+position **[V]** — plan 09 moves that into the legacy decoder table; left inline here, unrelated to
+this commit's scope.
 
 ### Consumer impact — breaking
 
 | Consumer | Query | Change |
 |---|---|---|
-| SDK | `tickerExternalAgents` | Rename → `assetAgents`. |
+| SDK | `tickerExternalAgents` | Rename → `assetAgents`; `callerId` filters/selections → `identityId`. |
 | SDK | `tickerExternalAgentActions` | Rename → `assetAgentActions`. |
-| SDK | `tickerExternalAgentHistories` | Rename → `assetAgentHistories`; `type` becomes an enum, `permissions` becomes a jsonField. |
+| SDK | `tickerExternalAgentHistories` | Rename → `assetAgentHistories`; `type` becomes an enum (`permissions` stays a String — see the modeling note above). |
 
-Three renames plus two type changes. Mechanical, but the SDK queries all three **[V]** so it needs a coordinated release.
+Three renames plus one type change (`type` → enum) plus the `caller`→`identity` field rename.
+Mechanical, but the SDK queries all three **[V]** so it needs a coordinated release.
 
 **[I]** If the rename churn is judged not worth it, keeping the `TickerExternalAgent*` names while fixing the `AgentGroup.asset` relation and the untyped fields captures most of the value. Worth asking the SDK team which they prefer.
 

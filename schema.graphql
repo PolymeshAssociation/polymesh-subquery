@@ -2179,8 +2179,12 @@ type StakingEvent @entity {
 
 """
 Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
+
+`caller` (who invoked the action), not `identity` — deliberately asymmetric with `AssetAgent.identity`
+(who is an agent). This entity answers "what did this agent do", a different question from
+membership, which `AssetAgent` / `AssetAgentHistory` answer
 """
-type TickerExternalAgentAction @entity {
+type AssetAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
@@ -2313,26 +2317,46 @@ type Investment @entity {
 }
 
 """
-Represents an Identity authorized to perform actions on behalf of a company
+Current agent membership for an Asset — an Identity authorized to perform actions on its behalf
+
+`permissions` stays JSON-in-a-string rather than the `PermissionsJson` jsonField: that type's
+shape (`assets`/`portfolios`/`transactions`/`transactionGroups`, each a flat `{type, values}`) was
+built for the secondary-key permission model. An `AgentGroup`'s `ExtrinsicPermissions` is a
+different, richer on-chain structure (`Whole | These<PalletPermissions> | Except<PalletPermissions>`,
+nesting per-pallet dispatchable names) that does not fit it without a lossy flattening — typing it
+correctly is a separate modeling exercise, deferred rather than forced into the wrong shape here
 """
-type TickerExternalAgent @entity {
-  id: ID! # assetId/callerId
+type AssetAgent @entity @compositeIndexes(fields: [["asset", "identity"]]) {
+  id: ID! # assetId/did
   asset: Asset! @index(unique: false)
-  caller: Identity! @index(unique: false)
+  identity: Identity! @index(unique: false)
+  group: AgentGroup
+  permissions: String
   updatedEvent: Event!
   createdEvent: Event!
 }
 
 """
-Represents a change in the status of an external agent.
+Represents all possible kinds of `AssetAgentHistory` row
 
-"AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
+"AgentAdded" and "AgentPermissionsChanged" carry `permissions`; `AgentRemoved` and `GroupChanged` may not
 """
-type TickerExternalAgentHistory @entity {
+enum AgentHistoryType {
+  AgentAdded
+  AgentRemoved
+  AgentPermissionsChanged
+  GroupChanged
+}
+
+"""
+Append-only membership and permission history for an Asset's agents
+"""
+type AssetAgentHistory @entity {
   id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  type: String!
+  type: AgentHistoryType!
+  "JSON-in-a-string, not the PermissionsJson jsonField — see the docstring on AssetAgent.permissions"
   permissions: String
   updatedEvent: Event!
   createdEvent: Event!
@@ -2343,6 +2367,7 @@ Represents a set of agents authorized to perform actions for a given Asset
 """
 type AgentGroup @entity {
   id: ID! #assetId/group_id
+  asset: Asset! @index
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
   createdEvent: Event!
@@ -2354,7 +2379,7 @@ Represent membership in a group. Tracks which members belong to which groups
 """
 type AgentGroupMembership @entity {
   id: ID! #assetId/group_id/member
-  member: String! @index(unique: false)
+  member: Identity! @index(unique: false)
   group: AgentGroup! @index(unique: false)
   createdEvent: Event!
   updatedEvent: Event!
@@ -2642,6 +2667,170 @@ type DistributionPayment @entity {
 }
 
 """
+The kind of benefit or notice a `CorporateAction` represents
+"""
+enum CorporateActionKind {
+  PredictableBenefit
+  UnpredictableBenefit
+  IssuerNotice
+  Reorganization
+  Other
+}
+
+"""
+Whether `CorporateAction.targetIdentities` names the holders it applies to, or the holders it excludes
+"""
+enum TargetTreatment {
+  Include
+  Exclude
+}
+
+"""
+A per-DID withholding tax override, as set by `corporateAction.DidWithholdingTaxChanged`
+"""
+type DidTax @jsonField {
+  did: String!
+  tax: BigInt!
+}
+
+"""
+A corporate action on an Asset — a dividend, benefit, or issuer notice. Defines the record date,
+target holders and withholding tax that a linked `Distribution` or `CorporateBallot` is subject to
+"""
+type CorporateAction @entity @compositeIndexes(fields: [["asset", "kind"]]) {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  localId: Int!
+  kind: CorporateActionKind!
+  declarationDate: Date!
+  "Set once `checkpoint.RecordDateChanged` resolves the record date to an existing checkpoint"
+  recordDate: Date
+  checkpoint: Checkpoint
+  details: String
+  "null = applies to every holder, subject to `targetTreatment`"
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  documents: [String!]
+  isRemoved: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Asset-level corporate action defaults — `corporateAction.DefaultTargetIdentitiesChanged`,
+`DefaultWithholdingTaxChanged` and `DidWithholdingTaxChanged` set these ahead of any specific CA
+"""
+type CorporateActionDefaultConfig @entity {
+  id: ID! # assetId
+  asset: Asset! @index
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A balance-at-record-date snapshot for an Asset, from `checkpoint.CheckpointCreated`. Makes a
+linked `CorporateAction`'s distribution amounts verifiable
+"""
+type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
+  id: ID! # assetId/checkpointId
+  asset: Asset! @index
+  checkpointId: Int!
+  totalSupply: BigInt!
+  datetime: Date!
+  "Set when created by a `CheckpointSchedule` rather than manually"
+  schedule: CheckpointSchedule
+  createdEvent: Event!
+}
+
+"""
+A recurring checkpoint schedule for an Asset, from `checkpoint.ScheduleCreated`. The pre-v6
+period-based model (`period`/`start`/`remaining`) and the v6+ explicit-timestamp model
+(`pendingCheckpoints`) are mutually exclusive on one row, era implicit in which is null
+"""
+type CheckpointSchedule @entity {
+  id: ID! # assetId/scheduleId
+  asset: Asset! @index
+  scheduleId: Int!
+  "v6+ — explicit list of scheduled checkpoint timestamps (`ScheduleCheckpoints.pending`)"
+  pendingCheckpoints: [Date!]
+  "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
+  period: String
+  start: Date
+  remaining: Int
+  nextCheckpointAt: Date
+  "null while active"
+  removedEvent: Event
+  createdEvent: Event!
+}
+
+"""
+A shareholder ballot on a `CorporateAction`, from `corporateBallot.Created`
+"""
+type CorporateBallot @entity {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  corporateAction: CorporateAction!
+  startDate: Date!
+  endDate: Date!
+  "title, motions"
+  meta: String
+  "ranked-choice voting enabled"
+  rcv: Boolean!
+  isRemoved: Boolean!
+  votes: [CorporateBallotVote!]! @derivedFrom(field: "ballot")
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Per-motion vote weights cast in a `CorporateBallot`
+"""
+type BallotVoteEntry @jsonField {
+  power: BigInt!
+  fallback: Int
+}
+
+"""
+One identity's vote in a `CorporateBallot`, from `corporateBallot.VoteCast`
+"""
+type CorporateBallotVote @entity {
+  id: ID! # padId(block)/padId(eventIdx)
+  ballot: CorporateBallot! @index
+  voter: Identity! @index
+  "per-motion weights, in motion order"
+  votes: [BallotVoteEntry]
+  createdEvent: Event!
+}
+
+"""
+A standing fee-paying relationship from the `relayer` pallet: `payingAccount` pays transaction and
+protocol fees on `beneficiaryAccount`'s behalf, up to `allowance`. Renamed from "paying key" to
+"subsidy" at chain v8.0.0 — this entity covers both eras (id `userKey/payingKey`)
+"""
+type Subsidy @entity {
+  id: ID! # userKey/payingKey
+  "the subsidised key"
+  beneficiaryAccount: Account! @index
+  "pays the fees"
+  payingAccount: Account! @index
+  "current POLYX limit (remaining)"
+  allowance: BigInt!
+  "cumulative `SubsidyDebited` (v8+ only; 0 for pre-v8 history)"
+  totalDebited: BigInt!
+  "false = approved/authorized but not yet accepted"
+  isAccepted: Boolean!
+  isRemoved: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {
@@ -2792,19 +2981,6 @@ Represents all possible transfer restriction types
 enum TransferRestrictionTypeEnum {
   Count
   Percentage
-}
-
-"""
-deprecated in favor of `TransferCompliance`
-"""
-type TransferManager @entity {
-  id: ID! # assetId/transferManagerType/value
-  asset: Asset! @index(unique: false)
-  type: TransferRestrictionTypeEnum!
-  value: Int!
-  exemptedEntities: [String]!
-  createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """
@@ -3033,7 +3209,6 @@ type Asset @entity {
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
-  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   updatedEvent: Event!

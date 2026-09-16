@@ -117,10 +117,10 @@ const filters: Record<string, Record<string, string[]>> = {
     Removed: ['handleDistributionRemoved'],
   },
   checkpoint: {
-    CheckpointCreated: [],
-    MaximumSchedulesComplexityChanged: [],
-    ScheduleCreated: [],
-    ScheduleRemoved: [],
+    CheckpointCreated: ['handleCheckpointCreated'],
+    MaximumSchedulesComplexityChanged: [], // chain config, no entity
+    ScheduleCreated: ['handleScheduleCreated'],
+    ScheduleRemoved: ['handleScheduleRemoved'],
   },
   complianceManager: {
     AssetCompliancePaused: ['handleAssetCompliancePaused'],
@@ -137,22 +137,24 @@ const filters: Record<string, Record<string, string[]>> = {
   // never deployed to a production chain. Events are only indexed into the generic events table
   confidentialAsset: {},
   corporateAction: {
-    CAInitiated: [],
-    CALinkedToDoc: [],
-    CARemoved: [],
-    DefaultTargetIdentitiesChanged: [],
-    DefaultWithholdingTaxChanged: [],
-    DidWithholdingTaxChanged: [],
-    MaxDetailsLengthChanged: [],
-    RecordDateChanged: [],
+    CAInitiated: ['handleCaInitiated'],
+    CALinkedToDoc: ['handleCaLinkedToDoc'],
+    CARemoved: ['handleCaRemoved'],
+    DefaultTargetIdentitiesChanged: ['handleDefaultTargetIdentitiesChanged'],
+    DefaultWithholdingTaxChanged: ['handleDefaultWithholdingTaxChanged'],
+    DidWithholdingTaxChanged: ['handleDidWithholdingTaxChanged'],
+    MaxDetailsLengthChanged: [], // chain config, no entity
+    RecordDateChanged: ['handleRecordDateChanged'],
+    // pre-6.0 CAA transfers — superseded by external agents, not indexed
+    // CAATransferred: [],
   },
   corporateBallot: {
-    Created: [],
-    MetaChanged: [],
-    RangeChanged: [],
-    RCVChanged: [],
-    Removed: [],
-    VoteCast: [],
+    Created: ['handleBallotCreated'],
+    MetaChanged: ['handleBallotMetaChanged'],
+    RangeChanged: ['handleBallotRangeChanged'],
+    RCVChanged: ['handleBallotRcvChanged'],
+    Removed: ['handleBallotRemoved'],
+    VoteCast: ['handleBallotVoteCast'],
   },
   externalAgents: {
     AgentAdded: ['handleExternalAgentAdded', 'handleAgentAdded'],
@@ -255,6 +257,18 @@ const filters: Record<string, Record<string, string[]>> = {
   protocolFee: {
     FeeCharged: ['handleTransactionFeeCharged'],
   },
+  relayer: {
+    // deprecated from 8.0.0 chain version — superseded by the Subsidy events below
+    AuthorizedPayingKey: ['handleSubsidyApproved'],
+    AcceptedPayingKey: ['handleSubsidyAccepted'],
+    RemovedPayingKey: ['handleSubsidyRemoved'],
+    UpdatedPolyxLimit: ['handlePolyxLimitUpdated'],
+    ApprovedSubsidy: ['handleSubsidyApproved'],
+    AcceptedSubsidy: ['handleSubsidyAccepted'],
+    RemovedPendingSubsidy: ['handleSubsidyRemoved'],
+    RemovedSubsidy: ['handleSubsidyRemoved'],
+    SubsidyDebited: ['handleSubsidyDebited'],
+  },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
     FailedToExecuteInstruction: ['handleFailedToExecuteInstruction'],
@@ -326,10 +340,12 @@ const filters: Record<string, Record<string, string[]>> = {
     SetAssetTransferCompliance: ['handleSetTransferCompliance'],
     StatTypesAdded: ['handleStatTypeAdded'],
     StatTypesRemoved: ['handleStatTypeRemoved'],
-    TransferManagerAdded: ['handleTransferManagerAdded', 'handleStatisticTransferManagerAdded'],
-    TransferManagerRemoved: ['handleTransferManagerRemoved'],
-    ExemptionsAdded: ['handleExemptionsAdded', 'handleTransferManagerExemptionsAdded'],
-    ExemptionsRemoved: ['handleExemptionsRemoved', 'handleTransferManagerExemptionsRemoved'],
+    // TransferManager (deprecated, retired) is gone; these still feed StatType /
+    // TransferComplianceExemption for the pre-v5 percentage/count restriction model
+    TransferManagerAdded: ['handleStatisticTransferManagerAdded'],
+    TransferManagerRemoved: [],
+    ExemptionsAdded: ['handleTransferManagerExemptionsAdded'],
+    ExemptionsRemoved: ['handleTransferManagerExemptionsRemoved'],
     TransferConditionExemptionsAdded: ['handleStatisticExemptionsAdded'],
     TransferConditionExemptionsRemoved: ['handleStatisticExemptionsRemoved'],
   },
