@@ -7,15 +7,30 @@ import { FieldNotFound } from './errors';
 export type DecodedEvent = Readonly<Record<string, Codec>>;
 
 /**
+ * `asset_id` -> `assetId`. A no-op for a name with no underscore, so an already-camelCase name
+ * (the common case so far) passes through unchanged rather than being lowercased.
+ */
+const toCamelCase = (name: string): string =>
+  name.includes('_')
+    ? name.replace(/_([a-zA-Z0-9])/g, (_match, c: string) => c.toUpperCase())
+    : name;
+
+/**
  * The field names the block's own metadata gives this event, in parameter order.
  *
  * Since metadata v14 the metadata is self-describing: a struct-style event carries a name per
  * field and a tuple-style one carries none. `mapEvent` already straddles this boundary for
  * `typeName`; this reads the sibling `name`.
+ *
+ * Substrate's own macros name fields idiomatic-Rust snake_case (`asset_id`), while every shape
+ * table and handler in this codebase reads camelCase (`assetId`) - the convention `#[derive]`d
+ * upstream-pallet events (and, on a later runtime, some of Polymesh's own) already happen to
+ * satisfy only when the name has no underscore to begin with. Normalising here, once, is what
+ * lets the shape table and every handler stay camelCase-only.
  */
 export const metadataFieldNames = (event: SubstrateEvent): (string | undefined)[] =>
   (event.event as unknown as GenericEvent).meta.fields.map(({ name }) =>
-    name.isSome ? name.unwrap().toString() : undefined
+    name.isSome ? toCamelCase(name.unwrap().toString()) : undefined
   );
 
 /**

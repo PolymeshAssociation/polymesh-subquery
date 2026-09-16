@@ -93,6 +93,19 @@ describe('field', () => {
     expect(() => field(event, 'reserved')).toThrow(FieldNotFound);
     expect(() => field(event, 'reserved')).toThrow(/has no field "reserved"/);
   });
+
+  it('resolves a metadata field name given in snake_case by its camelCase equivalent', () => {
+    // seen from a later v8 testnet spec: `asset.Approval` carries [owner, spender, asset_id,
+    // amount] named fields, not the [owner, spender, assetId, amount] every handler reads
+    const event = namedEvent('asset', 'Approval', {
+      owner: '5Owner',
+      spender: '5Spender',
+      asset_id: '0xabc',
+      amount: '100',
+    });
+
+    expect(field(event, 'assetId').toString()).toBe('0xabc');
+  });
 });
 
 describe('decodeEvent, named events', () => {

@@ -112,10 +112,16 @@ export const rawPortfolioToAssetHolder = (item: Codec): AssetHolderDetails => {
 export const meshAssetHolderToAssetHolder = async (
   meshAssetHolder: MeshAssetHolder,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId?: string
 ): Promise<AssetHolderDetails> => {
   if ('account' in meshAssetHolder) {
-    const account = await getOrCreateAccount(meshAssetHolder.account, blockId, datetime);
+    const account = await getOrCreateAccount(
+      meshAssetHolder.account,
+      blockId,
+      datetime,
+      blockEventId
+    );
     // `identityId` may be undefined here — an account with no known Identity is still a present
     // holder, and callers must classify on holder presence before DID equality.
     return accountHolder(account?.identityId, meshAssetHolder.account);
@@ -138,10 +144,16 @@ export const meshAssetHolderToAssetHolder = async (
 export const extractAssetHolder = async (
   value: MeshAssetHolder | MeshPortfolio,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  blockEventId?: string
 ): Promise<AssetHolderDetails> => {
   if (is8xChain(block)) {
-    return await meshAssetHolderToAssetHolder(value as MeshAssetHolder, blockId, block.timestamp);
+    return await meshAssetHolderToAssetHolder(
+      value as MeshAssetHolder,
+      blockId,
+      block.timestamp,
+      blockEventId
+    );
   }
   return meshPortfolioToAssetHolder(value as MeshPortfolio);
 };
@@ -154,10 +166,11 @@ export const extractAssetHolder = async (
 export const rawAssetHolderToAssetHolder = async (
   rawItem: Codec,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  blockEventId?: string
 ): Promise<AssetHolderDetails> => {
   const item = JSON.parse(rawItem.toString());
-  return extractAssetHolder(item, block, blockId);
+  return extractAssetHolder(item, block, blockId, blockEventId);
 };
 
 export const getPortfolioId = ({
