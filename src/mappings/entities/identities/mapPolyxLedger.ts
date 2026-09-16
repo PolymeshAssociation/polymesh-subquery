@@ -803,7 +803,7 @@ const takePendingMemo = (
   const queued = pendingMemos.get(key);
   const memo = queued?.shift();
 
-  if (queued && queued.length === 0) {
+  if (queued?.length === 0) {
     pendingMemos.delete(key);
   }
 
@@ -989,7 +989,7 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   // batch making two equal transfers to the same new account matched the first endowment twice,
   // so the second transfer posted only its debit — the recipient's second credit was lost, and
   // the endowment's counterparty and memo were overwritten by the later one.
-  const [endowment] = (await findExtrinsicEntries(args, MovementKind.Endowment, to, amount)).filter(
+  const endowment = (await findExtrinsicEntries(args, MovementKind.Endowment, to, amount)).find(
     entry => !entry.counterpartyAddress
   );
 
@@ -1047,7 +1047,7 @@ export const handleBalanceTransferWithMemo = async (event: SubstrateEvent): Prom
     return;
   }
 
-  const [unmemoed] = (await findExtrinsicEntries(args, MovementKind.Transfer, to, amount)).filter(
+  const unmemoed = (await findExtrinsicEntries(args, MovementKind.Transfer, to, amount)).find(
     entry => !entry.memo
   );
 
@@ -1310,10 +1310,11 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
  */
 const initialPolyx = (): bigint | undefined => {
   try {
-    const raw = (api.consts as unknown as Record<string, Record<string, unknown> | undefined>)
-      .identity?.initialPOLYX;
+    const raw = (
+      api.consts as unknown as Record<string, Record<string, Codec | undefined> | undefined>
+    ).identity?.initialPOLYX;
 
-    return raw === undefined || raw === null ? undefined : BigInt(String(raw));
+    return raw === undefined || raw === null ? undefined : BigInt(raw.toString());
   } catch {
     return undefined;
   }

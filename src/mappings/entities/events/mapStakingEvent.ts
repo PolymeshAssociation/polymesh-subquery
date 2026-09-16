@@ -190,6 +190,47 @@ const getStakingEventDetails = async (
 };
 
 /**
+ * Rolls a reward or slash into the stash's `StakingPosition`. Other staking events leave it alone.
+ */
+const applyToPosition = async (
+  position: StakingPosition,
+  eventId: EventIdEnum,
+  details: StakingEventDetails,
+  stashAccount: string,
+  amount: bigint,
+  { blockId, blockEventId }: { blockId: string; blockEventId: string }
+): Promise<void> => {
+  if (rewardEvents.has(eventId)) {
+    position.totalRewarded += amount;
+    if (details.rewardDestination !== undefined) {
+      position.rewardDestination = details.rewardDestination;
+    }
+    if (details.rewardDestinationAccount !== undefined) {
+      position.rewardDestinationAccountId = details.rewardDestinationAccount;
+    }
+
+    // S1: a `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
+    // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
+    // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
+    // and fell further behind the real active bond every era. Other destinations pay out to a
+    // free balance and leave the ledger alone, so they need no read.
+    if (details.rewardDestination === 'Staked') {
+      await refreshPositionFromLedger(position, stashAccount, blockId);
+    }
+  } else if (slashEvents.has(eventId)) {
+    position.totalSlashed += amount;
+
+    // S1: `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
+    await refreshPositionFromLedger(position, stashAccount, blockId);
+  } else {
+    return;
+  }
+
+  position.updatedEventId = blockEventId;
+  await position.save();
+};
+
+/**
  * Subscribes to staking events
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
@@ -212,38 +253,11 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     ? await StakingPosition.get(details.stashAccount)
     : undefined;
 
-  if (position && details.amount !== undefined) {
-    if (rewardEvents.has(eventId)) {
-      position.totalRewarded += details.amount;
-      if (details.rewardDestination !== undefined) {
-        position.rewardDestination = details.rewardDestination;
-      }
-      if (details.rewardDestinationAccount !== undefined) {
-        position.rewardDestinationAccountId = details.rewardDestinationAccount;
-      }
-
-      // S1: a `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
-      // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
-      // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
-      // and fell further behind the real active bond every era. Other destinations pay out to a
-      // free balance and leave the ledger alone, so they need no read.
-      if (details.rewardDestination === 'Staked' && details.stashAccount) {
-        await refreshPositionFromLedger(position, details.stashAccount, blockId);
-      }
-
-      position.updatedEventId = blockEventId;
-      await position.save();
-    } else if (slashEvents.has(eventId)) {
-      position.totalSlashed += details.amount;
-
-      // S1: `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
-      if (details.stashAccount) {
-        await refreshPositionFromLedger(position, details.stashAccount, blockId);
-      }
-
-      position.updatedEventId = blockEventId;
-      await position.save();
-    }
+  if (position && details.stashAccount && details.amount !== undefined) {
+    await applyToPosition(position, eventId, details, details.stashAccount, details.amount, {
+      blockId,
+      blockEventId,
+    });
   }
 
   await StakingEvent.create({
