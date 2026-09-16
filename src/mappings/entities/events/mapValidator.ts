@@ -3,6 +3,7 @@ import { decodeEvent } from '../../../decode';
 import { Validator } from '../../../types';
 import { getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { readPermissionedIdentity } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
 
@@ -22,7 +23,14 @@ export const getOrCreateValidator = async (
       accountId: stash,
       identityId: account.identityId,
       blocked: false,
-      isPermissioned: false,
+      // Read from chain rather than defaulted: `PermissionedIdentityAdded` usually fires *before*
+      // this row exists (rows are created by `StakersElected`, later), so `setPermissioned` finds
+      // nothing to update and the flag was silently lost — 12 such events on a testnet genesis
+      // resync left all 9,054 validators with `isPermissioned: false`. Reading it here covers that
+      // ordering; `setPermissioned` still covers the reverse.
+      isPermissioned: account.identityId
+        ? (await readPermissionedIdentity(account.identityId)) ?? false
+        : false,
       isActive: false,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
@@ -59,10 +67,10 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
 };
 
 /**
- * `PermissionedIdentityAdded`/`Removed` name an Identity, not a stash, so `isPermissioned` can
- * only be set on `Validator` rows that already exist for that identity — see the schema docstring
- * on `Validator.isPermissioned` for the resulting caveat (a stash bonded after its identity is
- * permissioned doesn't retroactively pick up the flag until its own row is next touched).
+ * `PermissionedIdentityAdded`/`Removed` name an Identity, not a stash, so this can only update
+ * `Validator` rows that already exist for that identity. The opposite ordering — the identity
+ * permissioned before any of its stashes has a row, which is the usual one — is covered by
+ * `getOrCreateValidator` reading the flag from chain when it creates the row.
  */
 const setPermissioned = async (
   identity: string,

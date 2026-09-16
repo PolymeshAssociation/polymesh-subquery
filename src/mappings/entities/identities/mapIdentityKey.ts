@@ -89,7 +89,7 @@ export const closeIdentityKeys = async (
     row.updatedEventId = blockEventId;
   });
 
-  // `getAllByFields` returns plain rows, not entity instances — updates go back through the store.
+  // One round trip for the whole set rather than a `.save()` each.
   await store.bulkUpdate('IdentityKey', open);
 
   return open;

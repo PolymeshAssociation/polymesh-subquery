@@ -180,7 +180,7 @@ const filters: Record<string, Record<string, string[]>> = {
     ClaimAdded: ['handleClaimAdded'],
     ClaimRevoked: ['handleClaimRevoked'],
     CustomClaimTypeAdded: ['handleCustomClaimTypeCreated'],
-    DidCreated: ['handleDidCreated'],
+    DidCreated: ['handleDidCreated', 'handleIdentityGrant'],
     PrimaryKeyUpdated: ['handlePrimaryKeyUpdated'],
     SecondaryKeyLeftIdentity: ['handleSecondaryKeyLeftIdentity'],
     SecondaryKeyPermissionsUpdated: ['handleSecondaryKeysPermissionsUpdated'],

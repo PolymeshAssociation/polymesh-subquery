@@ -38,16 +38,16 @@ const block = (height: number, specVersion = 8_000_000): SubstrateBlock =>
 const v7Block = (height: number): SubstrateBlock => block(height, 7_000_000);
 
 /**
- * Queue a reconcile (as an event handler would, mid-block) then flush it (as the *next* block's
- * handler would). `reconcileBlock` takes no block argument — it always flushes whatever the
- * previous block queued, regardless of which block is current when it's called.
+ * One block's worth of the real handler order: block K's handler (which decides whether K is a
+ * sample), then K's event queueing the account, then block K+1's handler flushing it.
  */
 const reconcile = async (
   height: number,
   opts: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
+  await reconcileBlock(block(height));
   await reconcileAccount(ADDR, '0000000000', block(height), opts);
-  await reconcileBlock();
+  await reconcileBlock(block(height + 1));
 };
 
 let db: Record<string, Record<string, any>>;
@@ -87,7 +87,11 @@ const setChain = (
    * `balances.holds(who)` (each `id` a composite `RuntimeHoldReason`), `ledgerTotal` is pre-v8's
    * `staking.ledger(controller).total`.
    */
-  { holds = [], ledgerTotal }: { holds?: unknown[]; ledgerTotal?: string } = {}
+  {
+    holds = [],
+    ledgerTotal,
+    locks = [],
+  }: { holds?: unknown[]; ledgerTotal?: string; locks?: unknown[] } = {}
 ) => {
   (globalThis as any).api.query = {
     system: {
@@ -97,6 +101,7 @@ const setChain = (
     },
     balances: {
       holds: jest.fn().mockResolvedValue(codec(holds)),
+      locks: jest.fn().mockResolvedValue(codec(locks)),
     },
     staking: {
       bonded: jest.fn().mockResolvedValue(codec(null)),
@@ -193,6 +198,42 @@ describe('reconcileAccount / reconcileBlock', () => {
     expect(db['AccountBalance'][ADDR].locks).toEqual([{ lockId: 'residual', amount: P(50) }]);
   });
 
+  /**
+   * The v8 lock → hold migration runs in two passes ~420k blocks apart: the first adds the
+   * `Staking` hold and leaves the old `'staking '` lock, the second drops the lock with an
+   * `Unlocked`. A correction landing between them used to re-file that still-present lock as
+   * `residual`, so the second pass — recognised by the lock's id — never cleared it. Ten accounts
+   * on a testnet resync ended up with `frozen` of up to 4.96M POLYX against a chain value of 0.
+   */
+  it('keeps a still-present staking lock as a staking lock between the v8 migration passes', async () => {
+    setDerived({ free: P(900), total: P(900) });
+    setChain(P(1000).toString(), P(213).toString(), P(213).toString(), {
+      holds: [{ id: { staking: 'Staking' }, amount: P(213).toString() }],
+      // `'staking '` as the chain encodes a LockIdentifier
+      locks: [{ id: '0x7374616b696e6720', amount: P(213).toString(), reasons: 'All' }],
+    });
+
+    await reconcile(9000, { force: true });
+
+    expect(db['AccountBalance'][ADDR].locks).toEqual([
+      { lockId: 'staking ', amount: P(213), reasons: 'staking' },
+    ]);
+    // the hold and the lock cover the same bond, so it is not counted twice
+    expect(db['AccountBalance'][ADDR]).toMatchObject({ bonded: P(213), frozen: P(213) });
+  });
+
+  it('files v8 frozen as residual once the second pass has dropped the staking lock', async () => {
+    setDerived({ free: P(900), total: P(900) });
+    setChain(P(1000).toString(), P(213).toString(), P(40).toString(), {
+      holds: [{ id: { staking: 'Staking' }, amount: P(213).toString() }],
+      locks: [],
+    });
+
+    await reconcile(9000, { force: true });
+
+    expect(db['AccountBalance'][ADDR].locks).toEqual([{ lockId: 'residual', amount: P(40) }]);
+  });
+
   it('pins the pre-v8 staking lock to ledger.total and files the remainder as residual', async () => {
     setDerived({ free: P(1000), frozen: BigInt(0), transferable: P(1000) });
     setChain(P(1000).toString(), '0', P(500).toString(), { ledgerTotal: P(400).toString() });
@@ -211,15 +252,40 @@ describe('reconcileAccount / reconcileBlock', () => {
     });
   });
 
-  it('only samples every Nth block unless forced', async () => {
-    setDerived({ free: BigInt(1) });
+  /**
+   * The dictionary hands a worker only the blocks carrying events it subscribes to (~1.6% of
+   * heights on testnet), so `height % 2000 === 0` almost never matched a processed block. Sampling
+   * now measures the gap since this worker's last sample, independent of which heights it sees.
+   */
+  it('samples at most once per 2000 heights, at whatever heights the worker is handed', async () => {
     setChain(P(999).toString(), '0', '0');
 
-    await reconcile(9001); // 9001 % 2000 != 0 -> nothing queued
-    expect(anomalies()).toHaveLength(0);
-
-    await reconcile(8000); // 8000 % 2000 == 0
+    // not a multiple of 2000 — still sampled, being the first block this worker has seen
+    setDerived({ free: BigInt(1) });
+    await reconcile(12_345);
     expect(anomalies()).toHaveLength(1);
+
+    // only 500 heights on — not sampled
+    setDerived({ free: BigInt(1) });
+    await reconcile(12_845);
+    expect(anomalies()).toHaveLength(1);
+
+    // 2000 heights after the last sample — sampled again
+    setDerived({ free: BigInt(1) });
+    await reconcile(14_345);
+    expect(anomalies()).toHaveLength(2);
+  });
+
+  it('a forced reconcile runs even between sample points', async () => {
+    setChain(P(999).toString(), '0', '0');
+
+    setDerived({ free: BigInt(1) });
+    await reconcile(12_345);
+
+    setDerived({ free: BigInt(1) });
+    await reconcile(12_346, { force: true });
+
+    expect(anomalies()).toHaveLength(2);
   });
 
   it('reconciles once per block, not after each event (no mid-block overshoot)', async () => {
@@ -227,9 +293,10 @@ describe('reconcileAccount / reconcileBlock', () => {
     setDerived({ free: P(1000), reserved: P(200), total: P(1200) });
     setChain(P(1000).toString(), P(200).toString(), '0');
 
+    await reconcileBlock(block(8000));
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 1 });
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 5 });
-    await reconcileBlock();
+    await reconcileBlock(block(8001));
 
     expect(anomalies()).toHaveLength(0);
     expect(db['AccountBalance'][ADDR]).toMatchObject({ free: P(1000), reserved: P(200) });
@@ -253,13 +320,13 @@ describe('reconcileAccount / reconcileBlock', () => {
     setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
     setChain(P(1000).toString(), '0', '0');
 
-    expect(reconcileStats()).toEqual({ compared: 0, drifted: 0 });
+    expect(reconcileStats()).toMatchObject({ compared: 0, drifted: 0 });
 
     await reconcile(9000, { force: true });
 
     // agreed, so no anomaly — but the check demonstrably ran
     expect(anomalies()).toHaveLength(0);
-    expect(reconcileStats()).toEqual({ compared: 1, drifted: 0 });
+    expect(reconcileStats()).toMatchObject({ compared: 1, drifted: 0 });
   });
 
   it('counts a drift as both compared and drifted', async () => {
@@ -268,7 +335,7 @@ describe('reconcileAccount / reconcileBlock', () => {
 
     await reconcile(9000, { force: true });
 
-    expect(reconcileStats()).toEqual({ compared: 1, drifted: 1 });
+    expect(reconcileStats()).toMatchObject({ compared: 1, drifted: 1 });
   });
 
   it('does not count a queued account whose comparison never happened', async () => {
@@ -278,7 +345,39 @@ describe('reconcileAccount / reconcileBlock', () => {
 
     await reconcile(9000, { force: true });
 
-    expect(reconcileStats()).toEqual({ compared: 0, drifted: 0 });
+    expect(reconcileStats()).toMatchObject({ compared: 0, drifted: 0 });
+  });
+
+  /**
+   * The flush is not reliably `block + 1`: `--workers` hands each thread a contiguous range and
+   * the dictionary makes those ranges sparse, so the next processed block can be far later. A
+   * snapshot taken at block K may only be compared against a derived value that is also as of K —
+   * otherwise "correcting" to the snapshot writes a stale balance over a newer one and
+   * manufactures the very drift it exists to remove.
+   */
+  it('skips the comparison when the derived row has moved past the snapshot block', async () => {
+    setDerived({ free: P(900), total: P(900), updatedEventId: '0000009999/0000000000' as any });
+    setChain(P(1000).toString(), '0', '0');
+
+    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+    await reconcileBlock();
+
+    // a real 100-POLYX gap, but measured at different points in time — so neither flagged nor "fixed"
+    expect(anomalies()).toHaveLength(0);
+    expect(db['AccountBalance'][ADDR].free).toBe(P(900));
+    expect(reconcileStats()).toMatchObject({ compared: 0, drifted: 0, skippedStale: 1 });
+  });
+
+  it('still compares when the row has not been written since the snapshot block', async () => {
+    setDerived({ free: P(900), total: P(900), updatedEventId: '0000009000/0000000003' as any });
+    setChain(P(1000).toString(), '0', '0');
+
+    await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
+    await reconcileBlock();
+
+    expect(anomalies()).toHaveLength(1);
+    expect(db['AccountBalance'][ADDR].free).toBe(P(1000));
+    expect(reconcileStats()).toMatchObject({ compared: 1, drifted: 1, skippedStale: 0 });
   });
 
   it('captures the on-chain snapshot at queue time, not at flush time', async () => {

@@ -303,6 +303,44 @@ export const readEraValidators = async (eraIndex: number): Promise<string[] | un
   }
 };
 
+/**
+ * Whether `identityId` is a permissioned validator identity at the block being indexed.
+ *
+ * The storage moved pallets at v8: `staking.permissionedIdentity` before, `validators.permissionedIdentity`
+ * from v8 on. `api` decodes against the block's own runtime, so whichever pallet that runtime has is
+ * the one present — both are tried rather than gating on a spec version. The value is
+ * `Option<PermissionedIdentityPrefs>`: any `Some` means permissioned.
+ *
+ * `undefined` when neither pallet can be read, which the caller treats as "not known to be
+ * permissioned" rather than guessing.
+ */
+export const readPermissionedIdentity = async (
+  identityId: string
+): Promise<boolean | undefined> => {
+  const query = api.query as unknown as Record<
+    string,
+    { permissionedIdentity?: (id: string) => Promise<{ toJSON: () => unknown }> } | undefined
+  >;
+
+  for (const pallet of ['validators', 'staking']) {
+    const read = query[pallet]?.permissionedIdentity;
+
+    if (!read) {
+      continue;
+    }
+
+    try {
+      const prefs = (await read(identityId)).toJSON();
+
+      return prefs !== null && prefs !== undefined;
+    } catch {
+      // try the other pallet
+    }
+  }
+
+  return undefined;
+};
+
 /** Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`. */
 export const readEraTotalStake = async (eraIndex: number): Promise<bigint | undefined> => {
   try {

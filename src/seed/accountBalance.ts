@@ -6,6 +6,7 @@ import {
   applyChainFreezes,
   emptyBalance,
   readChainHolds,
+  readChainStakingLock,
 } from '../mappings/entities/identities/mapPolyxLedger';
 import { ledgerAccount } from '../utils/accounts';
 import { readStakingLock } from '../utils/staking';
@@ -67,10 +68,15 @@ export const seedAccountBalances = async ({
      * `undefined` there *is* the pre-v8 signal, and only the unexplained remainder stays neutral.
      */
     const holds = reserved > BigInt(0) ? await readChainHolds(address) : undefined;
-    const stakingLock =
-      holds === undefined && frozen > BigInt(0)
-        ? await readStakingLock(address, blockId)
-        : undefined;
+    // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
+    // so on v8 it is read from the lock list rather than assumed away.
+    let stakingLock: bigint | undefined;
+    if (frozen > BigInt(0)) {
+      stakingLock =
+        holds === undefined
+          ? await readStakingLock(address, blockId)
+          : await readChainStakingLock(address);
+    }
 
     applyChainFreezes(balance, { frozen, holds, stakingLock });
 

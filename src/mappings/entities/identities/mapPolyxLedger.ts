@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { hexHasPrefix } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
@@ -10,15 +11,19 @@ import {
   HoldEntry,
   HoldReason,
   Identity,
-  LockEntry,
   MovementKind,
   PolyxEntry,
   PolyxPool,
 } from '../../../types';
 import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { camelToSnakeCase, is8xChain, snakeToCamelCase } from '../../../utils/common';
-import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/staking';
+import { camelToSnakeCase, hexToString, is8xChain, snakeToCamelCase } from '../../../utils/common';
+import {
+  readRewardDestination,
+  readStakingLock,
+  resolveController,
+  resolveLegacyRewardDestination,
+} from '../../../utils/staking';
 import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
@@ -231,6 +236,36 @@ export const readChainHolds = async (address: string): Promise<HoldEntry[] | und
 };
 
 /**
+ * The `'staking '` lock still present on chain for `address`, from `balances.locks(who)` — `0`
+ * once there is none.
+ *
+ * Needed on v8 because the lock → hold migration runs in two passes some ~420k blocks apart: the
+ * first adds the `Staking` hold and leaves the old lock in place, the second drops the lock. In
+ * between, an account's chain `frozen` *is* that staking lock, and only reading the lock list says
+ * so. `undefined` on a failed read.
+ */
+export const readChainStakingLock = async (address: string): Promise<bigint | undefined> => {
+  try {
+    const raw = (await api.query.balances.locks(address)).toJSON() as
+      | { id?: string; amount?: string | number }[]
+      | null;
+
+    if (!Array.isArray(raw)) {
+      return undefined;
+    }
+
+    const lock = raw.find(entry => {
+      const id = entry.id ?? '';
+      return (hexHasPrefix(id) ? hexToString(id) : id) === STAKING_LOCK_ID;
+    });
+
+    return lock ? BigInt(lock.amount ?? 0) : BigInt(0);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * An authoritative snapshot of everything that freezes an account's POLYX, read from chain.
  *
  * Captured by whoever does the chain read, rather than read inside `applyChainFreezes`, because
@@ -242,7 +277,11 @@ export interface ChainFreezes {
   frozen: bigint;
   /** v8: `balances.holds(who)`. `undefined` pre-v8 or on a failed read. */
   holds?: HoldEntry[];
-  /** pre-v8: `staking.ledger(controller).total`, the amount passed to `Currency::set_lock`. */
+  /**
+   * The amount of the `'staking '` lock on chain. Pre-v8 that is `staking.ledger.total` — the
+   * value passed to `Currency::set_lock` — and on v8 it is read from `balances.locks`, since it
+   * only survives there until the second migration pass drops it.
+   */
   stakingLock?: bigint;
 }
 
@@ -255,31 +294,35 @@ export interface ChainFreezes {
  * frozen amount under the staking lock calls every freeze a bond, and filing a pre-v8 staker's
  * freeze under a neutral id loses the bond entirely.
  *
- * - **v8:** bonds are holds, so `holds` is taken from `balances.holds` and `frozen` — a `Freezes`
- *   entry, unrelated to staking — goes under `RESIDUAL_LOCK_ID`. A `'staking '` lock must not be
- *   written on a v8 account at all: `handleBalanceUnlocked` reads one as an un-migrated pre-v8
- *   lock and clears it on the next `Unlocked`.
- * - **pre-v8:** the bond *is* a `'staking '` lock, pinned to `staking.ledger.total`; only the
- *   unexplained remainder goes under `RESIDUAL_LOCK_ID`.
+ * - **v8:** bonds are holds, so `holds` is taken from `balances.holds`.
+ * - **both eras:** whatever part of `frozen` is still a `'staking '` lock on chain keeps that id,
+ *   and only the unexplained remainder goes under `RESIDUAL_LOCK_ID`.
+ *
+ * The lock rule is the same on v8 because of the two-pass lock → hold migration: between the
+ * passes a v8 staker carries both the new `Staking` hold *and* its old `'staking '` lock. Filing
+ * that lock as residual broke the second pass, whose `Unlocked` is recognised by the lock's id —
+ * the lock was never cleared, and a testnet resync caught ten accounts reporting `frozen` of up to
+ * 4.96M POLYX against a chain value of 0.
+ *
+ * A staking lock can never exceed what is frozen, so it is capped there; above it, `frozen` is
+ * still the MAX over both entries.
  */
 export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes): void => {
   const { frozen, holds, stakingLock } = chain;
-  const residual = (amount: bigint): LockEntry[] =>
-    amount > BigInt(0) ? [{ lockId: RESIDUAL_LOCK_ID, amount }] : [];
 
   if (holds !== undefined) {
     balance.holds = holds;
-    balance.locks = residual(frozen);
-  } else {
-    const staked = stakingLock ?? BigInt(0);
-
-    balance.locks = [
-      ...(staked > BigInt(0)
-        ? [{ lockId: STAKING_LOCK_ID, amount: staked, reasons: 'staking' }]
-        : []),
-      ...residual(frozen > staked ? frozen : BigInt(0)),
-    ];
   }
+
+  const staked = stakingLock ?? BigInt(0);
+  const stakingPart = staked < frozen ? staked : frozen;
+
+  balance.locks = [
+    ...(stakingPart > BigInt(0)
+      ? [{ lockId: STAKING_LOCK_ID, amount: stakingPart, reasons: 'staking' }]
+      : []),
+    ...(frozen > stakingPart ? [{ lockId: RESIDUAL_LOCK_ID, amount: frozen }] : []),
+  ];
 
   recomputeDerived(balance);
 };
@@ -847,6 +890,20 @@ const findExtrinsicEntries = async (
 };
 
 /**
+ * The entry among `candidates` written closest *before* the current event — the one a paired event
+ * refers to when several match on account and amount. Block-scoped ids are zero-padded, so
+ * `movementId` order is event order.
+ */
+const nearestPreceding = (candidates: PolyxEntry[], args: HandlerArgs): PolyxEntry | undefined =>
+  candidates
+    .filter(entry => entry.movementId < args.blockEventId)
+    .sort((a, b) => (a.movementId < b.movementId ? 1 : -1))[0];
+
+/** The `movementId` of the event immediately before the current one in this block. */
+const previousEventId = (args: HandlerArgs): string =>
+  `${args.blockId}/${padId(String(args.eventIdx - 1))}`;
+
+/**
  * Entries written earlier in this block for `account` of one of `kinds`, narrowed to `amountAbs`.
  *
  * Staking rewards arrive from `on_initialize`, not an extrinsic, so the reward event and any
@@ -921,7 +978,12 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   const from = firstText(decoded, ['from']);
   const to = firstText(decoded, ['to']);
   const amount = amountOf(decoded);
-  const memo = memoOf(decoded) ?? takePendingMemo(args, from, to, amount);
+  // Always consume the stash, even when this event carries its own memo. Pre-v8 `transfer_core`
+  // emits `TransferWithMemo` *then* `Transfer`, and the `Transfer` repeats the memo itself — so
+  // the stashed copy was never taken, and a later memo-less transfer between the same accounts for
+  // the same amount in that extrinsic picked up a memo that was never its own.
+  const stashedMemo = takePendingMemo(args, from, to, amount);
+  const memo = memoOf(decoded) ?? stashedMemo;
 
   // F3: an endowment pairs with exactly one transfer. Without the `counterpartyAddress` guard a
   // batch making two equal transfers to the same new account matched the first endowment twice,
@@ -1215,9 +1277,101 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
     return;
   }
 
+  /**
+   * N2, the other ordering. `fungible::Balanced::deposit` runs `increase_balance` — which is where
+   * `try_mutate_account` emits `Endowed` for a new account — and only then `done_deposit`, which
+   * emits `Deposit`. So on this path the endowment is already recorded and *is* this credit.
+   * (`Currency::deposit_creating` emits `Deposit` inside the mutation, ahead of `Endowed`; that
+   * ordering is handled in `handleBalanceEndowed`.)
+   *
+   * Matched on the *immediately preceding* event rather than anywhere in the block: the two are
+   * adjacent by construction, and a looser match would swallow a genuine second deposit of the
+   * same amount into an account created earlier in the same block.
+   */
+  const endowedJustBefore = (
+    await findBlockEntries(args.blockId, who, amount, [MovementKind.Endowment])
+  ).some(entry => entry.movementId === previousEventId(args));
+
+  if (endowedJustBefore) {
+    return;
+  }
+
   await postTransition(args, {
     to: { address: who, pool: PolyxPool.Free },
     amount,
+    kind: MovementKind.Mint,
+  });
+};
+
+/**
+ * `identity.InitialPOLYX` for the block's runtime — 100,000 POLYX on testnet, 0 on mainnet and
+ * develop. A `#[pallet::constant]`, so read from metadata rather than assumed per chain.
+ * `undefined` when the runtime does not expose it.
+ */
+const initialPolyx = (): bigint | undefined => {
+  try {
+    const raw = (api.consts as unknown as Record<string, Record<string, unknown> | undefined>)
+      .identity?.initialPOLYX;
+
+    return raw === undefined || raw === null ? undefined : BigInt(String(raw));
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The POLYX `identity.do_register_did` gives a new identity's primary key.
+ *
+ * Pre-v8 the grant was invisible. `do_register_did` calls `deposit_creating(&sender,
+ * InitialPOLYX)` and then emits `DidCreated` — and Polymesh's own balances pallet emits nothing for
+ * a deposit, only `Endowed` when the account is new. So a key that already held POLYX before its
+ * identity was registered (common on testnet: fund a key, then register it) received 100,000 POLYX
+ * with no balance event at all. A resync found one such account exactly 100,000 POLYX short.
+ *
+ * `DidCreated` names the same account right after, so the grant is credited here — unless:
+ * - the account was new, in which case the `Endowed` for exactly this amount already credited it;
+ * - the chain is v8, whose upstream `Currency::deposit_creating` emits `Deposit`, already a `Mint`;
+ * - the grant is 0, as on mainnet;
+ * - the key is a systematic issuer, whose identity comes from `do_register_id`, which grants nothing.
+ */
+export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
+  if (is8xChain(args.block)) {
+    return;
+  }
+
+  const primaryKey = firstText(decodeEvent(event), ['primaryKey']);
+
+  if (!primaryKey) {
+    return;
+  }
+
+  const grant = initialPolyx();
+
+  if (!grant || grant <= BigInt(0)) {
+    return;
+  }
+
+  const systematic = Object.values(systematicIssuers).some(
+    issuer => getAccountId(issuer.accountId, api.registry.chainSS58) === primaryKey
+  );
+
+  if (systematic) {
+    return;
+  }
+
+  const [endowed] = args.extrinsicId
+    ? await findExtrinsicEntries(args, MovementKind.Endowment, primaryKey, grant)
+    : await findBlockEntries(args.blockId, primaryKey, grant, [MovementKind.Endowment]);
+
+  if (endowed) {
+    return;
+  }
+
+  await postTransition(args, {
+    to: { address: primaryKey, pool: PolyxPool.Free },
+    amount: grant,
     kind: MovementKind.Mint,
   });
 };
@@ -1517,9 +1671,10 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
  * / `Released` (written by the balances handlers). The `staking.*` events here become ledger
  * state only, so they must **not** write a second entry or bonds/rewards double-count.
  *
- * NOT YET VERIFIED against a real v8 block: that `staking.Bonded` and `balances.Held{Staking}`
- * are emitted within one extrinsic. If that pairing does not hold, v8 bonded POLYX is unindexed
- * and this assumption must change — the reconciliation harness is designed to catch it.
+ * Verified against the pinned `polkadot-sdk` (`f4d81a0`): `bond()` deposits `staking.Bonded` and
+ * then calls `ledger.bond()` → `update_stake` → `set_on_hold`, whose `done_hold` emits
+ * `balances.Held{Staking}` — same call, `Bonded` first. A compounded (`Staked`) reward follows
+ * the same route through `ledger.update()`, emitting `Held` after its `Deposit`.
  */
 
 /** `staking.PayoutStarted { eraIndex, validatorStash, … }` precedes the payout's `Rewarded` events. */
@@ -1566,13 +1721,25 @@ const rewardRecipient = async (
   if (is8x) {
     // v8: `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
     const dest = optionalField(decoded, 'dest');
-    const json = dest?.toJSON() as string | Record<string, unknown> | undefined;
+    const { destination, account } = readRewardDestination(
+      (dest?.toJSON() ?? null) as Parameters<typeof readRewardDestination>[0]
+    );
 
-    if (json && typeof json === 'object') {
-      return {
-        recipient: ((json.account ?? json.Account) as string | undefined) ?? stash,
-        restaked: false,
-      };
+    if (destination === 'Account' && account) {
+      return { recipient: account, restaked: false };
+    }
+
+    /**
+     * v8 `make_payout` still honours the deprecated `Controller` payee — it mints to
+     * `bonded(stash)`, not to the stash. The variant carries no account, and as a unit variant it
+     * decodes to a bare string, so the old object-only check sent every such reward to the stash:
+     * the stash ran high and the controller low by exactly the reward total (57 rewards,
+     * 141,981,208, on one testnet account).
+     */
+    if (destination === 'Controller') {
+      const controller = await resolveController(stash, blockId).catch(() => stash);
+
+      return { recipient: controller, restaked: false };
     }
 
     return { recipient: stash, restaked: false };
@@ -1613,13 +1780,31 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 
   const { recipient, restaked } = resolved;
 
-  // If a `balances` deposit for this reward was already recorded as a plain mint, relabel it.
-  const mints = await findBlockEntries(args.blockId, recipient, amount, [MovementKind.Mint]);
+  /**
+   * The payout's own balance movement may already be recorded, and if so it is re-filed rather
+   * than a second credit posted. Verified against both eras' `make_payout`, which mints *before*
+   * emitting `Rewarded`:
+   *
+   * - an existing account: v8 emits `Deposit` (a `Mint` here); pre-v8 `deposit_into_existing`
+   *   emits nothing at all — Polymesh's own balances pallet never had a `Deposit` event.
+   * - a destination the payout creates (`RewardDestination::Account`, or the old `Controller`):
+   *   pre-v8 `deposit_creating` emits only `Endowed`, and v8 `mint_creating` emits `Endowed` ahead
+   *   of `Deposit` — so the credit is an `Endowment`, and matching only `Mint` counted it twice.
+   *
+   * Exactly one entry, the nearest preceding match: relabelling every match let two same-amount
+   * rewards to one recipient in a block consume both deposits on the first event and then post a
+   * third credit on the second.
+   */
+  const paid = nearestPreceding(
+    await findBlockEntries(args.blockId, recipient, amount, [
+      MovementKind.Mint,
+      MovementKind.Endowment,
+    ]),
+    args
+  );
 
-  if (mints.length > 0) {
-    for (const mint of mints) {
-      await relabelEntry(mint, MovementKind.StakingReward, args.blockEventId, { eraIndex });
-    }
+  if (paid) {
+    await relabelEntry(paid, MovementKind.StakingReward, args.blockEventId, { eraIndex });
   } else {
     await postTransition(
       args,

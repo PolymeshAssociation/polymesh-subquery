@@ -30,6 +30,7 @@ import {
   handleReward,
   handleWithdrawn,
   handleDustLost,
+  handleIdentityGrant,
   handleReserveRepatriated,
   handleStakingSlash,
   handleTransactionFeeCharged,
@@ -124,6 +125,31 @@ const extrinsicEvents = (
     (event as { extrinsic?: unknown }).extrinsic = {
       idx: 1,
       // `getEventParams` resolves the call, and the eth-transact check walks into it
+      extrinsic: { method: { section: 'utility', method: 'batchAll' } },
+      success: true,
+    };
+
+    return event;
+  });
+
+/**
+ * A run of pre-v8 tuple events from one extrinsic, in order, sharing a block — the pre-v8
+ * counterpart of `extrinsicEvents`, for pairings that key on the block.
+ */
+const v7ExtrinsicEvents = (
+  height: number,
+  emitted: [section: string, method: string, values: string[]][],
+  specVersion = 7_004_001
+): SubstrateEvent[] =>
+  emitted.map(([section, method, values], index) => {
+    const event = tupleEvent(section, method, values, specVersion);
+
+    (event as unknown as { block: { block: unknown } }).block.block = {
+      header: { number: { toString: () => String(height) } },
+    };
+    (event as { idx: number }).idx = index;
+    (event as { extrinsic?: unknown }).extrinsic = {
+      idx: 1,
       extrinsic: { method: { section: 'utility', method: 'batchAll' } },
       success: true,
     };
@@ -940,5 +966,255 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(balance(ALICE)?.lifetimeByKind).toEqual([
       { kind: MovementKind.StakingReward, totalAbs: BigInt(900), net: BigInt(900), count: 1 },
     ]);
+  });
+});
+
+/**
+ * Event orderings taken from the runtime source rather than assumed — `pallets/balances` and
+ * `pallets/staking` at Polymesh v7.4.0, and `substrate/frame/{balances,staking}` at the
+ * `polkadot-sdk` commit the chain pins (`f4d81a0`).
+ */
+describe('pairings in the order the runtime actually emits them', () => {
+  const NEW_PAYEE = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+  const payeeIs = (payee: unknown) => {
+    (globalThis as any).api.query = {
+      staking: {
+        payee: jest.fn().mockResolvedValue({ toJSON: () => payee }),
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+    };
+  };
+
+  afterEach(() => {
+    (globalThis as any).api.query = {};
+  });
+
+  it('pre-v8: a reward that creates its destination is credited once (Endowed, then Rewarded)', async () => {
+    // `deposit_creating` emits only `Endowed` — Polymesh's pallet never had a `Deposit` event —
+    // and `make_payout` returns before `Rewarded` is deposited.
+    payeeIs({ account: NEW_PAYEE });
+    const [endowed, rewarded] = v7ExtrinsicEvents(3_000_100, [
+      ['balances', 'Endowed', ['0xdid', NEW_PAYEE, '900']],
+      ['staking', 'Rewarded', ['0xdid', ALICE, '900']],
+    ]);
+
+    await handleBalanceEndowed(endowed);
+    await handleReward(rewarded);
+
+    expect(balance(NEW_PAYEE)).toMatchObject({ free: BigInt(900), totalRewards: BigInt(900) });
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.StakingReward });
+  });
+
+  it('v8: a reward that creates its destination is credited once (Endowed, Deposit, Rewarded)', async () => {
+    // `mint_creating` → `fungible::Balanced::deposit`: `increase_balance` emits `Endowed`, then
+    // `done_deposit` emits `Deposit`, and only then does `do_payout_stakers` emit `Rewarded`.
+    const [endowed, deposit, rewarded] = extrinsicEvents(3_000_200, [
+      ['balances', 'Endowed', { account: NEW_PAYEE, freeBalance: '900' }],
+      ['balances', 'Deposit', { who: NEW_PAYEE, amount: '900' }],
+      ['staking', 'Rewarded', { stash: ALICE, dest: { account: NEW_PAYEE }, amount: '900' }],
+    ]);
+
+    await handleBalanceEndowed(endowed);
+    await handleBalanceMinted(deposit);
+    await handleReward(rewarded);
+
+    expect(balance(NEW_PAYEE)).toMatchObject({ free: BigInt(900), totalRewards: BigInt(900) });
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.StakingReward });
+  });
+
+  it('v8: two equal rewards to one recipient in a block are two credits, not three', async () => {
+    const events = extrinsicEvents(3_000_300, [
+      ['balances', 'Deposit', { who: ALICE, amount: '250' }],
+      ['staking', 'Rewarded', { stash: ALICE, dest: 'Stash', amount: '250' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '250' }],
+      ['staking', 'Rewarded', { stash: ALICE, dest: 'Stash', amount: '250' }],
+    ]);
+
+    await handleBalanceMinted(events[0]);
+    await handleReward(events[1]);
+    await handleBalanceMinted(events[2]);
+    await handleReward(events[3]);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(500));
+    expect(entries().filter(r => r.kind === MovementKind.StakingReward)).toHaveLength(2);
+  });
+
+  it('v8: a Deposit only dedupes against an Endowed immediately before it', async () => {
+    // an account created early in the block, then a separate deposit of the same size later —
+    // two real credits, which a block-wide match would have collapsed into one
+    const [endowed, unrelated, deposit] = extrinsicEvents(3_000_400, [
+      ['balances', 'Endowed', { account: BOB, freeBalance: '100' }],
+      ['balances', 'Reserved', { who: ALICE, amount: '1' }],
+      ['balances', 'Deposit', { who: BOB, amount: '100' }],
+    ]);
+
+    await handleBalanceEndowed(endowed);
+    await handleBalanceReserved(unrelated);
+    await handleBalanceMinted(deposit);
+
+    expect(balance(BOB)?.free).toBe(BigInt(200));
+  });
+
+  it('pre-v8: a memo-less transfer does not inherit the memo of an identical one before it', async () => {
+    // `transfer_core` emits `TransferWithMemo` then `Transfer`, and `Transfer` repeats the memo,
+    // so the stashed copy used to be left behind for the next matching transfer to pick up.
+    const events = v7ExtrinsicEvents(3_000_500, [
+      ['balances', 'TransferWithMemo', [ALICE, BOB, '10', 'rent']],
+      ['balances', 'Transfer', ['0xa', ALICE, '0xb', BOB, '10', 'rent']],
+      ['balances', 'Transfer', ['0xa', ALICE, '0xb', BOB, '10']],
+    ]);
+
+    await handleBalanceTransferWithMemo(events[0]);
+    await handleBalanceTransfer(events[1]);
+    await handleBalanceTransfer(events[2]);
+
+    const byMovement = (idx: number) =>
+      entries().filter(r => r.movementId === `0003000500/${String(idx).padStart(10, '0')}`);
+
+    expect(byMovement(1).every(r => r.memo === 'rent')).toBe(true);
+    expect(byMovement(2).some(r => r.memo === 'rent')).toBe(false);
+  });
+});
+
+/**
+ * `identity.do_register_did` gives the new primary key `InitialPOLYX` through `deposit_creating`,
+ * then emits `DidCreated`. Pre-v8 Polymesh's balances pallet emitted nothing for a deposit — only
+ * `Endowed` for a new account — so a key that already held POLYX got its grant silently. A testnet
+ * resync found an account exactly 100,000 POLYX short this way.
+ */
+describe('the identity registration grant', () => {
+  const GRANT = '100000000000';
+  const DID = '0x248422a4cc2fc0384d7808c4790d41b76723f3b90e78083956b6b1532bf205f7';
+
+  const initialPolyxIs = (value: string | undefined) => {
+    (globalThis as any).api.consts =
+      value === undefined ? {} : { identity: { initialPOLYX: value } };
+  };
+
+  afterEach(() => {
+    (globalThis as any).api.consts = undefined;
+  });
+
+  it('pre-v8: credits the grant to a primary key that already existed', async () => {
+    initialPolyxIs(GRANT);
+    const [didCreated] = v7ExtrinsicEvents(3_100_100, [
+      ['identity', 'DidCreated', [DID, ALICE, '[]']],
+    ]);
+
+    await handleIdentityGrant(didCreated);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(GRANT));
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({
+      kind: MovementKind.Mint,
+      direction: EntryDirection.Credit,
+    });
+  });
+
+  it('pre-v8: does not credit it twice for a new key, whose Endowed already did', async () => {
+    initialPolyxIs(GRANT);
+    const [endowed, didCreated] = v7ExtrinsicEvents(3_100_200, [
+      ['balances', 'Endowed', ['0xdid', ALICE, GRANT]],
+      ['identity', 'DidCreated', [DID, ALICE, '[]']],
+    ]);
+
+    await handleBalanceEndowed(endowed);
+    await handleIdentityGrant(didCreated);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(GRANT));
+    expect(entries()).toHaveLength(1);
+  });
+
+  it('does nothing on v8, where the grant already arrives as a Deposit', async () => {
+    initialPolyxIs(GRANT);
+
+    await handleIdentityGrant(
+      structEvent('identity', 'DidCreated', { did: DID, primaryKey: ALICE, secondaryKeys: [] })
+    );
+
+    expect(entries()).toHaveLength(0);
+  });
+
+  it('does nothing where the runtime grants nothing, as on mainnet', async () => {
+    initialPolyxIs('0');
+    const [didCreated] = v7ExtrinsicEvents(3_100_300, [
+      ['identity', 'DidCreated', [DID, ALICE, '[]']],
+    ]);
+
+    await handleIdentityGrant(didCreated);
+
+    expect(entries()).toHaveLength(0);
+  });
+
+  it('does nothing when the constant cannot be read', async () => {
+    initialPolyxIs(undefined);
+    const [didCreated] = v7ExtrinsicEvents(3_100_400, [
+      ['identity', 'DidCreated', [DID, ALICE, '[]']],
+    ]);
+
+    await handleIdentityGrant(didCreated);
+
+    expect(entries()).toHaveLength(0);
+  });
+});
+
+/**
+ * v8 `make_payout` still pays the deprecated `Controller` payee — to `bonded(stash)`, not the
+ * stash. As a unit variant it decodes to a bare string, which the old object-only check sent to
+ * the stash, leaving it high and the controller low by the reward total.
+ */
+describe('v8 reward destinations', () => {
+  const CONTROLLER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+  const bondedTo = (controller: string | null) => {
+    (globalThis as any).api.query = {
+      staking: { bonded: jest.fn().mockResolvedValue({ toJSON: () => controller }) },
+    };
+  };
+
+  afterEach(() => {
+    (globalThis as any).api.query = {};
+  });
+
+  it('credits a Controller payee to the controller, not the stash', async () => {
+    bondedTo(CONTROLLER);
+
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
+    );
+
+    expect(balance(CONTROLLER)?.free).toBe(BigInt(250));
+    expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('falls back to the stash when the controller cannot be resolved', async () => {
+    bondedTo(null);
+
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
+    );
+
+    expect(balance(ALICE)?.free).toBe(BigInt(250));
+  });
+
+  it('still credits Stash and Staked payees to the stash, and Account to the named account', async () => {
+    bondedTo(CONTROLLER);
+
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Stash', amount: '1' })
+    );
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: { staked: null }, amount: '2' })
+    );
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: { account: BOB }, amount: '4' })
+    );
+
+    expect(balance(ALICE)?.free).toBe(BigInt(3));
+    expect(balance(BOB)?.free).toBe(BigInt(4));
+    expect(balance(CONTROLLER)).toBeUndefined();
   });
 });

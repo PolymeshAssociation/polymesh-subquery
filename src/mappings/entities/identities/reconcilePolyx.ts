@@ -10,6 +10,7 @@ import {
   applyChainFreezes,
   ChainFreezes,
   readChainHolds,
+  readChainStakingLock,
 } from './mapPolyxLedger';
 
 /**
@@ -39,6 +40,7 @@ import {
  * (`scripts/reconcile-polyx.ts`) is what answers "is the history right"; this is the safety net.
  */
 
+/** Aim for one sampled block per this many heights, per worker. */
 const RECONCILE_EVERY_N_BLOCKS = 2000;
 
 /**
@@ -52,8 +54,34 @@ const abs = (value: bigint): bigint => (value < BigInt(0) ? -value : value);
 
 const blockNumber = (block: SubstrateBlock): number => Number(block.block.header.number.toString());
 
-const shouldSample = (block: SubstrateBlock, force: boolean): boolean =>
-  force || blockNumber(block) % RECONCILE_EVERY_N_BLOCKS === 0;
+/**
+ * Whether the block currently being indexed is a sample point — decided once, by the block
+ * handler, before any of that block's events run.
+ *
+ * This used to be `height % 2000 === 0`, but the dictionary only hands a worker the blocks that
+ * carry events it subscribes to — measured on a testnet genesis resync at ~1.6% of heights. So
+ * almost no multiple of 2000 was ever processed, and the check sampled ~350× less often than
+ * designed: 27 comparisons across ~272,000 block handlers. Measuring the *gap* since this worker's
+ * last sample instead gives one sample per ~2000 heights whatever the sparsity, with nothing to
+ * retune as the chain gets denser.
+ *
+ * Per worker, since each thread has its own copy; the workers cover disjoint ranges, so the
+ * chain-wide rate is still about one per 2000 heights.
+ */
+let sampleThisBlock = false;
+let lastSampledHeight = Number.NEGATIVE_INFINITY;
+
+const decideSampling = (block: SubstrateBlock): void => {
+  const height = blockNumber(block);
+
+  sampleThisBlock = height - lastSampledHeight >= RECONCILE_EVERY_N_BLOCKS;
+
+  if (sampleThisBlock) {
+    lastSampledHeight = height;
+  }
+};
+
+const shouldSample = (force: boolean): boolean => force || sampleThisBlock;
 
 interface OnChain extends ChainFreezes {
   free: bigint;
@@ -85,6 +113,8 @@ export const __resetOnChainCache = (): void => {
   onChainCache.clear();
   pendingBlock = -1;
   pending.clear();
+  sampleThisBlock = false;
+  lastSampledHeight = Number.NEGATIVE_INFINITY;
   __resetReconcileCounters();
 };
 
@@ -93,7 +123,8 @@ export const __resetOnChainCache = (): void => {
  *
  * `holds` (v8) and the staking lock (pre-v8) are read here rather than at correction time for the
  * same reason `free`/`reserved` are: by then `api` targets a later block. Which one is read is
- * decided by the chain version, so exactly one chain read is added per sampled account.
+ * decided by the chain version: pre-v8 adds the staking ledger read, v8 adds `balances.holds` and
+ * `balances.locks`.
  */
 const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnChain> => {
   const blockHeight = blockNumber(block);
@@ -119,7 +150,10 @@ const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnCh
     reserved: getBigIntValue(data.reserved),
     frozen: accountDataFrozen(data),
     holds: is8x ? await readChainHolds(address) : undefined,
-    stakingLock: is8x ? undefined : await readStakingLock(address, padId(String(blockHeight))),
+    // v8 reads the lock list itself: mid-migration the old `'staking '` lock is still there
+    stakingLock: is8x
+      ? await readChainStakingLock(address)
+      : await readStakingLock(address, padId(String(blockHeight))),
   };
 
   onChainCache.set(address, onChain);
@@ -142,7 +176,7 @@ export const reconcileAccount = async (
   block: SubstrateBlock,
   { force = false, eventIdx }: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
-  if (!address || !shouldSample(block, force)) {
+  if (!address || !shouldSample(force)) {
     return;
   }
 
@@ -185,23 +219,52 @@ export const reconcileAccount = async (
  */
 let comparedCount = 0;
 let driftedCount = 0;
+let skippedStaleCount = 0;
+let flushCount = 0;
 let lastReportedAt = 0;
 
-/** Report roughly once per sample interval's worth of comparisons, so the log stays readable. */
-const REPORT_EVERY = 500;
+/**
+ * Report every N *flushes*, not every N comparisons.
+ *
+ * Keyed on comparisons, the report could never fire while `compared` stayed 0 — which is the one
+ * state it exists to make visible, and the same shape of un-fireable condition that left the
+ * reconciler dead in the first place. Every block handler counts as a flush, so a silent
+ * reconciler now says so out loud.
+ */
+const REPORT_EVERY_FLUSHES = 2000;
 
 /** Test hook — the counters are process-lifetime. */
 export const __resetReconcileCounters = (): void => {
   comparedCount = 0;
   driftedCount = 0;
+  skippedStaleCount = 0;
+  flushCount = 0;
   lastReportedAt = 0;
 };
 
 /** The running liveness tally, for assertions after a resync. */
-export const reconcileStats = (): { compared: number; drifted: number } => ({
+export const reconcileStats = (): {
+  compared: number;
+  drifted: number;
+  skippedStale: number;
+} => ({
   compared: comparedCount,
   drifted: driftedCount,
+  skippedStale: skippedStaleCount,
 });
+
+const maybeReport = (): void => {
+  if (flushCount - lastReportedAt < REPORT_EVERY_FLUSHES) {
+    return;
+  }
+
+  lastReportedAt = flushCount;
+
+  logger.info(
+    `POLYX reconciliation (D11): compared=${comparedCount} drifted=${driftedCount} ` +
+      `skippedStale=${skippedStaleCount} over ${flushCount} flushes`
+  );
+};
 
 /**
  * Runs every reconciliation queued by the previous block. Called from the block handler, which
@@ -209,7 +272,14 @@ export const reconcileStats = (): { compared: number; drifted: number } => ({
  * before this block's — so the derived `AccountBalance` now reflects the previous block's final
  * state, matching the on-chain snapshot `reconcileAccount` captured back then.
  */
-export const reconcileBlock = async (): Promise<void> => {
+export const reconcileBlock = async (block?: SubstrateBlock): Promise<void> => {
+  flushCount += 1;
+  maybeReport();
+
+  if (block) {
+    decideSampling(block);
+  }
+
   if (pending.size === 0) {
     return;
   }
@@ -220,13 +290,6 @@ export const reconcileBlock = async (): Promise<void> => {
 
   for (const [address, entry] of queued) {
     await reconcileOne(address, entry);
-  }
-
-  if (comparedCount - lastReportedAt >= REPORT_EVERY) {
-    lastReportedAt = comparedCount;
-    logger.info(
-      `POLYX reconciliation: compared=${comparedCount} drifted=${driftedCount} (D11 in-flight check)`
-    );
   }
 };
 
@@ -240,6 +303,25 @@ const reconcileOne = async (
   }
 
   const blockId = padId(String(blockNumber(block)));
+
+  /**
+   * The snapshot is chain state at the end of `block`, so it may only be compared against a
+   * derived balance that is *also* as of `block`. The flush runs from the next block handler this
+   * worker reaches, and that is not reliably `block + 1`: `--workers` hands each thread a
+   * contiguous *range*, and the dictionary makes those ranges sparse, so the next processed block
+   * can be hundreds of heights later. If the row moved on in between, comparing the two measures
+   * different points in time and "correcting" to the snapshot writes a stale balance over a newer
+   * one — which is worse than not checking, because it manufactures drift rather than removing it.
+   *
+   * `updatedEventId` is the block/event that last wrote this row, so it dates the derived value
+   * exactly. Later than the snapshot ⇒ skip; this account simply misses that sample.
+   */
+  const derivedAt = (balance.updatedEventId ?? '').split('/')[0];
+
+  if (derivedAt && derivedAt > blockId) {
+    skippedStaleCount += 1;
+    return;
+  }
 
   // Counted here, where a derived balance is genuinely measured against chain state — not at
   // queue time, which says only that a comparison was intended.

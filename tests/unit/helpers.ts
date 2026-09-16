@@ -61,36 +61,25 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
 
 /**
  * Wires `store.getByFields` — used by `getAllByFields` — to read live from the same in-memory
- * `db` `mockStore` writes to, with a working `.save()` on each returned row. `store.get`'s wiring
- * above gives `Entity.get(id).save()` this for free; `store.getByFields` is a different store
- * primitive and needs it done explicitly for any handler that fetches a set and mutates it (the
- * "replace by diff" pattern — close rows no longer present, leave matching ones alone).
+ * `db` `mockStore` writes to.
+ *
+ * Returns **plain rows**, exactly as the real store primitive does. It used to staple a fake
+ * `.save()` onto each one, which made `row.save()` appear to work in tests while it was a
+ * `TypeError` in production — `handleNominated` crashed a genesis resync at block 555,566 on
+ * precisely that, with `mapValidator` and `mapEra` carrying the same call. `getAllByFields` now
+ * rebuilds each row into its generated model, so the `.save()` a handler calls is the real one,
+ * routed through `store.set` and therefore through `mockStore`'s own wiring.
  *
  * Ignores the filter expression and returns every row for `entityName` — fine for a test db
  * seeded with only the rows one query cares about; a handler diffing a mixed set needs its own
  * filtering, same as production code does after the store read.
  */
 export const mockGetByFields = (db: MockDb, entityName: string): void => {
-  storeGetByFields().mockImplementation((name: string) => {
-    if (name !== entityName) {
-      return Promise.resolve([]);
-    }
-
-    const rows = Object.values(db[entityName] ?? {}).map((raw: object) => {
-      const row: any = { ...raw };
-
-      row.save = () => {
-        const data = { ...row };
-        delete data.save;
-        db[entityName][row.id] = data;
-        return Promise.resolve();
-      };
-
-      return row;
-    });
-
-    return Promise.resolve(rows);
-  });
+  storeGetByFields().mockImplementation((name: string) =>
+    Promise.resolve(
+      name === entityName ? Object.values(db[entityName] ?? {}).map(row => ({ ...row })) : []
+    )
+  );
 };
 
 /**

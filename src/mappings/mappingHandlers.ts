@@ -29,9 +29,9 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
  * the *previous* block queued: the POLYX reconcile queue (only populated on sample blocks / forced
  * checkpoints) and the NftHolder write buffer. Both early-return when idle.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function handleBlock(block: SubstrateBlock): Promise<void> {
-  await reconcileBlock().catch(e => logError(e));
+  // Also decides whether this block is a reconciliation sample, before its events run.
+  await reconcileBlock(block).catch(e => logError(e));
   await flushNftBuffer().catch(e => logError(e));
 }
 

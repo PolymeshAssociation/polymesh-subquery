@@ -60,11 +60,13 @@ registerShape(
   discontinuedAt(LAST_V7, ['identityId', 'account', 'amount'])
 );
 
-// Deposit(AccountId, Balance)
+// Defensive only. No Polymesh custom balances pallet ever emitted any of the events below —
+// checked across every release from v3.3.0 to v7.4.0, whose balances events were only
+// `AccountBalanceBurned`, `BalanceSet`, `Endowed`, `ReserveRepatriated`, `Reserved`, `Transfer`,
+// `Unreserved`, plus `TransferWithMemo` at v7.4.0. Deposits, withdrawals and slashes there moved
+// balances silently; these events arrive only with the upstream pallet at v8, struct-style, where
+// the metadata supplies the names and none of these entries apply.
 registerShape('balances', 'Deposit', discontinuedAt(LAST_V7, ['account', 'amount']));
-
-// 2-arg (AccountId, Balance) events that also existed pre-v8. Defensive: if a runtime emitted
-// these as tuples the decoder covers them, and at v8 the struct-style metadata is used instead.
 registerShape('balances', 'Burned', discontinuedAt(LAST_V7, ['account', 'amount']));
 registerShape('balances', 'Slashed', discontinuedAt(LAST_V7, ['account', 'amount']));
 registerShape('balances', 'Withdraw', discontinuedAt(LAST_V7, ['account', 'amount']));

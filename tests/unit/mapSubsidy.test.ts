@@ -152,3 +152,87 @@ describe('UpdatedPolyxLimit', () => {
     expect(db.Subsidy[SUBSIDY_ID].allowance).toBe(BigInt(900));
   });
 });
+
+/**
+ * A paying key can be authorised through `identity.add_authorization` with
+ * `AuthorizationData::AddRelayerPayingKey` instead of `relayer.set_paying_key`. That path emits
+ * only `identity.AuthorizationAdded` — no `relayer.AuthorizedPayingKey` — so nothing creates the
+ * row ahead of the acceptance. Seen on testnet at block 1,747,041 (authorization 0000002617),
+ * where the acceptance and its later removal both reported a missing Subsidy.
+ */
+describe('an acceptance with no preceding relayer approval', () => {
+  it('creates the Subsidy rather than reporting it missing', async () => {
+    const db = mockStore(seedAccounts());
+
+    (globalThis as any).api.query = {
+      relayer: {
+        subsidies: jest
+          .fn()
+          .mockResolvedValue({
+            toJSON: () => ({ payingKey: PAYING_KEY, remaining: 1_000_000_000 }),
+          }),
+      },
+    };
+
+    await handleSubsidyAccepted(
+      tupleEvent({
+        section: 'relayer',
+        method: 'AcceptedPayingKey',
+        data: [codec('0xdid'), codec(USER_KEY), codec(PAYING_KEY)],
+        specVersion: 3002,
+      })
+    );
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      beneficiaryAccountId: USER_KEY,
+      payingAccountId: PAYING_KEY,
+      isAccepted: true,
+      isRemoved: false,
+      // pre-v8 `AcceptedPayingKey` carries no limit, so it comes from chain state
+      allowance: BigInt(1_000_000_000),
+    });
+    expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(0);
+  });
+
+  it('falls back to a zero allowance when chain state cannot be read', async () => {
+    const db = mockStore(seedAccounts());
+    (globalThis as any).api.query = {};
+
+    await handleSubsidyAccepted(
+      tupleEvent({
+        section: 'relayer',
+        method: 'AcceptedPayingKey',
+        data: [codec('0xdid'), codec(USER_KEY), codec(PAYING_KEY)],
+        specVersion: 3002,
+      })
+    );
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isAccepted: true, allowance: BigInt(0) });
+  });
+
+  it('a later removal then finds the row instead of anomalying', async () => {
+    const db = mockStore(seedAccounts());
+    (globalThis as any).api.query = {};
+
+    await handleSubsidyAccepted(
+      tupleEvent({
+        section: 'relayer',
+        method: 'AcceptedPayingKey',
+        data: [codec('0xdid'), codec(USER_KEY), codec(PAYING_KEY)],
+        specVersion: 3002,
+      })
+    );
+    await handleSubsidyRemoved(
+      tupleEvent({
+        section: 'relayer',
+        method: 'RemovedPayingKey',
+        data: [codec('0xdid'), codec(USER_KEY), codec(PAYING_KEY)],
+        specVersion: 3002,
+        idx: 1,
+      })
+    );
+
+    expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
+    expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(0);
+  });
+});
