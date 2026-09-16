@@ -53,6 +53,34 @@ const rewardEvent = (
     extrinsic: undefined,
   } as unknown as SubstrateEvent);
 
+/**
+ * v8 `staking.Rewarded` is a real named-struct event (upstream `pallet-staking`), unlike the
+ * tuple-style pre-v8 one `rewardEvent` builds — the block's own metadata names every field, so
+ * `decodeEvent` resolves it directly rather than via the registered shape table (which only
+ * covers the pre-v8 tuple form).
+ */
+const rewardEventV8 = (fields: { stash: string; dest: any; amount: string }): SubstrateEvent =>
+  ({
+    idx: 1,
+    block: {
+      block: { header: { number: { toString: () => '5000' } } },
+      timestamp: new Date('2022-01-01T00:00:00Z'),
+      specVersion: 8_000_000,
+    },
+    event: {
+      section: 'staking',
+      method: 'Rewarded',
+      data: [codec(fields.stash), fields.dest, codec(fields.amount)],
+      meta: {
+        fields: ['stash', 'dest', 'amount'].map(name => ({
+          name: { isSome: true, unwrap: () => codec(name) },
+          typeName: { isSome: true, unwrap: () => codec('Dummy') },
+        })),
+      },
+    },
+    extrinsic: undefined,
+  } as unknown as SubstrateEvent);
+
 const savedStakingEvent = () =>
   storeSet()
     .mock.calls.filter(([entity]) => entity === 'StakingEvent')
@@ -132,11 +160,11 @@ describe('A15 — pre-v8 reward destination', () => {
 
   it('v8 resolves the destination account for an explicit Account payee', async () => {
     await handleStakingEvent(
-      rewardEvent(
-        'Rewarded',
-        [codec(STASH), { toJSON: () => ({ account: PAYEE }) }, codec('3000')],
-        8_000_000
-      )
+      rewardEventV8({
+        stash: STASH,
+        dest: { toJSON: () => ({ account: PAYEE }) },
+        amount: '3000',
+      })
     );
 
     const row = savedStakingEvent();
@@ -146,7 +174,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
   it('v8 resolves Staked/Stash to the stash itself', async () => {
     await handleStakingEvent(
-      rewardEvent('Rewarded', [codec(STASH), { toJSON: () => 'Staked' }, codec('4000')], 8_000_000)
+      rewardEventV8({ stash: STASH, dest: { toJSON: () => 'Staked' }, amount: '4000' })
     );
 
     const row = savedStakingEvent();
@@ -156,11 +184,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
   it('v8 resolves the object form of a Staked payee to the stash', async () => {
     await handleStakingEvent(
-      rewardEvent(
-        'Rewarded',
-        [codec(STASH), { toJSON: () => ({ staked: null }) }, codec('4500')],
-        8_000_000
-      )
+      rewardEventV8({ stash: STASH, dest: { toJSON: () => ({ staked: null }) }, amount: '4500' })
     );
 
     const row = savedStakingEvent();

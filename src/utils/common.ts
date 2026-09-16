@@ -325,32 +325,6 @@ export const is8xSpecVersion = (specVersion: number): boolean =>
 export const is8xChain = (block: SubstrateBlock): boolean => is8xSpecVersion(block.specVersion);
 
 /**
- * Extracts the amount from 8.x chain staking event parameters.
- *
- * On 8.x chain, staking events have different parameter structures:
- * - Bonded/Unbonded: [stash, amount] (2 params)
- * - Rewarded: [stash, dest, amount] (3 params, dest is RewardDestination enum)
- *
- * This function detects if the second param is numeric (amount) or an enum (RewardDestination),
- * and returns the amount from the appropriate position.
- *
- * @param rawSecondParam - The second parameter (could be amount or RewardDestination)
- * @param rawThirdParam - The third parameter (amount for Rewarded events), optional
- * @returns The amount as bigint
- */
-export const extract8xStakingAmount = (rawSecondParam: Codec, rawThirdParam?: Codec): bigint => {
-  const secondParamText = getTextValue(rawSecondParam);
-  const isSecondParamNumeric = /^\d+$/.test(secondParamText);
-
-  if (isSecondParamNumeric) {
-    return getBigIntValue(rawSecondParam);
-  } else if (rawThirdParam) {
-    return getBigIntValue(rawThirdParam);
-  }
-  return BigInt(0);
-};
-
-/**
  * `store.getByFields` rejects a limit above the node's query limit, so pages are kept small
  */
 const PAGE_SIZE = 100;

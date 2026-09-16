@@ -149,6 +149,69 @@ const controllerCache = new Map<string, string>();
 export const __resetControllerCache = (): void => controllerCache.clear();
 
 /**
+ * Exported so `StakingPosition.controller` (`mapStakingPosition.ts`) can reuse the same cached
+ * resolution `readStakingLedger` already pays for, instead of a second `staking.bonded` read.
+ */
+export const resolveController = async (stash: string): Promise<string> => {
+  let controller = controllerCache.get(stash);
+
+  if (!controller) {
+    const bonded = (await api.query.staking.bonded(stash)).toJSON();
+    controller = typeof bonded === 'string' ? bonded : stash;
+    controllerCache.set(stash, controller);
+  }
+
+  return controller;
+};
+
+export interface StakingLedgerSnapshot {
+  /** `active` + everything still unlocking — what `Currency::set_lock`/the v8 hold amount matches */
+  total: bigint;
+  /** currently bonded, earning rewards — excludes chunks already in the unbonding queue */
+  active: bigint;
+  /** chunks queued by `unbond`, not yet withdrawable via `withdraw_unbonded` */
+  unlocking: { amount: bigint; era: number }[];
+}
+
+/**
+ * `staking.ledger(controller)`, read once and shared by every caller that needs a piece of it —
+ * `readStakingLock` (the whole-lock `total`, for the balance ledger) and `StakingPosition`'s
+ * `bonded`/`unbonding`/`unlocking` split (`active` vs the queued chunks) would otherwise each
+ * issue the same chain read.
+ *
+ * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
+ * callers keep their delta accumulator as the fallback. A killed ledger (fully withdrawn) reads
+ * back as all-zero, not `undefined`.
+ */
+export const readStakingLedger = async (
+  stash: string
+): Promise<StakingLedgerSnapshot | undefined> => {
+  try {
+    const controller = await resolveController(stash);
+    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
+      total?: string | number;
+      active?: string | number;
+      unlocking?: { value?: string | number; era?: number }[];
+    } | null;
+
+    if (!ledger) {
+      return { total: BigInt(0), active: BigInt(0), unlocking: [] };
+    }
+
+    return {
+      total: BigInt(ledger.total ?? 0),
+      active: BigInt(ledger.active ?? 0),
+      unlocking: (ledger.unlocking ?? []).map(({ value, era }) => ({
+        amount: BigInt(value ?? 0),
+        era: Number(era ?? 0),
+      })),
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * The pre-v8 staking lock on `stash`, read from chain: `staking.ledger(controller).total`
  * (bonded active + everything still unlocking), which is exactly the value `pallet-staking`
  * passes to `Currency::set_lock`, so it is what `miscFrozen` reports.
@@ -157,25 +220,60 @@ export const __resetControllerCache = (): void => controllerCache.clear();
  * do not see the max-bond cap, the rounding of a compounded `RewardDestination::Staked` reward,
  * or a slash — each of which leaves the accumulator drifting from the real lock.
  *
- * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
- * the caller keeps its delta accumulator as the fallback. A killed ledger (fully withdrawn)
- * reads back as `0`.
+ * `undefined` when the ledger cannot be read — the caller keeps its delta accumulator as the
+ * fallback.
  */
-export const readStakingLock = async (stash: string): Promise<bigint | undefined> => {
+export const readStakingLock = async (stash: string): Promise<bigint | undefined> =>
+  (await readStakingLedger(stash))?.total;
+
+/**
+ * The era `StakersElected` just elected, read from `staking.currentEra()` — **not**
+ * `staking.activeEra()`. Verified against `pallet-staking`'s `try_trigger_new_era`: the event is
+ * deposited, then `trigger_new_era` increments `CurrentEra` and stores the new era's exposures —
+ * both still within the same block. `ActiveEra` only catches up much later, when the session
+ * pallet actually rotates onto that era (`start_session` → `start_era`, a separate, later block),
+ * so reading `activeEra()` here would still return the *outgoing* era for a session or more.
+ *
+ * `undefined` when the read fails (a pruned node, or a runtime with no current era yet) — the
+ * caller leaves the era unset rather than guessing.
+ */
+export const readCurrentEraIndex = async (): Promise<number | undefined> => {
   try {
-    let controller = controllerCache.get(stash);
+    const currentEra = (await api.query.staking.currentEra()).toJSON() as number | null;
 
-    if (!controller) {
-      const bonded = (await api.query.staking.bonded(stash)).toJSON();
-      controller = typeof bonded === 'string' ? bonded : stash;
-      controllerCache.set(stash, controller);
-    }
+    return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
-    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
-      total?: string | number;
-    } | null;
+/**
+ * The validator set `StakersElected` just elected, for `eraIndex` (from `readCurrentEraIndex`
+ * above) — read from `staking.erasStakers(eraIndex)` keys, **not** `session.validators()`.
+ * `trigger_new_era` populates `ErasStakers` (via `store_stakers_info`) for the new era in the same
+ * block `StakersElected` fires; `session.validators()` still reports the *outgoing*,
+ * currently-serving set at that point — the new set only takes over once the session pallet
+ * rotates onto it, later. Enumerating the double-map's keys for a fixed era index is the standard
+ * way to list its validators without reading each `Exposure` value.
+ */
+export const readEraValidators = async (eraIndex: number): Promise<string[] | undefined> => {
+  try {
+    const keys = await api.query.staking.erasStakers.keys(eraIndex);
 
-    return ledger ? BigInt(ledger.total ?? 0) : BigInt(0);
+    return keys.map(key => key.args[1].toString());
+  } catch {
+    return undefined;
+  }
+};
+
+/** Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`. */
+export const readEraTotalStake = async (eraIndex: number): Promise<bigint | undefined> => {
+  try {
+    // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
+    // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
+    // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
+    // type mismatch under the webpack build that `tsc`/jest don't surface.
+    return BigInt((await api.query.staking.erasTotalStake(eraIndex)).toString());
   } catch {
     return undefined;
   }

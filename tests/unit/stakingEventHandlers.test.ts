@@ -8,9 +8,10 @@
  * Pre-8.x chain:
  * - Bonded/Unbonded/Rewarded: [did, account, amount] (3 params with DID)
  *
- * Note: `extract8xStakingAmount` is covered in `extract8xStakingAmount.test.ts` and the pre-v8
- * reward-destination (A15) resolution in `rewardDestinationA15.test.ts`. This file focuses on
- * `is8xChain` detection logic.
+ * Note: `extract8xStakingAmount` (B1) was retired — `handleStakingEvent` decodes named v8 fields
+ * directly now, covered in `mapStakingEvent.test.ts`, along with the B3 fallthrough fix. The
+ * pre-v8 reward-destination (A15) resolution is covered in `rewardDestinationA15.test.ts`. This
+ * file focuses on `is8xChain` detection logic.
  */
 
 import { is8xChain } from '../../src/utils/common';
