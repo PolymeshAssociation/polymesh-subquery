@@ -26,6 +26,7 @@ import {
 } from '../entities/multiSig/mapMultiSig';
 import { upsertEvmAccountMapping } from '../entities/revive/mapEvmAccountMapping';
 import { seedAccountBalances } from '../../seed/accountBalance';
+import { seedHoldings } from '../../seed/holding';
 
 const genesisBlock = padId('0');
 type DidWithAccount = { did: string; accountId: string };
@@ -288,6 +289,10 @@ export default async (): Promise<void> => {
   // opening balance snapshot for the POLYX ledger — without it every derived balance is wrong by
   // the genesis allocation (docs/implementation/02-polyx-ledger.md)
   await seedAccountBalances({ blockId: genesisBlock, datetime });
+
+  // opening asset-holding snapshot — Holding is rebuilt from the movement stream, so it needs
+  // the same genesis baseline (docs/implementation/03-holdings-nfts.md)
+  await seedHoldings({ blockId: genesisBlock, datetime });
 
   logger.info('Applied genesis migrations');
 };

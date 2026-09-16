@@ -809,10 +809,8 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 };
 
 export const handleFundsTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const { fromHolder: rawFromHolder, toHolder: rawToHolder, fund: rawFund } = decodeEvent(event);
-
-  const address = getSignerAddress(extrinsic);
 
   const [fromHolder, toHolder] = await Promise.all([
     rawAssetHolderToAssetHolder(rawFromHolder, block, blockId),
@@ -826,12 +824,15 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
   await mapAssetMovement({
     blockEventId,
     blockId,
-    address,
+    eventIdx,
+    eventId: EventIdEnum.FundsTransferred,
+    address: getSignerAddress(extrinsic),
     fromHolder,
     toHolder,
     assetType,
     fundDescription,
     memo: memo ? coerceHexToString(memo) : undefined,
     block,
+    extrinsic,
   });
 };

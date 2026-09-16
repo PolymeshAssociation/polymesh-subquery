@@ -2357,35 +2357,6 @@ type Portfolio @entity {
   createdEvent: Event!
 }
 
-enum PortfolioMovementTypeEnum {
-  Fungible
-  NonFungible
-}
-
-"""
-Represents a transfer of fungible assets between a single identities portfolios.
-
-Note: transfers between identities are known as `Settlements`
-"""
-type PortfolioMovement @entity {
-  id: ID!
-  from: Portfolio @index(unique: false)
-  fromAccount: String @index(unique: false)
-  to: Portfolio @index(unique: false)
-  toAccount: String @index(unique: false)
-  identity: Identity @index(unique: false)
-  type: PortfolioMovementTypeEnum!
-  asset: Asset!
-  "the number of fungible tokens transferred. Defined if type == Fungible"
-  amount: BigInt
-  "the IDs of non-fungible tokens transferred. Defined if type == NonFungible"
-  nftIds: [BigInt]
-  memo: String
-  address: String!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
 """
 Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
 
@@ -2913,7 +2884,71 @@ type NftHolder @entity {
   id: ID! #assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
-  nftIds: [Int]
+  nftIds: [BigInt]
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+Discriminates the grain a `Holding` is keyed at: a portfolio (identity model) or a v8
+account-level holder.
+"""
+enum HolderKind {
+  Portfolio
+  Account
+}
+
+"""
+One key/value pair of an NFT's on-chain metadata.
+"""
+type NftMetadataEntry @jsonField {
+  key: String!
+  value: String!
+}
+
+"""
+One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
+The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
+has it been?") is answered here.
+"""
+type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
+  id: ID! # assetId/padId(nftId)
+  "the collection this token belongs to"
+  asset: Asset!
+  "BigInt everywhere — resolves G10"
+  nftId: BigInt!
+  "current location; exactly one of portfolio / account is set while the token is in circulation"
+  portfolio: Portfolio
+  account: Account
+  identity: Identity
+  metadata: [NftMetadataEntry]
+  mintedBlock: Block!
+  "null = still in circulation. Filter `burnedBlockId: { isNull: true }` — Boolean cannot be indexed"
+  burnedBlock: Block
+  updatedBlock: Block!
+}
+
+"""
+One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
+account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
+`NftHolder`, kept as maintained rollups), never stored as primary truth.
+"""
+type Holding
+  @entity
+  @compositeIndexes(fields: [["asset", "identity"], ["portfolio", "asset"]]) {
+  id: ID! # assetId/portfolioId  or  assetId/address
+  asset: Asset!
+  holderKind: HolderKind!
+  "set when `holderKind` is `Portfolio`"
+  portfolio: Portfolio
+  "set when `holderKind` is `Account` (v8 account-level holder)"
+  account: Account
+  "denormalised — makes the identity rollup a groupBy, not a join. Null when the holder account has no known identity"
+  identity: Identity
+  "fungible balance held"
+  amount: BigInt!
+  "count of non-fungible tokens held; the ids live on `Nft`"
+  nftCount: Int!
   createdBlock: Block!
   updatedBlock: Block!
 }
@@ -2948,7 +2983,9 @@ type AssetDocument @entity {
 Represents a tokenized Asset on the Polymesh chain. The central data structure for the ecosystem
 """
 type Asset @entity {
-  id: ID! # ticker
+  id: ID! # assetId
+  "the chain's own asset id — equal to `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
+  assetId: String! @index(unique: true)
   ticker: String @index(unique: false)
   name: String @index(unique: false)
   isNftCollection: Boolean!
@@ -2956,11 +2993,14 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  isUniquenessRequired: Boolean!
+  "number of holders with a non-zero balance — maintained where `Holding` rows cross zero"
+  holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!
   documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
+  holdings: [Holding!]! @derivedFrom(field: "asset")
+  nfts: [Nft!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
@@ -3006,10 +3046,86 @@ type AssetTransaction @entity {
   instruction: Instruction
   "`instructionMemo` will only be present for the cases where memo is provided for the instruction which got executed"
   instructionMemo: String
+  "true when both sides belong to one Identity (a portfolio movement, or a settlement same-DID fast path); null for issuance and redemption. Not indexed — filter by plain equality"
+  isInternalTransfer: Boolean
+  "note attached to a portfolio movement or a settlement.transferFunds call"
+  memo: String
+  "the account that signed the extrinsic, for movements initiated directly by an account"
+  address: String
   datetime: Date!
   createdBlock: Block!
   updatedBlock: Block!
   createdEvent: Event!
+}
+
+"""
+The scope a metadata key is registered in: `Local` to one asset, or `Global` across the chain.
+"""
+enum MetadataScope {
+  Local
+  Global
+}
+
+"""
+A metadata key registered against an asset, with its current value (defect G13). Global keys
+applied to an asset also land here; the chain-wide global key registry is `GlobalMetadataKey`.
+"""
+type AssetMetadata @entity {
+  id: ID! # assetId/scope/keyId
+  asset: Asset! @index(unique: false)
+  scope: MetadataScope!
+  "the numeric key id within its scope, as a string"
+  keyId: String!
+  "registered name of the key"
+  name: String
+  "current value, once one has been set"
+  value: String
+  "true while the value is Locked or LockedUntil"
+  isLocked: Boolean!
+  "value expiry, when the detail carried one"
+  expiry: Date
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+A chain-wide global metadata key registration (name and id). Asset-scoped applications of a
+global key are `AssetMetadata` rows.
+"""
+type GlobalMetadataKey @entity {
+  id: ID! # global key id
+  name: String! @index(unique: false)
+  "JSON of the metadata spec (url / description / typeDef), as last registered or updated"
+  spec: String
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+A registered custom asset type — the `u32` id the chain assigns and the human name.
+"""
+type CustomAssetType @entity {
+  id: ID! # custom type id
+  name: String!
+  createdBlock: Block!
+  updatedBlock: Block!
+}
+
+"""
+An ERC20-style spending allowance one account has granted another over an asset (defect G11).
+v8 account-level layer — keyed by `AccountId`, outside the identity/portfolio model.
+"""
+type AssetAllowance @entity {
+  id: ID! # assetId/owner/spender
+  asset: Asset! @index(unique: false)
+  owner: Account! @index(unique: false)
+  spender: Account! @index(unique: false)
+  "remaining allowance — taken from the chain's own computed value, never derived by subtraction"
+  amount: BigInt!
+  "lifetime total spent against this allowance"
+  totalSpent: BigInt!
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """

@@ -205,10 +205,10 @@ describe('eventDrift', () => {
 describe('unhandledEvents', () => {
   it('lists an event of a subscribed pallet that no handler reads', () => {
     const unhandled = unhandledEvents(
-      snapshot({ events: { asset: { AssetCreated: 8, AssetTypeChanged: 3 } } })
+      snapshot({ events: { asset: { AssetCreated: 8, ClassicTickerClaimed: 2 } } })
     );
 
-    expect(unhandled).toContain('asset.AssetTypeChanged');
+    expect(unhandled).toContain('asset.ClassicTickerClaimed');
     expect(unhandled).not.toContain('asset.AssetCreated');
   });
 

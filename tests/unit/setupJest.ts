@@ -45,6 +45,11 @@ import { Codec } from '@polkadot/types/types';
 // SubQuery Runtime Mocks
 // ============================================================================
 
+// `chainId` is injected as a global from the manifest at `subql build`; utils that hash a
+// legacy ticker into an asset id read it. Default to a non-staging value so the standard
+// UUID-variant logic runs.
+(globalThis as any).chainId = '0x6fbd74e5e1d0a61d52ccfe9d4adaed16dd3a7caa37c6bc4d0c2d1396a1a56db7';
+
 // Mock the global `api` object that SubQuery injects at runtime
 (globalThis as any).api = {
   runtimeVersion: {

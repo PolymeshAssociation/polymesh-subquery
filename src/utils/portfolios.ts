@@ -1,14 +1,71 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
-import { Distribution, Portfolio } from '../types';
+import { Distribution, HolderKind, Portfolio } from '../types';
 import { getOrCreateAccount } from './accounts';
 import { getAssetId } from './assets';
 import { extractNumber, is8xChain } from './common';
 
-export type AccountDetails = { identityId: string; account: string };
-export type PortfolioDetails = Pick<Portfolio, 'identityId' | 'number'>;
+/**
+ * A resolved asset holder, carrying the grain it was resolved at.
+ *
+ * `holderKind` is the discriminator every downstream writer keys off — a `Holding` row, an
+ * `AssetTransaction`'s from/to columns, the internal-transfer classification. It is set here,
+ * at the one place a raw holder is parsed, so no consumer has to re-derive "portfolio or
+ * account?" from the shape. `identityId` may still be empty/undefined for an account-grain
+ * holder whose Identity is unknown — that is a *present* holder, not an absent one.
+ */
+export type AccountDetails = {
+  identityId: string;
+  account: string;
+  holderKind: HolderKind.Account;
+};
+export type PortfolioDetails = Pick<Portfolio, 'identityId' | 'number'> & {
+  holderKind: HolderKind.Portfolio;
+};
 
 export type AssetHolderDetails = AccountDetails | PortfolioDetails;
+
+export const accountHolder = (identityId: string | undefined, account: string): AccountDetails => ({
+  // typed `string` to match the rest of the codebase; genuinely undefined when the account's
+  // Identity is unknown, which holder classification accounts for explicitly.
+  identityId: identityId as string,
+  account,
+  holderKind: HolderKind.Account,
+});
+
+export const portfolioHolder = (identityId: string, number: number): PortfolioDetails => ({
+  identityId,
+  number,
+  holderKind: HolderKind.Portfolio,
+});
+
+/**
+ * Whether a movement is internal to one Identity — the shared classifier for
+ * `AssetTransaction.isInternalTransfer`.
+ *
+ * Presence is checked before DID equality, and the order matters:
+ *
+ * - a missing `from` holder is an issuance, a missing `to` holder a redemption — neither is a
+ *   transfer between two holders, so both return `undefined` rather than a boolean;
+ * - a holder that is *present* but whose DID never resolved (an account with no known Identity)
+ *   is not an absent holder. It classifies `false` — we cannot prove it is the same Identity,
+ *   but it must never fall through to the issuance/redemption case and be recorded as one.
+ *
+ * `ControllerTransfer` is the case `eventId` alone cannot decide: nothing on chain stops its
+ * source and destination resolving to the same DID, so it is classified here like any other.
+ */
+export const classifyInternalTransfer = (
+  fromHolder: AssetHolderDetails | undefined,
+  toHolder: AssetHolderDetails | undefined
+): boolean | undefined => {
+  if (!fromHolder || !toHolder) {
+    return undefined;
+  }
+  if (!fromHolder.identityId || !toHolder.identityId) {
+    return false;
+  }
+  return fromHolder.identityId === toHolder.identityId;
+};
 
 export interface MeshPortfolio {
   did: string;
@@ -30,19 +87,13 @@ export const meshPortfolioToAssetHolder = (meshPortfolio: MeshPortfolio): AssetH
 
   // extract account address
   if ('accountId' in meshPortfolio.kind) {
-    return {
-      identityId: meshPortfolio.did,
-      account: meshPortfolio.kind.accountId,
-    };
+    return accountHolder(meshPortfolio.did, meshPortfolio.kind.accountId);
   }
   // extract portfolio number
   if ('user' in meshPortfolio.kind) {
     number = meshPortfolio.kind.user;
   }
-  return {
-    identityId: meshPortfolio.did,
-    number: number || 0, // 0 maps to default portfolio
-  };
+  return portfolioHolder(meshPortfolio.did, number || 0); // 0 maps to default portfolio
 };
 
 /**
@@ -65,8 +116,9 @@ export const meshAssetHolderToAssetHolder = async (
 ): Promise<AssetHolderDetails> => {
   if ('account' in meshAssetHolder) {
     const account = await getOrCreateAccount(meshAssetHolder.account, blockId, datetime);
-    // @prashantasdeveloper need to confirm if we can safely assume that account will be present
-    return { account: meshAssetHolder.account, identityId: account?.identityId };
+    // `identityId` may be undefined here — an account with no known Identity is still a present
+    // holder, and callers must classify on holder presence before DID equality.
+    return accountHolder(account?.identityId, meshAssetHolder.account);
   }
 
   const { did, kind } = meshAssetHolder.portfolio;
@@ -75,7 +127,7 @@ export const meshAssetHolderToAssetHolder = async (
   if ('user' in kind) {
     number = kind.user;
   }
-  return { identityId: did, number };
+  return portfolioHolder(did, number);
 };
 
 /**
