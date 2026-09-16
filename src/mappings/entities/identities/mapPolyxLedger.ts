@@ -15,7 +15,7 @@ import {
 import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
 import { camelToSnakeCase, is8xChain, snakeToCamelCase } from '../../../utils/common';
 import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/staking';
-import { getAccountKeyType, getOrCreateAccount } from '../../../utils/accounts';
+import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
@@ -121,40 +121,6 @@ export const accountDataFrozen = (data: Record<string, Codec>): bigint => {
 // ---------------------------------------------------------------------------------------------
 // Account / balance state
 // ---------------------------------------------------------------------------------------------
-
-/**
- * The `Account` a POLYX-holding address belongs to.
- *
- * `getOrCreateAccount` covers every address the chain has a key record for. A pallet or system
- * address (the treasury pot, the block-reward pot, …) holds POLYX without being a key, so a bare
- * `Account` is created for it — `PolyxEntry.account` and `AccountBalance.account` are non-null
- * relations and the account page query is keyed on them.
- */
-export const ledgerAccount = async (
-  address: string,
-  blockId: string,
-  datetime: Date
-): Promise<Account> => {
-  const resolved = await getOrCreateAccount(address, blockId, datetime);
-
-  if (resolved) {
-    return resolved;
-  }
-
-  const account = Account.create({
-    id: address,
-    address,
-    eventId: EventIdEnum.AccountCreated,
-    datetime,
-    ...getAccountKeyType(address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
-
-  await account.save();
-
-  return account;
-};
 
 export const emptyBalance = (
   address: string,

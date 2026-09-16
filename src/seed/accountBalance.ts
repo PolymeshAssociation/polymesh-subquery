@@ -4,9 +4,9 @@ import { getBigIntValue } from '../utils';
 import {
   accountDataFrozen,
   emptyBalance,
-  ledgerAccount,
   recomputeDerived,
 } from '../mappings/entities/identities/mapPolyxLedger';
+import { ledgerAccount } from '../utils/accounts';
 
 /**
  * Snapshots `system.account` into `AccountBalance` rows.
@@ -36,7 +36,9 @@ export const seedAccountBalances = async ({
 
   for (const [key, accountInfo] of entries) {
     const address = key.args[0].toString();
-    const data = (accountInfo as unknown as { data: Record<string, Codec> }).data;
+    // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen`
+    // on older runtimes, so only this inner shape is read spec-agnostically.
+    const data = accountInfo.data as unknown as Record<string, Codec>;
 
     const free = getBigIntValue(data.free);
     const reserved = getBigIntValue(data.reserved);

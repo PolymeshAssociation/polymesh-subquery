@@ -1946,16 +1946,6 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
-  # The five denormalised filter columns below are indexed in db/compat.sql, not with `@index`:
-  # `@subql/node` caps an entity at 10 indexes and Event is at that cap with its foreign keys,
-  # eventIdx/extrinsicIdx/specVersionId, moduleId/eventId and the `[moduleId, eventId]` composite.
-  claimType: String
-  claimScope: String
-  claimIssuer: String
-  claimExpiry: String
-  corporateActionTicker: String
-  fundraiserOfferingAsset: String
-  transferTo: String
   extrinsic: Extrinsic
 }
 
@@ -2030,17 +2020,19 @@ type PortfolioPermissions @jsonField {
 }
 
 """
-Represents an Account's permissions. The primary key for an Identity always has full permission
+The role a key plays in the identity system, from the chain's own `KeyRecord`.
+
+Distinct from `Account.keyType` (the cryptographic shape of the key). Treated as an OPEN set —
+`Unlinked` currently covers pallet addresses, system pots, and deliberately-detached keys as one
+label, and may be split later. A multisig's own account reads `PrimaryKey` / `SecondaryKey` per
+its key record; multisig-ness is the `MultiSig` row keyed by the same address, not this field.
 """
-type Permissions @entity {
-  id: ID!
-  assets: AssetPermissions
-  portfolios: PortfolioPermissions
-  transactions: TransactionPermissions
-  transactionGroups: [String]!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+enum KeyRoleEnum {
+  PrimaryKey
+  SecondaryKey
+  MultiSigSigner
+  "Pallet / system address, or a key with no current key record"
+  Unlinked
 }
 
 """
@@ -2053,10 +2045,15 @@ type Account @entity {
   address: String! @index(unique: true)
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
+  "The key's role in the identity system, from the chain's `KeyRecord` — mutable, maintained on every key-link/unlink write"
+  keyRole: KeyRoleEnum! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
   identity: Identity
-  permissions: Permissions
+  "Every `IdentityKey` membership interval this account has held, current and historical"
+  keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
+  "Set when this account is a multisig — the account IS the multisig (defect G5)"
+  multiSig: MultiSig @derivedFrom(field: "account")
   eventId: EventIdEnum!
   datetime: Date!
   createdBlock: Block!
@@ -2064,27 +2061,14 @@ type Account @entity {
 }
 
 """
-Represents permissions to be saved in account history
+An account's permissions for one `IdentityKey` membership interval — the `Permissions` entity
+collapsed into the jsonField that already carried the same four fields (defect G4).
 """
 type PermissionsJson @jsonField {
   assets: AssetPermissions
   portfolios: PortfolioPermissions
   transactions: TransactionPermissions
   transactionGroups: [String]!
-}
-
-"""
-Represents historical data of identities assigned to an account
-"""
-type AccountHistory @entity {
-  id: ID!
-  account: String!
-  identity: String!
-  eventId: EventIdEnum!
-  permissions: PermissionsJson
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2096,7 +2080,6 @@ type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
   primaryAccount: String! @index(unique: false)
-  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
   secondaryKeysFrozen: Boolean!
   eventId: EventIdEnum!
   datetime: Date!
@@ -2106,6 +2089,56 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   children: [ChildIdentity!]! @derivedFrom(field: "parent")
+  """
+  Every key membership this Identity has held, current and historical — see `IdentityKey`.
+
+  Replaces the removed `secondaryAccounts` field, which derived from `Account.identity` and so
+  wrongly listed the primary key alongside the secondaries (defect G1). Current secondary keys are
+  `keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })`.
+  """
+  keys: [IdentityKey!]! @derivedFrom(field: "identity")
+}
+
+"""
+The role a key holds inside an Identity.
+
+Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles are modelled on
+`Account.keyRole` (a separate enum) rather than here, and further membership roles may be added.
+"""
+enum KeyRole {
+  Primary
+  Secondary
+}
+
+"""
+One row per `(identity, account, role)` membership interval — an append-only key-rotation history.
+
+A key joining an identity opens a row (`validFromBlock` set, `validToBlock` null). A key leaving,
+being rotated out, or having its permissions changed closes the row (`validToBlock`,
+`removedReason`) and, for a permissions change or rotation, opens a fresh one. The currently active
+membership for an account is the row with `validToBlockId: { isNull: true }` (`Boolean` cannot be
+indexed on the Postgres in use, so the null-FK filter is the query form).
+
+Replaces `Identity.primaryAccount`/`secondaryAccounts` as the source of truth for key membership,
+and subsumes `AccountHistory`, which had untyped columns and no validity interval.
+"""
+type IdentityKey @entity
+  @compositeIndexes(fields: [["identity", "role"], ["account", "validToBlock"]]) {
+  id: ID!
+  identity: Identity! @index
+  account: Account! @index
+  role: KeyRole!
+  "Permissions granted to the key for this interval. Null for a primary key, which always has full permission"
+  permissions: PermissionsJson
+  validFromBlock: Block!
+  "Null while the membership is active. Filter `validToBlockId: { isNull: true }` for current keys"
+  validToBlock: Block @index
+  "The event that opened this membership interval"
+  addedReason: EventIdEnum!
+  "The event that closed it — null while active"
+  removedReason: EventIdEnum
+  createdBlock: Block!
+  updatedBlock: Block!
 }
 
 """
@@ -2232,6 +2265,8 @@ enum AuthorizationStatusEnum {
   Consumed
   Rejected
   Revoked
+  "The chain gave up re-offering the authorization after too many failed accept attempts"
+  RetryLimitReached
 }
 
 """
@@ -3345,12 +3380,29 @@ enum SignerTypeEnum {
 
 """
 Represents a MultiSig
+
+A multisig *is* an account — it holds POLYX, holds assets, and signs — so it is linked to its
+`Account` row rather than carrying a bare address string (defect G5). The account's address is the
+`MultiSig` id.
 """
 type MultiSig @entity {
   id: ID!
-  address: String! @index(unique: true)
-  creator: Identity!
-  creatorAccount: Account!
+  "The multisig's own account — `account.address` is the multisig address, `id` is the same string"
+  account: Account! @index(unique: true)
+  """
+  The identity that dispatched `create_multisig` (the `MultiSigCreated` event's `callerDid`).
+
+  NULL for a multisig that existed at genesis: the chain keeps no `creator` storage (only
+  `multiSig.adminDid` and `multiSig.payingDid`), so for a row not observed being created the
+  creator is unrecoverable. Do NOT read this as "who controls it" — that is `admins`, which is
+  mutable (`multiSig.adminDid`, changed via `add_admin` / `remove_admin`) — nor as "which identity
+  it acts for", which is `account.identity` (the multisig joined to an identity as a key). Those
+  are three separate facts; pre-7.x `create_multisig` happened to set all of creator-and-admin at
+  once, which is where the old conflation came from.
+  """
+  creator: Identity
+  "The account that dispatched `create_multisig` (the event's `caller`). NULL for genesis rows."
+  creatorAccount: Account
   signaturesRequired: Int!
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
   proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
@@ -3373,7 +3425,8 @@ Represents a MultiSig admin
 type MultiSigAdmin @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
-  identityId: String!
+  "The administering identity — from `multiSig.adminDid` (genesis) or `MultiSigAddedAdmin` (defect G5)"
+  admin: Identity! @index(unique: false)
   status: MultiSigAdminStatusEnum!
   createdBlock: Block!
   updatedBlock: Block!
@@ -3395,7 +3448,14 @@ type MultiSigSigner @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
   signerType: SignerTypeEnum!
+  """
+  The canonical signer value. Kept as the source of truth: `SignerTypeEnum` is `Account | Identity`
+  and pre-7.x runtimes allowed identity signers, which a relation cannot point at, and the index
+  replays history from genesis.
+  """
   signerValue: String!
+  "The signer's account — set only when `signerType` is `Account`; a signer key is an account (G16)"
+  signerAccount: Account @index(unique: false)
   status: MultiSigSignerStatusEnum!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "signer")
   createdBlock: Block!

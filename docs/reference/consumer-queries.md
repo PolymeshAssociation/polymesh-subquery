@@ -109,10 +109,10 @@ Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction`
 
 | Group | Entities | Read |
 |---|---|---|
-| **Reached via relations only** | `Identity`, `Account`, `Permissions`, `Venue`, `InstructionParty`, `OffChainReceipt`, `Sto`, `AssetDocument` | Used, but never as a root query — relation traversal only. Safe to restructure as long as relations survive. |
+| **Reached via relations only** | `Identity`, `Account`, `Venue`, `InstructionParty`, `OffChainReceipt`, `Sto`, `AssetDocument` | Used, but never as a root query — relation traversal only. Safe to restructure as long as relations survive. (`Permissions` was here; the entity is removed in [04](../implementation/04-identity-keys.md) and its data moves to `IdentityKey.permissions`.) |
 | **Compliance set** | `Compliance`, `TransferManager`, `StatType`, `TransferCompliance`, `TransferComplianceExemption`, `ClaimScope` | Read from chain by the SDK rather than the index. Confirms `TransferManager`/`TransferCompliance` consolidation is low-risk. |
 | **Governance** | `Proposal`, `ProposalVote` | Unobserved. Lowers the priority of the PIP lifecycle gaps — worth confirming nothing external depends on them. |
-| **Identity extras** | `AccountHistory`, `ChildIdentity`, `MultiSig`, `MultiSigAdmin`, `MultiSigSigner`, `AgentGroup`, `AgentGroupMembership` | Unobserved. `IdentityKey` replacing `AccountHistory` becomes near-zero-risk. |
+| **Identity extras** | `AccountHistory`, `ChildIdentity`, `MultiSig`, `MultiSigAdmin`, `MultiSigSigner`, `AgentGroup`, `AgentGroupMembership` | Unobserved. `IdentityKey` replacing `AccountHistory` is near-zero-risk. [04](../implementation/04-identity-keys.md) also relinks `MultiSig` / `MultiSigAdmin` and adds a nullable `MultiSigSigner.signerAccount` — re-checked, still unqueried, so still near-zero-risk. |
 | **Confidential (8)** | all `Confidential*` | Newest domain; consumers likely not built yet. |
 | **Other** | `BridgeEvent`, `Funding`, `AssetMandatoryMediator`, `AssetPreApproval`, `TickerReservation`, `Migration`, `Debug`, `FoundType` | Mixed; `Debug`/`FoundType` are dev instrumentation. |
 
@@ -131,7 +131,7 @@ Direct consequences:
 - `BalanceTypeEnum` is replaced outright by `fromPool`/`toPool` rather than backfilled alongside `type`.
 - `AccountHistory` → `IdentityKey` directly.
 - `AssetHolder` / `NftHolder` become derived views or rollups over `Holding`; identity-grain is no longer the stored truth.
-- `Identity.secondaryAccounts` gets correct semantics instead of a compatibility alias.
+- `Identity.secondaryAccounts` is **removed** (`@derivedFrom` takes no filter, so its wrong semantics could not be corrected in place); `Identity.keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })` replaces it.
 
 The two consumers will need coordinated updates. The SDK's 27 connections and the portal's 6 are a bounded, enumerable surface — this document is the checklist.
 

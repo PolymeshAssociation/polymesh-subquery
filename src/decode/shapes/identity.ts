@@ -46,6 +46,7 @@ const authorizationOutcome = ['toDid', 'toKey', 'authId'];
 registerShape('identity', 'AuthorizationRevoked', stable(authorizationOutcome));
 registerShape('identity', 'AuthorizationRejected', stable(authorizationOutcome));
 registerShape('identity', 'AuthorizationConsumed', stable(authorizationOutcome));
+registerShape('identity', 'AuthorizationRetryLimitReached', stable(authorizationOutcome));
 
 registerShape(
   'identity',

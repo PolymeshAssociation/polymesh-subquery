@@ -234,7 +234,7 @@ describe('handleExtrinsic', () => {
   it('should index the recovered sender as an Ethereum account when it holds a key record', async () => {
     (globalThis as any).api.query.identity.keyRecords = jest.fn().mockResolvedValue({
       isEmpty: false,
-      toJSON: () => ({ primaryKey: DID }),
+      unwrap: () => ({ isPrimaryKey: true, asPrimaryKey: { toString: () => DID } }),
     });
 
     // A different block from the case above: account resolution is cached per block, negatives

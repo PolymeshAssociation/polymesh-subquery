@@ -77,14 +77,15 @@ const readOnChain = async (address: string, blockHeight: number): Promise<OnChai
     return hit;
   }
 
-  const info = (await api.query.system.account(address)) as unknown as {
-    data: Record<string, Codec>;
-  };
+  const info = await api.query.system.account(address);
+  // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen` on
+  // older runtimes, so only this inner shape is read spec-agnostically.
+  const data = info.data as unknown as Record<string, Codec>;
 
   const onChain: OnChain = {
-    free: getBigIntValue(info.data.free),
-    reserved: getBigIntValue(info.data.reserved),
-    frozen: accountDataFrozen(info.data),
+    free: getBigIntValue(data.free),
+    reserved: getBigIntValue(data.reserved),
+    frozen: accountDataFrozen(data),
   };
 
   onChainCache.set(address, onChain);

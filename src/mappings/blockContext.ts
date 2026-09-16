@@ -1,5 +1,5 @@
 import { SubstrateBlock } from '@subql/types';
-import { Account } from '../types';
+import type { KeyRecordResolution } from '../utils/accounts';
 import { padId } from '../utils/common';
 
 /**
@@ -23,11 +23,14 @@ export interface BlockContext {
   /** Extrinsic indices already handled in this block */
   handledExtrinsics: Set<number>;
   /**
-   * Addresses already resolved in this block, including the ones that resolved to nothing.
+   * What `identity.keyRecords` said about an address, including the addresses it said nothing
+   * about.
    *
-   * Entries are shared between callers, so a caller must not mutate what it reads back.
+   * Safe to hold for a whole block because `api` reads the block's end-of-block state, so the
+   * answer is the same for every event in it. Entity rows are not cached here - a handler can
+   * link or unlink a key mid-block, so `Account` is read from the store on every lookup.
    */
-  accounts: Map<string, Account | undefined>;
+  keyRecords: Map<string, KeyRecordResolution | undefined>;
 }
 
 let current: BlockContext | undefined;
@@ -43,7 +46,7 @@ const contextFor = (blockId: string, blockHash?: string): BlockContext => {
       blockHash,
       blockWritten: false,
       handledExtrinsics: new Set(),
-      accounts: new Map(),
+      keyRecords: new Map(),
     };
   } else if (blockHash !== undefined) {
     current.blockHash = blockHash;
@@ -63,7 +66,7 @@ export const getBlockContext = (block: SubstrateBlock): BlockContext =>
   contextFor(padId(block.block.header.number.toString()), block.hash.toHex());
 
 /**
- * The account resolution cache for a block, reachable from layers that carry only the block id.
+ * The key record cache for a block, reachable from layers that carry only the block id.
  */
-export const getAccountCache = (blockId: string): Map<string, Account | undefined> =>
-  contextFor(blockId).accounts;
+export const getKeyRecordCache = (blockId: string): Map<string, KeyRecordResolution | undefined> =>
+  contextFor(blockId).keyRecords;

@@ -16,6 +16,7 @@ const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatus
   [EventIdEnum.AuthorizationConsumed, AuthorizationStatusEnum.Consumed],
   [EventIdEnum.AuthorizationRevoked, AuthorizationStatusEnum.Revoked],
   [EventIdEnum.AuthorizationRejected, AuthorizationStatusEnum.Rejected],
+  [EventIdEnum.AuthorizationRetryLimitReached, AuthorizationStatusEnum.RetryLimitReached],
 ]);
 
 export async function handleAuthorization(event: SubstrateEvent): Promise<void> {
@@ -25,6 +26,13 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
   if (authorizationEventStatusMapping.has(eventId)) {
     const authId = getTextValue(decoded.authId);
     const auth = await Authorization.get(authId);
+
+    // The row is absent only for an authorization created before the index start; a terminal
+    // event for one of those has nothing to update.
+    if (!auth) {
+      return;
+    }
+
     auth.status = authorizationEventStatusMapping.get(eventId);
     auth.updatedBlockId = blockId;
 

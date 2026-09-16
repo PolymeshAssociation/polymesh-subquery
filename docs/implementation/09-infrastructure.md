@@ -134,9 +134,6 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   moduleId: ModuleIdEnum! @index
   eventId: EventIdEnum!   @index
   specVersionId: Int!     @index
-  claimType: String       @index
-  claimScope: String      @index
-  claimIssuer: String     @index
 }
 
 type Extrinsic @entity @compositeIndexes(fields: [["moduleId", "callId"]]) {
@@ -145,6 +142,15 @@ type Extrinsic @entity @compositeIndexes(fields: [["moduleId", "callId"]]) {
   address: String         @index
 }
 ```
+
+**Dropped, not consolidated** (done in the Phase 6 identity/keys branch): the denormalised
+`claimType` / `claimScope` / `claimIssuer` / `claimExpiry` / `corporateActionTicker` /
+`fundraiserOfferingAsset` / `transferTo` columns on `Event`, plus their `compat.sql` indexes and
+the `extractCorporateActionTicker` / `extractOfferingAsset` / `extractTransferTo` helpers. They are
+a harvester-era carry-over — empty or wrong on the large majority of events, unqueried by either
+consumer (`consumer-queries.md`), and duplicating facts the `Claim` (`type` / `scope` /
+`filterExpiry` / `issuerId`), corporate-action and STO entities already carry. Removing them also
+frees the `Event` index budget the `@subql/node` 10-index cap was pressing against.
 
 **Keep in `compat.sql`**, with a comment on each explaining why the directive cannot express it:
 - expression indexes — `left(event_arg_0, 100)` … `event_arg_3`, and `events (module_id, event_id, left(event_arg_2, 100))`
@@ -256,4 +262,4 @@ Three adjacent plans were split out of this one because they are independently s
 
 ## Consumer impact
 
-**None.** `IndexerAnomaly` and `ChainUpgrade` are additive; index consolidation is transparent; `Debug`/`FoundType` are unobserved. Existing `Event`/`Extrinsic` queries are unaffected — the indexes already exist, they just move to being declared in one place.
+**Near-none.** `IndexerAnomaly` and `ChainUpgrade` are additive; index consolidation is transparent; `Debug`/`FoundType` are unobserved. Existing `Event`/`Extrinsic` **filter** queries are unaffected — those use `moduleId`/`eventId`/`eventArg_0..3`, whose indexes already exist and just move to one place. The seven denormalised `Event` claim/CA/STO columns are **removed** (see §9.4) — neither consumer selects or filters on them per `consumer-queries.md`, but a middleware consumer that read `event.claimType` etc. directly must switch to the `Claim` / corporate-action / STO entities.
