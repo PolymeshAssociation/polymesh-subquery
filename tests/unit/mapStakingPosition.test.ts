@@ -8,7 +8,7 @@ import {
   handlePositionUnbonded,
   handlePositionWithdrawn,
 } from '../../src/mappings/entities/events/mapStakingPosition';
-import { __resetControllerCache } from '../../src/utils/staking';
+import { __resetStakingCaches } from '../../src/utils/staking';
 import { codec, mockLedgerAccountQuery, mockStore, namedEvent, tupleEvent } from './helpers';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -32,7 +32,7 @@ const mockLedger = (
 };
 
 beforeEach(() => {
-  __resetControllerCache();
+  __resetStakingCaches();
 });
 
 describe('handlePositionBonded', () => {
@@ -134,5 +134,71 @@ describe('handlePositionUnbonded / handlePositionWithdrawn', () => {
     );
 
     expect(db.StakingPosition[ALICE]).toMatchObject({ bonded: BigInt(3000), unbonding: BigInt(0) });
+  });
+});
+
+/**
+ * The payee and controller reads used to be cached for the life of the process, which made the
+ * answer depend on where the sync happened to start and left `set_payee` / `set_controller`
+ * permanently unnoticed — neither emits an event to invalidate on.
+ */
+describe('the staking reads are cached per block, not per process (F6)', () => {
+  it('picks up a controller change in a later block', async () => {
+    const db = mockStore();
+
+    mockLedger('4200', [], 'CONTROLLER_A');
+    await handlePositionBonded(
+      namedEvent({
+        section: 'staking',
+        method: 'Bonded',
+        fields: { stash: ALICE, amount: '4000' },
+        blockNumber: '1000',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
+
+    // `set_controller` moves the ledger to a new key and emits nothing
+    mockLedger('4200', [], 'CONTROLLER_B');
+    await handlePositionBonded(
+      namedEvent({
+        section: 'staking',
+        method: 'Bonded',
+        fields: { stash: ALICE, amount: '4000' },
+        blockNumber: '1001',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
+  });
+
+  it('does not pin the stash fallback for a stash that has not bonded yet', async () => {
+    const db = mockStore();
+
+    // `bonded(stash)` is empty before the bond lands, so the controller resolves to the stash…
+    mockLedger('0', [], null);
+    await handlePositionBonded(
+      namedEvent({
+        section: 'staking',
+        method: 'Bonded',
+        fields: { stash: ALICE, amount: '0' },
+        blockNumber: '2000',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe(ALICE);
+
+    // …and the real controller is picked up as soon as the chain names one
+    mockLedger('4200', [], 'CONTROLLER_A');
+    await handlePositionBonded(
+      namedEvent({
+        section: 'staking',
+        method: 'Bonded',
+        fields: { stash: ALICE, amount: '4000' },
+        blockNumber: '2001',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
   });
 });

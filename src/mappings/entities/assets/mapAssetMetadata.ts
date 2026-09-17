@@ -411,13 +411,13 @@ export const handleMetadataValueDeleted = async (event: SubstrateEvent): Promise
 };
 
 export const handleAssetTypeChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
+  const { block, blockEventId, eventIdx } = extractArgs(event);
   const { assetId: rawAssetId, assetType: rawType } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const asset = await getAsset(assetId);
 
-  asset.type = await getAssetType(rawType);
+  asset.type = await getAssetType(rawType, block, eventIdx);
   asset.updatedEventId = blockEventId;
   await asset.save();
 };

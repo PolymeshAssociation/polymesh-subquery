@@ -56,6 +56,9 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
 /**
  * Loads the `Subsidy` a mutating event refers to, recording a `MissingReferencedEntity` anomaly
  * instead of silently doing nothing when the approval that would have created it was not indexed.
+ *
+ * Used by the events that can only follow an acceptance — which now always leaves a row (see
+ * `handleSubsidyAccepted`), so reaching the anomaly here means something genuinely unexplained.
  */
 const getSubsidyOrAnomaly = async (
   userKey: string,
@@ -83,19 +86,61 @@ const getSubsidyOrAnomaly = async (
   return undefined;
 };
 
+/**
+ * The allowance the chain records for `userKey` right now.
+ *
+ * `relayer.subsidies(userKey)` is `Option<{ payingKey, remaining }>`. Only needed on the pre-v8
+ * acceptance path, which does not carry a limit in the event — `undefined` on an unreadable or
+ * absent entry, which the caller treats as "start at zero" rather than guessing.
+ */
+const readChainAllowance = async (userKey: string): Promise<bigint | undefined> => {
+  try {
+    const raw = (await api.query.relayer.subsidies(userKey)).toJSON() as {
+      remaining?: string | number;
+    } | null;
+
+    return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Acceptance is on-chain proof the subsidy exists, so a missing row is created here rather than
+ * reported as missing.
+ *
+ * `relayer.set_paying_key` emits `AuthorizedPayingKey`, which `handleSubsidyApproved` turns into
+ * the row — but the same authorization can be raised through `identity.add_authorization` with
+ * `AuthorizationData::AddRelayerPayingKey`, which emits only `identity.AuthorizationAdded` and no
+ * relayer event at all. Nothing then created the row, and every later `SubsidyDebited` /
+ * `RemovedPayingKey` for it would have reported it missing too. Seen on testnet at block
+ * 1,747,041, accepting authorization `0000002617`.
+ */
 export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { block, blockId, blockEventId } = extractArgs(event);
   const decoded = decodeEvent(event);
   const { userKey: rawUserKey, payingKey: rawPayingKey } = decoded;
 
-  const subsidy = await getSubsidyOrAnomaly(
-    getTextValue(rawUserKey),
-    getTextValue(rawPayingKey),
-    event
-  );
+  const userKey = getTextValue(rawUserKey);
+  const payingKey = getTextValue(rawPayingKey);
+  const id = subsidyId(userKey, payingKey);
+
+  let subsidy = await Subsidy.get(id);
 
   if (!subsidy) {
-    return;
+    await ensureAccounts(userKey, payingKey, blockId, block.timestamp, blockEventId);
+
+    subsidy = Subsidy.create({
+      id,
+      beneficiaryAccountId: userKey,
+      payingAccountId: payingKey,
+      allowance: (await readChainAllowance(userKey)) ?? BigInt(0),
+      totalDebited: BigInt(0),
+      isAccepted: false,
+      isRemoved: false,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    });
   }
 
   subsidy.isAccepted = true;

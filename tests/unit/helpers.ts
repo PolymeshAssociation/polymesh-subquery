@@ -10,6 +10,8 @@ export const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.M
 export const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 export const storeRemove = (): jest.Mock => (globalThis as any).store.remove as jest.Mock;
 export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
+export const storeBulkCreate = (): jest.Mock => (globalThis as any).store.bulkCreate as jest.Mock;
+export const storeBulkUpdate = (): jest.Mock => (globalThis as any).store.bulkUpdate as jest.Mock;
 
 /** Minimal Codec stand-in — handlers only read `toString` / `toJSON` / `isEmpty`. */
 export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
@@ -59,36 +61,49 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
 
 /**
  * Wires `store.getByFields` — used by `getAllByFields` — to read live from the same in-memory
- * `db` `mockStore` writes to, with a working `.save()` on each returned row. `store.get`'s wiring
- * above gives `Entity.get(id).save()` this for free; `store.getByFields` is a different store
- * primitive and needs it done explicitly for any handler that fetches a set and mutates it (the
- * "replace by diff" pattern — close rows no longer present, leave matching ones alone).
+ * `db` `mockStore` writes to.
+ *
+ * Returns **plain rows**, exactly as the real store primitive does. It used to staple a fake
+ * `.save()` onto each one, which made `row.save()` appear to work in tests while it was a
+ * `TypeError` in production — `handleNominated` crashed a genesis resync at block 555,566 on
+ * precisely that, with `mapValidator` and `mapEra` carrying the same call. `getAllByFields` now
+ * rebuilds each row into its generated model, so the `.save()` a handler calls is the real one,
+ * routed through `store.set` and therefore through `mockStore`'s own wiring.
  *
  * Ignores the filter expression and returns every row for `entityName` — fine for a test db
  * seeded with only the rows one query cares about; a handler diffing a mixed set needs its own
  * filtering, same as production code does after the store read.
  */
 export const mockGetByFields = (db: MockDb, entityName: string): void => {
-  storeGetByFields().mockImplementation((name: string) => {
+  storeGetByFields().mockImplementation((name: string) =>
+    Promise.resolve(
+      name === entityName ? Object.values(db[entityName] ?? {}).map(row => ({ ...row })) : []
+    )
+  );
+};
+
+/**
+ * Wires `store.bulkCreate`/`store.bulkUpdate` to write each entity in the array into the same
+ * in-memory `db` `mockStore` writes to — by default `setupJest.ts` mocks both as no-ops, so a
+ * handler that switched from individual `.save()` calls to a bulk write would otherwise leave a
+ * test's `db.<Entity>[id]` assertions seeing nothing.
+ */
+export const mockBulkWrites = (db: MockDb, entityName: string): void => {
+  const writeAll = (name: string, rows: { id: string }[]) => {
     if (name !== entityName) {
-      return Promise.resolve([]);
+      return Promise.resolve();
     }
 
-    const rows = Object.values(db[entityName] ?? {}).map((raw: object) => {
-      const row: any = { ...raw };
-
-      row.save = () => {
-        const data = { ...row };
-        delete data.save;
-        db[entityName][row.id] = data;
-        return Promise.resolve();
-      };
-
-      return row;
+    db[entityName] ??= {};
+    rows.forEach(row => {
+      db[entityName][row.id] = { ...row };
     });
 
-    return Promise.resolve(rows);
-  });
+    return Promise.resolve();
+  };
+
+  storeBulkCreate().mockImplementation(writeAll);
+  storeBulkUpdate().mockImplementation(writeAll);
 };
 
 /** Field metadata for a Polymesh tuple event — unnamed, so decode falls to the shape table. */

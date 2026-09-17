@@ -7,12 +7,25 @@ import {
   DidTax,
   TargetTreatment,
 } from '../../../types';
-import { bytesToString, getAssetId, getCaIdValue, getTextValue } from '../../../utils';
+import {
+  bytesToString,
+  extractNumber,
+  extractString,
+  extractValue,
+  getAssetId,
+  getCaIdValue,
+  getTextValue,
+} from '../../../utils';
 import { extractArgs, toEnum } from '../common';
 
 /**
  * The `CorporateAction` struct, identical in shape v5.4.3 through v8.0.0
- * (docs/reference/event-shape-verification.md).
+ * (docs/reference/event-shape-verification.md) — but not in *casing*: blocks before metadata v14
+ * (testnet 1–4,397,817, spec 3000–3010; mainnet had the same pre-5.0 gap) decode this struct via
+ * `polymesh-types`, whose `toJSON()` produces snake_case keys (`default_withholding_tax`,
+ * `decl_date`, `record_date`, `withholding_tax`) instead of the camelCase a v14+ metadata decode
+ * produces. `extractNumber`/`extractString`/`extractValue` (see `getCaIdValue`'s `local_id`) check
+ * the snake_case key first and fall back to camelCase, so this reads correctly either way.
  */
 interface RawCorporateAction {
   kind: string;
@@ -23,7 +36,14 @@ interface RawCorporateAction {
   withholdingTax: [string, number][];
 }
 
-const decodeCorporateAction = (raw: unknown): RawCorporateAction => raw as RawCorporateAction;
+const decodeCorporateAction = (raw: unknown): RawCorporateAction => ({
+  kind: extractString(raw, 'kind'),
+  declDate: extractNumber(raw, 'decl_date'),
+  recordDate: extractValue(raw, 'record_date') ?? null,
+  targets: extractValue(raw, 'targets'),
+  defaultWithholdingTax: extractNumber(raw, 'default_withholding_tax'),
+  withholdingTax: extractValue(raw, 'withholding_tax'),
+});
 
 const caId = (assetId: string, localId: number): string => `${assetId}/${localId}`;
 

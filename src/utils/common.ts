@@ -5,6 +5,7 @@ import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
 import { ErrorJson, FoundType } from '../types';
+import * as generatedModels from '../types/models';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
 const blockIdLength = 10;
@@ -330,7 +331,27 @@ export const is8xChain = (block: SubstrateBlock): boolean => is8xSpecVersion(blo
 const PAGE_SIZE = 100;
 
 /**
- * Every row matching `filter`, read in pages.
+ * Rebuilds a raw store record into its generated model instance.
+ *
+ * `store.getByFields` hands back plain objects — the generated `Model.getByFields` is what
+ * normally maps them through `Model.create`, and reading the store directly skips that. A plain
+ * row carries every field but none of the methods, so `row.save()` is a `TypeError` that only
+ * appears when that exact row is reached: `handleNominated` crashed a genesis resync at block
+ * 555,566 this way, and `mapValidator`/`mapEra` had the same latent call. Hydrating here fixes
+ * every caller at once rather than leaving a trap that each new one has to know about.
+ *
+ * An entity with no generated model is returned untouched rather than dropped.
+ */
+const hydrate = <T extends Entity>(entityName: string, rows: T[]): T[] => {
+  const model = (generatedModels as Record<string, { create?: (record: unknown) => Entity }>)[
+    entityName
+  ];
+
+  return model?.create ? rows.map(row => model.create(row) as T) : rows;
+};
+
+/**
+ * Every row matching `filter`, read in pages, as saveable entity instances.
  *
  * `store.getByFields` returns one page, so reading a whole set is still a loop - but the loop is
  * here rather than in a hand-rolled helper, and the filter is an expression list, so a call site
@@ -359,7 +380,7 @@ export const getAllByFields = async <T extends Entity>(
       orderDirection: 'ASC',
     });
 
-    results.push(...page);
+    results.push(...hydrate(entityName, page));
 
     if (page.length < PAGE_SIZE) {
       return results;

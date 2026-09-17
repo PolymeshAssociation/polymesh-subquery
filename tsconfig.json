@@ -19,6 +19,14 @@
     "baseUrl": ".",
     "rootDir": "src",
     "target": "es2017",
+    // Explicit, not inherited. TypeScript's own default is `false`, but an editor running the
+    // native preview (tsgo) defaults to `strict: true` — so the handler layer showed hundreds of
+    // `possibly undefined` errors in-editor that CI never reported, and it was not obvious which
+    // of the two was the project's actual contract. Stating it settles that: the checked-in
+    // contract is non-strict. Turning `strictNullChecks` on is wanted, but it is ~260 errors
+    // across 39 files today and has to land as its own ratcheted piece of work, not as a silent
+    // side effect of which tool someone happens to be running.
+    "strict": false,
     // required for `tsc --noEmit` to pass at all: @subql/types' global.d.ts and
     // tests/unit/globals.d.ts both declare `api`/`unsafeApi`/`logger` as SubQuery runtime
     // globals (TS2451), and some node_modules .d.ts files use syntax this TypeScript version

@@ -3,10 +3,15 @@ import { AccountBalance } from '../types';
 import { getBigIntValue } from '../utils';
 import {
   accountDataFrozen,
+  applyChainFreezes,
   emptyBalance,
-  recomputeDerived,
+  PIPS_LOCK_ID,
+  readChainHolds,
+  readChainLock,
+  readChainStakingLock,
 } from '../mappings/entities/identities/mapPolyxLedger';
 import { ledgerAccount } from '../utils/accounts';
+import { readStakingLock } from '../utils/staking';
 
 /**
  * Snapshots `system.account` into `AccountBalance` rows.
@@ -53,10 +58,32 @@ export const seedAccountBalances = async ({
 
     balance.free = free;
     balance.reserved = reserved;
-    // A genesis freeze is recorded as a single lock so `frozen` stays a MAX going forward.
-    balance.locks =
-      frozen > BigInt(0) ? [{ lockId: 'genesis', amount: frozen, reasons: undefined }] : [];
-    recomputeDerived(balance);
+
+    /**
+     * The seeded freeze used to go in wholesale under a `'genesis'` lock, which nothing ever
+     * lowered (F7): `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was
+     * never reported as bonded, and because `frozen` is the MAX over locks the `'genesis'` entry
+     * kept `frozen` pinned at the seeded amount even after the staker unbonded.
+     *
+     * Attributed from chain instead, the same way the reconciler's correction is. Which read
+     * applies is decided by the chain itself: `balances.holds` only exists from v8, so an
+     * `undefined` there *is* the pre-v8 signal, and only the unexplained remainder stays neutral.
+     */
+    const holds = reserved > BigInt(0) ? await readChainHolds(address) : undefined;
+    // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
+    // so on v8 it is read from the lock list rather than assumed away.
+    let stakingLock: bigint | undefined;
+    let pipsLock: bigint | undefined;
+    if (frozen > BigInt(0)) {
+      stakingLock =
+        holds === undefined
+          ? await readStakingLock(address, blockId)
+          : await readChainStakingLock(address);
+      // Pre-v8 only: a v8 pips deposit is tracked through the generic `Locked` / `Unlocked`.
+      pipsLock = holds === undefined ? await readChainLock(address, PIPS_LOCK_ID) : undefined;
+    }
+
+    applyChainFreezes(balance, { frozen, holds, stakingLock, pipsLock });
 
     rows.push(balance);
   }

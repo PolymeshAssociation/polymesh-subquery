@@ -5,7 +5,13 @@
  * `StakersElected` time), not decoded from the event. `EraPaid` then closes the era it opened.
  */
 import { handleEraPaid, handleStakersElected } from '../../src/mappings/entities/events/mapEra';
-import { mockGetByFields, mockLedgerAccountQuery, mockStore, namedEvent } from './helpers';
+import {
+  mockGetByFields,
+  mockLedgerAccountQuery,
+  mockStore,
+  namedEvent,
+  tupleEvent,
+} from './helpers';
 
 const VAL_OLD = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const VAL_NEW = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -88,6 +94,24 @@ describe('handleStakersElected', () => {
     // A failed read must not be treated as "nobody elected" — the prior set stays active.
     expect(db.Validator[VAL_OLD].isActive).toBe(true);
   });
+
+  it('handles the pre-v7 StakingElection the same way, ignoring its ElectionCompute payload', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Validator');
+    mockElection(3, [VAL_NEW]);
+
+    await handleStakersElected(
+      tupleEvent({
+        section: 'staking',
+        method: 'StakingElection',
+        data: ['OnChain'],
+        specVersion: 3000,
+      })
+    );
+
+    expect(Object.values(db.Era)[0]).toMatchObject({ eraIndex: 3 });
+    expect(db.Validator[VAL_NEW]).toMatchObject({ accountId: VAL_NEW, isActive: true });
+  });
 });
 
 describe('handleEraPaid', () => {
@@ -115,5 +139,29 @@ describe('handleEraPaid', () => {
       totalStaked: BigInt(900_000),
     });
     expect(era.endEventId).toBeDefined();
+  });
+
+  it('closes the era from the pre-v7 EraPayout tuple', async () => {
+    const db = mockStore();
+
+    (globalThis as any).api.query = {
+      staking: { erasTotalStake: jest.fn().mockResolvedValue({ toString: () => '700' }) },
+    };
+
+    await handleEraPaid(
+      tupleEvent({
+        section: 'staking',
+        method: 'EraPayout',
+        data: ['2', '300', '40'],
+        specVersion: 3000,
+      })
+    );
+
+    expect(Object.values(db.Era)[0]).toMatchObject({
+      eraIndex: 2,
+      validatorPayout: BigInt(300),
+      remainder: BigInt(40),
+      totalStaked: BigInt(700),
+    });
   });
 });

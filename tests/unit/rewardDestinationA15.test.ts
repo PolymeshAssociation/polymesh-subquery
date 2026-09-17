@@ -13,7 +13,7 @@
 
 import { SubstrateEvent } from '@subql/types';
 import { handleStakingEvent } from '../../src/mappings/entities/events/mapStakingEvent';
-import { __resetPayeeCache } from '../../src/utils/staking';
+import { __resetStakingCaches } from '../../src/utils/staking';
 
 const STASH = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const PAYEE = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -88,7 +88,7 @@ const savedStakingEvent = () =>
     .at(-1);
 
 beforeEach(() => {
-  __resetPayeeCache();
+  __resetStakingCaches();
   (globalThis as any).api.runtimeVersion.specName = { toString: () => 'polymesh' };
   (globalThis as any).api.query = {};
 });

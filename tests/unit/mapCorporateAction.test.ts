@@ -80,6 +80,41 @@ describe('handleCaInitiated', () => {
     expect(db.CorporateAction[`${ASSET_ID}/1`]).toMatchObject({ kind: 'Other' });
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(1);
   });
+
+  it('reads a pre-metadata-v14 snake_case CorporateAction struct (testnet block 90,693 repro)', async () => {
+    // Real event from the testnet genesis-sync crash: blocks before metadata v14 decode this
+    // struct via `polymesh-types`, so `toJSON()` keys are snake_case, not the camelCase a v14+
+    // metadata decode produces (see `corporateActionCodec` above).
+    const db = mockStore();
+
+    const event = tupleEvent({
+      section: 'corporateAction',
+      method: 'CAInitiated',
+      data: [
+        codec(DID_A),
+        caIdCodec(0),
+        codec({
+          kind: 'PredictableBenefit',
+          decl_date: 1_634_298_006_000,
+          record_date: { date: 1_634_298_006_000, checkpoint: { existing: 1 } },
+          targets: { identities: [], treatment: 'Exclude' },
+          default_withholding_tax: 0,
+          withholding_tax: [],
+        }),
+        codec(''),
+      ],
+    });
+
+    await handleCaInitiated(event);
+
+    expect(db.CorporateAction[`${ASSET_ID}/0`]).toMatchObject({
+      kind: 'PredictableBenefit',
+      declarationDate: new Date(1_634_298_006_000),
+      recordDate: new Date(1_634_298_006_000),
+      defaultWithholdingTax: BigInt(0),
+      didWithholdingTax: [],
+    });
+  });
 });
 
 describe('handleCaRemoved', () => {
@@ -114,6 +149,24 @@ describe('handleRecordDateChanged', () => {
         caIdCodec(0),
         corporateActionCodec({ recordDate: { date: 1_700_100_000_000 } }),
       ],
+    });
+
+    await handleRecordDateChanged(event);
+
+    expect(db.CorporateAction[`${ASSET_ID}/0`].recordDate).toEqual(new Date(1_700_100_000_000));
+  });
+
+  it('does not silently clear recordDate on a pre-v14 snake_case struct', async () => {
+    const db = mockStore({
+      CorporateAction: {
+        [`${ASSET_ID}/0`]: { id: `${ASSET_ID}/0`, recordDate: new Date(1_600_000_000_000) },
+      },
+    });
+
+    const event = tupleEvent({
+      section: 'corporateAction',
+      method: 'RecordDateChanged',
+      data: [codec(DID_A), caIdCodec(0), codec({ record_date: { date: 1_700_100_000_000 } })],
     });
 
     await handleRecordDateChanged(event);

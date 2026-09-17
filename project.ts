@@ -97,7 +97,7 @@ const filters: Record<string, Record<string, string[]>> = {
     BridgeTxFailed: [],
     BridgeTxScheduleFailed: [],
     BridgeTxScheduled: [],
-    Bridged: ['handleBridgeEvent'],
+    Bridged: ['handleBridgeEvent', 'handleBridgeMint'],
     ControllerChanged: [],
     ExemptedUpdated: [],
     FreezeAdminAdded: [],
@@ -180,7 +180,7 @@ const filters: Record<string, Record<string, string[]>> = {
     ClaimAdded: ['handleClaimAdded'],
     ClaimRevoked: ['handleClaimRevoked'],
     CustomClaimTypeAdded: ['handleCustomClaimTypeCreated'],
-    DidCreated: ['handleDidCreated'],
+    DidCreated: ['handleDidCreated', 'handleIdentityGrant'],
     PrimaryKeyUpdated: ['handlePrimaryKeyUpdated'],
     SecondaryKeyLeftIdentity: ['handleSecondaryKeyLeftIdentity'],
     SecondaryKeyPermissionsUpdated: ['handleSecondaryKeysPermissionsUpdated'],
@@ -231,13 +231,13 @@ const filters: Record<string, Record<string, string[]>> = {
     PendingPipExpiryChanged: [],
     PipClosed: [],
     PipSkipped: [],
-    ProposalCreated: ['handleProposalCreated'],
-    ProposalRefund: [],
+    ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
+    ProposalRefund: ['handleProposalRefund'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
     SnapshotCleared: [],
     SnapshotResultsEnacted: [],
     SnapshotTaken: ['handleSnapshotTaken'],
-    Voted: ['handleVoted'],
+    Voted: ['handleVoted', 'handlePipsDeposit'],
   },
   portfolio: {
     AllowIdentityToCreatePortfolios: [],
@@ -309,7 +309,8 @@ const filters: Record<string, Record<string, string[]>> = {
     CommissionCapUpdated: [],
     CurrencyMigrated: [],
     EraPaid: ['handleEraPaid'],
-    EraPayout: [],
+    // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
+    EraPayout: ['handleEraPaid'],
     ForceEra: [],
     InvalidatedNominators: [],
     Kicked: ['handleKicked'],
@@ -332,7 +333,8 @@ const filters: Record<string, Record<string, string[]>> = {
     SnapshotVotersSizeExceeded: [],
     SolutionStored: [],
     StakersElected: ['handleStakersElected'],
-    StakingElection: [],
+    // pre-v7.0 name for StakersElected: emitted after CurrentEra and ErasStakers are written
+    StakingElection: ['handleStakersElected'],
     StakingElectionFailed: [],
     Unbonded: ['handlePositionUnbonded', 'handleStakingEvent', 'handleUnbonded'],
     ValidatorPrefsSet: ['handleValidatorPrefsSet'],
@@ -536,10 +538,11 @@ const project: SubstrateProject = {
           {
             kind: SubstrateHandlerKind.Block,
             handler: 'handleBlock',
-            // End-of-block: flushes the POLYX reconcile queue (only populated on %2000 / forced
-            // blocks) and the NftHolder write buffer. Both early-return when there is nothing to do.
-            // `modulo: 1` is required — the reconcile flush reads `system.account` and must run in
-            // the same block that queued it.
+            // Runs before this block's own events. Flushes what the PREVIOUS block queued: the
+            // POLYX reconcile queue (only populated on %2000 / forced blocks, and read from chain
+            // at queue time, not here) and the NftHolder write buffer. Both early-return when
+            // there is nothing to do. `modulo: 1` is required — a gap would skip flushing whatever
+            // a skipped block queued.
             filter: { modulo: 1 },
           },
         ],

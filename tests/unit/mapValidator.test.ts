@@ -118,3 +118,63 @@ describe('handlePermissionedIdentityAdded / handlePermissionedIdentityRemoved', 
     expect(Object.keys(db.Validator ?? {})).toHaveLength(0);
   });
 });
+
+/**
+ * `PermissionedIdentityAdded` usually fires *before* any `Validator` row exists for that identity —
+ * rows are created later, by `StakersElected` — so `setPermissioned` found nothing to update and
+ * the flag was silently lost. A testnet genesis resync saw 12 such events and ended with all 9,054
+ * validators `isPermissioned: false`. The row now reads the flag from chain when it is created.
+ */
+describe('a Validator created after its identity was permissioned', () => {
+  const DID = '0x0100000000000000000000000000000000000000000000000000000000000000';
+
+  const prefsSet = () =>
+    namedEvent({
+      section: 'staking',
+      method: 'ValidatorPrefsSet',
+      fields: { stash: STASH, prefs: { commission: 0, blocked: false } },
+    });
+
+  const permissionedIn = (pallet: 'validators' | 'staking', prefs: unknown) => {
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      [pallet]: { permissionedIdentity: jest.fn().mockResolvedValue({ toJSON: () => prefs }) },
+    };
+  };
+
+  it('picks up the flag from the v8 validators pallet', async () => {
+    const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
+    permissionedIn('validators', { intendedCount: 2, runningCount: 0 });
+
+    await handleValidatorPrefsSet(prefsSet());
+
+    expect(db.Validator[STASH].isPermissioned).toBe(true);
+  });
+
+  it('picks up the flag from the pre-v8 staking pallet', async () => {
+    const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
+    permissionedIn('staking', { intendedCount: 2, runningCount: 0 });
+
+    await handleValidatorPrefsSet(prefsSet());
+
+    expect(db.Validator[STASH].isPermissioned).toBe(true);
+  });
+
+  it('leaves it false when the identity is not permissioned', async () => {
+    const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
+    permissionedIn('validators', null);
+
+    await handleValidatorPrefsSet(prefsSet());
+
+    expect(db.Validator[STASH].isPermissioned).toBe(false);
+  });
+
+  it('leaves it false when the chain cannot be read', async () => {
+    const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+
+    await handleValidatorPrefsSet(prefsSet());
+
+    expect(db.Validator[STASH].isPermissioned).toBe(false);
+  });
+});

@@ -2234,10 +2234,9 @@ type Nomination @entity @compositeIndexes(fields: [["position", "eraIndex"]]) {
 }
 
 """
-A validator stash. `isPermissioned` is set from `PermissionedIdentityAdded`/`Removed`, which name
-an Identity, not a stash — so it only updates rows that already exist for that identity at the
-time the event fires; a stash bonded *after* its identity is permissioned won't retroactively
-pick up the flag until its own `Validator` row is next touched
+A validator stash. `isPermissioned` is read from chain when the row is created, and kept current
+afterwards by `PermissionedIdentityAdded`/`Removed` — which name an Identity rather than a stash,
+so they can only update rows that already exist for it
 """
 type Validator @entity {
   id: ID! # stash address
