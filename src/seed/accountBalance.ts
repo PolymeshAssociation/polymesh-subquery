@@ -5,7 +5,9 @@ import {
   accountDataFrozen,
   applyChainFreezes,
   emptyBalance,
+  PIPS_LOCK_ID,
   readChainHolds,
+  readChainLock,
   readChainStakingLock,
 } from '../mappings/entities/identities/mapPolyxLedger';
 import { ledgerAccount } from '../utils/accounts';
@@ -71,14 +73,17 @@ export const seedAccountBalances = async ({
     // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
     // so on v8 it is read from the lock list rather than assumed away.
     let stakingLock: bigint | undefined;
+    let pipsLock: bigint | undefined;
     if (frozen > BigInt(0)) {
       stakingLock =
         holds === undefined
           ? await readStakingLock(address, blockId)
           : await readChainStakingLock(address);
+      // Pre-v8 only: a v8 pips deposit is tracked through the generic `Locked` / `Unlocked`.
+      pipsLock = holds === undefined ? await readChainLock(address, PIPS_LOCK_ID) : undefined;
     }
 
-    applyChainFreezes(balance, { frozen, holds, stakingLock });
+    applyChainFreezes(balance, { frozen, holds, stakingLock, pipsLock });
 
     rows.push(balance);
   }

@@ -14,8 +14,19 @@ import {
   MovementKind,
   PolyxEntry,
   PolyxPool,
+  Proposal,
+  ProposalVote,
+  Subsidy,
 } from '../../../types';
-import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
+import {
+  bytesToString,
+  getAllByFields,
+  getBigIntValue,
+  getProposerValue,
+  getTextValue,
+  padId,
+  padNumericId,
+} from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { camelToSnakeCase, hexToString, is8xChain, snakeToCamelCase } from '../../../utils/common';
 import {
@@ -24,7 +35,7 @@ import {
   resolveController,
   resolveLegacyRewardDestination,
 } from '../../../utils/staking';
-import { ledgerAccount } from '../../../utils/accounts';
+import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
@@ -210,6 +221,9 @@ export const STAKING_LOCK_ID = 'staking ';
  */
 export const RESIDUAL_LOCK_ID = 'residual';
 
+/** The pips pallet's `LockIdentifier` for proposal and vote deposits (`*b"pips    "`). */
+export const PIPS_LOCK_ID = 'pips    ';
+
 /**
  * `balances.holds(who)` — the v8 per-reason breakdown of `reserved`.
  *
@@ -236,15 +250,13 @@ export const readChainHolds = async (address: string): Promise<HoldEntry[] | und
 };
 
 /**
- * The `'staking '` lock still present on chain for `address`, from `balances.locks(who)` — `0`
- * once there is none.
- *
- * Needed on v8 because the lock → hold migration runs in two passes some ~420k blocks apart: the
- * first adds the `Staking` hold and leaves the old lock in place, the second drops the lock. In
- * between, an account's chain `frozen` *is* that staking lock, and only reading the lock list says
- * so. `undefined` on a failed read.
+ * The amount of the lock `lockId` on chain for `address`, from `balances.locks(who)` — `0` once
+ * there is none, `undefined` on a failed read. Both eras keep `balances.locks`.
  */
-export const readChainStakingLock = async (address: string): Promise<bigint | undefined> => {
+export const readChainLock = async (
+  address: string,
+  lockId: string
+): Promise<bigint | undefined> => {
   try {
     const raw = (await api.query.balances.locks(address)).toJSON() as
       | { id?: string; amount?: string | number }[]
@@ -256,7 +268,7 @@ export const readChainStakingLock = async (address: string): Promise<bigint | un
 
     const lock = raw.find(entry => {
       const id = entry.id ?? '';
-      return (hexHasPrefix(id) ? hexToString(id) : id) === STAKING_LOCK_ID;
+      return (hexHasPrefix(id) ? hexToString(id) : id) === lockId;
     });
 
     return lock ? BigInt(lock.amount ?? 0) : BigInt(0);
@@ -264,6 +276,17 @@ export const readChainStakingLock = async (address: string): Promise<bigint | un
     return undefined;
   }
 };
+
+/**
+ * The `'staking '` lock still present on chain for `address` — `0` once there is none.
+ *
+ * Needed on v8 because the lock → hold migration runs in two passes some ~420k blocks apart: the
+ * first adds the `Staking` hold and leaves the old lock in place, the second drops the lock. In
+ * between, an account's chain `frozen` *is* that staking lock, and only reading the lock list says
+ * so. `undefined` on a failed read.
+ */
+export const readChainStakingLock = (address: string): Promise<bigint | undefined> =>
+  readChainLock(address, STAKING_LOCK_ID);
 
 /**
  * An authoritative snapshot of everything that freezes an account's POLYX, read from chain.
@@ -283,6 +306,11 @@ export interface ChainFreezes {
    * only survives there until the second migration pass drops it.
    */
   stakingLock?: bigint;
+  /**
+   * Pre-v8: the `'pips    '` lock from `balances.locks`. Left unset on v8, where pips deposits
+   * reach the ledger through `balances.Locked`/`Unlocked` under the generic id instead.
+   */
+  pipsLock?: bigint;
 }
 
 /**
@@ -297,6 +325,8 @@ export interface ChainFreezes {
  * - **v8:** bonds are holds, so `holds` is taken from `balances.holds`.
  * - **both eras:** whatever part of `frozen` is still a `'staking '` lock on chain keeps that id,
  *   and only the unexplained remainder goes under `RESIDUAL_LOCK_ID`.
+ * - **pre-v8:** a PIPs deposit lock keeps its `'pips    '` id too, so the refund that clears it
+ *   (see `handleProposalRefund`) is not left behind by a residual copy of the same amount.
  *
  * The lock rule is the same on v8 because of the two-pass lock → hold migration: between the
  * passes a v8 staker carries both the new `Staking` hold *and* its old `'staking '` lock. Filing
@@ -304,24 +334,30 @@ export interface ChainFreezes {
  * the lock was never cleared, and a testnet resync caught ten accounts reporting `frozen` of up to
  * 4.96M POLYX against a chain value of 0.
  *
- * A staking lock can never exceed what is frozen, so it is capped there; above it, `frozen` is
- * still the MAX over both entries.
+ * A lock can never exceed what is frozen, so each is capped there. Locks overlap rather than add
+ * (`frozen` is their MAX), so the residual is only what exceeds the largest attributed lock.
  */
 export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes): void => {
-  const { frozen, holds, stakingLock } = chain;
+  const { frozen, holds, stakingLock, pipsLock } = chain;
 
   if (holds !== undefined) {
     balance.holds = holds;
   }
 
-  const staked = stakingLock ?? BigInt(0);
-  const stakingPart = staked < frozen ? staked : frozen;
+  const capped = (amount?: bigint): bigint => {
+    const value = amount ?? BigInt(0);
+    return value < frozen ? value : frozen;
+  };
+  const stakingPart = capped(stakingLock);
+  const pipsPart = capped(pipsLock);
+  const explained = stakingPart > pipsPart ? stakingPart : pipsPart;
 
   balance.locks = [
     ...(stakingPart > BigInt(0)
       ? [{ lockId: STAKING_LOCK_ID, amount: stakingPart, reasons: 'staking' }]
       : []),
-    ...(frozen > stakingPart ? [{ lockId: RESIDUAL_LOCK_ID, amount: frozen }] : []),
+    ...(pipsPart > BigInt(0) ? [{ lockId: PIPS_LOCK_ID, amount: pipsPart, reasons: 'pips' }] : []),
+    ...(frozen > explained ? [{ lockId: RESIDUAL_LOCK_ID, amount: frozen }] : []),
   ];
 
   recomputeDerived(balance);
@@ -616,8 +652,7 @@ const adjustHold = async (
  * `frozen = 150`. This is why each lock is tracked individually in `AccountBalance.locks` rather
  * than folded into a single number.
  *
- * PIPs vote locks (`PIPS_LOCK_ID`) are not wired here — the pips pallet emits no lock/unlock
- * event, only `Voted`, and attributing the deposit needs the proposal-deposit model. Follow-up.
+ * Pre-v8 PIPs deposit locks have no lock event; `syncPipsLock` reads them back from chain.
  */
 export const adjustLock = async (
   address: string,
@@ -1378,6 +1413,58 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
 };
 
 /**
+ * `bridge.Bridged(did, BridgeTx { nonce, recipient, amount, tx_hash })` — POLY locked on Ethereum,
+ * POLYX minted here. The bridge pallet (removed in v7.0.0) credits it with
+ * `balances::deposit_creating(recipient, amount)` (verified at v3.3.0 and v6.0.0), and the pre-v8
+ * balances pallet emits nothing for a deposit, so the only record of the credit is this event: a
+ * testnet resync found an account 30,000 POLYX short from one bridge transfer.
+ *
+ * A recipient with no account yet does get `Endowed(recipient, amount)` from the same deposit, and
+ * that endowment already is the credit. It is emitted inside `deposit_creating`, then dropping the
+ * imbalance touches the block reward reserve (which emits its own `Endowed(brr, 0)` the first time),
+ * then `Bridged` — so the endowment is one or two events back.
+ *
+ * Where the POLYX came from is not recorded here: dropping the imbalance takes it from the block
+ * reward reserve while that has free balance, and mints the rest, with no event either way.
+ */
+export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
+  if (is8xChain(args.block)) {
+    return;
+  }
+
+  const tx = (args.params[1] as Codec | undefined)?.toJSON() as
+    | { recipient?: string; amount?: string | number }
+    | null
+    | undefined;
+
+  if (!tx?.recipient || tx.amount === undefined) {
+    return;
+  }
+
+  const recipient = getAccountKey(tx.recipient, api.registry.chainSS58);
+  const amount = BigInt(String(tx.amount));
+
+  const recentEventIds = new Set(
+    [1, 2].map(back => `${args.blockId}/${padId(String(args.eventIdx - back))}`)
+  );
+  const endowed = (
+    await findBlockEntries(args.blockId, recipient, amount, [MovementKind.Endowment])
+  ).some(entry => recentEventIds.has(entry.movementId));
+
+  if (endowed) {
+    return;
+  }
+
+  await postTransition(args, {
+    to: { address: recipient, pool: PolyxPool.Free },
+    amount,
+    kind: MovementKind.Mint,
+  });
+};
+
+/**
  * A9: `balances.DustLost` — account reaping. The remaining free balance is destroyed; the row was
  * never written (`DustLost: []`).
  */
@@ -1613,11 +1700,22 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
  * `Withdraw`) behaved the same way.
  *
  * So the withdrawal is re-filed as the fee rather than a second debit being posted, and a refund
- * becomes the fee's credit side, leaving the pair netting to the fee actually charged. Matching is
- * by extrinsic and the account the *events* name — a subsidised fee is withdrawn from the
- * subsidiser, not the signer. A runtime that charges a fee with no paired `balances` event (every
- * pre-v8 Polymesh runtime, which used its own balances implementation) finds nothing to re-file
- * and posts the debit here, exactly as before.
+ * becomes the fee's credit side, leaving the pair netting to the fee actually charged. A runtime
+ * that charges a fee with no paired `balances` event (every pre-v8 Polymesh runtime, which used
+ * its own balances implementation) finds nothing to re-file and posts the debit here.
+ *
+ * **Subsidies.** Both events name the subsidised user, but the fee comes out of the subsidiser's
+ * paying key (`withdraw_fee`'s `fee_key`, verified in protocol-fee and transaction-payment at
+ * v5.4.0, v7.4.0 and v8.0.0), and on v8 that is the account the `Withdraw` names. Matching on the
+ * user alone missed the withdrawal and debited the user a second time; pre-v8, a subsidised
+ * protocol fee was debited from a user whose balance never moved (a testnet account 5,500 POLYX
+ * low from three of them). So the withdrawal is looked for under the paying key as well, and a
+ * pre-v8 protocol fee — which `check_subsidy(user, fee, None)` subsidises regardless of the call —
+ * is debited from it. A pre-v8 transaction fee is subsidised for every call except the relayer's
+ * own: `check_subsidy(user, fee, Some(pallet))` rejects the transaction outright for a pallet it
+ * does not subsidise (the pallet list up to v6, `SubsidyCallFilter` in v7), so any such call that
+ * made it into a block was subsidised — only `Relayer` is let through unsubsidised, so the user
+ * can remove the paying key.
  */
 export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
@@ -1626,36 +1724,72 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
   const who = getTextValue(rawWho);
   const fee = getBigIntValue(rawAmount);
 
+  if (await refileFeeWithdrawal(args, who, fee)) {
+    return;
+  }
+
+  const payingKey = await activeSubsidiser(who);
+
+  if (payingKey && (await refileFeeWithdrawal(args, payingKey, fee))) {
+    return;
+  }
+
+  const payer = payingKey && subsidisedCall(args) ? payingKey : who;
+
+  await postTransition(args, {
+    from: { address: payer, pool: PolyxPool.Free },
+    amount: fee,
+    kind: MovementKind.Fee,
+  });
+};
+
+/**
+ * Re-files `payer`'s fee withdrawal in this extrinsic, and its refund, as the fee. `false` when
+ * there is none.
+ */
+const refileFeeWithdrawal = async (
+  args: HandlerArgs,
+  payer: string,
+  fee: bigint
+): Promise<boolean> => {
   // The withdrawal covers the fee, so it is the exact match or the smallest larger burn — larger
   // when part of it is about to be refunded. Anything smaller belongs to a different charge.
-  const burns = await findExtrinsicEntries(args, MovementKind.Burn, who);
+  const burns = await findExtrinsicEntries(args, MovementKind.Burn, payer);
   const withdrawal =
     burns.find(row => row.amountAbs === fee) ??
     burns
       .filter(row => row.amountAbs > fee)
       .sort((a, b) => (a.amountAbs < b.amountAbs ? -1 : 1))[0];
 
-  if (withdrawal) {
-    await relabelEntry(withdrawal, MovementKind.Fee, args.blockEventId);
-
-    const refunded = withdrawal.amountAbs - fee;
-
-    if (refunded > BigInt(0)) {
-      const [refund] = await findExtrinsicEntries(args, MovementKind.Mint, who, refunded);
-
-      if (refund) {
-        await relabelEntry(refund, MovementKind.Fee, args.blockEventId);
-      }
-    }
-
-    return;
+  if (!withdrawal) {
+    return false;
   }
 
-  await postTransition(args, {
-    from: { address: who, pool: PolyxPool.Free },
-    amount: fee,
-    kind: MovementKind.Fee,
-  });
+  await relabelEntry(withdrawal, MovementKind.Fee, args.blockEventId);
+
+  const refunded = withdrawal.amountAbs - fee;
+
+  if (refunded > BigInt(0)) {
+    const [refund] = await findExtrinsicEntries(args, MovementKind.Mint, payer, refunded);
+
+    if (refund) {
+      await relabelEntry(refund, MovementKind.Fee, args.blockEventId);
+    }
+  }
+
+  return true;
+};
+
+/** Whether a pre-v8 fee event, for a user with an active subsidy, was charged to the paying key. */
+const subsidisedCall = (args: HandlerArgs): boolean =>
+  args.eventId === EventIdEnum.FeeCharged ||
+  args.extrinsic?.extrinsic.method.section.toLowerCase() !== 'relayer';
+
+/** The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows. */
+const activeSubsidiser = async (user: string): Promise<string | undefined> => {
+  const subsidies = await Subsidy.getByBeneficiaryAccountId(user, { limit: 10 });
+
+  return subsidies.find(subsidy => subsidy.isAccepted && !subsidy.isRemoved)?.payingAccountId;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1874,6 +2008,98 @@ const ensureBalanceRow = async (
   await ledgerAccount(address, blockId, datetime);
   const balance = await loadBalance(address, undefined, blockId);
   await balance.save();
+};
+
+// ---------------------------------------------------------------------------------------------
+// PIPs deposits — a pre-v8 lock with no balance event
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Sets `address`'s `'pips    '` lock to what the chain holds after this block.
+ *
+ * The pips pallet locks proposal and vote deposits with `Currency::increase_lock` /
+ * `reduce_lock(PIPS_LOCK_ID, …)` (verified at v3.3.0, v4.1.0, v6.0.0, v7.4.0 and v8.0.0), and the
+ * pre-v8 balances pallet emits nothing for a lock change, so the deposit was never on the ledger:
+ * a testnet resync found accounts reporting `frozen` 0 against a chain value of exactly the
+ * 2,000 POLYX minimum proposal deposit. The lock is an aggregate over every PIP the account has a
+ * deposit on, so it is read back rather than accumulated from the event amounts.
+ *
+ * v8 is skipped: upstream `update_locks` emits `Locked`/`Unlocked` for the change in `frozen`,
+ * which `handleBalanceLocked`/`handleBalanceUnlocked` already record.
+ */
+const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> => {
+  const amount = await readChainLock(address, PIPS_LOCK_ID);
+
+  if (amount === undefined) {
+    return;
+  }
+
+  await ensureBalanceRow(address, args.blockId, args.block.timestamp);
+  await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
+};
+
+/**
+ * `pips.ProposalCreated(did, proposer, pipId, deposit, …)` locks a community proposer's deposit;
+ * `pips.Voted(did, voter, pipId, aye, deposit)` raises or lowers the voter's. A committee proposer
+ * has no account and no deposit.
+ */
+export const handlePipsDeposit = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
+  if (is8xChain(args.block)) {
+    return;
+  }
+
+  const rawAccount = args.params[1] as Codec;
+  const address =
+    args.eventId === EventIdEnum.ProposalCreated
+      ? communityProposer(rawAccount)
+      : getTextValue(rawAccount);
+
+  if (address) {
+    await syncPipsLock(address, args);
+  }
+};
+
+const communityProposer = (rawProposer: Codec): string | undefined => {
+  const proposer = getProposerValue(rawProposer);
+
+  return proposer.type === 'Community' ? proposer.value : undefined;
+};
+
+/**
+ * `pips.ProposalRefund(did, pipId, total)` — the deposits on `pipId` are unlocked, but the event
+ * names neither the depositors nor their amounts, and by the time it fires the chain has already
+ * removed them from `Deposits`. The depositors are the community proposer and every voter, both
+ * already indexed, so each is re-read. From v7 a refund can be split over several blocks
+ * (`remove_pending_storage` takes a bounded batch); an account not refunded yet still reads its
+ * lock, so re-reading everyone is safe.
+ */
+export const handleProposalRefund = async (event: SubstrateEvent): Promise<void> => {
+  const args = extractArgs(event);
+
+  if (is8xChain(args.block)) {
+    return;
+  }
+
+  const pipId = padNumericId(getTextValue(args.params[1] as Codec));
+  const [proposal, votes] = await Promise.all([
+    Proposal.get(pipId),
+    getAllByFields<ProposalVote>('ProposalVote', [['proposalId', '=', pipId]]),
+  ]);
+
+  // `ProposalVote.account` is the raw public key; balances are keyed by SS58 address.
+  const addresses = new Set<string>(
+    votes.map(vote => getAccountKey(vote.account, api.registry.chainSS58))
+  );
+
+  if (proposal?.proposer.type === 'Community') {
+    addresses.add(proposal.proposer.value);
+  }
+
+  for (const address of addresses) {
+    await syncPipsLock(address, args);
+  }
 };
 
 /** `staking.Bonded` — pre-v8 raises the staking lock; v8 is ledger state only (see `Held`). */

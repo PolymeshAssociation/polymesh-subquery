@@ -9,7 +9,9 @@ import {
   accountDataFrozen,
   applyChainFreezes,
   ChainFreezes,
+  PIPS_LOCK_ID,
   readChainHolds,
+  readChainLock,
   readChainStakingLock,
 } from './mapPolyxLedger';
 
@@ -144,16 +146,18 @@ const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnCh
   // older runtimes, so only this inner shape is read spec-agnostically.
   const data = info.data as unknown as Record<string, Codec>;
   const is8x = is8xChain(block);
+  const frozen = accountDataFrozen(data);
 
   const onChain: OnChain = {
     free: getBigIntValue(data.free),
     reserved: getBigIntValue(data.reserved),
-    frozen: accountDataFrozen(data),
+    frozen,
     holds: is8x ? await readChainHolds(address) : undefined,
     // v8 reads the lock list itself: mid-migration the old `'staking '` lock is still there
     stakingLock: is8x
       ? await readChainStakingLock(address)
       : await readStakingLock(address, padId(String(blockHeight))),
+    pipsLock: !is8x && frozen > BigInt(0) ? await readChainLock(address, PIPS_LOCK_ID) : undefined,
   };
 
   onChainCache.set(address, onChain);

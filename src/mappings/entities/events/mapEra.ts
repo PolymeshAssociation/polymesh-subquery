@@ -13,6 +13,14 @@ import { getOrCreateValidator } from './mapValidator';
  * `activeEra()` / `session.validators()` — see `readCurrentEraIndex`/`readEraValidators` in
  * `src/utils/staking.ts` for why) when it fires; that resolution also doubles as the era-start
  * signal, since no event marks that directly.
+ *
+ * Before v7.0.0 the same two boundaries were `StakingElection(ElectionCompute)` and
+ * `EraPayout(EraIndex, Balance, Balance)`, and both are routed here. Verified in
+ * `pallets/staking/src/lib.rs` at v3.3.0 and v6.0.0: `new_era` increments `CurrentEra`, then
+ * `select_and_update_validators` writes `ErasStakers` for it and only then deposits
+ * `StakingElection` — the same storage state `StakersElected` sees, so the same reads apply. The
+ * `ElectionCompute` payload is not needed. Without this, testnet had no `Era` or `Validator` row
+ * until v7.
  */
 
 const getOrCreateEra = (eraIndex: number, blockEventId: string): Era => {

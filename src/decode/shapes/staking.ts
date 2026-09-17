@@ -68,6 +68,17 @@ registerShape(
 );
 
 /**
+ * `EraPayout(EraIndex, Balance, Balance)` is what `EraPaid` was called before v7.0.0 (verified in
+ * `pallets/staking/src/lib.rs` at v3.3.0 and v6.0.0: deposited from `end_era` as
+ * `(active_era.index, validator_payout, rest)`), so it takes `EraPaid`'s field names and handler.
+ */
+registerShape(
+  'staking',
+  'EraPayout',
+  discontinuedAt(LAST_V7, ['eraIndex', 'validatorPayout', 'remainder'])
+);
+
+/**
  * `StakersElected` carries no payload in either era (`AugmentedEvent<ApiType, []>`) — the era
  * index and elected validator set are resolved from chain storage when it fires (see
  * `mapEra.ts`). `hasNamedFields()` reports `false` for any zero-argument event regardless of era

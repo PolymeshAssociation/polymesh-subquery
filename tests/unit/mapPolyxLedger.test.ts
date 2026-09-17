@@ -26,11 +26,14 @@ import {
   handleBalanceUnlocked,
   handleBalanceUnreserved,
   handleBonded,
+  handleBridgeMint,
   handlePayoutStarted,
   handleReward,
   handleWithdrawn,
   handleDustLost,
   handleIdentityGrant,
+  handlePipsDeposit,
+  handleProposalRefund,
   handleReserveRepatriated,
   handleStakingSlash,
   handleTransactionFeeCharged,
@@ -40,6 +43,10 @@ import {
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
 import { __resetStakingCaches } from '../../src/utils/staking';
+import {
+  applyChainFreezes,
+  emptyBalance,
+} from '../../src/mappings/entities/identities/mapPolyxLedger';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -227,6 +234,15 @@ beforeEach(() => {
    * reads back entries written earlier in the same block, so stubbing it empty meant none of those
    * paths were ever exercised.
    */
+  ((globalThis as any).store.getByField as jest.Mock).mockImplementation(
+    (entity: string, field: string, value: unknown) =>
+      Promise.resolve(
+        Object.values(db[entity] ?? {})
+          .filter(row => row[field] === value)
+          .map(clone)
+      )
+  );
+
   storeGetByFields().mockImplementation((entity: string, filter: [string, string, unknown][]) =>
     Promise.resolve(
       Object.values(db[entity] ?? {})
@@ -838,6 +854,95 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee });
   });
 
+  describe('a subsidised fee', () => {
+    const PAYER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+    beforeEach(() => {
+      db['Subsidy'] = {
+        [`${ALICE}/${PAYER}`]: {
+          id: `${ALICE}/${PAYER}`,
+          beneficiaryAccountId: ALICE,
+          payingAccountId: PAYER,
+          isAccepted: true,
+          isRemoved: false,
+        },
+      };
+    });
+
+    it('pre-v8: a protocol fee is debited from the paying key, not the user', async () => {
+      await handleTransactionFeeCharged(
+        structEvent(
+          'protocolFee',
+          'FeeCharged',
+          { who: ALICE, amount: '2500' },
+          { specVersion: 5_003_001 }
+        )
+      );
+
+      expect(balance(ALICE)).toBeUndefined();
+      expect(balance(PAYER)?.free).toBe(BigInt(-2500));
+    });
+
+    const feePaidIn = (section: string) => {
+      const event = structEvent(
+        'transactionPayment',
+        'TransactionFeePaid',
+        { who: ALICE, actualFee: '7', tip: '0' },
+        { specVersion: 5_004_000 }
+      );
+      (event as { extrinsic?: unknown }).extrinsic = {
+        idx: 1,
+        extrinsic: { method: { section, method: 'anything' } },
+        success: true,
+      };
+      return event;
+    };
+
+    it('pre-v8: a transaction fee goes to the paying key for any call but the relayer', async () => {
+      await handleTransactionFeeCharged(feePaidIn('asset'));
+
+      expect(balance(ALICE)).toBeUndefined();
+      expect(balance(PAYER)?.free).toBe(BigInt(-7));
+    });
+
+    it('pre-v8: the user pays for its own relayer call', async () => {
+      await handleTransactionFeeCharged(feePaidIn('relayer'));
+
+      expect(balance(ALICE)?.free).toBe(BigInt(-7));
+      expect(balance(PAYER)).toBeUndefined();
+    });
+
+    it("v8: re-files the paying key's Withdraw instead of debiting the user again", async () => {
+      const [withdraw, feePaid] = extrinsicEvents(2_000_150, [
+        ['balances', 'Withdraw', { who: PAYER, amount: '500' }],
+        ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '500', tip: '0' }],
+      ]);
+
+      await handleBalanceBurned(withdraw);
+      await handleTransactionFeeCharged(feePaid);
+
+      expect(balance(ALICE)).toBeUndefined();
+      expect(balance(PAYER)?.free).toBe(BigInt(-500));
+      expect(entries()).toHaveLength(1);
+      expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee, accountId: PAYER });
+    });
+
+    it('ignores a subsidy that was removed', async () => {
+      db['Subsidy'][`${ALICE}/${PAYER}`].isRemoved = true;
+
+      await handleTransactionFeeCharged(
+        structEvent(
+          'protocolFee',
+          'FeeCharged',
+          { who: ALICE, amount: '3' },
+          { specVersion: 5_003_001 }
+        )
+      );
+
+      expect(balance(ALICE)?.free).toBe(BigInt(-3));
+    });
+  });
+
   it('N2: an account created by a deposit is credited once (Deposit then Endowed)', async () => {
     const [deposit, endowed] = extrinsicEvents(2_000_300, [
       ['balances', 'Deposit', { who: BOB, amount: '1000' }],
@@ -1216,5 +1321,178 @@ describe('v8 reward destinations', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(3));
     expect(balance(BOB)?.free).toBe(BigInt(4));
     expect(balance(CONTROLLER)).toBeUndefined();
+  });
+});
+
+/**
+ * The pips pallet locks proposal and vote deposits under `'pips    '` with no balance event before
+ * v8. A testnet resync found accounts at `frozen` 0 against exactly the 2,000 POLYX minimum
+ * proposal deposit on chain.
+ */
+describe('pre-v8 PIPs deposit locks', () => {
+  const ALICE_KEY = '0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d';
+  const PIPS = '0x7069707320202020'; // b"pips    "
+  const STAKING = '0x7374616b696e6720'; // b"staking "
+
+  const chainLocks = (byAccount: Record<string, { id: string; amount: string }[]>) => {
+    const locks = jest.fn((address: string) =>
+      Promise.resolve({ toJSON: () => byAccount[address] ?? [] })
+    );
+    (globalThis as any).api.query = { balances: { locks } };
+    return locks;
+  };
+
+  const pipsLock = (address: string) =>
+    balance(address)?.locks?.find((l: any) => l.lockId === 'pips    ')?.amount;
+
+  it("Voted sets the voter's pips lock from chain", async () => {
+    chainLocks({ [ALICE]: [{ id: PIPS, amount: '2000' }] });
+
+    await handlePipsDeposit(
+      tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '2000'], 3000)
+    );
+
+    expect(pipsLock(ALICE)).toBe(BigInt(2000));
+    expect(balance(ALICE)).toMatchObject({ frozen: BigInt(2000), bonded: BigInt(0) });
+  });
+
+  it('ProposalCreated locks a community proposer and skips a committee one', async () => {
+    const locks = chainLocks({ [ALICE]: [{ id: PIPS, amount: '5000' }] });
+    const created = (proposer: unknown) => {
+      const event = tupleEvent('pips', 'ProposalCreated', ['0xdid', 'x', '1', '5000'], 3000);
+      (event.event.data as any)[1] = {
+        toString: () => JSON.stringify(proposer),
+        registry: { chainSS58: 42 },
+      };
+      return event;
+    };
+
+    await handlePipsDeposit(created({ committee: { technical: null } }));
+    expect(locks).not.toHaveBeenCalled();
+
+    await handlePipsDeposit(created({ community: ALICE }));
+    expect(pipsLock(ALICE)).toBe(BigInt(5000));
+  });
+
+  it('ProposalRefund re-reads the proposer and every voter', async () => {
+    db['Proposal'] = {
+      '0000000007': { id: '0000000007', proposer: { type: 'Community', value: BOB } },
+    };
+    db['ProposalVote'] = {
+      [`0000000007/${ALICE_KEY}`]: { id: 'v', proposalId: '0000000007', account: ALICE_KEY },
+    };
+    chainLocks({
+      [ALICE]: [{ id: PIPS, amount: '100' }],
+      [BOB]: [{ id: PIPS, amount: '2000' }],
+    });
+    await handlePipsDeposit(
+      tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '100'], 3000)
+    );
+    await handlePipsDeposit(tupleEvent('pips', 'Voted', ['0xdid', BOB, '7', 'true', '2000'], 3000));
+
+    chainLocks({ [ALICE]: [{ id: STAKING, amount: '50' }], [BOB]: [] });
+    await handleProposalRefund(tupleEvent('pips', 'ProposalRefund', ['0xdid', '7', '2100'], 3000));
+
+    expect(pipsLock(ALICE)).toBeUndefined();
+    expect(pipsLock(BOB)).toBeUndefined();
+    expect(balance(BOB)?.frozen).toBe(BigInt(0));
+  });
+
+  it('does nothing on v8, where balances.Locked/Unlocked carry the change', async () => {
+    const locks = chainLocks({ [ALICE]: [{ id: PIPS, amount: '2000' }] });
+
+    await handlePipsDeposit(
+      structEvent('pips', 'Voted', {
+        did: '0xdid',
+        voter: ALICE,
+        pipId: '7',
+        aye: true,
+        deposit: '2000',
+      })
+    );
+    await handleProposalRefund(
+      structEvent('pips', 'ProposalRefund', { did: '0xdid', pipId: '7', amount: '2000' })
+    );
+
+    expect(locks).not.toHaveBeenCalled();
+    expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('a drift correction keeps the pips lock by id instead of filing it as residual', () => {
+    const row = emptyBalance(ALICE, undefined, '0000000001') as any;
+
+    applyChainFreezes(row, {
+      frozen: BigInt(2000),
+      stakingLock: BigInt(3),
+      pipsLock: BigInt(2000),
+    });
+
+    expect(row.locks).toEqual([
+      { lockId: 'staking ', amount: BigInt(3), reasons: 'staking' },
+      { lockId: 'pips    ', amount: BigInt(2000), reasons: 'pips' },
+    ]);
+    expect(row.frozen).toBe(BigInt(2000));
+    expect(row.bonded).toBe(BigInt(3));
+  });
+});
+
+/**
+ * The pre-v7 bridge credits its recipient through `deposit_creating`, which the pre-v8 balances
+ * pallet reports only when it creates the account.
+ */
+describe('pre-v7 bridge mints', () => {
+  const ALICE_KEY = '0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d';
+  const bridged = (height: number, idx: number, amount: string) => {
+    const [event] = v7ExtrinsicEvents(
+      height,
+      [
+        [
+          'bridge',
+          'Bridged',
+          ['0xdid', JSON.stringify({ nonce: 1, recipient: ALICE_KEY, amount })],
+        ],
+      ],
+      3010
+    );
+    (event.event.data as any)[1] = {
+      toJSON: () => ({ nonce: 1, recipient: ALICE_KEY, amount: Number(amount), tx_hash: '0x1' }),
+    };
+    (event as { idx: number }).idx = idx;
+    (event as { extrinsic?: unknown }).extrinsic = undefined;
+    return event;
+  };
+
+  it('credits an existing recipient, whose deposit had no balance event', async () => {
+    await handleBridgeMint(bridged(3_477_869, 1, '30000000000'));
+
+    expect(balance(ALICE)?.free).toBe(BigInt(30_000_000_000));
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.Mint, accountId: ALICE });
+  });
+
+  it('does not credit a new recipient twice, past the reserve endowment in between', async () => {
+    const [endowed, brr] = v7ExtrinsicEvents(
+      3_000_000,
+      [
+        ['balances', 'Endowed', ['0xdid', ALICE, '500']],
+        ['balances', 'Endowed', ['0xbrr', BOB, '0']],
+      ],
+      3010
+    );
+    await handleBalanceEndowed(endowed);
+    await handleBalanceEndowed(brr);
+
+    await handleBridgeMint(bridged(3_000_000, 2, '500'));
+
+    expect(balance(ALICE)?.free).toBe(BigInt(500));
+    expect(entries().filter(r => r.accountId === ALICE)).toHaveLength(1);
+  });
+
+  it('is skipped on v8', async () => {
+    const event = bridged(3_000_001, 1, '5');
+    (event.block as any).specVersion = 8_000_000;
+
+    await handleBridgeMint(event);
+
+    expect(balance(ALICE)).toBeUndefined();
   });
 });
