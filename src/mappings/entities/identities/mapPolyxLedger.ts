@@ -1377,7 +1377,8 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
     return;
   }
 
-  const primaryKey = firstText(decodeEvent(event), ['primaryKey']);
+  const decoded = decodeEvent(event);
+  const primaryKey = firstText(decoded, ['primaryKey']);
 
   if (!primaryKey) {
     return;
@@ -1394,6 +1395,16 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
   );
 
   if (systematic) {
+    return;
+  }
+
+  // `create_child_identity(ies)` emits `DidCreated` for the child too, but through
+  // `base_create_child_identity`, which grants nothing (v6.1.0, v7.4.0): only
+  // `register_did_without_cdd` does. The child is told apart by the `ParentDid` it stores before
+  // the event; a testnet resync credited a child's key 100,000 POLYX it never received.
+  const did = firstText(decoded, ['did']);
+
+  if (did && (await isChildIdentity(did))) {
     return;
   }
 
@@ -1462,6 +1473,23 @@ export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => 
     amount,
     kind: MovementKind.Mint,
   });
+};
+
+/** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1) or a failed read. */
+const isChildIdentity = async (did: string): Promise<boolean> => {
+  // Not in the v8 type augmentation (the storage was dropped with child identities there).
+  const identity = (
+    api.query as unknown as Record<
+      string,
+      { parentDid?: (id: string) => Promise<{ isSome?: boolean }> } | undefined
+    >
+  ).identity;
+
+  try {
+    return (await identity?.parentDid?.(did))?.isSome === true;
+  } catch {
+    return false;
+  }
 };
 
 /**

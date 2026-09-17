@@ -1219,6 +1219,21 @@ describe('the identity registration grant', () => {
     });
   });
 
+  it('pre-v8: does not credit a child identity, which gets no grant', async () => {
+    initialPolyxIs(GRANT);
+    const parentDid = jest.fn().mockResolvedValue({ isSome: true });
+    (globalThis as any).api.query = { identity: { parentDid } };
+    const [didCreated] = v7ExtrinsicEvents(3_100_150, [
+      ['identity', 'DidCreated', [DID, ALICE, '[]']],
+    ]);
+
+    await handleIdentityGrant(didCreated);
+
+    expect(parentDid).toHaveBeenCalledWith(DID);
+    expect(balance(ALICE)).toBeUndefined();
+    expect(entries()).toHaveLength(0);
+  });
+
   it('pre-v8: does not credit it twice for a new key, whose Endowed already did', async () => {
     initialPolyxIs(GRANT);
     const [endowed, didCreated] = v7ExtrinsicEvents(3_100_200, [
