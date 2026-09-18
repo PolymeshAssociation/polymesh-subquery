@@ -52,13 +52,13 @@ type Nft @entity @compositeIndexes(fields: [["assetId", "nftId"]]) {
   account: Account @index
   identity: Identity @index
 
-  metadata: [NftMetadataEntry]
   mintedBlock: Block!
   "null = still in circulation. Filter `burnedBlockId: { isNull: true }` (Boolean cannot be indexed, §8b)"
   burnedBlock: Block @index
 }
 
-type NftMetadataEntry @jsonField { key: String!, value: String! }
+<!-- `metadata: [NftMetadataEntry]` was dropped: nothing filled it, and a
+jsonField carries a GIN index that every mint, move and burn maintained over an empty array. -->
 
 type AssetAllowance @entity {
   id: ID!                        # assetId/owner/spender

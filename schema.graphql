@@ -3193,14 +3193,6 @@ enum HolderKind {
 }
 
 """
-One key/value pair of an NFT's on-chain metadata.
-"""
-type NftMetadataEntry @jsonField {
-  key: String!
-  value: String!
-}
-
-"""
 One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
 The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
 has it been?") is answered here.
@@ -3215,7 +3207,6 @@ type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
   portfolio: Portfolio
   account: Account
   identity: Identity
-  metadata: [NftMetadataEntry]
   createdEvent: Event!
   "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
   burnedEvent: Event

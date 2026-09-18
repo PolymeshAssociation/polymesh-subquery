@@ -40,7 +40,6 @@ const mintNft = (
     assetId,
     nftId: BigInt(nftId),
     ...locationOf(holder),
-    metadata: [],
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });
