@@ -3290,6 +3290,7 @@ type Asset @entity {
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   holdings: [Holding!]! @derivedFrom(field: "asset")
   nfts: [Nft!]! @derivedFrom(field: "asset")
+  metadata: [AssetMetadata!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
