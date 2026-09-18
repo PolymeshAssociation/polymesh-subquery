@@ -126,7 +126,7 @@ Identity-level holding becomes **derived**. Two options:
 | `handleAssetCreated` | Populate `assetId`; drop `isUniquenessRequired`. |
 | **new** `handleApproval` | Upsert `AssetAllowance.amount`. |
 | **new** `handleAllowanceSpent` | Set `amount = remainingAllowance` (chain already computed it — take it rather than subtracting, avoiding drift); increment `totalSpent`. |
-| **new** `handleCreatedAssetTransfer` | Write an `AssetTransaction` with account-side from/to. If `pendingTransferId` is present, link to the `Instruction` — it is an `InstructionId` **[V]**, so pending transfers are already-modelled Instructions and need no new state machine. |
+| ~~**new** `handleCreatedAssetTransfer`~~ | **Withdrawn.** `transfer_asset` emits it *after* `settlement::transfer_funds`, so the movement is already an `AssetTransaction` from `FundsTransferred` (same identity) or `AssetBalanceUpdated` (executed instruction) — or, with the receiver's affirmation pending, has not happened yet. Writing a row here duplicated the first two and recorded the third as a completed movement. The event stays unhandled. |
 | **new** `handleSetAssetMetadataValue` etc. | Upsert `AssetMetadata`. |
 
 `rawAssetHolderToAssetHolder` in `src/utils/portfolios.ts` already branches on `is8xChain` for the `MeshAssetHolder` (`{account}` | `{portfolio}`) shape **[V]** — extend it to return the `HolderKind` discriminator rather than collapsing to a DID.
@@ -235,7 +235,7 @@ With `Nft`, a mint is N inserts of a small immutable row and a burn is N updates
 |---|---|---|
 | SDK | `assetHolders`, `nftHolders` | **Compatible** if `AssetHolder`/`NftHolder` are kept as rollups (recommended). `NftHolder.nftIds` narrows `[Int]` → `[BigInt]` — check SDK typings. |
 | SDK | `assets` | `Asset.assetId` added, `isUniquenessRequired` removed, `holders` derived field may change shape. |
-| SDK | `assetTransactions` | Gains account-side rows from `CreatedAssetTransfer`. Existing filters still work. |
+| SDK | `assetTransactions` | Unchanged by `CreatedAssetTransfer` (see the withdrawn handler above). |
 | Portal | `assetTransactions` | Same. Its `fromPortfolioId`/`toPortfolioId` filters are unaffected and become better-served once `Holding` exists. |
 
 New capability: `holdings(filter: { portfolioId: { equalTo: "did/1" } })` — the query neither consumer can express today.

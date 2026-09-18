@@ -1,5 +1,5 @@
 /**
- * Asset metadata (defect G13), asset-type changes, and the v8 account-side CreatedAssetTransfer.
+ * Asset metadata and asset-type changes.
  * SetAssetMetadataValue / ...Details do not carry the metadata key — it is recovered from the
  * direct setAssetMetadata call args, else from a RegisterAssetMetadata*Type event in the same
  * extrinsic (the register-and-set path), and only an unrecognised wrapper is recorded and dropped.
@@ -13,7 +13,6 @@ import {
   handleSetAssetMetadataValue,
   handleSetAssetMetadataValueDetails,
 } from '../../src/mappings/entities/assets/mapAssetMetadata';
-import { handleCreatedAssetTransfer } from '../../src/mappings/entities/assets/mapAsset';
 import { codec, MockDb, mockStore, storeSet, tupleEvent } from './helpers';
 
 const ASSET = '0xasset000000000000000000000000000';
@@ -385,58 +384,5 @@ describe('asset metadata', () => {
     );
 
     expect(db['Asset'][ASSET].type).toBe('Derivative');
-  });
-});
-
-describe('handleCreatedAssetTransfer', () => {
-  let db: MockDb;
-
-  beforeEach(() => {
-    db = mockStore({ Asset: { [ASSET]: { id: ASSET } } });
-  });
-
-  it('writes an account-side AssetTransaction and links the pending instruction', async () => {
-    await handleCreatedAssetTransfer(
-      metaEvent(
-        'CreatedAssetTransfer',
-        [
-          codec(ASSET),
-          codec('5From000000000000000000000000000000000000000000000'),
-          codec('5To00000000000000000000000000000000000000000000000'),
-          codec('4200'),
-          codec(null, { isEmpty: true }),
-          codec('91'),
-        ],
-        { idx: 2, extrinsic: { method: { section: 'asset', method: 'transferAssetFrom' } } }
-      )
-    );
-
-    const [row] = Object.values(db['AssetTransaction']);
-    expect(row).toMatchObject({
-      assetId: ASSET,
-      fromAccount: '5From000000000000000000000000000000000000000000000',
-      toAccount: '5To00000000000000000000000000000000000000000000000',
-      amount: BigInt(4200),
-      // zero-padded to match Instruction.id (D12)
-      instructionId: '0000000091',
-      eventId: 'CreatedAssetTransfer',
-    });
-    expect(row.fromPortfolioId).toBeUndefined();
-  });
-
-  it('leaves instruction null when there is no pending transfer id', async () => {
-    await handleCreatedAssetTransfer(
-      metaEvent('CreatedAssetTransfer', [
-        codec(ASSET),
-        codec('5From000000000000000000000000000000000000000000000'),
-        codec('5To00000000000000000000000000000000000000000000000'),
-        codec('10'),
-        codec(null, { isEmpty: true }),
-        codec(null, { isEmpty: true }),
-      ])
-    );
-
-    const [row] = Object.values(db['AssetTransaction']);
-    expect(row.instructionId).toBeUndefined();
   });
 });
