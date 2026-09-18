@@ -6,7 +6,7 @@
 
 import { SubstrateEvent } from '@subql/types';
 import { handleAllowanceSpent, handleApproval } from '../../src/mappings/entities/assets/mapAsset';
-import { codec, MockDb, mockStore, tupleEvent } from './helpers';
+import { codec, MockDb, mockLedgerAccountQuery, mockStore, tupleEvent } from './helpers';
 
 const ASSET = '0xasset0000000000000000000000000a';
 const OWNER = '5Owner00000000000000000000000000000000000000000000';
@@ -73,6 +73,16 @@ describe('asset allowances', () => {
 
     await handleApproval(allowanceEvent('Approval', [OWNER, SPENDER, ASSET, '250']));
     expect(db['AssetAllowance'][id].amount).toBe(BigInt(250));
+  });
+
+  it('creates an Account row for a spender with no identity, which approve never checks', async () => {
+    const STRANGER = '5Stranger00000000000000000000000000000000000000000';
+    (globalThis as any).api.query = mockLedgerAccountQuery();
+
+    await handleApproval(allowanceEvent('Approval', [OWNER, STRANGER, ASSET, '7']));
+
+    expect(db['AssetAllowance'][`${ASSET}/${OWNER}/${STRANGER}`].spenderId).toBe(STRANGER);
+    expect(db['Account'][STRANGER]).toMatchObject({ id: STRANGER, address: STRANGER });
   });
 
   it('handleApproval resolves the same fields when the runtime names asset_id in snake_case', async () => {

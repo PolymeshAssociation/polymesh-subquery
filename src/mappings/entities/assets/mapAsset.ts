@@ -32,13 +32,13 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getOrCreateAccount,
   getPortfolioId,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
   is7xChain,
   isMigratedAssetId,
+  ledgerAccount,
   padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
@@ -852,9 +852,13 @@ const getAssetAllowance = async (
   block: SubstrateEvent['block'],
   blockEventId: string
 ): Promise<AssetAllowance> => {
+  // `ledgerAccount`, not `getOrCreateAccount`: `approve` never checks the spender, which can be a
+  // key with no identity or a multisig signer — keys `getOrCreateAccount` creates no row for — and
+  // `AssetAllowance.spender` is non-null, so a query selecting it failed on the missing row. The
+  // owner needs an identity to approve, but is resolved the same way.
   await Promise.all([
-    getOrCreateAccount(ownerId, blockId, block.timestamp, blockEventId),
-    getOrCreateAccount(spenderId, blockId, block.timestamp, blockEventId),
+    ledgerAccount(ownerId, blockId, block.timestamp, blockEventId),
+    ledgerAccount(spenderId, blockId, block.timestamp, blockEventId),
   ]);
 
   const id = `${assetId}/${ownerId}/${spenderId}`;
