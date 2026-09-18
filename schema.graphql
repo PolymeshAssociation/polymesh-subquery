@@ -3288,7 +3288,7 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  "number of holders with a non-zero balance — maintained where `Holding` rows cross zero"
+  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` / `NftHolder` rollup crosses zero, so a key with no identity is not counted"
   holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!

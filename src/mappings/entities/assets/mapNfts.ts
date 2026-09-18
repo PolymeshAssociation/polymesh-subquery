@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { EventIdEnum, HolderKind, Nft, NftHolder } from '../../../types';
+import { Asset, EventIdEnum, HolderKind, Nft, NftHolder } from '../../../types';
 import {
   AssetHolderDetails,
   bytesToString,
@@ -107,6 +107,19 @@ const adjustNftCount = async (
   holding.nftCount += delta;
   holding.updatedEventId = blockEventId;
   promises.push(holding.save());
+};
+
+/**
+ * `Asset.holderCount` counts identities, and for a collection an identity holds it while its
+ * `NftHolder` rollup is non-empty — the NFT counterpart of `applyHoldingDelta`'s zero crossing on
+ * `AssetHolder`. Without it every collection reported 0 holders.
+ */
+const countHolderChange = (asset: Asset, before: number, after: number): void => {
+  if (before === 0 && after > 0) {
+    asset.holderCount += 1;
+  } else if (before > 0 && after === 0) {
+    asset.holderCount = Math.max(0, asset.holderCount - 1);
+  }
 };
 
 /**
@@ -231,7 +244,9 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
 
     // the whole-array rollup, kept for the SDK and still buffered per block
     const nftHolder = await getNftHolder(assetId, did, blockId, blockEventId);
+    const heldBefore = nftHolder.nftIds.length;
     nftHolder.nftIds.push(...bigIds);
+    countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
     nftHolder.updatedEventId = blockEventId;
     await bufferHolder(blockId, nftHolder);
 
@@ -245,7 +260,9 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     asset.totalSupply -= BigInt(ids.length);
 
     const nftHolder = await getNftHolder(assetId, did, blockId, blockEventId);
+    const heldBefore = nftHolder.nftIds.length;
     nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !bigIds.includes(heldId));
+    countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
     nftHolder.updatedEventId = blockEventId;
     await bufferHolder(blockId, nftHolder);
 
@@ -263,8 +280,14 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     const fromRollup = await getNftHolder(assetId, fromDid, blockId, blockEventId);
     const toRollup =
       toDid === fromDid ? fromRollup : await getNftHolder(assetId, toDid, blockId, blockEventId);
+    const fromBefore = fromRollup.nftIds.length;
+    const toBefore = toRollup.nftIds.length;
     fromRollup.nftIds = fromRollup.nftIds.filter(id => !bigIds.includes(id));
     toRollup.nftIds.push(...bigIds);
+    if (toRollup !== fromRollup) {
+      countHolderChange(asset, fromBefore, fromRollup.nftIds.length);
+      countHolderChange(asset, toBefore, toRollup.nftIds.length);
+    }
     fromRollup.updatedEventId = blockEventId;
     toRollup.updatedEventId = blockEventId;
 

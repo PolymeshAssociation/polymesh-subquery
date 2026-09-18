@@ -57,6 +57,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
           id: ASSET,
           totalSupply: BigInt(0),
           totalTransfers: BigInt(0),
+          holderCount: 0,
           isNftCollection: true,
         },
       },
@@ -113,6 +114,42 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     });
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(0);
     expect(db['Holding'][`${ASSET}/${DID_B}/0`].nftCount).toBe(1);
+  });
+
+  it('counts identities holding the collection in Asset.holderCount', async () => {
+    const holderCount = () => db['Asset'][ASSET].holderCount;
+
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', { holderDid: DID_A, to: meshPortfolioHolderCodec(DID_A, 0), ids: [1, 2] })
+    );
+    expect(holderCount()).toBe(1);
+
+    // one of two tokens to B: A still holds one, B starts holding
+    await handleNftHoldingsUpdates(
+      nftEvent('transferred', {
+        holderDid: DID_A,
+        from: meshPortfolioHolderCodec(DID_A, 0),
+        to: meshPortfolioHolderCodec(DID_B, 0),
+        ids: [1],
+      })
+    );
+    expect(holderCount()).toBe(2);
+
+    // between A's own portfolios: no identity starts or stops holding
+    await handleNftHoldingsUpdates(
+      nftEvent('transferred', {
+        holderDid: DID_A,
+        from: meshPortfolioHolderCodec(DID_A, 0),
+        to: meshPortfolioHolderCodec(DID_A, 1),
+        ids: [2],
+      })
+    );
+    expect(holderCount()).toBe(2);
+
+    await handleNftHoldingsUpdates(
+      nftEvent('redeemed', { holderDid: DID_B, from: meshPortfolioHolderCodec(DID_B, 0), ids: [1] })
+    );
+    expect(holderCount()).toBe(1);
   });
 
   it('marks the Nft burned on redemption but leaves the row queryable', async () => {
