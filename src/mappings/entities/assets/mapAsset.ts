@@ -197,6 +197,14 @@ export const getHolding = async (
     });
   }
 
+  // Re-stamped on every touch, not only at creation. An account cannot leave its identity while it
+  // holds an asset (a non-zero balance raises `AccountKeyRefCount`, and unlinking fails with
+  // `AccountKeyIsBeingUsed`), but it can once the balance is zero — and rows outlive a zero
+  // balance. Receiving the asset again then reused the row with the old DID while the delta went to
+  // the new DID's rollup, breaking SUM(Holding.amount) = AssetHolder.amount for both. Every caller
+  // saves the row next, so this costs no extra write.
+  holding.identityId = holder.identityId || undefined;
+
   return holding;
 };
 
