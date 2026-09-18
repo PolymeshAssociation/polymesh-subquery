@@ -115,6 +115,26 @@ describe('asset metadata', () => {
     });
   });
 
+  it('keeps the time a LockedUntil lock ends', async () => {
+    await handleSetAssetMetadataValue(
+      metaEvent(
+        'SetAssetMetadataValue',
+        [
+          codec('0xdid'),
+          codec(ASSET),
+          codec('ipfs://cid'),
+          codec({ expire: null, lockStatus: { lockedUntil: 1_767_225_600_000 } }),
+        ],
+        setMetadataExtrinsic({ local: 1 })
+      )
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Local/1`]).toMatchObject({
+      isLocked: true,
+      lockedUntil: new Date(1_767_225_600_000),
+    });
+  });
+
   it('recovers the key from a sibling RegisterAssetMetadataLocalType (register-and-set path)', async () => {
     // the setter is dispatched by registerAndSetLocalAssetMetadata, not setAssetMetadata, so the
     // key is not in args[1]; the RegisterAssetMetadataLocalType event fired earlier in the same

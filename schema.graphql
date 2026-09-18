@@ -3354,12 +3354,14 @@ type AssetMetadata @entity {
   scope: MetadataScope!
   "the numeric key id within its scope, as a string"
   keyId: String!
-  "registered name of the key"
+  "registered name of the key. For a Global key it is copied from `GlobalMetadataKey`, whose names the chain never changes"
   name: String
   "current value, once one has been set"
   value: String
-  "true while the value is Locked or LockedUntil"
+  "true when the value was set Locked or LockedUntil. A LockedUntil lock ends at `lockedUntil` with no event, so compare that against the current time"
   isLocked: Boolean!
+  "When a LockedUntil lock ends; null for Unlocked and Locked. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
+  lockedUntil: Date
   "Value expiry, when the detail carried one. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdEvent: Event!
