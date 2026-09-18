@@ -3193,19 +3193,11 @@ enum HolderKind {
 }
 
 """
-One key/value pair of an NFT's on-chain metadata.
-"""
-type NftMetadataEntry @jsonField {
-  key: String!
-  value: String!
-}
-
-"""
 One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
 The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
 has it been?") is answered here.
 """
-type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
+type Nft @entity {
   id: ID! # assetId/padId(nftId)
   "the collection this token belongs to"
   asset: Asset!
@@ -3215,7 +3207,6 @@ type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
   portfolio: Portfolio
   account: Account
   identity: Identity
-  metadata: [NftMetadataEntry]
   createdEvent: Event!
   "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
   burnedEvent: Event
@@ -3226,6 +3217,9 @@ type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
 One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
 account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
 `NftHolder`, kept as maintained rollups), never stored as primary truth.
+
+A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
+filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
 """
 type Holding
   @entity
@@ -3279,8 +3273,8 @@ Represents a tokenized Asset on the Polymesh chain. The central data structure f
 """
 type Asset @entity {
   id: ID! # assetId
-  "the chain's own asset id — equal to `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
-  assetId: String! @index(unique: true)
+  "the chain's own asset id — equal to `id`, so look it up by `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
+  assetId: String!
   ticker: String @index(unique: false)
   name: String @index(unique: false)
   isNftCollection: Boolean!
@@ -3288,7 +3282,7 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  "number of holders with a non-zero balance — maintained where `Holding` rows cross zero"
+  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` / `NftHolder` rollup crosses zero, so a key with no identity is not counted"
   holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!
@@ -3296,6 +3290,7 @@ type Asset @entity {
   holders: [AssetHolder]! @derivedFrom(field: "asset")
   holdings: [Holding!]! @derivedFrom(field: "asset")
   nfts: [Nft!]! @derivedFrom(field: "asset")
+  metadata: [AssetMetadata!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
@@ -3363,12 +3358,14 @@ type AssetMetadata @entity {
   scope: MetadataScope!
   "the numeric key id within its scope, as a string"
   keyId: String!
-  "registered name of the key"
+  "registered name of the key. For a Global key it is copied from `GlobalMetadataKey`, whose names the chain never changes"
   name: String
   "current value, once one has been set"
   value: String
-  "true while the value is Locked or LockedUntil"
+  "true when the value was set Locked or LockedUntil. A LockedUntil lock ends at `lockedUntil` with no event, so compare that against the current time"
   isLocked: Boolean!
+  "When a LockedUntil lock ends; null for Unlocked and Locked. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
+  lockedUntil: Date
   "Value expiry, when the detail carried one. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdEvent: Event!

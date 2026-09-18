@@ -143,4 +143,27 @@ describe('applyHoldingDelta', () => {
     expect(db['AssetHolder'][`${ASSET}/${DID}`].amount).toBe(BigInt(0));
     expect(asset.holderCount).toBe(0);
   });
+
+  it('restamps the identity when an account that re-linked receives the asset again', async () => {
+    const OTHER = '0x02'.padEnd(66, '0');
+    const asset = makeAsset(0);
+    const account = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+
+    await flush(p =>
+      applyHoldingDelta(asset as any, accountHolder(DID, account), BLOCK, BigInt(5), p)
+    );
+    await flush(p =>
+      applyHoldingDelta(asset as any, accountHolder(DID, account), BLOCK, BigInt(-5), p)
+    );
+    // the key leaves DID and joins OTHER, then receives the asset again
+    await flush(p =>
+      applyHoldingDelta(asset as any, accountHolder(OTHER, account), BLOCK, BigInt(3), p)
+    );
+
+    expect(db['Holding'][`${ASSET}/${account}`]).toMatchObject({
+      identityId: OTHER,
+      amount: BigInt(3),
+    });
+    expect(db['AssetHolder'][`${ASSET}/${OTHER}`].amount).toBe(BigInt(3));
+  });
 });

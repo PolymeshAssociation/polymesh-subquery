@@ -18,7 +18,6 @@ import {
   SecurityIdentifier,
 } from '../../../types';
 import {
-  accountHolder,
   AssetHolderDetails,
   bytesToString,
   camelToSnakeCase,
@@ -33,13 +32,13 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNumberValue,
-  getOrCreateAccount,
   getPortfolioId,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
   is7xChain,
   isMigratedAssetId,
+  ledgerAccount,
   padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
@@ -197,6 +196,14 @@ export const getHolding = async (
       updatedEventId: blockEventId,
     });
   }
+
+  // Re-stamped on every touch, not only at creation. An account cannot leave its identity while it
+  // holds an asset (a non-zero balance raises `AccountKeyRefCount`, and unlinking fails with
+  // `AccountKeyIsBeingUsed`), but it can once the balance is zero — and rows outlive a zero
+  // balance. Receiving the asset again then reused the row with the old DID while the delta went to
+  // the new DID's rollup, breaking SUM(Holding.amount) = AssetHolder.amount for both. Every caller
+  // saves the row next, so this costs no extra write.
+  holding.identityId = holder.identityId || undefined;
 
   return holding;
 };
@@ -845,9 +852,13 @@ const getAssetAllowance = async (
   block: SubstrateEvent['block'],
   blockEventId: string
 ): Promise<AssetAllowance> => {
+  // `ledgerAccount`, not `getOrCreateAccount`: `approve` never checks the spender, which can be a
+  // key with no identity or a multisig signer — keys `getOrCreateAccount` creates no row for — and
+  // `AssetAllowance.spender` is non-null, so a query selecting it failed on the missing row. The
+  // owner needs an identity to approve, but is resolved the same way.
   await Promise.all([
-    getOrCreateAccount(ownerId, blockId, block.timestamp, blockEventId),
-    getOrCreateAccount(spenderId, blockId, block.timestamp, blockEventId),
+    ledgerAccount(ownerId, blockId, block.timestamp, blockEventId),
+    ledgerAccount(spenderId, blockId, block.timestamp, blockEventId),
   ]);
 
   const id = `${assetId}/${ownerId}/${spenderId}`;
@@ -890,43 +901,6 @@ export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
   allowance.updatedEventId = blockEventId;
 
   await allowance.save();
-};
-
-export const handleCreatedAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
-  const {
-    assetId: rawAssetId,
-    from: rawFrom,
-    to: rawTo,
-    amount: rawAmount,
-    memo: rawMemo,
-    pendingTransferId: rawPending,
-  } = decodeEvent(event);
-
-  const assetId = await getAssetId(rawAssetId, block);
-  await getAsset(assetId);
-
-  // `pendingTransferId` is an InstructionId — the pending transfer is an already-modelled
-  // Instruction, so this is a plain relation, no new state machine. Zero-pad it (D12) to match
-  // the padded `Instruction.id`.
-  const instructionId = rawPending?.isEmpty ? undefined : padNumericId(getTextValue(rawPending));
-
-  await createAssetTransaction(
-    blockId,
-    eventIdx,
-    block.timestamp,
-    {
-      assetId,
-      fromHolder: accountHolder(undefined, getTextValue(rawFrom)),
-      toHolder: accountHolder(undefined, getTextValue(rawTo)),
-      amount: getBigIntValue(rawAmount),
-      instructionId,
-      instructionMemo: rawMemo?.isEmpty ? undefined : bytesToString(rawMemo),
-    },
-    blockEventId,
-    EventIdEnum.CreatedAssetTransfer,
-    extrinsic
-  );
 };
 
 export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void> => {
