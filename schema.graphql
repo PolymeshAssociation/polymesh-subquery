@@ -3217,6 +3217,9 @@ type Nft @entity {
 One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
 account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
 `NftHolder`, kept as maintained rollups), never stored as primary truth.
+
+A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
+filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
 """
 type Holding
   @entity
