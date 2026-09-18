@@ -3197,7 +3197,7 @@ One row per individual non-fungible token — the authoritative per-token record
 The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
 has it been?") is answered here.
 """
-type Nft @entity @compositeIndexes(fields: [["asset", "nftId"]]) {
+type Nft @entity {
   id: ID! # assetId/padId(nftId)
   "the collection this token belongs to"
   asset: Asset!
@@ -3270,8 +3270,8 @@ Represents a tokenized Asset on the Polymesh chain. The central data structure f
 """
 type Asset @entity {
   id: ID! # assetId
-  "the chain's own asset id — equal to `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
-  assetId: String! @index(unique: true)
+  "the chain's own asset id — equal to `id`, so look it up by `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
+  assetId: String!
   ticker: String @index(unique: false)
   name: String @index(unique: false)
   isNftCollection: Boolean!

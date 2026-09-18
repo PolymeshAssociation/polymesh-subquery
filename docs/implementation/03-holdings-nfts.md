@@ -42,7 +42,7 @@ type Holding @entity @compositeIndexes(fields: [["assetId", "identityId"], ["por
 
 enum HolderKind { Portfolio, Account }
 
-type Nft @entity @compositeIndexes(fields: [["assetId", "nftId"]]) {
+type Nft @entity {               # no ["asset","nftId"] composite: `id` already serves point lookups
   id: ID!                        # assetId/padId(nftId)
   asset: Asset! @index           # the collection
   nftId: BigInt!                 # BigInt everywhere — resolves G10
@@ -90,7 +90,7 @@ enum MetadataScope { Local, Global }
   type Asset @entity {
 -   id: ID! # ticker
 +   id: ID!                      # assetId
-+   assetId: String! @index(unique: true)
++   assetId: String!             # no @index: equal to `id`, and `unique` is dropped under historical mode
     "current linked ticker, if any — NOT the asset's identity post-7.x"
     ticker: String @index(unique: false)
 -   isUniquenessRequired: Boolean!        # pre-6.0 concept, dead
