@@ -222,7 +222,6 @@ const mapAutomaticAffirmation = async (
     account,
     portfolio,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const partyId = getPartyId(instructionId, identity, account, false);
@@ -344,7 +343,6 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     event: InstructionEventEnum.InstructionCreated,
     identity: creator,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const promises = [
@@ -429,7 +427,6 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
     portfolio,
     account,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([
@@ -467,7 +464,6 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
       account,
       portfolio,
       createdEventId: blockEventId,
-      updatedEventId: blockEventId,
     }).save(),
   ];
 
@@ -546,7 +542,6 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
     event: InstructionEventEnum.InstructionRejected,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([instruction.save(), rejection.save(), rejectionEvent.save()]);
@@ -575,7 +570,6 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
     instructionId,
     event: eventId as unknown as InstructionEventEnum,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([
@@ -598,7 +592,6 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
     event: InstructionEventEnum.SettlementManuallyExecuted,
     identity: getTextValue(rawIdentityId),
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await manuallyExecutedEvent.save();
@@ -626,7 +619,6 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
     event: eventId as unknown as InstructionEventEnum,
     failureReason,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([instruction.save(), finalizedEvent.save()]);
@@ -664,7 +656,6 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
     event: InstructionEventEnum.MediatorAffirmationReceived,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([mediatorAffirmation.save(), mediatorAffirmationEvent.save()]);
@@ -683,7 +674,6 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([
@@ -714,7 +704,6 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
       event: InstructionEventEnum.InstructionMediators,
       identity,
       createdEventId: blockEventId,
-      updatedEventId: blockEventId,
     }).save();
   });
 
@@ -781,7 +770,6 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     identity: identityId,
     offChainReceiptId: `${signer}/${uid}`,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const promises = [receipt.save(), affirmation.save(), receiptEvent.save()];

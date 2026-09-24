@@ -58,7 +58,6 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
     amountAfterTax: amount - taxAmount,
     reclaimed: false,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([distributionPayment.save(), distribution.save()]);
@@ -81,6 +80,5 @@ export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
     amountAfterTax: amount,
     reclaimed: true,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 };

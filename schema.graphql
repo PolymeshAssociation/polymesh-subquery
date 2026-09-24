@@ -2161,7 +2161,6 @@ type BridgeEvent @entity {
   amount: BigInt!
   txHash: String! @index(unique: false)
   createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """
@@ -2181,7 +2180,6 @@ type StakingEvent @entity {
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
   eraIndex: Int @index
   position: StakingPosition
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2723,7 +2721,6 @@ type InstructionEvent @entity {
   account: String
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2758,7 +2755,6 @@ type DistributionPayment @entity {
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3342,7 +3338,6 @@ type AssetTransaction @entity {
   memo: String
   "the account that signed the extrinsic, for movements initiated directly by an account"
   address: String
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3427,7 +3422,6 @@ type Funding @entity {
   fundingRound: String! @index(unique: false)
   amount: BigInt!
   totalFundingAmount: BigInt!
-  updatedEvent: Event!
   createdEvent: Event!
 }
 

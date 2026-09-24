@@ -153,7 +153,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
-  const { block, eventIdx } = extractArgs(event);
+  const { block, eventIdx, blockEventId } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
   const {
     claimIssuer,
@@ -185,6 +185,7 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
 
   if (claim) {
     claim.revokeDate = issuanceDate;
+    claim.updatedEventId = blockEventId;
     await claim.save();
   } else {
     /**

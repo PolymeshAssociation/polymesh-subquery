@@ -268,6 +268,5 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     eraIndex: currentPayoutEra(blockId),
     positionId: position?.id,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 }
