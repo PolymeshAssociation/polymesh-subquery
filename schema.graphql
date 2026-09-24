@@ -2059,14 +2059,15 @@ type Account @entity {
   address: String! @index(unique: true)
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
-  "The key's role in the identity system, from the chain's `KeyRecord` — mutable, maintained on every key-link/unlink write"
+  "The key's current role, derived from the chain's `KeyRecord`. A convenience column: the membership history it summarises is `keyAssignments`"
   keyRole: AccountKeyRole! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
+  "The identity this key currently belongs to, null once it is detached. A convenience column for the current state; `keyAssignments` is the authoritative membership record, including past ones"
   identity: Identity
-  "Every `IdentityKey` membership interval this account has held, current and historical"
+  "Every `IdentityKey` membership interval this account has held, current and historical. The source of truth for key membership"
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
-  "Set when this account is a multisig — the account IS the multisig (defect G5)"
+  "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
   createdEvent: Event!
   updatedEvent: Event!
@@ -2074,7 +2075,11 @@ type Account @entity {
 
 """
 An account's permissions for one `IdentityKey` membership interval — the `Permissions` entity
-collapsed into the jsonField that already carried the same four fields (defect G4).
+collapsed into the jsonField that already carried the same four fields.
+
+These are not filterable: SubQuery generates filters over an entity's own columns, not over the
+contents of a jsonField. Filter on `IdentityKey`'s own columns and read the permissions from the
+rows that come back.
 """
 type PermissionsJson @jsonField {
   assets: AssetPermissions
@@ -2091,6 +2096,7 @@ An Identity needs a valid CDD claim from at least one KYC/KYB provider to perfor
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
+  "The address of the identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`"
   primaryAccount: String! @index(unique: false)
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
@@ -2103,7 +2109,7 @@ type Identity @entity {
   Every key membership this Identity has held, current and historical — see `IdentityKey`.
 
   Replaces the removed `secondaryAccounts` field, which derived from `Account.identity` and so
-  wrongly listed the primary key alongside the secondaries (defect G1). Current secondary keys are
+  wrongly listed the primary key alongside the secondaries. Current secondary keys are
   `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
   """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
@@ -2136,6 +2142,7 @@ and subsumes `AccountHistory`, which had untyped columns and no validity interva
 """
 type IdentityKey @entity
   @compositeIndexes(fields: [["identity", "role"], ["account", "validToBlock"]]) {
+  "`identity/address/validFromBlockId/paddedEventIdx` — the event index disambiguates two intervals opened for one identity in the same block"
   id: ID!
   identity: Identity! @index
   account: Account! @index
@@ -2367,7 +2374,7 @@ enum AuthorizationStatusEnum {
   Consumed
   Rejected
   Revoked
-  "The chain gave up re-offering the authorization after too many failed accept attempts"
+  "The chain gave up re-offering the authorization after too many failed accept attempts. No row is expected to hold this: the runtime declares the event but never emits it, and the retry count itself is not in any event, so an exhausted authorization stays Pending"
   RetryLimitReached
 }
 
