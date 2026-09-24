@@ -127,7 +127,6 @@ const handleGenesisDids = async () => {
             {
               identityId: did,
               keyRole: keyIndex === 0 ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
-              eventId: EventIdEnum.DidCreated,
               address: key,
             },
             SEED_EVENT_ID

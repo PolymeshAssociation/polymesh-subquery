@@ -147,7 +147,6 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     {
       identityId: did,
       keyRole: AccountKeyRole.PrimaryKey,
-      eventId,
       address,
     },
     blockEventId
@@ -367,7 +366,6 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
           address,
           identityId,
           keyRole: AccountKeyRole.SecondaryKey,
-          eventId,
         },
         blockEventId
       ),
@@ -406,7 +404,6 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   // unlink the old primary key from the identity — `keyRole` rides the same write
   account.identityId = undefined;
   account.keyRole = AccountKeyRole.Unlinked;
-  account.eventId = eventId;
   account.updatedEventId = blockEventId;
 
   await Promise.all([
@@ -415,7 +412,6 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
         address,
         identityId: identity.id,
         keyRole: AccountKeyRole.PrimaryKey,
-        eventId,
       },
       blockEventId
     ),
@@ -447,7 +443,6 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
 
   accountEntity.identityId = undefined;
   accountEntity.keyRole = AccountKeyRole.Unlinked;
-  accountEntity.eventId = eventId;
   accountEntity.updatedEventId = blockEventId;
 
   await Promise.all([

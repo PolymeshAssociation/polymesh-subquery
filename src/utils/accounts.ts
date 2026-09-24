@@ -231,7 +231,6 @@ export const getOrCreateAccount = async (
 
   const account = Account.create({
     id: address,
-    eventId: EventIdEnum.AccountCreated,
     identityId: did,
     address,
     keyRole: kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
@@ -289,7 +288,6 @@ export const ledgerAccount = async (
   const account = Account.create({
     id: address,
     address,
-    eventId: EventIdEnum.AccountCreated,
     keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
     createdEventId,

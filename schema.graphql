@@ -2066,7 +2066,6 @@ type Account @entity {
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig (defect G5)"
   multiSig: MultiSig @derivedFrom(field: "account")
-  eventId: EventIdEnum!
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2172,6 +2171,7 @@ type StakingEvent @entity {
   id: ID!
   stashAccount: String @index(unique: false)
   identity: Identity
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   amount: BigInt
   rewardDestination: String
@@ -2285,6 +2285,7 @@ type AssetAgentAction @entity {
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
   palletName: String! @index(unique: false)
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   updatedEvent: Event!
   createdEvent: Event!
@@ -2753,7 +2754,6 @@ type DistributionPayment @entity {
   id: ID!
   distribution: Distribution!
   target: Identity!
-  eventId: EventIdEnum!
   amount: BigInt!
   tax: BigInt!
   amountAfterTax: BigInt!
@@ -3328,6 +3328,7 @@ type AssetTransaction @entity {
   amount: BigInt
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
   nftIds: [BigInt]
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
   fundingRound: String
