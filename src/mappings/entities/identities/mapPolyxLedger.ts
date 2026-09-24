@@ -196,7 +196,7 @@ export const emptyBalance = (
 export const loadBalance = async (
   address: string,
   identityId: string | undefined,
-  blockId: string
+  blockEventId: string
 ): Promise<AccountBalance> => {
   const existing = await AccountBalance.get(address);
 
@@ -208,7 +208,7 @@ export const loadBalance = async (
     return existing;
   }
 
-  return emptyBalance(address, identityId, blockId);
+  return emptyBalance(address, identityId, blockEventId);
 };
 
 /** Pre-v8 staking bonds via a lock with this identifier; v8 bonds via a `Staking` hold. */
@@ -535,7 +535,7 @@ const writeMovementSide = async (
   const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
 
   const account = await ledgerAccount(address, blockId, block.timestamp);
-  const balance = await loadBalance(address, account.identityId, blockId);
+  const balance = await loadBalance(address, account.identityId, blockEventId);
 
   advanceBalance(balance, side, transition, signed, isInternal);
   balance.updatedEventId = blockEventId;
@@ -736,7 +736,7 @@ const lockHandler =
 
     // Ensure the balance row exists so the lock has somewhere to live.
     await ledgerAccount(who, blockId, block.timestamp);
-    const balance = await loadBalance(who, undefined, blockId);
+    const balance = await loadBalance(who, undefined, blockEventId);
     await balance.save();
 
     await adjustLock(who, lockId, sign * amountOf(decoded), blockEventId);
@@ -1583,7 +1583,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   }
 
   const account = await ledgerAccount(who, blockId, datetime);
-  const balance = await loadBalance(who, account.identityId, blockId);
+  const balance = await loadBalance(who, account.identityId, blockEventId);
 
   const deltas = applyBalanceSet(balance, newFree, newReserved);
 
@@ -2031,10 +2031,11 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
 const ensureBalanceRow = async (
   address: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId: string
 ): Promise<void> => {
   await ledgerAccount(address, blockId, datetime);
-  const balance = await loadBalance(address, undefined, blockId);
+  const balance = await loadBalance(address, undefined, blockEventId);
   await balance.save();
 };
 
@@ -2062,7 +2063,7 @@ const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> =
     return;
   }
 
-  await ensureBalanceRow(address, args.blockId, args.block.timestamp);
+  await ensureBalanceRow(address, args.blockId, args.block.timestamp, args.blockEventId);
   await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
 };
 
@@ -2145,7 +2146,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await ensureBalanceRow(stash, args.blockId, args.block.timestamp);
+  await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId);
   await syncStakingLock(stash, amountOf(decoded), args);
 };
 

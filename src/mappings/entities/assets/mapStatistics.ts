@@ -196,7 +196,7 @@ const getStatTypeId = (
 };
 
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockEventId, block } = extractArgs(event);
 
   const [, rawStatisticsScope, rawStatType] = params;
 
@@ -206,7 +206,7 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
   const promises = [];
   statTypes.forEach(statType => {
     const upsert = async () => {
-      return upsertStatType({ assetId, ...statType }, blockId);
+      return upsertStatType({ assetId, ...statType }, blockEventId);
     };
     promises.push(upsert());
   });
@@ -328,7 +328,7 @@ export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): P
 };
 
 export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockEventId, block } = extractArgs(event);
 
   const [, rawAssetId, rawManager] = params;
 
@@ -338,7 +338,7 @@ export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent)
   if (type === TransferRestrictionTypeEnum.Percentage) {
     await upsertStatType(
       { assetId, opType: StatOpTypeEnum.Balance, claimType: null, claimIssuerId: null },
-      blockId
+      blockEventId
     );
   }
 };
@@ -427,7 +427,7 @@ export const handleTransferManagerExemptionsRemoved = async (
 };
 
 export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId] = params;
 
@@ -436,7 +436,7 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
   if (specVersion < transferRestrictionSpecVersion) {
     await upsertStatType(
       { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
-      blockId
+      blockEventId
     );
   }
 };

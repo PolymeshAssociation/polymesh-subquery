@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { SEED_EVENT_ID } from '../mappings/consts';
 import { AccountBalance } from '../types';
 import { getBigIntValue } from '../utils';
 import {
@@ -53,8 +54,10 @@ export const seedAccountBalances = async ({
       continue;
     }
 
-    const account = await ledgerAccount(address, blockId, datetime);
-    const balance = emptyBalance(address, account.identityId, blockId);
+    // Seeded rows have no causing event, so both the account and its balance carry the seed
+    // marker rather than a bare block id in an `Event` foreign key.
+    const account = await ledgerAccount(address, blockId, datetime, SEED_EVENT_ID);
+    const balance = emptyBalance(address, account.identityId, SEED_EVENT_ID);
 
     balance.free = free;
     balance.reserved = reserved;
