@@ -87,6 +87,7 @@ const createEvmTransaction = (
   return EvmTransaction.create({
     id: extrinsicId,
     extrinsicId,
+    blockId,
     ethTxHash: resolved.ethTxHash,
     ethTxType: tx.txType,
     callKind: resolved.callKind,

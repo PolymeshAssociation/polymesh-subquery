@@ -1,7 +1,7 @@
 import { AnyTuple, Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Instruction, InstructionEvent, Leg } from '../../../types';
+import { AnomalyKind, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
   bytesToString,
@@ -23,6 +23,7 @@ import {
   removeIfIncludes,
   specVersionOf,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, HandlerArgs } from '../common';
 import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
 import {
@@ -40,11 +41,47 @@ import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements'
  * Until spec 6.3.1, `InstructionAutomaticallyAffirmed` was emitted *before* `InstructionCreated`,
  * so `handleInstructionCreated` re-scans the block for it. That workaround must be scoped to the
  * 6.1.0–6.3.1 window on public chains; a folded `||` previously made it run on every non-private
- * block at any spec version (defect A4). The private-chain equivalent range is unknown — if one is
+ * block at any spec version. The private-chain equivalent range is unknown — if one is
  * ever needed, add it as an explicit second clause rather than widening this one.
  */
 export const shouldRescanAutomaticAffirmations = (specName: string, specVersion: number): boolean =>
   specName !== 'polymesh_private_dev' && specVersion >= 6001000 && specVersion <= 6003001;
+
+/**
+ * The `InstructionEvent.event` value for each event that writes one.
+ *
+ * The narrow enum exists so the column cannot hold an event that has nothing to do with an
+ * instruction; casting an `EventIdEnum` straight into it gives that up and would write a value
+ * the GraphQL enum never declared. An event arriving here that this map does not cover is drift
+ * between the handler list and the enum, so it is reported rather than written.
+ */
+const instructionEventMap: Partial<Record<EventIdEnum, InstructionEventEnum>> = {
+  [EventIdEnum.InstructionExecuted]: InstructionEventEnum.InstructionExecuted,
+  [EventIdEnum.InstructionFailed]: InstructionEventEnum.InstructionFailed,
+  [EventIdEnum.InstructionLocked]: InstructionEventEnum.InstructionLocked,
+  [EventIdEnum.InstructionUnlocked]: InstructionEventEnum.InstructionUnlocked,
+  [EventIdEnum.FailedToExecuteInstruction]: InstructionEventEnum.FailedToExecuteInstruction,
+};
+
+const instructionEventFor = async (
+  eventId: EventIdEnum,
+  block: SubstrateBlock,
+  eventIdx: number
+): Promise<InstructionEventEnum | undefined> => {
+  const mapped = instructionEventMap[eventId];
+
+  if (!mapped) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnknownEnumValue,
+      detail: `${eventId} writes an InstructionEvent but has no InstructionEventEnum value`,
+      block,
+      eventIdx,
+      dedupeKey: `instructionEvent/${eventId}`,
+    });
+  }
+
+  return mapped;
+};
 
 const instructionStatusMap = {
   [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
@@ -555,7 +592,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionUnlocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, eventId, blockEventId } = extractArgs(event);
+  const { extrinsic, eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { instructionId: rawInstructionId } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
@@ -565,18 +602,22 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
   instruction.status = instructionStatusMap[eventId];
   instruction.updatedEventId = blockEventId;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    createdEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([
-    instruction.save(),
-    finalizedEvent.save(),
-    updateLegs(blockEventId, address, instructionId),
-  ]);
+  const writes = [instruction.save(), updateLegs(blockEventId, address, instructionId)];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
 /**
@@ -601,7 +642,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
 export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { instructionId: rawInstructionId, error: rawDispatchError } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
@@ -613,15 +654,23 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   instruction.status = InstructionStatusEnum.Failed;
   instruction.failureReason = failureReason;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    failureReason,
-    createdEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([instruction.save(), finalizedEvent.save()]);
+  const writes = [instruction.save()];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        failureReason,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {

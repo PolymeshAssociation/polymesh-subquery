@@ -1888,6 +1888,8 @@ type EvmTransaction @entity {
   "Same ID as the `Extrinsic` that carried this transaction"
   id: ID!
   extrinsic: Extrinsic!
+  "The block the transaction was included in — the only direct link to one, as `Event` and `Extrinsic` also keep"
+  block: Block! @index(unique: false)
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String! @index(unique: false)
   "0 for legacy, 1 for EIP-2930, 2 for EIP-1559"
@@ -2715,7 +2717,8 @@ Represents events associated with an Instruction
 type InstructionEvent @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
-  event: InstructionEventEnum!
+  "Indexed so an event type can be filtered without joining `events`, which is why the column is kept locally"
+  event: InstructionEventEnum! @index(unique: false)
   identity: String @index(unique: false)
   portfolio: Int
   account: String
