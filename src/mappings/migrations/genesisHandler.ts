@@ -15,8 +15,9 @@ import {
   legacyQuery,
   padId,
 } from '../../utils';
+import { upsertAccount } from '../../utils/accounts';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
-import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
+import { createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
@@ -123,7 +124,7 @@ const handleGenesisDids = async () => {
     if (primaryKey.length) {
       [primaryKey, ...secondaryKeys].forEach((key, keyIndex) => {
         accountInserts.push(
-          createAccount(
+          upsertAccount(
             {
               identityId: did,
               keyRole: keyIndex === 0 ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
@@ -226,7 +227,11 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
 
     if (adminDid.length) {
       multiSigInserts.push(
-        createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock, SEED_EVENT_ID)
+        createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock, SEED_EVENT_ID, {
+          reason: 'the genesis multisig scan',
+          eventIdx: 0,
+          blockEventId: SEED_EVENT_ID,
+        })
       );
     }
 

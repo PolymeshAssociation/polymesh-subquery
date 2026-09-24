@@ -1,11 +1,12 @@
 /**
- * `MultiSig` is linked to its own `Account` row (defect G5): a multisig is an account, so
- * `createMultiSig` creates the account first and points `MultiSig.account` at it, and
- * `MultiSigAdmin` names its `admin` identity by relation rather than a bare string.
+ * `MultiSig` is linked to its own `Account` row: a multisig is an account, so `createMultiSig`
+ * creates the account first and points `MultiSig.account` at it, and `MultiSigAdmin` names its
+ * `admin` identity by relation rather than a bare string.
  *
- * `MultiSigSigner.signerAccount` (G16): a signer key is an account too, so an `Account` signer
- * gets a relation to its row (with `keyRole = MultiSigSigner`); an `Identity` signer, which only
- * pre-7.x runtimes allowed, keeps `signerValue` as the canonical value and a null `signerAccount`.
+ * A signer key is an account too, so an `Account` signer gets a relation to its row and takes its
+ * `keyRole` from the chain's key record — creating a multisig only *offers* the role. An
+ * `Identity` signer, which only pre-7.x runtimes allowed, keeps `signerValue` as the canonical
+ * value and a null `signerAccount`.
  */
 
 import {
@@ -16,8 +17,14 @@ import {
 } from '../../src/types';
 
 const ledgerAccount = jest.fn();
+const resolveKeyRole = jest.fn();
+const resolveIdentity = jest.fn();
 jest.mock('../../src/utils/accounts', () => ({
   ledgerAccount: (...args: unknown[]) => ledgerAccount(...args),
+  resolveKeyRole: (...args: unknown[]) => resolveKeyRole(...args),
+}));
+jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
+  resolveIdentity: (...args: unknown[]) => resolveIdentity(...args),
 }));
 
 import {
@@ -37,6 +44,8 @@ let db: Record<string, Row>;
 
 beforeEach(() => {
   db = {};
+  resolveKeyRole.mockReset().mockResolvedValue(AccountKeyRole.MultiSigSigner);
+  resolveIdentity.mockReset().mockImplementation((did: string) => Promise.resolve(did));
   ledgerAccount.mockReset().mockImplementation((address: string) => {
     const row: Row = {
       id: address,
@@ -98,7 +107,7 @@ describe('createMultiSig', () => {
 });
 
 describe('createMultiSigSigner', () => {
-  it('sets signerAccount and forces keyRole = MultiSigSigner for an Account signer', async () => {
+  it('sets signerAccount and takes keyRole from the key record for an Account signer', async () => {
     await createMultiSigSigner(
       MULTISIG,
       SignerTypeEnum.Account,
@@ -115,6 +124,27 @@ describe('createMultiSigSigner', () => {
     const signer = db[`MultiSigSigner:${MULTISIG}/${SignerTypeEnum.Account}/${SIGNER}`];
     expect(signer.signerValue).toBe(SIGNER);
     expect(signer.signerAccountId).toBe(SIGNER);
+  });
+
+  /**
+   * Creating a multisig and authorising a signer are offers — the chain writes the key record
+   * only once the signer accepts. A key that is currently an identity's primary key must not be
+   * relabelled by an offer it may never take up.
+   */
+  it('leaves a live primary key alone when the signer has not accepted', async () => {
+    resolveKeyRole.mockResolvedValue(AccountKeyRole.PrimaryKey);
+
+    await createMultiSigSigner(
+      MULTISIG,
+      SignerTypeEnum.Account,
+      SIGNER,
+      MultiSigSignerStatusEnum.Authorized,
+      '0000002',
+      datetime,
+      '0000002/0000000000'
+    );
+
+    expect(db[`Account:${SIGNER}`].keyRole).toBe(AccountKeyRole.PrimaryKey);
   });
 
   it('leaves signerAccount null for an Identity signer (pre-7.x) and touches no account', async () => {
@@ -136,9 +166,21 @@ describe('createMultiSigSigner', () => {
   });
 });
 
+const identityContext = {
+  reason: 'a test',
+  eventIdx: 0,
+  blockEventId: '0000001/0000000000',
+};
+
 describe('createMultiSigAdmin', () => {
   it('names the admin identity by relation', async () => {
-    await createMultiSigAdmin(MULTISIG, CREATOR_DID, '0000001', '0000001/0000000000');
+    await createMultiSigAdmin(
+      MULTISIG,
+      CREATOR_DID,
+      '0000001',
+      '0000001/0000000000',
+      identityContext
+    );
 
     const admin = db[`MultiSigAdmin:${MULTISIG}/${CREATOR_DID}`];
     expect(admin).toMatchObject({
@@ -147,5 +189,23 @@ describe('createMultiSigAdmin', () => {
       status: MultiSigAdminStatusEnum.Authorized,
     });
     expect(admin).not.toHaveProperty('identityId');
+  });
+
+  /**
+   * `admin` is a non-null relation, so a DID the index has never seen would make the field
+   * unresolvable for anyone selecting it. No row beats a broken one.
+   */
+  it('writes no row when the admin DID resolves to nothing', async () => {
+    resolveIdentity.mockResolvedValue(undefined);
+
+    await createMultiSigAdmin(
+      MULTISIG,
+      CREATOR_DID,
+      '0000001',
+      '0000001/0000000000',
+      identityContext
+    );
+
+    expect(db[`MultiSigAdmin:${MULTISIG}/${CREATOR_DID}`]).toBeUndefined();
   });
 });

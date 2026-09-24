@@ -153,12 +153,50 @@ const resolveKeyRecord = async (
 /**
  * The `Account.keyRole` the chain's key record gives an address, read at most once per block.
  *
- * The one derivation path for the field: identity and multisig handlers, `getOrCreateAccount`,
- * `ledgerAccount`, and the genesis/seed scan all resolve `keyRole` through this or `keyRoleFor`,
- * so a role is never accumulated from events and cannot go stale relative to `keyRecords`.
+ * Which writers use it follows from what their event proves. An event that grants the role itself
+ * — an identity announcing its primary or secondary key — states the role and writes it directly.
+ * An event that only *implies* one, because acceptance comes later or never, reads it from here
+ * instead: that is every multisig signer write, where creating a multisig and authorising a signer
+ * are offers the chain records on the key only once the signer accepts.
+ *
+ * `keyRoleFor` is the same mapping over a key record the caller already holds, used by the paths
+ * that read the record for other reasons too.
  */
 export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
+
+/**
+ * Writes what a key-link event says about an address, keeping the row an address already has.
+ *
+ * Several events re-announce a key that is already indexed: a primary-key rotation announces the
+ * incoming key, which was a secondary key a moment earlier, and the genesis scan re-announces
+ * every key it seeds. Creating the row afresh each time would move its provenance forward to the
+ * latest of those, so an existing row is updated in place and only a genuinely new address takes
+ * the current event as its `createdEvent`.
+ */
+export const upsertAccount = async (
+  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
+  blockEventId: string
+): Promise<void> => {
+  const existing = await Account.get(args.address);
+
+  if (existing) {
+    Object.assign(existing, args, getAccountKeyType(args.address));
+    existing.updatedEventId = blockEventId;
+
+    await existing.save();
+
+    return;
+  }
+
+  await Account.create({
+    id: args.address,
+    ...args,
+    ...getAccountKeyType(args.address),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  }).save();
+};
 
 /**
  * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
