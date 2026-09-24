@@ -2035,8 +2035,11 @@ Distinct from `Account.keyType` (the cryptographic shape of the key). Treated as
 `Unlinked` currently covers pallet addresses, system pots, and deliberately-detached keys as one
 label, and may be split later. A multisig's own account reads `PrimaryKey` / `SecondaryKey` per
 its key record; multisig-ness is the `MultiSig` row keyed by the same address, not this field.
+
+A superset of `IdentityKeyRole`: a key can sit outside the identity system entirely, which a
+membership interval cannot express. The values common to both are spelled the same way.
 """
-enum KeyRoleEnum {
+enum AccountKeyRole {
   PrimaryKey
   SecondaryKey
   MultiSigSigner
@@ -2055,7 +2058,7 @@ type Account @entity {
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
   "The key's role in the identity system, from the chain's `KeyRecord` — mutable, maintained on every key-link/unlink write"
-  keyRole: KeyRoleEnum! @index(unique: false)
+  keyRole: AccountKeyRole! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
   identity: Identity
@@ -2100,20 +2103,22 @@ type Identity @entity {
 
   Replaces the removed `secondaryAccounts` field, which derived from `Account.identity` and so
   wrongly listed the primary key alongside the secondaries (defect G1). Current secondary keys are
-  `keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })`.
+  `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
   """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
 }
 
 """
-The role a key holds inside an Identity.
+The role a key holds within one `IdentityKey` membership interval.
 
-Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles are modelled on
-`Account.keyRole` (a separate enum) rather than here, and further membership roles may be added.
+Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles belong to
+`AccountKeyRole`, the account's current state, rather than here: an unlinked membership interval
+is a contradiction, and further membership roles may be added. The values shared with that enum
+are spelled the same way, so neither has to be translated into the other.
 """
-enum KeyRole {
-  Primary
-  Secondary
+enum IdentityKeyRole {
+  PrimaryKey
+  SecondaryKey
 }
 
 """
@@ -2133,7 +2138,7 @@ type IdentityKey @entity
   id: ID!
   identity: Identity! @index
   account: Account! @index
-  role: KeyRole!
+  role: IdentityKeyRole!
   "Permissions granted to the key for this interval. Null for a primary key, which always has full permission"
   permissions: PermissionsJson
   validFromBlock: Block!

@@ -5,7 +5,7 @@
  */
 
 import { SubstrateEvent } from '@subql/types';
-import { Account, KeyRoleEnum } from '../../src/types';
+import { Account, AccountKeyRole } from '../../src/types';
 import { handleSecondaryKeyLeftIdentity } from '../../src/mappings/entities/identities/mapIdentities';
 
 const DID = '0x01'.padEnd(66, '0');
@@ -40,7 +40,7 @@ describe('handleSecondaryKeyLeftIdentity', () => {
     const account: any = {
       id: SECONDARY,
       identityId: DID,
-      keyRole: KeyRoleEnum.SecondaryKey,
+      keyRole: AccountKeyRole.SecondaryKey,
       save,
     };
     jest.spyOn(Account, 'get').mockResolvedValue(account);
@@ -48,7 +48,7 @@ describe('handleSecondaryKeyLeftIdentity', () => {
     await handleSecondaryKeyLeftIdentity(leftIdentityEvent());
 
     expect(account.identityId).toBeUndefined();
-    expect(account.keyRole).toBe(KeyRoleEnum.Unlinked);
+    expect(account.keyRole).toBe(AccountKeyRole.Unlinked);
     expect(save).toHaveBeenCalled();
   });
 });

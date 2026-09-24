@@ -1,4 +1,4 @@
-import { EventIdEnum, IdentityKey, KeyRole, PermissionsJson } from '../../../types';
+import { EventIdEnum, IdentityKey, IdentityKeyRole, PermissionsJson } from '../../../types';
 import { getAllByFields, padId } from '../../../utils';
 
 /**
@@ -27,7 +27,7 @@ const identityKeyId = (
 interface OpenArgs {
   identityId: string;
   address: string;
-  role: KeyRole;
+  role: IdentityKeyRole;
   /** Granted permissions for this interval. Left null for a primary key, which always has full permission. */
   permissions?: PermissionsJson;
   addedReason: EventIdEnum;
@@ -57,7 +57,7 @@ export const openIdentityKey = async (
 };
 
 /** The open interval(s) for an account, optionally narrowed to one role. */
-const openIntervals = async (address: string, role?: KeyRole): Promise<IdentityKey[]> => {
+const openIntervals = async (address: string, role?: IdentityKeyRole): Promise<IdentityKey[]> => {
   const rows = await getAllByFields<IdentityKey>('IdentityKey', [['accountId', '=', address]]);
 
   return rows.filter(
@@ -67,7 +67,7 @@ const openIntervals = async (address: string, role?: KeyRole): Promise<IdentityK
 
 interface CloseArgs {
   address: string;
-  role?: KeyRole;
+  role?: IdentityKeyRole;
   removedReason: EventIdEnum;
 }
 
@@ -97,7 +97,7 @@ export const closeIdentityKeys = async (
 
 interface RotateArgs {
   address: string;
-  role: KeyRole;
+  role: IdentityKeyRole;
   reason: EventIdEnum;
   eventIdx: number;
   permissions?: PermissionsJson;

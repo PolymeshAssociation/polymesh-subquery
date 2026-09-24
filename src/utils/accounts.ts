@@ -5,7 +5,7 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity, IdentityKey, KeyRole, KeyRoleEnum } from '../types';
+import { Account, EventIdEnum, Identity, IdentityKey, IdentityKeyRole, AccountKeyRole } from '../types';
 import { extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
@@ -105,18 +105,18 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
  * The enum is treated as open: `undefined` (no key record) and the multisig account itself both
  * fold into `Unlinked` today, and could be split later without touching this switch's callers.
  */
-export const keyRoleFor = (resolution: KeyRecordResolution | undefined): KeyRoleEnum => {
+export const keyRoleFor = (resolution: KeyRecordResolution | undefined): AccountKeyRole => {
   if (!resolution) {
-    return KeyRoleEnum.Unlinked;
+    return AccountKeyRole.Unlinked;
   }
 
   switch (resolution.kind) {
     case 'primaryKey':
-      return KeyRoleEnum.PrimaryKey;
+      return AccountKeyRole.PrimaryKey;
     case 'secondaryKey':
-      return KeyRoleEnum.SecondaryKey;
+      return AccountKeyRole.SecondaryKey;
     case 'multiSigSigner':
-      return KeyRoleEnum.MultiSigSigner;
+      return AccountKeyRole.MultiSigSigner;
   }
 };
 
@@ -157,7 +157,7 @@ const resolveKeyRecord = async (
  * `ledgerAccount`, and the genesis/seed scan all resolve `keyRole` through this or `keyRoleFor`,
  * so a role is never accumulated from events and cannot go stale relative to `keyRecords`.
  */
-export const resolveKeyRole = async (address: string, blockId: string): Promise<KeyRoleEnum> =>
+export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
 
 /**
@@ -234,7 +234,7 @@ export const getOrCreateAccount = async (
     eventId: EventIdEnum.AccountCreated,
     identityId: did,
     address,
-    keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
+    keyRole: kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
     ...getAccountKeyType(address),
     createdEventId,
     updatedEventId: createdEventId,
@@ -251,7 +251,7 @@ export const getOrCreateAccount = async (
       id: `${did}/${address}/${blockId}/${padId('0')}`,
       identityId: did,
       accountId: address,
-      role: kind === 'primaryKey' ? KeyRole.Primary : KeyRole.Secondary,
+      role: kind === 'primaryKey' ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
       validFromBlockId: blockId,
       addedReason: eventId,
       createdEventId,

@@ -14,8 +14,8 @@ import {
   Event,
   EventIdEnum,
   Identity,
-  KeyRole,
-  KeyRoleEnum,
+  IdentityKeyRole,
+  AccountKeyRole,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
@@ -146,7 +146,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   const account = createAccount(
     {
       identityId: did,
-      keyRole: KeyRoleEnum.PrimaryKey,
+      keyRole: AccountKeyRole.PrimaryKey,
       eventId,
       address,
     },
@@ -158,7 +158,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   // The primary key's membership record — a primary key always has full permission, so no
   // `permissions` snapshot is kept.
   await openIdentityKey(
-    { identityId: did, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    { identityId: did, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
     blockEventId
   );
 };
@@ -286,7 +286,7 @@ export const handleSecondaryKeysPermissionsUpdated = async (
   await rotateIdentityKey(
     {
       address,
-      role: KeyRole.Secondary,
+      role: IdentityKeyRole.SecondaryKey,
       reason: eventId,
       eventIdx,
       permissions: { assets, portfolios, transactions, transactionGroups },
@@ -304,7 +304,7 @@ export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise
   await Promise.all(
     addresses.flatMap(address => [
       Account.remove(address),
-      closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+      closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
     ])
   );
 };
@@ -317,7 +317,7 @@ export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => 
 
   await Promise.all([
     Account.remove(address),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
   ]);
 };
 
@@ -366,7 +366,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
         {
           address,
           identityId,
-          keyRole: KeyRoleEnum.SecondaryKey,
+          keyRole: AccountKeyRole.SecondaryKey,
           eventId,
         },
         blockEventId
@@ -375,7 +375,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
         {
           identityId,
           address,
-          role: KeyRole.Secondary,
+          role: IdentityKeyRole.SecondaryKey,
           permissions: { assets, portfolios, transactions, transactionGroups },
           addedReason: eventId,
           eventIdx,
@@ -405,7 +405,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
 
   // unlink the old primary key from the identity — `keyRole` rides the same write
   account.identityId = undefined;
-  account.keyRole = KeyRoleEnum.Unlinked;
+  account.keyRole = AccountKeyRole.Unlinked;
   account.eventId = eventId;
   account.updatedEventId = blockEventId;
 
@@ -414,7 +414,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
       {
         address,
         identityId: identity.id,
-        keyRole: KeyRoleEnum.PrimaryKey,
+        keyRole: AccountKeyRole.PrimaryKey,
         eventId,
       },
       blockEventId
@@ -423,7 +423,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     account.save(),
     // close the old primary's membership interval — the rotation history lives on `IdentityKey`
     closeIdentityKeys(
-      { address: account.id, role: KeyRole.Primary, removedReason: eventId },
+      { address: account.id, role: IdentityKeyRole.PrimaryKey, removedReason: eventId },
       blockEventId
     ),
   ]);
@@ -431,7 +431,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   // ...and open the new primary's. The rotation record G3 asks for: both rows stay queryable, the
   // old row's `validToBlock` equals the new one's `validFromBlock`.
   await openIdentityKey(
-    { identityId: identity.id, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    { identityId: identity.id, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
     blockEventId
   );
 };
@@ -446,13 +446,13 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
   const accountEntity = await Account.get(address);
 
   accountEntity.identityId = undefined;
-  accountEntity.keyRole = KeyRoleEnum.Unlinked;
+  accountEntity.keyRole = AccountKeyRole.Unlinked;
   accountEntity.eventId = eventId;
   accountEntity.updatedEventId = blockEventId;
 
   await Promise.all([
     accountEntity.save(),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
   ]);
 };
 

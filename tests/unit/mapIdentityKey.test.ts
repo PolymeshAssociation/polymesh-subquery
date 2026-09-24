@@ -7,7 +7,7 @@
  */
 
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, KeyRole } from '../../src/types';
+import { EventIdEnum, IdentityKeyRole } from '../../src/types';
 import {
   closeIdentityKeys,
   openIdentityKey,
@@ -64,7 +64,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -75,7 +75,7 @@ describe('openIdentityKey', () => {
     expect(rows()[0]).toMatchObject({
       identityId: DID,
       accountId: PRIMARY,
-      role: KeyRole.Primary,
+      role: IdentityKeyRole.PrimaryKey,
       validFromBlockId: '0000001',
       addedReason: EventIdEnum.DidCreated,
     });
@@ -93,7 +93,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 1,
@@ -111,7 +111,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -121,7 +121,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -131,7 +131,7 @@ describe('closeIdentityKeys', () => {
     const closed = await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000005'
@@ -161,7 +161,7 @@ describe('rotateIdentityKey', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions: { transactionGroups: [] },
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
@@ -172,7 +172,7 @@ describe('rotateIdentityKey', () => {
     await rotateIdentityKey(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
         eventIdx: 3,
         permissions: { transactionGroups: ['Portfolio'] },
@@ -199,7 +199,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -209,7 +209,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -217,7 +217,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
     );
 
     const activeSecondary = rows().filter(
-      r => r.identityId === DID && r.role === KeyRole.Secondary && r.validToBlockId == null
+      r => r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
     );
 
     expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);
@@ -231,7 +231,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -240,7 +240,7 @@ describe('add → remove → re-add', () => {
     await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000020'
@@ -249,7 +249,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },

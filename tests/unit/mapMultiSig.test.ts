@@ -9,7 +9,7 @@
  */
 
 import {
-  KeyRoleEnum,
+  AccountKeyRole,
   MultiSigAdminStatusEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
@@ -41,7 +41,7 @@ beforeEach(() => {
     const row: Row = {
       id: address,
       address,
-      keyRole: KeyRoleEnum.Unlinked,
+      keyRole: AccountKeyRole.Unlinked,
       save: jest.fn().mockResolvedValue(undefined),
     };
     db[`Account:${address}`] = row;
@@ -110,7 +110,7 @@ describe('createMultiSigSigner', () => {
     );
 
     expect(ledgerAccount).toHaveBeenCalledWith(SIGNER, '0000002', datetime, '0000002/0000000000');
-    expect(db[`Account:${SIGNER}`].keyRole).toBe(KeyRoleEnum.MultiSigSigner);
+    expect(db[`Account:${SIGNER}`].keyRole).toBe(AccountKeyRole.MultiSigSigner);
 
     const signer = db[`MultiSigSigner:${MULTISIG}/${SignerTypeEnum.Account}/${SIGNER}`];
     expect(signer.signerValue).toBe(SIGNER);

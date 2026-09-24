@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
-  KeyRoleEnum,
+  AccountKeyRole,
   MultiSig,
   MultiSigAdmin,
   MultiSigAdminStatusEnum,
@@ -69,8 +69,8 @@ export const linkSignerAccount = async (
 
   const account = await ledgerAccount(signerValue, blockId, datetime, blockEventId);
 
-  if (account.keyRole !== KeyRoleEnum.MultiSigSigner) {
-    account.keyRole = KeyRoleEnum.MultiSigSigner;
+  if (account.keyRole !== AccountKeyRole.MultiSigSigner) {
+    account.keyRole = AccountKeyRole.MultiSigSigner;
     account.updatedEventId = blockEventId;
     await account.save();
   }

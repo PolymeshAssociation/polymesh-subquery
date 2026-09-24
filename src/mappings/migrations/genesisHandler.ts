@@ -2,8 +2,8 @@ import {
   Block,
   Event,
   EventIdEnum,
-  KeyRole,
-  KeyRoleEnum,
+  IdentityKeyRole,
+  AccountKeyRole,
   ModuleIdEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
@@ -126,7 +126,7 @@ const handleGenesisDids = async () => {
           createAccount(
             {
               identityId: did,
-              keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
+              keyRole: keyIndex === 0 ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
               eventId: EventIdEnum.DidCreated,
               address: key,
             },
@@ -140,7 +140,7 @@ const handleGenesisDids = async () => {
             {
               identityId: did,
               address: key,
-              role: keyIndex === 0 ? KeyRole.Primary : KeyRole.Secondary,
+              role: keyIndex === 0 ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
               addedReason: EventIdEnum.DidCreated,
               eventIdx: keyIndex,
             },
