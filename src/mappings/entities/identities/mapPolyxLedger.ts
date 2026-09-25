@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix } from '@polkadot/util';
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
   Account,
@@ -39,7 +39,7 @@ import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { reconcileAccount } from './reconcilePolyx';
+import { reconcileAccount, reconcilePending } from './reconcilePolyx';
 
 /**
  * POLYX ledger — entry-centric replacement for `mapPolyxTransaction`.
@@ -193,11 +193,21 @@ export const emptyBalance = (
     updatedEventId: blockEventId,
   });
 
+/**
+ * The balance row for an address, created empty when the ledger has not seen it before.
+ *
+ * Every balance mutation goes through here, which is also where a reconciliation queued by an
+ * earlier block is flushed: at this point the current block has changed nothing yet, so the
+ * derived side still matches the snapshot that was captured back then.
+ */
 export const loadBalance = async (
   address: string,
   identityId: string | undefined,
-  blockId: string
+  blockEventId: string,
+  block: SubstrateBlock
 ): Promise<AccountBalance> => {
+  await reconcilePending(block);
+
   const existing = await AccountBalance.get(address);
 
   if (existing) {
@@ -208,7 +218,7 @@ export const loadBalance = async (
     return existing;
   }
 
-  return emptyBalance(address, identityId, blockId);
+  return emptyBalance(address, identityId, blockEventId);
 };
 
 /** Pre-v8 staking bonds via a lock with this identifier; v8 bonds via a `Staking` hold. */
@@ -535,7 +545,7 @@ const writeMovementSide = async (
   const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
 
   const account = await ledgerAccount(address, blockId, block.timestamp);
-  const balance = await loadBalance(address, account.identityId, blockId);
+  const balance = await loadBalance(address, account.identityId, blockEventId, block);
 
   advanceBalance(balance, side, transition, signed, isInternal);
   balance.updatedEventId = blockEventId;
@@ -736,7 +746,7 @@ const lockHandler =
 
     // Ensure the balance row exists so the lock has somewhere to live.
     await ledgerAccount(who, blockId, block.timestamp);
-    const balance = await loadBalance(who, undefined, blockId);
+    const balance = await loadBalance(who, undefined, blockEventId, block);
     await balance.save();
 
     await adjustLock(who, lockId, sign * amountOf(decoded), blockEventId);
@@ -1583,7 +1593,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   }
 
   const account = await ledgerAccount(who, blockId, datetime);
-  const balance = await loadBalance(who, account.identityId, blockId);
+  const balance = await loadBalance(who, account.identityId, blockEventId, block);
 
   const deltas = applyBalanceSet(balance, newFree, newReserved);
 
@@ -2031,10 +2041,12 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
 const ensureBalanceRow = async (
   address: string,
   blockId: string,
-  datetime: Date
+  datetime: Date,
+  blockEventId: string,
+  block: SubstrateBlock
 ): Promise<void> => {
   await ledgerAccount(address, blockId, datetime);
-  const balance = await loadBalance(address, undefined, blockId);
+  const balance = await loadBalance(address, undefined, blockEventId, block);
   await balance.save();
 };
 
@@ -2062,7 +2074,7 @@ const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> =
     return;
   }
 
-  await ensureBalanceRow(address, args.blockId, args.block.timestamp);
+  await ensureBalanceRow(address, args.blockId, args.block.timestamp, args.blockEventId, args.block);
   await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
 };
 
@@ -2145,7 +2157,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await ensureBalanceRow(stash, args.blockId, args.block.timestamp);
+  await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId, args.block);
   await syncStakingLock(stash, amountOf(decoded), args);
 };
 

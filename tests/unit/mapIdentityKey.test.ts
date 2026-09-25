@@ -1,5 +1,5 @@
 /**
- * `IdentityKey` — the time-bounded key membership record (defect G3).
+ * `IdentityKey` — the time-bounded key membership record.
  *
  * The headline case: a secondary key added, removed, then re-added produces a queryable history
  * with no gaps or overlaps — the first interval is closed before the second opens, and the two
@@ -7,7 +7,8 @@
  */
 
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, KeyRole } from '../../src/types';
+import { SubstrateBlock } from '@subql/types';
+import { EventIdEnum, IndexerAnomaly, IdentityKeyRole } from '../../src/types';
 import {
   closeIdentityKeys,
   openIdentityKey,
@@ -21,6 +22,12 @@ import {
 } from '../../src/decode/legacy';
 
 const DID = '0x01'.padEnd(66, '0');
+const OTHER_DID = '0x02'.padEnd(66, '0');
+
+/** Only what `recordAnomaly` reads off a block. */
+const block = {
+  block: { header: { number: { toString: () => '9' } } },
+} as unknown as SubstrateBlock;
 const PRIMARY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 
@@ -64,7 +71,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -75,7 +82,7 @@ describe('openIdentityKey', () => {
     expect(rows()[0]).toMatchObject({
       identityId: DID,
       accountId: PRIMARY,
-      role: KeyRole.Primary,
+      role: IdentityKeyRole.PrimaryKey,
       validFromBlockId: '0000001',
       addedReason: EventIdEnum.DidCreated,
     });
@@ -93,7 +100,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 1,
@@ -111,7 +118,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -121,7 +128,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -131,7 +138,7 @@ describe('closeIdentityKeys', () => {
     const closed = await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000005'
@@ -161,7 +168,7 @@ describe('rotateIdentityKey', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions: { transactionGroups: [] },
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
@@ -172,10 +179,11 @@ describe('rotateIdentityKey', () => {
     await rotateIdentityKey(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
         eventIdx: 3,
         permissions: { transactionGroups: ['Portfolio'] },
+        block,
       },
       '0000007'
     );
@@ -191,15 +199,72 @@ describe('rotateIdentityKey', () => {
     expect(history[1].validToBlockId).toBeUndefined();
     expect(history[1].permissions).toEqual({ transactionGroups: ['Portfolio'] });
   });
+
+  /**
+   * The close covers every open interval, so reopening only the first would silently drop the
+   * rest of the key's memberships.
+   */
+  it('reopens one interval per interval it closed', async () => {
+    for (const [identityId, eventIdx] of [
+      [DID, 0],
+      [OTHER_DID, 1],
+    ] as const) {
+      await openIdentityKey(
+        {
+          identityId,
+          address: SECONDARY,
+          role: IdentityKeyRole.SecondaryKey,
+          addedReason: EventIdEnum.SecondaryKeysAdded,
+          eventIdx,
+        },
+        '0000002'
+      );
+    }
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    const active = rows().filter(r => r.accountId === SECONDARY && !r.validToBlockId);
+
+    expect(active.map(r => r.identityId).sort()).toEqual([DID, OTHER_DID].sort());
+  });
+
+  it('records an anomaly instead of returning silently with nothing to carry forward', async () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    expect(anomaly).toHaveBeenCalled();
+    expect(rows().filter(r => r.accountId === SECONDARY)).toHaveLength(0);
+  });
 });
 
-describe('G1 — active secondary keys exclude the primary', () => {
+describe('active secondary keys exclude the primary', () => {
   it('a primary and a secondary on one identity filter apart by role', async () => {
     await openIdentityKey(
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -209,7 +274,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -217,7 +282,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
     );
 
     const activeSecondary = rows().filter(
-      r => r.identityId === DID && r.role === KeyRole.Secondary && r.validToBlockId == null
+      r => r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
     );
 
     expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);
@@ -231,7 +296,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -240,7 +305,7 @@ describe('add → remove → re-add', () => {
     await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000020'
@@ -249,7 +314,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },

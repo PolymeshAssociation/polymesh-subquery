@@ -131,7 +131,12 @@ Direct consequences:
 - `BalanceTypeEnum` is replaced outright by `fromPool`/`toPool` rather than backfilled alongside `type`.
 - `AccountHistory` → `IdentityKey` directly.
 - `AssetHolder` / `NftHolder` become derived views or rollups over `Holding`; identity-grain is no longer the stored truth.
-- `Identity.secondaryAccounts` is **removed** (`@derivedFrom` takes no filter, so its wrong semantics could not be corrected in place); `Identity.keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })` replaces it.
+- `Identity.secondaryAccounts` is **removed** (`@derivedFrom` takes no filter, so its wrong semantics could not be corrected in place); `Identity.keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })` replaces it.
+- The key-role enums are `AccountKeyRole` (`Account.keyRole`) and `IdentityKeyRole` (`IdentityKey.role`), and both spell the shared values `PrimaryKey` / `SecondaryKey`. A query written against the earlier `KeyRoleEnum` / `KeyRole` names, or against `Primary` / `Secondary`, fails validation rather than returning wrong rows.
+- `updatedEvent` is gone from the append-only tables (`AssetTransaction`, `InstructionEvent`, `Funding`, `DistributionPayment`, `BridgeEvent`, `StakingEvent`) — nothing ever updated those rows, so it always equalled `createdEvent`. Select `createdEvent` instead.
+- The denormalised `eventId` column is kept only where a consumer filters or groups by event type: `PolyxEntry`, `StakingEvent`, `AssetTransaction`, `AssetAgentAction`. It is gone from `Account` and `DistributionPayment` — read `updatedEvent { eventId }` / `createdEvent { eventId }`, or `reclaimed` for a distribution payment.
+- An account's permissions moved from the `Permissions` entity into `IdentityKey.permissions`, a jsonField. SubQuery generates no filters over a jsonField's contents, so `transactionGroups` in particular is no longer filterable — filter on `IdentityKey`'s own columns and read the permissions off the rows returned. No consumer query in this document filtered on it.
+- `EvmTransaction.block` is available again alongside `extrinsic`, matching `Event` and `Extrinsic`.
 
 The two consumers will need coordinated updates. The SDK's 27 connections and the portal's 6 are a bounded, enumerable surface — this document is the checklist.
 

@@ -60,6 +60,30 @@ Roughly **three thousand integers written per integer deleted**, in one block. T
 
 With a row-per-`Nft` entity the same block is 399 single-row updates touching one column each.
 
+### How the buffered write is triggered — measured, 2026-09-25
+
+The rollup is buffered across a block's holdings events and written once. What triggers that write
+matters more than it looks, because under historical mode a row's validity begins at the block it is
+saved in: a holder buffered in block K and written while indexing a later block is recorded as
+changing *there*, and every query between the two sees the stale array.
+
+The first implementation flushed from a block handler on the following block, which is correct but
+made the datasource subscribe to **every** block. That is what costs the dictionary its whole
+purpose: with only event filters the dictionary hands a worker the ~2% of heights that carry
+subscribed events (measured: 1,175 events across blocks 4,000,000–4,050,000, and ~1.6% of heights on
+an earlier run), and with an unconditional block handler it hands over nothing and the node scans the
+chain sequentially instead. A genesis resync went from hours to ~2 days.
+
+`modulo: 1` was not a way out: its coverage is identical and it also pays a dictionary query per
+batch whose every height is then unioned straight back in. A block handler with *no* filter is
+marginally cheaper, and equally fatal to skipping.
+
+So the flush hangs off the last holdings event of the block instead, identified from the block's own
+event list — no block handler, no extra chain read, and the write stays inside the block that made
+the change. The POLYX reconcile queue moved the same way: it flushes from the ledger's read path
+before a later block applies anything of its own, which is sound because a block the index skipped
+moved no balance, and `reconcileOne` re-checks that against the row before comparing.
+
 ### Replay fixtures — capture these **[V]**
 
 Both verified against the live testnet middleware:

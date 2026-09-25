@@ -8,26 +8,29 @@ import {
 } from '../../../decode';
 import {
   Account,
+  AnomalyKind,
   AssetPermissions,
   ChildIdentity,
   CustomClaimType,
   Event,
   EventIdEnum,
   Identity,
-  KeyRole,
-  KeyRoleEnum,
+  IdentityKeyRole,
+  AccountKeyRole,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
 import {
   MeshPortfolio,
   bytesToString,
+  extractString,
   getEventParams,
   getNumberValue,
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
-import { getAccountKeyType } from '../../../utils/accounts';
+import { upsertAccount } from '../../../utils/accounts';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
@@ -45,18 +48,6 @@ const getIdentity = async (did: string): Promise<Identity> => {
 
   return identity;
 };
-
-export const createAccount = async (
-  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
-  blockEventId: string
-): Promise<void> =>
-  Account.create({
-    id: args.address,
-    ...args,
-    ...getAccountKeyType(args.address),
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  }).save();
 
 export const createIdentity = async (
   args: Attributes<Identity>,
@@ -103,6 +94,72 @@ export const createIdentityIfNotExists = async (
   }
 };
 
+export interface ResolveIdentityArgs {
+  /** What referenced the DID — an event id, or a description of the path for a non-event caller */
+  reason: string;
+  eventIdx: number;
+  /** Absent on the genesis scan, which runs outside any block's event stream */
+  block?: SubstrateBlock;
+  blockEventId: string;
+}
+
+/**
+ * The identity a DID names, created from chain state when the index has never seen it.
+ *
+ * A relation cannot point at a row that is not there. Historical tracking emits no foreign keys,
+ * so a dangling reference is accepted on write and only fails at query time — where a non-null
+ * relation resolves to nothing and errors the field and everything selecting it. The index does
+ * not necessarily hold every identity: the genesis scan seeds a fixed handful, and an index
+ * started from a later block seeds none, so a handler can legitimately meet a DID registered
+ * before its coverage begins.
+ *
+ * The chain is the fallback rather than a zero-filled placeholder row, which would put a
+ * permanently wrong primary key in the index and never be corrected. A DID the chain does not
+ * know either is recorded and dropped.
+ */
+export const resolveIdentity = async (
+  did: string,
+  { reason, eventIdx, block, blockEventId }: ResolveIdentityArgs
+): Promise<string | undefined> => {
+  if (await Identity.get(did)) {
+    return did;
+  }
+
+  const record = await api.query.identity.didRecords(did);
+
+  const detail = `${reason} referenced identity ${did}, which is neither indexed nor on chain`;
+
+  if (record.isEmpty) {
+    if (block) {
+      await recordAnomaly({
+        kind: AnomalyKind.MissingReferencedEntity,
+        detail,
+        block,
+        eventIdx,
+      });
+    } else {
+      // The genesis scan reads the DIDs it resolves out of chain storage itself, so it cannot
+      // normally get here, and it has no block to attribute a row to.
+      logger.warn(detail);
+    }
+
+    return undefined;
+  }
+
+  await createIdentity(
+    {
+      did,
+      primaryAccount: extractString(record.toJSON(), 'primary_key') ?? '',
+      secondaryKeysFrozen: false,
+    },
+    blockEventId
+  );
+
+  await createPortfolio({ identityId: did, number: 0 }, blockEventId);
+
+  return did;
+};
+
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
@@ -143,11 +200,10 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     );
   }
 
-  const account = createAccount(
+  const account = upsertAccount(
     {
       identityId: did,
-      keyRole: KeyRoleEnum.PrimaryKey,
-      eventId,
+      keyRole: AccountKeyRole.PrimaryKey,
       address,
     },
     blockEventId
@@ -158,7 +214,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   // The primary key's membership record — a primary key always has full permission, so no
   // `permissions` snapshot is kept.
   await openIdentityKey(
-    { identityId: did, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    { identityId: did, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
     blockEventId
   );
 };
@@ -270,7 +326,7 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
 export const handleSecondaryKeysPermissionsUpdated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, eventId, eventIdx } = extractArgs(event);
+  const { blockEventId, eventId, eventIdx, block } = extractArgs(event);
 
   const { account: rawSignerDetails, updatedPermissions: rawUpdatedPermissions } =
     decodeEvent(event);
@@ -286,38 +342,80 @@ export const handleSecondaryKeysPermissionsUpdated = async (
   await rotateIdentityKey(
     {
       address,
-      role: KeyRole.Secondary,
+      role: IdentityKeyRole.SecondaryKey,
       reason: eventId,
       eventIdx,
       permissions: { assets, portfolios, transactions, transactionGroups },
+      block,
     },
-    blockId
+    blockEventId
   );
 };
 
+interface UnlinkArgs {
+  eventId: EventIdEnum;
+  blockEventId: string;
+  block: SubstrateBlock;
+  eventIdx: number;
+}
+
+/**
+ * Detaches a key from its identity, keeping the account row.
+ *
+ * Deleting the row instead would orphan everything that points at it — the membership interval
+ * this event closes, the account's balance and every ledger entry — and the account is a non-null
+ * relation on all of them, so those fields stop resolving. A primary-key rotation goes through
+ * here too: the chain announces the incoming key as removed a moment before it becomes the
+ * identity's primary key, and deleting it there costs the row its original provenance when the
+ * next event recreates it.
+ */
+const unlinkAccount = async (
+  address: string,
+  { eventId, blockEventId, block, eventIdx }: UnlinkArgs
+): Promise<void> => {
+  const account = await Account.get(address);
+
+  if (!account) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `${eventId} named account ${address}, which is not indexed`,
+      block,
+      eventIdx,
+    });
+
+    return;
+  }
+
+  account.identityId = undefined;
+  account.keyRole = AccountKeyRole.Unlinked;
+  account.updatedEventId = blockEventId;
+
+  await account.save();
+};
+
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { signers: rawAccounts } = decodeEvent(event);
 
   const addresses = legacyRemovedAddresses(rawAccounts);
 
   await Promise.all(
     addresses.flatMap(address => [
-      Account.remove(address),
-      closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+      unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+      closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
     ])
   );
 };
 
 export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { signer: rawSigner } = decodeEvent(event);
 
   const address = legacySignerLeftAddress(rawSigner);
 
   await Promise.all([
-    Account.remove(address),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+    unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
   ]);
 };
 
@@ -362,12 +460,11 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(
-      createAccount(
+      upsertAccount(
         {
           address,
           identityId,
-          keyRole: KeyRoleEnum.SecondaryKey,
-          eventId,
+          keyRole: AccountKeyRole.SecondaryKey,
         },
         blockEventId
       ),
@@ -375,7 +472,7 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
         {
           identityId,
           address,
-          role: KeyRole.Secondary,
+          role: IdentityKeyRole.SecondaryKey,
           permissions: { assets, portfolios, transactions, transactionGroups },
           addedReason: eventId,
           eventIdx,
@@ -388,6 +485,24 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
   await Promise.all(promises);
 };
 
+/**
+ * `PrimaryKeyUpdated` — the identity's primary key changes hands.
+ *
+ * This handler is only half of the transition, and reads as if it leaks a membership interval
+ * unless the rest is known. Both of the chain's rotation calls promote a key that is already a
+ * secondary key of the same identity, and each emits a fixed sequence:
+ *
+ * ```
+ * SecondaryKeysRemoved(did, [new primary])   closes the incoming key's secondary interval
+ * PrimaryKeyUpdated(did, old, new)           this handler
+ * SecondaryKeysAdded(did, [old primary])     only when the old key is demoted rather than dropped
+ * ```
+ *
+ * Handlers run in event order, so the incoming key's secondary interval is already closed by the
+ * time this runs and the demoted key is re-linked after it — no key holds two open intervals at
+ * once. Closing the incoming key's interval here as well would close an interval that no longer
+ * exists; reordering or removing either sibling handler is what would actually break the rotation.
+ */
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const { eventId, createdEventId: blockEventId, eventIdx } = getEventParams(args);
@@ -398,61 +513,65 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   const address = getTextValue(rawNewKey);
 
   const identity = await getIdentity(did);
-  const account = await Account.get(identity.primaryAccount);
+  // An identity created from a key record alone carries no primary key, so the outgoing account
+  // can be absent. The rotation itself still stands: the new key is linked either way.
+  const account = identity.primaryAccount ? await Account.get(identity.primaryAccount) : undefined;
+
+  if (!account) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `${eventId} on identity ${did} found no account for the outgoing primary key`,
+      block: args.block,
+      eventIdx,
+    });
+  }
 
   identity.primaryAccount = address;
   identity.updatedEventId = blockEventId;
 
-  // unlink the old primary key from the identity — `keyRole` rides the same write
-  account.identityId = undefined;
-  account.keyRole = KeyRoleEnum.Unlinked;
-  account.eventId = eventId;
-  account.updatedEventId = blockEventId;
+  const retireOldKey = account
+    ? [
+        // unlink the old primary key from the identity — `keyRole` rides the same write
+        unlinkAccount(account.id, { eventId, blockEventId, block: args.block, eventIdx }),
+        // close its membership interval — the rotation history lives on `IdentityKey`
+        closeIdentityKeys(
+          { address: account.id, role: IdentityKeyRole.PrimaryKey, removedReason: eventId },
+          blockEventId
+        ),
+      ]
+    : [];
 
   await Promise.all([
-    createAccount(
+    upsertAccount(
       {
         address,
         identityId: identity.id,
-        keyRole: KeyRoleEnum.PrimaryKey,
-        eventId,
+        keyRole: AccountKeyRole.PrimaryKey,
       },
       blockEventId
     ),
     identity.save(),
-    account.save(),
-    // close the old primary's membership interval — the rotation history lives on `IdentityKey`
-    closeIdentityKeys(
-      { address: account.id, role: KeyRole.Primary, removedReason: eventId },
-      blockEventId
-    ),
+    ...retireOldKey,
   ]);
 
-  // ...and open the new primary's. The rotation record G3 asks for: both rows stay queryable, the
-  // old row's `validToBlock` equals the new one's `validFromBlock`.
+  // ...and open the new primary's, so both rows stay queryable and the old row's `validToBlock`
+  // equals the new one's `validFromBlock`.
   await openIdentityKey(
-    { identityId: identity.id, address, role: KeyRole.Primary, addedReason: eventId, eventIdx },
+    { identityId: identity.id, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
     blockEventId
   );
 };
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
 
   const { account: rawAccount } = decodeEvent(event);
 
   const address = getTextValue(rawAccount);
 
-  const accountEntity = await Account.get(address);
-
-  accountEntity.identityId = undefined;
-  accountEntity.keyRole = KeyRoleEnum.Unlinked;
-  accountEntity.eventId = eventId;
-  accountEntity.updatedEventId = blockEventId;
-
   await Promise.all([
-    accountEntity.save(),
-    closeIdentityKeys({ address, role: KeyRole.Secondary, removedReason: eventId }, blockEventId),
+    unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
   ]);
 };
 

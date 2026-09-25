@@ -26,12 +26,27 @@ const DID_B = '0x0b'.padEnd(66, '0');
 
 const nftEvent = (
   reason: 'issued' | 'redeemed' | 'transferred',
-  { holderDid, from, to, ids }: { holderDid: string; from?: unknown; to?: unknown; ids: number[] }
+  {
+    holderDid,
+    from,
+    to,
+    ids,
+    idx = 1,
+    events = [],
+  }: {
+    holderDid: string;
+    from?: unknown;
+    to?: unknown;
+    ids: number[];
+    idx?: number;
+    events?: unknown[];
+  }
 ) =>
   tupleEvent({
     section: 'nft',
     method: 'NFTHoldingsUpdated',
-    idx: 1,
+    idx,
+    events,
     blockNumber: '500',
     data: [
       codec(holderDid),
@@ -202,5 +217,89 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     expect(nftIds.filter((id: bigint) => id === BigInt(1))).toHaveLength(1);
     expect(nftIds.filter((id: bigint) => id === BigInt(2))).toHaveLength(1);
     expect(nftIds).toHaveLength(2);
+  });
+});
+
+/**
+ * The holder rollup is buffered across a block's holdings events and written by the last of them.
+ * Writing it from a later block instead would date the change to that block, since a row's
+ * validity begins where it is saved — and having a block handler do it means subscribing to every
+ * block, which is what costs the dictionary its ability to skip empty heights.
+ */
+describe('handleNftHoldingsUpdates — when the holder rollup is written', () => {
+  let db: MockDb;
+
+  /** A block whose event list holds two holdings events, at indexes 0 and 1. */
+  const blockEvents = [
+    { event: { section: 'nft', method: 'NFTHoldingsUpdated' } },
+    { event: { section: 'nft', method: 'NFTHoldingsUpdated' } },
+  ];
+
+  beforeEach(() => {
+    __resetNftBuffer();
+    db = mockStore({
+      Asset: {
+        [ASSET]: {
+          id: ASSET,
+          totalSupply: BigInt(0),
+          totalTransfers: BigInt(0),
+          holderCount: 0,
+          isNftCollection: true,
+        },
+      },
+    });
+    mockBulkWrites(db, 'Nft');
+  });
+
+  const holderSaves = () =>
+    storeSet().mock.calls.filter(([entity]) => entity === 'NftHolder').length;
+
+  it('holds the write back while a later holdings event is still to come', async () => {
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', {
+        holderDid: DID_A,
+        to: meshPortfolioHolderCodec(DID_A, 0),
+        ids: [1],
+        idx: 0,
+        events: blockEvents,
+      })
+    );
+
+    expect(holderSaves()).toBe(0);
+  });
+
+  it('writes each holder once, from the last holdings event of the block', async () => {
+    for (const [idx, ids] of [
+      [0, [1]],
+      [1, [2]],
+    ] as [number, number[]][]) {
+      await handleNftHoldingsUpdates(
+        nftEvent('issued', {
+          holderDid: DID_A,
+          to: meshPortfolioHolderCodec(DID_A, 0),
+          ids,
+          idx,
+          events: blockEvents,
+        })
+      );
+    }
+
+    expect(holderSaves()).toBe(1);
+    expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(1), BigInt(2)]);
+  });
+
+  it('writes it without any outside flush when it is the only holdings event', async () => {
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', {
+        holderDid: DID_A,
+        to: meshPortfolioHolderCodec(DID_A, 0),
+        ids: [3],
+        idx: 0,
+        events: [blockEvents[0]],
+      })
+    );
+
+    expect(holderSaves()).toBe(1);
+    expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(3)]);
   });
 });

@@ -5,7 +5,7 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity, IdentityKey, KeyRole, KeyRoleEnum } from '../types';
+import { Account, EventIdEnum, Identity, IdentityKey, IdentityKeyRole, AccountKeyRole } from '../types';
 import { extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
@@ -105,18 +105,18 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
  * The enum is treated as open: `undefined` (no key record) and the multisig account itself both
  * fold into `Unlinked` today, and could be split later without touching this switch's callers.
  */
-export const keyRoleFor = (resolution: KeyRecordResolution | undefined): KeyRoleEnum => {
+export const keyRoleFor = (resolution: KeyRecordResolution | undefined): AccountKeyRole => {
   if (!resolution) {
-    return KeyRoleEnum.Unlinked;
+    return AccountKeyRole.Unlinked;
   }
 
   switch (resolution.kind) {
     case 'primaryKey':
-      return KeyRoleEnum.PrimaryKey;
+      return AccountKeyRole.PrimaryKey;
     case 'secondaryKey':
-      return KeyRoleEnum.SecondaryKey;
+      return AccountKeyRole.SecondaryKey;
     case 'multiSigSigner':
-      return KeyRoleEnum.MultiSigSigner;
+      return AccountKeyRole.MultiSigSigner;
   }
 };
 
@@ -153,12 +153,50 @@ const resolveKeyRecord = async (
 /**
  * The `Account.keyRole` the chain's key record gives an address, read at most once per block.
  *
- * The one derivation path for the field: identity and multisig handlers, `getOrCreateAccount`,
- * `ledgerAccount`, and the genesis/seed scan all resolve `keyRole` through this or `keyRoleFor`,
- * so a role is never accumulated from events and cannot go stale relative to `keyRecords`.
+ * Which writers use it follows from what their event proves. An event that grants the role itself
+ * — an identity announcing its primary or secondary key — states the role and writes it directly.
+ * An event that only *implies* one, because acceptance comes later or never, reads it from here
+ * instead: that is every multisig signer write, where creating a multisig and authorising a signer
+ * are offers the chain records on the key only once the signer accepts.
+ *
+ * `keyRoleFor` is the same mapping over a key record the caller already holds, used by the paths
+ * that read the record for other reasons too.
  */
-export const resolveKeyRole = async (address: string, blockId: string): Promise<KeyRoleEnum> =>
+export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
+
+/**
+ * Writes what a key-link event says about an address, keeping the row an address already has.
+ *
+ * Several events re-announce a key that is already indexed: a primary-key rotation announces the
+ * incoming key, which was a secondary key a moment earlier, and the genesis scan re-announces
+ * every key it seeds. Creating the row afresh each time would move its provenance forward to the
+ * latest of those, so an existing row is updated in place and only a genuinely new address takes
+ * the current event as its `createdEvent`.
+ */
+export const upsertAccount = async (
+  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
+  blockEventId: string
+): Promise<void> => {
+  const existing = await Account.get(args.address);
+
+  if (existing) {
+    Object.assign(existing, args, getAccountKeyType(args.address));
+    existing.updatedEventId = blockEventId;
+
+    await existing.save();
+
+    return;
+  }
+
+  await Account.create({
+    id: args.address,
+    ...args,
+    ...getAccountKeyType(args.address),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  }).save();
+};
 
 /**
  * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
@@ -231,10 +269,9 @@ export const getOrCreateAccount = async (
 
   const account = Account.create({
     id: address,
-    eventId: EventIdEnum.AccountCreated,
     identityId: did,
     address,
-    keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
+    keyRole: kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
     ...getAccountKeyType(address),
     createdEventId,
     updatedEventId: createdEventId,
@@ -251,7 +288,7 @@ export const getOrCreateAccount = async (
       id: `${did}/${address}/${blockId}/${padId('0')}`,
       identityId: did,
       accountId: address,
-      role: kind === 'primaryKey' ? KeyRole.Primary : KeyRole.Secondary,
+      role: kind === 'primaryKey' ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
       validFromBlockId: blockId,
       addedReason: eventId,
       createdEventId,
@@ -289,7 +326,6 @@ export const ledgerAccount = async (
   const account = Account.create({
     id: address,
     address,
-    eventId: EventIdEnum.AccountCreated,
     keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
     createdEventId,

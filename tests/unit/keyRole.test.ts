@@ -13,32 +13,32 @@
  */
 
 import { keyRoleFor, KeyRecordResolution } from '../../src/utils/accounts';
-import { KeyRoleEnum } from '../../src/types';
+import { AccountKeyRole } from '../../src/types';
 
 const DID = '0x01'.padEnd(66, '0');
 const MULTISIG = '5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z';
 
 describe('keyRoleFor', () => {
   it('maps a primaryKey record to PrimaryKey', () => {
-    expect(keyRoleFor({ kind: 'primaryKey', did: DID })).toBe(KeyRoleEnum.PrimaryKey);
+    expect(keyRoleFor({ kind: 'primaryKey', did: DID })).toBe(AccountKeyRole.PrimaryKey);
   });
 
   it('maps a secondaryKey record to SecondaryKey', () => {
-    expect(keyRoleFor({ kind: 'secondaryKey', did: DID })).toBe(KeyRoleEnum.SecondaryKey);
+    expect(keyRoleFor({ kind: 'secondaryKey', did: DID })).toBe(AccountKeyRole.SecondaryKey);
   });
 
   it('maps a multiSigSigner record to MultiSigSigner', () => {
     expect(keyRoleFor({ kind: 'multiSigSigner', multiSig: MULTISIG })).toBe(
-      KeyRoleEnum.MultiSigSigner
+      AccountKeyRole.MultiSigSigner
     );
   });
 
   it('maps the absence of a record to Unlinked', () => {
-    expect(keyRoleFor(undefined)).toBe(KeyRoleEnum.Unlinked);
+    expect(keyRoleFor(undefined)).toBe(AccountKeyRole.Unlinked);
   });
 
   it("a multisig's own account keyed as a secondary key reads SecondaryKey, not a multisig role", () => {
     const multisigOwnKeyRecord: KeyRecordResolution = { kind: 'secondaryKey', did: DID };
-    expect(keyRoleFor(multisigOwnKeyRecord)).toBe(KeyRoleEnum.SecondaryKey);
+    expect(keyRoleFor(multisigOwnKeyRecord)).toBe(AccountKeyRole.SecondaryKey);
   });
 });

@@ -532,25 +532,6 @@ const project: SubstrateProject = {
         handlers,
       },
     },
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock,
-      mapping: {
-        file: './dist/index.js',
-        handlers: [
-          {
-            kind: SubstrateHandlerKind.Block,
-            handler: 'handleBlock',
-            // Runs before this block's own events. Flushes what the PREVIOUS block queued: the
-            // POLYX reconcile queue (only populated on %2000 / forced blocks, and read from chain
-            // at queue time, not here) and the NftHolder write buffer. Both early-return when
-            // there is nothing to do. `modulo: 1` is required — a gap would skip flushing whatever
-            // a skipped block queued.
-            filter: { modulo: 1 },
-          },
-        ],
-      },
-    },
   ],
 };
 

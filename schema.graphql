@@ -1888,6 +1888,8 @@ type EvmTransaction @entity {
   "Same ID as the `Extrinsic` that carried this transaction"
   id: ID!
   extrinsic: Extrinsic!
+  "The block the transaction was included in — the only direct link to one, as `Event` and `Extrinsic` also keep"
+  block: Block! @index(unique: false)
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String! @index(unique: false)
   "0 for legacy, 1 for EIP-2930, 2 for EIP-1559"
@@ -2035,8 +2037,11 @@ Distinct from `Account.keyType` (the cryptographic shape of the key). Treated as
 `Unlinked` currently covers pallet addresses, system pots, and deliberately-detached keys as one
 label, and may be split later. A multisig's own account reads `PrimaryKey` / `SecondaryKey` per
 its key record; multisig-ness is the `MultiSig` row keyed by the same address, not this field.
+
+A superset of `IdentityKeyRole`: a key can sit outside the identity system entirely, which a
+membership interval cannot express. The values common to both are spelled the same way.
 """
-enum KeyRoleEnum {
+enum AccountKeyRole {
   PrimaryKey
   SecondaryKey
   MultiSigSigner
@@ -2054,23 +2059,27 @@ type Account @entity {
   address: String! @index(unique: true)
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
-  "The key's role in the identity system, from the chain's `KeyRecord` — mutable, maintained on every key-link/unlink write"
-  keyRole: KeyRoleEnum! @index(unique: false)
+  "The key's current role, derived from the chain's `KeyRecord`. A convenience column: the membership history it summarises is `keyAssignments`"
+  keyRole: AccountKeyRole! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
+  "The identity this key currently belongs to, null once it is detached. A convenience column for the current state; `keyAssignments` is the authoritative membership record, including past ones"
   identity: Identity
-  "Every `IdentityKey` membership interval this account has held, current and historical"
+  "Every `IdentityKey` membership interval this account has held, current and historical. The source of truth for key membership"
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
-  "Set when this account is a multisig — the account IS the multisig (defect G5)"
+  "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
-  eventId: EventIdEnum!
   createdEvent: Event!
   updatedEvent: Event!
 }
 
 """
 An account's permissions for one `IdentityKey` membership interval — the `Permissions` entity
-collapsed into the jsonField that already carried the same four fields (defect G4).
+collapsed into the jsonField that already carried the same four fields.
+
+These are not filterable: SubQuery generates filters over an entity's own columns, not over the
+contents of a jsonField. Filter on `IdentityKey`'s own columns and read the permissions from the
+rows that come back.
 """
 type PermissionsJson @jsonField {
   assets: AssetPermissions
@@ -2087,6 +2096,7 @@ An Identity needs a valid CDD claim from at least one KYC/KYB provider to perfor
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
+  "The address of the identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`"
   primaryAccount: String! @index(unique: false)
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
@@ -2099,21 +2109,23 @@ type Identity @entity {
   Every key membership this Identity has held, current and historical — see `IdentityKey`.
 
   Replaces the removed `secondaryAccounts` field, which derived from `Account.identity` and so
-  wrongly listed the primary key alongside the secondaries (defect G1). Current secondary keys are
-  `keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })`.
+  wrongly listed the primary key alongside the secondaries. Current secondary keys are
+  `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
   """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
 }
 
 """
-The role a key holds inside an Identity.
+The role a key holds within one `IdentityKey` membership interval.
 
-Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles are modelled on
-`Account.keyRole` (a separate enum) rather than here, and further membership roles may be added.
+Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles belong to
+`AccountKeyRole`, the account's current state, rather than here: an unlinked membership interval
+is a contradiction, and further membership roles may be added. The values shared with that enum
+are spelled the same way, so neither has to be translated into the other.
 """
-enum KeyRole {
-  Primary
-  Secondary
+enum IdentityKeyRole {
+  PrimaryKey
+  SecondaryKey
 }
 
 """
@@ -2130,10 +2142,11 @@ and subsumes `AccountHistory`, which had untyped columns and no validity interva
 """
 type IdentityKey @entity
   @compositeIndexes(fields: [["identity", "role"], ["account", "validToBlock"]]) {
+  "`identity/address/validFromBlockId/paddedEventIdx` — the event index disambiguates two intervals opened for one identity in the same block"
   id: ID!
   identity: Identity! @index
   account: Account! @index
-  role: KeyRole!
+  role: IdentityKeyRole!
   "Permissions granted to the key for this interval. Null for a primary key, which always has full permission"
   permissions: PermissionsJson
   validFromBlock: Block!
@@ -2157,7 +2170,6 @@ type BridgeEvent @entity {
   amount: BigInt!
   txHash: String! @index(unique: false)
   createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """
@@ -2167,6 +2179,7 @@ type StakingEvent @entity {
   id: ID!
   stashAccount: String @index(unique: false)
   identity: Identity
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   amount: BigInt
   rewardDestination: String
@@ -2176,7 +2189,6 @@ type StakingEvent @entity {
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
   eraIndex: Int @index
   position: StakingPosition
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2280,6 +2292,7 @@ type AssetAgentAction @entity {
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
   palletName: String! @index(unique: false)
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   updatedEvent: Event!
   createdEvent: Event!
@@ -2361,7 +2374,7 @@ enum AuthorizationStatusEnum {
   Consumed
   Rejected
   Revoked
-  "The chain gave up re-offering the authorization after too many failed accept attempts"
+  "The chain gave up re-offering the authorization after too many failed accept attempts. No row is expected to hold this: the runtime declares the event but never emits it, and the retry count itself is not in any event, so an exhausted authorization stays Pending"
   RetryLimitReached
 }
 
@@ -2711,13 +2724,13 @@ Represents events associated with an Instruction
 type InstructionEvent @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
-  event: InstructionEventEnum!
+  "Indexed so an event type can be filtered without joining `events`, which is why the column is kept locally"
+  event: InstructionEventEnum! @index(unique: false)
   identity: String @index(unique: false)
   portfolio: Int
   account: String
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2748,12 +2761,10 @@ type DistributionPayment @entity {
   id: ID!
   distribution: Distribution!
   target: Identity!
-  eventId: EventIdEnum!
   amount: BigInt!
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3323,6 +3334,7 @@ type AssetTransaction @entity {
   amount: BigInt
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
   nftIds: [BigInt]
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
   fundingRound: String
@@ -3336,7 +3348,6 @@ type AssetTransaction @entity {
   memo: String
   "the account that signed the extrinsic, for movements initiated directly by an account"
   address: String
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3421,7 +3432,6 @@ type Funding @entity {
   fundingRound: String! @index(unique: false)
   amount: BigInt!
   totalFundingAmount: BigInt!
-  updatedEvent: Event!
   createdEvent: Event!
 }
 

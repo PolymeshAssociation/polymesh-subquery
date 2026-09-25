@@ -13,10 +13,18 @@ export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getBy
 export const storeBulkCreate = (): jest.Mock => (globalThis as any).store.bulkCreate as jest.Mock;
 export const storeBulkUpdate = (): jest.Mock => (globalThis as any).store.bulkUpdate as jest.Mock;
 
-/** Minimal Codec stand-in — handlers only read `toString` / `toJSON` / `isEmpty`. */
+/**
+ * A `Codec` stand-in. `toHex()` is deliberately distinct from `toString()` — a real codec's two
+ * encodings differ, and code that builds an id with one and looks it up with the other is a bug
+ * a mock without `toHex` cannot catch.
+ */
 export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
   isEmpty: opts.isEmpty ?? (value === undefined || value === null),
   toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
+  toHex: () => {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return text?.startsWith('0x') ? text : `0x${Buffer.from(text ?? '', 'utf8').toString('hex')}`;
+  },
   toJSON: () => value,
 });
 
