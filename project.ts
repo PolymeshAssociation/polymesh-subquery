@@ -532,38 +532,6 @@ const project: SubstrateProject = {
         handlers,
       },
     },
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock,
-      mapping: {
-        file: './dist/index.js',
-        handlers: [
-          {
-            kind: SubstrateHandlerKind.Block,
-            handler: 'handleBlock',
-            /**
-             * Runs before this block's own events. Flushes what the PREVIOUS block queued: the
-             * NftHolder write buffer, and the POLYX reconcile queue (populated only on sample and
-             * forced blocks, and read from chain at queue time rather than here). Both
-             * early-return when there is nothing to do.
-             *
-             * It has to run on every block, which is why it carries no `modulo` filter. Under
-             * historical tracking a row's validity starts at the block it is saved in, so a
-             * holder buffered in block K and flushed at the next handled block would be recorded
-             * as taking effect there instead — the buffer is only safe because the very next
-             * block flushes it.
-             *
-             * An unfiltered block handler makes the dictionary's block-skipping moot: it produces
-             * no dictionary query conditions, so the node falls back to fetching the range
-             * sequentially. That cost is the price of the buffer, and the lever for reducing it is
-             * the buffer's design, not this filter. `modulo: 1` was equivalent in coverage and
-             * strictly worse: it kept issuing a dictionary query per batch whose every height was
-             * then unioned back in.
-             */
-          },
-        ],
-      },
-    },
   ],
 };
 

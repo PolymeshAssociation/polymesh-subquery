@@ -1,18 +1,20 @@
 /**
- * In-flight POLYX reconciliation (D11). Every Nth block for touched accounts, and always after a
+ * In-flight POLYX reconciliation. Every Nth block for touched accounts, and always after a
  * `BalanceSet` / `DustLost`, `reconcileAccount` reads `system.account` immediately (during event
- * handling, while `api` is still bound to that block) and queues the snapshot. `reconcileBlock`,
- * run from the *next* block's handler — the block handler runs before its own block's events, so
- * only the previous block's derived state is final by then — does the compare-and-correct against
- * that already-captured snapshot. On a mismatch it records a `BalanceReconciliationDrift` anomaly
- * and corrects the derived value so the drift cannot compound.
+ * handling, while `api` is still bound to that block) and queues the snapshot. `reconcilePending`,
+ * called from the ledger's read path before a *later* block applies anything of its own, does the
+ * compare-and-correct against that already-captured snapshot. On a mismatch it records a
+ * `BalanceReconciliationDrift` anomaly and corrects the derived value so the drift cannot compound.
+ *
+ * The cases below drive the two in production order — queue during the block, flush from a later
+ * one — because the order is the whole correctness argument.
  */
 
 import { SubstrateBlock } from '@subql/types';
 import {
   __resetOnChainCache,
   reconcileAccount,
-  reconcileBlock,
+  reconcilePending,
   reconcileStats,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
 import { __resetStakingCaches } from '../../src/utils/staking';
@@ -38,16 +40,15 @@ const block = (height: number, specVersion = 8_000_000): SubstrateBlock =>
 const v7Block = (height: number): SubstrateBlock => block(height, 7_000_000);
 
 /**
- * One block's worth of the real handler order: block K's handler (which decides whether K is a
- * sample), then K's event queueing the account, then block K+1's handler flushing it.
+ * The real order: block K's event queues the account, then a later block's first ledger write
+ * flushes it.
  */
 const reconcile = async (
   height: number,
   opts: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
-  await reconcileBlock(block(height));
   await reconcileAccount(ADDR, '0000000000', block(height), opts);
-  await reconcileBlock(block(height + 1));
+  await reconcilePending(block(height + 1));
 };
 
 let db: Record<string, Record<string, any>>;
@@ -133,7 +134,7 @@ beforeEach(() => {
 // Values are in base units (6 decimals); drifts here are far above the MIN_DRIFT (100 POLYX) floor.
 const P = (polyx: number): bigint => BigInt(polyx) * BigInt(1_000_000);
 
-describe('reconcileAccount / reconcileBlock', () => {
+describe('reconcileAccount / reconcilePending', () => {
   it('does nothing when the derived balance agrees with chain state', async () => {
     setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
     setChain(P(1000).toString(), '0', '0');
@@ -239,7 +240,7 @@ describe('reconcileAccount / reconcileBlock', () => {
     setChain(P(1000).toString(), '0', P(500).toString(), { ledgerTotal: P(400).toString() });
 
     await reconcileAccount(ADDR, '0000009000', v7Block(9000), { force: true });
-    await reconcileBlock();
+    await reconcilePending(v7Block(9001));
 
     expect(db['AccountBalance'][ADDR]).toMatchObject({
       frozen: P(500),
@@ -293,22 +294,54 @@ describe('reconcileAccount / reconcileBlock', () => {
     setDerived({ free: P(1000), reserved: P(200), total: P(1200) });
     setChain(P(1000).toString(), P(200).toString(), '0');
 
-    await reconcileBlock(block(8000));
+    // the flush the block's own first ledger write attempts must not compare mid-block
+    await reconcilePending(block(8000));
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 1 });
+    await reconcilePending(block(8000));
     await reconcileAccount(ADDR, '0000008000', block(8000), { eventIdx: 5 });
-    await reconcileBlock(block(8001));
+    await reconcilePending(block(8001));
 
     expect(anomalies()).toHaveLength(0);
     expect(db['AccountBalance'][ADDR]).toMatchObject({ free: P(1000), reserved: P(200) });
   });
 
-  it('flushes nothing when nothing was queued (block handler runs every block)', async () => {
+  it('flushes nothing when nothing was queued', async () => {
     setDerived({ free: BigInt(1) });
     setChain(P(999).toString(), '0', '0');
 
-    await reconcileBlock(); // no reconcileAccount call first
+    await reconcilePending(block(8000)); // no reconcileAccount call first
 
     expect(anomalies()).toHaveLength(0);
+  });
+
+  /**
+   * A block the index skipped contributed nothing, so the derived balance has not moved and the
+   * snapshot is still comparable however many heights later the flush lands. This is what lets the
+   * flush hang off the ledger's read path instead of a handler on every block.
+   */
+  it('still compares when the flushing block is far later than the queued one', async () => {
+    setDerived({ free: BigInt(1) });
+    setChain(P(999).toString(), '0', '0');
+
+    await reconcileAccount(ADDR, '0000008000', block(8000), { force: true });
+    await reconcilePending(block(45_000));
+
+    expect(anomalies()).toHaveLength(1);
+  });
+
+  /**
+   * Sampling is decided once per block. Asking twice used to move the gap marker on the first ask
+   * and then answer "no", which dropped the rest of the block's accounts.
+   */
+  it('keeps sampling the same block across several accounts', async () => {
+    setDerived({ free: BigInt(1) });
+    setChain(P(999).toString(), '0', '0');
+
+    await reconcileAccount(ADDR, '0000012345', block(12_345));
+    await reconcileAccount(ADDR, '0000012345', block(12_345), { eventIdx: 2 });
+    await reconcilePending(block(12_346));
+
+    expect(reconcileStats().compared).toBe(1);
   });
 
   /**
@@ -360,7 +393,7 @@ describe('reconcileAccount / reconcileBlock', () => {
     setChain(P(1000).toString(), '0', '0');
 
     await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
-    await reconcileBlock();
+    await reconcilePending(block(9001));
 
     // a real 100-POLYX gap, but measured at different points in time — so neither flagged nor "fixed"
     expect(anomalies()).toHaveLength(0);
@@ -373,7 +406,7 @@ describe('reconcileAccount / reconcileBlock', () => {
     setChain(P(1000).toString(), '0', '0');
 
     await reconcileAccount(ADDR, '0000009000', block(9000), { force: true });
-    await reconcileBlock();
+    await reconcilePending(block(9001));
 
     expect(anomalies()).toHaveLength(1);
     expect(db['AccountBalance'][ADDR].free).toBe(P(1000));
@@ -382,14 +415,14 @@ describe('reconcileAccount / reconcileBlock', () => {
 
   it('captures the on-chain snapshot at queue time, not at flush time', async () => {
     // Queue during block 8000 while chain state is X; chain state changes before the flush
-    // (block 8001's handler, once `api` is bound to a later block) — the flush must still compare
-    // against the snapshot taken back in 8000, not re-read current chain state.
+    // (a later block, once `api` is bound elsewhere) — the flush must still compare against the
+    // snapshot taken back in 8000, not re-read current chain state.
     setDerived({ free: P(1000), total: P(1000) });
     setChain(P(1000).toString(), '0', '0');
     await reconcileAccount(ADDR, '0000008000', block(8000), { force: true });
 
     setChain(P(5000).toString(), '0', '0'); // chain moved on; must not affect this flush
-    await reconcileBlock();
+    await reconcilePending(block(8001));
 
     expect(anomalies()).toHaveLength(0);
   });

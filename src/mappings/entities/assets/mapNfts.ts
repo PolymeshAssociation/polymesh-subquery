@@ -124,11 +124,15 @@ const countHolderChange = (asset: Asset, before: number, after: number): void =>
 /**
  * `NftHolder.nftIds` is a JSON array, and under historical mode every `.save()` writes a new
  * versioned row carrying the whole array. A bulk mint — hundreds of `NFTPortfolioUpdated` for one
- * holder in one block — turned that into Σ(1..n) array serialisations and poisoned the store
- * cache with 30k-element arrays. So holder mutations are buffered per block and each holder is
- * saved once, when the block changes (or `flushNftBuffer` is called from the block handler).
- * Nothing inside the indexer reads `NftHolder` — it is written for external queries only — so a
- * holder being at most one block-handler interval stale is acceptable.
+ * holder in one block — turned that into Σ(1..n) array serialisations and poisoned the store cache
+ * with 30k-element arrays. So holder mutations are buffered across the block's events and each
+ * holder is saved once, by the block's last holdings event.
+ *
+ * The flush stays inside the block that made the change. A row's validity begins at the block it is
+ * saved in, so flushing from a later block would date the change to that later block instead — and
+ * relying on a block handler to do it means subscribing to every block, which costs the dictionary's
+ * ability to skip the ~98% of heights that carry nothing. The block-change flush below is kept as a
+ * backstop for the case where the event stream cannot be read.
  */
 let bufferedBlock: string | undefined;
 const bufferedHolders = new Map<string, NftHolder>();
@@ -141,6 +145,29 @@ export const flushNftBuffer = async (): Promise<void> => {
   await Promise.all([...bufferedHolders.values()].map(holder => holder.save()));
   bufferedHolders.clear();
   bufferedBlock = undefined;
+};
+
+const HOLDINGS_EVENTS = new Set(['NFTPortfolioUpdated', 'NFTHoldingsUpdated']);
+
+/**
+ * Whether this is the last event in its block that can add to the buffer, and so the one that has
+ * to write it out. Read from the block's own event list, which is what the runtime already handed
+ * the worker — no extra chain read.
+ */
+const lastHoldingsEvent = (event: SubstrateEvent): boolean => {
+  const records = (event.block.events ?? []) as unknown as {
+    event: { section: string; method: string };
+  }[];
+
+  for (let i = event.idx + 1; i < records.length; i += 1) {
+    const emitted = records[i]?.event;
+
+    if (emitted?.section === 'nft' && HOLDINGS_EVENTS.has(emitted.method)) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 /** Test hook. */
@@ -338,4 +365,8 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   );
 
   await Promise.all(promises);
+
+  if (lastHoldingsEvent(event)) {
+    await flushNftBuffer();
+  }
 };
