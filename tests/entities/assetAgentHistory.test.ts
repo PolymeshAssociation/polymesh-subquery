@@ -12,11 +12,12 @@ describe('assetAgentHistory', () => {
             nodes {
               ticker: assetId
               did: identityId
-              createdBlockId
-              eventIdx
-              datetime
               type
               permissions
+              createdEvent {
+                blockId
+                eventIdx
+              }
             }
           }
         }
@@ -26,6 +27,23 @@ describe('assetAgentHistory', () => {
     const subquery = await query(q);
 
     expect(subquery?.errors).toBeFalsy();
-    expect(subquery?.data).toMatchSnapshot();
+
+    // asserted field by field rather than against a snapshot: this file's snapshot was deleted with
+    // the entity rename, and a missing snapshot makes `toMatchSnapshot` write one instead of
+    // comparing — so the assertion passed whatever came back
+    const nodes = subquery?.data?.assetAgentHistories.nodes;
+
+    expect(nodes.length).toBeGreaterThan(0);
+    nodes.forEach((node: Record<string, unknown>) => {
+      expect(node).toMatchObject({
+        ticker: '12TICKER',
+        did: expect.any(String),
+        type: expect.any(String),
+        createdEvent: expect.objectContaining({
+          blockId: expect.any(String),
+          eventIdx: expect.any(Number),
+        }),
+      });
+    });
   });
 });

@@ -871,6 +871,12 @@ enum EventIdEnum {
   Seeded
 
   ## added by scripts/sync-metadata.ts ##
+  ControllerTransferTo
+  FrozenBalanceSet
+  NFTApproval
+  NFTApprovalForAll
+  NFTApprovalSpent
+  SetAccountFreeze
 }
 
 """
@@ -1767,6 +1773,12 @@ enum CallIdEnum {
   unknown
 
   ## added by scripts/sync-metadata.ts ##
+  controller_transfer_to
+  freeze_partial_tokens
+  set_approval_for_all
+  set_frozen_tokens
+  set_holder_frozen
+  unfreeze_partial_tokens
 }
 
 type Debug @entity {

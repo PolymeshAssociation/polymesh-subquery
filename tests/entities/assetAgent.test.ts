@@ -6,7 +6,7 @@ const { query } = getApolloClient();
 const ticker = '12TICKER';
 
 describe('assetAgent', () => {
-  it('should return the time block and event index when an agent was added to a ticker', async () => {
+  it('should return the block and event index of the agent addition', async () => {
     const q = {
       variables: { ticker },
       query: gql`
@@ -21,9 +21,10 @@ describe('assetAgent', () => {
           ) {
             nodes {
               identityDid: identityId
-              datetime
-              createdBlockId
-              eventIdx
+              createdEvent {
+                blockId
+                eventIdx
+              }
             }
           }
         }
@@ -33,7 +34,16 @@ describe('assetAgent', () => {
     const subquery = await query(q);
 
     expect(subquery?.errors).toBeFalsy();
-    expect(subquery?.data).toMatchSnapshot();
+    expect(subquery?.data?.assetAgents.nodes).toEqual([
+      {
+        __typename: 'AssetAgent',
+        identityDid: eveDid,
+        createdEvent: expect.objectContaining({
+          blockId: expect.any(String),
+          eventIdx: expect.any(Number),
+        }),
+      },
+    ]);
   });
   it('should return empty when an agent has been removed', async () => {
     const q = {
@@ -49,9 +59,7 @@ describe('assetAgent', () => {
             }, orderBy: ID_ASC
           ) {
             nodes {
-              datetime
-              createdBlockId
-              eventIdx
+              identityId
             }
           }
         }
@@ -73,9 +81,7 @@ describe('assetAgent', () => {
             orderBy: ID_ASC
           ) {
             nodes {
-              datetime
-              createdBlockId
-              eventIdx
+              identityId
             }
           }
         }
