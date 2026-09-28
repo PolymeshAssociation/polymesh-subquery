@@ -125,12 +125,10 @@ export const rotateIdentityKey = async (
 ): Promise<void> => {
   const closed = await closeIdentityKeys({ address, role, removedReason: reason }, blockEventId);
 
-  const owners =
-    closed.length > 0
-      ? closed.map(row => identityId ?? row.identityId)
-      : identityId
-      ? [identityId]
-      : [];
+  // One owner per interval closed, each keeping its own identity unless the caller named one. With
+  // nothing closed there is still a rotation to record if the caller named the identity itself.
+  const carried = closed.map(row => identityId ?? row.identityId);
+  const owners = carried.length > 0 ? carried : [identityId].filter(Boolean);
 
   if (owners.length === 0) {
     await recordAnomaly({

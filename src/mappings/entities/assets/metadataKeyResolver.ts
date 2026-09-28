@@ -47,9 +47,12 @@ export const parseMetadataKey = (raw: unknown): MetadataKey | undefined => {
   return undefined;
 };
 
-/** Normalises an asset id for comparison — the same asset reaches here as hex or as a `toHuman` string. */
-const sameAsset = (a: string | undefined, b: string | undefined): boolean =>
-  a !== undefined && b !== undefined && a.toLowerCase() === b.toLowerCase();
+/**
+ * Normalises an asset id for comparison — the same asset reaches here as hex or as a `toHuman`
+ * string. Two absent ids are not "the same asset": nothing was compared, so nothing matched.
+ */
+const sameAsset = (a?: string, b?: string): boolean =>
+  a === undefined || b === undefined ? false : a.toLowerCase() === b.toLowerCase();
 
 /**
  * Only what key matching needs from a call. `leaf` is any call this module does not care about —
@@ -185,78 +188,99 @@ const multiSigProposalNode = async (
   return proposal.params.isBatch ? { kind: 'batch', calls: nodes } : nodes[0];
 };
 
+/** `asset` calls that carry or produce a metadata key. */
+const assetCallNode = (call: RawCall, method: string): CallNode | undefined => {
+  if (SET_METADATA_CALLS.has(method)) {
+    return {
+      kind: 'set',
+      asset: asHex(argOf(call, 'asset_id', 0)) ?? asHex(argOf(call, 'ticker', 0)),
+      key: parseMetadataKey(asJson(argOf(call, 'key', 1))),
+    };
+  }
+
+  return method === 'registerAndSetLocalAssetMetadata' ? { kind: 'registerAndSet' } : undefined;
+};
+
+/**
+ * `utility` calls that dispatch other calls: a batch, or one of the single-call wrappers.
+ *
+ * The wrappers differ only in which argument holds the call and whether they close with an event of
+ * their own — `with_weight(call, weight)` puts it first, `as_derivative(index, call)` second.
+ */
+const utilityCallNode = async (call: RawCall, method: string): Promise<CallNode | undefined> => {
+  if (BATCH_METHODS.has(method)) {
+    const calls = (argOf(call, 'calls', 0) as RawCall[] | undefined) ?? [];
+
+    return { kind: 'batch', calls: await Promise.all(calls.map(toCallNode)) };
+  }
+
+  if (method === 'relayTx') {
+    const relayed = argOf(call, 'call', 2) as { call?: RawCall } | undefined;
+
+    return {
+      kind: 'wrap',
+      closer: 'utility.RelayedTx',
+      call: await toCallNode(relayed?.call ?? (relayed as RawCall | undefined)),
+    };
+  }
+
+  const wrappers: Record<string, { index: number; closer?: string }> = {
+    dispatchAs: { index: 1, closer: 'utility.DispatchedAs' },
+    withWeight: { index: 0 },
+    asDerivative: { index: 1 },
+  };
+
+  const wrapper = wrappers[method];
+
+  if (!wrapper) {
+    return undefined;
+  }
+
+  return {
+    kind: 'wrap',
+    closer: wrapper.closer,
+    call: await toCallNode(argOf(call, 'call', wrapper.index) as RawCall | undefined),
+  };
+};
+
+/**
+ * `multiSig` calls: creating a proposal carries the call, approving one does not — that is read back
+ * from what the indexer captured when the proposal was added.
+ */
+const multiSigCallNode = async (call: RawCall, method: string): Promise<CallNode | undefined> => {
+  if (MULTISIG_CREATE.has(method)) {
+    return { kind: 'multisig', call: await toCallNode(argOf(call, 'proposal', 1) as RawCall) };
+  }
+
+  if (!MULTISIG_APPROVE.has(method)) {
+    return undefined;
+  }
+
+  return {
+    kind: 'multisig',
+    call: await multiSigProposalNode(
+      asText(argOf(call, 'multisig', 0)),
+      asText(argOf(call, 'proposal_id', 1))
+    ),
+  };
+};
+
 /** The normalised tree for one decoded call. */
 export const toCallNode = async (call: RawCall | undefined): Promise<CallNode> => {
-  if (!call) {
+  const { section, method } = call ?? {};
+
+  if (!call || !section || !method) {
     return { kind: 'leaf' };
   }
 
-  const { section, method } = call;
+  const bySection: Record<string, () => Promise<CallNode | undefined>> = {
+    asset: async () => assetCallNode(call, method),
+    utility: () => utilityCallNode(call, method),
+    multiSig: () => multiSigCallNode(call, method),
+  };
 
-  if (section === 'asset') {
-    if (method && SET_METADATA_CALLS.has(method)) {
-      return {
-        kind: 'set',
-        asset: asHex(argOf(call, 'asset_id', 0)) ?? asHex(argOf(call, 'ticker', 0)),
-        key: parseMetadataKey(asJson(argOf(call, 'key', 1))),
-      };
-    }
-    if (method === 'registerAndSetLocalAssetMetadata') {
-      return { kind: 'registerAndSet' };
-    }
-  }
-
-  if (section === 'utility') {
-    if (method && BATCH_METHODS.has(method)) {
-      const calls = (argOf(call, 'calls', 0) as RawCall[] | undefined) ?? [];
-      return { kind: 'batch', calls: await Promise.all(calls.map(toCallNode)) };
-    }
-    if (method === 'relayTx') {
-      const relayed = argOf(call, 'call', 2) as { call?: RawCall } | undefined;
-      return {
-        kind: 'wrap',
-        closer: 'utility.RelayedTx',
-        call: await toCallNode(relayed?.call ?? (relayed as RawCall | undefined)),
-      };
-    }
-    if (method === 'dispatchAs') {
-      return {
-        kind: 'wrap',
-        closer: 'utility.DispatchedAs',
-        call: await toCallNode(argOf(call, 'call', 1) as RawCall | undefined),
-      };
-    }
-    if (method === 'withWeight') {
-      // `with_weight(call, weight)` — the call is the first argument, unlike `asDerivative`.
-      return {
-        kind: 'wrap',
-        call: await toCallNode(argOf(call, 'call', 0) as RawCall | undefined),
-      };
-    }
-    if (method === 'asDerivative') {
-      return {
-        kind: 'wrap',
-        call: await toCallNode(argOf(call, 'call', 1) as RawCall | undefined),
-      };
-    }
-  }
-
-  if (section === 'multiSig') {
-    if (method && MULTISIG_CREATE.has(method)) {
-      return { kind: 'multisig', call: await toCallNode(argOf(call, 'proposal', 1) as RawCall) };
-    }
-    if (method && MULTISIG_APPROVE.has(method)) {
-      return {
-        kind: 'multisig',
-        call: await multiSigProposalNode(
-          asText(argOf(call, 'multisig', 0)),
-          asText(argOf(call, 'proposal_id', 1))
-        ),
-      };
-    }
-  }
-
-  return { kind: 'leaf' };
+  // Anything else is a leaf: it still consumes its events, which is what keeps the walk aligned.
+  return (await bySection[section]?.()) ?? { kind: 'leaf' };
 };
 
 /** One of the extrinsic's own events, flattened to what the walk reads. */
@@ -355,30 +379,83 @@ const eventCounts = (event: WalkEvent): number[] | undefined => {
   return raw as number[];
 };
 
-const walkBatch = (node: { calls: CallNode[] }, state: WalkState, end: number): boolean => {
-  // Pre-v7: find a closing event whose per-call counts account for exactly the events since the
-  // batch started, then walk each call inside its own bounded range.
+/**
+ * The index of the closing event whose per-call counts account for exactly the events seen since the
+ * batch started, or `-1` when no such event is in range.
+ *
+ * A `Completed` closer ran every call, so its vector must cover the whole call list. Only the
+ * interrupted / optimistic-failed forms stop early and legitimately carry fewer entries. Without
+ * that distinction an inner old-style batch's own closer can be mistaken for the outer one's.
+ */
+const oldStyleCloser = (calls: number, state: WalkState, end: number): number => {
   for (let j = state.i; j < end; j += 1) {
     const counts = eventCounts(state.events[j]);
-    // A `Completed` closer ran every call, so its vector must cover the whole call list. Only the
-    // interrupted / optimistic-failed forms stop early and legitimately carry fewer entries.
-    // Without this an inner old-style batch's own closer can be mistaken for the outer one's.
-    const ranEveryCall = /Completed/.test(state.events[j].name);
-    if (
-      counts &&
-      (ranEveryCall ? counts.length === node.calls.length : counts.length <= node.calls.length) &&
-      counts.reduce((a, b) => a + b, 0) === j - state.i
-    ) {
-      for (let k = 0; k < counts.length; k += 1) {
-        const callEnd = state.i + counts[k];
-        if (!walk(node.calls[k], state, callEnd)) {
-          return false;
-        }
-        state.i = callEnd;
-      }
-      state.i = j + 1;
-      return true;
+
+    if (!counts || counts.reduce((a, b) => a + b, 0) !== j - state.i) {
+      continue;
     }
+
+    const covers = /Completed/.test(state.events[j].name)
+      ? counts.length === calls
+      : counts.length <= calls;
+
+    if (covers) {
+      return j;
+    }
+  }
+
+  return -1;
+};
+
+/** Pre-v7: each call's events are bounded by its own entry in the closer's count vector. */
+const walkOldStyleBatch = (
+  node: { calls: CallNode[] },
+  state: WalkState,
+  closerIdx: number
+): boolean => {
+  const counts = eventCounts(state.events[closerIdx]) ?? [];
+
+  for (let k = 0; k < counts.length; k += 1) {
+    const callEnd = state.i + counts[k];
+
+    if (!walk(node.calls[k], state, callEnd)) {
+      return false;
+    }
+
+    state.i = callEnd;
+  }
+
+  state.i = closerIdx + 1;
+
+  return true;
+};
+
+/** Consumes the marker after one call of a v7+ batch. `stop` ends the batch early but validly. */
+const afterBatchItem = (state: WalkState): { ok: boolean; stop: boolean } => {
+  const marker = state.events[state.i]?.name;
+
+  if (marker === 'utility.ItemCompleted' || marker === 'utility.ItemFailed') {
+    state.i += 1;
+
+    return { ok: true, stop: false };
+  }
+
+  if (marker === 'utility.BatchInterrupted') {
+    state.i += 1;
+
+    return { ok: true, stop: true };
+  }
+
+  return { ok: false, stop: true };
+};
+
+const BATCH_CLOSERS = new Set(['utility.BatchCompleted', 'utility.BatchCompletedWithErrors']);
+
+const walkBatch = (node: { calls: CallNode[] }, state: WalkState, end: number): boolean => {
+  const closerIdx = oldStyleCloser(node.calls.length, state, end);
+
+  if (closerIdx >= 0) {
+    return walkOldStyleBatch(node, state, closerIdx);
   }
 
   // v7+: ItemCompleted / ItemFailed after each call, BatchInterrupted stops the batch early.
@@ -386,25 +463,22 @@ const walkBatch = (node: { calls: CallNode[] }, state: WalkState, end: number): 
     if (!walk(call, state, end)) {
       return false;
     }
-    const marker = state.events[state.i]?.name;
-    if (marker === 'utility.ItemCompleted' || marker === 'utility.ItemFailed') {
-      state.i += 1;
-      continue;
+
+    const { ok, stop } = afterBatchItem(state);
+
+    if (stop) {
+      return ok;
     }
-    if (marker === 'utility.BatchInterrupted') {
-      state.i += 1;
-      return true;
-    }
+  }
+
+  // Every call was walked, so the batch must close here. If it does not, the tree and the event
+  // stream disagree and nothing from this extrinsic can be trusted.
+  if (!BATCH_CLOSERS.has(state.events[state.i]?.name)) {
     return false;
   }
 
-  const closer = state.events[state.i]?.name;
-  if (closer !== 'utility.BatchCompleted' && closer !== 'utility.BatchCompletedWithErrors') {
-    // Every call was walked but the batch did not close. The tree and the event stream disagree,
-    // so nothing from this extrinsic can be trusted.
-    return false;
-  }
   state.i += 1;
+
   return true;
 };
 

@@ -88,6 +88,22 @@ const multiSigApproveExtrinsic = (multisig: string, proposalId: string) =>
 
 const VALUE_DETAIL_NONE = () => codec(null, { isEmpty: true });
 
+/** `asset.RegisterAssetMetadataLocalType(did, assetId, name, localKeyId, spec)`. */
+const registerLocalRec = (name: string, keyId: string, extrinsicIdx = 1) =>
+  assetRec(
+    'RegisterAssetMetadataLocalType',
+    [codec('0xdid'), codec(ASSET), codec(name), codec(keyId), codec({})],
+    extrinsicIdx
+  );
+
+/** `asset.SetAssetMetadataValue(did, assetId, value, detail)` with no detail. */
+const setValueRec = (value: string, extrinsicIdx = 1) =>
+  assetRec(
+    'SetAssetMetadataValue',
+    [codec('0xdid'), codec(ASSET), codec(value), VALUE_DETAIL_NONE()],
+    extrinsicIdx
+  );
+
 describe('asset metadata', () => {
   let db: MockDb;
 
@@ -462,26 +478,10 @@ describe('asset metadata', () => {
     // registerAndSetLocalAssetMetadata emits a SetAssetMetadataValue of its own, so the two calls
     // produce two indistinguishable events. Each must resolve to the key its own call carries.
     const events = [
-      assetRec('RegisterAssetMetadataLocalType', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('Whitepaper'),
-        codec('7'),
-        codec({}),
-      ]),
-      assetRec('SetAssetMetadataValue', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('blob:registered'),
-        VALUE_DETAIL_NONE(),
-      ]),
+      registerLocalRec('Whitepaper', '7'),
+      setValueRec('blob:registered'),
       itemCompleted(),
-      assetRec('SetAssetMetadataValue', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('blob:plain'),
-        VALUE_DETAIL_NONE(),
-      ]),
+      setValueRec('blob:plain'),
       itemCompleted(),
       batchCompleted(),
     ];
@@ -504,12 +504,7 @@ describe('asset metadata', () => {
     // that actually ran. ItemFailed is what marks the gap.
     const events = [
       rec('utility', 'ItemFailed'),
-      assetRec('SetAssetMetadataValue', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('blob:survivor'),
-        VALUE_DETAIL_NONE(),
-      ]),
+      setValueRec('blob:survivor'),
       itemCompleted(),
       rec('utility', 'BatchCompletedWithErrors'),
     ];
@@ -533,33 +528,11 @@ describe('asset metadata', () => {
     // Both calls register a key and set it, so the extrinsic carries two registration events. Each
     // setter takes the key registered by its own call, not the first one in the extrinsic.
     const events = [
-      assetRec('RegisterAssetMetadataLocalType', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('First'),
-        codec('11'),
-        codec({}),
-      ]),
-      assetRec('SetAssetMetadataValue', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('blob:one'),
-        VALUE_DETAIL_NONE(),
-      ]),
+      registerLocalRec('First', '11'),
+      setValueRec('blob:one'),
       itemCompleted(),
-      assetRec('RegisterAssetMetadataLocalType', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('Second'),
-        codec('12'),
-        codec({}),
-      ]),
-      assetRec('SetAssetMetadataValue', [
-        codec('0xdid'),
-        codec(ASSET),
-        codec('blob:two'),
-        VALUE_DETAIL_NONE(),
-      ]),
+      registerLocalRec('Second', '12'),
+      setValueRec('blob:two'),
       itemCompleted(),
       batchCompleted(),
     ];

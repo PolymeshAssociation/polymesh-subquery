@@ -53,7 +53,7 @@ describe('assetAgentActions', () => {
     const { totalCount, nodes } = subquery.data.assetAgentActions;
 
     expect(totalCount).toBeGreaterThan(0);
-    expect(nodes.length).toBe(totalCount);
+    expect(nodes).toHaveLength(totalCount);
     nodes.forEach((node: Record<string, unknown>) =>
       expect(node).toMatchObject({
         palletName: expect.any(String),
