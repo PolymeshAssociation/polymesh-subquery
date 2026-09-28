@@ -1,7 +1,7 @@
 import { hexAddPrefix } from '@polkadot/util';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { decodeEvent, DecodedEvent } from '../../../decode';
+import { decodeEvent, DecodedEvent, optionalField } from '../../../decode';
 import { Account, AnomalyKind, EventIdEnum, StakingEvent, StakingPosition } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
@@ -77,12 +77,13 @@ const getNominatedEventDetails = (params: Codec[]): StakingEventDetails => {
  * why. Any *future* addition to the `handleStakingEvent` registration for an event this switch
  * doesn't know about now shows up as an anomaly instead of a silently incomplete row.
  */
-const get8xStakingEventDetails = (
+const get8xStakingEventDetails = async (
   eventId: EventIdEnum,
   decoded: DecodedEvent,
   block: SubstrateBlock,
-  eventIdx: number
-): StakingEventDetails => {
+  eventIdx: number,
+  blockId: string
+): Promise<StakingEventDetails> => {
   // `decoded` throws `FieldNotFound` on any key it doesn't carry (the whole point of the decode
   // layer's guard), so `.stash` is read inside each case that actually has one — not once up
   // front — or a future event without a `stash` field (e.g. `EraPaid`) would crash here instead
@@ -90,7 +91,31 @@ const get8xStakingEventDetails = (
   switch (eventId) {
     case EventIdEnum.Rewarded: {
       const stashAccount = getTextValue(decoded.stash);
-      const { destination, account } = readRewardDestination(decoded.dest.toJSON());
+
+      /**
+       * Read as optional, and resolved from chain storage when absent.
+       *
+       * Upstream Substrate's `Rewarded` carries `dest`, but Polymesh keeps its own
+       * `(identity, stash, amount)` shape — checked against testnet metadata at spec 8000000 and
+       * 7004001, where neither declares a `dest`. Reading it as a required field also made this
+       * branch fatal rather than merely wrong: the node can attribute a block near an upgrade to
+       * the later runtime, and one pre-v8 reward taken down this path killed the worker and
+       * restarted the container mid-resync (block 24,730,189, spec 7004001).
+       */
+      const dest = optionalField(decoded, 'dest');
+
+      if (!dest) {
+        const resolved = await resolveLegacyRewardDestination(stashAccount, blockId);
+
+        return {
+          stashAccount,
+          amount: getBigIntValue(decoded.amount),
+          rewardDestination: resolved.rewardDestination,
+          rewardDestinationAccount: resolved.rewardDestinationAccount,
+        };
+      }
+
+      const { destination, account } = readRewardDestination(dest.toJSON());
 
       return {
         stashAccount,
@@ -177,7 +202,7 @@ const getStakingEventDetails = async (
     // their pre-v8 tuple form, and `decodeEvent` throws `NoDecoderForSpecVersion` rather than
     // returning nothing — calling it unconditionally for every staking event would risk breaking
     // one on the way to a branch that never uses the result.
-    details = get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx);
+    details = await get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx, blockId);
   } else {
     details = await getLegacyStakingEventDetails(eventId, params, blockId);
   }

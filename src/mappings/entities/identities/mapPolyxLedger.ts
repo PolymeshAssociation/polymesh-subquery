@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { decodeEvent } from '../../../decode';
+import { decodeEvent, optionalField } from '../../../decode';
 import {
   Account,
   AccountBalance,
@@ -28,7 +28,7 @@ import {
   padNumericId,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { camelToSnakeCase, hexToString, is8xChain, snakeToCamelCase } from '../../../utils/common';
+import { hexToString, is8xChain } from '../../../utils/common';
 import {
   readRewardDestination,
   readStakingLock,
@@ -53,21 +53,6 @@ import { reconcileAccount, reconcilePending } from './reconcilePolyx';
 // ---------------------------------------------------------------------------------------------
 // Decoded-field helpers
 // ---------------------------------------------------------------------------------------------
-
-/**
- * A decoded field, tolerating the snake_case ⇄ camelCase difference between an upstream struct
- * event (`free_balance`) and a Polymesh shape-table entry (`freeBalance`). Returns `undefined`
- * rather than letting the decode proxy throw when the field is genuinely absent.
- */
-const optionalField = (decoded: Record<string, Codec>, name: string): Codec | undefined => {
-  for (const candidate of new Set([name, camelToSnakeCase(name), snakeToCamelCase(name)])) {
-    if (candidate in decoded) {
-      return decoded[candidate];
-    }
-  }
-
-  return undefined;
-};
 
 const firstText = (decoded: Record<string, Codec>, names: string[]): string | undefined => {
   for (const name of names) {
