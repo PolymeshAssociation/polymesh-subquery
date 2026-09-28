@@ -83,9 +83,22 @@ const scheduleForCheckpoint = async (
     ['assetId', '=', assetId],
   ]);
 
-  const candidates = schedules
+  /**
+   * Pre-v6 schedules do not enumerate their moments — they carry a period, a start and a count, and
+   * the chain advances them as balances change. So there is nothing to pair a moment against, and a
+   * checkpoint from that era is left unlinked without comment: unpairable by construction is not the
+   * same as unexpected, and reporting it would mean one anomaly per scheduled checkpoint for the
+   * whole pre-v6 range.
+   */
+  const declaring = schedules.filter(({ scheduledCheckpoints }) => scheduledCheckpoints?.length);
+
+  if (declaring.length === 0) {
+    return undefined;
+  }
+
+  const candidates = declaring
     .filter(({ scheduledCheckpoints }) =>
-      (scheduledCheckpoints ?? []).some(declared => declared.getTime() === moment.getTime())
+      scheduledCheckpoints.some(declared => declared.getTime() === moment.getTime())
     )
     .sort((a, b) => a.scheduleId - b.scheduleId);
 

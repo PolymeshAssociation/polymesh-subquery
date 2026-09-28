@@ -2869,7 +2869,7 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   checkpointId: Int!
   totalSupply: BigInt!
   datetime: Date!
-  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, and for a scheduled one the index could not pair to a declared moment"
+  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
   schedule: CheckpointSchedule
   createdEvent: Event!
 }

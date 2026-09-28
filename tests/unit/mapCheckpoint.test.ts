@@ -103,9 +103,46 @@ describe('handleCheckpointCreated', () => {
       expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBeUndefined();
     });
 
-    it('records an anomaly and leaves it null when no schedule declared the moment', async () => {
+    /**
+     * A pre-v6 schedule carries a period, a start and a count — never the moments themselves — so a
+     * checkpoint from that era has nothing to be paired against. Left unlinked, and silently: one
+     * anomaly per scheduled checkpoint across the whole pre-v6 range would be noise, not a finding.
+     */
+    it('leaves a pre-v6 scheduled checkpoint unlinked without reporting it', async () => {
       const assetId = await assetIdAt(8_000_000);
-      const db = mockStore({ CheckpointSchedule: {} });
+      const db = mockStore({
+        CheckpointSchedule: {
+          [`${assetId}/1`]: {
+            id: `${assetId}/1`,
+            assetId,
+            scheduleId: 1,
+            period: '{"unit":"Month","amount":1}',
+            remaining: 4,
+          },
+        },
+      });
+      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
+      const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+      await handleCheckpointCreated(created(5, codec(undefined), 0));
+
+      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBeUndefined();
+      expect(anomaly).not.toHaveBeenCalled();
+    });
+
+    it('records an anomaly and leaves it null when a declaring schedule does not match', async () => {
+      const assetId = await assetIdAt(8_000_000);
+      const db = mockStore({
+        CheckpointSchedule: {
+          [`${assetId}/1`]: {
+            id: `${assetId}/1`,
+            assetId,
+            scheduleId: 1,
+            // declares a different moment, so the pairing genuinely fails
+            scheduledCheckpoints: [new Date(MOMENT + 60_000)],
+          },
+        },
+      });
       mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
       const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
