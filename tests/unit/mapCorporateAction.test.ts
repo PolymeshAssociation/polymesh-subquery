@@ -173,6 +173,55 @@ describe('handleRecordDateChanged', () => {
 
     expect(db.CorporateAction[`${ASSET_ID}/0`].recordDate).toEqual(new Date(1_700_100_000_000));
   });
+
+  /**
+   * `CACheckpoint` is `Existing(CheckpointId)` or `Scheduled(ScheduleId, moment)`. The `Existing`
+   * half names a checkpoint that already exists, so the relation resolves from the event alone;
+   * the `Scheduled` half names one that does not exist yet and is linked from `CheckpointCreated`.
+   */
+  it('links the checkpoint a record date names when it already exists', async () => {
+    const db = mockStore({
+      CorporateAction: { [`${ASSET_ID}/0`]: { id: `${ASSET_ID}/0` } },
+    });
+
+    await handleRecordDateChanged(
+      tupleEvent({
+        section: 'corporateAction',
+        method: 'RecordDateChanged',
+        data: [
+          codec(DID_A),
+          caIdCodec(0),
+          corporateActionCodec({
+            recordDate: { date: 1_700_100_000_000, checkpoint: { existing: 7 } },
+          }),
+        ],
+      })
+    );
+
+    expect(db.CorporateAction[`${ASSET_ID}/0`].checkpointId).toBe(`${ASSET_ID}/7`);
+  });
+
+  it('leaves the checkpoint unlinked when the record date only names a schedule', async () => {
+    const db = mockStore({
+      CorporateAction: { [`${ASSET_ID}/0`]: { id: `${ASSET_ID}/0` } },
+    });
+
+    await handleRecordDateChanged(
+      tupleEvent({
+        section: 'corporateAction',
+        method: 'RecordDateChanged',
+        data: [
+          codec(DID_A),
+          caIdCodec(0),
+          corporateActionCodec({
+            recordDate: { date: 1_700_100_000_000, checkpoint: { scheduled: [3, 1_700_000_000] } },
+          }),
+        ],
+      })
+    );
+
+    expect(db.CorporateAction[`${ASSET_ID}/0`].checkpointId).toBeUndefined();
+  });
 });
 
 describe('handleCaLinkedToDoc', () => {

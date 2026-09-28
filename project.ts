@@ -271,6 +271,10 @@ const filters: Record<string, Record<string, string[]>> = {
     RemovedPendingSubsidy: ['handleSubsidyRemoved'],
     RemovedSubsidy: ['handleSubsidyRemoved'],
     SubsidyDebited: ['handleSubsidyDebited'],
+    // unhandled deliberately: the standing relationship and every fee drawn against it are already
+    // recorded on `Subsidy`, and the relayed call itself is indexed as an `Extrinsic` like any other.
+    // A per-relay row would add a third record of the same activity with no query asking for it.
+    RelayedTx: [],
   },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],

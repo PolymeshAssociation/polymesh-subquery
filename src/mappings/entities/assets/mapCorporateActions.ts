@@ -19,6 +19,9 @@ export const handleDistributionCreated = async (event: SubstrateEvent): Promise<
     identityId: getTextValue(rawDid),
     localId,
     assetId,
+    // a distribution is a corporate action plus payout terms, and the chain keys both on the same
+    // `CAId` — so the relation is the id this row already has
+    corporateActionId: `${assetId}/${localId}`,
     ...distributionDetails,
     taxes: BigInt(0),
     createdEventId: blockEventId,

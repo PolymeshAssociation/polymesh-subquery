@@ -1,18 +1,20 @@
 import { SubstrateEvent } from '@subql/types';
 import { DecodedEvent, decodeEvent, V6 } from '../../../decode';
-import { Checkpoint, CheckpointSchedule } from '../../../types';
+import { AnomalyKind, Checkpoint, CheckpointSchedule } from '../../../types';
 import {
+  getAllByFields,
   getAssetId,
   getBigIntValue,
   getDateValue,
   getNumberValue,
   specVersionOf,
 } from '../../../utils';
-import { extractArgs } from '../common';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { extractArgs, getOrAnomaly } from '../common';
 
 interface ParsedSchedule {
   scheduleId: number;
-  pendingCheckpoints?: Date[];
+  scheduledCheckpoints?: Date[];
   period?: string;
   start?: Date;
   remaining?: number;
@@ -54,8 +56,67 @@ export const parseSchedule = (decoded: DecodedEvent, specVersion: number): Parse
 
   return {
     scheduleId: getNumberValue(decoded.scheduleId),
-    pendingCheckpoints: pending.map(moment => new Date(moment)),
+    scheduledCheckpoints: pending.map(moment => new Date(moment)),
   };
+};
+
+/**
+ * The schedule that produced a scheduled checkpoint, resolved from the index rather than the chain.
+ *
+ * `CheckpointCreated` names the moment but not the schedule, and two schedules can fall due at the
+ * same moment — so the timestamp alone is ambiguous and the order is what resolves it. The chain
+ * processes schedules in ascending `ScheduleId` and, within one, its moments in ascending order, so
+ * the events arrive in that order too. Taking the lowest-numbered schedule that declared this moment
+ * and has not yet had a checkpoint linked to it therefore assigns them one-to-one: the first event
+ * claims the first schedule, the next claims the next.
+ *
+ * `SchedulePoints` would answer this directly, but it is a chain read per checkpoint; the index
+ * already holds everything needed. An unresolvable pairing is recorded and left null rather than
+ * guessed at.
+ */
+const scheduleForCheckpoint = async (
+  assetId: string,
+  moment: Date,
+  event: SubstrateEvent
+): Promise<string | undefined> => {
+  const schedules = await getAllByFields<CheckpointSchedule>('CheckpointSchedule', [
+    ['assetId', '=', assetId],
+  ]);
+
+  const candidates = schedules
+    .filter(({ scheduledCheckpoints }) =>
+      (scheduledCheckpoints ?? []).some(declared => declared.getTime() === moment.getTime())
+    )
+    .sort((a, b) => a.scheduleId - b.scheduleId);
+
+  // One read for the asset's checkpoints rather than one per candidate: whichever schedules are
+  // already spoken for at this moment are the ones an earlier event in the same batch claimed.
+  const existing = await getAllByFields<Checkpoint>('Checkpoint', [['assetId', '=', assetId]]);
+
+  const claimed = new Set(
+    existing
+      .filter(({ datetime, scheduleId }) => scheduleId && datetime.getTime() === moment.getTime())
+      .map(({ scheduleId }) => scheduleId)
+  );
+
+  const unclaimed = candidates.find(({ id }) => !claimed.has(id));
+
+  if (unclaimed) {
+    return unclaimed.id;
+  }
+
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  await recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `no unclaimed CheckpointSchedule of asset ${assetId} declared the moment ${moment.toISOString()}`,
+    block,
+    eventIdx,
+    moduleId,
+    eventId,
+  });
+
+  return undefined;
 };
 
 export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -69,17 +130,24 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
 
   const assetId = await getAssetId(rawAssetId, block);
   const checkpointId = getNumberValue(rawCheckpointId);
+  // The checkpoint's own moment, never the block's. A schedule only advances when the asset's
+  // balances change, so a checkpoint's moment can predate the block that created it by some
+  // margin — substituting the block time would quietly move the balance snapshot's date.
+  const datetime = getDateValue(moment);
+
+  // `CheckpointCreated`'s first arg is `Option<IdentityId>`: `Some` for a manual
+  // `checkpoint.createCheckpoint`, `None` only when a schedule triggered it. A manual checkpoint
+  // belongs to no schedule, so it skips the lookup entirely.
+  const scheduled = decodeEvent(event).did.isEmpty;
 
   await Checkpoint.create({
     id: `${assetId}/${checkpointId}`,
     assetId,
     checkpointId,
     totalSupply: getBigIntValue(rawTotalSupply),
-    datetime: getDateValue(moment) ?? block.timestamp,
-    // `CheckpointCreated`'s first arg is `Option<IdentityId>` — `None` when a schedule triggered
-    // it, `Some` for a manual `checkpoint.createCheckpoint`. Neither case names *which* schedule,
-    // so linking `schedule` here would mean scanning every schedule for this asset for a
-    // matching pending timestamp — left for a future enrichment rather than guessed at.
+    datetime,
+    scheduleId:
+      scheduled && datetime ? await scheduleForCheckpoint(assetId, datetime, event) : undefined,
     createdEventId: blockEventId,
   }).save();
 };
@@ -96,7 +164,7 @@ export const handleScheduleCreated = async (event: SubstrateEvent): Promise<void
     id: `${assetId}/${parsed.scheduleId}`,
     assetId,
     scheduleId: parsed.scheduleId,
-    pendingCheckpoints: parsed.pendingCheckpoints,
+    scheduledCheckpoints: parsed.scheduledCheckpoints,
     period: parsed.period,
     start: parsed.start,
     remaining: parsed.remaining,
@@ -113,7 +181,12 @@ export const handleScheduleRemoved = async (event: SubstrateEvent): Promise<void
   const assetId = await getAssetId(rawAssetId, block);
   const { scheduleId } = parseSchedule(decoded, specVersionOf(block));
 
-  const schedule = await CheckpointSchedule.get(`${assetId}/${scheduleId}`);
+  const schedule = await getOrAnomaly(
+    id => CheckpointSchedule.get(id),
+    `${assetId}/${scheduleId}`,
+    'CheckpointSchedule',
+    event
+  );
 
   if (!schedule) {
     return;

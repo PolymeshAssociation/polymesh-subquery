@@ -96,6 +96,13 @@ const assetIdFromCorporateAction: AssetIdFromParams = async (
  * migrated to the decode layer yet - `statistics`, `sto`, `complianceManager`, `nft` and the
  * rest. Reading it by name would mean registering shapes for all of them here rather than as
  * each domain is migrated, so it moves when they do.
+ *
+ * Kept honest by hand, which is its weak point: `scripts/sync-metadata.ts` catches an event the
+ * chain added that the *schema enum* does not know, and lists the enum members a subscribed pallet
+ * emits that no handler reads, but nothing tells this table it is missing an agent-permissioned
+ * event. The gaps found by review so far were a whole pallet (`nft`) and single events in two
+ * others, so the analogous report — events of a pallet already in this table that the table does
+ * not list — is worth adding to that script rather than sweeping it by hand again.
  */
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
@@ -159,7 +166,13 @@ class ExternalAgentEventsManager {
       )
       .add(
         ModuleIdEnum.statistics,
-        [EventIdEnum.AssetStatsUpdated, EventIdEnum.StatTypesAdded, EventIdEnum.StatTypesRemoved],
+        [
+          EventIdEnum.AssetStatsUpdated,
+          EventIdEnum.StatTypesAdded,
+          EventIdEnum.StatTypesRemoved,
+          // the remaining agent-permissioned event in this pallet; the other nine were already here
+          EventIdEnum.SetAssetTransferCompliance,
+        ],
         async (params, block) => await getAssetIdForStatisticsEvent(params[1], block)
       )
       .add(
@@ -216,9 +229,15 @@ class ExternalAgentEventsManager {
         ],
         1
       )
+      /**
+       * `BenefitClaimed` is deliberately absent. It is emitted by `push_benefit`, which an agent
+       * calls, *and* by `claim`, which any holder calls — so recording it would attribute holders'
+       * own claims to the agents, the same over-inclusion `asset.Transfer` is excluded for.
+       * `Reclaimed` has no such ambiguity: only an agent can reclaim.
+       */
       .add(
         ModuleIdEnum.capitaldistribution,
-        [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.BenefitClaimed],
+        [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.Reclaimed],
         assetIdFromCorporateAction
       )
       .add(
@@ -275,6 +294,23 @@ class ExternalAgentEventsManager {
         ],
         2
       )
+      /**
+       * The `nft` counterparts of `asset.create` / `issue` / `redeem`, which are all in this table:
+       * without them an agent minting a fungible token is recorded and one minting an NFT is not.
+       *
+       * Every spec version is covered, not just the current one — the index replays from genesis, so
+       * the names deprecated at 6.0 count. `RedeemedNFT(IdentityId, Ticker, NFTId)` names the asset
+       * at index 1 like the rest; `NftCollectionCreated` spans every version.
+       *
+       * `NFTPortfolioUpdated` / `NFTHoldingsUpdated` stay out for the reason `asset.Transfer` does:
+       * they fire on every transfer, not only on agent-permissioned calls.
+       *
+       * `IssuedNFT` is the one gap. Pre-6.0 it is `(IdentityId, NFTCollectionId, NFTId)` — it names
+       * the collection, never the asset or ticker — so it cannot be resolved by parameter position
+       * and would need a collection→asset lookup this table has no shape for. Recorded here as a
+       * known omission rather than left to look like an oversight.
+       */
+      .add(ModuleIdEnum.nft, [EventIdEnum.NftCollectionCreated, EventIdEnum.RedeemedNFT], 1)
       .add(
         ModuleIdEnum.externalagents,
         [

@@ -78,15 +78,18 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
  * rebuilds each row into its generated model, so the `.save()` a handler calls is the real one,
  * routed through `store.set` and therefore through `mockStore`'s own wiring.
  *
- * Ignores the filter expression and returns every row for `entityName` — fine for a test db
+ * Ignores the filter expression and returns every row for the named entities — fine for a test db
  * seeded with only the rows one query cares about; a handler diffing a mixed set needs its own
  * filtering, same as production code does after the store read.
+ *
+ * Takes a list as well as a single name, for a handler that reads more than one entity through
+ * `getAllByFields` in the course of one event.
  */
-export const mockGetByFields = (db: MockDb, entityName: string): void => {
+export const mockGetByFields = (db: MockDb, entityName: string | string[]): void => {
+  const served = new Set(Array.isArray(entityName) ? entityName : [entityName]);
+
   storeGetByFields().mockImplementation((name: string) =>
-    Promise.resolve(
-      name === entityName ? Object.values(db[entityName] ?? {}).map(row => ({ ...row })) : []
-    )
+    Promise.resolve(served.has(name) ? Object.values(db[name] ?? {}).map(row => ({ ...row })) : [])
   );
 };
 

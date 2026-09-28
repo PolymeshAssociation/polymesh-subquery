@@ -1,8 +1,8 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { AnomalyKind, Subsidy } from '../../../types';
-import { getBigIntValue, getOrCreateAccount, getTextValue, recordAnomaly } from '../../../utils';
-import { extractArgs } from '../common';
+import { Subsidy } from '../../../types';
+import { getBigIntValue, getOrCreateAccount, getTextValue, is8xChain } from '../../../utils';
+import { extractArgs, getOrAnomaly } from '../common';
 
 /**
  * `relayer` pallet handlers.
@@ -45,7 +45,9 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
     beneficiaryAccountId: userKey,
     payingAccountId: payingKey,
     allowance: getBigIntValue(rawLimit),
-    totalDebited: BigInt(0),
+    // Only countable from v8, which is when the chain started emitting `SubsidyDebited`. Left null
+    // across the earlier range so "nothing was drawn" and "not knowable" stay different answers.
+    totalDebited: is8xChain(block) ? BigInt(0) : undefined,
     isAccepted: false,
     isRemoved: false,
     createdEventId: blockEventId,
@@ -60,31 +62,12 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
  * Used by the events that can only follow an acceptance — which now always leaves a row (see
  * `handleSubsidyAccepted`), so reaching the anomaly here means something genuinely unexplained.
  */
-const getSubsidyOrAnomaly = async (
+const getSubsidyOrAnomaly = (
   userKey: string,
   payingKey: string,
   event: SubstrateEvent
-): Promise<Subsidy | undefined> => {
-  const id = subsidyId(userKey, payingKey);
-  const subsidy = await Subsidy.get(id);
-
-  if (subsidy) {
-    return subsidy;
-  }
-
-  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
-
-  await recordAnomaly({
-    kind: AnomalyKind.MissingReferencedEntity,
-    detail: `${eventId} found no Subsidy at id "${id}"`,
-    block,
-    eventIdx,
-    moduleId,
-    eventId,
-  });
-
-  return undefined;
-};
+): Promise<Subsidy | undefined> =>
+  getOrAnomaly(id => Subsidy.get(id), subsidyId(userKey, payingKey), 'Subsidy', event);
 
 /**
  * The allowance the chain records for `userKey` right now.
@@ -135,7 +118,8 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
       beneficiaryAccountId: userKey,
       payingAccountId: payingKey,
       allowance: (await readChainAllowance(userKey)) ?? BigInt(0),
-      totalDebited: BigInt(0),
+      // see `handleSubsidyApproved` — pre-v8 there is nothing to accumulate from
+      totalDebited: is8xChain(block) ? BigInt(0) : undefined,
       isAccepted: false,
       isRemoved: false,
       createdEventId: blockEventId,
@@ -157,7 +141,8 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
 
 export const handleSubsidyRemoved = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { userKey: rawUserKey, payingKey: rawPayingKey } = decodeEvent(event);
+  const decoded = decodeEvent(event);
+  const { userKey: rawUserKey, payingKey: rawPayingKey } = decoded;
 
   const subsidy = await getSubsidyOrAnomaly(
     getTextValue(rawUserKey),
@@ -170,6 +155,11 @@ export const handleSubsidyRemoved = async (event: SubstrateEvent): Promise<void>
   }
 
   subsidy.isRemoved = true;
+  // `RemovedSubsidy` states the allowance left at the moment it ended — more exact than whatever the
+  // last `UpdatedPolyxLimit` or debit left behind. The other two removal events carry no such figure.
+  if ('remaining' in decoded) {
+    subsidy.allowance = getBigIntValue(decoded.remaining);
+  }
   subsidy.updatedEventId = blockEventId;
 
   await subsidy.save();
@@ -191,7 +181,9 @@ export const handleSubsidyDebited = async (event: SubstrateEvent): Promise<void>
 
   const amount = getBigIntValue(rawAmount);
 
-  subsidy.totalDebited += amount;
+  // A row created pre-v8 carries no running total; this event only exists from v8, so the first
+  // one to reach such a row starts the count rather than adding to nothing.
+  subsidy.totalDebited = (subsidy.totalDebited ?? BigInt(0)) + amount;
   subsidy.allowance -= amount;
   subsidy.updatedEventId = blockEventId;
 

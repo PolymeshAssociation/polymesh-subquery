@@ -75,7 +75,8 @@ describe('v8 subsidy lifecycle', () => {
       })
     );
 
-    expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
+    // `RemovedSubsidy`'s third field is the allowance left when it ended, not an amount drawn
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(700) });
   });
 });
 
@@ -94,7 +95,9 @@ describe('pre-v8 paying-key lifecycle', () => {
       })
     );
 
+    // nothing accumulates a debited total before v8, and a null says so where a zero would not
     expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ allowance: BigInt(500), isAccepted: false });
+    expect(db.Subsidy[SUBSIDY_ID].totalDebited).toBeUndefined();
 
     await handleSubsidyAccepted(
       tupleEvent({
@@ -119,7 +122,27 @@ describe('pre-v8 paying-key lifecycle', () => {
       })
     );
 
-    expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
+    // `RemovedPayingKey` carries no figure, so the allowance stands as it was
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(500) });
+  });
+
+  /**
+   * `RemovedPendingSubsidy`'s third field is the initial limit of the offer being withdrawn, not an
+   * allowance that was ever live — so it must not be written over one.
+   */
+  it('leaves the allowance alone when a pending subsidy is withdrawn', async () => {
+    const db = mockStore(seedAccounts());
+    db.Subsidy = { [SUBSIDY_ID]: { id: SUBSIDY_ID, allowance: BigInt(500), isRemoved: false } };
+
+    await handleSubsidyRemoved(
+      tupleEvent({
+        section: 'relayer',
+        method: 'RemovedPendingSubsidy',
+        data: [codec(USER_KEY), codec(PAYING_KEY), codec(999)],
+      })
+    );
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(500) });
   });
 });
 

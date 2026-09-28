@@ -869,6 +869,8 @@ enum EventIdEnum {
   Unknown
   "The one synthetic seed Event written at `0000000000/0000000000` before the indexer's start block (D13). Every genesis/storage-seeded row points its `createdEvent` at this. Not a chain event."
   Seeded
+
+  ## added by scripts/sync-metadata.ts ##
 }
 
 """
@@ -1763,6 +1765,8 @@ enum CallIdEnum {
   set_proposal_duration @deprecated
 
   unknown
+
+  ## added by scripts/sync-metadata.ts ##
 }
 
 type Debug @entity {
@@ -2105,6 +2109,8 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   children: [ChildIdentity!]! @derivedFrom(field: "parent")
+  "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
+  agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
   """
   Every key membership this Identity has held, current and historical — see `IdentityKey`.
 
@@ -2421,21 +2427,18 @@ type Investment @entity {
 }
 
 """
-Current agent membership for an Asset — an Identity authorized to perform actions on its behalf
+Current agent membership for an Asset — an Identity authorized to perform actions on its behalf.
+Memberships that have ended are `AssetAgentHistory`.
 
-`permissions` stays JSON-in-a-string rather than the `PermissionsJson` jsonField: that type's
-shape (`assets`/`portfolios`/`transactions`/`transactionGroups`, each a flat `{type, values}`) was
-built for the secondary-key permission model. An `AgentGroup`'s `ExtrinsicPermissions` is a
-different, richer on-chain structure (`Whole | These<PalletPermissions> | Except<PalletPermissions>`,
-nesting per-pallet dispatchable names) that does not fit it without a lossy flattening — typing it
-correctly is a separate modeling exercise, deferred rather than forced into the wrong shape here
+It carries no group or permissions of its own. An agent's permissions live on the `AgentGroup` it
+belongs to, which is the chain's own arrangement, so a copy here would be a second source that goes
+stale the first time an agent is moved between groups. Reach the group through
+`AgentGroupMembership`, and read an agent's group and permission timeline from `AssetAgentHistory`.
 """
 type AssetAgent @entity @compositeIndexes(fields: [["asset", "identity"]]) {
   id: ID! # assetId/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  group: AgentGroup
-  permissions: String
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2460,7 +2463,7 @@ type AssetAgentHistory @entity {
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
   type: AgentHistoryType!
-  "JSON-in-a-string, not the PermissionsJson jsonField — see the docstring on AssetAgent.permissions"
+  "The permissions as at this history row, JSON-in-a-string. An `AgentGroup`'s `ExtrinsicPermissions` is a richer structure (`Whole | These | Except`, nesting per-pallet dispatchable names) than the `PermissionsJson` jsonField's flat shape, so typing it properly is a separate exercise rather than a lossy flattening"
   permissions: String
   updatedEvent: Event!
   createdEvent: Event!
@@ -2742,6 +2745,8 @@ type Distribution @entity {
   identity: Identity!
   localId: Int! @index(unique: false)
   asset: Asset! @index(unique: false)
+  "The corporate action this distribution declares — the same `CAId`, so the same row id"
+  corporateAction: CorporateAction!
   portfolio: Portfolio!
   currency: Asset!
   perShare: BigInt!
@@ -2792,6 +2797,7 @@ A per-DID withholding tax override, as set by `corporateAction.DidWithholdingTax
 """
 type DidTax @jsonField {
   did: String!
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
   tax: BigInt!
 }
 
@@ -2805,17 +2811,22 @@ type CorporateAction @entity @compositeIndexes(fields: [["asset", "kind"]]) {
   localId: Int!
   kind: CorporateActionKind!
   declarationDate: Date!
-  "Set once `checkpoint.RecordDateChanged` resolves the record date to an existing checkpoint"
   recordDate: Date
+  "The checkpoint the record date names. Set when the chain names one that already exists (`CACheckpoint::Existing`); for the `Scheduled` variant the checkpoint does not exist yet and links itself from `CheckpointCreated` instead"
   checkpoint: Checkpoint
   details: String
   "null = applies to every holder, subject to `targetTreatment`"
   targetIdentities: [String!]
   targetTreatment: TargetTreatment
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
   defaultWithholdingTax: BigInt
   didWithholdingTax: [DidTax]
   documents: [String!]
   isRemoved: Boolean!
+  "The distribution this action declares, when it declares one"
+  distribution: Distribution @derivedFrom(field: "corporateAction")
+  "The ballot this action declares, when it declares one"
+  ballot: CorporateBallot @derivedFrom(field: "corporateAction")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2829,6 +2840,7 @@ type CorporateActionDefaultConfig @entity {
   asset: Asset! @index
   targetIdentities: [String!]
   targetTreatment: TargetTreatment
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
   defaultWithholdingTax: BigInt
   didWithholdingTax: [DidTax]
   createdEvent: Event!
@@ -2845,7 +2857,7 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   checkpointId: Int!
   totalSupply: BigInt!
   datetime: Date!
-  "Set when created by a `CheckpointSchedule` rather than manually"
+  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, and for a scheduled one the index could not pair to a declared moment"
   schedule: CheckpointSchedule
   createdEvent: Event!
 }
@@ -2859,13 +2871,15 @@ type CheckpointSchedule @entity {
   id: ID! # assetId/scheduleId
   asset: Asset! @index
   scheduleId: Int!
-  "v6+ — explicit list of scheduled checkpoint timestamps (`ScheduleCheckpoints.pending`)"
-  pendingCheckpoints: [Date!]
+  "v6+ — the checkpoint timestamps this schedule declared when it was created. Not decremented as they fire, and not cleared on removal, where it records what was cancelled. Still-pending is this set minus `checkpoints`"
+  scheduledCheckpoints: [Date!]
   "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
   period: String
   start: Date
   remaining: Int
   nextCheckpointAt: Date
+  "The checkpoints this schedule has actually created"
+  checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
   "null while active"
   removedEvent: Event
   createdEvent: Event!
@@ -2899,14 +2913,22 @@ type BallotVoteEntry @jsonField {
 }
 
 """
-One identity's vote in a `CorporateBallot`, from `corporateBallot.VoteCast`
+One identity's current vote in a `CorporateBallot`, from `corporateBallot.VoteCast`.
+
+One row per voter per ballot, not one per `VoteCast`. On chain `Votes` is keyed
+`(CAId, IdentityId)`, so voting again while the ballot is open *replaces* the previous vote —
+a row per event would give a voter who changed their mind two rows with nothing marking which
+counts, and `ballot.votes` would double-count them in a tally. Superseded votes stay readable as
+the `VoteCast` events themselves.
 """
 type CorporateBallotVote @entity {
-  id: ID! # padId(block)/padId(eventIdx)
+  id: ID! # ballotId/voterId
   ballot: CorporateBallot! @index
   voter: Identity! @index
   "per-motion weights, in motion order"
   votes: [BallotVoteEntry]
+  "The `VoteCast` this row's weights came from — a later one than `createdEvent` when the voter changed their vote"
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2923,8 +2945,8 @@ type Subsidy @entity {
   payingAccount: Account! @index
   "current POLYX limit (remaining)"
   allowance: BigInt!
-  "cumulative `SubsidyDebited` (v8+ only; 0 for pre-v8 history)"
-  totalDebited: BigInt!
+  "Cumulative `SubsidyDebited`. Null across the pre-v8 range, where the chain emitted nothing to accumulate — which is not the same fact as a subsidy that was never drawn on"
+  totalDebited: BigInt
   "false = approved/authorized but not yet accepted"
   isAccepted: Boolean!
   isRemoved: Boolean!
@@ -3301,6 +3323,8 @@ type Asset @entity {
   compliance: [Compliance]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
+  "The identities currently acting as agents for this asset. Past memberships are `AssetAgentHistory`"
+  agents: [AssetAgent!]! @derivedFrom(field: "asset")
   updatedEvent: Event!
   createdEvent: Event!
 }
