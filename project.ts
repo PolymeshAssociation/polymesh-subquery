@@ -350,10 +350,14 @@ const filters: Record<string, Record<string, string[]>> = {
     StatTypesRemoved: ['handleStatTypeRemoved'],
     // TransferManager (deprecated, retired) is gone; these still feed StatType /
     // TransferComplianceExemption for the pre-v5 percentage/count restriction model
-    TransferManagerAdded: ['handleStatisticTransferManagerAdded'],
+    // the pre-v5 transfer-manager model is gone from the chain, and its events are not mapped onto
+    // the statistics model that replaced it: the two disagree on what a restriction is, and a
+    // partial mapping left exemptions pointing at restrictions that were never written. Neither
+    // consumer reads this era, so it is recorded as unhandled rather than half-translated.
+    TransferManagerAdded: [],
     TransferManagerRemoved: [],
-    ExemptionsAdded: ['handleTransferManagerExemptionsAdded'],
-    ExemptionsRemoved: ['handleTransferManagerExemptionsRemoved'],
+    ExemptionsAdded: [],
+    ExemptionsRemoved: [],
     TransferConditionExemptionsAdded: ['handleStatisticExemptionsAdded'],
     TransferConditionExemptionsRemoved: ['handleStatisticExemptionsRemoved'],
   },

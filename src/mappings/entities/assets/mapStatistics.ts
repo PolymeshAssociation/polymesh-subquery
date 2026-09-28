@@ -8,16 +8,13 @@ import {
   TransferCompliance,
   TransferComplianceExemption,
   TransferComplianceTypeEnum,
-  TransferRestrictionTypeEnum,
 } from '../../../types';
 import { TransferComplianceProps } from '../../../types/models/TransferCompliance';
 import {
   capitalizeFirstLetter,
   getAssetId,
   getExemptKeyValue,
-  getExemptionsValue,
   getAllByFields,
-  getTransferManagerValue,
   is7xChain,
   isMigratedAssetId,
 } from '../../../utils';
@@ -325,105 +322,6 @@ export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): P
       TransferComplianceExemption.remove(`${assetId}/${opType}/${claimType}/${entity}`)
     )
   );
-};
-
-export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockEventId, block } = extractArgs(event);
-
-  const [, rawAssetId, rawManager] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const { type } = getTransferManagerValue(rawManager);
-
-  if (type === TransferRestrictionTypeEnum.Percentage) {
-    await upsertStatType(
-      { assetId, opType: StatOpTypeEnum.Balance, claimType: null, claimIssuerId: null },
-      blockEventId
-    );
-  }
-};
-
-export const handleTransferManagerExemptionsAdded = async (
-  event: SubstrateEvent
-): Promise<void> => {
-  const { params, block, blockEventId } = extractArgs(event);
-
-  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const { type } = getTransferManagerValue(rawAgentGroup);
-  const parsedExemptions = getExemptionsValue(rawExemptions);
-
-  const opType =
-    type === TransferRestrictionTypeEnum.Percentage ? StatOpTypeEnum.Balance : StatOpTypeEnum.Count;
-
-  const exemptKey = {
-    assetId,
-    opType,
-    claimType: null,
-  };
-
-  const transferComplianceExemptions = await getAllByFields<TransferComplianceExemption>(
-    'TransferComplianceExemption',
-    [['assetId', '=', assetId]]
-  );
-
-  const existingExemptions = transferComplianceExemptions.filter(
-    ({ opType: exemptionType, exemptedEntityId }) =>
-      exemptionType == opType && parsedExemptions.includes(exemptedEntityId)
-  );
-
-  const promises = parsedExemptions.map(exemption => {
-    const existingExemption = existingExemptions.find(
-      ({ exemptedEntityId }) => exemption === exemptedEntityId
-    );
-
-    if (existingExemption) {
-      existingExemption.updatedEventId = blockEventId;
-      return existingExemption.save();
-    }
-
-    return TransferComplianceExemption.create({
-      id: exemption,
-      ...exemptKey,
-      exemptedEntityId: exemption,
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    }).save();
-  });
-
-  await Promise.all(promises);
-};
-
-export const handleTransferManagerExemptionsRemoved = async (
-  event: SubstrateEvent
-): Promise<void> => {
-  const { params, block } = extractArgs(event);
-
-  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const transferManagerValue = getTransferManagerValue(rawAgentGroup);
-  const parsedExemptions = getExemptionsValue(rawExemptions);
-
-  const transferComplianceExemptions = await getAllByFields<TransferComplianceExemption>(
-    'TransferComplianceExemption',
-    [['assetId', '=', assetId]]
-  );
-
-  const selectedOpType =
-    transferManagerValue.type === TransferRestrictionTypeEnum.Percentage
-      ? StatOpTypeEnum.Balance
-      : StatOpTypeEnum.Count;
-
-  const promises = transferComplianceExemptions
-    .filter(
-      ({ exemptedEntityId, opType }) =>
-        opType === selectedOpType && parsedExemptions.includes(exemptedEntityId)
-    )
-    .map(({ id }) => TransferComplianceExemption.remove(id));
-
-  await Promise.all(promises);
 };
 
 export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promise<void> => {

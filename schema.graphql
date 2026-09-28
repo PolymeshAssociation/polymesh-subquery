@@ -3077,13 +3077,6 @@ type SecurityIdentifier @jsonField {
   value: String!
 }
 
-"""
-Represents all possible transfer restriction types
-"""
-enum TransferRestrictionTypeEnum {
-  Count
-  Percentage
-}
 
 """
 Represents all known stat types

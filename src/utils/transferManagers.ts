@@ -1,12 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
-import {
-  ClaimTypeEnum,
-  Compliance,
-  TransferComplianceExemption,
-  TransferRestrictionTypeEnum,
-} from '../types';
+import { ClaimTypeEnum, Compliance, TransferComplianceExemption } from '../types';
 import { getAssetId } from './assets';
 import { capitalizeFirstLetter } from './common';
 
@@ -35,33 +30,6 @@ export const getComplianceValue = (
     complianceId: Number(id),
     data: JSON.stringify(data),
   };
-};
-
-/**
- * Parses AssetTransferManager into the `{ type, value }` shape `StatType` /
- * `TransferComplianceExemption` derive from — the retired `TransferManager` entity used to be the
- * third consumer of this shape
- */
-export const getTransferManagerValue = (
-  manager: Codec
-): { type: TransferRestrictionTypeEnum; value: number } => {
-  const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
-
-  if (countTransferManager) {
-    return {
-      type: TransferRestrictionTypeEnum.Count,
-      value: Number(countTransferManager),
-    };
-  }
-
-  if (percentageTransferManager) {
-    return {
-      type: TransferRestrictionTypeEnum.Percentage,
-      value: Number(percentageTransferManager),
-    };
-  }
-
-  throw new Error('Unknown transfer restriction type found');
 };
 
 export const getExemptKeyValue = async (
