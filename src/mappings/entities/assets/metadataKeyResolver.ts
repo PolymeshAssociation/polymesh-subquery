@@ -390,8 +390,11 @@ const eventCounts = (event: WalkEvent): number[] | undefined => {
 const oldStyleCloser = (calls: number, state: WalkState, end: number): number => {
   for (let j = state.i; j < end; j += 1) {
     const counts = eventCounts(state.events[j]);
+    // `undefined` for an event carrying no count vector at all, which never equals a real offset —
+    // so this one comparison rejects both the wrong events and the wrong totals.
+    const accounted = counts?.reduce((a, b) => a + b, 0);
 
-    if (!counts || counts.reduce((a, b) => a + b, 0) !== j - state.i) {
+    if (accounted !== j - state.i) {
       continue;
     }
 
