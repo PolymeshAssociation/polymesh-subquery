@@ -12,7 +12,7 @@
  *   1. events added, removed or reshaped since each captured spec version;
  *   2. events the chain emits, whose pallet `project.ts` subscribes to, that no handler reads.
  *
- * Migration files are deliberately not generated. Decision D5 is a full resync from genesis, so
+ * Migration files are deliberately not generated. A schema change ships as a full resync from genesis, so
  * there is nothing to `ALTER TYPE` - migrations matter again only for changes made after that
  * reset.
  *
@@ -32,12 +32,29 @@ const ROOT = join(__dirname, '..');
 const SCHEMA_PATH = join(ROOT, 'schema.graphql');
 const ARITY_DIR = join(ROOT, 'tests', 'fixtures', 'event-arity');
 
-/** The pallets whose event shapes the decode layer registers, and so the ones worth capturing */
+/**
+ * The pallets whose event shapes the decode layer registers, and so the ones worth capturing.
+ *
+ * This tracks `src/decode/shapes/` — every section that declares a shape there belongs here, or its
+ * arity is asserted by nobody and a runtime is free to reshape it silently. `relayer` is the standing
+ * example: its field names had to be corrected by hand against metadata, and nothing would have
+ * caught the drift that made that necessary.
+ *
+ * `nft` belongs here for the same reason: it is the write path for every NFT movement, and its
+ * handlers used to read parameters by position, so a reshape would have gone unnoticed.
+ */
 const CAPTURED_MODULES = [
   'asset',
   'balances',
+  'checkpoint',
+  'corporateAction',
+  'corporateBallot',
   'externalAgents',
   'identity',
+  'multiSig',
+  'nft',
+  'portfolio',
+  'relayer',
   'settlement',
   'staking',
 ];
@@ -49,6 +66,11 @@ export interface RuntimeSnapshot {
   modules: string[];
   /** Section id (`ExternalAgents` -> `externalAgents`) to event name to parameter count */
   events: Record<string, Record<string, number>>;
+  /**
+   * Section id to the events that name their fields. Those decode from the block's own metadata,
+   * so the shape table is never consulted for them — only the unnamed, tuple-style ones need it.
+   */
+  namedEvents: Record<string, string[]>;
   /** Section id to snake_cased call names */
   calls: Record<string, string[]>;
 }
@@ -57,6 +79,8 @@ export interface ArityFixture {
   specVersion: number;
   source: string;
   modules: Record<string, Record<string, number>>;
+  /** Per module, the events that name their fields, and so need no registered shape */
+  named?: Record<string, string[]>;
 }
 
 /** `camelToSnakeCase` from `src/utils/common`, repeated so this script pulls in no runtime code */
@@ -93,6 +117,7 @@ export const snapshotFromMetadata = (
     specVersion,
     modules: [],
     events: {},
+    namedEvents: {},
     calls: {},
   };
 
@@ -102,12 +127,15 @@ export const snapshotFromMetadata = (
     snapshot.modules.push(section.toLowerCase());
 
     if (pallet.events.isSome) {
+      const variants = variantsOf(registry, pallet.events.unwrap().type.toNumber());
+
       snapshot.events[section] = Object.fromEntries(
-        variantsOf(registry, pallet.events.unwrap().type.toNumber()).map(variant => [
-          variant.name.toString(),
-          variant.fields.length,
-        ])
+        variants.map(variant => [variant.name.toString(), variant.fields.length])
       );
+      snapshot.namedEvents[section] = variants
+        .filter(variant => variant.fields.length > 0 && variant.fields[0].name.isSome)
+        .map(variant => variant.name.toString())
+        .sort((a, b) => a.localeCompare(b));
     }
 
     if (pallet.calls.isSome) {
@@ -401,6 +429,12 @@ export const arityFixtureFor = (snapshot: RuntimeSnapshot): ArityFixture => ({
       Object.fromEntries(
         Object.entries(snapshot.events[moduleId]).sort(([a], [b]) => a.localeCompare(b))
       ),
+    ])
+  ),
+  named: Object.fromEntries(
+    CAPTURED_MODULES.filter(moduleId => snapshot.namedEvents[moduleId]?.length).map(moduleId => [
+      moduleId,
+      snapshot.namedEvents[moduleId],
     ])
   ),
 });

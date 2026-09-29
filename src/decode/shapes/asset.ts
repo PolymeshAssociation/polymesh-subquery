@@ -120,7 +120,11 @@ registerShape('asset', 'CustomAssetTypeRegistered', stable(['did', 'typeId', 'na
 
 registerShape('asset', 'TickerRegistered', stable(['did', 'ticker', 'expiry']));
 // Deprecated at 6.0.0
-registerShape('asset', 'ClassicTickerClaimed', discontinuedAt(LAST_V5, ['did', 'ticker']));
+registerShape(
+  'asset',
+  'ClassicTickerClaimed',
+  discontinuedAt(LAST_V5, ['did', 'ticker', 'ethereumAddress'])
+);
 registerShape('asset', 'TickerTransferred', stable(['did', 'ticker', 'previousOwnerDid']));
 registerShape('asset', 'TickerLinkedToAsset', stable(['did', 'ticker', 'assetId']));
 registerShape('asset', 'TickerUnlinkedFromAsset', stable(['did', 'ticker', 'assetId']));

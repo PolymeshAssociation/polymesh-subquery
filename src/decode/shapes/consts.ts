@@ -9,4 +9,5 @@ export const V7_3 = 7_003_000;
 export const V8 = 8_000_000;
 
 export const LAST_V5 = V6 - 1;
+export const LAST_V6 = V7 - 1;
 export const LAST_V7 = V8 - 1;
