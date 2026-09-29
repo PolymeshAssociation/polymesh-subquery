@@ -1868,10 +1868,40 @@ const FEE_QUOTE_LANES = 16;
 const feeQuotes = new WeakMap<SubstrateBlock, Map<number, Promise<bigint | Error>>>();
 
 /**
- * What the chain charged extrinsic `extrinsicIdx` — see `postUneventedTransactionFee`.
+ * The treasury's cut announced just before extrinsic `extrinsicIdx` closes — `0` when there is
+ * none. See `treasuryShareAt`.
+ */
+const treasuryShareBeforeClose = (block: SubstrateBlock, extrinsicIdx: number): bigint => {
+  const own = extrinsicEventIndices(block, extrinsicIdx);
+
+  return own.length < 2 ? BigInt(0) : treasuryShareAt(block, own[own.length - 2], extrinsicIdx);
+};
+
+/**
+ * Every fee whose treasury cut is `share`, lowest first.
  *
- * The first question in a block requests the quote for every signed extrinsic in it that announced
- * no fee, a few at a time, and later ones collect theirs. One at a time, a block of a few hundred
+ * The runtime gave the treasury `floor(fee × 80 / 100)`, so the fee lies in
+ * `[⌈5·share / 4⌉, ⌈5·(share + 1) / 4⌉ − 1]` — one value for three shares in four, and two when
+ * `share` is a multiple of 4. Empty for no cut at all.
+ */
+const feeCandidates = (share: bigint): bigint[] => {
+  if (share <= BigInt(0)) {
+    return [];
+  }
+
+  const ceilDiv = (n: bigint, d: bigint) => (n + d - BigInt(1)) / d;
+  const lowest = ceilDiv(BigInt(5) * share, BigInt(4));
+  const highest = ceilDiv(BigInt(5) * (share + BigInt(1)), BigInt(4)) - BigInt(1);
+
+  return highest > lowest ? [lowest, highest] : [lowest];
+};
+
+/**
+ * The chain's price for extrinsic `extrinsicIdx`, for telling apart two fees its treasury cut
+ * allows — see `uneventedFee`.
+ *
+ * The first question in a block requests the quote for every signed extrinsic in it that needs
+ * one, a few at a time, and later ones collect theirs. One at a time, a block of a few hundred
  * transfers spent most of a minute waiting on the chain.
  */
 const quoteUneventedFee = async (extrinsic: SubstrateExtrinsic): Promise<bigint> => {
@@ -1910,8 +1940,8 @@ const requestFeeQuotes = (block: SubstrateBlock): Map<number, Promise<bigint | E
     .filter(
       ({ extrinsic, idx }) =>
         extrinsic.isSigned &&
-        extrinsicEventIndices(block, idx).length > 0 &&
-        !extrinsicEmits(block, idx, 'transactionPayment', 'TransactionFeePaid')
+        !extrinsicEmits(block, idx, 'transactionPayment', 'TransactionFeePaid') &&
+        feeCandidates(treasuryShareBeforeClose(block, idx)).length > 1
     );
   const settle: ((fee: bigint | Error) => void)[] = [];
   const quotes = new Map(
@@ -1940,19 +1970,43 @@ const requestFeeQuotes = (block: SubstrateBlock): Map<number, Promise<bigint | E
 };
 
 /**
+ * What an extrinsic that announced no fee was actually charged, given the treasury's cut of it.
+ *
+ * The cut is the chain's own record of the fee, after any refund. `payment.queryInfo` is not: it
+ * prices the weight the call declared, and a call that used less is refunded after it runs.
+ * `staking.rebond` and `contracts.instantiate` routinely are, and `sudo` calls are refunded in
+ * full. Pricing those from the quote charged payers for weight they never paid for and credited
+ * authors with it.
+ *
+ * The quote is still asked when the cut allows two fees one unit apart. It is exact when nothing was
+ * refunded. When something was, both candidates are below it and the lower one is taken; that case
+ * is off by at most one unit.
+ */
+const uneventedFee = async (extrinsic: SubstrateExtrinsic, share: bigint): Promise<bigint> => {
+  const candidates = feeCandidates(share);
+
+  if (candidates.length < 2) {
+    return candidates[0] ?? BigInt(0);
+  }
+
+  const quoted = await quoteUneventedFee(extrinsic);
+
+  return candidates.includes(quoted) ? quoted : candidates[0];
+};
+
+/**
  * Posts the transaction fee of a signed extrinsic whose runtime announced none.
  *
- * `transactionPayment.TransactionFeePaid` first appears at v5.4.0 (spec 5004000). Before it the fee was charged
- * and paid to the block author with no event at all — on testnet, every transaction fee in the
- * first 8.48 million blocks — so each one was missing twice over: the signer kept POLYX it had
- * spent, and the author never received it. The reconciler caught both halves, as accounts holding
- * less than the index said and validators holding more.
+ * `transactionPayment.TransactionFeePaid` first appears at v5.4.0 (spec 5004000). Before it the fee
+ * was charged with no event of its own — on testnet, every transaction fee in the first 8.48 million
+ * blocks — so each one was missing: the signer kept POLYX it had spent, and the author never
+ * received its part. The reconciler caught both halves, as accounts holding less than the index
+ * said and validators holding more.
  *
- * The fee is priced the way the chain priced it: `payment.queryInfo` at the parent block, which is
- * the state the fee was charged against. Checked against the replay, it reproduces the missing
- * amount exactly — two unrelated accounts, 1,851 and 1,231 extrinsics of transfers and committee
- * votes, each to the unit. The runtime charged the declared weight in this era, so there is no
- * post-dispatch refund to account for.
+ * Every runtime in that range split each fee, 80% to the treasury and the rest to the author, and
+ * the treasury's part is announced as `TreasuryReimbursement` just before the extrinsic closes. The
+ * fee is read back from that cut (see `uneventedFee`). No cut means nothing was charged — a call
+ * the runtime let off its fee, `sudo` among them.
  *
  * Posted against the extrinsic's closing event — see `indexClosingEvent`.
  */
@@ -1976,7 +2030,8 @@ export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic)
     return;
   }
 
-  const fee = await quoteUneventedFee(extrinsic);
+  const treasuryShare = treasuryShareAt(block, closing.idx - 1, extrinsic.idx);
+  const fee = await uneventedFee(extrinsic, treasuryShare);
 
   if (fee === BigInt(0)) {
     return;
@@ -1998,7 +2053,7 @@ export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic)
     amount: fee,
     kind: MovementKind.Fee,
   });
-  await creditBlockAuthor(args, fee, treasuryShareAt(block, closing.idx - 1, extrinsic.idx));
+  await creditBlockAuthor(args, fee, treasuryShare);
 };
 
 /**
