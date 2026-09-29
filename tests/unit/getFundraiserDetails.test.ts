@@ -33,7 +33,7 @@ const fundraiserCodec = (venueId: number | string) => ({
 });
 
 /**
- * Regression: `venue_id` arrives from `JSON.parse` as a JS number, and D12's `padNumericId`
+ * Regression: `venue_id` arrives from `JSON.parse` as a JS number, and `padNumericId`
  * calls `String.padStart` — so it must be coerced to a string first, or the STO handler throws
  * `padStart is not a function` on every `FundraiserCreated`.
  */

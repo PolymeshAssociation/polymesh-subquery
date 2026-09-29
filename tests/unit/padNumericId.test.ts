@@ -9,7 +9,7 @@ const codec = (value: string | null): Codec =>
   ({ toString: () => (value === null ? '' : value) } as unknown as Codec);
 
 /**
- * Defect A14 / decision D12: chain-assigned numeric ids (instruction, venue, PIP, authorization
+ * Chain-assigned numeric ids (instruction, venue, PIP, authorization
  * sequences) are stored as `String` ids, so a lexicographic `orderBy: ID_DESC` puts "9999"
  * above "14712". Zero-padding to 10 digits makes the string order a numeric one.
  */

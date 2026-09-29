@@ -5,7 +5,7 @@ import { processUpdateReason } from '../../src/mappings/entities/assets/mapAsset
 import { EventIdEnum } from '../../src/types';
 
 /**
- * Regression tests for defect A7: `processUpdateReason` branched on three of the four
+ * Regression tests: `processUpdateReason` branched on three of the four
  * `HoldingsUpdateReason` variants and fell through to `{ eventId: undefined, assetDelta: {} }`
  * for `controllerTransfer`, so controller transfers were not counted in `asset.totalTransfers`
  * and their event id was resolved from the (possibly wrapping) extrinsic call name instead.

@@ -3,7 +3,7 @@ import '@subql/types/dist/global';
 import { shouldRescanAutomaticAffirmations } from '../../src/mappings/entities/settlements/mapSettlement';
 
 /**
- * Regression tests for defect A4: the guard around the `InstructionAutomaticallyAffirmed`
+ * Regression tests: the guard around the `InstructionAutomaticallyAffirmed`
  * re-scan folded its two conditions into a single `||`, so it evaluated true for every
  * non-private chain at any spec version and the re-scan ran on every mainnet/testnet block
  * instead of only on the 6.1.0–6.3.1 window it exists for.

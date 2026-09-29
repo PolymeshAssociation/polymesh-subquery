@@ -268,7 +268,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
 };
 
 /**
- * `portfolio.FungibleTokensMovedBetweenPortfolios` — a v5.4.3-only event (defect A8). Emitted
+ * `portfolio.FungibleTokensMovedBetweenPortfolios` — a v5.4.3-only event. Emitted
  * from `unchecked_move_funds` and removed at v6.0.0; `MovedBetweenPortfolios` is not emitted
  * alongside it, so without this the movement is not indexed at all. Measured: 0 on mainnet,
  * 0 on testnet — registered for completeness and testnet parity.
