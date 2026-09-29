@@ -4,10 +4,12 @@
  * could not satisfy: a `Reserved`/`Unreserved` round-trip returns the pools to their starting
  * values, and every movement writes a signed entry per account-side sharing one `movementId`.
  *
- * Events are built struct-style (v8), which is the surface A9 left entirely unindexed.
+ * Events are built struct-style (v8), which is the surface that was once left entirely unindexed.
  */
 
 import { SubstrateEvent } from '@subql/types';
+
+jest.mock('../../src/utils/blockAuthor', () => ({ blockAuthor: jest.fn() }));
 import { EntryDirection, HoldReason, MovementKind, PolyxPool } from '../../src/types';
 import {
   adjustLock,
@@ -37,11 +39,13 @@ import {
   handleReserveRepatriated,
   handleStakingSlash,
   handleTransactionFeeCharged,
+  postUneventedTransactionFee,
   handleTransferAndHold,
   handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
+import { blockAuthor } from '../../src/utils/blockAuthor';
 import { __resetStakingCaches } from '../../src/utils/staking';
 import {
   applyChainFreezes,
@@ -59,7 +63,7 @@ const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields 
  * `toString()` is `stringify(toJSON())` in polkadot-js, so a composite enum such as v8's
  * `RuntimeHoldReason` stringifies to `'{"staking":"Staking"}'`, not `'Staking'`. Mirroring that
  * here is what lets a fixture carry the shape the chain really emits — a plain string mock hid
- * the hold-reason defect (F8) entirely.
+ * the hold-reason defect entirely.
  */
 const mockCodec = (value: unknown) => ({
   toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
@@ -124,8 +128,8 @@ const extrinsicEvents = (
   height: number,
   emitted: [section: string, method: string, fields: Record<string, unknown>][],
   { specVersion = 8_000_000 }: { specVersion?: number } = {}
-): SubstrateEvent[] =>
-  emitted.map(([section, method, fields], index) => {
+): SubstrateEvent[] => {
+  const events = emitted.map(([section, method, fields], index) => {
     const event = structEvent(section, method, fields, { atHeight: height, specVersion });
 
     (event as { idx: number }).idx = index;
@@ -138,6 +142,19 @@ const extrinsicEvents = (
 
     return event;
   });
+
+  // The block's own event list, as the node hands it over — the fee paths read which events the
+  // extrinsic emitted from it, rather than trusting the block's spec label.
+  const records = events.map(event => ({
+    phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => 1 } },
+    event: (event as any).event,
+  }));
+  events.forEach(event => {
+    (event as any).block.events = records;
+  });
+
+  return events;
+};
 
 /**
  * A run of pre-v8 tuple events from one extrinsic, in order, sharing a block — the pre-v8
@@ -345,7 +362,7 @@ describe('Event → pool transition', () => {
   });
 
   it('Held{Staking}: decodes the real v8 composite RuntimeHoldReason, not just a bare string', async () => {
-    // F8: `{ staking: 'Staking' }` stringifies to `'{"staking":"Staking"}'`, which matched no
+    // `{ staking: 'Staking' }` stringifies to `'{"staking":"Staking"}'`, which matched no
     // HoldReason member — so every v8 hold landed as `Unknown` and `bonded` was always 0.
     await handleBalanceHeld(
       balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
@@ -572,7 +589,7 @@ describe('properties the one-column model could not satisfy', () => {
   });
 });
 
-describe('staking — era-dependent, inverted at v8 (A10 / A6)', () => {
+describe('staking — era-dependent, inverted at v8', () => {
   it('v7 Bonded produces no PolyxEntry and raises frozen via the staking lock', async () => {
     await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
     const beforeEntries = entries().length;
@@ -837,6 +854,51 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(-300));
     expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(300));
     expect(entries().every(r => r.kind === MovementKind.Fee)).toBe(true);
+  });
+
+  /**
+   * The fee withdrawal is found by where it sits, not by its size. Here the estimate (600) is refunded
+   * down to 500, and the call itself also burns exactly 500 — matching on amount re-filed the call's
+   * burn as the fee and left the real withdrawal counted as a burn.
+   */
+  it('re-files the withdrawal taken before the call, not a burn of the same size made by the call', async () => {
+    const [feeWithdraw, callBurn, refund, feePaid] = extrinsicEvents(2_000_300, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '600' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '500' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '100' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '500', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(feeWithdraw);
+    await handleBalanceBurned(callBurn);
+    await handleBalanceMinted(refund);
+    await handleTransactionFeeCharged(feePaid);
+
+    const byAmount = (amount: number) => entries().find(r => r.amountAbs === BigInt(amount));
+    expect(byAmount(600)?.kind).toBe(MovementKind.Fee);
+    expect(byAmount(100)?.kind).toBe(MovementKind.Fee);
+    expect(byAmount(500)?.kind).toBe(MovementKind.Burn);
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(500));
+    // every POLYX that left still left exactly once
+    expect(balance(ALICE)?.free).toBe(BigInt(-1000));
+  });
+
+  it('does not look for a withdrawal on a runtime that never pairs one with a fee', async () => {
+    // inside an extrinsic, as every fee is — an event with none would skip the lookup anyway
+    const [feePaid] = extrinsicEvents(
+      2_000_400,
+      [['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '250', tip: '0' }]],
+      { specVersion: 7_000_000 }
+    );
+
+    await handleTransactionFeeCharged(feePaid);
+
+    const lookedForBurns = storeGetByFields().mock.calls.some(
+      ([entity, filter]: [string, [string, string, unknown][]]) =>
+        entity === 'PolyxEntry' && filter.some(([field]) => field === 'extrinsicId')
+    );
+    expect(lookedForBurns).toBe(false);
+    expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee, amountAbs: BigInt(250) });
   });
 
   it('F9: a protocol fee on a runtime that emits no Withdraw still posts its own debit', async () => {
@@ -1509,5 +1571,323 @@ describe('pre-v7 bridge mints', () => {
     await handleBridgeMint(event);
 
     expect(balance(ALICE)).toBeUndefined();
+  });
+});
+
+/**
+ * Every Polymesh runtime pays transaction and protocol fees to the block author. Before v8 it did so
+ * with no event, so each fee left the payer and arrived nowhere — the reconciler saw validators
+ * holding more than the index said, hundreds of times over a replay. On v8 the author's `Deposit`
+ * records it, and was being filed as new POLYX.
+ */
+describe('the block author is paid the fee', () => {
+  const AUTHOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+
+  it('before v8: credits the author with what the payer was charged', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [feePaid] = extrinsicEvents(
+      3_000_100,
+      [['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '250', tip: '0' }]],
+      { specVersion: 7_000_000 }
+    );
+
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-250));
+    expect(balance(AUTHOR)?.free).toBe(BigInt(250));
+    expect(entries().find(r => r.accountId === AUTHOR)).toMatchObject({
+      kind: MovementKind.BlockAuthorFee,
+      direction: EntryDirection.Credit,
+      amountAbs: BigInt(250),
+    });
+    // the author's income is not a fee they paid
+    expect(balance(AUTHOR)?.totalFeesPaid ?? BigInt(0)).toBe(BigInt(0));
+  });
+
+  it('before v5.4.2: leaves the treasury its announced cut of a protocol fee, and pays the author the rest', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [feeCharged] = extrinsicEvents(
+      3_000_150,
+      [
+        ['protocolFee', 'FeeCharged', { who: ALICE, amount: '500' }],
+        ['treasury', 'TreasuryReimbursement', { did: '0xdid', amount: '400' }],
+      ],
+      { specVersion: 5_000_002 }
+    );
+
+    await handleTransactionFeeCharged(feeCharged);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-500));
+    expect(balance(AUTHOR)?.free).toBe(BigInt(100));
+  });
+
+  it('v5.4.0: leaves the treasury its cut announced just before TransactionFeePaid', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [, feePaid] = extrinsicEvents(
+      3_000_160,
+      [
+        ['treasury', 'TreasuryReimbursement', { did: '0xdid', amount: '76962' }],
+        ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '96203', tip: '0' }],
+      ],
+      { specVersion: 5_004_000 }
+    );
+
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(AUTHOR)?.free).toBe(BigInt(19241));
+  });
+
+  it('before v8: credits nobody when the block has no author, as the chain drops the fee', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(undefined);
+    const [feePaid] = extrinsicEvents(
+      3_000_200,
+      [['protocolFee', 'FeeCharged', { who: ALICE, amount: '90' }]],
+      { specVersion: 7_000_000 }
+    );
+
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(entries()).toHaveLength(1);
+    expect(entries()[0]).toMatchObject({ accountId: ALICE, kind: MovementKind.Fee });
+  });
+
+  it('on v8: files the deposit before TransactionFeePaid as the author being paid, not new POLYX', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [withdraw, refund, paid, feePaid] = extrinsicEvents(3_000_300, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '500' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '200' }],
+      ['balances', 'Deposit', { who: AUTHOR, amount: '300' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '300', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(withdraw);
+    await handleBalanceMinted(refund);
+    await handleBalanceMinted(paid);
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(entries().find(r => r.accountId === AUTHOR)?.kind).toBe(MovementKind.BlockAuthorFee);
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(300));
+    expect(entries().some(r => r.kind === MovementKind.Mint)).toBe(false);
+  });
+
+  it('on v8: files the deposit after FeeCharged as the author being paid a protocol fee', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [withdraw, charged, paid] = extrinsicEvents(3_000_400, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '90' }],
+      ['protocolFee', 'FeeCharged', { who: ALICE, amount: '90' }],
+      ['balances', 'Deposit', { who: AUTHOR, amount: '90' }],
+    ]);
+
+    await handleBalanceBurned(withdraw);
+    await handleTransactionFeeCharged(charged);
+    await handleBalanceMinted(paid);
+
+    expect(entries().find(r => r.accountId === AUTHOR)?.kind).toBe(MovementKind.BlockAuthorFee);
+  });
+
+  it('on v8: leaves a deposit that sits next to no fee as new POLYX', async () => {
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [paid] = extrinsicEvents(3_000_500, [
+      ['balances', 'Deposit', { who: AUTHOR, amount: '300' }],
+    ]);
+
+    await handleBalanceMinted(paid);
+
+    expect(entries()[0].kind).toBe(MovementKind.Mint);
+  });
+});
+
+/**
+ * Before v5.4.0 the transaction fee was charged and paid to the block author with no event at all,
+ * so both halves were missing — the reconciler saw signers holding less than the index said and
+ * validators holding more. Priced the way the chain priced it, `payment.queryInfo` at the parent
+ * block, which reproduced the missing amount to the unit on the replay.
+ */
+describe('a fee its runtime did not announce', () => {
+  const AUTHOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+  const PAYING_KEY = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+  const phase = (extrinsicIdx: number | undefined) => ({
+    isApplyExtrinsic: extrinsicIdx !== undefined,
+    asApplyExtrinsic: { toNumber: () => extrinsicIdx },
+  });
+
+  const signedExtrinsic = ({
+    specVersion,
+    signed = true,
+    section = 'balances',
+  }: {
+    specVersion: number;
+    signed?: boolean;
+    section?: string;
+  }) => {
+    const extrinsic = {
+      isSigned: signed,
+      signer: { toString: () => ALICE },
+      method: { section, method: 'transfer' },
+      toHex: () => '0xextrinsic',
+    };
+    const unsigned = { isSigned: false };
+    const block = {
+      block: {
+        header: { number: { toString: () => '4000000' }, parentHash: '0xparent' },
+        extrinsics: [unsigned, unsigned, extrinsic],
+      },
+      timestamp: new Date('2021-06-01T00:00:00.000Z'),
+      specVersion,
+      events: [
+        // the call's own event, then the extrinsic's closing one
+        {
+          phase: phase(2),
+          event: { section: 'balances', method: 'Transfer', data: [], meta: { fields: [] } },
+        },
+        {
+          phase: phase(2),
+          event: { section: 'system', method: 'ExtrinsicSuccess', data: [], meta: { fields: [] } },
+        },
+      ],
+    };
+
+    return {
+      idx: 2,
+      block,
+      extrinsic,
+      events: [],
+      success: true,
+    } as any;
+  };
+
+  const queryInfo = jest.fn();
+
+  beforeEach(() => {
+    queryInfo.mockReset().mockResolvedValue({ partialFee: { toString: () => '186554' } });
+    (globalThis as any).api.rpc = { payment: { queryInfo } };
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+  });
+
+  it('charges the signer and pays the author the fee the chain priced at the parent block', async () => {
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 5_003_001 }));
+
+    expect(queryInfo).toHaveBeenCalledWith('0xextrinsic', '0xparent');
+    expect(balance(ALICE)?.free).toBe(BigInt(-186554));
+    expect(balance(AUTHOR)?.free).toBe(BigInt(186554));
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(186554));
+  });
+
+  it("files both halves on the extrinsic's closing event, which it indexes, clear of the call's own", async () => {
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 5_003_001 }));
+
+    expect(entries().every(r => r.movementId === '0004000000/0000000001')).toBe(true);
+    expect(db['Event']?.['0004000000/0000000001']).toBeDefined();
+  });
+
+  it('leaves an extrinsic whose runtime announced its fee to TransactionFeePaid', async () => {
+    const extrinsic = signedExtrinsic({ specVersion: 5_004_000 });
+    extrinsic.block.events.splice(1, 0, {
+      phase: phase(2),
+      event: {
+        section: 'transactionPayment',
+        method: 'TransactionFeePaid',
+        data: [],
+        meta: { fields: [] },
+      },
+    });
+
+    await postUneventedTransactionFee(extrinsic);
+
+    expect(queryInfo).not.toHaveBeenCalled();
+    expect(entries()).toHaveLength(0);
+  });
+
+  /**
+   * The node labels blocks near an upgrade with the neighbouring runtime's spec. A block that ran
+   * under a runtime announcing no fee is still reconstructed when its label says otherwise.
+   */
+  it('goes by what the extrinsic emitted, not by the spec the block is labelled with', async () => {
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 6_000_001 }));
+
+    expect(queryInfo).toHaveBeenCalled();
+    expect(balance(ALICE)?.free).toBe(BigInt(-186554));
+  });
+
+  it('charges nothing for an unsigned extrinsic', async () => {
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 5_003_001, signed: false }));
+
+    expect(queryInfo).not.toHaveBeenCalled();
+  });
+
+  it('charges the subsidiser rather than the signer, except for the relayer pallet itself', async () => {
+    db['Subsidy'] = {
+      s1: {
+        id: 's1',
+        beneficiaryAccountId: ALICE,
+        payingAccountId: PAYING_KEY,
+        isAccepted: true,
+        isRemoved: false,
+      },
+    };
+    ((globalThis as any).store.getByField as jest.Mock).mockImplementation(
+      (entity: string, field: string, value: unknown) =>
+        Promise.resolve(Object.values(db[entity] ?? {}).filter(row => row[field] === value))
+    );
+
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 5_003_001 }));
+
+    expect(balance(PAYING_KEY)?.free).toBe(BigInt(-186554));
+    expect(balance(ALICE)).toBeUndefined();
+  });
+
+  /**
+   * Up to v5.4.0 the runtime paid 80% of the fee to the treasury, announced just before the
+   * extrinsic closes, and only the rest to the author — crediting the author the whole fee counted
+   * the treasury's part twice.
+   */
+  it('pays the author only what is left after the treasury cut announced before the extrinsic closes', async () => {
+    const extrinsic = signedExtrinsic({ specVersion: 3_000 });
+    extrinsic.block.events.splice(1, 0, {
+      phase: phase(2),
+      event: {
+        section: 'treasury',
+        method: 'TreasuryReimbursement',
+        data: [{ toString: () => '0xdid' }, { toString: () => '149243' }],
+        meta: { fields: [] },
+      },
+    });
+
+    await postUneventedTransactionFee(extrinsic);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-186554));
+    // 186554 − floor(186554 × 80%)
+    expect(balance(AUTHOR)?.free).toBe(BigInt(37311));
+  });
+
+  it('asks the chain for every unannounced fee in the block at once, and each extrinsic collects its own', async () => {
+    const first = signedExtrinsic({ specVersion: 5_003_001 });
+    const { block } = first;
+    const other = { ...first.extrinsic, toHex: () => '0xother' };
+    block.block.extrinsics.push(other);
+    block.events.push(
+      {
+        phase: phase(3),
+        event: { section: 'balances', method: 'Transfer', data: [], meta: { fields: [] } },
+      },
+      {
+        phase: phase(3),
+        event: { section: 'system', method: 'ExtrinsicSuccess', data: [], meta: { fields: [] } },
+      }
+    );
+    queryInfo.mockImplementation((hex: string) =>
+      Promise.resolve({ partialFee: { toString: () => (hex === '0xother' ? '7' : '186554') } })
+    );
+
+    await postUneventedTransactionFee(first);
+
+    expect(queryInfo).toHaveBeenCalledTimes(2);
+    expect(queryInfo).toHaveBeenCalledWith('0xother', '0xparent');
+
+    await postUneventedTransactionFee({ ...first, idx: 3, extrinsic: other });
+
+    expect(queryInfo).toHaveBeenCalledTimes(2);
+    expect(balance(ALICE)?.free).toBe(BigInt(-186561));
   });
 });

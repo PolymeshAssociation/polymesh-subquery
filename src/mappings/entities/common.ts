@@ -4,6 +4,7 @@ import { FunctionPropertyNames } from '@subql/types-core';
 import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 import { padId } from '../../utils';
 import { recordAnomaly } from '../../utils/anomaly';
+import { assetFromChain } from './assets/assetFromChain';
 
 export type Attributes<T> = Omit<
   T,
@@ -31,8 +32,15 @@ export interface HandlerArgs {
   extrinsicIdx?: number;
 }
 
-export const getAsset = async (assetId: string): Promise<Asset> => {
-  const asset = await Asset.get(assetId);
+/**
+ * The asset a handler is about to change — from the index, or, given the event that names it,
+ * built from chain storage when the index has never seen it (see `assetFromChain`). Only an asset
+ * neither holds still fails the block, as it always has: a handler cannot make a change to an asset
+ * that exists nowhere.
+ */
+export const getAsset = async (assetId: string, event?: SubstrateEvent): Promise<Asset> => {
+  const asset =
+    (await Asset.get(assetId)) ?? (event ? await assetFromChain(assetId, event) : undefined);
 
   if (!asset) {
     throw new Error(`Asset with ID ${assetId} was not found.`);
@@ -122,6 +130,18 @@ export interface EnumContext {
  * value states something the chain did not say. Omitting it stores nothing, which a nullable column
  * can express and the anomaly still reports.
  */
+export function toEnum<T extends Record<string, string>>(
+  enumType: T,
+  value: string,
+  fallback: T[keyof T],
+  context?: EnumContext
+): T[keyof T];
+export function toEnum<T extends Record<string, string>>(
+  enumType: T,
+  value: string,
+  fallback?: T[keyof T],
+  context?: EnumContext
+): T[keyof T] | undefined;
 export function toEnum<T extends Record<string, string>>(
   enumType: T,
   value: string,

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { HandlerArgs, toEnum } from '../mappings/entities/common';
 import { CallIdEnum, EventIdEnum, ModuleIdEnum } from '../types';
-import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
+import { blockTime, camelToSnakeCase, JSONStringifyExceptStringAndNull, padId } from './common';
 import { resolveEthTransact } from './ethExtrinsic';
 
 export const extractEventArg = (arg: any, exists: boolean) => {
@@ -49,11 +49,12 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     moduleIdText,
     eventIdText,
     eventIdx,
-    block: { timestamp: datetime },
+    block,
     extrinsic,
     blockEventId,
     extrinsicId,
   } = args;
+  const datetime = blockTime(block);
 
   let callId: CallIdEnum | undefined;
   let callIdText: string | undefined;

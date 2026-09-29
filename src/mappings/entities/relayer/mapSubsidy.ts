@@ -1,7 +1,13 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Subsidy } from '../../../types';
-import { getBigIntValue, getOrCreateAccount, getTextValue, is8xChain } from '../../../utils';
+import {
+  blockTime,
+  getBigIntValue,
+  getOrCreateAccount,
+  getTextValue,
+  is8xChain,
+} from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
 
 /**
@@ -27,6 +33,15 @@ const ensureAccounts = async (
   ]);
 };
 
+/**
+ * An offer of a subsidy. It changes nothing until it is accepted.
+ *
+ * The same paying key can offer again while its earlier subsidy is still live, and the chain goes on
+ * paying from that subsidy until the new offer is accepted. The row is keyed on the pair, so it
+ * cannot hold both. It keeps the live subsidy, and the acceptance takes up the new one. Overwriting
+ * it here marked a live subsidy as merely offered, and every fee the paying key covered in between
+ * was charged to the user instead.
+ */
 export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockId, blockEventId } = extractArgs(event);
   const {
@@ -37,8 +52,13 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
 
   const userKey = getTextValue(rawUserKey);
   const payingKey = getTextValue(rawPayingKey);
+  const existing = await Subsidy.get(subsidyId(userKey, payingKey));
 
-  await ensureAccounts(userKey, payingKey, blockId, block.timestamp, blockEventId);
+  if (existing?.isAccepted && !existing.isRemoved) {
+    return;
+  }
+
+  await ensureAccounts(userKey, payingKey, blockId, blockTime(block), blockEventId);
 
   await Subsidy.create({
     id: subsidyId(userKey, payingKey),
@@ -111,7 +131,7 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
   let subsidy = await Subsidy.get(id);
 
   if (!subsidy) {
-    await ensureAccounts(userKey, payingKey, blockId, block.timestamp, blockEventId);
+    await ensureAccounts(userKey, payingKey, blockId, blockTime(block), blockEventId);
 
     subsidy = Subsidy.create({
       id,
@@ -127,12 +147,21 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
     });
   }
 
-  subsidy.isAccepted = true;
+  // Accepting replaces whatever subsidy the user had, and the chain removes the old one first. When
+  // the old one had the same paying key, its `RemovedPayingKey` has just marked this same row
+  // removed, so acceptance has to make it live again.
+  const replacedLive = subsidy.isAccepted && subsidy.isRemoved;
 
-  // v8+ `AcceptedSubsidy` repeats the limit; pre-v8 `AcceptedPayingKey` does not carry one, so
-  // the allowance `handleSubsidyApproved` already set stands.
+  subsidy.isAccepted = true;
+  subsidy.isRemoved = false;
+
+  // v8+ `AcceptedSubsidy` repeats the limit. Pre-v8 `AcceptedPayingKey` does not carry one. The
+  // approval's limit stands unless it was not recorded because a subsidy was already live; then
+  // the chain's own figure is read.
   if ('initialPolyxLimit' in decoded) {
     subsidy.allowance = getBigIntValue(decoded.initialPolyxLimit);
+  } else if (replacedLive) {
+    subsidy.allowance = (await readChainAllowance(userKey)) ?? subsidy.allowance;
   }
   subsidy.updatedEventId = blockEventId;
 

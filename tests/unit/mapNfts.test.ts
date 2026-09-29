@@ -10,6 +10,7 @@ import {
   flushNftBuffer,
   handleNftHoldingsUpdates,
 } from '../../src/mappings/entities/assets/mapNfts';
+import { IndexerAnomaly } from '../../src/types';
 import {
   codec,
   MockDb,
@@ -266,6 +267,39 @@ describe('handleNftHoldingsUpdates — when the holder rollup is written', () =>
     );
 
     expect(holderSaves()).toBe(0);
+  });
+
+  /**
+   * The one path that writes from the wrong block — a buffer the previous block left behind — dates
+   * the change a block late. It should never be taken; if it is, it says so.
+   */
+  it('reports a buffer flushed from a later block instead of flushing it quietly', async () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    // the first of two holdings events: buffered, and the block ends without the second
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', {
+        holderDid: DID_A,
+        to: meshPortfolioHolderCodec(DID_A, 0),
+        ids: [1],
+        idx: 0,
+        events: blockEvents,
+      })
+    );
+    expect(holderSaves()).toBe(0);
+
+    const nextBlock = nftEvent('issued', {
+      holderDid: DID_B,
+      to: meshPortfolioHolderCodec(DID_B, 0),
+      ids: [2],
+      idx: 0,
+    });
+    (nextBlock as any).block.block.header.number = { toString: () => '501' };
+
+    await handleNftHoldingsUpdates(nextBlock);
+
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    expect(db['NftHolder'][`${ASSET}/${DID_A}`]).toBeDefined();
   });
 
   it('writes each holder once, from the last holdings event of the block', async () => {

@@ -27,6 +27,7 @@ const OTHER_DID = '0x02'.padEnd(66, '0');
 /** Only what `recordAnomaly` reads off a block. */
 const block = {
   block: { header: { number: { toString: () => '9' } } },
+  timestamp: new Date(0),
 } as unknown as SubstrateBlock;
 const PRIMARY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -282,7 +283,8 @@ describe('active secondary keys exclude the primary', () => {
     );
 
     const activeSecondary = rows().filter(
-      r => r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
+      r =>
+        r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
     );
 
     expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);

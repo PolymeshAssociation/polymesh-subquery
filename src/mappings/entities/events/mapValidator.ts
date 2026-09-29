@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Validator } from '../../../types';
-import { getAllByFields, getTextValue } from '../../../utils';
+import { blockTime, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { readPermissionedIdentity } from '../../../utils/staking';
 import { extractArgs } from '../common';
@@ -51,14 +51,14 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
   }
 
   const prefs = rawPrefs.toJSON() as { commission?: number; blocked?: boolean };
-  const validator = await getOrCreateValidator(stash, blockId, block.timestamp, blockEventId);
+  const validator = await getOrCreateValidator(stash, blockId, blockTime(block), blockEventId);
 
   validator.commission = prefs.commission !== undefined ? BigInt(prefs.commission) : undefined;
   validator.blocked = Boolean(prefs.blocked);
   validator.updatedEventId = blockEventId;
 
   // `validate()` is on-chain proof the stash is a validator and actively participating again.
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   position.isValidator = true;
   position.isChilled = false;
   position.updatedEventId = blockEventId;

@@ -159,7 +159,7 @@ const getLegacyStakingEventDetails = async (
     details.amount = getBigIntValue(params[2]);
 
     if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
-      // A15 — the pre-v8 event names only the stash; read the payee from chain storage.
+      // The pre-v8 event names only the stash; read the payee from chain storage.
       const resolved = await resolveLegacyRewardDestination(stashAccount, blockId);
       details.rewardDestination = resolved.rewardDestination;
       details.rewardDestinationAccount = resolved.rewardDestinationAccount;
@@ -223,8 +223,10 @@ const applyToPosition = async (
   details: StakingEventDetails,
   stashAccount: string,
   amount: bigint,
-  { blockId, blockEventId }: { blockId: string; blockEventId: string }
+  event: SubstrateEvent
 ): Promise<void> => {
+  const { blockEventId } = extractArgs(event);
+
   if (rewardEvents.has(eventId)) {
     position.totalRewarded += amount;
     if (details.rewardDestination !== undefined) {
@@ -234,19 +236,19 @@ const applyToPosition = async (
       position.rewardDestinationAccountId = details.rewardDestinationAccount;
     }
 
-    // S1: a `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
+    // A `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
     // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
     // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
     // and fell further behind the real active bond every era. Other destinations pay out to a
     // free balance and leave the ledger alone, so they need no read.
     if (details.rewardDestination === 'Staked') {
-      await refreshPositionFromLedger(position, stashAccount, blockId);
+      await refreshPositionFromLedger(position, stashAccount, event);
     }
   } else if (slashEvents.has(eventId)) {
     position.totalSlashed += amount;
 
-    // S1: `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
-    await refreshPositionFromLedger(position, stashAccount, blockId);
+    // `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
+    await refreshPositionFromLedger(position, stashAccount, event);
   } else {
     return;
   }
@@ -279,10 +281,7 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     : undefined;
 
   if (position && details.stashAccount && details.amount !== undefined) {
-    await applyToPosition(position, eventId, details, details.stashAccount, details.amount, {
-      blockId,
-      blockEventId,
-    });
+    await applyToPosition(position, eventId, details, details.stashAccount, details.amount, event);
   }
 
   await StakingEvent.create({

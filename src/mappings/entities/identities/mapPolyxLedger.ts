@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix } from '@polkadot/util';
-import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent, optionalField } from '../../../decode';
 import {
   Account,
@@ -29,6 +29,7 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { hexToString, is8xChain } from '../../../utils/common';
+import { blockAuthor } from '../../../utils/blockAuthor';
 import {
   readRewardDestination,
   readStakingLock,
@@ -40,6 +41,8 @@ import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import { reconcileAccount, reconcilePending } from './reconcilePolyx';
+import { closingEventOf, indexClosingEvent } from '../block/closingEvent';
+import { extrinsicEventIndices } from '../../blockContext';
 
 /**
  * POLYX ledger — entry-centric replacement for `mapPolyxTransaction`.
@@ -331,6 +334,16 @@ export interface ChainFreezes {
  *
  * A lock can never exceed what is frozen, so each is capped there. Locks overlap rather than add
  * (`frozen` is their MAX), so the residual is only what exceeds the largest attributed lock.
+ *
+ * **An empty `holds` on v8 is written as-is, even though it can mean "not migrated yet".** v8
+ * converts locks to holds lazily, so an account the migration has not reached reads `[]` from
+ * `balances.holds` while it is still bonded. That is safe only because of the order the migration
+ * works in — the hold is added before the lock is removed, so an account is never without both —
+ * and because `bonded` is the MAX of the staking hold and the staking lock: until the account
+ * migrates, its lock carries the bond. Treating `[]` as "unknown" and keeping the derived holds
+ * instead would be worse, since those were derived before the chain was consulted at all. Anything
+ * that changes how `bonded` is derived has to keep this case, which the seeder's reserved-nothing
+ * test pins.
  */
 export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes): void => {
   const { frozen, holds, stakingLock, pipsLock } = chain;
@@ -787,7 +800,7 @@ export const handleBalanceThawed = lockHandler('freeze', BigInt(-1));
  *
  * A **queue** per key, not one value: one `utility.batch` can make two transfers with the same
  * endpoints and the same amount but different memos, and a single slot let the second overwrite
- * the first (F11). Queued in emission order and consumed in the same order, which is the order the
+ * the first. Queued in emission order and consumed in the same order, which is the order the
  * paired `Transfer` events arrive in.
  */
 let pendingMemoBlock: string | undefined;
@@ -849,7 +862,7 @@ const takePendingMemo = (
  * transfer that turns out to be a treasury disbursement, a withdrawal that turns out to be the
  * transaction fee. Changing `kind` alone leaves `AccountBalance.lifetimeByKind` (and the
  * `totalFeesPaid` / `totalRewards` / `totalSlashed` rollups) still counting the entry under the
- * kind it no longer has — defect F12 — so both sides move together here.
+ * kind it no longer has — so both sides move together here.
  */
 const relabelEntry = async (
   entry: PolyxEntry,
@@ -1015,7 +1028,7 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   const stashedMemo = takePendingMemo(args, from, to, amount);
   const memo = memoOf(decoded) ?? stashedMemo;
 
-  // F3: an endowment pairs with exactly one transfer. Without the `counterpartyAddress` guard a
+  // An endowment pairs with exactly one transfer. Without the `counterpartyAddress` guard a
   // batch making two equal transfers to the same new account matched the first endowment twice,
   // so the second transfer posted only its debit — the recipient's second credit was lost, and
   // the endowment's counterparty and memo were overwritten by the later one.
@@ -1055,11 +1068,11 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
 };
 
 /**
- * A2: `TransferWithMemo` is emitted alongside the classic `Transfer` for one `transfer_with_memo`
+ * `TransferWithMemo` is emitted alongside the classic `Transfer` for one `transfer_with_memo`
  * call. It is never its own movement — it only supplies the memo. If the `Transfer` was already
  * indexed this enriches it; otherwise the memo is stashed for the `Transfer` still to come.
  *
- * **F11** — the memo belongs to the *movement*, so it is written to every entry sharing the
+ * The memo belongs to the *movement*, so it is written to every entry sharing the
  * matched entry's `movementId` rather than only to the recipient's side, which is all the
  * account-filtered lookup could reach. Entries that already carry a memo are skipped so two
  * identical transfers in one extrinsic consume one memo each instead of both taking the first.
@@ -1236,7 +1249,7 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
 /**
  * `balances.TransferAndHold { reason, source, dest, transferred }` — `source/Free → dest/Reserved`.
  *
- * **F2** — the amount field is named `transferred` here, which the shared `amountOf` name list does
+ * The amount field is named `transferred` here, which the shared `amountOf` name list does
  * not carry, so every one of these posted 0 (and held 0). Read explicitly rather than by widening
  * that list: `transferred` appearing in some other event would then silently outrank the name that
  * event actually means. Confirmed against `pallet-balances` at `d25e171` and live mainnet
@@ -1278,7 +1291,7 @@ export const handleBalanceBurned = async (event: SubstrateEvent): Promise<void> 
 };
 
 /**
- * A3: `balances.Suspended` — an upstream (v8-only) event that reaps `who`'s free balance. The
+ * `balances.Suspended` — an upstream (v8-only) event that reaps `who`'s free balance. The
  * registration pointed at a `handleBalanceSuspended` that never existed.
  */
 export const handleBalanceSuspended = async (event: SubstrateEvent): Promise<void> => {
@@ -1329,7 +1342,9 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
   await postTransition(args, {
     to: { address: who, pool: PolyxPool.Free },
     amount,
-    kind: MovementKind.Mint,
+    kind: (await isFeePaidToAuthor(event, who, amount))
+      ? MovementKind.BlockAuthorFee
+      : MovementKind.Mint,
   });
 };
 
@@ -1488,7 +1503,7 @@ const isChildIdentity = async (did: string): Promise<boolean> => {
 };
 
 /**
- * A9: `balances.DustLost` — account reaping. The remaining free balance is destroyed; the row was
+ * `balances.DustLost` — account reaping. The remaining free balance is destroyed; the row was
  * never written (`DustLost: []`).
  */
 export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
@@ -1510,7 +1525,7 @@ export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
 };
 
 // ---------------------------------------------------------------------------------------------
-// BalanceSet — a checkpoint, not a movement (resolves A1 structurally)
+// BalanceSet — a checkpoint, not a movement
 // ---------------------------------------------------------------------------------------------
 
 interface PoolDelta {
@@ -1697,9 +1712,9 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
   const [, rawBalance] = args.params;
 
   // `TreasuryReimbursement(payerDid, amount)` — the amount routed to the treasury out of a fee.
-  // The payer's full fee is already debited by `protocolFee.FeeCharged` /
-  // `transactionPayment.TransactionFeePaid`, so this is the treasury's credit, not a refund to
-  // the payer. (The pre-5.4.1 author split is not emitted and stays outside the ledger.)
+  // The payer's full fee is already debited where the fee is posted, so this is the treasury's
+  // credit, not a refund to the payer. The rest of the fee is the block author's, credited there
+  // (see `treasuryShareAt`).
   await postTransition(args, {
     to: { address: treasuryPalletAccount(), pool: PolyxPool.Free },
     amount: getBigIntValue(rawBalance),
@@ -1714,7 +1729,7 @@ export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promis
  * exist for (`TransactionFeePaid` adds a trailing `tip` that is not a POLYX movement), so these
  * are read positionally rather than through the shape table.
  *
- * **F9** — on v8 the fee is *already* a balance movement by the time this fires. The runtime pays
+ * On v8 the fee is *already* a balance movement by the time this fires. The runtime pays
  * fees through `FungibleAdapter<Balances, DealWithFees>`, so the chain emits
  * `balances.Withdraw{who, estimated}` (indexed as a `Burn`) first, then — when the estimate was
  * high — `balances.Deposit{who, estimated − actual}` refunding the payer (a `Mint`), and finally
@@ -1747,13 +1762,36 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
   const who = getTextValue(rawWho);
   const fee = getBigIntValue(rawAmount);
 
-  if (await refileFeeWithdrawal(args, who, fee)) {
+  // Only a v8 runtime pairs a fee with a `balances` event to re-file. Earlier runtimes used their own
+  // balances implementation and emit nothing of the kind — a full testnet replay has none before
+  // v8 — so looking for a withdrawal there cost store reads on every fee that could never find one.
+  // Decided by whether this extrinsic emitted a withdrawal at all, not by the block's spec label
+  // (see `extrinsicEmits`); when it did, it is one read for every burn in the extrinsic, shared by
+  // the payer and any subsidiser.
+  const pairedWithBalanceEvents = extrinsicEmits(
+    args.block,
+    args.extrinsicIdx,
+    'balances',
+    'Withdraw'
+  );
+  const burns = pairedWithBalanceEvents
+    ? await getAllByFields<PolyxEntry>('PolyxEntry', [
+        ['extrinsicId', '=', args.extrinsicId],
+        ['kind', '=', MovementKind.Burn],
+      ])
+    : [];
+
+  if (pairedWithBalanceEvents && (await refileFeeWithdrawal(args, burns, who, fee))) {
     return;
   }
 
   const payingKey = await activeSubsidiser(who);
 
-  if (payingKey && (await refileFeeWithdrawal(args, payingKey, fee))) {
+  if (
+    pairedWithBalanceEvents &&
+    payingKey &&
+    (await refileFeeWithdrawal(args, burns, payingKey, fee))
+  ) {
     return;
   }
 
@@ -1764,27 +1802,292 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
     amount: fee,
     kind: MovementKind.Fee,
   });
+
+  // Where the fee went. On v8 the author's `balances.Deposit` records it; before v8 the runtime paid
+  // the author through its own balances implementation and emitted nothing, so every fee left the
+  // payer and arrived nowhere — which the reconciler saw as validators holding more than the index
+  // said, block after block. The same test as above tells the two apart.
+  if (!pairedWithBalanceEvents) {
+    const splitAt = args.eventId === EventIdEnum.FeeCharged ? event.idx + 1 : event.idx - 1;
+
+    await creditBlockAuthor(args, fee, treasuryShareAt(args.block, splitAt, args.extrinsicIdx));
+  }
+};
+
+/**
+ * Whether the block's events show extrinsic `extrinsicIdx` emitting `section.method`.
+ *
+ * The fee paths decide which runtime they are in from what the extrinsic actually emitted, not from
+ * the block's reported spec version. That label comes from the dictionary's map of spec ranges,
+ * which starts each runtime late — by up to a few hundred blocks on testnet — so a gate on it
+ * misfiles the blocks either side of an upgrade: a fee counted twice, or not at all. What the
+ * runtime emitted cannot be mislabelled.
+ */
+const extrinsicEmits = (
+  block: SubstrateBlock,
+  extrinsicIdx: number | undefined,
+  section: string,
+  method: string
+): boolean =>
+  extrinsicIdx !== undefined &&
+  extrinsicEventIndices(block, extrinsicIdx).some(index => {
+    const { event } = (block.events ?? [])[index];
+
+    return event.section === section && event.method === method;
+  });
+
+/**
+ * The treasury's cut of a fee, announced by the event at `index` — `0` when that event is not one.
+ *
+ * Up to v5.4.0 the runtime split every fee rather than paying it all to the block author: 80% went
+ * to the treasury, which announced it as `treasury.TreasuryReimbursement`, and the remaining 20% to
+ * the author, unannounced. The treasury's event sits at a fixed point beside the fee it came from —
+ * right after a protocol fee's `FeeCharged`, and right before a transaction fee is settled (its
+ * `TransactionFeePaid` from v5.4.0, or the extrinsic's closing event before it) — so its position
+ * says which fee it is a cut of. From v5.4.2 fees go to the author whole and no such event appears.
+ */
+const treasuryShareAt = (block: SubstrateBlock, index: number, extrinsicIdx?: number): bigint => {
+  const record = (block.events ?? [])[index];
+
+  if (
+    extrinsicIdx === undefined ||
+    record?.event.section !== 'treasury' ||
+    record.event.method !== 'TreasuryReimbursement' ||
+    !extrinsicEventIndices(block, extrinsicIdx).includes(index)
+  ) {
+    return BigInt(0);
+  }
+
+  return BigInt(record.event.data[1].toString());
+};
+
+/** How many fee quotes a block keeps in flight at once. */
+const FEE_QUOTE_LANES = 16;
+
+/** Each block's fee quotes, held against the block itself so they go when it does. */
+const feeQuotes = new WeakMap<SubstrateBlock, Map<number, Promise<bigint | Error>>>();
+
+/**
+ * What the chain charged extrinsic `extrinsicIdx` — see `postUneventedTransactionFee`.
+ *
+ * The first question in a block requests the quote for every signed extrinsic in it that announced
+ * no fee, a few at a time, and later ones collect theirs. One at a time, a block of a few hundred
+ * transfers spent most of a minute waiting on the chain.
+ */
+const quoteUneventedFee = async (extrinsic: SubstrateExtrinsic): Promise<bigint> => {
+  let quotes = feeQuotes.get(extrinsic.block);
+
+  if (!quotes) {
+    quotes = requestFeeQuotes(extrinsic.block);
+    feeQuotes.set(extrinsic.block, quotes);
+  }
+
+  const quote =
+    quotes.get(extrinsic.idx) ??
+    quoteFee(extrinsic.block, extrinsic.extrinsic).catch((e: Error) => e);
+  const fee = await quote;
+
+  if (fee instanceof Error) {
+    throw fee;
+  }
+
+  return fee;
+};
+
+const quoteFee = async (
+  block: SubstrateBlock,
+  extrinsic: SubstrateExtrinsic['extrinsic']
+): Promise<bigint> => {
+  const info = await api.rpc.payment.queryInfo(extrinsic.toHex(), block.block.header.parentHash);
+
+  return BigInt(info.partialFee.toString());
+};
+
+/** Starts a quote for each extrinsic in `block` that may need one; failures resolve as the error. */
+const requestFeeQuotes = (block: SubstrateBlock): Map<number, Promise<bigint | Error>> => {
+  const pending = block.block.extrinsics
+    .map((extrinsic, idx) => ({ extrinsic, idx }))
+    .filter(
+      ({ extrinsic, idx }) =>
+        extrinsic.isSigned &&
+        extrinsicEventIndices(block, idx).length > 0 &&
+        !extrinsicEmits(block, idx, 'transactionPayment', 'TransactionFeePaid')
+    );
+  const settle: ((fee: bigint | Error) => void)[] = [];
+  const quotes = new Map(
+    pending.map(({ idx }, position) => [
+      idx,
+      new Promise<bigint | Error>(resolve => {
+        settle[position] = resolve;
+      }),
+    ])
+  );
+
+  let next = 0;
+  const lane = async (): Promise<void> => {
+    while (next < pending.length) {
+      const position = next;
+      next += 1;
+      settle[position](await quoteFee(block, pending[position].extrinsic).catch((e: Error) => e));
+    }
+  };
+
+  for (let started = 0; started < FEE_QUOTE_LANES; started += 1) {
+    void lane();
+  }
+
+  return quotes;
+};
+
+/**
+ * Posts the transaction fee of a signed extrinsic whose runtime announced none.
+ *
+ * `transactionPayment.TransactionFeePaid` first appears at v5.4.0 (spec 5004000). Before it the fee was charged
+ * and paid to the block author with no event at all — on testnet, every transaction fee in the
+ * first 8.48 million blocks — so each one was missing twice over: the signer kept POLYX it had
+ * spent, and the author never received it. The reconciler caught both halves, as accounts holding
+ * less than the index said and validators holding more.
+ *
+ * The fee is priced the way the chain priced it: `payment.queryInfo` at the parent block, which is
+ * the state the fee was charged against. Checked against the replay, it reproduces the missing
+ * amount exactly — two unrelated accounts, 1,851 and 1,231 extrinsics of transfers and committee
+ * votes, each to the unit. The runtime charged the declared weight in this era, so there is no
+ * post-dispatch refund to account for.
+ *
+ * Posted against the extrinsic's closing event — see `indexClosingEvent`.
+ */
+export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+  const { block } = extrinsic;
+
+  // Every signed extrinsic from v5.4.0 on announces its fee, even a zero one — so an announced fee
+  // is the one sure sign this runtime needs nothing reconstructed.
+  if (
+    !extrinsic.extrinsic.isSigned ||
+    extrinsicEmits(block, extrinsic.idx, 'transactionPayment', 'TransactionFeePaid')
+  ) {
+    return;
+  }
+
+  // Found before the chain is asked anything: an extrinsic with no event of its own in the block
+  // has nothing to settle a fee against.
+  const closing = closingEventOf(extrinsic);
+
+  if (!closing) {
+    return;
+  }
+
+  const fee = await quoteUneventedFee(extrinsic);
+
+  if (fee === BigInt(0)) {
+    return;
+  }
+
+  await indexClosingEvent(extrinsic);
+
+  const args = extractArgs(closing);
+  const signer = extrinsic.extrinsic.signer.toString();
+  // Subsidised like any other pre-v8 transaction fee: for every call but the relayer's own.
+  const payingKey = await activeSubsidiser(signer);
+  const payer =
+    payingKey && extrinsic.extrinsic.method.section.toLowerCase() !== 'relayer'
+      ? payingKey
+      : signer;
+
+  await postTransition(args, {
+    from: { address: payer, pool: PolyxPool.Free },
+    amount: fee,
+    kind: MovementKind.Fee,
+  });
+  await creditBlockAuthor(args, fee, treasuryShareAt(block, closing.idx - 1, extrinsic.idx));
+};
+
+/**
+ * Pays a pre-v8 fee to the block author — what is left of it once the treasury's announced cut is
+ * taken, which is all of it from v5.4.2 (see `treasuryShareAt`). With no author the chain drops
+ * that part instead, so nothing is credited. A treasury event larger than the fee cannot be its
+ * cut, and leaves the fee whole.
+ */
+const creditBlockAuthor = async (
+  args: HandlerArgs,
+  fee: bigint,
+  treasuryShare: bigint
+): Promise<void> => {
+  const author = await blockAuthor(args.block);
+  const amount = treasuryShare <= fee ? fee - treasuryShare : fee;
+
+  if (!author || amount === BigInt(0)) {
+    return;
+  }
+
+  await postTransition(args, {
+    to: { address: author, pool: PolyxPool.Free },
+    amount,
+    kind: MovementKind.BlockAuthorFee,
+  });
+};
+
+/**
+ * Whether a v8 `balances.Deposit` is the block author being paid a fee, rather than new POLYX.
+ *
+ * The runtime pays each fee to the author through a `Deposit` it emits at a fixed point: a
+ * transaction fee's immediately before `TransactionFeePaid`, a protocol fee's immediately after
+ * `FeeCharged`. Adjacency and the amount identify it; the author check rules out the one lookalike —
+ * a payer's refund that happens to equal the fee, sitting in the same place when no author was paid.
+ */
+const isFeePaidToAuthor = async (
+  event: SubstrateEvent,
+  who: string,
+  amount: bigint
+): Promise<boolean> => {
+  const records = (event.block.events ?? []) as unknown as {
+    event: { section: string; method: string; data: { toString(): string }[] };
+  }[];
+  const amountOf = (record?: { event: { data: { toString(): string }[] } }) =>
+    record?.event.data[1] !== undefined ? BigInt(record.event.data[1].toString()) : undefined;
+
+  const next = records[event.idx + 1];
+  const previous = records[event.idx - 1];
+  const beforeTransactionFee =
+    next?.event.section === 'transactionPayment' &&
+    next.event.method === 'TransactionFeePaid' &&
+    amountOf(next) === amount;
+  const afterProtocolFee =
+    previous?.event.section === 'protocolFee' &&
+    previous.event.method === 'FeeCharged' &&
+    amountOf(previous) === amount;
+
+  if (!beforeTransactionFee && !afterProtocolFee) {
+    return false;
+  }
+
+  return (await blockAuthor(event.block)) === who;
 };
 
 /**
  * Re-files `payer`'s fee withdrawal in this extrinsic, and its refund, as the fee. `false` when
  * there is none.
+ *
+ * Which burn is the fee's is decided by where it sits, not by its size: the call itself can burn
+ * from the same account, and picking by amount could re-file that burn as the fee instead. The two
+ * fees are withdrawn at fixed points. A transaction fee is withdrawn before the call runs, so it is
+ * the payer's first burn in the extrinsic; a protocol fee is withdrawn by the call, immediately
+ * before `FeeCharged` announces it. The amount is only checked, never searched on: a transaction
+ * fee's withdrawal is the estimate, never less than what was finally charged, and a protocol fee's
+ * is exact.
  */
 const refileFeeWithdrawal = async (
   args: HandlerArgs,
+  burns: PolyxEntry[],
   payer: string,
   fee: bigint
 ): Promise<boolean> => {
-  // The withdrawal covers the fee, so it is the exact match or the smallest larger burn — larger
-  // when part of it is about to be refunded. Anything smaller belongs to a different charge.
-  const burns = await findExtrinsicEntries(args, MovementKind.Burn, payer);
-  const withdrawal =
-    burns.find(row => row.amountAbs === fee) ??
-    burns
-      .filter(row => row.amountAbs > fee)
-      .sort((a, b) => (a.amountAbs < b.amountAbs ? -1 : 1))[0];
+  const own = burns.filter(row => row.accountId === payer);
+  const isProtocolFee = args.eventId === EventIdEnum.FeeCharged;
+  const withdrawal = isProtocolFee
+    ? nearestPreceding(own, args)
+    : [...own].sort((a, b) => (a.movementId < b.movementId ? -1 : 1))[0];
 
-  if (!withdrawal) {
+  if (!withdrawal || (isProtocolFee ? withdrawal.amountAbs !== fee : withdrawal.amountAbs < fee)) {
     return false;
   }
 
@@ -1816,13 +2119,13 @@ const activeSubsidiser = async (user: string): Promise<string | undefined> => {
 };
 
 // ---------------------------------------------------------------------------------------------
-// Staking — era-dependent, and inverted at v8 (defect A10, resolves A6)
+// Staking — era-dependent, and inverted at v8
 // ---------------------------------------------------------------------------------------------
 
 /**
  * ≤ v7.4: bonding is `set_lock(STAKING_ID, …)` — **no balance moves**. `Bonded`/`Unbonded`/
  * `Withdrawn` maintain the staking lock only, so `frozen` reflects it; they write **no
- * `PolyxEntry`**. This is the A6 correction — the old `type: Bonded` rows asserted movements
+ * `PolyxEntry`**. This is a correction — the old `type: Bonded` rows asserted movements
  * that never happened.
  *
  * v8: bonding is a Hold. The balance-side movement is the paired `balances.Held{reason:Staking}`
@@ -1863,7 +2166,7 @@ const stakingStash = (decoded: Record<string, Codec>): string | undefined =>
  * The account a reward was actually paid to.
  *
  * v8: the `Rewarded` event carries the `RewardDestination`. Pre-v8 it carries only the stash, so
- * `staking.payee(stash)` is read from chain storage (A15) — measured on mainnet to matter for a
+ * `staking.payee(stash)` is read from chain storage — measured on mainnet to matter for a
  * large share of pre-v8 rewards.
  */
 const rewardRecipient = async (
@@ -1984,7 +2287,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 /**
  * `staking.Slash` / `Slashed` — a real movement at both eras, but out of a different pool.
  *
- * **F10** — on v8 a staking slash is taken from the *held* balance, not from free:
+ * On v8 a staking slash is taken from the *held* balance, not from free:
  * `slashing::do_slash` → `asset::slash` → `Currency::slash(&HoldReason::Staking, …)` →
  * `hold::Balanced::slash`, which calls `decrease_balance_on_hold` and then `done_slash` — and the
  * runtime sets `DoneSlashHandler = ()`, so no `Held`/`Released` is emitted and `staking.Slashed`
@@ -2059,7 +2362,13 @@ const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> =
     return;
   }
 
-  await ensureBalanceRow(address, args.blockId, args.block.timestamp, args.blockEventId, args.block);
+  await ensureBalanceRow(
+    address,
+    args.blockId,
+    args.block.timestamp,
+    args.blockEventId,
+    args.block
+  );
   await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
 };
 

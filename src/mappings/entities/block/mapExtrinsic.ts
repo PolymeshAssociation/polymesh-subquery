@@ -1,15 +1,17 @@
 import { SubstrateExtrinsic } from '@subql/types';
 import { CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
 import {
-  ResolvedEthTransact,
+  blockTime,
   camelToSnakeCase,
   evmAddressFromSs58,
   getOrCreateAccount,
   getSignerAddress,
   padId,
+  ResolvedEthTransact,
   resolveEthTransact,
 } from '../../../utils';
 import { toEnum } from '../common';
+import { postUneventedTransactionFee } from '../identities/mapPolyxLedger';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
@@ -124,7 +126,7 @@ const handleEvmAccountMapping = async (extrinsic: SubstrateExtrinsic): Promise<v
     evmAddress,
     address,
     mapped: camelToSnakeCase(extrinsic.extrinsic.method.method) === 'map_account',
-    datetime: extrinsic.block.timestamp,
+    datetime: blockTime(extrinsic.block),
     blockId: padId(extrinsic.block.block.header.number.toString()),
   });
 };
@@ -147,6 +149,9 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
 
   await createExtrinsic(extrinsic).save();
 
+  // A fee its runtime charged without announcing it — see `postUneventedTransactionFee`.
+  await postUneventedTransactionFee(extrinsic);
+
   if (resolved) {
     // `EvmTransaction` references the extrinsic, so it has to be written after it
     await createEvmTransaction(extrinsic, resolved);
@@ -155,7 +160,7 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
     await getOrCreateAccount(
       resolved.fromAddress,
       padId(extrinsic.block.block.header.number.toString()),
-      extrinsic.block.timestamp
+      blockTime(extrinsic.block)
     );
   } else if (isAccountMappingCall(extrinsic)) {
     await handleEvmAccountMapping(extrinsic);

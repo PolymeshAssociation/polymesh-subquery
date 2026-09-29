@@ -46,6 +46,36 @@ describe('handleCheckpointCreated', () => {
   });
 
   /**
+   * `datetime` is the row's own snapshot date and its column is not nullable, so an unreadable moment
+   * is reported and the row skipped — writing null would fail the insert and take the block with it.
+   * No spec version is known to omit it; this pins the two lines that treat it as optional to one
+   * answer.
+   */
+  it('skips the row and records an anomaly when the moment does not read', async () => {
+    const db = mockStore();
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleCheckpointCreated(
+      tupleEvent({
+        section: 'checkpoint',
+        method: 'CheckpointCreated',
+        data: [
+          codec(TEST_DID),
+          codec(RAW_ASSET_ID),
+          codec(5),
+          codec(1_000_000),
+          // an empty Moment: what `getDateValue` reads as absent
+          codec(''),
+        ],
+      })
+    );
+
+    // nothing was written at all: the store never saw a Checkpoint
+    expect(db.Checkpoint).toBeUndefined();
+    expect(anomaly).toHaveBeenCalled();
+  });
+
+  /**
    * `CheckpointCreated` names the moment but not the schedule, and two schedules can fall due at the
    * same moment — so the timestamp alone is ambiguous. The chain emits them in ascending schedule
    * order, which is what makes the pairing exact.
@@ -53,13 +83,32 @@ describe('handleCheckpointCreated', () => {
   describe('linking the schedule that produced it', () => {
     const MOMENT = 1_700_000_000_000;
 
-    const created = (checkpointId: number, did: unknown, idx: number) =>
+    const params = (checkpointId: number, did: unknown) => [
+      did,
+      codec(RAW_ASSET_ID),
+      codec(checkpointId),
+      codec(1_000),
+      codec(MOMENT),
+    ];
+
+    const created = (checkpointId: number, did: unknown, idx: number, events: unknown[] = []) =>
       tupleEvent({
         section: 'checkpoint',
         method: 'CheckpointCreated',
-        data: [did, codec(RAW_ASSET_ID), codec(checkpointId), codec(1_000), codec(MOMENT)],
+        data: params(checkpointId, did),
         idx,
+        events,
       });
+
+    /** The block's own event list, which is what the schedule pairing counts its position against. */
+    const inBlock = (...emitted: [number, unknown][]) =>
+      emitted.map(([checkpointId, did]) => ({
+        event: {
+          section: 'checkpoint',
+          method: 'CheckpointCreated',
+          data: params(checkpointId, did),
+        },
+      }));
 
     const seedSchedules = async (assetId: string) => {
       const db = mockStore({
@@ -86,12 +135,38 @@ describe('handleCheckpointCreated', () => {
     it('assigns two schedules due at one moment in ascending schedule order', async () => {
       const assetId = await assetIdAt(8_000_000);
       const db = await seedSchedules(assetId);
+      // Both fall due in the same block, which is what makes the position exact.
+      const records = inBlock([5, codec(undefined)], [6, codec(undefined)]);
 
-      await handleCheckpointCreated(created(5, codec(undefined), 0));
-      await handleCheckpointCreated(created(6, codec(undefined), 1));
+      await handleCheckpointCreated(created(5, codec(undefined), 0, records));
+      await handleCheckpointCreated(created(6, codec(undefined), 1, records));
 
       expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBe(`${assetId}/1`);
       expect(db.Checkpoint[`${assetId}/6`].scheduleId).toBe(`${assetId}/3`);
+    });
+
+    /**
+     * A list of timestamps round-trips through the store as JSON, so the `Date`s written on the way
+     * in come back out as ISO strings. That is the shape the pairing sees on a live index, and a
+     * comparison that assumed a `Date` threw on the first schedule that declared its own moments.
+     */
+    it('pairs a schedule whose moments came back from the store as strings', async () => {
+      const assetId = await assetIdAt(8_000_000);
+      const db = mockStore({
+        CheckpointSchedule: {
+          [`${assetId}/1`]: {
+            id: `${assetId}/1`,
+            assetId,
+            scheduleId: 1,
+            scheduledCheckpoints: [new Date(MOMENT).toISOString()],
+          },
+        },
+      });
+      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
+
+      await handleCheckpointCreated(created(5, codec(undefined), 0));
+
+      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBe(`${assetId}/1`);
     });
 
     it('leaves a manually created checkpoint unlinked', async () => {

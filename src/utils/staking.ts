@@ -73,7 +73,7 @@ export const readRewardDestination = (
  * Per-block caches of the two chain reads every staking path starts with: `staking.payee(stash)`
  * and `staking.bonded(stash)`.
  *
- * **Block scoped, not process lifetime (F6).** `set_payee` and `set_controller` emit no event, so
+ * **Block scoped, not process lifetime.** `set_payee` and `set_controller` emit no event, so
  * there is nothing a longer-lived entry could be invalidated on, and both went stale silently and
  * permanently: a changed payee kept crediting later rewards to the old destination, and a changed
  * controller made `staking.ledger(oldController)` read empty — which `readStakingLock` reports as
@@ -114,12 +114,12 @@ export const __resetStakingCaches = (): void => {
 /**
  * Resolves where a pre-v8 staking reward for `stash` was actually paid.
  *
- * Defect A15: the pre-8.x `Reward`/`Rewarded` event carries only the stash and the amount. A
+ * The pre-8.x `Reward`/`Rewarded` event carries only the stash and the amount. A
  * staker who set a payee of `Controller` or an explicit `Account` received the POLYX somewhere
  * the event does not name. Measured across a spread of eras on mainnet, a large share of pre-v8
  * rewards went somewhere other than the stash, so the destination is read from
  * `staking.payee(stash)` — chain storage, at the block being indexed (`api.query` targets the
- * current block). Cheap during the D5 genesis replay; needs an archive node afterwards, which is
+ * current block). Cheap during a genesis replay; needs an archive node afterwards, which is
  * why it is done now rather than deferred.
  */
 export const resolveLegacyRewardDestination = async (
@@ -177,7 +177,7 @@ export const resolveLegacyRewardDestination = async (
  * Falls back to the stash — the common case, where stash and controller are the same account —
  * but **does not cache that fallback**: `bonded(stash)` is also empty for a stash that has not
  * bonded yet, and pinning `stash` as its answer would keep it wrong for the rest of the block
- * (F6). Only a controller the chain actually named is cached.
+ *. Only a controller the chain actually named is cached.
  */
 export const resolveController = async (stash: string, blockId: string): Promise<string> => {
   const controllers = cachesFor(blockId).controllers;

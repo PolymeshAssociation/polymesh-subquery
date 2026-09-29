@@ -3,7 +3,7 @@ import { SubstrateBlock } from '@subql/types';
 import { Distribution, HolderKind, Portfolio } from '../types';
 import { getOrCreateAccount } from './accounts';
 import { getAssetId } from './assets';
-import { extractNumber, is8xChain } from './common';
+import { blockTime, extractNumber, is8xChain } from './common';
 
 /**
  * A resolved asset holder, carrying the grain it was resolved at.
@@ -151,7 +151,7 @@ export const extractAssetHolder = async (
     return await meshAssetHolderToAssetHolder(
       value as MeshAssetHolder,
       blockId,
-      block.timestamp,
+      blockTime(block),
       blockEventId
     );
   }

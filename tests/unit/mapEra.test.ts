@@ -5,6 +5,7 @@
  * `StakersElected` time), not decoded from the event. `EraPaid` then closes the era it opened.
  */
 import { handleEraPaid, handleStakersElected } from '../../src/mappings/entities/events/mapEra';
+import { IndexerAnomaly } from '../../src/types';
 import {
   mockGetByFields,
   mockLedgerAccountQuery,
@@ -59,16 +60,22 @@ describe('handleStakersElected', () => {
     expect(db.Validator[VAL_NEW]).toMatchObject({ accountId: VAL_NEW, isActive: true });
   });
 
-  it('is a no-op when the current era cannot be read', async () => {
+  /**
+   * The event has no payload, so the era it opens is only knowable from chain state. Without it there
+   * is nothing to write — but an era boundary the index skipped is a gap, so it is reported.
+   */
+  it('writes nothing and reports the gap when the current era cannot be read', async () => {
     const db = mockStore();
     mockGetByFields(db, 'Validator');
     (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
     await expect(
       handleStakersElected(namedEvent({ section: 'staking', method: 'StakersElected', fields: {} }))
     ).resolves.not.toThrow();
 
     expect(Object.keys(db.Era ?? {})).toHaveLength(0);
+    expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
   it('still records the Era, but leaves the active-validator set untouched, when the validator-set read fails', async () => {
@@ -85,6 +92,7 @@ describe('handleStakersElected', () => {
     });
     mockGetByFields(db, 'Validator');
     mockElection(5, 'unreadable');
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
     await handleStakersElected(
       namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
@@ -93,6 +101,8 @@ describe('handleStakersElected', () => {
     expect(Object.values(db.Era)).toHaveLength(1);
     // A failed read must not be treated as "nobody elected" — the prior set stays active.
     expect(db.Validator[VAL_OLD].isActive).toBe(true);
+    // …which is a decision about what to keep, not a reason to keep quiet about it
+    expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
   it('handles the pre-v7 StakingElection the same way, ignoring its ElectionCompute payload', async () => {

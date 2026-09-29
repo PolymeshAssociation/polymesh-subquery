@@ -43,7 +43,7 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
  * issuer per claim. `issuer` is deliberately part of the id: without it, two trusted
  * issuers attesting the same target/type/scope collide on the same row, and the SDK's
  * `issuerId: { in: $trustedClaimIssuers }` filter silently loses whichever claim was
- * written first (defect A12). Block/eventIdx are deliberately NOT part of the id — the
+ * written first. Block/eventIdx are deliberately NOT part of the id — the
  * SDK's claims query is a current-state question ("does T hold a valid claim from A?"),
  * and an append-only id would force every consumer to add a "latest per group" filter
  * they do not have today.
@@ -191,7 +191,7 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
     /**
      * With issuer-scoped ids the lookup above is exact, so a miss here means the revoked claim
      * was never indexed, or was indexed under a different id, rather than merely being one of
-     * several rows sharing an id as it silently was before A12 was fixed
+     * several rows sharing an id as it silently did before the issuer was part of the id
      */
     await recordAnomaly({
       kind: AnomalyKind.MissingReferencedEntity,

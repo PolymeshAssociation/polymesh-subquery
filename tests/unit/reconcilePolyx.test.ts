@@ -13,6 +13,7 @@
 import { SubstrateBlock } from '@subql/types';
 import {
   __resetOnChainCache,
+  driftBetween,
   reconcileAccount,
   reconcilePending,
   reconcileStats,
@@ -171,7 +172,7 @@ describe('reconcileAccount / reconcilePending', () => {
   });
 
   it('rebuilds v8 holds from chain, so bonded and otherReserved stay consistent', async () => {
-    // F4: the correction used to file the whole frozen amount under the `'staking '` lock on every
+    // The correction used to file the whole frozen amount under the `'staking '` lock on every
     // chain version, and never touched `holds` — so on v8 `bonded` counted an unrelated freeze,
     // `SUM(holds)` no longer matched the corrected `reserved`, and the next `Unlocked` (which
     // reads a `'staking '` lock on a v8 account as an un-migrated pre-v8 lock) wiped `frozen`.
@@ -360,6 +361,33 @@ describe('reconcileAccount / reconcilePending', () => {
     // agreed, so no anomaly — but the check demonstrably ran
     expect(anomalies()).toHaveLength(0);
     expect(reconcileStats()).toMatchObject({ compared: 1, drifted: 0 });
+  });
+
+  /**
+   * `drifted=0` means either that every balance was right or that the check cannot fail. The first
+   * real comparison is repeated against the same chain snapshot pushed off by the tolerance, which
+   * a working comparison has to flag — and nothing is written for it.
+   */
+  it('proves on its first comparison that it can see a drift, without recording one', async () => {
+    setDerived({ free: P(1000), total: P(1000), transferable: P(1000) });
+    setChain(P(1000).toString(), '0', '0');
+
+    expect(reconcileStats().positiveControl).toBe('pending');
+
+    await reconcile(9000, { force: true });
+
+    expect(reconcileStats().positiveControl).toBe('passed');
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('flags a drift of exactly the tolerance, in each pool it compares', () => {
+    const chain = { free: P(1000), reserved: P(10), frozen: P(5) };
+
+    expect(driftBetween(chain, chain)).toEqual([]);
+    expect(driftBetween({ ...chain, free: chain.free + P(100) }, chain)).toHaveLength(1);
+    expect(driftBetween({ ...chain, reserved: chain.reserved - P(100) }, chain)).toHaveLength(1);
+    expect(driftBetween({ ...chain, frozen: chain.frozen + P(100) }, chain)).toHaveLength(1);
+    expect(driftBetween({ ...chain, free: chain.free + P(99) }, chain)).toEqual([]);
   });
 
   it('counts a drift as both compared and drifted', async () => {

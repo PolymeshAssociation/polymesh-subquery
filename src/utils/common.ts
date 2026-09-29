@@ -20,7 +20,7 @@ export const padId = (id: string): string => {
 /**
  * Zero-pad a bare chain-assigned numeric id (an instruction / venue / PIP / authorization
  * sequence stored as a `String` id) so a lexicographic `orderBy: ID_DESC` is also a numeric
- * one — otherwise `"9999"` ranks above `"14712"` (defect A14 / decision D12). This is `padId`
+ * one — otherwise `"9999"` ranks above `"14712"`. This is `padId`
  * with an intent-revealing name: the same 10-digit width covers any chain sequence for the
  * life of the chain, and it must be applied at both construction and every lookup so stored
  * ids and the FK references to them stay consistent.
@@ -358,8 +358,7 @@ const hydrate = <T extends Entity>(entityName: string, rows: T[]): T[] => {
  * that used to read a set and narrow it in JavaScript can push the narrowing into the query.
  *
  * Ordered by `id`. Every entity's id is unique, so offset paging over it is a total order; the
- * filter columns are not, and paging over one of those repeats a row and skips another (defect
- * A13).
+ * filter columns are not, and paging over one of those repeats a row and skips another.
  *
  * Note the store searches its write cache before the database, so a page can include rows
  * written earlier in this block.
@@ -388,4 +387,19 @@ export const getAllByFields = async <T extends Entity>(
 
     offset += page.length;
   }
+};
+
+/**
+ * When a block was produced.
+ *
+ * SubQuery types a block's timestamp as optional because some chains have no timestamp pallet.
+ * Every Polymesh block sets one in its first inherent, so a block without it is not one this index
+ * can make sense of — it fails loudly here rather than a date column being filled with a guess.
+ */
+export const blockTime = (block: SubstrateBlock): Date => {
+  if (!block.timestamp) {
+    throw new Error(`Block ${block.block.header.number.toString()} carries no timestamp`);
+  }
+
+  return block.timestamp;
 };

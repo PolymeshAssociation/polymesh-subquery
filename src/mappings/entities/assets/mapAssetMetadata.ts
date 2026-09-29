@@ -94,7 +94,7 @@ export const handleRegisterAssetMetadataLocalType = async (
   const { assetId: rawAssetId, name: rawName, localKeyId: rawKeyId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  await getAsset(assetId);
+  await getAsset(assetId, event);
 
   await upsertMetadata(
     assetId,
@@ -244,7 +244,7 @@ export const handleAssetTypeChanged = async (event: SubstrateEvent): Promise<voi
   const { assetId: rawAssetId, assetType: rawType } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
 
   asset.type = await getAssetType(rawType, block, eventIdx);
   asset.updatedEventId = blockEventId;

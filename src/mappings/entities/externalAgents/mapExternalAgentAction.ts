@@ -11,6 +11,7 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
+import { assetOfCollection } from '../assets/mapNfts';
 
 /**
  * Subscribes to the events related to external agents
@@ -305,12 +306,16 @@ class ExternalAgentEventsManager {
        * `NFTPortfolioUpdated` / `NFTHoldingsUpdated` stay out for the reason `asset.Transfer` does:
        * they fire on every transfer, not only on agent-permissioned calls.
        *
-       * `IssuedNFT` is the one gap. Pre-6.0 it is `(IdentityId, NFTCollectionId, NFTId)` — it names
-       * the collection, never the asset or ticker — so it cannot be resolved by parameter position
-       * and would need a collection→asset lookup this table has no shape for. Recorded here as a
-       * known omission rather than left to look like an oversight.
+       * `IssuedNFT` names the collection rather than the asset — pre-6.0 it is `(IdentityId,
+       * NFTCollectionId, NFTId)` — so it resolves through the collection's own storage instead of
+       * by parameter position.
        */
       .add(ModuleIdEnum.nft, [EventIdEnum.NftCollectionCreated, EventIdEnum.RedeemedNFT], 1)
+      .add(
+        ModuleIdEnum.nft,
+        [EventIdEnum.IssuedNFT],
+        async (params, block) => (await assetOfCollection(params[1], block)) as string
+      )
       .add(
         ModuleIdEnum.externalagents,
         [

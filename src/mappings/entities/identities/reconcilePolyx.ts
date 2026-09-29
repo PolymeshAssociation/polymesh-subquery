@@ -16,7 +16,7 @@ import {
 } from './mapPolyxLedger';
 
 /**
- * In-flight reconciliation (D11).
+ * In-flight reconciliation.
  *
  * `api.query` targets the block being indexed, and `.at` is unsupported, so authoritative state
  * can only be read while that block is current, and no longer once the next block starts.
@@ -233,26 +233,36 @@ export const reconcileAccount = async (
 let comparedCount = 0;
 let driftedCount = 0;
 let skippedStaleCount = 0;
-let flushCount = 0;
+let ledgerWrites = 0;
 let lastReportedAt = 0;
 
 /**
- * Report every N *flushes*, not every N comparisons.
+ * Report every N *ledger writes*, not every N comparisons.
  *
  * Keyed on comparisons, the report could never fire while `compared` stayed 0 — which is the one
  * state it exists to make visible, and the same shape of un-fireable condition that left the
- * reconciler dead in the first place. Every ledger write counts as a flush, so a silent reconciler
- * now says so out loud.
+ * reconciler dead in the first place. Keying it on something that happens whether or not anything
+ * is compared is the point, so a silent reconciler says so out loud.
+ *
+ * The interval is scaled for what is being counted. This used to tick once per block and report
+ * every 2,000 of them; it now ticks once per balance-moving write, of which an active block has
+ * several, so the interval is raised to keep roughly the old cadence in blocks. The rate is
+ * data-dependent either way — a quiet stretch of chain reports less often — which is acceptable for
+ * a liveness signal but is why the number is not exact.
+ *
+ * One sample per worker per run is lost: the queue from the last block a worker processes is never
+ * compared, because nothing follows it to trigger the flush.
  */
-const REPORT_EVERY_FLUSHES = 2000;
+const REPORT_EVERY_LEDGER_WRITES = 20_000;
 
 /** Test hook — the counters are process-lifetime. */
 export const __resetReconcileCounters = (): void => {
   comparedCount = 0;
   driftedCount = 0;
   skippedStaleCount = 0;
-  flushCount = 0;
+  ledgerWrites = 0;
   lastReportedAt = 0;
+  positiveControl = 'pending';
 };
 
 /** The running liveness tally, for assertions after a resync. */
@@ -260,22 +270,24 @@ export const reconcileStats = (): {
   compared: number;
   drifted: number;
   skippedStale: number;
+  positiveControl: typeof positiveControl;
 } => ({
   compared: comparedCount,
   drifted: driftedCount,
   skippedStale: skippedStaleCount,
+  positiveControl,
 });
 
 const maybeReport = (): void => {
-  if (flushCount - lastReportedAt < REPORT_EVERY_FLUSHES) {
+  if (ledgerWrites - lastReportedAt < REPORT_EVERY_LEDGER_WRITES) {
     return;
   }
 
-  lastReportedAt = flushCount;
+  lastReportedAt = ledgerWrites;
 
   logger.info(
     `POLYX reconciliation: compared=${comparedCount} drifted=${driftedCount} ` +
-      `skippedStale=${skippedStaleCount} over ${flushCount} flushes`
+      `skippedStale=${skippedStaleCount} positiveControl=${positiveControl} over ${ledgerWrites} ledger writes`
   );
 };
 
@@ -287,7 +299,7 @@ const maybeReport = (): void => {
  * only complete once the block is.
  */
 export const reconcilePending = async (block: SubstrateBlock): Promise<void> => {
-  flushCount += 1;
+  ledgerWrites += 1;
   maybeReport();
 
   if (pending.size === 0 || blockNumber(block) === pendingBlock) {
@@ -300,6 +312,62 @@ export const reconcilePending = async (block: SubstrateBlock): Promise<void> => 
 
   for (const [address, entry] of queued) {
     await reconcileOne(address, entry);
+  }
+};
+
+/** How a derived balance differs from chain state, one entry per pool beyond the tolerance. */
+export const driftBetween = (
+  derived: Pick<AccountBalance, 'free' | 'reserved' | 'frozen'>,
+  onChain: Pick<OnChain, 'free' | 'reserved' | 'frozen'>
+): string[] => {
+  const drifts: string[] = [];
+
+  if (abs(derived.free - onChain.free) >= MIN_DRIFT) {
+    drifts.push(`free ${derived.free} vs ${onChain.free}`);
+  }
+  if (abs(derived.reserved - onChain.reserved) >= MIN_DRIFT) {
+    drifts.push(`reserved ${derived.reserved} vs ${onChain.reserved}`);
+  }
+  if (abs(derived.frozen - onChain.frozen) >= MIN_DRIFT) {
+    drifts.push(`frozen ${derived.frozen} vs ${onChain.frozen}`);
+  }
+
+  return drifts;
+};
+
+/**
+ * The reconciler's positive control: proof, once per process, that it can see a drift at all.
+ *
+ * `drifted=0` means either that every balance checked was right or that the check cannot fail,
+ * and the counters alone cannot tell those apart — the same blind spot the liveness counter closes
+ * for `compared=0`. So the first real comparison is repeated against a copy of the same chain
+ * snapshot pushed off by exactly the tolerance, which a working comparison must flag. It uses the
+ * real chain values rather than a fixture, so a field mix-up or a threshold that has drifted is
+ * caught the same way a broken comparison is. Nothing is written for it: a deliberate anomaly would
+ * sit in every run's drift count, and the result is reported in the log alongside the counters.
+ */
+let positiveControl: 'pending' | 'passed' | 'failed' = 'pending';
+
+const runPositiveControl = (address: string, onChain: OnChain): void => {
+  if (positiveControl !== 'pending') {
+    return;
+  }
+
+  const canary = {
+    free: onChain.free + MIN_DRIFT,
+    reserved: onChain.reserved,
+    frozen: onChain.frozen,
+  };
+  positiveControl = driftBetween(canary, onChain).length > 0 ? 'passed' : 'failed';
+
+  if (positiveControl === 'failed') {
+    logger.error(
+      `POLYX reconciliation positive control FAILED: a drift of ${MIN_DRIFT} on ${address} went undetected, so no drifted count from this process can be trusted`
+    );
+  } else {
+    logger.info(
+      `POLYX reconciliation positive control passed: a drift of ${MIN_DRIFT} on ${address} was detected`
+    );
   }
 };
 
@@ -336,17 +404,9 @@ const reconcileOne = async (
   // Counted here, where a derived balance is genuinely measured against chain state — not at
   // queue time, which says only that a comparison was intended.
   comparedCount += 1;
+  runPositiveControl(address, onChain);
 
-  const drifts: string[] = [];
-  if (abs(balance.free - onChain.free) >= MIN_DRIFT) {
-    drifts.push(`free ${balance.free} vs ${onChain.free}`);
-  }
-  if (abs(balance.reserved - onChain.reserved) >= MIN_DRIFT) {
-    drifts.push(`reserved ${balance.reserved} vs ${onChain.reserved}`);
-  }
-  if (abs(balance.frozen - onChain.frozen) >= MIN_DRIFT) {
-    drifts.push(`frozen ${balance.frozen} vs ${onChain.frozen}`);
-  }
+  const drifts = driftBetween(balance, onChain);
 
   if (drifts.length === 0) {
     return;

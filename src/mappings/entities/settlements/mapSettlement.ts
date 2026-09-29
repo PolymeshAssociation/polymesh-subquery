@@ -159,7 +159,7 @@ const updateLegs = async (
 ): Promise<void> => {
   const legs = await getAllByFields<Leg>('Leg', [['instructionId', '=', instructionId]]);
 
-  // A19: only the legs that actually gained a signer address are rewritten. `getSignerAddress`
+  // Only the legs that actually gained a signer address are rewritten. `getSignerAddress`
   // returns undefined on the scheduled/unsigned execution paths, which used to rewrite every leg
   // of the instruction with no content change.
   const updatedLegs = legs.flatMap(leg => {
@@ -180,7 +180,7 @@ const updateLegs = async (
 };
 
 /**
- * The chain's instruction id is a bare numeric sequence. Zero-pad it (D12 / A14) so
+ * The chain's instruction id is a bare numeric sequence. Zero-pad it so
  * `Instruction.id` and every FK that references it (`Leg`, `InstructionParty`,
  * `InstructionAffirmation`, `InstructionEvent`, `AssetTransaction.instructionId`) sort
  * numerically under `ID_DESC`. Every construction and every lookup routes through here.

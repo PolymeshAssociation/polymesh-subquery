@@ -29,7 +29,7 @@ import {
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
-import { upsertAccount } from '../../../utils/accounts';
+import { restampPositionIdentity, upsertAccount } from '../../../utils/accounts';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
@@ -391,6 +391,7 @@ const unlinkAccount = async (
   account.updatedEventId = blockEventId;
 
   await account.save();
+  await restampPositionIdentity(address, undefined, blockEventId);
 };
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
@@ -402,7 +403,10 @@ export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise
   await Promise.all(
     addresses.flatMap(address => [
       unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
-      closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
+      closeIdentityKeys(
+        { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+        blockEventId
+      ),
     ])
   );
 };
@@ -415,7 +419,10 @@ export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => 
 
   await Promise.all([
     unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
-    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
+    closeIdentityKeys(
+      { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+      blockEventId
+    ),
   ]);
 };
 
@@ -557,7 +564,13 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   // ...and open the new primary's, so both rows stay queryable and the old row's `validToBlock`
   // equals the new one's `validFromBlock`.
   await openIdentityKey(
-    { identityId: identity.id, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
+    {
+      identityId: identity.id,
+      address,
+      role: IdentityKeyRole.PrimaryKey,
+      addedReason: eventId,
+      eventIdx,
+    },
     blockEventId
   );
 };
@@ -571,7 +584,10 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
 
   await Promise.all([
     unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
-    closeIdentityKeys({ address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId }, blockEventId),
+    closeIdentityKeys(
+      { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+      blockEventId
+    ),
   ]);
 };
 

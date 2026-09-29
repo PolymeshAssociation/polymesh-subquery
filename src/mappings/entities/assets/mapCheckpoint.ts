@@ -61,6 +61,62 @@ export const parseSchedule = (decoded: DecodedEvent, specVersion: number): Parse
 };
 
 /**
+ * A moment as a comparable number, whatever shape the store handed back.
+ *
+ * A list of timestamps is held as a JSON array, so the `Date`s written on the way in come back out
+ * as ISO strings — only a column-typed timestamp, like a checkpoint's own `datetime`, round-trips as
+ * a `Date`. Both kinds are compared here, so both are widened rather than trusted to be `Date`s.
+ */
+const momentValue = (moment: Date | string): number =>
+  moment instanceof Date ? moment.getTime() : new Date(moment).getTime();
+
+/**
+ * How many scheduled checkpoints for the same asset and moment the chain already announced earlier
+ * in this block.
+ *
+ * Every schedule due at one moment fires in the same block, in ascending `ScheduleId`, so this count
+ * is the checkpoint's position among the schedules that declared that moment. Reading it from the
+ * block's own event list costs nothing, where asking the store which schedules were already spoken
+ * for meant loading every checkpoint the asset has ever had — quadratic over the lifetime of an asset
+ * on a daily schedule. Scanning sibling events in the same block has precedent in the settlement and
+ * NFT handlers.
+ *
+ * `CheckpointCreated` carries `(Option<IdentityId>, AssetId, CheckpointId, Balance, Moment)`, and the
+ * raw parameters are compared rather than the resolved ids: siblings in one block share an encoding,
+ * so comparing them as emitted is exact and needs no asset-id resolution per sibling.
+ */
+const earlierScheduledCheckpoints = (event: SubstrateEvent): number => {
+  const records = (event.block.events ?? []) as unknown as {
+    event: { section: string; method: string; data: { toString(): string; isEmpty: boolean }[] };
+  }[];
+
+  const own = records[event.idx]?.event?.data;
+
+  if (!own) {
+    return 0;
+  }
+
+  let earlier = 0;
+
+  for (let i = 0; i < event.idx; i += 1) {
+    const emitted = records[i]?.event;
+
+    if (
+      emitted?.section === 'checkpoint' &&
+      emitted.method === 'CheckpointCreated' &&
+      // scheduled, not a manual `createCheckpoint`, which belongs to no schedule
+      emitted.data[0]?.isEmpty &&
+      emitted.data[1]?.toString() === own[1]?.toString() &&
+      emitted.data[4]?.toString() === own[4]?.toString()
+    ) {
+      earlier += 1;
+    }
+  }
+
+  return earlier;
+};
+
+/**
  * The schedule that produced a scheduled checkpoint, resolved from the index rather than the chain.
  *
  * `CheckpointCreated` names the moment but not the schedule, and two schedules can fall due at the
@@ -98,24 +154,14 @@ const scheduleForCheckpoint = async (
 
   const candidates = declaring
     .filter(({ scheduledCheckpoints }) =>
-      scheduledCheckpoints.some(declared => declared.getTime() === moment.getTime())
+      (scheduledCheckpoints ?? []).some(declared => momentValue(declared) === momentValue(moment))
     )
     .sort((a, b) => a.scheduleId - b.scheduleId);
 
-  // One read for the asset's checkpoints rather than one per candidate: whichever schedules are
-  // already spoken for at this moment are the ones an earlier event in the same batch claimed.
-  const existing = await getAllByFields<Checkpoint>('Checkpoint', [['assetId', '=', assetId]]);
+  const paired = candidates[earlierScheduledCheckpoints(event)];
 
-  const claimed = new Set(
-    existing
-      .filter(({ datetime, scheduleId }) => scheduleId && datetime.getTime() === moment.getTime())
-      .map(({ scheduleId }) => scheduleId)
-  );
-
-  const unclaimed = candidates.find(({ id }) => !claimed.has(id));
-
-  if (unclaimed) {
-    return unclaimed.id;
+  if (paired) {
+    return paired.id;
   }
 
   const { block, eventIdx, moduleId, eventId } = extractArgs(event);
@@ -148,6 +194,25 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
   // margin — substituting the block time would quietly move the balance snapshot's date.
   const datetime = getDateValue(moment);
 
+  // `datetime` is the row's own snapshot date and the column is not nullable, so a moment that will
+  // not read is reported and the row skipped rather than written as null — which would fail the
+  // insert and take the whole block down with it. No spec version is known to omit the moment; this
+  // is here so that one answer covers it, since the pairing below also has to treat it as optional.
+  if (!datetime) {
+    const { eventIdx, moduleId, eventId } = extractArgs(event);
+
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `CheckpointCreated for asset ${assetId} carried no readable Moment, so checkpoint ${checkpointId} was not recorded`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+
+    return;
+  }
+
   // `CheckpointCreated`'s first arg is `Option<IdentityId>`: `Some` for a manual
   // `checkpoint.createCheckpoint`, `None` only when a schedule triggered it. A manual checkpoint
   // belongs to no schedule, so it skips the lookup entirely.
@@ -159,8 +224,7 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
     checkpointId,
     totalSupply: getBigIntValue(rawTotalSupply),
     datetime,
-    scheduleId:
-      scheduled && datetime ? await scheduleForCheckpoint(assetId, datetime, event) : undefined,
+    scheduleId: scheduled ? await scheduleForCheckpoint(assetId, datetime, event) : undefined,
     createdEventId: blockEventId,
   }).save();
 };

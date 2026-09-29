@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SEED_EVENT_ID } from '../mappings/consts';
 import { AccountBalance } from '../types';
-import { getBigIntValue } from '../utils';
+import { getBigIntValue, is8xSpecVersion } from '../utils';
 import {
   accountDataFrozen,
   applyChainFreezes,
@@ -30,12 +30,19 @@ import { readStakingLock } from '../utils/staking';
 export interface SeedContext {
   blockId: string;
   datetime: Date;
+  /**
+   * The runtime the seed is read under. Which chain reads apply — and what an absent `holds` means —
+   * depends on the era, so it is passed in rather than inferred from which reads happen to answer.
+   */
+  specVersion: number;
 }
 
 export const seedAccountBalances = async ({
   blockId,
   datetime,
+  specVersion,
 }: SeedContext): Promise<{ seeded: number }> => {
+  const is8x = is8xSpecVersion(specVersion);
   const entries = await api.query.system.account.entries();
 
   const rows: AccountBalance[] = [];
@@ -64,7 +71,7 @@ export const seedAccountBalances = async ({
 
     /**
      * The seeded freeze used to go in wholesale under a `'genesis'` lock, which nothing ever
-     * lowered (F7): `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was
+     * lowered: `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was
      * never reported as bonded, and because `frozen` is the MAX over locks the `'genesis'` entry
      * kept `frozen` pinned at the seeded amount even after the staker unbonded.
      *
@@ -72,18 +79,21 @@ export const seedAccountBalances = async ({
      * applies is decided by the chain itself: `balances.holds` only exists from v8, so an
      * `undefined` there *is* the pre-v8 signal, and only the unexplained remainder stays neutral.
      */
-    const holds = reserved > BigInt(0) ? await readChainHolds(address) : undefined;
+    // `holds` exists only from v8, so an absent value must mean exactly that. Reading it only when
+    // something was reserved made a v8 account with nothing reserved look pre-v8 and sent its freeze
+    // through the pre-v8 lock reads. On v8, nothing reserved means nothing held — an empty list, not
+    // an unknown one — and the era decides every branch below, not whether a read answered.
+    const holds = is8x ? (reserved > BigInt(0) ? await readChainHolds(address) : []) : undefined;
     // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
     // so on v8 it is read from the lock list rather than assumed away.
     let stakingLock: bigint | undefined;
     let pipsLock: bigint | undefined;
     if (frozen > BigInt(0)) {
-      stakingLock =
-        holds === undefined
-          ? await readStakingLock(address, blockId)
-          : await readChainStakingLock(address);
+      stakingLock = is8x
+        ? await readChainStakingLock(address)
+        : await readStakingLock(address, blockId);
       // Pre-v8 only: a v8 pips deposit is tracked through the generic `Locked` / `Unlocked`.
-      pipsLock = holds === undefined ? await readChainLock(address, PIPS_LOCK_ID) : undefined;
+      pipsLock = is8x ? undefined : await readChainLock(address, PIPS_LOCK_ID);
     }
 
     applyChainFreezes(balance, { frozen, holds, stakingLock, pipsLock });

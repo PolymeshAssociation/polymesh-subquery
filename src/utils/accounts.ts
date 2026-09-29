@@ -5,7 +5,15 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity, IdentityKey, IdentityKeyRole, AccountKeyRole } from '../types';
+import {
+  Account,
+  AccountKeyRole,
+  EventIdEnum,
+  Identity,
+  IdentityKey,
+  IdentityKeyRole,
+  StakingPosition,
+} from '../types';
 import { extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
@@ -166,6 +174,33 @@ export const resolveKeyRole = async (address: string, blockId: string): Promise<
   keyRoleFor(await resolveKeyRecord(address, blockId));
 
 /**
+ * Carries an account's identity onto the staking position it is the stash of, when there is one.
+ *
+ * `StakingPosition.identity` is copied from the stash's `Account` so positions can be listed by
+ * identity without a join, which makes the account the source of truth and the position's field a
+ * copy that has to follow it. A stash can leave its identity and join another while it stays bonded,
+ * so the copy is updated here, where the account's identity changes, rather than re-read on every
+ * staking event: identity changes are rare, and staking events — a reward per nominator per era —
+ * are not.
+ */
+export const restampPositionIdentity = async (
+  address: string,
+  identityId: string | undefined,
+  blockEventId: string
+): Promise<void> => {
+  const position = await StakingPosition.get(address);
+
+  if (!position || position.identityId === identityId) {
+    return;
+  }
+
+  position.identityId = identityId;
+  position.updatedEventId = blockEventId;
+
+  await position.save();
+};
+
+/**
  * Writes what a key-link event says about an address, keeping the row an address already has.
  *
  * Several events re-announce a key that is already indexed: a primary-key rotation announces the
@@ -181,10 +216,16 @@ export const upsertAccount = async (
   const existing = await Account.get(args.address);
 
   if (existing) {
+    const identityChanged = existing.identityId !== args.identityId;
+
     Object.assign(existing, args, getAccountKeyType(args.address));
     existing.updatedEventId = blockEventId;
 
     await existing.save();
+
+    if (identityChanged) {
+      await restampPositionIdentity(args.address, args.identityId, blockEventId);
+    }
 
     return;
   }
@@ -220,7 +261,7 @@ export const getOrCreateAccount = async (
    * site (`meshAssetHolderToAssetHolder` and up) now threads its real `blockEventId` through; the
    * fallback below covers the few callers that still don't have one to give — an account
    * discovered by a genuinely event-less path (the genesis/seed scan) has no single causing event
-   * at all. D13's block-granularity caveat on `updatedEvent` applies either way.
+   * at all. The block-granularity caveat on `updatedEvent` applies either way.
    */
   createdEventId = `${blockId}/${padId('0')}`
 ): Promise<Account | undefined> => {

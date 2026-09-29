@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
-import { Distribution, DistributionPayment } from '../../../types';
+import { CorporateAction, Distribution, DistributionPayment } from '../../../types';
 import { getBigIntValue, getCaIdValue, getDistributionValue, getTextValue } from '../../../utils';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
 
 export const handleDistributionCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, block, blockEventId } = extractArgs(event);
@@ -14,14 +14,24 @@ export const handleDistributionCreated = async (event: SubstrateEvent): Promise<
     return;
   }
 
+  const corporateAction = await getOrAnomaly(
+    id => CorporateAction.get(id),
+    `${assetId}/${localId}`,
+    'CorporateAction',
+    event
+  );
+  const caId = corporateAction?.id;
+
   await Distribution.create({
     id: `${assetId}/${localId}`,
     identityId: getTextValue(rawDid),
     localId,
     assetId,
-    // a distribution is a corporate action plus payout terms, and the chain keys both on the same
-    // `CAId` — so the relation is the id this row already has
-    corporateActionId: `${assetId}/${localId}`,
+    // A distribution is a corporate action plus payout terms, and the chain keys both on the same
+    // `CAId`, so the relation is the id this row already has — but the action was created by an
+    // earlier extrinsic, which can be outside the index. The row is still worth keeping when it is:
+    // its payout terms stand on their own, and the payments that reference it are not optional.
+    corporateActionId: caId,
     ...distributionDetails,
     taxes: BigInt(0),
     createdEventId: blockEventId,
@@ -47,7 +57,20 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
   const amount = getBigIntValue(rawAmount);
   const tax = getBigIntValue(rawTax);
 
-  const distribution = await Distribution.get(`${assetId}/${localId}`);
+  const distribution = await getOrAnomaly(
+    id => Distribution.get(id),
+    `${assetId}/${localId}`,
+    'Distribution',
+    event
+  );
+
+  // The payment names the distribution by id, and the distribution is what the tax accrues to —
+  // without it there is nothing to accrue to, and a payment pointing at nothing, so both are
+  // recorded as missing rather than the block failing on the first field.
+  if (!distribution) {
+    return;
+  }
+
   const taxAmount = BigInt((amount * tax) / BigInt(1000000));
   distribution.taxes += taxAmount;
   distribution.updatedEventId = blockEventId;
