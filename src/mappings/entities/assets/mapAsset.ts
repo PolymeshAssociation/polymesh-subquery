@@ -36,7 +36,7 @@ import {
   serializeTicker,
 } from '../../../utils';
 import { processInstructionId } from '../settlements/mapSettlement';
-import { extractArgs, getAsset } from './../common';
+import { extractArgs, getAsset, toEnum } from './../common';
 
 export const createFunding = (
   blockId: string,
@@ -542,7 +542,7 @@ type UpdateReasonResult = {
   assetDelta: { totalSupply?: bigint; totalTransfers?: bigint };
 };
 
-const processUpdateReason = (
+export const processUpdateReason = (
   updateReason: string,
   value: unknown,
   transferAmount: bigint,
@@ -576,7 +576,7 @@ const processUpdateReason = (
       : null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
-      : (blockEvents[eventIdx + 1]?.event.method as EventIdEnum) ?? EventIdEnum.Unknown;
+      : toEnum(EventIdEnum, blockEvents[eventIdx + 1]?.event.method, EventIdEnum.Unknown);
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
   }
 
