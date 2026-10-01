@@ -11,7 +11,7 @@ import {
   resolveEthTransact,
 } from '../../../utils';
 import { toEnum } from '../common';
-import { postUneventedTransactionFee } from '../identities/mapPolyxLedger';
+import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {

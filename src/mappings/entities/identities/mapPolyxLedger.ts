@@ -1,4 +1,3 @@
-import { Option } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
@@ -42,7 +41,8 @@ import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import { reconcileAccount, reconcilePending } from './reconcilePolyx';
-import { closingEventOf, indexClosingEvent } from '../block/closingEvent';
+import { storageEntriesAtParent } from '../../../utils/storageAtParent';
+import { resolveFeePayer } from './feePayer';
 import { extrinsicEventIndices } from '../../blockContext';
 
 /**
@@ -1769,8 +1769,8 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
   // balances implementation and emit nothing of the kind — a full testnet replay has none before
   // v8 — so looking for a withdrawal there cost store reads on every fee that could never find one.
   // Decided by whether this extrinsic emitted a withdrawal at all, not by the block's spec label
-  // (see `extrinsicEmits`); when it did, it is one read for every burn in the extrinsic, shared by
-  // the payer and any subsidiser.
+  // (see `extrinsicEmits`). The withdrawal is from the account the event names: v8 withdraws the
+  // fee from `fee_key`, the subsidiser if there is one, and names `fee_key` in the event.
   const pairedWithBalanceEvents = extrinsicEmits(
     args.block,
     args.extrinsicIdx,
@@ -1788,20 +1788,8 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
     return;
   }
 
-  const payingKey = await activeSubsidiser(who);
-
-  if (
-    pairedWithBalanceEvents &&
-    payingKey &&
-    (await refileFeeWithdrawal(args, burns, payingKey, fee))
-  ) {
-    return;
-  }
-
-  const payer = payingKey && subsidisedCall(args) ? payingKey : who;
-
   await postTransition(args, {
-    from: { address: payer, pool: PolyxPool.Free },
+    from: { address: await chargedFor(args, who), pool: PolyxPool.Free },
     amount: fee,
     kind: MovementKind.Fee,
   });
@@ -1826,7 +1814,7 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
  * misfiles the blocks either side of an upgrade: a fee counted twice, or not at all. What the
  * runtime emitted cannot be mislabelled.
  */
-const extrinsicEmits = (
+export const extrinsicEmits = (
   block: SubstrateBlock,
   extrinsicIdx: number | undefined,
   section: string,
@@ -1849,7 +1837,11 @@ const extrinsicEmits = (
  * `TransactionFeePaid` from v5.4.0, or the extrinsic's closing event before it) — so its position
  * says which fee it is a cut of. From v5.4.2 fees go to the author whole and no such event appears.
  */
-const treasuryShareAt = (block: SubstrateBlock, index: number, extrinsicIdx?: number): bigint => {
+export const treasuryShareAt = (
+  block: SubstrateBlock,
+  index: number,
+  extrinsicIdx?: number
+): bigint => {
   const record = (block.events ?? [])[index];
 
   if (
@@ -1864,208 +1856,13 @@ const treasuryShareAt = (block: SubstrateBlock, index: number, extrinsicIdx?: nu
   return BigInt(record.event.data[1].toString());
 };
 
-/** How many fee quotes a block keeps in flight at once. */
-const FEE_QUOTE_LANES = 16;
-
-/** Each block's fee quotes, held against the block itself so they go when it does. */
-const feeQuotes = new WeakMap<SubstrateBlock, Map<number, Promise<bigint | Error>>>();
-
-/**
- * The treasury's cut announced just before extrinsic `extrinsicIdx` closes — `0` when there is
- * none. See `treasuryShareAt`.
- */
-const treasuryShareBeforeClose = (block: SubstrateBlock, extrinsicIdx: number): bigint => {
-  const own = extrinsicEventIndices(block, extrinsicIdx);
-
-  return own.length < 2 ? BigInt(0) : treasuryShareAt(block, own[own.length - 2], extrinsicIdx);
-};
-
-/**
- * Every fee whose treasury cut is `share`, lowest first.
- *
- * The runtime gave the treasury `floor(fee × 80 / 100)`, so the fee lies in
- * `[⌈5·share / 4⌉, ⌈5·(share + 1) / 4⌉ − 1]` — one value for three shares in four, and two when
- * `share` is a multiple of 4. Empty for no cut at all.
- */
-const feeCandidates = (share: bigint): bigint[] => {
-  if (share <= BigInt(0)) {
-    return [];
-  }
-
-  const ceilDiv = (n: bigint, d: bigint) => (n + d - BigInt(1)) / d;
-  const lowest = ceilDiv(BigInt(5) * share, BigInt(4));
-  const highest = ceilDiv(BigInt(5) * (share + BigInt(1)), BigInt(4)) - BigInt(1);
-
-  return highest > lowest ? [lowest, highest] : [lowest];
-};
-
-/**
- * The chain's price for extrinsic `extrinsicIdx`, for telling apart two fees its treasury cut
- * allows — see `uneventedFee`.
- *
- * The first question in a block requests the quote for every signed extrinsic in it that needs
- * one, a few at a time, and later ones collect theirs. One at a time, a block of a few hundred
- * transfers spent most of a minute waiting on the chain.
- */
-const quoteUneventedFee = async (extrinsic: SubstrateExtrinsic): Promise<bigint> => {
-  let quotes = feeQuotes.get(extrinsic.block);
-
-  if (!quotes) {
-    quotes = requestFeeQuotes(extrinsic.block);
-    feeQuotes.set(extrinsic.block, quotes);
-  }
-
-  const quote =
-    quotes.get(extrinsic.idx) ??
-    quoteFee(extrinsic.block, extrinsic.extrinsic).catch((e: Error) => e);
-  const fee = await quote;
-
-  if (fee instanceof Error) {
-    throw fee;
-  }
-
-  return fee;
-};
-
-const quoteFee = async (
-  block: SubstrateBlock,
-  extrinsic: SubstrateExtrinsic['extrinsic']
-): Promise<bigint> => {
-  const info = await api.rpc.payment.queryInfo(extrinsic.toHex(), block.block.header.parentHash);
-
-  return BigInt(info.partialFee.toString());
-};
-
-/** Starts a quote for each extrinsic in `block` that may need one; failures resolve as the error. */
-const requestFeeQuotes = (block: SubstrateBlock): Map<number, Promise<bigint | Error>> => {
-  const pending = block.block.extrinsics
-    .map((extrinsic, idx) => ({ extrinsic, idx }))
-    .filter(
-      ({ extrinsic, idx }) =>
-        extrinsic.isSigned &&
-        !extrinsicEmits(block, idx, 'transactionPayment', 'TransactionFeePaid') &&
-        feeCandidates(treasuryShareBeforeClose(block, idx)).length > 1
-    );
-  const settle: ((fee: bigint | Error) => void)[] = [];
-  const quotes = new Map(
-    pending.map(({ idx }, position) => [
-      idx,
-      new Promise<bigint | Error>(resolve => {
-        settle[position] = resolve;
-      }),
-    ])
-  );
-
-  let next = 0;
-  const lane = async (): Promise<void> => {
-    while (next < pending.length) {
-      const position = next;
-      next += 1;
-      settle[position](await quoteFee(block, pending[position].extrinsic).catch((e: Error) => e));
-    }
-  };
-
-  for (let started = 0; started < FEE_QUOTE_LANES; started += 1) {
-    void lane();
-  }
-
-  return quotes;
-};
-
-/**
- * What an extrinsic that announced no fee was actually charged, given the treasury's cut of it.
- *
- * The cut is the chain's own record of the fee, after any refund. `payment.queryInfo` is not: it
- * prices the weight the call declared, and a call that used less is refunded after it runs.
- * `staking.rebond` and `contracts.instantiate` routinely are, and `sudo` calls are refunded in
- * full. Pricing those from the quote charged payers for weight they never paid for and credited
- * authors with it.
- *
- * The quote is still asked when the cut allows two fees one unit apart. It is exact when nothing was
- * refunded. When something was, both candidates are below it and the lower one is taken; that case
- * is off by at most one unit.
- */
-const uneventedFee = async (extrinsic: SubstrateExtrinsic, share: bigint): Promise<bigint> => {
-  const candidates = feeCandidates(share);
-
-  if (candidates.length < 2) {
-    return candidates[0] ?? BigInt(0);
-  }
-
-  const quoted = await quoteUneventedFee(extrinsic);
-
-  return candidates.includes(quoted) ? quoted : candidates[0];
-};
-
-/**
- * Posts the transaction fee of a signed extrinsic whose runtime announced none.
- *
- * `transactionPayment.TransactionFeePaid` first appears at v5.4.0 (spec 5004000). Before it the fee
- * was charged with no event of its own — on testnet, every transaction fee in the first 8.48 million
- * blocks — so each one was missing: the signer kept POLYX it had spent, and the author never
- * received its part. The reconciler caught both halves, as accounts holding less than the index
- * said and validators holding more.
- *
- * Every runtime in that range split each fee, 80% to the treasury and the rest to the author, and
- * the treasury's part is announced as `TreasuryReimbursement` just before the extrinsic closes. The
- * fee is read back from that cut (see `uneventedFee`). No cut means nothing was charged — a call
- * the runtime let off its fee, `sudo` among them.
- *
- * Posted against the extrinsic's closing event — see `indexClosingEvent`.
- */
-export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
-  const { block } = extrinsic;
-
-  // Every signed extrinsic from v5.4.0 on announces its fee, even a zero one — so an announced fee
-  // is the one sure sign this runtime needs nothing reconstructed.
-  if (
-    !extrinsic.extrinsic.isSigned ||
-    extrinsicEmits(block, extrinsic.idx, 'transactionPayment', 'TransactionFeePaid')
-  ) {
-    return;
-  }
-
-  // Found before the chain is asked anything: an extrinsic with no event of its own in the block
-  // has nothing to settle a fee against.
-  const closing = closingEventOf(extrinsic);
-
-  if (!closing) {
-    return;
-  }
-
-  const treasuryShare = treasuryShareAt(block, closing.idx - 1, extrinsic.idx);
-  const fee = await uneventedFee(extrinsic, treasuryShare);
-
-  if (fee === BigInt(0)) {
-    return;
-  }
-
-  await indexClosingEvent(extrinsic);
-
-  const args = extractArgs(closing);
-  const signer = extrinsic.extrinsic.signer.toString();
-  // Subsidised like any other pre-v8 transaction fee: for every call but the relayer's own.
-  const payingKey = await activeSubsidiser(signer);
-  const payer =
-    payingKey && extrinsic.extrinsic.method.section.toLowerCase() !== 'relayer'
-      ? payingKey
-      : signer;
-
-  await postTransition(args, {
-    from: { address: payer, pool: PolyxPool.Free },
-    amount: fee,
-    kind: MovementKind.Fee,
-  });
-  await creditBlockAuthor(args, fee, treasuryShare);
-};
-
 /**
  * Pays a pre-v8 fee to the block author — what is left of it once the treasury's announced cut is
  * taken, which is all of it from v5.4.2 (see `treasuryShareAt`). With no author the chain drops
  * that part instead, so nothing is credited. A treasury event larger than the fee cannot be its
  * cut, and leaves the fee whole.
  */
-const creditBlockAuthor = async (
+export const creditBlockAuthor = async (
   args: HandlerArgs,
   fee: bigint,
   treasuryShare: bigint
@@ -2164,16 +1961,57 @@ const refileFeeWithdrawal = async (
   return true;
 };
 
-/** Whether a pre-v8 fee event, for a user with an active subsidy, was charged to the paying key. */
-const subsidisedCall = (args: HandlerArgs): boolean =>
-  args.eventId === EventIdEnum.FeeCharged ||
-  args.extrinsic?.extrinsic.method.section.toLowerCase() !== 'relayer';
+/**
+ * The account a fee event's fee was taken from, when no withdrawal of it was recorded.
+ *
+ * From v5.4.1 (spec 5004001) both fee events name it, subsidiser included (`fee_key`), so it is
+ * taken as is: applying a subsidy again charged a subsidised paying key's own subsidiser instead
+ * (testnet block 14,872,581, where a two-level subsidy moved 25 POLYX on to the wrong account).
+ * Checked on testnet at 5004001, 5004002, 6002010, 7000005 and 7003003, where the named account
+ * fell by the fee and the signer did not; v8 names `fee_key` too.
+ *
+ * Before it, each named someone else:
+ * - `protocolFee.FeeCharged` the payer, before its subsidy (`check_subsidy(account, fee, None)`
+ *   then `FeeCharged(account, …)`), which covers any call.
+ * - `transactionPayment.TransactionFeePaid`, only on v5.4.0 (spec 5004000), the signer, while the
+ *   fee was charged as before v5.4 (see `resolveFeeAccount`). So a call someone else pays for,
+ *   such as `relayer.accept_paying_key`, left its signer low and its payer high.
+ *
+ * Gated on `block.specVersion`, which `ensureTrueSpecVersion` has already set to the runtime that
+ * executed the block. So the subsidy is looked up only on the runtimes whose events left it out.
+ */
+const chargedFor = async (args: HandlerArgs, who: string): Promise<string> => {
+  if (args.block.specVersion >= 5_004_001) {
+    return who;
+  }
+  if (args.eventId === EventIdEnum.FeeCharged) {
+    return (await activeSubsidiser(who)) ?? who;
+  }
+
+  return args.extrinsic ? resolveFeeAccount(args.extrinsic) : who;
+};
 
 /** The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows. */
-const activeSubsidiser = async (user: string): Promise<string | undefined> => {
+export const activeSubsidiser = async (user: string): Promise<string | undefined> => {
   const subsidies = await Subsidy.getByBeneficiaryAccountId(user, { limit: 10 });
 
   return subsidies.find(subsidy => subsidy.isAccepted && !subsidy.isRemoved)?.payingAccountId;
+};
+
+/**
+ * The account a transaction fee was taken from, up to v5.4.0, when the runtime announced no fee
+ * or named the signer: the payer `get_valid_payer` chose (`resolveFeePayer`), or the paying key of
+ * that payer's subsidy (`check_subsidy(&payer_key, …)`). A subsidy covers every call but the
+ * relayer's own: a subsidised payer's call to any other unsubsidised pallet is rejected, so never
+ * reaches the chain.
+ */
+export const resolveFeeAccount = async (extrinsic: SubstrateExtrinsic): Promise<string> => {
+  const payer = await resolveFeePayer(extrinsic);
+  const subsidiser = await activeSubsidiser(payer);
+
+  return subsidiser && extrinsic.extrinsic.method.section.toLowerCase() !== 'relayer'
+    ? subsidiser
+    : payer;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -2395,53 +2233,38 @@ interface DeferredSlash {
 }
 
 /**
- * The slashes still deferred as `block` begins, which is the set it applies from.
+ * The slashes still deferred as `block` begins, which is the set it applies from; `undefined` when
+ * that state can't be read (see `storageEntriesAtParent`).
  *
  * Read at the parent hash, because applying a slash takes it out of storage, so the block's own
- * state no longer holds it. The keys and bytes are read raw and decoded with the block's registry:
- * a decoded `getStorage` uses the connection's latest metadata, which reads a pre-v8
- * `UnappliedSlash` as an empty list.
+ * state no longer holds it.
  */
-const deferredSlashesBefore = async (block: SubstrateBlock): Promise<DeferredSlash[]> => {
-  const storage = api.query.staking.unappliedSlashes;
-  const prefix = storage.keyPrefix();
-  const parentHash = block.block.header.parentHash;
-  const valueType = api.registry.createLookupType(storage.creator.meta.type.asMap.value);
-  const keys = await api.rpc.state.getKeysPaged(prefix, 64, prefix, parentHash);
-  const slashes: DeferredSlash[] = [];
+const deferredSlashesBefore = async (
+  block: SubstrateBlock
+): Promise<DeferredSlash[] | undefined> => {
+  const entries = await storageEntriesAtParent(block, 'staking', 'unappliedSlashes');
 
-  for (const key of keys) {
-    // `Twox64Concat` keeps the era itself as the key's last four bytes, little-endian
-    const keyBytes = key.toU8a(true);
-    const era = new DataView(keyBytes.buffer, keyBytes.byteOffset + keyBytes.length - 4).getUint32(
-      0,
-      true
-    );
-    const raw = (await api.rpc.state.getStorage(key, parentHash)) as unknown as Option<Codec>;
+  // a key whose era didn't decode leaves its slashes unplaceable, which is not "none deferred"
+  if (entries?.some(({ args }) => args.length === 0)) {
+    return undefined;
+  }
 
-    if (raw.isNone) {
-      continue;
-    }
-
-    const deferred = api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as {
+  return entries?.flatMap(({ args: [era], value }) => {
+    const deferred = value as unknown as {
       validator: Codec;
       own: Codec;
       reporters: Codec[];
       payout: Codec;
     }[];
 
-    for (const slash of deferred) {
-      slashes.push({
-        era,
-        validator: getTextValue(slash.validator),
-        own: getBigIntValue(slash.own),
-        reporters: slash.reporters.map(reporter => getTextValue(reporter)),
-        payout: getBigIntValue(slash.payout),
-      });
-    }
-  }
-
-  return slashes;
+    return deferred.map(slash => ({
+      era: Number(getBigIntValue(era)),
+      validator: getTextValue(slash.validator),
+      own: getBigIntValue(slash.own),
+      reporters: slash.reporters.map(reporter => getTextValue(reporter)),
+      payout: getBigIntValue(slash.payout),
+    }));
+  });
 };
 
 /**
@@ -2490,9 +2313,19 @@ const creditSlashReporters = async (
   own: bigint
 ): Promise<void> => {
   const { block, eventIdx } = args;
-  const candidates = (await deferredSlashesBefore(block)).filter(
-    slash => slash.validator === validator
-  );
+  const deferred = await deferredSlashesBefore(block);
+
+  if (!deferred) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `staking.Slash of ${own} on ${validator}: the deferred slashes could not be read, so its reporters were not paid`,
+      block,
+      eventIdx,
+    });
+    return;
+  }
+
+  const candidates = deferred.filter(slash => slash.validator === validator);
 
   if (candidates.length === 0) {
     // A nominator's share of someone else's slash. Its validator's `Slash` paid the reporters.
