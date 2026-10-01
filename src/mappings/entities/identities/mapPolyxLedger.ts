@@ -1,3 +1,4 @@
+import { Option } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { hexHasPrefix } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
@@ -437,6 +438,8 @@ interface Transition {
   kind: MovementKind;
   holdReason?: HoldReason;
   memo?: string;
+  /** who the value came from, for a credit with no debit side here (a slash's reporter reward) */
+  source?: string;
 }
 
 const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
@@ -463,7 +466,7 @@ const movementSides = (transition: Transition): MovementSide[] => {
     sides.push({
       endpoint: transition.to,
       direction: EntryDirection.Credit,
-      counterparty: transition.from?.address,
+      counterparty: transition.from?.address ?? transition.source,
     });
   }
 
@@ -2378,6 +2381,179 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
   } else {
     // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
     await syncStakingLock(stash, -amount, args);
+    await creditSlashReporters(args, stash, amount);
+  }
+};
+
+/** One `staking.UnappliedSlash`: a slash the chain holds back until its era comes due. */
+interface DeferredSlash {
+  era: number;
+  validator: string;
+  own: bigint;
+  reporters: string[];
+  payout: bigint;
+}
+
+/**
+ * The slashes still deferred as `block` begins, which is the set it applies from.
+ *
+ * Read at the parent hash, because applying a slash takes it out of storage, so the block's own
+ * state no longer holds it. The keys and bytes are read raw and decoded with the block's registry:
+ * a decoded `getStorage` uses the connection's latest metadata, which reads a pre-v8
+ * `UnappliedSlash` as an empty list.
+ */
+const deferredSlashesBefore = async (block: SubstrateBlock): Promise<DeferredSlash[]> => {
+  const storage = api.query.staking.unappliedSlashes;
+  const prefix = storage.keyPrefix();
+  const parentHash = block.block.header.parentHash;
+  const valueType = api.registry.createLookupType(storage.creator.meta.type.asMap.value);
+  const keys = await api.rpc.state.getKeysPaged(prefix, 64, prefix, parentHash);
+  const slashes: DeferredSlash[] = [];
+
+  for (const key of keys) {
+    // `Twox64Concat` keeps the era itself as the key's last four bytes, little-endian
+    const keyBytes = key.toU8a(true);
+    const era = new DataView(keyBytes.buffer, keyBytes.byteOffset + keyBytes.length - 4).getUint32(
+      0,
+      true
+    );
+    const raw = (await api.rpc.state.getStorage(key, parentHash)) as unknown as Option<Codec>;
+
+    if (raw.isNone) {
+      continue;
+    }
+
+    const deferred = api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as {
+      validator: Codec;
+      own: Codec;
+      reporters: Codec[];
+      payout: Codec;
+    }[];
+
+    for (const slash of deferred) {
+      slashes.push({
+        era,
+        validator: getTextValue(slash.validator),
+        own: getBigIntValue(slash.own),
+        reporters: slash.reporters.map(reporter => getTextValue(reporter)),
+        payout: getBigIntValue(slash.payout),
+      });
+    }
+  }
+
+  return slashes;
+};
+
+/**
+ * Pays a pre-v8 slash's reporters their share. The chain announces nothing for it.
+ *
+ * `slashing::apply_slash` takes the slash from the validator and its nominators, each announced
+ * by `staking.Slash`, then `pay_reporters` gives the offence's reporters up to the deferred
+ * slash's `payout`, split evenly, through `resolve_creating`, which emits nothing. The rest,
+ * including any remainder of the split, goes to the treasury as one `TreasuryReimbursement`. So
+ * the reporters' share left the validator and arrived nowhere. On testnet that left the one
+ * reporter of the era-2159 slash 637.5 POLYX short from block 7,751,343.
+ *
+ * Done once per deferred slash, on the validator's own `Slash`, which comes first: a nominator's
+ * `Slash` names an account that is not the deferred slash's validator. Of the deferred slashes
+ * that match, the oldest era is the one applied, because eras are applied in order.
+ *
+ * Checked against the treasury's event. The slashes of this offence, less what the reporters were
+ * paid, must be what the treasury received; anything else is recorded, not guessed at.
+ */
+/**
+ * What applying a slash took, from the validator's `Slash` at `eventIdx` and the nominators' after
+ * it, up to the treasury's receipt; and what the treasury announced it received, if it did.
+ */
+const slashProceeds = (
+  block: SubstrateBlock,
+  eventIdx: number
+): { slashed: bigint; announced?: bigint } => {
+  const records = (block.events ?? []).slice(eventIdx);
+  const treasuryAt = records.findIndex(
+    ({ event }) => event.section === 'treasury' && event.method === 'TreasuryReimbursement'
+  );
+  const upToTreasury = treasuryAt === -1 ? records : records.slice(0, treasuryAt);
+  const slashed = upToTreasury
+    .filter(({ event }) => event.section === 'staking' && event.method === 'Slash')
+    .reduce((sum, { event }) => sum + BigInt(event.data[1].toString()), BigInt(0));
+
+  return {
+    slashed,
+    announced: treasuryAt === -1 ? undefined : BigInt(records[treasuryAt].event.data[1].toString()),
+  };
+};
+
+const creditSlashReporters = async (
+  args: HandlerArgs,
+  validator: string,
+  own: bigint
+): Promise<void> => {
+  const { block, eventIdx } = args;
+  const candidates = (await deferredSlashesBefore(block)).filter(
+    slash => slash.validator === validator
+  );
+
+  if (candidates.length === 0) {
+    // A nominator's share of someone else's slash. Its validator's `Slash` paid the reporters.
+    return;
+  }
+
+  const applied = candidates.filter(slash => slash.own === own).sort((a, b) => a.era - b.era)[0];
+
+  if (!applied) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `staking.Slash of ${own} on ${validator} matches no deferred slash, so its reporters were not paid`,
+      block,
+      eventIdx,
+    });
+    return;
+  }
+
+  const { slashed, announced } = slashProceeds(block, eventIdx);
+
+  const reporters = applied.reporters;
+  const perReporter =
+    reporters.length === 0
+      ? BigInt(0)
+      : (applied.payout < slashed ? applied.payout : slashed) / BigInt(reporters.length);
+
+  if (perReporter > BigInt(0)) {
+    if (reporters.length > 1) {
+      // Every reporter's credit is filed against this one event, and an entry's id carries no
+      // account, so each overwrites the one before. The balances still come out right.
+      await recordAnomaly({
+        kind: AnomalyKind.UnreadableValue,
+        detail: `staking.Slash on ${validator} paid ${reporters.length} reporters; only the last one's PolyxEntry survives`,
+        block,
+        eventIdx,
+      });
+    }
+
+    for (const reporter of reporters) {
+      await postTransition(args, {
+        to: { address: reporter, pool: PolyxPool.Free },
+        amount: perReporter,
+        kind: MovementKind.StakingReward,
+        source: validator,
+      });
+    }
+  }
+
+  const toTreasury = slashed - perReporter * BigInt(reporters.length);
+
+  if (announced !== toTreasury) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `staking.Slash on ${validator}: ${slashed} slashed and ${
+        perReporter * BigInt(reporters.length)
+      } paid to reporters should leave ${toTreasury} for the treasury, which announced ${
+        announced ?? 'nothing'
+      }`,
+      block,
+      eventIdx,
+    });
   }
 };
 

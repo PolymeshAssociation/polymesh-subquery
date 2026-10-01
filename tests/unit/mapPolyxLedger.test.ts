@@ -1914,3 +1914,194 @@ describe('a fee its runtime did not announce', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(-(94756 + 94755)));
   });
 });
+
+describe("a pre-v8 slash's reporters are paid, unannounced", () => {
+  // Testnet block 7,751,343 (spec 5003001): the era-2159 slash of 5Gx24bnY… by 12,750 POLYX, with
+  // one reporter paid 637.5 POLYX and the treasury the remaining 12,112.5
+  const OFFENDER = BOB;
+  const REPORTER = '5EFbtwDBQu64WjUGqAgC3kuaiH86E34CHtqxbN7zAgwwT2cg';
+  const SPEC = 5_003_001;
+
+  type Deferred = { validator: string; own: string; reporters: string[]; payout: string };
+
+  const eraKey = (era: number) => {
+    const bytes = new Uint8Array(20);
+    new DataView(bytes.buffer).setUint32(16, era, true);
+    return { toU8a: () => bytes };
+  };
+
+  const getKeysPaged = jest.fn();
+  const getStorage = jest.fn();
+
+  /** `staking.unappliedSlashes`, as the parent block's state holds it. */
+  const deferredSlashes = (byEra: Record<number, Deferred[]>) => {
+    getKeysPaged.mockReset().mockResolvedValue(Object.keys(byEra).map(Number).map(eraKey));
+    getStorage
+      .mockReset()
+      .mockImplementation((key: { toU8a: () => Uint8Array }) =>
+        Promise.resolve({ isNone: false, unwrap: () => ({ toU8a: () => key.toU8a() }) })
+      );
+
+    (globalThis as any).api.query = {
+      staking: {
+        unappliedSlashes: {
+          keyPrefix: () => '0xunappliedSlashes',
+          creator: { meta: { type: { asMap: { value: 587 } } } },
+        },
+      },
+    };
+    (globalThis as any).api.rpc = { state: { getKeysPaged, getStorage } };
+    (globalThis as any).api.registry = {
+      chainSS58: 42,
+      createLookupType: () => 'Lookup587',
+      createType: (_type: string, bytes: Uint8Array) =>
+        byEra[new DataView(bytes.buffer).getUint32(16, true)].map(slash => ({
+          validator: mockCodec(slash.validator),
+          own: mockCodec(slash.own),
+          reporters: slash.reporters.map(mockCodec),
+          payout: mockCodec(slash.payout),
+        })),
+    };
+  };
+
+  afterEach(() => {
+    (globalThis as any).api.query = {};
+    delete (globalThis as any).api.rpc;
+  });
+
+  /** The block's event records from the `Slash`es on, as `apply_slash` emits them. */
+  const slashEvents = (
+    slashes: [stash: string, amount: string][],
+    toTreasury: string | null,
+    specVersion = SPEC
+  ): SubstrateEvent[] => {
+    const records = [
+      ...slashes.map(([stash, amount]) => ['staking', 'Slash', [stash, amount]] as const),
+      ...(toTreasury === null
+        ? []
+        : [['treasury', 'TreasuryReimbursement', ['0x' + '00'.repeat(32), toTreasury]] as const]),
+    ].map(([section, method, data]) => ({
+      phase: { isApplyExtrinsic: false },
+      event: { section, method, data: data.map(mockCodec) },
+    }));
+
+    return slashes.map(([stash, amount], index) => {
+      const event = tupleEvent('staking', 'Slash', [stash, amount], specVersion);
+      const block = (event as any).block;
+
+      block.block = {
+        header: { number: { toString: () => '7751343' }, parentHash: '0xparent' },
+      };
+      block.events = records;
+      (event as { idx: number }).idx = index;
+
+      return event;
+    });
+  };
+
+  const anomalies = (): Row[] => Object.values(db['IndexerAnomaly'] ?? {});
+
+  it('credits the reporter the payout the deferred slash names, from the offender', async () => {
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(637_500_000));
+    expect(balance(OFFENDER)?.free).toBe(BigInt(-12_750_000_000));
+    expect(entries().find(row => row.accountId === REPORTER)).toMatchObject({
+      kind: MovementKind.StakingReward,
+      direction: EntryDirection.Credit,
+      counterpartyAddress: OFFENDER,
+    });
+    // read where the slash still is: the parent, since applying it takes it out of storage
+    expect(getKeysPaged).toHaveBeenCalledWith(
+      '0xunappliedSlashes',
+      64,
+      '0xunappliedSlashes',
+      '0xparent'
+    );
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('pays no one when the offence had no reporters, and the treasury takes it all', async () => {
+    // testnet block 7,737,503: era 2155's slash, with 2159's still waiting behind it
+    deferredSlashes({
+      2155: [{ validator: OFFENDER, own: '1673299719', reporters: [], payout: '83664986' }],
+      2159: [{ validator: ALICE, own: '12750000000', reporters: [REPORTER], payout: '637500000' }],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '1673299719']], '1673299719');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)).toBeUndefined();
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('applies the oldest era when the same validator has more than one slash waiting', async () => {
+    deferredSlashes({
+      2160: [{ validator: OFFENDER, own: '1000', reporters: [ALICE], payout: '50' }],
+      2159: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER], payout: '100' }],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '1000']], '900');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(100));
+    expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('pays once per offence, on the validator, not again on its nominators', async () => {
+    const NOMINATOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    deferredSlashes({
+      2159: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER], payout: '120' }],
+    });
+
+    // the treasury's share is what both slashes leave after the reporter
+    for (const event of slashEvents(
+      [
+        [OFFENDER, '1000'],
+        [NOMINATOR, '400'],
+      ],
+      '1280'
+    )) {
+      await handleStakingSlash(event);
+    }
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(120));
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('records it when the treasury received something other than the rest', async () => {
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12750000000');
+    await handleStakingSlash(slash);
+
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0].detail).toContain('should leave 12112500000 for the treasury');
+  });
+
+  it('leaves a v8 slash alone: it comes out of the hold and is burned, with no treasury share', async () => {
+    deferredSlashes({});
+
+    await handleStakingSlash(
+      structEvent(
+        'staking',
+        'Slashed',
+        { staker: OFFENDER, amount: '400' },
+        { specVersion: 8_000_020 }
+      )
+    );
+
+    expect(getKeysPaged).not.toHaveBeenCalled();
+  });
+});
