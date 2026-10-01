@@ -493,6 +493,60 @@ describe('Event → pool transition', () => {
     expect(balance(treasury)?.free).toBe(BigInt(-4014));
     expect(balance(BOB)?.free).toBe(BigInt(4014));
   });
+
+  it('credits a new account once when a transfer outside any extrinsic creates it', async () => {
+    // Testnet block 10,036,148 (spec 6000001): scheduled settlement instructions ran as the block
+    // initialised, each paying a new account: `Endowed` then `Transfer`, adjacent. Paired only
+    // within an extrinsic, each of the 29 recipients was credited twice.
+    const NEW_ACCOUNT = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const events = v7ExtrinsicEvents(
+      10_036_148,
+      [
+        ['balances', 'Endowed', ['0x00', NEW_ACCOUNT, '210000']],
+        ['balances', 'Transfer', ['0x9c8f', ALICE, '0x00', NEW_ACCOUNT, '210000']],
+        // a later, unrelated transfer of the same amount to the account, once it exists
+        ['balances', 'Transfer', ['0x9c8f', BOB, '0x00', NEW_ACCOUNT, '210000']],
+      ],
+      6_000_001
+    );
+    events.forEach(event => delete (event as { extrinsic?: unknown }).extrinsic);
+
+    await handleBalanceEndowed(events[0]);
+    await handleBalanceTransfer(events[1]);
+    await handleBalanceTransfer(events[2]);
+
+    expect(balance(NEW_ACCOUNT)?.free).toBe(BigInt(420_000));
+    expect(balance(ALICE)?.free).toBe(BigInt(-210_000));
+    expect(balance(BOB)?.free).toBe(BigInt(-210_000));
+  });
+
+  it('pairs each 5.x disbursement with the transfer just before it, outside any extrinsic', async () => {
+    // Testnet block 6,527,686 (spec 5001020): PIP 26, enacted as the block initialised, paid 11 × 1
+    // unit, each as `balances.Transfer{treasury → recipient}` then `TreasuryDisbursement`. Matched
+    // only within an extrinsic, every one was counted twice: recipient +11, treasury −11.
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const recipientDid = '0x8015a1702789fedf8474a042af07ba6a37f94e8d24b4eed89414e6eb79df084e';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+    const treasuryDid = '0x73797374656d3a74726561737572795f6d6f64756c655f646964000000000000';
+
+    const pair = (): [string, string, string[]][] => [
+      ['balances', 'Transfer', [treasuryDid, treasury, recipientDid, BOB, '1']],
+      ['treasury', 'TreasuryDisbursement', [committeeDid, recipientDid, BOB, '1']],
+    ];
+    const events = v7ExtrinsicEvents(6_527_686, [...pair(), ...pair(), ...pair()], 5_001_020);
+    events.forEach(event => delete (event as { extrinsic?: unknown }).extrinsic);
+
+    for (const event of events) {
+      await (event.event.method === 'Transfer'
+        ? handleBalanceTransfer(event)
+        : handleTreasuryDisbursement(event));
+    }
+
+    expect(balance(BOB)?.free).toBe(BigInt(3));
+    expect(balance(treasury)?.free).toBe(BigInt(-3));
+    expect(entries()).toHaveLength(6);
+    expect(entries().every(r => r.kind === MovementKind.TreasuryDisbursement)).toBe(true);
+  });
 });
 
 describe('properties the one-column model could not satisfy', () => {
@@ -858,6 +912,31 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(-300));
     expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(300));
     expect(entries().every(r => r.kind === MovementKind.Fee)).toBe(true);
+  });
+
+  it('charges an Ethereum transaction its fee once, past the empty withdrawal before it', async () => {
+    // Testnet block 25,118,132: `revive.eth_transact` withdraws nothing, then the 242,500 fee
+    // estimate, then 71 the call burns; 44,371 is refunded and 198,129 charged. The empty
+    // withdrawal was the payer's first burn, so it was taken for the fee's, failed the size check,
+    // and the fee was posted a second time beside the real withdrawal and its refund.
+    const [empty, feeWithdraw, callBurn, refund, feePaid] = extrinsicEvents(25_118_132, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '0' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '242500' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '71' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '44371' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '198129', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(empty);
+    await handleBalanceBurned(feeWithdraw);
+    await handleBalanceBurned(callBurn);
+    await handleBalanceMinted(refund);
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-198_200));
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(198_129));
+    // a movement of nothing writes nothing
+    expect(entries().some(r => r.amount === BigInt(0))).toBe(false);
   });
 
   /**
@@ -1655,6 +1734,18 @@ describe('pre-v7 bridge mints', () => {
 
     expect(balance(ALICE)?.free).toBe(BigInt(30_000_000_000));
     expect(entries()[0]).toMatchObject({ kind: MovementKind.Mint, accountId: ALICE });
+  });
+
+  it('writes nothing for the reserve endowed with nothing', async () => {
+    // Pre-v8 every dropped positive imbalance touches the block reward reserve, which, empty, is
+    // recreated with `Endowed(brr, 0)`: 210,000 of them on a testnet resync, each writing an entry
+    // and a new balance version (27,000 for the reserve alone) that moved nothing.
+    await handleBalanceEndowed(
+      v7ExtrinsicEvents(3_000_000, [['balances', 'Endowed', ['0xbrr', BOB, '0']]], 3010)[0]
+    );
+
+    expect(entries()).toHaveLength(0);
+    expect(balance(BOB)).toBeUndefined();
   });
 
   it('does not credit a new recipient twice, past the reserve endowment in between', async () => {

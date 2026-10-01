@@ -598,7 +598,11 @@ export const postTransition = async (
   transition: Transition,
   options: { eraIndex?: number } = {}
 ): Promise<void> => {
-  if (!transition.from && !transition.to) {
+  // A movement of nothing writes nothing. Left in, a `Withdraw` of 0 ahead of a v8 Ethereum
+  // transaction's fee was taken for the fee's own withdrawal, being the payer's first burn, so the
+  // fee was charged twice (testnet block 25,118,132), and every empty event wrote an entry and a
+  // balance version for no change.
+  if ((!transition.from && !transition.to) || transition.amount === BigInt(0)) {
     return;
   }
 
@@ -1001,6 +1005,13 @@ export const handleBalanceEndowed = async (event: SubstrateEvent): Promise<void>
   const who = holder(decoded);
   const amount = amountOf(decoded);
 
+  // Moves nothing. Pre-v8 every dropped positive imbalance touches the block reward reserve, which,
+  // empty, is recreated with `Endowed(brr, 0)` each time: 210,000 of them on a testnet resync, each
+  // writing an entry and a new balance version, 27,000 for the reserve alone.
+  if (amount === BigInt(0)) {
+    return;
+  }
+
   const [deposit] = args.extrinsicId
     ? await findExtrinsicEntries(args, MovementKind.Mint, who, amount)
     : await findBlockEntries(args.blockId, who, amount, [MovementKind.Mint]);
@@ -1035,9 +1046,19 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   // batch making two equal transfers to the same new account matched the first endowment twice,
   // so the second transfer posted only its debit — the recipient's second credit was lost, and
   // the endowment's counterparty and memo were overwritten by the later one.
-  const endowment = (await findExtrinsicEntries(args, MovementKind.Endowment, to, amount)).find(
-    entry => !entry.counterpartyAddress
-  );
+  //
+  // Outside an extrinsic, matched on the block instead, and only to the endowment the event just
+  // before wrote: the balances pallet emits `Endowed` immediately ahead of its `Transfer`, and a
+  // looser match would swallow a later transfer of the same amount to the account. Testnet block
+  // 10,036,148 ran scheduled settlement instructions as it initialised, paying 29 new accounts,
+  // and each was credited twice.
+  const endowment = (
+    args.extrinsicId
+      ? await findExtrinsicEntries(args, MovementKind.Endowment, to, amount)
+      : (await findBlockEntries(args.blockId, to, amount, [MovementKind.Endowment])).filter(
+          entry => entry.movementId === previousEventId(args)
+        )
+  ).find(entry => !entry.counterpartyAddress);
 
   if (endowment) {
     // `balances.transfer` to a fresh account emits `Endowed` (already crediting `to/Free`) and
@@ -1680,16 +1701,21 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
     (hasToAddress ? getTextValue(rawTo) : undefined) ??
     (await identityPrimaryAccount(getTextValue(rawToDid)));
 
-  const [existingTransfer] = await findExtrinsicEntries(
-    args,
-    MovementKind.Transfer,
-    toAddress,
-    amount
+  // From 5.0.0 `unsafe_disbursement` pays by `Currency::transfer`, which emits
+  // `balances.Transfer{treasury → recipient}`, and emits this event straight after it. Matched on
+  // the block, not the extrinsic: `disbursement` is root-only, so it runs from a PIP's enactment,
+  // usually as the block initialises, with no extrinsic at all. Testnet block 6,527,686 paid
+  // 11 × 1 unit that way and each was counted twice. And on the *immediately preceding* event, so
+  // equal payments to one recipient each consume their own transfer.
+  const treasury = treasuryPalletAccount();
+  const existingTransfer = (
+    await findBlockEntries(args.blockId, toAddress, amount, [MovementKind.Transfer])
+  ).find(
+    entry => entry.movementId === previousEventId(args) && entry.counterpartyAddress === treasury
   );
 
   if (existingTransfer) {
-    // From 5.0.0 `treasury.disbursement` also emits `balances.Transfer{treasury → recipient}`;
-    // relabel both sides of it rather than writing a second movement.
+    // relabel both sides of the transfer rather than writing a second movement
     const siblings = await PolyxEntry.getByFields(
       [['movementId', '=', existingTransfer.movementId]],
       { limit: 10 }
@@ -1703,7 +1729,7 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   }
 
   await postTransition(args, {
-    from: { address: treasuryPalletAccount(), pool: PolyxPool.Free },
+    from: { address: treasury, pool: PolyxPool.Free },
     to: toAddress ? { address: toAddress, pool: PolyxPool.Free } : undefined,
     amount,
     kind: MovementKind.TreasuryDisbursement,
