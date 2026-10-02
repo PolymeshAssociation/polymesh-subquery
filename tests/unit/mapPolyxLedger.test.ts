@@ -1048,6 +1048,70 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(500));
   });
 
+  it("posts no second debit for an Ethereum transaction's split gas charge", async () => {
+    // Testnet block 24,913,217: the gas charge in two withdrawals, mostly refunded, and the fee the
+    // difference; no single withdrawal accounts for it
+    const events = extrinsicEvents(24_913_217, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '245926802' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '54073198' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '299738595' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '261405', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(events[0]);
+    await handleBalanceBurned(events[1]);
+    await handleBalanceMinted(events[2]);
+    await handleTransactionFeeCharged(events[3]);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-261_405));
+  });
+
+  it("posts no second debit when an Ethereum transaction's charge also pays contract deposits", async () => {
+    // Testnet block 25,117,609: the withdrawals fund the code and storage deposits too, the call
+    // burns 33, and the rest is refunded; the payer's entries already come to its real change
+    const CONTRACT = '5HWbRf2kVZKH7d6Usr4XDVRPNcfqz6oJcnwGTvowdtpY7Em4';
+    const events = extrinsicEvents(25_117_609, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '422519702' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '54738898' }],
+      ['balances', 'Deposit', { who: BOB, amount: '279780000' }],
+      ['balances', 'Deposit', { who: CONTRACT, amount: '110791500' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '33' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '85662633' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '1024466', tip: '0' }],
+    ]);
+
+    for (const event of events) {
+      const handler = {
+        Withdraw: handleBalanceBurned,
+        Deposit: handleBalanceMinted,
+        TransactionFeePaid: handleTransactionFeeCharged,
+      }[event.event.method as 'Withdraw' | 'Deposit' | 'TransactionFeePaid'];
+      await handler(event);
+    }
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-391_596_000));
+  });
+
+  it('charges a fee once when another withdrawal, returned, comes before the fee', async () => {
+    // Testnet block 25,473,580: 3,132 withdrawn and deposited back around a relayer subsidy, and the
+    // 155,668 fee withdrawn between them. Taking the first withdrawal for the fee's found 3,132,
+    // smaller than the fee, and posted the fee a second time.
+    const [first, feeWithdraw, returned, feePaid] = extrinsicEvents(25_473_580, [
+      ['balances', 'Withdraw', { who: ALICE, amount: '3132' }],
+      ['balances', 'Withdraw', { who: ALICE, amount: '155668' }],
+      ['balances', 'Deposit', { who: ALICE, amount: '3132' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '155668', tip: '0' }],
+    ]);
+
+    await handleBalanceBurned(first);
+    await handleBalanceBurned(feeWithdraw);
+    await handleBalanceMinted(returned);
+    await handleTransactionFeeCharged(feePaid);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-155_668));
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(155_668));
+  });
+
   it('charges an Ethereum transaction its fee once, past the empty withdrawal before it', async () => {
     // Testnet block 25,118,132: `revive.eth_transact` withdraws nothing, then the 242,500 fee
     // estimate, then 71 the call burns; 44,371 is refunded and 198,129 charged. The empty

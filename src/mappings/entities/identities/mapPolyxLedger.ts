@@ -1954,8 +1954,24 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
           .filter(row => row.kind === MovementKind.Burn)
       : [];
 
-  if (pairedWithBalanceEvents && (await refileFeeWithdrawal(args, burns, who, fee))) {
-    return;
+  if (pairedWithBalanceEvents) {
+    if (await refileFeeWithdrawal(args, burns, who, fee)) {
+      return;
+    }
+
+    // The payer's withdrawals already took the fee, with whatever else they paid for, and its
+    // refund came back: its entries already come to its real change. On v8 every withdrawal for a
+    // transaction goes into one credit pool (`TxPaymentCredit`): the fee estimate (`withdraw_fee`)
+    // and, for an Ethereum transaction, the storage deposit limit too, withdrawn before dispatch
+    // (`runtime.rs`, `deposit_txfee`). Revive pays contract deposits out of the pool, and
+    // `correct_and_deposit_fee` splits what is left into the fee, to the author, and one refund to
+    // the payer of everything unspent (polkadot-sdk `FungibleAdapter`, transaction-payment v8.1.2).
+    // `TransactionFeePaid` only reports the fee's share, which no single withdrawal then matches
+    // (testnet blocks 24,913,217 and 25,117,609). So nothing more is debited; the fee stays inside
+    // those burns rather than being split out of the one refund that mixes it with the rest.
+    if (burns.some(row => row.accountId === who)) {
+      return;
+    }
   }
 
   await postTransition(args, {
@@ -2092,13 +2108,17 @@ const isFeePaidToAuthor = async (
  * Re-files `payer`'s fee withdrawal in this extrinsic, and its refund, as the fee. `false` when
  * there is none.
  *
- * Which burn is the fee's is decided by where it sits, not by its size: the call itself can burn
- * from the same account, and picking by amount could re-file that burn as the fee instead. The two
- * fees are withdrawn at fixed points. A transaction fee is withdrawn before the call runs, so it is
- * the payer's first burn in the extrinsic; a protocol fee is withdrawn by the call, immediately
- * before `FeeCharged` announces it. The amount is only checked, never searched on: a transaction
- * fee's withdrawal is the estimate, never less than what was finally charged, and a protocol fee's
- * is exact.
+ * A protocol fee is withdrawn by the call immediately before `FeeCharged` announces it, and is
+ * exact, so it is the nearest preceding withdrawal of that amount.
+ *
+ * A transaction fee is withdrawn before the call runs, as an estimate, and what the chain did not
+ * charge is refunded with a `Deposit` to the payer in the same extrinsic. So its withdrawal is the
+ * payer's first that accounts for the fee: equal to it, or exceeding it by exactly a refund the
+ * payer was deposited. Not simply the first: a withdrawal can come ahead of the fee's and be
+ * returned (testnet block 25,473,580 withdrew 3,132 then the 155,668 fee, and deposited the 3,132
+ * back), and an Ethereum transaction withdraws nothing first (block 25,118,132). Not simply one of
+ * the fee's size either: the call itself can burn exactly the fee from the same account after the
+ * fee was withdrawn, which is why the first that accounts for it is taken.
  */
 const refileFeeWithdrawal = async (
   args: HandlerArgs,
@@ -2107,25 +2127,35 @@ const refileFeeWithdrawal = async (
   fee: bigint
 ): Promise<boolean> => {
   const own = burns.filter(row => row.accountId === payer);
-  const isProtocolFee = args.eventId === EventIdEnum.FeeCharged;
-  const withdrawal = isProtocolFee
-    ? nearestPreceding(own, args)
-    : [...own].sort((a, b) => (a.movementId < b.movementId ? -1 : 1))[0];
 
-  if (!withdrawal || (isProtocolFee ? withdrawal.amountAbs !== fee : withdrawal.amountAbs < fee)) {
+  if (args.eventId === EventIdEnum.FeeCharged) {
+    const withdrawal = nearestPreceding(own, args);
+
+    if (!withdrawal || withdrawal.amountAbs !== fee) {
+      return false;
+    }
+
+    await relabelEntry(withdrawal, MovementKind.Fee, args.blockEventId);
+    return true;
+  }
+
+  const refundOf = (withdrawal: PolyxEntry): PolyxEntry | undefined =>
+    findExtrinsicEntries(args, MovementKind.Mint, payer, withdrawal.amountAbs - fee)[0];
+
+  const withdrawal = [...own]
+    .sort((a, b) => (a.movementId < b.movementId ? -1 : 1))
+    .find(row => row.amountAbs === fee || (row.amountAbs > fee && refundOf(row)));
+
+  if (!withdrawal) {
     return false;
   }
 
   await relabelEntry(withdrawal, MovementKind.Fee, args.blockEventId);
 
-  const refunded = withdrawal.amountAbs - fee;
+  const refund = withdrawal.amountAbs > fee ? refundOf(withdrawal) : undefined;
 
-  if (refunded > BigInt(0)) {
-    const [refund] = findExtrinsicEntries(args, MovementKind.Mint, payer, refunded);
-
-    if (refund) {
-      await relabelEntry(refund, MovementKind.Fee, args.blockEventId);
-    }
+  if (refund) {
+    await relabelEntry(refund, MovementKind.Fee, args.blockEventId);
   }
 
   return true;
