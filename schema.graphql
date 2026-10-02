@@ -1781,17 +1781,6 @@ enum CallIdEnum {
   unfreeze_partial_tokens
 }
 
-type Debug @entity {
-  id: ID!
-  line: String
-  context: String
-}
-
-type FoundType @entity {
-  id: ID!
-  rawType: String!
-}
-
 """
 A set of transactions that were executed together. Includes a reference to its parent, which reference its parent, this forms a chain to the genesis block
 

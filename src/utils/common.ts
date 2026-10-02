@@ -4,7 +4,7 @@ import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
-import { ErrorJson, FoundType } from '../types';
+import { ErrorJson } from '../types';
 import * as generatedModels from '../types/models';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
@@ -214,10 +214,6 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
       )
     )
   );
-};
-
-export const logFoundType = (type: string, rawType: string): void => {
-  FoundType.create({ id: type, rawType }).save();
 };
 
 export const END_OF_TIME = BigInt('253402194600000');

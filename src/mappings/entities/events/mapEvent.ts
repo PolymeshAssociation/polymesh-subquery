@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { metadataTypeNames } from '../../../decode';
 import { Event } from '../../../types';
-import { extractEventArgs, logFoundType } from '../../../utils';
+import { extractEventArgs } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
 import { extractArgs } from '../common';
 
@@ -22,7 +22,7 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
   const types = metadataTypeNames(event);
 
   const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i], logFoundType),
+    value: serializeLikeHarvester(arg, types[i]),
   }));
 
   const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
