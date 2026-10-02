@@ -218,6 +218,13 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
 
 export const END_OF_TIME = BigInt('253402194600000');
 
+/**
+ * `null`, for a field the generated models type as `string | undefined`: an open interval or
+ * nomination is written and looked up with an explicit `null` in its closing field, because the
+ * store's cache matches a filter with `isEqual`, which does not take an unset field for `null`.
+ */
+export const EXPLICIT_NULL = null as unknown as undefined;
+
 export function addIfNotIncludes<T>(arr: T[], item: T): void {
   if (!arr.includes(item)) {
     arr.push(item);

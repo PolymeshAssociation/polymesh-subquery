@@ -10,8 +10,13 @@ const preRuntime = (engine: 'BABE' | 'aura', authorityIndex: number) => ({
 
 const blockWith = (height: number, logs: unknown[]): SubstrateBlock =>
   ({
-    block: { header: { number: { toString: () => String(height) }, digest: { logs } } },
-    hash: { toHex: () => `0xhash${height}` },
+    block: {
+      header: {
+        number: { toString: () => String(height) },
+        hash: { toHex: () => `0xhash${height}` },
+        digest: { logs },
+      },
+    },
   } as unknown as SubstrateBlock);
 
 describe('blockAuthor', () => {

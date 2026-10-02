@@ -70,8 +70,8 @@ export const readRewardDestination = (
 };
 
 /**
- * Per-block caches of the two chain reads every staking path starts with: `staking.payee(stash)`
- * and `staking.bonded(stash)`.
+ * Per-block caches of the chain reads every staking path starts with: `staking.payee(stash)` and
+ * `staking.bonded(stash)`, and `staking.ledger(controller)` behind them.
  *
  * **Block scoped, not process lifetime.** `set_payee` and `set_controller` emit no event, so
  * there is nothing a longer-lived entry could be invalidated on, and both went stale silently and
@@ -91,24 +91,31 @@ export const readRewardDestination = (
 let cacheBlock: string | undefined;
 let payeeCache = new Map<string, LegacyRewardDestination>();
 let controllerCache = new Map<string, string>();
+let ledgerCache = new Map<string, StakingLedgerSnapshot>();
 
 const cachesFor = (
   blockId: string
-): { payees: Map<string, LegacyRewardDestination>; controllers: Map<string, string> } => {
+): {
+  payees: Map<string, LegacyRewardDestination>;
+  controllers: Map<string, string>;
+  ledgers: Map<string, StakingLedgerSnapshot>;
+} => {
   if (cacheBlock !== blockId) {
     cacheBlock = blockId;
     payeeCache = new Map();
     controllerCache = new Map();
+    ledgerCache = new Map();
   }
 
-  return { payees: payeeCache, controllers: controllerCache };
+  return { payees: payeeCache, controllers: controllerCache, ledgers: ledgerCache };
 };
 
-/** Test hook — a suite re-mocking `staking.payee` / `staking.bonded` within one block must clear. */
+/** Test hook — a suite re-mocking staking storage within one block must clear. */
 export const __resetStakingCaches = (): void => {
   cacheBlock = undefined;
   payeeCache = new Map();
   controllerCache = new Map();
+  ledgerCache = new Map();
 };
 
 /**
@@ -218,6 +225,26 @@ export interface StakingLedgerSnapshot {
  * back as all-zero, not `undefined`.
  */
 export const readStakingLedger = async (
+  stash: string,
+  blockId: string
+): Promise<StakingLedgerSnapshot | undefined> => {
+  // Per block, like the payee and controller above: a payout block restakes many rewards, and both
+  // the ledger and `StakingPosition` read each stash's ledger. Only a successful read is kept.
+  const ledgers = cachesFor(blockId).ledgers;
+  const cached = ledgers.get(stash);
+  if (cached) {
+    return cached;
+  }
+
+  const snapshot = await readLedger(stash, blockId);
+  if (snapshot) {
+    ledgers.set(stash, snapshot);
+  }
+
+  return snapshot;
+};
+
+const readLedger = async (
   stash: string,
   blockId: string
 ): Promise<StakingLedgerSnapshot | undefined> => {

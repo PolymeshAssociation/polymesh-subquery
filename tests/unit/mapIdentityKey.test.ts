@@ -87,7 +87,7 @@ describe('openIdentityKey', () => {
       validFromBlockId: '0000001',
       addedReason: EventIdEnum.DidCreated,
     });
-    expect(rows()[0].validToBlockId).toBeUndefined();
+    expect(rows()[0].validToBlockId).toBeNull();
     expect(rows()[0].removedReason).toBeUndefined();
   });
 
@@ -164,6 +164,53 @@ describe('closeIdentityKeys', () => {
 });
 
 describe('rotateIdentityKey', () => {
+  it("reads only the open interval, however long the key's history", async () => {
+    // testnet block 1,056,718: one key re-permissioned 100 times after 1,400 earlier changes, each
+    // change reading every interval the key ever had
+    for (let i = 0; i < 250; i += 1) {
+      db[`closed-${i}`] = {
+        id: `closed-${i}`,
+        identityId: DID,
+        accountId: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        validFromBlockId: '0000001',
+        validToBlockId: '0000002',
+      };
+    }
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: { transactionGroups: [] },
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000003/0000000000'
+    );
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 1,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000004/0000000001'
+    );
+
+    expect((store.getByFields as jest.Mock).mock.calls[0][1]).toContainEqual([
+      'validToBlockId',
+      '=',
+      null,
+    ]);
+    const open = Object.values(db).filter(row => row.validToBlockId === null);
+    expect(open).toHaveLength(1);
+    expect(open[0].permissions).toEqual({ transactionGroups: ['Portfolio'] });
+  });
+
   it('closes the current interval and opens a fresh one carrying the new permissions', async () => {
     await openIdentityKey(
       {
@@ -197,7 +244,7 @@ describe('rotateIdentityKey', () => {
     // no gap and no overlap: the old interval ends exactly where the new one begins
     expect(history[0].validToBlockId).toBe('0000007');
     expect(history[1].validFromBlockId).toBe('0000007');
-    expect(history[1].validToBlockId).toBeUndefined();
+    expect(history[1].validToBlockId).toBeNull();
     expect(history[1].permissions).toEqual({ transactionGroups: ['Portfolio'] });
   });
 
@@ -330,7 +377,7 @@ describe('add → remove → re-add', () => {
     expect(history).toHaveLength(2);
     expect(history[0]).toMatchObject({ validFromBlockId: '0000010', validToBlockId: '0000020' });
     expect(history[1].validFromBlockId).toBe('0000030');
-    expect(history[1].validToBlockId).toBeUndefined();
+    expect(history[1].validToBlockId).toBeNull();
     // no overlap: interval 1 closes (block 20) strictly before interval 2 opens (block 30)
     expect(history[0].validToBlockId < history[1].validFromBlockId).toBe(true);
     expect(openRows()).toHaveLength(1);

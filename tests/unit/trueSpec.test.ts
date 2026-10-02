@@ -13,9 +13,9 @@ describe('ensureTrueSpecVersion', () => {
         header: {
           number: { toString: () => String(height) },
           parentHash: `0xparent${height}`,
+          hash: { toHex: () => `0xhash${height}` },
         },
       },
-      hash: { toHex: () => `0xhash${height}` },
       specVersion: labelled,
     } as unknown as SubstrateBlock);
 

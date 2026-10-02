@@ -180,11 +180,58 @@ const countHolderChange = (asset: Asset, before: number, after: number): void =>
 let bufferedBlock: string | undefined;
 const bufferedHolders = new Map<string, NftHolder>();
 
+/**
+ * The tokens that have left a buffered holder this block, taken out of its `nftIds` in one pass when
+ * the buffer is flushed. Tokens that arrive are appended straight away.
+ *
+ * So a block costs a holder at most one pass over its tokens, and only if some left. Filtering on
+ * every event cost a pass per event: testnet blocks 15,391,560 onward redeemed 400 tokens a block,
+ * one per event, from one portfolio holding tens of thousands. Holding the tokens as a set instead
+ * cost two passes per holder per block even for a holder only receiving, which made the NFT
+ * settlements of testnet blocks 13,527,617 onward 2.5 times slower.
+ *
+ * A token leaving is one its holder holds (the chain checks), so the holder holds its `nftIds` less
+ * the tokens that have left.
+ */
+const leftIds = new WeakMap<NftHolder, Set<bigint>>();
+
+const heldCount = (holder: NftHolder): number =>
+  holder.nftIds.length - (leftIds.get(holder)?.size ?? 0);
+
+const addTokens = (holder: NftHolder, ids: bigint[]): void => {
+  const left = leftIds.get(holder);
+
+  ids.forEach(nftId => {
+    // a token that left earlier in the block and came back is still in `nftIds`
+    if (!left?.delete(nftId)) {
+      holder.nftIds.push(nftId);
+    }
+  });
+};
+
+const removeTokens = (holder: NftHolder, ids: bigint[]): void => {
+  let left = leftIds.get(holder);
+
+  if (!left) {
+    left = new Set();
+    leftIds.set(holder, left);
+  }
+
+  ids.forEach(nftId => left.add(nftId));
+};
+
 export const flushNftBuffer = async (): Promise<void> => {
   if (bufferedHolders.size === 0) {
     return;
   }
 
+  bufferedHolders.forEach(holder => {
+    const left = leftIds.get(holder);
+    if (left?.size) {
+      holder.nftIds = holder.nftIds.filter(nftId => !left.has(nftId));
+    }
+    leftIds.delete(holder);
+  });
   await Promise.all([...bufferedHolders.values()].map(holder => holder.save()));
   bufferedHolders.clear();
   bufferedBlock = undefined;
@@ -316,9 +363,9 @@ const issueNfts = async ({
 
   // the whole-array rollup, kept for the SDK and still buffered per block
   const nftHolder = await getNftHolder(asset.id, did, blockId, blockEventId);
-  const heldBefore = nftHolder.nftIds.length;
-  nftHolder.nftIds.push(...ids.map(BigInt));
-  countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
+  const heldBefore = heldCount(nftHolder);
+  addTokens(nftHolder, ids.map(BigInt));
+  countHolderChange(asset, heldBefore, heldCount(nftHolder));
   nftHolder.updatedEventId = blockEventId;
   await bufferHolder(blockId, nftHolder, event);
 
@@ -342,9 +389,9 @@ const redeemNfts = async ({
 
   const bigIds = ids.map(BigInt);
   const nftHolder = await getNftHolder(asset.id, did, blockId, blockEventId);
-  const heldBefore = nftHolder.nftIds.length;
-  nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !bigIds.includes(heldId));
-  countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
+  const heldBefore = heldCount(nftHolder);
+  removeTokens(nftHolder, bigIds);
+  countHolderChange(asset, heldBefore, heldCount(nftHolder));
   nftHolder.updatedEventId = blockEventId;
   await bufferHolder(blockId, nftHolder, event);
 
@@ -429,13 +476,13 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     const fromRollup = await getNftHolder(assetId, fromDid, blockId, blockEventId);
     const toRollup =
       toDid === fromDid ? fromRollup : await getNftHolder(assetId, toDid, blockId, blockEventId);
-    const fromBefore = fromRollup.nftIds.length;
-    const toBefore = toRollup.nftIds.length;
-    fromRollup.nftIds = fromRollup.nftIds.filter(id => !bigIds.includes(id));
-    toRollup.nftIds.push(...bigIds);
+    const fromBefore = heldCount(fromRollup);
+    const toBefore = heldCount(toRollup);
+    removeTokens(fromRollup, bigIds);
+    addTokens(toRollup, bigIds);
     if (toRollup !== fromRollup) {
-      countHolderChange(asset, fromBefore, fromRollup.nftIds.length);
-      countHolderChange(asset, toBefore, toRollup.nftIds.length);
+      countHolderChange(asset, fromBefore, heldCount(fromRollup));
+      countHolderChange(asset, toBefore, heldCount(toRollup));
     }
     fromRollup.updatedEventId = blockEventId;
     toRollup.updatedEventId = blockEventId;

@@ -96,56 +96,70 @@ export const serializeLikeHarvester = (item: Codec, type: string, isCallArg = fa
   } else if (type === 'ElectionScore') {
     // In newer Substrate versions ElectionScore became a named struct (SpNposElectionsElectionScore)
     // rather than a plain tuple/array of BN values. Fall back to the struct serializer in that case.
-    if (isStruct(item)) {
+    if (isStructType(rawType)) {
       const types = extractStructTypes(item as unknown as Struct, rawType);
       return fromEntries((item as unknown as Struct).entries(), (v, _, k) =>
         serializeLikeHarvester(v, types[k])
       );
     }
     return (item as unknown as BN[]).map(n => parseInt(n.toString())); // This might not work for big numbers but that's the way the harvester does it.
-  } else if (isTuple(item)) {
-    const types = extractTupleTypes(item, type);
+  }
+
+  // Each test reads the raw type computed above. The `isX(item)` helpers recompute it, and a
+  // struct's or call's raw type is rebuilt from the registry every time, so testing through them
+  // described a value 8-10 times over and parsed it several.
+  if (isTupleType(rawType)) {
+    const types = extractTupleTypes(item as unknown as Tuple, type, rawType);
     return fromEntries(
       (item as unknown as AnyTuple).map((v, i) => [`col${i + 1}`, v]),
       (v, i) => serializeLikeHarvester(v, types[i])
     );
-  } else if (isArray(item)) {
+  } else if (isArrayType(rawType)) {
     // item.Type === "Type" therefore string manipulation.
-    const innerType = extractArrayType(item, type);
-    return item.map(v => serializeLikeHarvester(v, innerType));
-  } else if (isVec(item)) {
+    const array = item as unknown as VecFixed<any>;
+    const innerType = extractArrayType(array, type, rawType);
+    return array.map(v => serializeLikeHarvester(v, innerType));
+  } else if (isVecType(rawType)) {
     // item.Type === "Type" therefore string manipulation.
-    const innerType = extractVecType(item, type);
-    return item.map(v => serializeLikeHarvester(v, innerType));
-  } else if (isResult(item)) {
-    const types = extractResultTypes(item, type);
-    if (item.isOk) {
-      return { Ok: serializeLikeHarvester(item.value, types.ok) };
+    const vec = item as unknown as Vec<any>;
+    const innerType = extractVecType(vec, type, rawType);
+    return vec.map(v => serializeLikeHarvester(v, innerType));
+  } else if (isResultType(rawType)) {
+    const result = item as unknown as Result<any, any>;
+    const types = extractResultTypes(result, type, rawType);
+    if (result.isOk) {
+      return { Ok: serializeLikeHarvester(result.value, types.ok) };
     } else {
       // Harvester likes "Error" instead of "Err"
       return {
-        Error: serializeLikeHarvester(item.value, types.err),
+        Error: serializeLikeHarvester(result.value, types.err),
       };
     }
-  } else if (isEnum(item)) {
-    const variant = capitalizeFirstLetter(item.type);
-    const valueType = extractEnumType(item, type, variant);
-    if (item.isBasic) {
+  } else if (isEnumType(rawType)) {
+    const enumItem = item as unknown as Enum;
+    const variant = capitalizeFirstLetter(enumItem.type);
+    const valueType = extractEnumType(enumItem, type, variant, rawType);
+    if (enumItem.isBasic) {
       return variant;
     } else {
       return {
-        [variant]: serializeLikeHarvester(item.value, valueType),
+        [variant]: serializeLikeHarvester(enumItem.value, valueType),
       };
     }
-  } else if (isStruct(item)) {
-    const types = extractStructTypes(item, type);
-    return fromEntries(item.entries(), (v, _, k) => serializeLikeHarvester(v, types[k]));
-  } else if (isOption(item)) {
-    return item.isSome ? serializeLikeHarvester(item.value, extractOptionType(item, type)) : null;
-  } else if (isMap(item)) {
+  } else if (isStructType(rawType)) {
+    const struct = item as unknown as Struct;
+    const types = extractStructTypes(struct, type, rawType);
+    return fromEntries(struct.entries(), (v, _, k) => serializeLikeHarvester(v, types[k]));
+  } else if (isOptionType(rawType)) {
+    const option = item as unknown as Option<any>;
+    return option.isSome
+      ? serializeLikeHarvester(option.value, extractOptionType(option, type, rawType))
+      : null;
+  } else if (isMapType(rawType)) {
     // It is a BTreeMap or HashMap
-    const { value } = extractMapTypes(item, type);
-    return fromEntries(item.entries(), v => serializeLikeHarvester(v, value));
+    const map = item as unknown as CodecMap<any>;
+    const { value } = extractMapTypes(map, type, rawType);
+    return fromEntries(map.entries(), v => serializeLikeHarvester(v, value));
   } else {
     return item.toJSON();
   }
@@ -171,12 +185,21 @@ export const serializeCallArgsLikeHarvester = (
  * Meaning in order to extract the inner types, we must parse
  * the raw type as JSON.
  */
+const parsedTypes = new Map<string, any>();
+
 export const parseType = (type: string): any => {
-  if (type.startsWith('{')) {
-    return JSON.parse(type);
-  } else {
+  if (!type.startsWith('{')) {
     return undefined;
   }
+
+  // a type's definition is fixed, so each distinct one is parsed once; there are a few hundred
+  let parsed = parsedTypes.get(type);
+  if (parsed === undefined) {
+    parsed = JSON.parse(type);
+    parsedTypes.set(type, parsed);
+  }
+
+  return parsed;
 };
 
 const isTupleType = (type: string) => type.length > 2 && type.startsWith('(') && type.endsWith(')');
@@ -206,20 +229,20 @@ const isStructType = (type: string) => {
 };
 export const isStruct = (item: Codec): item is Struct => isStructType(item.toRawType());
 
-export const extractOptionType = (item: Option<any>, t: string): string => {
-  const type = isOptionType(t) ? t : item.toRawType();
+export const extractOptionType = (item: Option<any>, t: string, rawType?: string): string => {
+  const type = isOptionType(t) ? t : rawType ?? item.toRawType();
   return type.slice(7, -1);
 };
-export const extractVecType = (item: Vec<any>, t: string): string => {
-  const type = isVecType(t) ? t : item.toRawType();
+export const extractVecType = (item: Vec<any>, t: string, rawType?: string): string => {
+  const type = isVecType(t) ? t : rawType ?? item.toRawType();
   return type.slice(4, -1);
 };
-export const extractArrayType = (item: VecFixed<any>, t: string): string => {
-  const type = isArrayType(t) ? t : item.toRawType();
+export const extractArrayType = (item: VecFixed<any>, t: string, rawType?: string): string => {
+  const type = isArrayType(t) ? t : rawType ?? item.toRawType();
   return type.slice(1, type.lastIndexOf(';'));
 };
-export const extractTupleTypes = (item: Tuple, t: string): string[] => {
-  const type = isTupleType(t) ? t : item.toRawType();
+export const extractTupleTypes = (item: Tuple, t: string, rawType?: string): string[] => {
+  const type = isTupleType(t) ? t : rawType ?? item.toRawType();
   const commas = findTopLevelCommas(type);
   commas.push(-1);
 
@@ -232,8 +255,12 @@ export const extractTupleTypes = (item: Tuple, t: string): string[] => {
   }
   return types;
 };
-export const extractMapTypes = (item: CodecMap, t: string): { key: string; value: string } => {
-  const type = isMapType(t) ? t : item.toRawType();
+export const extractMapTypes = (
+  item: CodecMap,
+  t: string,
+  rawType?: string
+): { key: string; value: string } => {
+  const type = isMapType(t) ? t : rawType ?? item.toRawType();
   let start = 0;
   if (type.startsWith('BTreeMap<')) {
     start = 9;
@@ -251,9 +278,10 @@ export const extractMapTypes = (item: CodecMap, t: string): { key: string; value
 };
 export const extractResultTypes = (
   item: Result<any, any>,
-  t: string
+  t: string,
+  rawType?: string
 ): { ok: string; err: string } => {
-  const type = isResultType(t) ? t : item.toRawType();
+  const type = isResultType(t) ? t : rawType ?? item.toRawType();
 
   const commaPosition = findTopLevelCommas(type, true)[0];
 
@@ -262,12 +290,21 @@ export const extractResultTypes = (
   return { ok, err };
 };
 // item.Type would return raw types
-export const extractStructTypes = (item: Struct, t: string): { [name: string]: string } => {
-  const type = isStructType(t) ? t : item.toRawType();
+export const extractStructTypes = (
+  item: Struct,
+  t: string,
+  rawType?: string
+): { [name: string]: string } => {
+  const type = isStructType(t) ? t : rawType ?? item.toRawType();
   return parseType(type);
 };
 // item.Type would return raw types
-export const extractEnumType = (item: Enum, t: string, variant: string): string => {
-  const type = isEnumType(t) ? t : item.toRawType();
+export const extractEnumType = (
+  item: Enum,
+  t: string,
+  variant: string,
+  rawType?: string
+): string => {
+  const type = isEnumType(t) ? t : rawType ?? item.toRawType();
   return parseType(type)._enum[variant];
 };
