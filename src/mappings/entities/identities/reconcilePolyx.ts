@@ -1,8 +1,9 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
-import { AccountBalance, AnomalyKind } from '../../../types';
+import { AccountBalance, AnomalyKind, PolyxPool } from '../../../types';
 import { getBigIntValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { EventParams } from '../../../utils/events';
 import { is8xChain } from '../../../utils/common';
 import { readStakingLock } from '../../../utils/staking';
 import {
@@ -10,9 +11,12 @@ import {
   applyChainFreezes,
   ChainFreezes,
   PIPS_LOCK_ID,
+  PoolDelta,
+  poolTag,
   readChainHolds,
   readChainLock,
   readChainStakingLock,
+  recordAdjustment,
 } from './mapPolyxLedger';
 
 /**
@@ -104,6 +108,8 @@ const onChainCache = new Map<string, OnChain>();
 interface PendingEntry {
   /** First provoking event index, kept for the anomaly's provenance. */
   eventIdx: number | undefined;
+  /** The same event's ids, which the correction's ledger entries are filed under. */
+  params: EventParams | undefined;
   /** The block the snapshot was captured in — not the block the flush later runs in. */
   block: SubstrateBlock;
   onChain: OnChain;
@@ -187,7 +193,11 @@ export const reconcileAccount = async (
   address: string,
   _blockId: string,
   block: SubstrateBlock,
-  { force = false, eventIdx }: { force?: boolean; eventIdx?: number } = {}
+  {
+    force = false,
+    eventIdx,
+    params,
+  }: { force?: boolean; eventIdx?: number; params?: EventParams } = {}
 ): Promise<void> => {
   if (!address || !shouldSample(block, force)) {
     return;
@@ -204,6 +214,7 @@ export const reconcileAccount = async (
     // Fill in a real event index if the queueing call so far only had a forced, event-less one.
     if (existing.eventIdx === undefined && eventIdx !== undefined) {
       existing.eventIdx = eventIdx;
+      existing.params = params;
     }
     return;
   }
@@ -216,7 +227,7 @@ export const reconcileAccount = async (
     return;
   }
 
-  pending.set(address, { eventIdx, block, onChain });
+  pending.set(address, { eventIdx, params, block, onChain });
 };
 
 /**
@@ -373,7 +384,7 @@ const runPositiveControl = (address: string, onChain: OnChain): void => {
 
 const reconcileOne = async (
   address: string,
-  { eventIdx, block, onChain }: PendingEntry
+  { eventIdx, params, block, onChain }: PendingEntry
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
   if (!balance) {
@@ -414,19 +425,46 @@ const reconcileOne = async (
 
   driftedCount += 1;
 
+  // The correction is posted as a `BalanceSetAdjustment` per pool, filed under the event that
+  // queued the check, so the account's entries still add up to its balance and the full ledger
+  // check can trace every corrected unit. Without one it set the balance silently, and the
+  // corrected accounts dropped out of the check while the cause stayed hidden.
+  const filed = params !== undefined && eventIdx !== undefined;
+
   await recordAnomaly({
     kind: AnomalyKind.BalanceReconciliationDrift,
-    detail: `${address}: ${drifts.join('; ')}`,
+    detail: `${address}: ${drifts.join('; ')}${
+      filed ? '' : ' (no provoking event to file the correction under, so it has no ledger entry)'
+    }`,
     block,
     eventIdx,
   });
+
+  const deltas: PoolDelta[] = [
+    { pool: PolyxPool.Free, delta: onChain.free - balance.free },
+    { pool: PolyxPool.Reserved, delta: onChain.reserved - balance.reserved },
+  ].filter(({ delta }) => delta !== BigInt(0));
 
   balance.free = onChain.free;
   balance.reserved = onChain.reserved;
   // Rebuilds `locks`/`holds` from the same snapshot, so `bonded` and `otherReserved` stay
   // consistent with the corrected pools — see `applyChainFreezes`.
   applyChainFreezes(balance, onChain);
-  balance.updatedEventId = `${blockId}/${padId(String(eventIdx ?? 0))}`;
 
-  await balance.save();
+  const movementId = `${blockId}/${padId(String(eventIdx ?? 0))}`;
+
+  if (!filed) {
+    balance.updatedEventId = movementId;
+    await balance.save();
+    return;
+  }
+
+  await recordAdjustment(balance, deltas, {
+    block,
+    blockId,
+    movementId,
+    params,
+    // one event can queue several accounts, so the address keeps their corrections apart
+    entryId: pool => `${movementId}/${poolTag(pool)}c/${address}`,
+  });
 };

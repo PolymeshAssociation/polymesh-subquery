@@ -444,7 +444,7 @@ interface Transition {
   destination?: string;
 }
 
-const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
+export const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
 
 interface MovementSide {
   endpoint: Endpoint;
@@ -598,7 +598,7 @@ const writeMovementSide = async (
     extrinsicId: params.extrinsicId,
   }).save();
 
-  await reconcileAccount(address, blockId, block, { eventIdx });
+  await reconcileAccount(address, blockId, block, { eventIdx, params });
 };
 
 /**
@@ -1555,6 +1555,7 @@ export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
   await reconcileAccount(account, args.blockId, args.block, {
     force: true,
     eventIdx: args.eventIdx,
+    params: getEventParams(args),
   });
 };
 
@@ -1562,7 +1563,7 @@ export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
 // BalanceSet — a checkpoint, not a movement
 // ---------------------------------------------------------------------------------------------
 
-interface PoolDelta {
+export interface PoolDelta {
   pool: PolyxPool;
   delta: bigint;
 }
@@ -1593,6 +1594,78 @@ const applyBalanceSet = (
   }
 
   return deltas;
+};
+
+/**
+ * Records `deltas`, already applied to `balance`'s pools, as `BalanceSetAdjustment`s: one movement
+ * on the lifetime tallies and one entry per changed pool, so the account's entries still add up to
+ * its balance. Saves the balance. For a balance set to a value rather than moved by an amount: a
+ * `BalanceSet`, or the reconciler correcting a drift to chain state.
+ */
+export const recordAdjustment = async (
+  balance: AccountBalance,
+  deltas: PoolDelta[],
+  {
+    block,
+    blockId,
+    movementId,
+    params,
+    entryId,
+  }: {
+    block: SubstrateBlock;
+    blockId: string;
+    movementId: string;
+    params: ReturnType<typeof getEventParams>;
+    entryId: (pool: PolyxPool) => string;
+  }
+): Promise<void> => {
+  if (deltas.length > 0) {
+    balance.movementCount += 1;
+    for (const { delta } of deltas) {
+      bumpLifetimeByKind(
+        balance,
+        MovementKind.BalanceSetAdjustment,
+        signOf(delta),
+        delta > BigInt(0) ? delta : -delta
+      );
+    }
+  }
+
+  recomputeDerived(balance);
+  balance.updatedEventId = movementId;
+  await balance.save();
+
+  const date = startOfUtcDay(block.timestamp);
+
+  for (const { pool, delta } of deltas) {
+    await PolyxEntry.create({
+      id: entryId(pool),
+      movementId,
+      accountId: balance.id,
+      identityId: balance.identityId,
+      counterpartyAddress: undefined,
+      counterpartyIdentityId: undefined,
+      pool,
+      amount: delta,
+      amountAbs: delta > BigInt(0) ? delta : -delta,
+      kind: MovementKind.BalanceSetAdjustment,
+      direction: signOf(delta),
+      holdReason: undefined,
+      memo: undefined,
+      freeAfter: balance.free,
+      reservedAfter: balance.reserved,
+      frozenAfter: balance.frozen,
+      moduleId: params.moduleId,
+      callId: params.callId,
+      eventId: params.eventId,
+      specVersionId: block.specVersion,
+      date,
+      eraIndex: undefined,
+      createdEventId: movementId,
+      blockId,
+      extrinsicId: params.extrinsicId,
+    }).save();
+  }
 };
 
 /**
@@ -1630,58 +1703,18 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   const balance = await loadBalance(who, account.identityId, blockEventId, block);
 
   const deltas = applyBalanceSet(balance, newFree, newReserved);
-
-  if (deltas.length > 0) {
-    balance.movementCount += 1;
-    for (const { delta } of deltas) {
-      bumpLifetimeByKind(
-        balance,
-        MovementKind.BalanceSetAdjustment,
-        signOf(delta),
-        delta > BigInt(0) ? delta : -delta
-      );
-    }
-  }
-
-  recomputeDerived(balance);
-  balance.updatedEventId = blockEventId;
-  await balance.save();
-
   const params = getEventParams(args);
-  const date = startOfUtcDay(datetime);
 
-  for (const { pool, delta } of deltas) {
-    await PolyxEntry.create({
-      id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}s`,
-      movementId: blockEventId,
-      accountId: who,
-      identityId: account.identityId,
-      counterpartyAddress: undefined,
-      counterpartyIdentityId: undefined,
-      pool,
-      amount: delta,
-      amountAbs: delta > BigInt(0) ? delta : -delta,
-      kind: MovementKind.BalanceSetAdjustment,
-      direction: signOf(delta),
-      holdReason: undefined,
-      memo: undefined,
-      freeAfter: balance.free,
-      reservedAfter: balance.reserved,
-      frozenAfter: balance.frozen,
-      moduleId: params.moduleId,
-      callId: params.callId,
-      eventId: params.eventId,
-      specVersionId: block.specVersion,
-      date,
-      eraIndex: undefined,
-      createdEventId: blockEventId,
-      blockId,
-      extrinsicId: params.extrinsicId,
-    }).save();
-  }
+  await recordAdjustment(balance, deltas, {
+    block,
+    blockId,
+    movementId: blockEventId,
+    params,
+    entryId: pool => `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}s`,
+  });
 
   // a checkpoint should equal chain state — always reconcile right after it
-  await reconcileAccount(who, blockId, block, { force: true, eventIdx });
+  await reconcileAccount(who, blockId, block, { force: true, eventIdx, params });
 };
 
 // ---------------------------------------------------------------------------------------------

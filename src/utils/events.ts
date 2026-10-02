@@ -24,7 +24,7 @@ export const extractEventArgs = (args: any[]) => {
   };
 };
 
-type EventParams = {
+export type EventParams = {
   id: string;
   moduleId: ModuleIdEnum;
   moduleIdText: string;

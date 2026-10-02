@@ -19,6 +19,7 @@ import {
   reconcileStats,
 } from '../../src/mappings/entities/identities/reconcilePolyx';
 import { __resetStakingCaches } from '../../src/utils/staking';
+import { EventParams } from '../../src/utils/events';
 
 const ADDR = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
@@ -46,7 +47,7 @@ const v7Block = (height: number): SubstrateBlock => block(height, 7_000_000);
  */
 const reconcile = async (
   height: number,
-  opts: { force?: boolean; eventIdx?: number } = {}
+  opts: Parameters<typeof reconcileAccount>[3] = {}
 ): Promise<void> => {
   await reconcileAccount(ADDR, '0000000000', block(height), opts);
   await reconcilePending(block(height + 1));
@@ -169,6 +170,58 @@ describe('reconcileAccount / reconcilePending', () => {
       reserved: P(50),
       total: P(1050),
     });
+  });
+
+  it('posts the correction as entries under the provoking event, so they still sum to the balance', async () => {
+    setDerived({ free: P(900), reserved: P(60), total: P(960) });
+    setChain(P(1000).toString(), P(50).toString(), '0');
+    const params = {
+      moduleId: 'balances',
+      callId: 'transfer',
+      eventId: 'Transfer',
+      extrinsicId: '0000009000-1',
+    } as unknown as EventParams;
+
+    await reconcile(9000, { eventIdx: 3, params });
+
+    const entries = Object.values(db['PolyxEntry'] ?? {});
+    expect(entries).toEqual([
+      expect.objectContaining({
+        id: `0000009000/0000000003/fc/${ADDR}`,
+        movementId: '0000009000/0000000003',
+        accountId: ADDR,
+        pool: 'Free',
+        amount: P(100),
+        kind: 'BalanceSetAdjustment',
+        eventId: 'Transfer',
+        extrinsicId: '0000009000-1',
+      }),
+      expect.objectContaining({
+        id: `0000009000/0000000003/rc/${ADDR}`,
+        pool: 'Reserved',
+        amount: -P(10),
+        kind: 'BalanceSetAdjustment',
+      }),
+    ]);
+    // the drift is still recorded as such: the entry is the trace, the anomaly the cause
+    expect(anomalies()).toHaveLength(1);
+    expect(db['AccountBalance'][ADDR]).toMatchObject({
+      free: P(1000),
+      reserved: P(50),
+      movementCount: 1,
+      updatedEventId: '0000009000/0000000003',
+    });
+  });
+
+  it('says so when a correction has no event to file an entry under', async () => {
+    setDerived({ free: P(900), total: P(900) });
+    setChain(P(1000).toString(), '0', '0');
+
+    await reconcile(9000, { force: true });
+
+    expect(db['PolyxEntry']).toBeUndefined();
+    expect(anomalies()[0].detail).toContain('no ledger entry');
+    expect(db['AccountBalance'][ADDR].free).toBe(P(1000));
   });
 
   it('rebuilds v8 holds from chain, so bonded and otherReserved stay consistent', async () => {
