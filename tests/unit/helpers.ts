@@ -45,6 +45,19 @@ export const mockStore = (db: MockDb = {}): MockDb => {
     delete db[entity]?.[id];
     return Promise.resolve();
   });
+  // equality filters over the in-memory rows, paged as the real store pages them
+  ((globalThis as any).store.getByFields as jest.Mock).mockImplementation(
+    (
+      entity: string,
+      filter: [string, string, unknown][],
+      { offset = 0, limit = 100 }: { offset?: number; limit?: number } = {}
+    ) =>
+      Promise.resolve(
+        Object.values(db[entity] ?? {})
+          .filter(row => filter.every(([field, , value]) => (row as any)[field] === value))
+          .slice(offset, offset + limit)
+      )
+  );
   (globalThis as any).api.query = {};
   return db;
 };
