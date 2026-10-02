@@ -10,7 +10,6 @@ import {
   getErrorDetails,
   getLegsValue,
   getNumberValue,
-  getAllByFields,
   getSettlementLeg,
   getSettlementTypeDetails,
   getSignerAddress,
@@ -152,31 +151,55 @@ const prepareLegCreateParams = async (
   };
 };
 
-const updateLegs = async (
-  blockEventId: string,
-  address: string,
-  instructionId: string
+/**
+ * Adds the signer of an affirmation or execution to every leg of `instruction`.
+ *
+ * Nothing to add on the scheduled and unsigned execution paths, which `getSignerAddress` returns
+ * no address for. The legs are read by id, all at once: a leg's id is `instructionId/legIndex`,
+ * the indices run from 0 with no gaps (`getLegsValue`, `getSettlementLeg`), and the instruction
+ * records how many there are. Searching for them instead cost a `getByFields` per affirmation,
+ * which sorts every cached `Leg` and sends their ids to Postgres: quadratic in a block of
+ * affirmations, like testnet block 5,091,762's 498. And reading on until a leg was missing cost a
+ * read of an id that does not exist, which no cache holds, so a Postgres query per affirmation.
+ */
+export const updateLegs = async (
+  {
+    blockEventId,
+    block,
+    eventIdx,
+  }: { blockEventId: string; block: SubstrateBlock; eventIdx: number },
+  address: string | undefined,
+  instruction: Pick<Instruction, 'id' | 'legCount'>
 ): Promise<void> => {
-  const legs = await getAllByFields<Leg>('Leg', [['instructionId', '=', instructionId]]);
-
-  // Only the legs that actually gained a signer address are rewritten. `getSignerAddress`
-  // returns undefined on the scheduled/unsigned execution paths, which used to rewrite every leg
-  // of the instruction with no content change.
-  const updatedLegs = legs.flatMap(leg => {
-    if (!address) {
-      return [];
-    }
-    addIfNotIncludes(leg.addresses, address);
-    leg.updatedEventId = blockEventId;
-
-    return [leg];
-  });
-
-  if (updatedLegs.length === 0) {
+  if (!address) {
     return;
   }
 
-  return store.bulkUpdate('Leg', updatedLegs);
+  const read = await Promise.all(
+    Array.from({ length: instruction.legCount }, (_, legIndex) =>
+      Leg.get(`${instruction.id}/${legIndex}`)
+    )
+  );
+  const legs = read.filter((leg): leg is Leg => leg !== undefined);
+
+  if (legs.length < instruction.legCount) {
+    // every instruction has its legs, written when it was created: the index is missing some
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instruction.id} has ${legs.length} of its ${instruction.legCount} legs in the index to add its signer ${address} to`,
+      block,
+      eventIdx,
+    });
+  }
+
+  legs.forEach(leg => {
+    addIfNotIncludes(leg.addresses, address);
+    leg.updatedEventId = blockEventId;
+  });
+
+  if (legs.length > 0) {
+    await store.bulkUpdate('Leg', legs);
+  }
 };
 
 /**
@@ -341,6 +364,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     valueDate: getDateValue(rawValueDate),
     memo,
     mediators: [],
+    legCount: legs.length,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });
@@ -420,7 +444,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
  *   - InstructionAffirmed
  */
 export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { extrinsic, blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
   const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
@@ -469,8 +493,33 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   await Promise.all([
     affirmation.save(),
     affirmationEvent.save(),
-    updateLegs(blockEventId, address, instructionId),
+    addSignerToLegs({ blockEventId, block, eventIdx }, address, instructionId),
   ]);
+};
+
+/** `updateLegs` for an event that names only the instruction, which is read for its leg count. */
+const addSignerToLegs = async (
+  at: Parameters<typeof updateLegs>[0],
+  address: string | undefined,
+  instructionId: string
+): Promise<void> => {
+  if (!address) {
+    return;
+  }
+
+  const instruction = await Instruction.get(instructionId);
+
+  if (!instruction) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instructionId} is not in the index to add its signer ${address} to its legs`,
+      block: at.block,
+      eventIdx: at.eventIdx,
+    });
+    return;
+  }
+
+  await updateLegs(at, address, instruction);
 };
 
 /**
@@ -604,7 +653,10 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
 
   const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  const writes = [instruction.save(), updateLegs(blockEventId, address, instructionId)];
+  const writes = [
+    instruction.save(),
+    updateLegs({ blockEventId, block, eventIdx }, address, instruction),
+  ];
 
   if (instructionEvent) {
     writes.push(

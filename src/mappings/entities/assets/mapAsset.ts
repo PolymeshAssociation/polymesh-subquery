@@ -1,8 +1,9 @@
 import { EventRecord } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
+  AnomalyKind,
   Asset,
   AssetDocument,
   AssetHolder,
@@ -43,6 +44,7 @@ import {
   rawAssetHolderToAssetHolder,
   serializeTicker,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly } from './../common';
 
@@ -575,6 +577,64 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
   await asset.save();
 };
 
+/**
+ * Why a pre-v6 `asset.Transfer` happened, which is where its instruction comes from.
+ *
+ * `asset.Transfer` exists up to v5.x (v6.0.0 replaced it with `AssetBalanceUpdated`, which names
+ * the instruction itself) and names no instruction. In those runtimes it is emitted by
+ * `unsafe_transfer`, which only three paths reach (checked at v3.0.0, v4.1.0 and v5.4.0):
+ *
+ * - settlement, which transfers an instruction's legs one at a time and then emits
+ *   `settlement.InstructionExecuted`, in the same dispatch (a failed instruction rolls back with its
+ *   events). STO investments settle this way too. Between the legs there can be only more
+ *   transfers, and the `checkpoint.CheckpointCreated` of a schedule a leg advances; an NFT leg
+ *   emits nothing;
+ * - `asset.controller_transfer`, which emits `asset.ControllerTransfer` straight after;
+ * - a capital distribution claim, which emits `capitalDistribution.BenefitClaimed` straight after.
+ *
+ * (Issuance and redemption, to and from no identity, are told apart before this is asked.)
+ *
+ * So the transfer's instruction is the next `InstructionExecuted` in its phase, reached past only
+ * those, and a transfer followed by either of the other two has none. Anything else means the
+ * reasoning above has a gap: `unexplained` names what was found, for the caller to record, rather
+ * than the transfer quietly being left without one.
+ *
+ * This used to take the block's first `InstructionExecuted`, which filed every transfer in a block
+ * of several executions under the first instruction: testnet block 5,091,763 executed 27.
+ */
+export const transferInstruction = (
+  block: SubstrateBlock,
+  eventIdx: number
+): { instructionId?: string; unexplained?: string } => {
+  // the subql-typed records, as elsewhere in this file: the webpack build treats its `EventRecord`
+  // and `@polkadot/types`' as distinct types
+  const records = (block.events ?? []) as unknown as EventRecord[];
+  const phase = records[eventIdx]?.phase.toString();
+  const name = ({ event }: EventRecord) => `${event.section}.${event.method}`;
+
+  const next = records[eventIdx + 1];
+  if (
+    next?.phase.toString() === phase &&
+    ['asset.ControllerTransfer', 'capitalDistribution.BenefitClaimed'].includes(name(next))
+  ) {
+    return {};
+  }
+
+  for (const record of records.slice(eventIdx + 1)) {
+    if (record.phase.toString() !== phase) {
+      return { unexplained: 'the end of its phase' };
+    }
+    if (name(record) === 'settlement.InstructionExecuted') {
+      return { instructionId: processInstructionId(record.event.data[1] as unknown as Codec) };
+    }
+    if (!['asset.Transfer', 'checkpoint.CheckpointCreated'].includes(name(record))) {
+      return { unexplained: name(record) };
+    }
+  }
+
+  return { unexplained: 'the end of the block' };
+};
+
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
   const {
@@ -609,7 +669,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
     }
   }
 
-  let instructionId: string;
+  let instructionId: string | undefined;
 
   const promises = [];
 
@@ -632,14 +692,16 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
     toHolder.updatedEventId = blockEventId;
     promises.push(toHolder.save());
 
-    // For old `Transfer` events, `InstructionExecuted` event was separately emitted in the same block
-    const instructionExecutedEvent = block.events.find(
-      ({ event }) => event.method === 'InstructionExecuted'
-    );
-    if (instructionExecutedEvent) {
-      instructionId = processInstructionId(
-        instructionExecutedEvent.event.data[1] as unknown as Codec
-      );
+    const settled = transferInstruction(block, eventIdx);
+    instructionId = settled.instructionId;
+
+    if (settled.unexplained) {
+      await recordAnomaly({
+        kind: AnomalyKind.UnreadableValue,
+        detail: `asset.Transfer of ${assetId} is not a settlement leg, controller transfer or distribution claim: it is followed by ${settled.unexplained}, so it has no instruction`,
+        block,
+        eventIdx,
+      });
     }
   }
 

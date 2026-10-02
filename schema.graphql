@@ -2626,6 +2626,8 @@ type Instruction @entity {
   "DID of the mediators"
   mediators: [String!]!
   failureReason: ErrorJson
+  "How many legs the instruction has. Their ids are `id/0` to `id/(legCount - 1)`"
+  legCount: Int!
   legs: [Leg!]! @derivedFrom(field: "instruction")
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
