@@ -30,19 +30,12 @@ import {
  * @param type The actual type (as opposed to raw type) of item
  * @param isCallArg true if item is an argument in a Call (the harvester deserializes LookupSources differently based on this)
  */
-export const serializeLikeHarvester = (
-  item: Codec,
-  type: string,
-  logFoundType: (type: string, rawType: string) => void,
-  isCallArg = false
-): AnyJson => {
+export const serializeLikeHarvester = (item: Codec, type: string, isCallArg = false): AnyJson => {
   if (typeof item !== 'object') {
     return item;
   }
 
   const rawType = item.toRawType();
-
-  logFoundType(type, rawType);
 
   // The filters have to be based on string comparisons because `item` does not have the right prototype chain to be comparable using `instanceof`.
   //
@@ -90,7 +83,7 @@ export const serializeLikeHarvester = (
       call_index: hexStripPrefix(hexCallIndex),
       call_function: camelToSnakeCase(e.method),
       call_module: capitalizeFirstLetter(e.section),
-      call_args: serializeCallArgsLikeHarvester(e, logFoundType),
+      call_args: serializeCallArgsLikeHarvester(e),
     };
   } else if (isCallArg && type === 'Vec<LookupSource>') {
     return (item as Vec<any>).map(i =>
@@ -106,7 +99,7 @@ export const serializeLikeHarvester = (
     if (isStruct(item)) {
       const types = extractStructTypes(item as unknown as Struct, rawType);
       return fromEntries((item as unknown as Struct).entries(), (v, _, k) =>
-        serializeLikeHarvester(v, types[k], logFoundType)
+        serializeLikeHarvester(v, types[k])
       );
     }
     return (item as unknown as BN[]).map(n => parseInt(n.toString())); // This might not work for big numbers but that's the way the harvester does it.
@@ -114,24 +107,24 @@ export const serializeLikeHarvester = (
     const types = extractTupleTypes(item, type);
     return fromEntries(
       (item as unknown as AnyTuple).map((v, i) => [`col${i + 1}`, v]),
-      (v, i) => serializeLikeHarvester(v, types[i], logFoundType)
+      (v, i) => serializeLikeHarvester(v, types[i])
     );
   } else if (isArray(item)) {
     // item.Type === "Type" therefore string manipulation.
     const innerType = extractArrayType(item, type);
-    return item.map(v => serializeLikeHarvester(v, innerType, logFoundType));
+    return item.map(v => serializeLikeHarvester(v, innerType));
   } else if (isVec(item)) {
     // item.Type === "Type" therefore string manipulation.
     const innerType = extractVecType(item, type);
-    return item.map(v => serializeLikeHarvester(v, innerType, logFoundType));
+    return item.map(v => serializeLikeHarvester(v, innerType));
   } else if (isResult(item)) {
     const types = extractResultTypes(item, type);
     if (item.isOk) {
-      return { Ok: serializeLikeHarvester(item.value, types.ok, logFoundType) };
+      return { Ok: serializeLikeHarvester(item.value, types.ok) };
     } else {
       // Harvester likes "Error" instead of "Err"
       return {
-        Error: serializeLikeHarvester(item.value, types.err, logFoundType),
+        Error: serializeLikeHarvester(item.value, types.err),
       };
     }
   } else if (isEnum(item)) {
@@ -141,22 +134,18 @@ export const serializeLikeHarvester = (
       return variant;
     } else {
       return {
-        [variant]: serializeLikeHarvester(item.value, valueType, logFoundType),
+        [variant]: serializeLikeHarvester(item.value, valueType),
       };
     }
   } else if (isStruct(item)) {
     const types = extractStructTypes(item, type);
-    return fromEntries(item.entries(), (v, _, k) =>
-      serializeLikeHarvester(v, types[k], logFoundType)
-    );
+    return fromEntries(item.entries(), (v, _, k) => serializeLikeHarvester(v, types[k]));
   } else if (isOption(item)) {
-    return item.isSome
-      ? serializeLikeHarvester(item.value, extractOptionType(item, type), logFoundType)
-      : null;
+    return item.isSome ? serializeLikeHarvester(item.value, extractOptionType(item, type)) : null;
   } else if (isMap(item)) {
     // It is a BTreeMap or HashMap
     const { value } = extractMapTypes(item, type);
-    return fromEntries(item.entries(), v => serializeLikeHarvester(v, value, logFoundType));
+    return fromEntries(item.entries(), v => serializeLikeHarvester(v, value));
   } else {
     return item.toJSON();
   }
@@ -165,13 +154,12 @@ export const serializeLikeHarvester = (
 export type HarvesterLikeCallArgs = { name: string; value: any }[];
 
 export const serializeCallArgsLikeHarvester = (
-  extrinsic: GenericCall | GenericExtrinsic,
-  logFoundType: (type: string, rawType: string) => void
+  extrinsic: GenericCall | GenericExtrinsic
 ): HarvesterLikeCallArgs => {
   const meta = extrinsic.meta.args;
   return extrinsic.args.map((arg, i) => ({
     name: camelToSnakeCase(meta[i].name.toString()),
-    value: serializeLikeHarvester(arg, meta[i].type.toString(), logFoundType, true),
+    value: serializeLikeHarvester(arg, meta[i].type.toString(), true),
   }));
 };
 

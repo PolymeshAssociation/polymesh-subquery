@@ -269,16 +269,12 @@ describe('Struct', () => {
 });
 
 describe('serializeLikeHarvester', () => {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  const logFoundType = () => {};
   it('should ignore non object types', () => {
-    expect(serializeLikeHarvester(4 as any, 'u32', logFoundType)).toBe(4);
-    expect(serializeLikeHarvester('hi' as any, 'u32', logFoundType)).toBe('hi');
+    expect(serializeLikeHarvester(4 as any, 'u32')).toBe(4);
+    expect(serializeLikeHarvester('hi' as any, 'u32')).toBe('hi');
   });
 
-  it('should log found types', () => {
-    const logFoundType = jest.fn();
-
+  it('should serialize a Vec of structs', () => {
     registry.register(
       'MyStruct',
       createClass(registry, JSON.stringify({ foo: 'bool', bar: 'u32' }))
@@ -287,27 +283,18 @@ describe('serializeLikeHarvester', () => {
     const MyVec = createClass(registry, 'MyVec');
 
     expect(
-      serializeLikeHarvester(new MyVec(registry, [{ foo: true, bar: 3 }]), 'MyVec', logFoundType)
+      serializeLikeHarvester(new MyVec(registry, [{ foo: true, bar: 3 }]), 'MyVec')
     ).toStrictEqual([{ foo: true, bar: 3 }]);
-
-    expect(logFoundType).toHaveBeenNthCalledWith(1, 'MyVec', 'Vec<{"foo":"bool","bar":"u32"}>');
-    expect(logFoundType).toHaveBeenNthCalledWith(
-      2,
-      '{"foo":"bool","bar":"u32"}',
-      '{"foo":"bool","bar":"u32"}'
-    );
   });
 
   it('should serialize dates like the harvester', () => {
     const CompactMoment = createClass(registry, 'Compact<Moment>');
 
     const notPrecise = new CompactMoment(registry, Date.parse('04 Dec 1995 00:12:00 GMT'));
-    expect(serializeLikeHarvester(notPrecise, 'Compact<Moment>', logFoundType)).toBe(
-      '1995-12-04T00:12:00'
-    );
+    expect(serializeLikeHarvester(notPrecise, 'Compact<Moment>')).toBe('1995-12-04T00:12:00');
 
     const veryPrecise = new CompactMoment(registry, Date.parse('04 Dec 1995 00:12:00 GMT') + 1);
-    expect(serializeLikeHarvester(veryPrecise, 'Compact<Moment>', logFoundType)).toBe(
+    expect(serializeLikeHarvester(veryPrecise, 'Compact<Moment>')).toBe(
       '1995-12-04T00:12:00.001000'
     );
   });
@@ -316,7 +303,7 @@ describe('serializeLikeHarvester', () => {
     const AccountId = createClass(registry, 'AccountId');
 
     const account = new AccountId(registry, '5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX');
-    expect(serializeLikeHarvester(account, 'Compact<Moment>', logFoundType)).toBe(
+    expect(serializeLikeHarvester(account, 'Compact<Moment>')).toBe(
       '0x841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d'
     );
   });
@@ -325,14 +312,14 @@ describe('serializeLikeHarvester', () => {
     registry.register('Empty', createClass(registry, '()'));
     const Empty = createClass(registry, 'Empty');
 
-    expect(serializeLikeHarvester(new Empty(registry), 'Empty', logFoundType)).toBe(null);
+    expect(serializeLikeHarvester(new Empty(registry), 'Empty')).toBe(null);
   });
 
   it('should serialize HexBytes like the harvester', () => {
     registry.register('HexBytes', registry.get('Bytes'));
     const HexBytes = createClass(registry, 'HexBytes');
 
-    expect(serializeLikeHarvester(new HexBytes(registry, 'hello'), 'HexBytes', logFoundType)).toBe(
+    expect(serializeLikeHarvester(new HexBytes(registry, 'hello'), 'HexBytes')).toBe(
       '0x68656c6c6f'
     );
   });
@@ -340,38 +327,24 @@ describe('serializeLikeHarvester', () => {
   it('should serialize Bytes like the harvester', () => {
     // Invalid utf-8
     expect(
-      serializeLikeHarvester(
-        new Bytes(registry, [...Buffer.from('c328', 'hex').values()]),
-        'Bytes',
-        logFoundType
-      )
+      serializeLikeHarvester(new Bytes(registry, [...Buffer.from('c328', 'hex').values()]), 'Bytes')
     ).toBe('0xc328');
 
     // Valid utf-8
     expect(
-      serializeLikeHarvester(
-        new Bytes(registry, [...stringToU8a('hello').values()]),
-        'Bytes',
-        logFoundType
-      )
+      serializeLikeHarvester(new Bytes(registry, [...stringToU8a('hello').values()]), 'Bytes')
     ).toBe('hello');
 
     // Valid utf-8 with null characters
     expect(
-      serializeLikeHarvester(
-        new Bytes(registry, [...stringToU8a('\0hello\0\0').values()]),
-        'Bytes',
-        logFoundType
-      )
+      serializeLikeHarvester(new Bytes(registry, [...stringToU8a('\0hello\0\0').values()]), 'Bytes')
     ).toBe('hello');
   });
 
   it('should serialize Text like the harvester', () => {
     const Text = createClass(registry, 'Text');
 
-    expect(serializeLikeHarvester(new Text(registry, '\0foo\0bar\0'), 'Text', logFoundType)).toBe(
-      'foobar'
-    );
+    expect(serializeLikeHarvester(new Text(registry, '\0foo\0bar\0'), 'Text')).toBe('foobar');
   });
 
   it('should serialize Tickers like the harvester', () => {
@@ -379,11 +352,7 @@ describe('serializeLikeHarvester', () => {
     const Ticker = createClass(registry, 'Ticker');
 
     expect(
-      serializeLikeHarvester(
-        new Ticker(registry, [...stringToU8a('ticker\0\0\0\0\0\0')]),
-        'Ticker',
-        logFoundType
-      )
+      serializeLikeHarvester(new Ticker(registry, [...stringToU8a('ticker\0\0\0\0\0\0')]), 'Ticker')
     ).toBe('ticker');
   });
 
@@ -399,7 +368,7 @@ describe('serializeLikeHarvester', () => {
     });
     expect(extrinsic.toRawType()).toBe('Call');
 
-    expect(serializeLikeHarvester(extrinsic, 'Call', logFoundType)).toStrictEqual({
+    expect(serializeLikeHarvester(extrinsic, 'Call')).toStrictEqual({
       call_args: [
         {
           name: 'remark',
@@ -419,7 +388,6 @@ describe('serializeLikeHarvester', () => {
       serializeLikeHarvester(
         new VecLookupSource(registry, ['5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX']),
         'Vec<LookupSource>',
-        logFoundType,
         true
       )
     ).toStrictEqual(['841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d']);
@@ -431,8 +399,7 @@ describe('serializeLikeHarvester', () => {
     expect(
       serializeLikeHarvester(
         new VecLookupSource(registry, ['5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX']),
-        'Vec<LookupSource>',
-        logFoundType
+        'Vec<LookupSource>'
       )
     ).toStrictEqual(['0x841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d']);
   });
@@ -440,18 +407,14 @@ describe('serializeLikeHarvester', () => {
   it('should serialize Balance like the harvester', () => {
     const Balance = createClass(registry, 'Balance');
 
-    expect(serializeLikeHarvester(new Balance(registry, 20), 'Balance', logFoundType)).toBe(20);
+    expect(serializeLikeHarvester(new Balance(registry, 20), 'Balance')).toBe(20);
   });
 
   it('should serialize ElectionScore like the harvester', () => {
     const ElectionScore = createClass(registry, 'ElectionScore');
 
     expect(
-      serializeLikeHarvester(
-        new ElectionScore(registry, [20, 30, 40]),
-        'ElectionScore',
-        logFoundType
-      )
+      serializeLikeHarvester(new ElectionScore(registry, [20, 30, 40]), 'ElectionScore')
     ).toStrictEqual([20, 30, 40]);
   });
 
@@ -462,7 +425,7 @@ describe('serializeLikeHarvester', () => {
     });
     const MyTuple = createClass(registry, 'MyTuple');
     expect(
-      serializeLikeHarvester(new MyTuple(registry, ['hello', 30, -40]), 'MyTuple', logFoundType)
+      serializeLikeHarvester(new MyTuple(registry, ['hello', 30, -40]), 'MyTuple')
     ).toStrictEqual({ col1: '0x68656c6c6f', col2: 30, col3: -40 });
   });
 
@@ -470,17 +433,16 @@ describe('serializeLikeHarvester', () => {
     registry.register({ MyArray: '[u32; 2]' });
     const MyArray = createClass(registry, 'MyArray');
 
-    expect(
-      serializeLikeHarvester(new MyArray(registry, [3, 4]), 'MyArray', logFoundType)
-    ).toStrictEqual([3, 4]);
+    expect(serializeLikeHarvester(new MyArray(registry, [3, 4]), 'MyArray')).toStrictEqual([3, 4]);
   });
 
   it('should serialize Vecs like the harvester', () => {
     registry.register({ HexBytes: 'Bytes', MyVec: 'Vec<HexBytes>' });
     const MyVec = createClass(registry, 'MyVec');
-    expect(
-      serializeLikeHarvester(new MyVec(registry, ['hello', 'bye']), 'MyVec', logFoundType)
-    ).toStrictEqual(['0x68656c6c6f', '0x627965']);
+    expect(serializeLikeHarvester(new MyVec(registry, ['hello', 'bye']), 'MyVec')).toStrictEqual([
+      '0x68656c6c6f',
+      '0x627965',
+    ]);
   });
 
   it('should serialize Results like the harvester', () => {
@@ -489,11 +451,11 @@ describe('serializeLikeHarvester', () => {
       MyResult: 'Result<HexBytes,HexBytes>',
     });
     const MyResult = createClass(registry, 'MyResult');
+    expect(serializeLikeHarvester(new MyResult(registry, { Ok: 'foo' }), 'MyResult')).toStrictEqual(
+      { Ok: '0x666f6f' }
+    );
     expect(
-      serializeLikeHarvester(new MyResult(registry, { Ok: 'foo' }), 'MyResult', logFoundType)
-    ).toStrictEqual({ Ok: '0x666f6f' });
-    expect(
-      serializeLikeHarvester(new MyResult(registry, { Err: 'bar' }), 'MyResult', logFoundType)
+      serializeLikeHarvester(new MyResult(registry, { Err: 'bar' }), 'MyResult')
     ).toStrictEqual({ Error: '0x626172' });
   });
 
@@ -504,17 +466,17 @@ describe('serializeLikeHarvester', () => {
       MySimpleEnum: JSON.stringify({ _enum: ['One', 'Two', 'Three'] }),
     });
     const MyEnum = createClass(registry, 'MyEnum');
-    expect(
-      serializeLikeHarvester(new MyEnum(registry, { Foo: false }), 'MyEnum', logFoundType)
-    ).toStrictEqual({ Foo: false });
-    expect(
-      serializeLikeHarvester(new MyEnum(registry, { Bar: 'bar' }), 'MyEnum', logFoundType)
-    ).toStrictEqual({ Bar: '0x626172' });
+    expect(serializeLikeHarvester(new MyEnum(registry, { Foo: false }), 'MyEnum')).toStrictEqual({
+      Foo: false,
+    });
+    expect(serializeLikeHarvester(new MyEnum(registry, { Bar: 'bar' }), 'MyEnum')).toStrictEqual({
+      Bar: '0x626172',
+    });
 
     const MySimpleEnum = createClass(registry, 'MySimpleEnum');
-    expect(
-      serializeLikeHarvester(new MySimpleEnum(registry, 'One'), 'MySimpleEnum', logFoundType)
-    ).toStrictEqual('One');
+    expect(serializeLikeHarvester(new MySimpleEnum(registry, 'One'), 'MySimpleEnum')).toStrictEqual(
+      'One'
+    );
   });
 
   it('should serialize Structs like the harvester', () => {
@@ -524,11 +486,7 @@ describe('serializeLikeHarvester', () => {
     });
     const MyStruct = createClass(registry, 'MyStruct');
     expect(
-      serializeLikeHarvester(
-        new MyStruct(registry, { foo: 'hello', bar: 'hello' }),
-        'MyStruct',
-        logFoundType
-      )
+      serializeLikeHarvester(new MyStruct(registry, { foo: 'hello', bar: 'hello' }), 'MyStruct')
     ).toStrictEqual({ foo: '0x68656c6c6f', bar: 'hello' });
   });
 
@@ -538,12 +496,10 @@ describe('serializeLikeHarvester', () => {
       MyOption: 'Option<HexBytes>',
     });
     const MyOption = createClass(registry, 'MyOption');
-    expect(
-      serializeLikeHarvester(new MyOption(registry, 'hello'), 'MyOption', logFoundType)
-    ).toStrictEqual('0x68656c6c6f');
-    expect(
-      serializeLikeHarvester(new MyOption(registry, null), 'MyOption', logFoundType)
-    ).toStrictEqual(null);
+    expect(serializeLikeHarvester(new MyOption(registry, 'hello'), 'MyOption')).toStrictEqual(
+      '0x68656c6c6f'
+    );
+    expect(serializeLikeHarvester(new MyOption(registry, null), 'MyOption')).toStrictEqual(null);
   });
 
   it('should serialize Maps like the harvester', () => {
@@ -553,11 +509,7 @@ describe('serializeLikeHarvester', () => {
     });
     const MyMap = createClass(registry, 'MyMap');
     expect(
-      serializeLikeHarvester(
-        new MyMap(registry, { hello: 'hello', bye: 'bye' }),
-        'MyMap',
-        logFoundType
-      )
+      serializeLikeHarvester(new MyMap(registry, { hello: 'hello', bye: 'bye' }), 'MyMap')
     ).toStrictEqual({ '0x68656c6c6f': 'hello', '0x627965': 'bye' });
   });
 });

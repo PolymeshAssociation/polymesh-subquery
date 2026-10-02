@@ -15,7 +15,6 @@ import {
   extractClaimInfo,
   getAssetIdWithTicker,
   getTextValue,
-  logFoundType,
   recordAnomaly,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
@@ -34,7 +33,7 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
   const types = metadataTypeNames(event);
 
   return params.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i], logFoundType),
+    value: serializeLikeHarvester(arg, types[i]),
   }));
 };
 
