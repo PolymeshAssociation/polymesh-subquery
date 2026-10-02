@@ -219,6 +219,50 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     expect(nftIds.filter((id: bigint) => id === BigInt(2))).toHaveLength(1);
     expect(nftIds).toHaveLength(2);
   });
+
+  it('keeps a token that leaves a holder and comes back within one block, once', async () => {
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', {
+        holderDid: DID_A,
+        to: meshPortfolioHolderCodec(DID_A, 0),
+        ids: [1, 2, 3],
+      })
+    );
+    await flushNftBuffer();
+
+    // three holdings events in one block, so the rollups stay buffered until the last
+    const events = [0, 1, 2].map(() => ({
+      event: { section: 'nft', method: 'NFTHoldingsUpdated' },
+    }));
+    const there = {
+      from: meshPortfolioHolderCodec(DID_A, 0),
+      to: meshPortfolioHolderCodec(DID_B, 0),
+    };
+    const back = {
+      from: meshPortfolioHolderCodec(DID_B, 0),
+      to: meshPortfolioHolderCodec(DID_A, 0),
+    };
+
+    await handleNftHoldingsUpdates(
+      nftEvent('transferred', { holderDid: DID_A, ...there, ids: [2], idx: 0, events })
+    );
+    await handleNftHoldingsUpdates(
+      nftEvent('transferred', { holderDid: DID_B, ...back, ids: [2], idx: 1, events })
+    );
+    await handleNftHoldingsUpdates(
+      nftEvent('redeemed', {
+        holderDid: DID_A,
+        from: meshPortfolioHolderCodec(DID_A, 0),
+        ids: [3],
+        idx: 2,
+        events,
+      })
+    );
+
+    expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(1), BigInt(2)]);
+    expect(db['NftHolder'][`${ASSET}/${DID_B}`].nftIds).toEqual([]);
+    expect(db['Asset'][ASSET].holderCount).toBe(1);
+  });
 });
 
 /**

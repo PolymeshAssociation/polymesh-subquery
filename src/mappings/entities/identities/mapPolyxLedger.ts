@@ -43,7 +43,7 @@ import { getAccountId, systematicIssuers } from '../../consts';
 import { reconcileAccount, reconcilePending } from './reconcilePolyx';
 import { storageEntriesAtParent } from '../../../utils/storageAtParent';
 import { resolveFeePayer } from './feePayer';
-import { extrinsicEventIndices } from '../../blockContext';
+import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
 
 /**
  * POLYX ledger — entry-centric replacement for `mapPolyxTransaction`.
@@ -568,7 +568,7 @@ const writeMovementSide = async (
 
   const counterpartyAccount = side.counterparty ? await Account.get(side.counterparty) : undefined;
 
-  await PolyxEntry.create({
+  const entry = PolyxEntry.create({
     id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}${
       side.direction === EntryDirection.Debit ? 'd' : 'c'
     }${options.idTag ?? ''}`,
@@ -596,7 +596,9 @@ const writeMovementSide = async (
     createdEventId: blockEventId,
     blockId,
     extrinsicId: params.extrinsicId,
-  }).save();
+  });
+  await entry.save();
+  getLedgerEntries(blockId).add(entry);
 
   await reconcileAccount(address, blockId, block, { eventIdx, params });
 };
@@ -925,32 +927,27 @@ const relabelEntry = async (
 };
 
 /**
- * Entries already written in this extrinsic for `(kind, account)`, narrowed to `amountAbs` here.
- *
- * `store.getByFields` reads the write cache before the database, so a row saved earlier in this
- * block is visible. Only indexed fields can go in the filter (`amountAbs` is not one — the schema
- * is at the 10-index cap), so the amount match is applied in memory.
+ * Entries already written in this extrinsic for `(kind, account)`, narrowed to `amountAbs` if given.
+ * The live objects, from the block's own index (see `LedgerEntries`).
  */
-const findExtrinsicEntries = async (
+const findExtrinsicEntries = (
   args: HandlerArgs,
   kind: MovementKind,
   account: string | undefined,
   amountAbs?: bigint
-): Promise<PolyxEntry[]> => {
+): PolyxEntry[] => {
   if (!args.extrinsicId || !account) {
     return [];
   }
 
-  const rows = await PolyxEntry.getByFields(
-    [
-      ['extrinsicId', '=', args.extrinsicId],
-      ['kind', '=', kind],
-      ['accountId', '=', account],
-    ],
-    { limit: 50 }
-  );
-
-  return amountAbs === undefined ? rows : rows.filter(row => row.amountAbs === amountAbs);
+  return getLedgerEntries(args.blockId)
+    .inExtrinsic(args.extrinsicId)
+    .filter(
+      row =>
+        row.kind === kind &&
+        row.accountId === account &&
+        (amountAbs === undefined || row.amountAbs === amountAbs)
+    );
 };
 
 /**
@@ -974,26 +971,17 @@ const previousEventId = (args: HandlerArgs): string =>
  * paired `balances` deposit can only be matched on the block. Used to keep a v8 reward from being
  * counted twice — once as `Mint`, once as `StakingReward`.
  */
-const findBlockEntries = async (
+const findBlockEntries = (
   blockId: string,
   account: string | undefined,
   amountAbs: bigint,
   kinds: MovementKind[]
-): Promise<PolyxEntry[]> => {
-  if (!account) {
-    return [];
-  }
-
-  const rows = await PolyxEntry.getByFields(
-    [
-      ['blockId', '=', blockId],
-      ['accountId', '=', account],
-    ],
-    { limit: 100 }
-  );
-
-  return rows.filter(row => kinds.includes(row.kind) && row.amountAbs === amountAbs);
-};
+): PolyxEntry[] =>
+  account
+    ? getLedgerEntries(blockId)
+        .ofAccount(account)
+        .filter(row => kinds.includes(row.kind) && row.amountAbs === amountAbs)
+    : [];
 
 // ---------------------------------------------------------------------------------------------
 // Balances-pallet handlers
@@ -1027,8 +1015,8 @@ export const handleBalanceEndowed = async (event: SubstrateEvent): Promise<void>
   }
 
   const [deposit] = args.extrinsicId
-    ? await findExtrinsicEntries(args, MovementKind.Mint, who, amount)
-    : await findBlockEntries(args.blockId, who, amount, [MovementKind.Mint]);
+    ? findExtrinsicEntries(args, MovementKind.Mint, who, amount)
+    : findBlockEntries(args.blockId, who, amount, [MovementKind.Mint]);
 
   if (deposit) {
     await relabelEntry(deposit, MovementKind.Endowment, args.blockEventId);
@@ -1068,8 +1056,8 @@ export const handleBalanceTransfer = async (event: SubstrateEvent): Promise<void
   // and each was credited twice.
   const endowment = (
     args.extrinsicId
-      ? await findExtrinsicEntries(args, MovementKind.Endowment, to, amount)
-      : (await findBlockEntries(args.blockId, to, amount, [MovementKind.Endowment])).filter(
+      ? findExtrinsicEntries(args, MovementKind.Endowment, to, amount)
+      : findBlockEntries(args.blockId, to, amount, [MovementKind.Endowment]).filter(
           entry => entry.movementId === previousEventId(args)
         )
   ).find(entry => !entry.counterpartyAddress);
@@ -1128,16 +1116,12 @@ export const handleBalanceTransferWithMemo = async (event: SubstrateEvent): Prom
     return;
   }
 
-  const unmemoed = (await findExtrinsicEntries(args, MovementKind.Transfer, to, amount)).find(
+  const unmemoed = findExtrinsicEntries(args, MovementKind.Transfer, to, amount).find(
     entry => !entry.memo
   );
 
   if (unmemoed) {
-    const sides = await PolyxEntry.getByFields([['movementId', '=', unmemoed.movementId]], {
-      limit: 10,
-    });
-
-    for (const side of sides) {
+    for (const side of getLedgerEntries(args.blockId).ofMovement(unmemoed.movementId)) {
       side.memo = memo;
       await side.save();
     }
@@ -1352,7 +1336,7 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
 
   // A v8 staking payout can emit both `staking.Rewarded` and a `balances` deposit for the same
   // POLYX. If the reward side already recorded it, this is not a second movement.
-  const reward = await findBlockEntries(args.blockId, who, amount, [MovementKind.StakingReward]);
+  const reward = findBlockEntries(args.blockId, who, amount, [MovementKind.StakingReward]);
 
   if (reward.length > 0) {
     return;
@@ -1369,9 +1353,9 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
    * adjacent by construction, and a looser match would swallow a genuine second deposit of the
    * same amount into an account created earlier in the same block.
    */
-  const endowedJustBefore = (
-    await findBlockEntries(args.blockId, who, amount, [MovementKind.Endowment])
-  ).some(entry => entry.movementId === previousEventId(args));
+  const endowedJustBefore = findBlockEntries(args.blockId, who, amount, [
+    MovementKind.Endowment,
+  ]).some(entry => entry.movementId === previousEventId(args));
 
   if (endowedJustBefore) {
     return;
@@ -1457,8 +1441,8 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
   }
 
   const [endowed] = args.extrinsicId
-    ? await findExtrinsicEntries(args, MovementKind.Endowment, primaryKey, grant)
-    : await findBlockEntries(args.blockId, primaryKey, grant, [MovementKind.Endowment]);
+    ? findExtrinsicEntries(args, MovementKind.Endowment, primaryKey, grant)
+    : findBlockEntries(args.blockId, primaryKey, grant, [MovementKind.Endowment]);
 
   // A deposit like any other, funded from the block reward reserve first (see `reserveShare`).
   if (endowed) {
@@ -1506,9 +1490,9 @@ export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => 
   const recentEventIds = new Set(
     [1, 2].map(back => `${args.blockId}/${padId(String(args.eventIdx - back))}`)
   );
-  const endowed = (
-    await findBlockEntries(args.blockId, recipient, amount, [MovementKind.Endowment])
-  ).find(entry => recentEventIds.has(entry.movementId));
+  const endowed = findBlockEntries(args.blockId, recipient, amount, [MovementKind.Endowment]).find(
+    entry => recentEventIds.has(entry.movementId)
+  );
 
   // Funded from the block reward reserve first (see `reserveShare`).
   if (endowed) {
@@ -1638,7 +1622,7 @@ export const recordAdjustment = async (
   const date = startOfUtcDay(block.timestamp);
 
   for (const { pool, delta } of deltas) {
-    await PolyxEntry.create({
+    const entry = PolyxEntry.create({
       id: entryId(pool),
       movementId,
       accountId: balance.id,
@@ -1664,7 +1648,9 @@ export const recordAdjustment = async (
       createdEventId: movementId,
       blockId,
       extrinsicId: params.extrinsicId,
-    }).save();
+    });
+    await entry.save();
+    getLedgerEntries(blockId).add(entry);
   }
 };
 
@@ -1814,12 +1800,8 @@ const drawReserveFor = async (
     options
   );
 
-  const reloaded = await PolyxEntry.get(credit.id);
-
-  if (reloaded) {
-    reloaded.counterpartyAddress = blockRewardReserve();
-    await reloaded.save();
-  }
+  credit.counterpartyAddress = blockRewardReserve();
+  await credit.save();
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1856,20 +1838,15 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   // 11 × 1 unit that way and each was counted twice. And on the *immediately preceding* event, so
   // equal payments to one recipient each consume their own transfer.
   const treasury = treasuryPalletAccount();
-  const existingTransfer = (
-    await findBlockEntries(args.blockId, toAddress, amount, [MovementKind.Transfer])
-  ).find(
+  const existingTransfer = findBlockEntries(args.blockId, toAddress, amount, [
+    MovementKind.Transfer,
+  ]).find(
     entry => entry.movementId === previousEventId(args) && entry.counterpartyAddress === treasury
   );
 
   if (existingTransfer) {
     // relabel both sides of the transfer rather than writing a second movement
-    const siblings = await PolyxEntry.getByFields(
-      [['movementId', '=', existingTransfer.movementId]],
-      { limit: 10 }
-    );
-
-    for (const sibling of siblings) {
+    for (const sibling of getLedgerEntries(args.blockId).ofMovement(existingTransfer.movementId)) {
       await relabelEntry(sibling, MovementKind.TreasuryDisbursement, args.blockEventId);
     }
 
@@ -1970,12 +1947,12 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
     'balances',
     'Withdraw'
   );
-  const burns = pairedWithBalanceEvents
-    ? await getAllByFields<PolyxEntry>('PolyxEntry', [
-        ['extrinsicId', '=', args.extrinsicId],
-        ['kind', '=', MovementKind.Burn],
-      ])
-    : [];
+  const burns =
+    pairedWithBalanceEvents && args.extrinsicId
+      ? getLedgerEntries(args.blockId)
+          .inExtrinsic(args.extrinsicId)
+          .filter(row => row.kind === MovementKind.Burn)
+      : [];
 
   if (pairedWithBalanceEvents && (await refileFeeWithdrawal(args, burns, who, fee))) {
     return;
@@ -2144,7 +2121,7 @@ const refileFeeWithdrawal = async (
   const refunded = withdrawal.amountAbs - fee;
 
   if (refunded > BigInt(0)) {
-    const [refund] = await findExtrinsicEntries(args, MovementKind.Mint, payer, refunded);
+    const [refund] = findExtrinsicEntries(args, MovementKind.Mint, payer, refunded);
 
     if (refund) {
       await relabelEntry(refund, MovementKind.Fee, args.blockEventId);
@@ -2346,10 +2323,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
    * third credit on the second.
    */
   const paid = nearestPreceding(
-    await findBlockEntries(args.blockId, recipient, amount, [
-      MovementKind.Mint,
-      MovementKind.Endowment,
-    ]),
+    findBlockEntries(args.blockId, recipient, amount, [MovementKind.Mint, MovementKind.Endowment]),
     args
   );
 

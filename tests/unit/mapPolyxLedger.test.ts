@@ -51,6 +51,7 @@ import { postUneventedTransactionFee } from '../../src/mappings/entities/identit
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
 import { blockAuthor } from '../../src/utils/blockAuthor';
 import { __resetStakingCaches } from '../../src/utils/staking';
+import { __resetBlockContext } from '../../src/mappings/blockContext';
 import {
   applyChainFreezes,
   emptyBalance,
@@ -231,6 +232,7 @@ const clone = (value: Row): Row => {
 
 beforeEach(() => {
   __resetStakingCaches();
+  __resetBlockContext();
   db = {};
   blockHeight = 1_000_000;
   (globalThis as any).api.registry = { chainSS58: 42 };
@@ -1019,6 +1021,31 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(-300));
     expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(300));
     expect(entries().every(r => r.kind === MovementKind.Fee)).toBe(true);
+  });
+
+  it('pairs a busy block without searching the store', async () => {
+    // Every transfer, fee and deposit pairs with entries written earlier in its block. Searched in
+    // the store, each lookup sorted every cached entry and sent their ids to Postgres: quadratic in
+    // the block's size. The block's own index answers it instead.
+    const rounds = Array.from({ length: 50 }, () => [
+      ['balances', 'Withdraw', { who: ALICE, amount: '10' }],
+      ['balances', 'Transfer', { from: ALICE, to: BOB, amount: '1' }],
+      ['transactionPayment', 'TransactionFeePaid', { who: ALICE, actualFee: '10', tip: '0' }],
+    ]).flat() as [string, string, Record<string, unknown>][];
+
+    for (const event of extrinsicEvents(3_000_000, rounds)) {
+      const handler = {
+        Withdraw: handleBalanceBurned,
+        Transfer: handleBalanceTransfer,
+        TransactionFeePaid: handleTransactionFeeCharged,
+      }[event.event.method as 'Withdraw' | 'Transfer' | 'TransactionFeePaid'];
+      await handler(event);
+    }
+
+    const searched = storeGetByFields().mock.calls.filter(([entity]) => entity === 'PolyxEntry');
+    expect(searched).toHaveLength(0);
+    expect(balance(ALICE)?.free).toBe(BigInt(-550));
+    expect(balance(ALICE)?.totalFeesPaid).toBe(BigInt(500));
   });
 
   it('charges an Ethereum transaction its fee once, past the empty withdrawal before it', async () => {

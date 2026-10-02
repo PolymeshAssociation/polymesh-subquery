@@ -114,7 +114,8 @@ describe('handlePositionUnbonded / handlePositionWithdrawn', () => {
         section: 'staking',
         method: 'Unbonded',
         fields: { stash: ALICE, amount: '1000' },
-        idx: 1,
+        // a later block: within one, every ledger read returns the block's end state
+        blockNumber: '1001',
       })
     );
 
@@ -131,7 +132,7 @@ describe('handlePositionUnbonded / handlePositionWithdrawn', () => {
         section: 'staking',
         method: 'Withdrawn',
         fields: { stash: ALICE, amount: '1000' },
-        idx: 2,
+        blockNumber: '1002',
       })
     );
 
@@ -285,8 +286,13 @@ describe('handleSetController', () => {
     ({
       idx: 1,
       block: {
-        block: { header: { number: { toString: () => blockNumber }, parentHash: '0xparent' } },
-        hash: { toHex: () => `0xhash${blockNumber}` },
+        block: {
+          header: {
+            number: { toString: () => blockNumber },
+            parentHash: '0xparent',
+            hash: { toHex: () => `0xhash${blockNumber}` },
+          },
+        },
         timestamp: new Date('2024-01-01T00:00:00Z'),
         specVersion: 7_004_000,
         events: [

@@ -14,7 +14,7 @@ import {
   IdentityKeyRole,
   StakingPosition,
 } from '../types';
-import { extractString, getTextValue, padId } from './common';
+import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
 
@@ -331,6 +331,7 @@ export const getOrCreateAccount = async (
       accountId: address,
       role: kind === 'primaryKey' ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
       validFromBlockId: blockId,
+      validToBlockId: EXPLICIT_NULL, // explicitly open (see `openIntervals`)
       addedReason: eventId,
       createdEventId,
       updatedEventId: createdEventId,
