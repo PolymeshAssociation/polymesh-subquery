@@ -790,6 +790,113 @@ describe('staking — era-dependent, inverted at v8', () => {
     (globalThis as any).api.query = {};
   });
 
+  describe('a deposit the block reward reserve funds, before v8', () => {
+    // Pre-v8, dropping a deposit's positive imbalance takes what it can from the block reward
+    // reserve and mints only the rest, with no event (testnet block 9,259,823 emptied it).
+    const RESERVE = getAccountId(systematicIssuers.blockRewardReserve.accountId, 42);
+    const NEW_PAYEE = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+    const fundReserve = (amount: string) =>
+      handleBalanceEndowed(
+        tupleEvent('balances', 'Endowed', ['0xbrr', RESERVE, amount], 7_004_001)
+      );
+    const payee = (to: unknown) => {
+      (globalThis as any).api.query = {
+        staking: {
+          payee: jest.fn().mockResolvedValue({ toJSON: () => to }),
+          bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        },
+      };
+    };
+
+    beforeEach(() => payee('Stash'));
+    afterEach(() => {
+      (globalThis as any).api.query = {};
+    });
+
+    it('pays a reward from the reserve while it holds enough', async () => {
+      await fundReserve('1000');
+
+      await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '300'], 7_004_001));
+
+      expect(balance(RESERVE)?.free).toBe(BigInt(700));
+      expect(balance(ALICE)?.free).toBe(BigInt(300));
+      expect(balance(ALICE)?.totalRewards).toBe(BigInt(300));
+      // the reserve paid a reward, it did not receive one
+      expect(balance(RESERVE)?.totalRewards).toBe(BigInt(0));
+      expect(entries().find(r => r.accountId === ALICE)).toMatchObject({
+        kind: MovementKind.StakingReward,
+        counterpartyAddress: RESERVE,
+      });
+    });
+
+    it('pays what the reserve has and mints the rest', async () => {
+      await fundReserve('100');
+
+      await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '300'], 7_004_001));
+
+      expect(balance(RESERVE)?.free).toBe(BigInt(0));
+      expect(balance(ALICE)?.free).toBe(BigInt(300));
+      const credits = entries().filter(r => r.accountId === ALICE);
+      expect(credits.map(r => r.amount).sort()).toEqual([BigInt(100), BigInt(200)]);
+      expect(new Set(credits.map(r => r.id)).size).toBe(2);
+    });
+
+    it('mints a reward the empty reserve cannot pay', async () => {
+      await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '300'], 7_004_001));
+
+      expect(balance(ALICE)?.free).toBe(BigInt(300));
+      expect(balance(RESERVE)).toBeUndefined();
+    });
+
+    it('draws on the reserve for a reward whose payout created its payee', async () => {
+      await fundReserve('1000');
+      payee({ account: NEW_PAYEE });
+      const [endowed, reward] = v7ExtrinsicEvents(
+        9_259_823,
+        [
+          ['balances', 'Endowed', ['0xdid', NEW_PAYEE, '300']],
+          ['staking', 'Reward', ['0xdid', ALICE, '300']],
+        ],
+        7_004_001
+      );
+
+      await handleBalanceEndowed(endowed);
+      await handleReward(reward);
+
+      expect(balance(NEW_PAYEE)?.free).toBe(BigInt(300));
+      expect(balance(RESERVE)?.free).toBe(BigInt(700));
+      expect(entries().find(r => r.accountId === NEW_PAYEE)).toMatchObject({
+        kind: MovementKind.StakingReward,
+        counterpartyAddress: RESERVE,
+      });
+      expect(entries().find(r => r.accountId === RESERVE && r.amount < 0)).toMatchObject({
+        amount: BigInt(-300),
+        counterpartyAddress: NEW_PAYEE,
+      });
+    });
+
+    it("destroys the reserve's share of a pre-v5 treasury disbursement", async () => {
+      // v4.1 `unsafe_disbursement` withdraws from the treasury, then deposits to the recipient:
+      // the withdrawal is burned, and the deposit is funded like any other
+      const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+      await fundReserve('1000');
+      // the pre-5.0.0 event names the recipient's identity, paid through its primary key
+      db['Identity'] = { '0xdid': { id: '0xdid', primaryAccount: BOB } };
+
+      await handleTreasuryDisbursement(
+        tupleEvent('treasury', 'TreasuryDisbursement', ['0xgc', '0xdid', '400'], 3010)
+      );
+
+      expect(balance(BOB)?.free).toBe(BigInt(400));
+      expect(balance(treasury)?.free).toBe(BigInt(-400));
+      expect(balance(RESERVE)?.free).toBe(BigInt(600));
+      expect(entries().find(r => r.accountId === RESERVE && r.amount < 0)).toMatchObject({
+        kind: MovementKind.Burn,
+      });
+    });
+  });
+
   describe('the staking lock is read from staking.ledger.total, not accumulated', () => {
     const mockLedger = (total: string, bonded: string | null = null) => {
       (globalThis as any).api.query = {
@@ -2356,6 +2463,22 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
 
     expect(balance(REPORTER)?.free).toBe(BigInt(100));
     expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('keeps an entry for each of several reporters', async () => {
+    deferredSlashes({
+      2159: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER, ALICE], payout: '100' }],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '1000']], '900');
+    await handleStakingSlash(slash);
+
+    // filed under one event, they used to share an id and overwrite each other
+    const credits = entries().filter(r => r.kind === MovementKind.StakingReward);
+    expect(credits.map(r => r.accountId).sort()).toEqual([REPORTER, ALICE].sort());
+    expect(balance(REPORTER)?.free).toBe(BigInt(50));
+    expect(balance(ALICE)?.free).toBe(BigInt(50));
+    expect(anomalies()).toHaveLength(0);
   });
 
   it('pays once per offence, on the validator, not again on its nominators', async () => {

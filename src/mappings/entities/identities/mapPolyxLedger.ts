@@ -440,6 +440,8 @@ interface Transition {
   memo?: string;
   /** who the value came from, for a credit with no debit side here (a slash's reporter reward) */
   source?: string;
+  /** who the value went to, for a debit with no credit side here (a reserve funding a credit) */
+  destination?: string;
 }
 
 const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
@@ -458,7 +460,7 @@ const movementSides = (transition: Transition): MovementSide[] => {
     sides.push({
       endpoint: transition.from,
       direction: EntryDirection.Debit,
-      counterparty: transition.to?.address,
+      counterparty: transition.to?.address ?? transition.destination,
     });
   }
 
@@ -517,8 +519,11 @@ const advanceBalance = (
     }
   }
 
+  // Only on the side the total is about: a reward paid from the block reward reserve has a debit
+  // side too, and the reserve received no reward.
   const lifetimeTotal = LIFETIME_TOTAL[transition.kind];
-  if (lifetimeTotal) {
+  const lifetimeSide = LIFETIME_DIRECTION[transition.kind];
+  if (lifetimeTotal && (lifetimeSide === undefined || lifetimeSide === side.direction)) {
     balance[lifetimeTotal] += transition.amount;
   }
 
@@ -527,10 +532,19 @@ const advanceBalance = (
   recomputeDerived(balance);
 };
 
+/**
+ * `idTag` keeps apart the entries of two movements filed under one event, which would otherwise
+ * share ids: an entry's id is its event and pool and direction, and carries no account.
+ */
+interface TransitionOptions {
+  eraIndex?: number;
+  idTag?: string;
+}
+
 interface TransitionContext {
   args: HandlerArgs;
   transition: Transition;
-  options: { eraIndex?: number };
+  options: TransitionOptions;
   isInternal: boolean;
   date: Date;
   params: ReturnType<typeof getEventParams>;
@@ -557,7 +571,7 @@ const writeMovementSide = async (
   await PolyxEntry.create({
     id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}${
       side.direction === EntryDirection.Debit ? 'd' : 'c'
-    }`,
+    }${options.idTag ?? ''}`,
     movementId: blockEventId,
     accountId: address,
     identityId: account.identityId,
@@ -596,7 +610,7 @@ const writeMovementSide = async (
 export const postTransition = async (
   args: HandlerArgs,
   transition: Transition,
-  options: { eraIndex?: number } = {}
+  options: TransitionOptions = {}
 ): Promise<void> => {
   // A movement of nothing writes nothing. Left in, a `Withdraw` of 0 ahead of a v8 Ethereum
   // transaction's fee was taken for the fee's own withdrawal, being the payer's first burn, so the
@@ -1446,15 +1460,13 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
     ? await findExtrinsicEntries(args, MovementKind.Endowment, primaryKey, grant)
     : await findBlockEntries(args.blockId, primaryKey, grant, [MovementKind.Endowment]);
 
+  // A deposit like any other, funded from the block reward reserve first (see `reserveShare`).
   if (endowed) {
+    await drawReserveFor(args, endowed, MovementKind.Mint);
     return;
   }
 
-  await postTransition(args, {
-    to: { address: primaryKey, pool: PolyxPool.Free },
-    amount: grant,
-    kind: MovementKind.Mint,
-  });
+  await creditFromReserve(args, primaryKey, grant, MovementKind.Mint);
 };
 
 /**
@@ -1469,8 +1481,8 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
  * imbalance touches the block reward reserve (which emits its own `Endowed(brr, 0)` the first time),
  * then `Bridged` — so the endowment is one or two events back.
  *
- * Where the POLYX came from is not recorded here: dropping the imbalance takes it from the block
- * reward reserve while that has free balance, and mints the rest, with no event either way.
+ * Dropping the imbalance takes the POLYX from the block reward reserve while that has free
+ * balance, and mints the rest, with no event either way (see `reserveShare`).
  */
 export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
@@ -1496,17 +1508,15 @@ export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => 
   );
   const endowed = (
     await findBlockEntries(args.blockId, recipient, amount, [MovementKind.Endowment])
-  ).some(entry => recentEventIds.has(entry.movementId));
+  ).find(entry => recentEventIds.has(entry.movementId));
 
+  // Funded from the block reward reserve first (see `reserveShare`).
   if (endowed) {
+    await drawReserveFor(args, endowed, MovementKind.Mint);
     return;
   }
 
-  await postTransition(args, {
-    to: { address: recipient, pool: PolyxPool.Free },
-    amount,
-    kind: MovementKind.Mint,
-  });
+  await creditFromReserve(args, recipient, amount, MovementKind.Mint);
 };
 
 /** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1) or a failed read. */
@@ -1675,6 +1685,111 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
 };
 
 // ---------------------------------------------------------------------------------------------
+// The block reward reserve, before v8
+// ---------------------------------------------------------------------------------------------
+
+const blockRewardReserve = (): string =>
+  getAccountId(systematicIssuers.blockRewardReserve.accountId, api.registry.chainSS58);
+
+/**
+ * How much of a deposit the block reward reserve paid, before v8.
+ *
+ * Pre-v8 a deposit not offset by a withdrawal, such as a staking reward, a bridge mint or the
+ * testnet identity grant, leaves a positive imbalance, and dropping it does not simply mint:
+ * `drop_positive_imbalance` takes what it can from the reserve's free balance and mints only the
+ * rest, with no event either way (balances pallet, v3.0.0 to v7.4.0; v8 has no reserve). Read from
+ * the index's own reserve balance, which genesis seeds and every movement since keeps.
+ *
+ * On testnet the reserve held 1 POLYX and paid the first reward of block 9,259,823; on mainnet it
+ * held real funds and paid rewards for a long time, and every one was recorded as newly minted.
+ */
+const reserveShare = async (args: HandlerArgs, amount: bigint): Promise<bigint> => {
+  if (is8xChain(args.block) || amount <= BigInt(0)) {
+    return BigInt(0);
+  }
+
+  const free = (await AccountBalance.get(blockRewardReserve()))?.free ?? BigInt(0);
+
+  if (free <= BigInt(0)) {
+    return BigInt(0);
+  }
+
+  return free < amount ? free : amount;
+};
+
+/**
+ * Credits `to` with a deposit as the runtime funded it: from the block reward reserve for its share
+ * (see `reserveShare`), and minted for the rest. A deposit the reserve only part-covered is two
+ * movements under one event, the minted one tagged apart.
+ */
+const creditFromReserve = async (
+  args: HandlerArgs,
+  to: string,
+  amount: bigint,
+  kind: MovementKind,
+  options: TransitionOptions = {}
+): Promise<void> => {
+  const fromReserve = await reserveShare(args, amount);
+
+  if (fromReserve > BigInt(0)) {
+    await postTransition(
+      args,
+      {
+        from: { address: blockRewardReserve(), pool: PolyxPool.Free },
+        to: { address: to, pool: PolyxPool.Free },
+        amount: fromReserve,
+        kind,
+      },
+      options
+    );
+  }
+
+  if (amount > fromReserve) {
+    await postTransition(
+      args,
+      { to: { address: to, pool: PolyxPool.Free }, amount: amount - fromReserve, kind },
+      { ...options, idTag: fromReserve > BigInt(0) ? `${options.idTag ?? ''}m` : options.idTag }
+    );
+  }
+};
+
+/**
+ * The reserve's side of a deposit already credited, by the `Endowed` the deposit emitted for an
+ * account it created: the reserve's share (see `reserveShare`) debited, naming the account it
+ * went to, and the credit marked as coming from the reserve.
+ */
+const drawReserveFor = async (
+  args: HandlerArgs,
+  credit: PolyxEntry,
+  kind: MovementKind,
+  options: TransitionOptions = {}
+): Promise<void> => {
+  const fromReserve = await reserveShare(args, credit.amountAbs);
+
+  if (fromReserve <= BigInt(0)) {
+    return;
+  }
+
+  await postTransition(
+    args,
+    {
+      from: { address: blockRewardReserve(), pool: PolyxPool.Free },
+      amount: fromReserve,
+      kind,
+      destination: credit.accountId,
+    },
+    options
+  );
+
+  const reloaded = await PolyxEntry.get(credit.id);
+
+  if (reloaded) {
+    reloaded.counterpartyAddress = blockRewardReserve();
+    await reloaded.save();
+  }
+};
+
+// ---------------------------------------------------------------------------------------------
 // Treasury and fees
 // ---------------------------------------------------------------------------------------------
 
@@ -1734,6 +1849,25 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
     amount,
     kind: MovementKind.TreasuryDisbursement,
   });
+
+  // Before 5.0.0 the payment was a withdrawal from the treasury, burned, and a deposit to the
+  // recipient, which the block reward reserve funded first (see `reserveShare`). Net, the
+  // recipient gained what the treasury lost, and the reserve's share was destroyed.
+  if (!hasToAddress) {
+    const burned = await reserveShare(args, amount);
+
+    if (burned > BigInt(0)) {
+      await postTransition(
+        args,
+        {
+          from: { address: blockRewardReserve(), pool: PolyxPool.Free },
+          amount: burned,
+          kind: MovementKind.Burn,
+        },
+        { idTag: 'b' }
+      );
+    }
+  }
 };
 
 export const handleTreasuryReimbursement = async (event: SubstrateEvent): Promise<void> => {
@@ -2186,18 +2320,12 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
     args
   );
 
+  // Pre-v8 the payout is funded from the block reward reserve first (see `reserveShare`).
   if (paid) {
     await relabelEntry(paid, MovementKind.StakingReward, args.blockEventId, { eraIndex });
+    await drawReserveFor(args, paid, MovementKind.StakingReward, { eraIndex });
   } else {
-    await postTransition(
-      args,
-      {
-        to: { address: recipient, pool: PolyxPool.Free },
-        amount,
-        kind: MovementKind.StakingReward,
-      },
-      { eraIndex }
-    );
+    await creditFromReserve(args, recipient, amount, MovementKind.StakingReward, { eraIndex });
   }
 
   // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
@@ -2379,24 +2507,19 @@ const creditSlashReporters = async (
       : (applied.payout < slashed ? applied.payout : slashed) / BigInt(reporters.length);
 
   if (perReporter > BigInt(0)) {
-    if (reporters.length > 1) {
-      // Every reporter's credit is filed against this one event, and an entry's id carries no
-      // account, so each overwrites the one before. The balances still come out right.
-      await recordAnomaly({
-        kind: AnomalyKind.UnreadableValue,
-        detail: `staking.Slash on ${validator} paid ${reporters.length} reporters; only the last one's PolyxEntry survives`,
-        block,
-        eventIdx,
-      });
-    }
-
-    for (const reporter of reporters) {
-      await postTransition(args, {
-        to: { address: reporter, pool: PolyxPool.Free },
-        amount: perReporter,
-        kind: MovementKind.StakingReward,
-        source: validator,
-      });
+    // Every reporter's credit is filed against this one event, so each after the first is tagged
+    // apart: an entry's id carries no account.
+    for (const [index, reporter] of reporters.entries()) {
+      await postTransition(
+        args,
+        {
+          to: { address: reporter, pool: PolyxPool.Free },
+          amount: perReporter,
+          kind: MovementKind.StakingReward,
+          source: validator,
+        },
+        { idTag: index === 0 ? undefined : `p${index}` }
+      );
     }
   }
 
