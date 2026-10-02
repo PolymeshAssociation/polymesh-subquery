@@ -2310,6 +2310,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const getKeysPaged = jest.fn();
   const getStorage = jest.fn();
   const getHeader = jest.fn();
+  const registryRuntime = (globalThis as any).api.runtimeVersion;
   const getRuntimeVersion = jest.fn();
 
   /** `staking.unappliedSlashes`, as the parent block's state holds it. */
@@ -2329,11 +2330,14 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         },
       },
     };
-    // the parent ran under the runtime this block's registry describes, so its state is readable
-    getHeader.mockReset().mockResolvedValue({ parentHash: '0xgrandparent' });
-    getRuntimeVersion
-      .mockReset()
-      .mockImplementation(() => Promise.resolve((globalThis as any).api.runtimeVersion));
+    // the block's registry describes its own runtime, and no upgrade came in the parent, so the
+    // parent's state is readable without asking the chain which runtime wrote it
+    (globalThis as any).api.runtimeVersion = {
+      ...registryRuntime,
+      specVersion: { toNumber: () => SPEC },
+    };
+    getHeader.mockReset();
+    getRuntimeVersion.mockReset();
     (globalThis as any).api.rpc = {
       chain: { getHeader },
       state: { getKeysPaged, getStorage, getRuntimeVersion },
@@ -2360,6 +2364,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   afterEach(() => {
     undecodable = [];
     (globalThis as any).api.query = {};
+    (globalThis as any).api.runtimeVersion = registryRuntime;
     delete (globalThis as any).api.rpc;
   });
 
@@ -2523,6 +2528,11 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
       ],
     });
+    // ...so the index holds that upgrade's row, and the chain names the runtime that wrote the parent
+    db['ChainUpgrade'] = {
+      [String(SPEC).padStart(10, '0')]: { specVersionId: SPEC, firstBlockId: '0007751342' },
+    };
+    getHeader.mockResolvedValue({ parentHash: '0xgrandparent' });
     getRuntimeVersion.mockResolvedValue({ specVersion: { toNumber: () => 1 } });
 
     const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');

@@ -11,10 +11,20 @@ const getRuntimeVersion = jest.fn();
 const spec = (specVersion: number) => ({ specVersion: { toNumber: () => specVersion } });
 const createType = jest.fn();
 
+/** `ChainUpgrade` rows, by the block carrying each one's `system.CodeUpdated` */
+let upgrades: { firstBlockId: string; specVersionId: number }[];
+
 beforeEach(() => {
+  // the block's true spec, which `ensureTrueSpecVersion` has set before any handler reads state
   block = {
     block: { header: { number: { toString: () => '466634' }, parentHash: '0xparent' } },
+    specVersion: 3000,
   } as unknown as SubstrateBlock;
+  upgrades = [];
+  ((globalThis as any).store.getByFields as jest.Mock).mockImplementation(
+    (_entity: string, filter: [string, string, unknown][]) =>
+      Promise.resolve(upgrades.filter(row => filter.every(([f, , v]) => (row as any)[f] === v)))
+  );
   getStorage.mockReset();
   getKeysPaged.mockReset();
   getHeader.mockReset().mockResolvedValue({ parentHash: '0xgrandparent' });
@@ -86,8 +96,9 @@ describe('storageAtParent', () => {
   });
 
   it("reads nothing when another runtime wrote the parent's state", async () => {
-    // the first block after an upgrade: the parent ran under 3000 and stored 3000's layout, but this
-    // block's registry is 3010's, and decoding the one with the other can give a wrong account
+    // the first block after an upgrade: the parent carried it, so ran under the old runtime and
+    // stored its layout, and decoding that with this block's registry can give a wrong account
+    upgrades = [{ firstBlockId: '0000466633', specVersionId: 3000 }];
     getRuntimeVersion.mockResolvedValue(spec(2025));
 
     expect(await storageAtParent(block, 'bridge', 'controller')).toBeUndefined();
@@ -95,12 +106,33 @@ describe('storageAtParent', () => {
     expect(getStorage).not.toHaveBeenCalled();
   });
 
+  it("reads nothing on a block whose registry is another runtime's", async () => {
+    // the dictionary labelled the block, and so built its registry, for a neighbouring runtime
+    (block as { specVersion: number }).specVersion = 2025;
+
+    expect(await storageAtParent(block, 'bridge', 'controller')).toBeUndefined();
+    expect(getStorage).not.toHaveBeenCalled();
+  });
+
+  it('asks the chain nothing about the parent unless an upgrade came in it', async () => {
+    getStorage.mockResolvedValue({ isNone: true });
+
+    await storageAtParent(block, 'bridge', 'controller');
+
+    expect(getHeader).not.toHaveBeenCalled();
+    expect(getRuntimeVersion).not.toHaveBeenCalled();
+    expect(getStorage).toHaveBeenCalled();
+  });
+
   it('asks which runtime wrote the parent once per block', async () => {
     getStorage.mockResolvedValue({ isNone: true });
+
+    upgrades = [{ firstBlockId: '0000466633', specVersionId: 3000 }];
 
     await storageAtParent(block, 'bridge', 'controller');
     await storageAtParent(block, 'multiSig', 'multiSigToIdentity', '5Multisig');
 
+    expect((globalThis as any).store.getByFields).toHaveBeenCalledTimes(1);
     expect(getRuntimeVersion).toHaveBeenCalledTimes(1);
   });
 
@@ -144,6 +176,7 @@ describe('storageAtParent', () => {
     });
 
     it("reads nothing when another runtime wrote the parent's state", async () => {
+      upgrades = [{ firstBlockId: '0000466633', specVersionId: 3000 }];
       getRuntimeVersion.mockResolvedValue(spec(2025));
 
       // unreadable, which is not the same as empty

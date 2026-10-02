@@ -2,6 +2,8 @@ import { Option, StorageKey } from '@polkadot/types';
 import { StorageEntryMetadataLatest } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
+import { ChainUpgrade } from '../types';
+import { padId } from './common';
 
 interface StorageItem {
   key: (...keys: unknown[]) => string;
@@ -15,24 +17,41 @@ interface StorageItem {
  * Whether this block's registry describes the runtime that wrote its parent's state, decided once
  * per block.
  *
- * The parent's state was written by the runtime that executed the parent, which is the one its own
- * parent's state holds. On the first block after an upgrade that is still the old runtime: the new
- * one migrates the state only as it runs this block. And on a block the dictionary mislabelled, the
- * registry is a neighbouring runtime's. Either way the bytes would be decoded with the wrong types,
- * which can quietly yield a wrong account rather than fail.
+ * The parent's state was written by the runtime that executed the parent. On the first block after
+ * an upgrade that is still the old runtime: the new one migrates the state only as it runs this
+ * block. And on a block the dictionary mislabelled, the registry is a neighbouring runtime's.
+ * Either way the bytes would be decoded with the wrong types, which can quietly yield a wrong
+ * account rather than fail.
+ *
+ * Unless the parent carried a recorded upgrade (`ChainUpgrade.firstBlock`, the block with its
+ * `system.CodeUpdated`), it ran the same runtime as this block, whose spec `ensureTrueSpecVersion`
+ * has already set on the block, so no chain read is needed. Only on the block after an upgrade is
+ * the runtime that wrote the parent's state read from the chain.
  */
 const registryWroteParent = new WeakMap<SubstrateBlock, Promise<boolean>>();
+
+const parentWriterSpec = async (block: SubstrateBlock): Promise<number> => {
+  const parentId = padId(String(Number(block.block.header.number.toString()) - 1));
+  const [upgradedInParent] = await store.getByFields<ChainUpgrade>(
+    'ChainUpgrade',
+    [['firstBlockId', '=', parentId]],
+    { limit: 1 }
+  );
+
+  if (!upgradedInParent) {
+    return block.specVersion;
+  }
+
+  const parent = await api.rpc.chain.getHeader(block.block.header.parentHash);
+  return (await api.rpc.state.getRuntimeVersion(parent.parentHash)).specVersion.toNumber();
+};
 
 const parentReadable = (block: SubstrateBlock): Promise<boolean> => {
   let readable = registryWroteParent.get(block);
 
   if (!readable) {
-    readable = (async () => {
-      const parent = await api.rpc.chain.getHeader(block.block.header.parentHash);
-      const writer = await api.rpc.state.getRuntimeVersion(parent.parentHash);
-
-      return writer.specVersion.toNumber() === api.runtimeVersion.specVersion.toNumber();
-    })();
+    readable = (async () =>
+      (await parentWriterSpec(block)) === api.runtimeVersion.specVersion.toNumber())();
     registryWroteParent.set(block, readable);
   }
 
