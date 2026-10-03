@@ -1,8 +1,9 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Nomination } from '../../../types';
+import { AnomalyKind, Nomination } from '../../../types';
 import { blockTime, EXPLICIT_NULL, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
 
@@ -25,14 +26,15 @@ const nominationId = (stash: string, validator: string, blockEventId: string): s
 /**
  * `Nominated` carries no era — a nomination applies to future elections, not a specific past one.
  * Read `staking.activeEra()` once per call so `Nomination.eraIndex` at least records "as of which
- * era this nomination was submitted." A missing/unreadable value leaves `eraIndex` null rather
- * than guessed at.
+ * era this nomination was submitted." `null` when the chain has no active era yet; `undefined` when
+ * the read failed. Either leaves `eraIndex` null rather than guessed at, but only a failure is
+ * reported (see `handleNominated`).
  */
-const currentEraIndex = async (): Promise<number | undefined> => {
+const currentEraIndex = async (): Promise<number | null | undefined> => {
   try {
     const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
 
-    return active?.index;
+    return active?.index ?? null;
   } catch {
     return undefined;
   }
@@ -50,7 +52,7 @@ const getOpenNominations = (stash: string): Promise<Nomination[]> =>
   ]);
 
 export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
   const { stash: rawStash, targets: rawTargets } = decodeEvent(event);
 
   const stash = getTextValue(rawStash);
@@ -73,6 +75,19 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
   const toClose = open.filter(({ validatorId }) => !targets.includes(validatorId));
   const toOpen = targets.filter(validator => !openValidators.has(validator));
 
+  // The `(position, eraIndex)` index serves "nominations as of era N", which a row without an era
+  // drops out of. So a failed read is reported once for the rows it leaves without one.
+  if (eraIndex === undefined && toOpen.length > 0) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `staking.activeEra could not be read, so ${toOpen.length} nomination(s) by ${stash} were written without an era`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+  }
+
   await Promise.all([
     ...toClose.map(nomination => {
       nomination.validToEventId = blockEventId;
@@ -88,7 +103,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
         id: nominationId(stash, validator, blockEventId),
         positionId: stash,
         validatorId: validator,
-        eraIndex,
+        eraIndex: eraIndex ?? undefined,
         validFromEventId: blockEventId,
         validToEventId: EXPLICIT_NULL, // explicitly open (see `getOpenNominations`)
       }).save();
