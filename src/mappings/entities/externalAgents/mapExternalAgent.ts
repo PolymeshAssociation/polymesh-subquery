@@ -11,11 +11,9 @@ export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<v
   const identityId = getTextValue(did);
   const assetId = await getAssetId(rawAssetId, block);
 
-  // `group` / `permissions` are left unset here: `AgentAdded`'s third param (`AgentGroup`) sets
-  // the initial group, but `GroupChanged` — the only handler that later moves an agent between
-  // groups — has no counterpart writing to `AssetAgent`, so populating them only on add would go
-  // stale the first time an agent's group changes. `AssetAgentHistory` is the reliable source for
-  // an agent's group/permission timeline until both paths are wired together.
+  // The row records membership only. An agent's permissions belong to the `AgentGroup` it is in,
+  // so copying them here would be a second source going stale the first time `GroupChanged` moves
+  // the agent — `AssetAgentHistory` carries the group and permission timeline instead.
   await AssetAgent.create({
     id: `${assetId}/${identityId}`,
     assetId,

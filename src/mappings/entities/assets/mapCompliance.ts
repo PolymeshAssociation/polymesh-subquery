@@ -17,7 +17,7 @@ export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promis
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isCompliancePaused = true;
   asset.updatedEventId = blockEventId;
 
@@ -30,7 +30,7 @@ export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promi
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isCompliancePaused = false;
   asset.updatedEventId = blockEventId;
 

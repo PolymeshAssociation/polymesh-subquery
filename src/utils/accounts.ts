@@ -5,8 +5,16 @@ import { getKeyRecordCache } from '../mappings/blockContext';
 import { createIdentity } from '../mappings/entities/identities/mapIdentities';
 import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity, IdentityKey, KeyRole, KeyRoleEnum } from '../types';
-import { extractString, getTextValue, padId } from './common';
+import {
+  Account,
+  AccountKeyRole,
+  EventIdEnum,
+  Identity,
+  IdentityKey,
+  IdentityKeyRole,
+  StakingPosition,
+} from '../types';
+import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
 
@@ -105,18 +113,18 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
  * The enum is treated as open: `undefined` (no key record) and the multisig account itself both
  * fold into `Unlinked` today, and could be split later without touching this switch's callers.
  */
-export const keyRoleFor = (resolution: KeyRecordResolution | undefined): KeyRoleEnum => {
+export const keyRoleFor = (resolution: KeyRecordResolution | undefined): AccountKeyRole => {
   if (!resolution) {
-    return KeyRoleEnum.Unlinked;
+    return AccountKeyRole.Unlinked;
   }
 
   switch (resolution.kind) {
     case 'primaryKey':
-      return KeyRoleEnum.PrimaryKey;
+      return AccountKeyRole.PrimaryKey;
     case 'secondaryKey':
-      return KeyRoleEnum.SecondaryKey;
+      return AccountKeyRole.SecondaryKey;
     case 'multiSigSigner':
-      return KeyRoleEnum.MultiSigSigner;
+      return AccountKeyRole.MultiSigSigner;
   }
 };
 
@@ -153,12 +161,83 @@ const resolveKeyRecord = async (
 /**
  * The `Account.keyRole` the chain's key record gives an address, read at most once per block.
  *
- * The one derivation path for the field: identity and multisig handlers, `getOrCreateAccount`,
- * `ledgerAccount`, and the genesis/seed scan all resolve `keyRole` through this or `keyRoleFor`,
- * so a role is never accumulated from events and cannot go stale relative to `keyRecords`.
+ * Which writers use it follows from what their event proves. An event that grants the role itself
+ * — an identity announcing its primary or secondary key — states the role and writes it directly.
+ * An event that only *implies* one, because acceptance comes later or never, reads it from here
+ * instead: that is every multisig signer write, where creating a multisig and authorising a signer
+ * are offers the chain records on the key only once the signer accepts.
+ *
+ * `keyRoleFor` is the same mapping over a key record the caller already holds, used by the paths
+ * that read the record for other reasons too.
  */
-export const resolveKeyRole = async (address: string, blockId: string): Promise<KeyRoleEnum> =>
+export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
+
+/**
+ * Carries an account's identity onto the staking position it is the stash of, when there is one.
+ *
+ * `StakingPosition.identity` is copied from the stash's `Account` so positions can be listed by
+ * identity without a join, which makes the account the source of truth and the position's field a
+ * copy that has to follow it. A stash can leave its identity and join another while it stays bonded,
+ * so the copy is updated here, where the account's identity changes, rather than re-read on every
+ * staking event: identity changes are rare, and staking events — a reward per nominator per era —
+ * are not.
+ */
+export const restampPositionIdentity = async (
+  address: string,
+  identityId: string | undefined,
+  blockEventId: string
+): Promise<void> => {
+  const position = await StakingPosition.get(address);
+
+  if (!position || position.identityId === identityId) {
+    return;
+  }
+
+  position.identityId = identityId;
+  position.updatedEventId = blockEventId;
+
+  await position.save();
+};
+
+/**
+ * Writes what a key-link event says about an address, keeping the row an address already has.
+ *
+ * Several events re-announce a key that is already indexed: a primary-key rotation announces the
+ * incoming key, which was a secondary key a moment earlier, and the genesis scan re-announces
+ * every key it seeds. Creating the row afresh each time would move its provenance forward to the
+ * latest of those, so an existing row is updated in place and only a genuinely new address takes
+ * the current event as its `createdEvent`.
+ */
+export const upsertAccount = async (
+  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
+  blockEventId: string
+): Promise<void> => {
+  const existing = await Account.get(args.address);
+
+  if (existing) {
+    const identityChanged = existing.identityId !== args.identityId;
+
+    Object.assign(existing, args, getAccountKeyType(args.address));
+    existing.updatedEventId = blockEventId;
+
+    await existing.save();
+
+    if (identityChanged) {
+      await restampPositionIdentity(args.address, args.identityId, blockEventId);
+    }
+
+    return;
+  }
+
+  await Account.create({
+    id: args.address,
+    ...args,
+    ...getAccountKeyType(args.address),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  }).save();
+};
 
 /**
  * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
@@ -182,7 +261,7 @@ export const getOrCreateAccount = async (
    * site (`meshAssetHolderToAssetHolder` and up) now threads its real `blockEventId` through; the
    * fallback below covers the few callers that still don't have one to give — an account
    * discovered by a genuinely event-less path (the genesis/seed scan) has no single causing event
-   * at all. D13's block-granularity caveat on `updatedEvent` applies either way.
+   * at all. The block-granularity caveat on `updatedEvent` applies either way.
    */
   createdEventId = `${blockId}/${padId('0')}`
 ): Promise<Account | undefined> => {
@@ -231,10 +310,9 @@ export const getOrCreateAccount = async (
 
   const account = Account.create({
     id: address,
-    eventId: EventIdEnum.AccountCreated,
     identityId: did,
     address,
-    keyRole: kind === 'primaryKey' ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
+    keyRole: kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
     ...getAccountKeyType(address),
     createdEventId,
     updatedEventId: createdEventId,
@@ -251,8 +329,9 @@ export const getOrCreateAccount = async (
       id: `${did}/${address}/${blockId}/${padId('0')}`,
       identityId: did,
       accountId: address,
-      role: kind === 'primaryKey' ? KeyRole.Primary : KeyRole.Secondary,
+      role: kind === 'primaryKey' ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
       validFromBlockId: blockId,
+      validToBlockId: EXPLICIT_NULL, // explicitly open (see `openIntervals`)
       addedReason: eventId,
       createdEventId,
       updatedEventId: createdEventId,
@@ -289,7 +368,6 @@ export const ledgerAccount = async (
   const account = Account.create({
     id: address,
     address,
-    eventId: EventIdEnum.AccountCreated,
     keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
     createdEventId,

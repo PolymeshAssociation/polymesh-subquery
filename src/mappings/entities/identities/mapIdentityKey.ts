@@ -1,8 +1,16 @@
-import { EventIdEnum, IdentityKey, KeyRole, PermissionsJson } from '../../../types';
-import { getAllByFields, padId } from '../../../utils';
+import { SubstrateBlock } from '@subql/types';
+import {
+  AnomalyKind,
+  EventIdEnum,
+  IdentityKey,
+  IdentityKeyRole,
+  PermissionsJson,
+} from '../../../types';
+import { EXPLICIT_NULL, getAllByFields, padId } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 
 /**
- * `IdentityKey` — an append-only key-rotation history (defect G3).
+ * `IdentityKey` — an append-only key-rotation history.
  *
  * A key joining an identity opens an interval (`validFromBlock` set, `validToBlock` null); leaving,
  * being rotated out, or a permissions change closes it. A permissions change and a primary-key
@@ -27,7 +35,7 @@ const identityKeyId = (
 interface OpenArgs {
   identityId: string;
   address: string;
-  role: KeyRole;
+  role: IdentityKeyRole;
   /** Granted permissions for this interval. Left null for a primary key, which always has full permission. */
   permissions?: PermissionsJson;
   addedReason: EventIdEnum;
@@ -50,24 +58,34 @@ export const openIdentityKey = async (
     role,
     permissions,
     validFromBlockId: blockId,
+    validToBlockId: EXPLICIT_NULL, // explicitly open (see `openIntervals`)
     addedReason,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
 };
 
-/** The open interval(s) for an account, optionally narrowed to one role. */
-const openIntervals = async (address: string, role?: KeyRole): Promise<IdentityKey[]> => {
-  const rows = await getAllByFields<IdentityKey>('IdentityKey', [['accountId', '=', address]]);
+/**
+ * An account's open membership intervals, of `role` if given.
+ *
+ * Only the open ones are read, through the `(account, validToBlock)` index. Reading every interval
+ * the account ever had and filtering made each change cost the key's whole history: testnet block
+ * 1,056,718 re-permissioned one key 100 times, after 1,400 earlier changes, at ~15 paged reads a
+ * time. An open interval is written with an explicit `null` (`openIdentityKey`), which the store's
+ * cache needs to match one.
+ */
+const openIntervals = async (address: string, role?: IdentityKeyRole): Promise<IdentityKey[]> => {
+  const rows = await getAllByFields<IdentityKey>('IdentityKey', [
+    ['accountId', '=', address],
+    ['validToBlockId', '=', EXPLICIT_NULL],
+  ]);
 
-  return rows.filter(
-    row => row.validToBlockId == null && (role === undefined || row.role === role)
-  );
+  return role === undefined ? rows : rows.filter(row => row.role === role);
 };
 
 interface CloseArgs {
   address: string;
-  role?: KeyRole;
+  role?: IdentityKeyRole;
   removedReason: EventIdEnum;
 }
 
@@ -97,32 +115,54 @@ export const closeIdentityKeys = async (
 
 interface RotateArgs {
   address: string;
-  role: KeyRole;
+  role: IdentityKeyRole;
   reason: EventIdEnum;
   eventIdx: number;
   permissions?: PermissionsJson;
   /** Falls back to the closed interval's identity when omitted — a permissions change keeps the DID. */
   identityId?: string;
+  /** For the anomaly recorded when there is no membership to carry forward. */
+  block: SubstrateBlock;
 }
 
 /**
  * Closes an account's open interval and opens a fresh one — a permissions change or a primary-key
  * rotation, where the membership continues but its terms change.
+ *
+ * One interval is reopened per interval closed, each on its own identity: closing every open
+ * interval and reopening only the first would leave the key with memberships the chain still
+ * considers active. Finding nothing to carry forward is a gap in the index rather than a
+ * no-op — the close has already happened by then, and the new terms would be recorded nowhere —
+ * so it is reported rather than swallowed.
  */
 export const rotateIdentityKey = async (
-  { address, role, reason, eventIdx, permissions, identityId }: RotateArgs,
+  { address, role, reason, eventIdx, permissions, identityId, block }: RotateArgs,
   blockEventId: string
 ): Promise<void> => {
-  const [closed] = await closeIdentityKeys({ address, role, removedReason: reason }, blockEventId);
+  const closed = await closeIdentityKeys({ address, role, removedReason: reason }, blockEventId);
 
-  const owningIdentity = identityId ?? closed?.identityId;
+  // One owner per interval closed, each keeping its own identity unless the caller named one. With
+  // nothing closed there is still a rotation to record if the caller named the identity itself.
+  const carried = closed.map(row => identityId ?? row.identityId);
+  const owners = carried.length > 0 ? carried : [identityId].filter(Boolean);
 
-  if (!owningIdentity) {
+  if (owners.length === 0) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `${reason} on account ${address} found no membership interval to carry forward`,
+      block,
+      eventIdx,
+    });
+
     return;
   }
 
-  await openIdentityKey(
-    { identityId: owningIdentity, address, role, permissions, addedReason: reason, eventIdx },
-    blockEventId
+  await Promise.all(
+    owners.map(owner =>
+      openIdentityKey(
+        { identityId: owner, address, role, permissions, addedReason: reason, eventIdx },
+        blockEventId
+      )
+    )
   );
 };

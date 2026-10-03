@@ -376,9 +376,25 @@ SubQuery maps `Date` to Postgres `timestamp without time zone`, and PostGraphile
 
 Neither the SDK nor the portal was shown to compare datetime strings, so the concrete harm is a consumer that parses `new Date(value)` and gets local time. The proportionate fix for that is a **schema docstring**: one on `Block.datetime` stating the rule for every `Date` field in the API, plus one-liners on the entitlement-critical fields (`tradeDate`, `valueDate`, the `expiry` fields, `filedAt`, the distribution dates), each saying "parse as UTC — `new Date(value + 'Z')`". Non-breaking, nothing generated, and it puts the fix where the reader looks.
 
+**Does the schema sync undo the `ALTER`? No — checked, 2026-09-24.** This is the question that
+would have settled it either way, and it was not asked before: if every start and upgrade reset the
+column type, the conversion would be unworkable rather than merely expensive. It does not.
+`SchemaMigrationService` compares the *previous GraphQL schema against the next one*
+(`schemaComparator` → `compareModels`) and emits DDL only for fields that changed in the schema; it
+never inspects the live column type, so a `Date` field that stays a `Date` produces no statement at
+all. The only other DDL path is `sequelize.sync()` with no options (`db.module.js`), which is
+`CREATE TABLE IF NOT EXISTS` and does not alter existing columns. A converted column therefore
+survives restarts and upgrades untouched.
+
+So the objections below are cost, not correctness — which is exactly why the conversion is declined
+rather than ruled out. The cost is real and recurring: a newly *added* `Date` field is created as
+`timestamp`, so the `ALTER` block has to be extended in the same commit as every such field, forever,
+with nothing in CI to catch a miss — and one missed field is the inconsistency the whole conversion
+exists to remove.
+
 **Nothing is converted.** A middle position was considered — convert *only* `Block.datetime` once D13 (§14b) removes the `datetime` copy from the domain entities — and dropped: ~13 named `Date` columns survive D13 (`Sto.start`/`end`, `tradeDate`, `valueDate`, four `expiry` fields, `filedAt`, `Portfolio.deletedAt`, `PolyxEntry.date`, `IndexerAnomaly.createdAt`), so a single conversion just reintroduces the inconsistency the docstring approach avoids, and `new Date("…+00:00" + "Z")` is `Invalid Date` — it would break the very docstring it ships with. Phase 7.6 still replaces the dead `data_block_datetime_timestamp` expression index (A18) with a plain btree on `datetime` — that is a perf fix, unrelated to the column type.
 
-### 10.2 The epoch integer — open, deliberately
+### 10.2 The epoch integer — declined, 2026-09-24
 
 A second question was raised alongside it: should timestamps *also* be exposed as an integer (Unix ms), for ordering and for consumers that would rather not parse strings? **No recommendation is made here.** It is a real trade-off and the arguments do not obviously resolve.
 
@@ -398,6 +414,16 @@ A second question was raised alongside it: should timestamps *also* be exposed a
 - **Aggregation works on both.** pg-aggregates handles `timestamptz` fine, so there is no capability the integer unlocks.
 
 **A middle position worth considering:** add the integer only where a consumer demonstrably needs it, rather than schema-wide — and add it as `blockTimestamp: BigInt!` on the ledger entities (`PolyxEntry`, `AssetTransaction`) where time-range filtering is the dominant query, leaving the other 25 date fields as `timestamptz` alone. That keeps the cost proportional to the benefit, at the price of an inconsistent schema.
+
+**Decision — declined.** Left open, the docstring approach wins by default rather than by decision,
+which is the state this section was criticised for. The case against is decisive as things stand:
+the columns were *not* converted, so the "convenience on top of a correct value" framing no longer
+holds — an epoch integer beside an unconverted `Date` would be a second representation of the same
+fact, and the two would have to be kept in agreement by hand, on the tables that grow fastest, for a
+benefit no consumer has asked for. Ordering is already solved by the padded composite id, and an
+epoch column mostly invites the mistake of ordering by it. The middle position stays on the table:
+if a consumer shows a time-range query it cannot express, add `blockTimestamp: BigInt!` to the two
+ledger entities then, scoped to that need.
 
 The decision needs a consumer, not an argument. It is recorded in [`README.md`](./README.md) "Questions still open" as needing a decision rather than evidence.
 

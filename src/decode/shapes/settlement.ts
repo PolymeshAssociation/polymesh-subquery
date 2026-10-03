@@ -38,13 +38,9 @@ registerShape('settlement', 'InstructionCreated', [
 const portfolioAffirmation = ['did', 'portfolio', 'instructionId'];
 
 registerShape('settlement', 'InstructionAffirmed', stable(portfolioAffirmation));
-// `InstructionAuthorized` and `InstructionUnauthorized` are absent from the v8 runtime
-registerShape('settlement', 'InstructionAuthorized', discontinuedAt(LAST_V7, portfolioAffirmation));
-registerShape(
-  'settlement',
-  'InstructionUnauthorized',
-  discontinuedAt(LAST_V7, portfolioAffirmation)
-);
+// `InstructionAuthorized` / `InstructionUnauthorized` were renamed to the affirmation events before
+// v2.3.0, and both public chains start at spec 3000 — no supported runtime ever emits them, so
+// neither is declared or registered.
 registerShape('settlement', 'AffirmationWithdrawn', stable(portfolioAffirmation));
 registerShape('settlement', 'InstructionAutomaticallyAffirmed', stable(portfolioAffirmation));
 

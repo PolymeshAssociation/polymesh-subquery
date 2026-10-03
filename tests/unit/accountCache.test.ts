@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { Account } from '../../src/types';
-import { getOrCreateAccount } from '../../src/utils/accounts';
+import { Account, AccountKeyRole } from '../../src/types';
+import { getOrCreateAccount, upsertAccount } from '../../src/utils/accounts';
 import { createIdentity } from '../../src/mappings/entities/identities/mapIdentities';
 
 jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
@@ -9,6 +9,7 @@ jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
 
 const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+const DID = '0x01'.padEnd(66, '0');
 
 const keyRecords = () => (api.query as any).identity.keyRecords as jest.Mock;
 
@@ -145,5 +146,46 @@ describe('getOrCreateAccount for a multisig signer key', () => {
     await expect(getOrCreateAccount(ADDRESS, freshBlockId(), datetime)).resolves.toBeUndefined();
 
     expect(createIdentity).not.toHaveBeenCalled();
+  });
+});
+
+describe('upsertAccount', () => {
+  beforeEach(() => {
+    (globalThis as any).api.registry = { chainSS58: 12 };
+  });
+
+  /**
+   * A primary-key rotation re-announces a key that was a secondary key a moment earlier. Writing
+   * the row afresh there would move its provenance to the rotation.
+   */
+  it('updates an existing row and leaves its createdEvent alone', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const existing: any = {
+      id: ADDRESS,
+      address: ADDRESS,
+      identityId: undefined,
+      keyRole: AccountKeyRole.Unlinked,
+      createdEventId: '0000000100/0000000000',
+      updatedEventId: '0000000100/0000000000',
+      save,
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(existing);
+    const created = jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
+
+    await upsertAccount(
+      {
+        address: ADDRESS,
+        identityId: DID,
+        keyRole: AccountKeyRole.PrimaryKey,
+      },
+      '0000000200/0000000003'
+    );
+
+    expect(created).not.toHaveBeenCalled();
+    expect(existing.createdEventId).toBe('0000000100/0000000000');
+    expect(existing.updatedEventId).toBe('0000000200/0000000003');
+    expect(existing.keyRole).toBe(AccountKeyRole.PrimaryKey);
+    expect(existing.identityId).toBe(DID);
+    expect(save).toHaveBeenCalled();
   });
 });

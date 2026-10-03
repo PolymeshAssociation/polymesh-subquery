@@ -1,5 +1,5 @@
 /**
- * `IdentityKey` — the time-bounded key membership record (defect G3).
+ * `IdentityKey` — the time-bounded key membership record.
  *
  * The headline case: a secondary key added, removed, then re-added produces a queryable history
  * with no gaps or overlaps — the first interval is closed before the second opens, and the two
@@ -7,7 +7,8 @@
  */
 
 import { Codec } from '@polkadot/types/types';
-import { EventIdEnum, KeyRole } from '../../src/types';
+import { SubstrateBlock } from '@subql/types';
+import { EventIdEnum, IndexerAnomaly, IdentityKeyRole } from '../../src/types';
 import {
   closeIdentityKeys,
   openIdentityKey,
@@ -21,6 +22,13 @@ import {
 } from '../../src/decode/legacy';
 
 const DID = '0x01'.padEnd(66, '0');
+const OTHER_DID = '0x02'.padEnd(66, '0');
+
+/** Only what `recordAnomaly` reads off a block. */
+const block = {
+  block: { header: { number: { toString: () => '9' } } },
+  timestamp: new Date(0),
+} as unknown as SubstrateBlock;
 const PRIMARY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 
@@ -64,7 +72,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -75,11 +83,11 @@ describe('openIdentityKey', () => {
     expect(rows()[0]).toMatchObject({
       identityId: DID,
       accountId: PRIMARY,
-      role: KeyRole.Primary,
+      role: IdentityKeyRole.PrimaryKey,
       validFromBlockId: '0000001',
       addedReason: EventIdEnum.DidCreated,
     });
-    expect(rows()[0].validToBlockId).toBeUndefined();
+    expect(rows()[0].validToBlockId).toBeNull();
     expect(rows()[0].removedReason).toBeUndefined();
   });
 
@@ -93,7 +101,7 @@ describe('openIdentityKey', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 1,
@@ -111,7 +119,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -121,7 +129,7 @@ describe('closeIdentityKeys', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -131,7 +139,7 @@ describe('closeIdentityKeys', () => {
     const closed = await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000005'
@@ -156,12 +164,59 @@ describe('closeIdentityKeys', () => {
 });
 
 describe('rotateIdentityKey', () => {
+  it("reads only the open interval, however long the key's history", async () => {
+    // testnet block 1,056,718: one key re-permissioned 100 times after 1,400 earlier changes, each
+    // change reading every interval the key ever had
+    for (let i = 0; i < 250; i += 1) {
+      db[`closed-${i}`] = {
+        id: `closed-${i}`,
+        identityId: DID,
+        accountId: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        validFromBlockId: '0000001',
+        validToBlockId: '0000002',
+      };
+    }
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: { transactionGroups: [] },
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000003/0000000000'
+    );
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 1,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000004/0000000001'
+    );
+
+    expect((store.getByFields as jest.Mock).mock.calls[0][1]).toContainEqual([
+      'validToBlockId',
+      '=',
+      null,
+    ]);
+    const open = Object.values(db).filter(row => row.validToBlockId === null);
+    expect(open).toHaveLength(1);
+    expect(open[0].permissions).toEqual({ transactionGroups: ['Portfolio'] });
+  });
+
   it('closes the current interval and opens a fresh one carrying the new permissions', async () => {
     await openIdentityKey(
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         permissions: { transactionGroups: [] },
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
@@ -172,10 +227,11 @@ describe('rotateIdentityKey', () => {
     await rotateIdentityKey(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
         eventIdx: 3,
         permissions: { transactionGroups: ['Portfolio'] },
+        block,
       },
       '0000007'
     );
@@ -188,18 +244,75 @@ describe('rotateIdentityKey', () => {
     // no gap and no overlap: the old interval ends exactly where the new one begins
     expect(history[0].validToBlockId).toBe('0000007');
     expect(history[1].validFromBlockId).toBe('0000007');
-    expect(history[1].validToBlockId).toBeUndefined();
+    expect(history[1].validToBlockId).toBeNull();
     expect(history[1].permissions).toEqual({ transactionGroups: ['Portfolio'] });
+  });
+
+  /**
+   * The close covers every open interval, so reopening only the first would silently drop the
+   * rest of the key's memberships.
+   */
+  it('reopens one interval per interval it closed', async () => {
+    for (const [identityId, eventIdx] of [
+      [DID, 0],
+      [OTHER_DID, 1],
+    ] as const) {
+      await openIdentityKey(
+        {
+          identityId,
+          address: SECONDARY,
+          role: IdentityKeyRole.SecondaryKey,
+          addedReason: EventIdEnum.SecondaryKeysAdded,
+          eventIdx,
+        },
+        '0000002'
+      );
+    }
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    const active = rows().filter(r => r.accountId === SECONDARY && !r.validToBlockId);
+
+    expect(active.map(r => r.identityId).sort()).toEqual([DID, OTHER_DID].sort());
+  });
+
+  it('records an anomaly instead of returning silently with nothing to carry forward', async () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    expect(anomaly).toHaveBeenCalled();
+    expect(rows().filter(r => r.accountId === SECONDARY)).toHaveLength(0);
   });
 });
 
-describe('G1 — active secondary keys exclude the primary', () => {
+describe('active secondary keys exclude the primary', () => {
   it('a primary and a secondary on one identity filter apart by role', async () => {
     await openIdentityKey(
       {
         identityId: DID,
         address: PRIMARY,
-        role: KeyRole.Primary,
+        role: IdentityKeyRole.PrimaryKey,
         addedReason: EventIdEnum.DidCreated,
         eventIdx: 0,
       },
@@ -209,7 +322,7 @@ describe('G1 — active secondary keys exclude the primary', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -217,7 +330,8 @@ describe('G1 — active secondary keys exclude the primary', () => {
     );
 
     const activeSecondary = rows().filter(
-      r => r.identityId === DID && r.role === KeyRole.Secondary && r.validToBlockId == null
+      r =>
+        r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
     );
 
     expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);
@@ -231,7 +345,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -240,7 +354,7 @@ describe('add → remove → re-add', () => {
     await closeIdentityKeys(
       {
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         removedReason: EventIdEnum.SecondaryKeysRemoved,
       },
       '0000020'
@@ -249,7 +363,7 @@ describe('add → remove → re-add', () => {
       {
         identityId: DID,
         address: SECONDARY,
-        role: KeyRole.Secondary,
+        role: IdentityKeyRole.SecondaryKey,
         addedReason: EventIdEnum.SecondaryKeysAdded,
         eventIdx: 0,
       },
@@ -263,7 +377,7 @@ describe('add → remove → re-add', () => {
     expect(history).toHaveLength(2);
     expect(history[0]).toMatchObject({ validFromBlockId: '0000010', validToBlockId: '0000020' });
     expect(history[1].validFromBlockId).toBe('0000030');
-    expect(history[1].validToBlockId).toBeUndefined();
+    expect(history[1].validToBlockId).toBeNull();
     // no overlap: interval 1 closes (block 20) strictly before interval 2 opens (block 30)
     expect(history[0].validToBlockId < history[1].validFromBlockId).toBe(true);
     expect(openRows()).toHaveLength(1);

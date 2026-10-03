@@ -13,12 +13,12 @@ Models key membership as an explicit, time-bounded relationship instead of a mut
 ## Problem
 
 - **G1 — `Identity.secondaryAccounts` includes the primary account** **[V]**. It derives from `Account.identity`, and `handleDidCreated` sets `identityId` on the primary account too. `Account` had no `role` discriminator, so consumers could not filter it out. *(Fixed: field removed; `keys(filter: …)` replaces it.)*
-- **G2 — `primaryAccount: String!`** while `Account.identity` is a relation. No FK, no join. *(NOT addressed in this phase — `primaryAccount` stays a string; the relation is reachable via `keys(filter: { role: { equalTo: Primary } })`. Turning `primaryAccount` itself into a relation is a follow-up.)*
+- **G2 — `primaryAccount: String!`** while `Account.identity` is a relation. No FK, no join. *(NOT addressed in this phase — `primaryAccount` stays a string; the relation is reachable via `keys(filter: { role: { equalTo: PrimaryKey } })`. Turning `primaryAccount` itself into a relation is a follow-up.)*
 - **G3 — no key-rotation history.** `PrimaryKeyUpdated` overwrites in place; `AccountHistory` has untyped `String` columns and no validity interval. Rotations cannot be listed, counted, or aggregated. *(Fixed: `IdentityKey`.)*
 - **G4 — `Permissions` entity and `PermissionsJson` jsonField duplicate the same four fields.** *(Fixed: entity removed, permissions live on `IdentityKey.permissions`.)*
 - **G5 — `MultiSig` is not linked to its `Account`**, despite a multisig *being* an account. *(Fixed: `MultiSig.account`, `MultiSigAdmin.admin`.)*
 - **G6/A11 — `ChildIdentity` holds rows for a feature the chain deleted** in a silent v8 storage migration **[V]**. *(Already handled in [09](./09-infrastructure.md) — `retireChildIdentitiesAtV8`.)*
-- **G16 — signer keys and account role are not modelled** **[V]**. `MultiSigSigner.signerValue` is unindexed and unjoinable to `Account`, and `Account` records the key's cryptographic shape (`keyType`) but not its role in the identity system, even though the chain's `KeyRecord` distinguishes primary / secondary / multisig-signer keys and the indexer reads that via `resolveKeyIdentity` before discarding it. *(Fixed: `Account.keyRole: KeyRoleEnum`, `MultiSigSigner.signerAccount: Account`.)*
+- **G16 — signer keys and account role are not modelled** **[V]**. `MultiSigSigner.signerValue` is unindexed and unjoinable to `Account`, and `Account` records the key's cryptographic shape (`keyType`) but not its role in the identity system, even though the chain's `KeyRecord` distinguishes primary / secondary / multisig-signer keys and the indexer reads that via `resolveKeyIdentity` before discarding it. *(Fixed: `Account.keyRole: AccountKeyRole`, `MultiSigSigner.signerAccount: Account`.)*
 - **`MultiSig.creator` conflated creator and admin** **[V]**. `genesisHandler.ts` filled it from `multiSig.adminDid` storage — the current **admin** — for genesis-seeded rows; `mapMultiSig.ts` fills it from the `MultiSigCreated` event's `callerDid` — the **creator** — for everything after. *(Fixed — see "MultiSig identity relationships" below.)*
 
 ---
@@ -50,7 +50,7 @@ type IdentityKey @entity
   id: ID!                        # did/address/padId(fromBlock)/padId(eventIdx)  — D4
   identity: Identity! @index
   account: Account! @index
-  role: KeyRole!
+  role: IdentityKeyRole!
   permissions: PermissionsJson   # null for a primary key (always full permission)
 
   validFromBlock: Block!
@@ -62,19 +62,19 @@ type IdentityKey @entity
   updatedBlock: Block!
 }
 
-enum KeyRole { Primary  Secondary }
+enum IdentityKeyRole { PrimaryKey  SecondaryKey }
 
 """
 The key's role in the identity system, from the chain's KeyRecord — distinct from keyType
 (the cryptographic shape). Open set: Unlinked currently covers pallet/pot/detached keys as one.
 """
-enum KeyRoleEnum { PrimaryKey  SecondaryKey  MultiSigSigner  Unlinked }
+enum AccountKeyRole { PrimaryKey  SecondaryKey  MultiSigSigner  Unlinked }
 
 type Account @entity {
   id: ID!                        # address
   address: String! @index(unique: true)
   keyType: String!               # substrate | ethereum — unchanged
-  keyRole: KeyRoleEnum! @index(unique: false)     # NEW — the key's role, mutable
+  keyRole: AccountKeyRole! @index(unique: false)     # NEW — the key's role, mutable
   evmAddress: String @index(unique: false)
   identity: Identity             # current identity, for convenience
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
@@ -117,7 +117,7 @@ type MultiSigSigner @entity {
 |---|---|
 | `AccountHistory` | Subsumed by `IdentityKey`, which adds the validity interval it lacks. Unobserved by both consumers **[V]**. |
 | `Permissions` (entity) | Collapsed into `IdentityKey.permissions` using the existing `PermissionsJson` jsonField, removing the duplicate shape (G4). `Account.permissions` gone. Unobserved by both consumers **[V]**. |
-| `Identity.secondaryAccounts` | Semantics were wrong (G1) and `@derivedFrom` takes no filter, so it could not be corrected in place. **Removed.** Current secondary keys: `keys(filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } })`. |
+| `Identity.secondaryAccounts` | Semantics were wrong (G1) and `@derivedFrom` takes no filter, so it could not be corrected in place. **Removed.** Current secondary keys: `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`. |
 | `MultiSig.address` | Replaced by the `account` relation. |
 
 **Safe to remove `secondaryAccounts`** — verified the SDK reads secondary keys from **chain** (`polymeshApi.query.identity`, `src/api/entities/Identity/index.ts:865+` on `origin/develop`), not from middleware **[V]**.
@@ -153,7 +153,7 @@ storage read on `MultiSigCreated` / `join_identity`. Belongs with the multisig e
 | Question | Answer |
 |---|---|
 | `MultiSigSigner.signerAccount` nullable or non-null? | **Nullable — forced, not a preference.** `multiSig.multiSigSigners` is keyed by `AccountId32` in v8, but `SignerTypeEnum` is `Account \| Identity` and pre-7.x `Signatory` signers could be an identity (the `is7xChain` branch in `getMultiSigSigners` still parses both). A relation cannot point at an identity, and the index replays from genesis, so a non-null `signerAccount` would be impossible for those rows. `signerValue` stays canonical. |
-| Should `KeyRoleEnum.Unlinked` split? | **No — the chain has no finer distinction.** `KeyRecord` is a closed three-variant enum (`PrimaryKey` / `SecondaryKey` / `MultiSigSignerKey`); every other address is simply `None`. Pallet addresses, system pots, brand-new addresses and deliberately-detached keys are indistinguishable *from chain state*. A future split (`SystemAccount` for known `PalletId`-derived addresses via `systematicIssuers`, `Detached` for an address with a closed `IdentityKey` interval and no open one, `Unlinked` for the rest) would be an **indexer-side heuristic over data the index already has** — worth doing only if a consumer asks. The enum is left open (nothing marks it exhaustive) so that stays cheap. |
+| Should `AccountKeyRole.Unlinked` split? | **No — the chain has no finer distinction.** `KeyRecord` is a closed three-variant enum (`PrimaryKey` / `SecondaryKey` / `MultiSigSignerKey`); every other address is simply `None`. Pallet addresses, system pots, brand-new addresses and deliberately-detached keys are indistinguishable *from chain state*. A future split (`SystemAccount` for known `PalletId`-derived addresses via `systematicIssuers`, `Detached` for an address with a closed `IdentityKey` interval and no open one, `Unlinked` for the rest) would be an **indexer-side heuristic over data the index already has** — worth doing only if a consumer asks. The enum is left open (nothing marks it exhaustive) so that stays cheap. |
 | Should `MultiSig.creator` split into `creator` / `admin` / joined-identity? | **Yes — done** (see "MultiSig identity relationships" above). The chain models them as separate, independently-`Option`al, mostly-mutable relationships, plus a fourth (`payingDid`). `creator` is now nullable and event-only; `admin` is `MultiSig.admins`; joined-identity is `account.identity`; `payingDid` is a noted gap. |
 
 ### `ChildIdentity`

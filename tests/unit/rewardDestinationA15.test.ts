@@ -1,5 +1,5 @@
 /**
- * Defect A15 — pre-v8 staking rewards and the account that received them.
+ * Pre-v8 staking rewards and the account that received them.
  *
  * Measured across a spread of eras (`scripts/measure-a15-payees.ts`): a large share of pre-v8
  * mainnet rewards were paid to a `Controller` or an explicit `Account`, not the stash. So

@@ -1,6 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import { AnomalyKind, EventIdEnum, IndexerAnomaly, ModuleIdEnum } from '../types';
-import { padId } from './common';
+import { blockTime, padId } from './common';
 
 export interface AnomalyInput {
   kind: AnomalyKind;
@@ -91,6 +91,6 @@ export const recordAnomaly = async ({
     detail,
     specVersionId: block.specVersion,
     blockId,
-    createdAt: block.timestamp,
+    createdAt: blockTime(block),
   }).save();
 };

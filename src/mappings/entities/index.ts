@@ -22,6 +22,7 @@ export * from './identities/mapIdentities';
 export * from './multiSig/mapMultiSig';
 export * from './multiSig/mapMultiSigProposal';
 export * from './assets/mapNfts';
+export * from './assets/mapNftApprovals';
 export * from './identities/mapPolyxLedger';
 export * from './identities/mapPortfolio';
 export * from './pips/mapProposal';

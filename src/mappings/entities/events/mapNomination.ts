@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Nomination } from '../../../types';
-import { getAllByFields, getTextValue } from '../../../utils';
+import { blockTime, EXPLICIT_NULL, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
@@ -38,11 +38,16 @@ const currentEraIndex = async (): Promise<number | undefined> => {
   }
 };
 
-const getOpenNominations = async (stash: string): Promise<Nomination[]> => {
-  const rows = await getAllByFields<Nomination>('Nomination', [['positionId', '=', stash]]);
-
-  return rows.filter(row => !row.validToEventId);
-};
+/**
+ * A stash's open nominations, read through the `(position, validToEvent)` index: only the open
+ * ones, rather than every nomination the stash ever made, which grew with each re-nomination. An
+ * open nomination is written with an explicit `null`, which the store's cache needs to match one.
+ */
+const getOpenNominations = (stash: string): Promise<Nomination[]> =>
+  getAllByFields<Nomination>('Nomination', [
+    ['positionId', '=', stash],
+    ['validToEventId', '=', EXPLICIT_NULL],
+  ]);
 
 export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId } = extractArgs(event);
@@ -54,7 +59,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   // A `nominate` call is on-chain proof the stash is actively participating again.
   position.isChilled = false;
   position.updatedEventId = blockEventId;
@@ -77,7 +82,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
     ...toOpen.map(async validator => {
       // `validator` is a nomination *target* — a third-party stash that may never have signed an
       // indexed extrinsic of its own, so nothing else guarantees its `Account` row exists yet.
-      await ledgerAccount(validator, blockId, block.timestamp);
+      await ledgerAccount(validator, blockId, blockTime(block));
 
       return Nomination.create({
         id: nominationId(stash, validator, blockEventId),
@@ -85,6 +90,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
         validatorId: validator,
         eraIndex,
         validFromEventId: blockEventId,
+        validToEventId: EXPLICIT_NULL, // explicitly open (see `getOpenNominations`)
       }).save();
     }),
   ]);
@@ -103,7 +109,7 @@ export const handleChilled = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   position.isChilled = true;
   position.updatedEventId = blockEventId;
 

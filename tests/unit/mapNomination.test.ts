@@ -60,9 +60,9 @@ describe('handleNominated', () => {
 
     expect(aRow.validToEventId).toBeDefined();
     expect(bRow.id).toBe(bRowId);
-    expect(bRow.validToEventId).toBeUndefined();
+    expect(bRow.validToEventId).toBeNull();
     expect(cRow).toBeDefined();
-    expect(cRow.validToEventId).toBeUndefined();
+    expect(cRow.validToEventId).toBeNull();
     expect(rows.every(r => r.eraIndex === 500)).toBe(true);
   });
 
@@ -199,6 +199,6 @@ describe('handleKicked', () => {
 
     const rows = Object.values(db.Nomination) as any[];
     expect(rows.find(r => r.validatorId === VALIDATOR_A).validToEventId).toBeDefined();
-    expect(rows.find(r => r.validatorId === VALIDATOR_B).validToEventId).toBeUndefined();
+    expect(rows.find(r => r.validatorId === VALIDATOR_B).validToEventId).toBeNull();
   });
 });

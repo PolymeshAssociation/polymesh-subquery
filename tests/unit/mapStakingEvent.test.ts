@@ -192,13 +192,13 @@ describe('handleStakingEvent', () => {
 });
 
 /**
- * S1 — `StakingPosition.bonded`/`unbonding` are a view onto `staking.ledger`, but two events
+ * `StakingPosition.bonded`/`unbonding` are a view onto `staking.ledger`, but two events
  * rewrite that ledger without emitting `Bonded`/`Unbonded`/`Withdrawn`: a compounded
  * (`RewardDestination::Staked`) reward, which `make_payout` adds straight onto `active`/`total`,
  * and a slash, which `do_slash` subtracts. Refreshing only on the three registered events left the
  * position falling further behind the real bond every era.
  */
-describe('a ledger change with no Bonded event still refreshes the position (S1)', () => {
+describe('a ledger change with no Bonded event still refreshes the position', () => {
   const mockLedger = (active: string) => {
     (globalThis as any).api.query = {
       ...mockLedgerAccountQuery(),

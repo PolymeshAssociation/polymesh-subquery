@@ -1,7 +1,8 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Era, Validator } from '../../../types';
-import { getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
+import { AnomalyKind, Era, Validator } from '../../../types';
+import { blockTime, getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { readCurrentEraIndex, readEraTotalStake, readEraValidators } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { getOrCreateValidator } from './mapValidator';
@@ -30,11 +31,26 @@ const getOrCreateEra = (eraIndex: number, blockEventId: string): Era => {
 };
 
 export const handleStakersElected = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
+  const reportUnreadable = (detail: string) =>
+    recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
 
   const eraIndex = await readCurrentEraIndex();
 
+  // The event carries no payload, so the era it opens is only knowable from chain state. Without
+  // it there is no row to write — but an era boundary the index skipped is a gap, not a no-op.
   if (eraIndex === undefined) {
+    await reportUnreadable(
+      'staking.currentEra could not be read, so the era this election opened was not recorded'
+    );
+
     return;
   }
 
@@ -49,6 +65,10 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
   // safer than deactivating every validator on a transient RPC error. The `Era` row above is
   // still worth recording even when this part can't be completed.
   if (validators === undefined) {
+    await reportUnreadable(
+      `the validators elected for era ${eraIndex} could not be read, so the previous active set was kept`
+    );
+
     return;
   }
 
@@ -66,7 +86,7 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
         return validator.save();
       }),
     ...validators.map(async stash => {
-      const validator = await getOrCreateValidator(stash, blockId, block.timestamp, blockEventId);
+      const validator = await getOrCreateValidator(stash, blockId, blockTime(block), blockEventId);
       validator.isActive = true;
       validator.updatedEventId = blockEventId;
 

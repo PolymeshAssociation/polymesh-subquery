@@ -4,6 +4,7 @@ import { FunctionPropertyNames } from '@subql/types-core';
 import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 import { padId } from '../../utils';
 import { recordAnomaly } from '../../utils/anomaly';
+import { assetFromChain } from './assets/assetFromChain';
 
 export type Attributes<T> = Omit<
   T,
@@ -31,8 +32,15 @@ export interface HandlerArgs {
   extrinsicIdx?: number;
 }
 
-export const getAsset = async (assetId: string): Promise<Asset> => {
-  const asset = await Asset.get(assetId);
+/**
+ * The asset a handler is about to change — from the index, or, given the event that names it,
+ * built from chain storage when the index has never seen it (see `assetFromChain`). Only an asset
+ * neither holds still fails the block, as it always has: a handler cannot make a change to an asset
+ * that exists nowhere.
+ */
+export const getAsset = async (assetId: string, event?: SubstrateEvent): Promise<Asset> => {
+  const asset =
+    (await Asset.get(assetId)) ?? (event ? await assetFromChain(assetId, event) : undefined);
 
   if (!asset) {
     throw new Error(`Asset with ID ${assetId} was not found.`);
@@ -68,6 +76,41 @@ export const getAssetOrAnomaly = async (
 };
 
 /**
+ * A row a handler needs but the index does not hold, recorded rather than returned as a bare
+ * `undefined`.
+ *
+ * Every "the thing this event refers to was never indexed" case means one of two things: the event
+ * that created it was missed, or the two handlers disagree about how the id is built. Both are worth
+ * knowing, and a silent `return` leaves no trace of either. Callers still decide what to do with
+ * `undefined` — this only makes sure the miss is on the record.
+ */
+export const getOrAnomaly = async <T>(
+  read: (id: string) => Promise<T | undefined>,
+  id: string,
+  entity: string,
+  event: SubstrateEvent
+): Promise<T | undefined> => {
+  const found = await read(id);
+
+  if (found) {
+    return found;
+  }
+
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  await recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `${eventId} found no ${entity} at id "${id}"`,
+    block,
+    eventIdx,
+    moduleId,
+    eventId,
+  });
+
+  return undefined;
+};
+
+/**
  * Context that lets an unmapped chain value be recorded as an `IndexerAnomaly` instead of
  * silently becoming `Unknown`. Optional so a caller with no block in hand still type checks,
  * but every call site inside a handler has one and should pass it.
@@ -79,12 +122,32 @@ export interface EnumContext {
   eventIdx?: number;
 }
 
+/**
+ * Maps a chain value onto a schema enum member, recording an anomaly when it maps onto nothing.
+ *
+ * `fallback` is optional, and leaving it out is the right choice whenever every member of the enum
+ * is a meaningful value rather than a catch-all: writing one of two opposites on an unrecognised
+ * value states something the chain did not say. Omitting it stores nothing, which a nullable column
+ * can express and the anomaly still reports.
+ */
 export function toEnum<T extends Record<string, string>>(
   enumType: T,
   value: string,
   fallback: T[keyof T],
   context?: EnumContext
-): T[keyof T] {
+): T[keyof T];
+export function toEnum<T extends Record<string, string>>(
+  enumType: T,
+  value: string,
+  fallback?: T[keyof T],
+  context?: EnumContext
+): T[keyof T] | undefined;
+export function toEnum<T extends Record<string, string>>(
+  enumType: T,
+  value: string,
+  fallback?: T[keyof T],
+  context?: EnumContext
+): T[keyof T] | undefined {
   if (Object.values(enumType).includes(value)) {
     return value as T[keyof T];
   }
@@ -96,7 +159,9 @@ export function toEnum<T extends Record<string, string>>(
      */
     void recordAnomaly({
       kind: AnomalyKind.UnknownEnumValue,
-      detail: `${context.enumName} has no member "${value}"; recorded as "${fallback}"`,
+      detail:
+        `${context.enumName} has no member "${value}"; ` +
+        (fallback === undefined ? 'left unset' : `recorded as "${fallback}"`),
       block: context.block,
       eventIdx: context.eventIdx,
       dedupeKey: `${context.enumName}/${value}`,

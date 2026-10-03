@@ -1,6 +1,6 @@
 // `project.ts` resolves each handler by name at runtime, with no static link to its
 // implementation — a typo or a removed export is silently dropped rather than failing the
-// build (defect A3: `Suspended: ['handleBalanceSuspended']` named a function that was never
+// build (`Suspended: ['handleBalanceSuspended']` named a function that was never
 // exported anywhere in `src/`). This asserts every handler name `project.ts` references is
 // actually exported from `src/index.ts`.
 import * as handlers from '../src/index';

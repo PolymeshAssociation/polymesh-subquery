@@ -19,6 +19,5 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
     amount: BigInt(amount) / BigInt(1000000),
     txHash: extractString(rest, 'tx_hash'),
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 }

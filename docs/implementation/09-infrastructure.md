@@ -2,7 +2,7 @@
 
 Prerequisite for most other plans. Ships no consumer-visible feature; delivers the decode layer, anomaly recording, upgrade tracking, and index consolidation everything else depends on.
 
-**Entities:** `IndexerAnomaly` (new), `ChainUpgrade` (new), `Event`/`Extrinsic` (index consolidation), `Debug`/`FoundType` (removal).
+**Entities:** `IndexerAnomaly` (new), `ChainUpgrade` (new), `Event`/`Extrinsic` (index consolidation), `Debug`/`FoundType` (removal). §9.10 *proposes* an argument encoding and an `EventReference` entity, pending a decision.
 
 ---
 
@@ -157,9 +157,11 @@ frees the `Event` index budget the `@subql/node` 10-index cap was pressing again
 - generated JSONB columns — `attributes`, `params`
 - the JSONB path index — `trim('"' from attributes #>> '{2,value,did}')`
 
+**All three would go if §9.10's proposal is accepted**: it replaces the positional `eventArg_n` columns and the text-plus-generated-JSONB pair with typed `args` and an `EventReference` lookup.
+
 **Fix the startup ordering.** `(npm run sql || (sleep 3 && kill "$$")) &` races the node creating tables, while `npm run migrations` runs synchronously before it. Make index/column creation deterministic rather than a race.
 
-**Consider `@fullText`** on `Event.eventArg_0..3` — currently served by `left(col, 100)` expression indexes, which is a prefix match, not a search. **[I]** Measure before switching; a GIN index has a different write cost.
+**Consider `@fullText`** on `Event.eventArg_0..3` — currently served by `left(col, 100)` expression indexes, which is a prefix match, not a search. **[I]** Measure before switching; a GIN index has a different write cost. Moot if §9.10's proposal, which removes the columns, is accepted.
 
 **~~`compat.sql` also owns the `timestamptz` conversion (D8).~~** **D8 was revised to documentation-only (2026-09-10 — see [`../README.md`](../README.md) decision log and [`../architecture-review.md`](../architecture-review.md) §10.1).** The `Date` columns stay `timestamp without time zone`; the timezone ambiguity is addressed by a schema docstring on `Block.datetime` (covering every `Date` field) plus one-liners on the entitlement-critical fields, telling consumers to parse as UTC. No column-type change, no generator script. The one `compat.sql` change in this area is separate: Phase 7.6 replaces the dead `data_block_datetime_timestamp` expression index (A18 — an expression index no generated query can use) with a plain btree on `blocks.datetime`, and adds one `created_event_id` btree on `multi_sig_proposals` (D13, plan [13](./13-entity-provenance.md)).
 
@@ -243,6 +245,99 @@ Three adjacent plans were split out of this one because they are independently s
 
 ---
 
+## 9.10 Event and call argument encoding — proposed, pending a decision
+
+**Status: a proposal, not a decision, and not built.** It is breaking for both consumers (see *SDK and portal* below and [`../reference/consumer-queries.md`](../reference/consumer-queries.md) §5), so it needs agreement from the SDK and portal maintainers first. It is listed as open question 3 in [`../README.md`](../README.md); if accepted, it becomes a decision there and this status line changes. Until then the current encoding stands.
+
+### Current state
+
+Every `Event` row stores its arguments twice, in a format the indexer defines itself:
+
+- `attributesTxt` — the arguments as JSON, produced by `serializeLikeHarvester`, plus a generated JSONB copy (`attributes`) added by `compat.sql` **[V]**.
+- `eventArg_0` … `eventArg_3` — the first four arguments as strings, with `left(col, 100)` expression indexes in `compat.sql` **[V]**.
+
+`Extrinsic` stores its call arguments as `paramsTxt`, which is `JSON.stringify(toHuman().method.args)` — display text, with balances formatted as `"75.8040 mPOLYX"` — plus a generated JSONB copy `params` **[V]**.
+
+The event encoding is the old **harvester**'s, kept for compatibility with an indexer that no longer exists: tuple members keyed `col1`, `col2` …; `Err` spelled `Error`; accounts as hex; moments reformatted as ISO strings with a 6-digit fraction; and a `Balance` passed through `parseInt`, which **loses precision above 2⁵³ base units** **[V]**. It is ~300 lines of our own code, it walks every value's type at runtime, and until it was profiled it described each value 8–10 times over. Speed is not a reason to replace it, though: on a testnet replay of busy blocks, removing it saved about 0.5 ms of an event's ~11 ms **[V]**.
+
+Consumers filter events **positionally**: the SDK's public `Network.getEventByIndexedArgs` / `getEventsByIndexedArgs` take `moduleId`, `eventId` and `eventArg0`–`eventArg2`, exact string match **[V]**. Nothing inside the SDK, the REST API or the portal calls them; they are an escape hatch for third parties **[V]**. Positional filtering is weak in itself: `eventArg0` means something different in each event, the same event can move a field between runtime versions, and only four arguments are reachable.
+
+### Target
+
+**1. One canonical encoding, for event and call arguments alike.** Built on polkadot's own `Codec.toPrimitive()`, with a short, documented normalisation on top, rather than a serialiser of our own:
+
+| Value | Encoded as |
+|---|---|
+| any integer (`u8`…`u128`, `Compact`, `Balance`, `Moment`) | decimal **string**, never a JSON number — no precision loss, and one type to compare |
+| `AccountId` | SS58 address, with the chain's prefix |
+| `IdentityId`, `AssetId`, hashes, fixed byte arrays | `0x` hex |
+| `Ticker` | text, trailing nulls removed |
+| `Bytes`, `Text` | UTF-8 text when valid, else `0x` hex |
+| struct | object keyed by the metadata's field names |
+| tuple | array |
+| enum | `{ "<variant>": value }`, or the variant name for a unit variant |
+| `Option` | the value, or `null` |
+| `Result` | `{ "ok": value }` / `{ "err": value }` |
+
+The exact casing `toPrimitive()` gives enum variants and struct fields is to be pinned down when building it, and fixed by tests, since it then becomes the contract **[I]**.
+
+**2. Schema.**
+
+```graphql
+type Event @entity {
+  # …
+  "The event's arguments, canonically encoded (plan 09 §9.10), keyed by field name where the metadata names them"
+  args: JSON!            # jsonField: filterable with `contains`
+  references: [EventReference!]! @derivedFrom(field: "event")
+}
+
+"Something an event refers to: an identity, account, asset or portfolio in any of its arguments"
+type EventReference @entity
+  @compositeIndexes(fields: [["kind", "value"], ["event", "kind"]]) {
+  id: ID!                # `${eventId}/${n}`, padded (D4)
+  event: Event!
+  kind: EventReferenceKind!   # Identity | Account | Asset | Portfolio
+  value: String!         # canonical encoding of the referenced value
+  argument: String       # the field it was found in, where named
+}
+
+type Extrinsic @entity {
+  # …
+  args: JSON!            # the call's arguments, the same encoding
+}
+```
+
+`args` is shaped as an object keyed by field name when the metadata names every field (every v8 event, and the struct-style events before it), and as an array otherwise (Polymesh's tuple-style events before v8).
+
+**Removed:** `Event.attributesTxt`, `Event.eventArg_0` … `eventArg_3`, `Extrinsic.paramsTxt`, and from `compat.sql` the generated `attributes` / `params` columns, the four `left(event_arg_n, 100)` indexes, the `(module_id, event_id, left(event_arg_2, 100))` index and the `attributes #>> '{2,value,did}'` path index.
+
+**3. References are found generically, by metadata type name**, with no code per event: while encoding, any value whose type is `IdentityId`, `AccountId`, `AssetId` / `Ticker` or `PortfolioId` adds an `EventReference` (a `PortfolioId` also adds its identity). A pre-v7 `Ticker` is recorded under the asset id it maps to (`getAssetIdForLegacyTicker`), so one query finds an asset's events across the ticker-to-id migration.
+
+**4. Implementation notes.**
+
+- `serializeLikeHarvester.ts` is deleted, not renamed.
+- `mapClaim` currently reads its claim fields out of the serialiser's output (`extractHarvesterArgs`); it moves to `decodeEvent`, like every other handler.
+- Write cost: the `eventArg_n` expression indexes go and `EventReference` rows come in, about 1–3 per event **[I]**. Measure on a testnet resync against the current run's throughput before settling; the fallback is reference arrays on `Event` with one GIN index in `compat.sql`.
+
+### SDK and portal
+
+| Today | Becomes |
+|---|---|
+| `getEventByIndexedArgs({ moduleId, eventId, eventArg0..2 })` / `getEventsByIndexedArgs(...)` | `getEvents({ moduleId?, eventId?, involving?: { identity? \| account? \| asset? \| portfolio? }, args?: object, size?, start? })` |
+| `eventArg0: '<hex account>'` | `involving: { account: '<SS58 address>' }` — an `EventReference` filter, at any argument position |
+| a value that is not a reference (an amount, a flag) | `args: { … }` — a JSONB `contains` filter on `Event.args` |
+| `Extrinsic.paramsTxt` / `params` (`toHuman` text) | `Extrinsic.args`, canonical encoding — balances become integer strings, not formatted text |
+
+The GraphQL for `involving` is `events(filter: { moduleId, eventId, references: { some: { kind: { equalTo: Identity }, value: { equalTo: $did } } } })`. The portal's multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`), and the SDK selects `paramsTxt` (`middleware/queries/extrinsics.ts`) and `params` (`middleware/queries/multisigs.ts`); all three move to `args` **[V]**.
+
+### Tests
+
+- **Contract:** the encoding of a fixture of real events and calls from each runtime era (v3 to v8) is checked in, so any change to the public format fails a test.
+- **Unit:** an event naming an identity, an account and a portfolio writes three references and a fourth for the portfolio's identity; a pre-v7 ticker is referenced under its asset id.
+- **Unit:** integers above 2⁵³ round-trip exactly.
+
+---
+
 ## Tests
 
 - **Unit:** `field()` resolves by name; throws `FieldNotFound` on a missing name.
@@ -253,4 +348,4 @@ Three adjacent plans were split out of this one because they are independently s
 
 ## Consumer impact
 
-**Near-none.** `IndexerAnomaly` and `ChainUpgrade` are additive; index consolidation is transparent; `Debug`/`FoundType` are unobserved. Existing `Event`/`Extrinsic` **filter** queries are unaffected — those use `moduleId`/`eventId`/`eventArg_0..3`, whose indexes already exist and just move to one place. The seven denormalised `Event` claim/CA/STO columns are **removed** (see §9.4) — neither consumer selects or filters on them per `consumer-queries.md`, but a middleware consumer that read `event.claimType` etc. directly must switch to the `Claim` / corporate-action / STO entities.
+**Near-none.** `IndexerAnomaly` and `ChainUpgrade` are additive; index consolidation is transparent; `Debug`/`FoundType` are unobserved. Existing `Event`/`Extrinsic` **filter** queries are unaffected — those use `moduleId`/`eventId`/`eventArg_0..3`, whose indexes already exist and just move to one place. **§9.10's proposal, if accepted, is breaking**: `eventArg_0..3`, `attributesTxt` and `Extrinsic.paramsTxt` / `params` would be replaced by `args` and `EventReference`, changing the SDK's `getEventByIndexedArgs` / `getEventsByIndexedArgs` and the extrinsic params the SDK and portal parse — see §9.10's *SDK and portal* table. The seven denormalised `Event` claim/CA/STO columns are **removed** (see §9.4) — neither consumer selects or filters on them per `consumer-queries.md`, but a middleware consumer that read `event.claimType` etc. directly must switch to the `Claim` / corporate-action / STO entities.

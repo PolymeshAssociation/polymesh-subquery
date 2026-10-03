@@ -1,7 +1,7 @@
 import { AnyTuple, Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Instruction, InstructionEvent, Leg } from '../../../types';
+import { AnomalyKind, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
   bytesToString,
@@ -10,7 +10,6 @@ import {
   getErrorDetails,
   getLegsValue,
   getNumberValue,
-  getAllByFields,
   getSettlementLeg,
   getSettlementTypeDetails,
   getSignerAddress,
@@ -23,6 +22,7 @@ import {
   removeIfIncludes,
   specVersionOf,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, HandlerArgs } from '../common';
 import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
 import {
@@ -40,11 +40,47 @@ import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements'
  * Until spec 6.3.1, `InstructionAutomaticallyAffirmed` was emitted *before* `InstructionCreated`,
  * so `handleInstructionCreated` re-scans the block for it. That workaround must be scoped to the
  * 6.1.0–6.3.1 window on public chains; a folded `||` previously made it run on every non-private
- * block at any spec version (defect A4). The private-chain equivalent range is unknown — if one is
+ * block at any spec version. The private-chain equivalent range is unknown — if one is
  * ever needed, add it as an explicit second clause rather than widening this one.
  */
 export const shouldRescanAutomaticAffirmations = (specName: string, specVersion: number): boolean =>
   specName !== 'polymesh_private_dev' && specVersion >= 6001000 && specVersion <= 6003001;
+
+/**
+ * The `InstructionEvent.event` value for each event that writes one.
+ *
+ * The narrow enum exists so the column cannot hold an event that has nothing to do with an
+ * instruction; casting an `EventIdEnum` straight into it gives that up and would write a value
+ * the GraphQL enum never declared. An event arriving here that this map does not cover is drift
+ * between the handler list and the enum, so it is reported rather than written.
+ */
+const instructionEventMap: Partial<Record<EventIdEnum, InstructionEventEnum>> = {
+  [EventIdEnum.InstructionExecuted]: InstructionEventEnum.InstructionExecuted,
+  [EventIdEnum.InstructionFailed]: InstructionEventEnum.InstructionFailed,
+  [EventIdEnum.InstructionLocked]: InstructionEventEnum.InstructionLocked,
+  [EventIdEnum.InstructionUnlocked]: InstructionEventEnum.InstructionUnlocked,
+  [EventIdEnum.FailedToExecuteInstruction]: InstructionEventEnum.FailedToExecuteInstruction,
+};
+
+const instructionEventFor = async (
+  eventId: EventIdEnum,
+  block: SubstrateBlock,
+  eventIdx: number
+): Promise<InstructionEventEnum | undefined> => {
+  const mapped = instructionEventMap[eventId];
+
+  if (!mapped) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnknownEnumValue,
+      detail: `${eventId} writes an InstructionEvent but has no InstructionEventEnum value`,
+      block,
+      eventIdx,
+      dedupeKey: `instructionEvent/${eventId}`,
+    });
+  }
+
+  return mapped;
+};
 
 const instructionStatusMap = {
   [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
@@ -115,35 +151,59 @@ const prepareLegCreateParams = async (
   };
 };
 
-const updateLegs = async (
-  blockEventId: string,
-  address: string,
-  instructionId: string
+/**
+ * Adds the signer of an affirmation or execution to every leg of `instruction`.
+ *
+ * Nothing to add on the scheduled and unsigned execution paths, which `getSignerAddress` returns
+ * no address for. The legs are read by id, all at once: a leg's id is `instructionId/legIndex`,
+ * the indices run from 0 with no gaps (`getLegsValue`, `getSettlementLeg`), and the instruction
+ * records how many there are. Searching for them instead cost a `getByFields` per affirmation,
+ * which sorts every cached `Leg` and sends their ids to Postgres: quadratic in a block of
+ * affirmations, like testnet block 5,091,762's 498. And reading on until a leg was missing cost a
+ * read of an id that does not exist, which no cache holds, so a Postgres query per affirmation.
+ */
+export const updateLegs = async (
+  {
+    blockEventId,
+    block,
+    eventIdx,
+  }: { blockEventId: string; block: SubstrateBlock; eventIdx: number },
+  address: string | undefined,
+  instruction: Pick<Instruction, 'id' | 'legCount'>
 ): Promise<void> => {
-  const legs = await getAllByFields<Leg>('Leg', [['instructionId', '=', instructionId]]);
-
-  // A19: only the legs that actually gained a signer address are rewritten. `getSignerAddress`
-  // returns undefined on the scheduled/unsigned execution paths, which used to rewrite every leg
-  // of the instruction with no content change.
-  const updatedLegs = legs.flatMap(leg => {
-    if (!address) {
-      return [];
-    }
-    addIfNotIncludes(leg.addresses, address);
-    leg.updatedEventId = blockEventId;
-
-    return [leg];
-  });
-
-  if (updatedLegs.length === 0) {
+  if (!address) {
     return;
   }
 
-  return store.bulkUpdate('Leg', updatedLegs);
+  const read = await Promise.all(
+    Array.from({ length: instruction.legCount }, (_, legIndex) =>
+      Leg.get(`${instruction.id}/${legIndex}`)
+    )
+  );
+  const legs = read.filter((leg): leg is Leg => leg !== undefined);
+
+  if (legs.length < instruction.legCount) {
+    // every instruction has its legs, written when it was created: the index is missing some
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instruction.id} has ${legs.length} of its ${instruction.legCount} legs in the index to add its signer ${address} to`,
+      block,
+      eventIdx,
+    });
+  }
+
+  legs.forEach(leg => {
+    addIfNotIncludes(leg.addresses, address);
+    leg.updatedEventId = blockEventId;
+  });
+
+  if (legs.length > 0) {
+    await store.bulkUpdate('Leg', legs);
+  }
 };
 
 /**
- * The chain's instruction id is a bare numeric sequence. Zero-pad it (D12 / A14) so
+ * The chain's instruction id is a bare numeric sequence. Zero-pad it so
  * `Instruction.id` and every FK that references it (`Leg`, `InstructionParty`,
  * `InstructionAffirmation`, `InstructionEvent`, `AssetTransaction.instructionId`) sort
  * numerically under `ID_DESC`. Every construction and every lookup routes through here.
@@ -222,7 +282,6 @@ const mapAutomaticAffirmation = async (
     account,
     portfolio,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const partyId = getPartyId(instructionId, identity, account, false);
@@ -305,6 +364,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     valueDate: getDateValue(rawValueDate),
     memo,
     mediators: [],
+    legCount: legs.length,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });
@@ -344,7 +404,6 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     event: InstructionEventEnum.InstructionCreated,
     identity: creator,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const promises = [
@@ -385,7 +444,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
  *   - InstructionAffirmed
  */
 export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { extrinsic, blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
   const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
@@ -429,14 +488,38 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
     portfolio,
     account,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([
     affirmation.save(),
     affirmationEvent.save(),
-    updateLegs(blockEventId, address, instructionId),
+    addSignerToLegs({ blockEventId, block, eventIdx }, address, instructionId),
   ]);
+};
+
+/** `updateLegs` for an event that names only the instruction, which is read for its leg count. */
+const addSignerToLegs = async (
+  at: Parameters<typeof updateLegs>[0],
+  address: string | undefined,
+  instructionId: string
+): Promise<void> => {
+  if (!address) {
+    return;
+  }
+
+  const instruction = await Instruction.get(instructionId);
+
+  if (!instruction) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instructionId} is not in the index to add its signer ${address} to its legs`,
+      block: at.block,
+      eventIdx: at.eventIdx,
+    });
+    return;
+  }
+
+  await updateLegs(at, address, instruction);
 };
 
 /**
@@ -467,7 +550,6 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
       account,
       portfolio,
       createdEventId: blockEventId,
-      updatedEventId: blockEventId,
     }).save(),
   ];
 
@@ -546,7 +628,6 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
     event: InstructionEventEnum.InstructionRejected,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([instruction.save(), rejection.save(), rejectionEvent.save()]);
@@ -560,7 +641,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionUnlocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, eventId, blockEventId } = extractArgs(event);
+  const { extrinsic, eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { instructionId: rawInstructionId } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
@@ -570,19 +651,25 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
   instruction.status = instructionStatusMap[eventId];
   instruction.updatedEventId = blockEventId;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([
+  const writes = [
     instruction.save(),
-    finalizedEvent.save(),
-    updateLegs(blockEventId, address, instructionId),
-  ]);
+    updateLegs({ blockEventId, block, eventIdx }, address, instruction),
+  ];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
 /**
@@ -598,7 +685,6 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
     event: InstructionEventEnum.SettlementManuallyExecuted,
     identity: getTextValue(rawIdentityId),
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await manuallyExecutedEvent.save();
@@ -608,7 +694,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
 export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
   const { instructionId: rawInstructionId, error: rawDispatchError } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
@@ -620,16 +706,23 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   instruction.status = InstructionStatusEnum.Failed;
   instruction.failureReason = failureReason;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    failureReason,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([instruction.save(), finalizedEvent.save()]);
+  const writes = [instruction.save()];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        failureReason,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
@@ -664,7 +757,6 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
     event: InstructionEventEnum.MediatorAffirmationReceived,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([mediatorAffirmation.save(), mediatorAffirmationEvent.save()]);
@@ -683,7 +775,6 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
     identity: identityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   await Promise.all([
@@ -714,7 +805,6 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
       event: InstructionEventEnum.InstructionMediators,
       identity,
       createdEventId: blockEventId,
-      updatedEventId: blockEventId,
     }).save();
   });
 
@@ -781,7 +871,6 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     identity: identityId,
     offChainReceiptId: `${signer}/${uid}`,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const promises = [receipt.save(), affirmation.save(), receiptEvent.save()];

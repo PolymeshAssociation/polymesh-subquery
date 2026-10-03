@@ -4,7 +4,7 @@ import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
-import { ErrorJson, FoundType } from '../types';
+import { ErrorJson } from '../types';
 import * as generatedModels from '../types/models';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
@@ -20,7 +20,7 @@ export const padId = (id: string): string => {
 /**
  * Zero-pad a bare chain-assigned numeric id (an instruction / venue / PIP / authorization
  * sequence stored as a `String` id) so a lexicographic `orderBy: ID_DESC` is also a numeric
- * one — otherwise `"9999"` ranks above `"14712"` (defect A14 / decision D12). This is `padId`
+ * one — otherwise `"9999"` ranks above `"14712"`. This is `padId`
  * with an intent-revealing name: the same 10-digit width covers any chain sequence for the
  * life of the chain, and it must be applied at both construction and every lookup so stored
  * ids and the FK references to them stay consistent.
@@ -216,11 +216,14 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   );
 };
 
-export const logFoundType = (type: string, rawType: string): void => {
-  FoundType.create({ id: type, rawType }).save();
-};
-
 export const END_OF_TIME = BigInt('253402194600000');
+
+/**
+ * `null`, for a field the generated models type as `string | undefined`: an open interval or
+ * nomination is written and looked up with an explicit `null` in its closing field, because the
+ * store's cache matches a filter with `isEqual`, which does not take an unset field for `null`.
+ */
+export const EXPLICIT_NULL = null as unknown as undefined;
 
 export function addIfNotIncludes<T>(arr: T[], item: T): void {
   if (!arr.includes(item)) {
@@ -358,8 +361,7 @@ const hydrate = <T extends Entity>(entityName: string, rows: T[]): T[] => {
  * that used to read a set and narrow it in JavaScript can push the narrowing into the query.
  *
  * Ordered by `id`. Every entity's id is unique, so offset paging over it is a total order; the
- * filter columns are not, and paging over one of those repeats a row and skips another (defect
- * A13).
+ * filter columns are not, and paging over one of those repeats a row and skips another.
  *
  * Note the store searches its write cache before the database, so a page can include rows
  * written earlier in this block.
@@ -388,4 +390,19 @@ export const getAllByFields = async <T extends Entity>(
 
     offset += page.length;
   }
+};
+
+/**
+ * When a block was produced.
+ *
+ * SubQuery types a block's timestamp as optional because some chains have no timestamp pallet.
+ * Every Polymesh block sets one in its first inherent, so a block without it is not one this index
+ * can make sense of — it fails loudly here rather than a date column being filled with a guess.
+ */
+export const blockTime = (block: SubstrateBlock): Date => {
+  if (!block.timestamp) {
+    throw new Error(`Block ${block.block.header.number.toString()} carries no timestamp`);
+  }
+
+  return block.timestamp;
 };

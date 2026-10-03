@@ -155,7 +155,7 @@ describe('identities', () => {
             updatedBlockId
             datetime
             keys(
-              filter: { role: { equalTo: Secondary }, validToBlockId: { isNull: true } }
+              filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } }
               orderBy: [ACCOUNT_ID_ASC]
             ) {
               nodes {

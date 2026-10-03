@@ -73,7 +73,10 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
 
   const ticker = serializeTicker(rawTicker);
   const assetId = getTextValue(rawAssetId);
-  const [asset, reservation] = await Promise.all([getAsset(assetId), getTickerReservation(ticker)]);
+  const [asset, reservation] = await Promise.all([
+    getAsset(assetId, event),
+    getTickerReservation(ticker),
+  ]);
 
   asset.ticker = ticker;
   asset.updatedEventId = blockEventId;
@@ -89,7 +92,10 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
 
   const ticker = serializeTicker(rawTicker);
   const assetId = getTextValue(rawAssetId);
-  const [asset, reservation] = await Promise.all([getAsset(assetId), getTickerReservation(ticker)]);
+  const [asset, reservation] = await Promise.all([
+    getAsset(assetId, event),
+    getTickerReservation(ticker),
+  ]);
 
   if (asset.ticker === ticker) {
     asset.ticker = undefined;

@@ -41,30 +41,54 @@ const runActionsQuery = async (
   return subquery;
 };
 
+/**
+ * Asserted field by field rather than against snapshots. This file's snapshot was deleted with the
+ * entity rename, and a missing snapshot file makes `toMatchSnapshot` write one instead of comparing —
+ * so every case passed whatever came back, in the suite that was meant to evidence the rename
+ * preserving the data.
+ */
 describe('assetAgentActions', () => {
   it('should return the transactions for ticker', async () => {
     const subquery = await runActionsQuery('', { orderBy: true, totalCount: true });
+    const { totalCount, nodes } = subquery.data.assetAgentActions;
 
-    expect(subquery?.data).toMatchSnapshot();
+    expect(totalCount).toBeGreaterThan(0);
+    expect(nodes).toHaveLength(totalCount);
+    nodes.forEach((node: Record<string, unknown>) =>
+      expect(node).toMatchObject({
+        palletName: expect.any(String),
+        eventId: expect.any(String),
+      })
+    );
   });
 
   it('should filter by event id', async () => {
     const subquery = await runActionsQuery(', eventId: { equalTo: FundraiserFrozen }');
+    const { nodes } = subquery.data.assetAgentActions;
 
-    expect(subquery?.data).toMatchSnapshot();
+    expect(nodes.length).toBeGreaterThan(0);
+    nodes.forEach((node: Record<string, unknown>) =>
+      expect(node.eventId).toBe('FundraiserFrozen')
+    );
   });
 
   it('should filter by pallet name', async () => {
     const subquery = await runActionsQuery(', palletName: { equalTo: "compliancemanager" }');
+    const { nodes } = subquery.data.assetAgentActions;
 
-    expect(subquery?.data).toMatchSnapshot();
+    expect(nodes.length).toBeGreaterThan(0);
+    nodes.forEach((node: Record<string, unknown>) =>
+      expect(node.palletName).toBe('compliancemanager')
+    );
   });
 
   it('should filter by caller DID', async () => {
     const subquery = await runActionsQuery(`, callerId: { equalTo: "${eveDid}" }`, {
       orderBy: true,
     });
+    const { nodes } = subquery.data.assetAgentActions;
 
-    expect(subquery?.data).toMatchSnapshot();
+    expect(nodes.length).toBeGreaterThan(0);
+    nodes.forEach((node: Record<string, unknown>) => expect(node.callerId).toBe(eveDid));
   });
 });

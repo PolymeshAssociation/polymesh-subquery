@@ -13,10 +13,18 @@ export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getBy
 export const storeBulkCreate = (): jest.Mock => (globalThis as any).store.bulkCreate as jest.Mock;
 export const storeBulkUpdate = (): jest.Mock => (globalThis as any).store.bulkUpdate as jest.Mock;
 
-/** Minimal Codec stand-in — handlers only read `toString` / `toJSON` / `isEmpty`. */
+/**
+ * A `Codec` stand-in. `toHex()` is deliberately distinct from `toString()` — a real codec's two
+ * encodings differ, and code that builds an id with one and looks it up with the other is a bug
+ * a mock without `toHex` cannot catch.
+ */
 export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
   isEmpty: opts.isEmpty ?? (value === undefined || value === null),
   toString: () => (typeof value === 'string' ? value : JSON.stringify(value)),
+  toHex: () => {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return text?.startsWith('0x') ? text : `0x${Buffer.from(text ?? '', 'utf8').toString('hex')}`;
+  },
   toJSON: () => value,
 });
 
@@ -37,6 +45,19 @@ export const mockStore = (db: MockDb = {}): MockDb => {
     delete db[entity]?.[id];
     return Promise.resolve();
   });
+  // equality filters over the in-memory rows, paged as the real store pages them
+  ((globalThis as any).store.getByFields as jest.Mock).mockImplementation(
+    (
+      entity: string,
+      filter: [string, string, unknown][],
+      { offset = 0, limit = 100 }: { offset?: number; limit?: number } = {}
+    ) =>
+      Promise.resolve(
+        Object.values(db[entity] ?? {})
+          .filter(row => filter.every(([field, , value]) => (row as any)[field] === value))
+          .slice(offset, offset + limit)
+      )
+  );
   (globalThis as any).api.query = {};
   return db;
 };
@@ -70,15 +91,18 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
  * rebuilds each row into its generated model, so the `.save()` a handler calls is the real one,
  * routed through `store.set` and therefore through `mockStore`'s own wiring.
  *
- * Ignores the filter expression and returns every row for `entityName` — fine for a test db
+ * Ignores the filter expression and returns every row for the named entities — fine for a test db
  * seeded with only the rows one query cares about; a handler diffing a mixed set needs its own
  * filtering, same as production code does after the store read.
+ *
+ * Takes a list as well as a single name, for a handler that reads more than one entity through
+ * `getAllByFields` in the course of one event.
  */
-export const mockGetByFields = (db: MockDb, entityName: string): void => {
+export const mockGetByFields = (db: MockDb, entityName: string | string[]): void => {
+  const served = new Set(Array.isArray(entityName) ? entityName : [entityName]);
+
   storeGetByFields().mockImplementation((name: string) =>
-    Promise.resolve(
-      name === entityName ? Object.values(db[entityName] ?? {}).map(row => ({ ...row })) : []
-    )
+    Promise.resolve(served.has(name) ? Object.values(db[name] ?? {}).map(row => ({ ...row })) : [])
   );
 };
 

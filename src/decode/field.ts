@@ -104,3 +104,24 @@ export const namedFields = (event: SubstrateEvent): DecodedEvent | undefined => 
     )
   );
 };
+
+/**
+ * A decoded field that an event may or may not carry, as `undefined` rather than a throw.
+ *
+ * The named-field proxy throws on an absent key deliberately — a handler asking for a field the
+ * event does not have is a bug worth surfacing. This is for the cases where absence is the
+ * information: a field one runtime added, or one an upstream pallet declares and Polymesh's own
+ * version of the same event does not. Both spellings are tried, since a struct event names fields
+ * snake_case upstream while the shape tables and handlers read camelCase.
+ */
+export const optionalField = (decoded: DecodedEvent, name: string): Codec | undefined => {
+  const snake = name.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+
+  for (const candidate of new Set([name, snake, toCamelCase(name)])) {
+    if (candidate in decoded) {
+      return decoded[candidate];
+    }
+  }
+
+  return undefined;
+};

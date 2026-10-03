@@ -46,7 +46,7 @@ registerShape(
   discontinuedAt(LAST_V7, ['from', 'to', 'amount', 'destinationStatus'])
 );
 
-// BalanceSet(IdentityId, AccountId, free, reserved) — reserved is index 3 (defect A1)
+// BalanceSet(IdentityId, AccountId, free, reserved) — reserved is index 3
 registerShape(
   'balances',
   'BalanceSet',
