@@ -176,13 +176,9 @@ Verified emissions **[V]** (`pallets/balances/src/lib.rs` @ v7.4.0, `types-looku
 
 Write it as a **domain seeder in `src/seed/`** rather than inline in `genesisHandler`. Plan [10](./10-partial-index.md) needs the identical read — "snapshot `system.account` at block B and create `AccountBalance` rows" — with the only difference being which block. Writing it once, called from both entry points, is the difference between one seeder and two that drift.
 
-### Reconciliation — in-flight
+### Reconciliation — in-flight (built, then removed)
 
-Because `api.query` targets the block being indexed **[V]** (and `.at` is unsupported), verify against authoritative state for the current block only:
-
-- every Nth block for accounts touched in that block
-- always after `BalanceSet` and `DustLost`
-- on mismatch: write an `IndexerAnomaly(BalanceReconciliationDrift)` **and correct** the derived value so drift cannot compound
+An in-flight check was built: sampled accounts compared with chain state at the block being indexed, a `BalanceReconciliationDrift` anomaly and a correction on a mismatch. It was removed once full syncs reconciled every balance with zero drift. Its sampling was too coarse to be the gate, and a correction hides the defect that caused the drift. Drift is fixed at its source, and a sync is checked by comparing the whole ledger with chain balances.
 
 ---
 
@@ -243,7 +239,7 @@ Splitting a transaction fee between validator, treasury and payer was derived ra
 
 ### The reconciliation harness — an acceptance test, not a follow-up
 
-The in-flight reconciliation above catches drift *going forward*. It cannot answer "is the history right", because it only ever compares at the block being indexed. A separate offline harness does that, and it is a deliverable of this plan.
+An in-flight check can only compare at the block being indexed, so it cannot answer "is the history right". A separate offline harness does that, and it is a deliverable of this plan.
 
 **Method:**
 

@@ -62,8 +62,7 @@ const inBatches = async <T, R>(
  * The seeded freeze used to go in wholesale under a `'genesis'` lock, which nothing ever lowered:
  * `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was never reported as
  * bonded, and because `frozen` is the MAX over locks the `'genesis'` entry kept `frozen` pinned at
- * the seeded amount even after the staker unbonded. Attributed from chain instead, the same way
- * the reconciler's correction is.
+ * the seeded amount even after the staker unbonded. So it is attributed from chain instead.
  */
 const chainFreezes = async (
   address: string,

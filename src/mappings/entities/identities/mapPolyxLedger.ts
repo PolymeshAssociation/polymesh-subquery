@@ -40,7 +40,6 @@ import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { reconcileAccount, reconcilePending } from './reconcilePolyx';
 import { storageEntriesAtParent } from '../../../utils/storageAtParent';
 import { resolveFeePayer } from './feePayer';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
@@ -97,7 +96,7 @@ const amountOf = (decoded: Record<string, Codec>): bigint => {
  * reason is a plain unit enum encodes as the bare string instead.
  *
  * Takes JSON rather than a `Codec` so the same decode serves `balances.holds(who)` entries, whose
- * `id` arrives already-JSON from a storage read (see `reconcilePolyx`).
+ * `id` arrives already-JSON from a storage read (see `readChainHolds`).
  */
 export const holdReasonFromJson = (json: unknown): HoldReason => {
   let variant: string | undefined;
@@ -185,18 +184,13 @@ export const emptyBalance = (
 /**
  * The balance row for an address, created empty when the ledger has not seen it before.
  *
- * Every balance mutation goes through here, which is also where a reconciliation queued by an
- * earlier block is flushed: at this point the current block has changed nothing yet, so the
- * derived side still matches the snapshot that was captured back then.
+ * Every balance mutation goes through here.
  */
 export const loadBalance = async (
   address: string,
   identityId: string | undefined,
-  blockEventId: string,
-  block: SubstrateBlock
+  blockEventId: string
 ): Promise<AccountBalance> => {
-  await reconcilePending(block);
-
   const existing = await AccountBalance.get(address);
 
   if (existing) {
@@ -290,10 +284,8 @@ export const readChainStakingLock = (address: string): Promise<bigint | undefine
 /**
  * An authoritative snapshot of everything that freezes an account's POLYX, read from chain.
  *
- * Captured by whoever does the chain read, rather than read inside `applyChainFreezes`, because
- * both callers need the read to happen against a specific block: the reconciler queues the
- * snapshot during the account's own block and corrects one block later (see `reconcilePolyx`), and
- * the seeder reads at its start block.
+ * Captured by whoever does the chain read, rather than read inside `applyChainFreezes`, because the
+ * read has to happen against a specific block: the seeder reads at its start block.
  */
 export interface ChainFreezes {
   frozen: bigint;
@@ -315,8 +307,8 @@ export interface ChainFreezes {
 /**
  * Rebuilds `locks` and `holds` from chain state, then recomputes the derived fields.
  *
- * Used wherever a derived balance is replaced wholesale by a chain read — the in-flight
- * reconciler's drift correction and the genesis / partial-index seed. Attribution matters because
+ * Used where a derived balance is replaced wholesale by a chain read — the genesis / partial-index
+ * seed. Attribution matters because
  * `bonded` comes from the staking lock (pre-v8) or the `Staking` hold (v8): filing the whole
  * frozen amount under the staking lock calls every freeze a bond, and filing a pre-v8 staker's
  * freeze under a neutral id loses the bond entirely.
@@ -550,7 +542,7 @@ interface TransitionContext {
   params: ReturnType<typeof getEventParams>;
 }
 
-/** Advances one account, writes its `PolyxEntry`, and reconciles it. */
+/** Advances one account and writes its `PolyxEntry`. */
 const writeMovementSide = async (
   side: MovementSide,
   { args, transition, options, isInternal, date, params }: TransitionContext
@@ -560,7 +552,7 @@ const writeMovementSide = async (
   const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
 
   const account = await ledgerAccount(address, blockId, block.timestamp);
-  const balance = await loadBalance(address, account.identityId, blockEventId, block);
+  const balance = await loadBalance(address, account.identityId, blockEventId);
 
   advanceBalance(balance, side, transition, signed, isInternal);
   balance.updatedEventId = blockEventId;
@@ -599,8 +591,6 @@ const writeMovementSide = async (
   });
   await entry.save();
   getLedgerEntries(blockId).add(entry);
-
-  await reconcileAccount(address, blockId, block, { eventIdx, params });
 };
 
 /**
@@ -736,8 +726,7 @@ export const setLock = async (
  *
  * The chain read is authoritative — it already accounts for the max-bond cap, the rounding of a
  * compounded `Staked` reward, unbonding chunks, and slashes. When the ledger cannot be read the
- * `fallbackDelta` keeps the old accumulator behaviour so the reconciler still has a base to work
- * from.
+ * `fallbackDelta` keeps the old accumulator behaviour, so the lock still moves by the event's amount.
  */
 const syncStakingLock = async (
   stash: string,
@@ -767,7 +756,7 @@ const lockHandler =
 
     // Ensure the balance row exists so the lock has somewhere to live.
     await ledgerAccount(who, blockId, block.timestamp);
-    const balance = await loadBalance(who, undefined, blockEventId, block);
+    const balance = await loadBalance(who, undefined, blockEventId);
     await balance.save();
 
     await adjustLock(who, lockId, sign * amountOf(decoded), blockEventId);
@@ -1534,13 +1523,6 @@ export const handleDustLost = async (event: SubstrateEvent): Promise<void> => {
     amount: amountOf(decoded),
     kind: MovementKind.DustLost,
   });
-
-  // account reaping — always reconcile the reaped account against chain state
-  await reconcileAccount(account, args.blockId, args.block, {
-    force: true,
-    eventIdx: args.eventIdx,
-    params: getEventParams(args),
-  });
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1584,7 +1566,7 @@ const applyBalanceSet = (
  * Records `deltas`, already applied to `balance`'s pools, as `BalanceSetAdjustment`s: one movement
  * on the lifetime tallies and one entry per changed pool, so the account's entries still add up to
  * its balance. Saves the balance. For a balance set to a value rather than moved by an amount: a
- * `BalanceSet`, or the reconciler correcting a drift to chain state.
+ * `BalanceSet`.
  */
 export const recordAdjustment = async (
   balance: AccountBalance,
@@ -1687,7 +1669,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
   }
 
   const account = await ledgerAccount(who, blockId, datetime);
-  const balance = await loadBalance(who, account.identityId, blockEventId, block);
+  const balance = await loadBalance(who, account.identityId, blockEventId);
 
   const deltas = applyBalanceSet(balance, newFree, newReserved);
   const params = getEventParams(args);
@@ -1699,9 +1681,6 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
     params,
     entryId: pool => `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}s`,
   });
-
-  // a checkpoint should equal chain state — always reconcile right after it
-  await reconcileAccount(who, blockId, block, { force: true, eventIdx, params });
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -2587,11 +2566,10 @@ const ensureBalanceRow = async (
   address: string,
   blockId: string,
   datetime: Date,
-  blockEventId: string,
-  block: SubstrateBlock
+  blockEventId: string
 ): Promise<void> => {
   await ledgerAccount(address, blockId, datetime);
-  const balance = await loadBalance(address, undefined, blockEventId, block);
+  const balance = await loadBalance(address, undefined, blockEventId);
   await balance.save();
 };
 
@@ -2619,13 +2597,7 @@ const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> =
     return;
   }
 
-  await ensureBalanceRow(
-    address,
-    args.blockId,
-    args.block.timestamp,
-    args.blockEventId,
-    args.block
-  );
+  await ensureBalanceRow(address, args.blockId, args.block.timestamp, args.blockEventId);
   await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
 };
 
@@ -2708,7 +2680,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId, args.block);
+  await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId);
   await syncStakingLock(stash, amountOf(decoded), args);
 };
 

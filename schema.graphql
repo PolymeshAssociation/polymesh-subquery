@@ -2008,8 +2008,6 @@ enum AnomalyKind {
   UnknownEnumValue
   "A handler resolved a relation to an entity that does not exist in the index"
   MissingReferencedEntity
-  "An accumulated balance disagreed with the same balance read from chain state"
-  BalanceReconciliationDrift
   "A handler threw. The index is missing whatever that handler would have written"
   HandlerError
   "A value a handler depends on could not be read — from the event itself or from chain state — so what depended on it was skipped or left as it last was"

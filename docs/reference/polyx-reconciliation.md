@@ -85,13 +85,15 @@ in this phase rather than deferred.
 
 ## The reconciliation harness (D11) — the acceptance gate
 
-### In-flight — `src/mappings/entities/identities/reconcilePolyx.ts`
+### In-flight — removed
 
-Wired into the ledger handlers. Every 500th block for accounts touched in that block, and always
-after `BalanceSet` / `DustLost`, the derived `AccountBalance` is compared against `system.account`
-read at the block being indexed (`api.query` targets the current block; `.at` is unsupported).
-On a mismatch it writes a `BalanceReconciliationDrift` anomaly **and corrects** the derived
-value, so drift from one missed or mis-signed event cannot compound into every later balance.
+An in-flight reconciler used to sample accounts as they were indexed, compare them with
+`system.account`, record a `BalanceReconciliationDrift` anomaly and correct the derived balance. It
+was a stopgap while drift still had unfixed causes, and it was removed once full syncs reconciled
+every POLYX balance with zero drift. Its sampling was too coarse to find drift anyway: below its
+100 POLYX tolerance an error built up unflagged, and an account it never sampled was never checked.
+A correction also hid where drift came from. Drift is now found by comparing the whole ledger with
+chain balances after a sync, and fixed in the handler that caused it.
 
 ### Offline — `scripts/reconcile-polyx.ts`
 
