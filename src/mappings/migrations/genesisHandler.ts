@@ -71,7 +71,7 @@ export const seedEventId = SEED_EVENT_ID;
  * `createdEventId: '0000000000/0000000000'` for a row that did not exist — historical mode's
  * foreign keys are virtual, so Postgres never caught the dangling reference.
  */
-export const insertSeedEvent = async (
+export const insertSeedEvent = (
   blockId: string = genesisBlock,
   specVersion = 3000
 ): Promise<void> =>
@@ -348,7 +348,7 @@ export const seedFromStartBlock = async (block: SubstrateBlock): Promise<void> =
 /**
  * This adds in all the entries which are present in the genesisBlock
  */
-export default async (block: SubstrateBlock): Promise<void> => {
+const genesisHandler = async (block: SubstrateBlock): Promise<void> => {
   const { specVersion } = block;
   logger.info('Running genesis handler');
 
@@ -380,3 +380,5 @@ export default async (block: SubstrateBlock): Promise<void> => {
 
   logger.info('Applied genesis migrations');
 };
+
+export default genesisHandler;

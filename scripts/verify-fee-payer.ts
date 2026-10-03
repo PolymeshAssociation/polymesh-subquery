@@ -17,17 +17,20 @@ import { exactFee } from '../src/mappings/entities/identities/preV54Fees';
 
 type EventRecords = {
   phase: { isApplyExtrinsic: boolean; asApplyExtrinsic: { toNumber(): number } };
-  event: { section: string; method: string; data: unknown[] };
+  event: { section: string; method: string; data: { toString(): string }[] };
 }[];
 
 /** The sandbox's globals: nothing is written, and an anomaly is only printed. */
 const installSandboxGlobals = (): void => {
   (globalThis as any).logger = console;
   (globalThis as any).store = {
-    get: async () => undefined,
-    getByField: async () => [],
-    getByFields: async () => [],
-    set: async (entity: string, _id: string, data: unknown) => console.log(`  [${entity}]`, data),
+    get: () => Promise.resolve(undefined),
+    getByField: () => Promise.resolve([]),
+    getByFields: () => Promise.resolve([]),
+    set: (entity: string, _id: string, data: unknown) => {
+      console.log(`  [${entity}]`, data);
+      return Promise.resolve();
+    },
   };
 };
 
@@ -56,7 +59,7 @@ const feeCheck = (events: EventRecords, idx: number, extrinsic: unknown): string
     return `fee=${fee} (no cut: nothing charged)`;
   }
 
-  const cut = BigInt(String(cutRecord.event.data[1]));
+  const cut = BigInt(cutRecord.event.data[1].toString());
 
   return `fee=${fee} cut=${cut} ${(fee * BigInt(8)) / BigInt(10) === cut ? 'ok' : 'MISMATCH'}`;
 };
@@ -84,26 +87,33 @@ const reportBlock = async (api: ApiPromise, height: number): Promise<void> => {
   const events = (await apiAt.query.system.events()) as unknown as EventRecords;
   const timestamp = new Date(Number((await apiAt.query.timestamp.now()).toString()));
 
-  for (const [idx, extrinsic] of signed.block.extrinsics.entries()) {
-    if (!extrinsic.isSigned) {
-      continue;
-    }
-
+  const describe = async (
+    extrinsic: (typeof signed.block.extrinsics)[number],
+    idx: number
+  ): Promise<string> => {
     const signer = extrinsic.signer.toString();
     const payer = await resolveFeePayer({
       idx,
       extrinsic,
       block: { block: signed.block, specVersion: version.specVersion.toNumber(), timestamp },
     } as any);
-    const payerMove =
-      payer === signer ? '  payer=signer' : `  payer=${payer} Δ${await delta(payer)}`;
+    const [signerMove, payerDelta] = await Promise.all([
+      delta(signer),
+      payer === signer ? undefined : delta(payer),
+    ]);
+    const payerMove = payerDelta === undefined ? 'payer=signer' : `payer=${payer} Δ${payerDelta}`;
 
-    console.log(
-      `  x${idx} ${extrinsic.method.section}.${
-        extrinsic.method.method
-      } signer=${signer} Δ${await delta(signer)}${payerMove}  ${feeCheck(events, idx, extrinsic)}`
-    );
-  }
+    return `  x${idx} ${extrinsic.method.section}.${
+      extrinsic.method.method
+    } signer=${signer} Δ${signerMove}  ${payerMove}  ${feeCheck(events, idx, extrinsic)}`;
+  };
+
+  const lines = await Promise.all(
+    [...signed.block.extrinsics.entries()]
+      .filter(([, extrinsic]) => extrinsic.isSigned)
+      .map(([idx, extrinsic]) => describe(extrinsic, idx))
+  );
+  lines.forEach(line => console.log(line));
 };
 
 const main = async (): Promise<void> => {
@@ -123,9 +133,11 @@ const main = async (): Promise<void> => {
 
   installSandboxGlobals();
 
-  for (const height of blocks) {
-    await reportBlock(api, height);
-  }
+  // One block at a time: each installs its own `api` global for the resolver to read.
+  await blocks.reduce(
+    (previous, height) => previous.then(() => reportBlock(api, height)),
+    Promise.resolve()
+  );
 
   await api.disconnect();
 };

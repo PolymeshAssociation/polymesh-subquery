@@ -64,7 +64,7 @@ const primaryKeyOf = async (block: SubstrateBlock, did: string): Promise<string 
 const authIssuerPrimaryKey = async (
   block: SubstrateBlock,
   signer: string,
-  authId: unknown
+  authId: string | number
 ): Promise<string | undefined> => {
   const auth = (
     await storageAtParent(block, 'identity', 'authorizations', { Account: signer }, authId)
@@ -74,7 +74,7 @@ const authIssuerPrimaryKey = async (
   // holds it, from that earlier extrinsic's events.
   const issuer =
     (field(auth, 'authorizedby') as string | undefined) ??
-    (await Authorization.get(padNumericId(String(authId))))?.fromId;
+    (await Authorization.get(padNumericId(authId.toString())))?.fromId;
 
   return issuer ? primaryKeyOf(block, issuer) : undefined;
 };
@@ -117,12 +117,16 @@ export const resolveFeePayer = async (extrinsic: SubstrateExtrinsic): Promise<st
       (extrinsic.extrinsic.method.toJSON() as { args?: Record<string, unknown> }).args ?? {};
 
     if (call in AUTH_ISSUER_PAYS) {
-      payer = await authIssuerPrimaryKey(block, signer, field(args, AUTH_ISSUER_PAYS[call]));
+      payer = await authIssuerPrimaryKey(
+        block,
+        signer,
+        field(args, AUTH_ISSUER_PAYS[call]) as string | number
+      );
     } else if (call === 'identity.removeauthorization') {
       if (field(args, 'authissuerpays') !== true) {
         return signer;
       }
-      payer = await authIssuerPrimaryKey(block, signer, field(args, 'authid'));
+      payer = await authIssuerPrimaryKey(block, signer, field(args, 'authid') as string | number);
     } else if (MULTISIG_PAYS.has(call)) {
       payer = await multisigPrimaryKey(block, field(args, 'multisig'));
     } else {

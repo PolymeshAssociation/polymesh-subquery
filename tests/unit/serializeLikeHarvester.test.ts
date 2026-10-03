@@ -312,7 +312,7 @@ describe('serializeLikeHarvester', () => {
     registry.register('Empty', createClass(registry, '()'));
     const Empty = createClass(registry, 'Empty');
 
-    expect(serializeLikeHarvester(new Empty(registry), 'Empty')).toBe(null);
+    expect(serializeLikeHarvester(new Empty(registry), 'Empty')).toBeNull();
   });
 
   it('should serialize HexBytes like the harvester', () => {
@@ -499,7 +499,7 @@ describe('serializeLikeHarvester', () => {
     expect(serializeLikeHarvester(new MyOption(registry, 'hello'), 'MyOption')).toStrictEqual(
       '0x68656c6c6f'
     );
-    expect(serializeLikeHarvester(new MyOption(registry, null), 'MyOption')).toStrictEqual(null);
+    expect(serializeLikeHarvester(new MyOption(registry, null), 'MyOption')).toBeNull();
   });
 
   it('should serialize Maps like the harvester', () => {

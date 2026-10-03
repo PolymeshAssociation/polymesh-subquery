@@ -73,9 +73,9 @@ const weightToFee = (weight: bigint): bigint => {
 export const exactFee = (extrinsic: SubstrateExtrinsic, closing: SubstrateEvent): bigint => {
   const { method, data } = closing.event;
   const info = data[method === 'ExtrinsicFailed' ? 1 : 0] as unknown as {
-    weight: { refTime?: unknown; toString(): string };
+    weight: { refTime?: { toString(): string }; toString(): string };
   };
-  const used = BigInt(String(info.weight.refTime ?? info.weight));
+  const used = BigInt((info.weight.refTime ?? info.weight).toString());
 
   return (
     weightToFee(EXTRINSIC_BASE_WEIGHT) +

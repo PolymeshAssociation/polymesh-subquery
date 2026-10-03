@@ -160,13 +160,14 @@ export const storageEntriesAtParent = async (
       parentHash
     );
 
-    for (const key of keys) {
-      const value = await readAtParent(block, storage, key);
+    const values = await Promise.all(keys.map(key => readAtParent(block, storage, key)));
 
+    keys.forEach((key, index) => {
+      const value = values[index];
       if (value) {
         entries.push({ args: keyArgs(storage, key), value });
       }
-    }
+    });
 
     if (keys.length < KEYS_PER_PAGE) {
       return entries;

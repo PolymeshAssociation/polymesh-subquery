@@ -1621,8 +1621,8 @@ export const recordAdjustment = async (
 
   const date = startOfUtcDay(block.timestamp);
 
-  for (const { pool, delta } of deltas) {
-    const entry = PolyxEntry.create({
+  const entries = deltas.map(({ pool, delta }) =>
+    PolyxEntry.create({
       id: entryId(pool),
       movementId,
       accountId: balance.id,
@@ -1648,10 +1648,11 @@ export const recordAdjustment = async (
       createdEventId: movementId,
       blockId,
       extrinsicId: params.extrinsicId,
-    });
-    await entry.save();
-    getLedgerEntries(blockId).add(entry);
-  }
+    })
+  );
+
+  entries.forEach(entry => getLedgerEntries(blockId).add(entry));
+  await Promise.all(entries.map(entry => entry.save()));
 };
 
 /**
@@ -2131,7 +2132,7 @@ const refileFeeWithdrawal = async (
   if (args.eventId === EventIdEnum.FeeCharged) {
     const withdrawal = nearestPreceding(own, args);
 
-    if (!withdrawal || withdrawal.amountAbs !== fee) {
+    if (withdrawal?.amountAbs !== fee) {
       return false;
     }
 
@@ -2538,26 +2539,32 @@ const creditSlashReporters = async (
   const { slashed, announced } = slashProceeds(block, eventIdx);
 
   const reporters = applied.reporters;
-  const perReporter =
-    reporters.length === 0
-      ? BigInt(0)
-      : (applied.payout < slashed ? applied.payout : slashed) / BigInt(reporters.length);
+  const payout = applied.payout < slashed ? applied.payout : slashed;
+  const perReporter = reporters.length === 0 ? BigInt(0) : payout / BigInt(reporters.length);
 
   if (perReporter > BigInt(0)) {
-    // Every reporter's credit is filed against this one event, so each after the first is tagged
-    // apart: an entry's id carries no account.
-    for (const [index, reporter] of reporters.entries()) {
-      await postTransition(
-        args,
-        {
-          to: { address: reporter, pool: PolyxPool.Free },
-          amount: perReporter,
-          kind: MovementKind.StakingReward,
-          source: validator,
-        },
-        { idTag: index === 0 ? undefined : `p${index}` }
-      );
-    }
+    // One credit per account, of its share for each time it is listed, so no two credits touch
+    // the same balance. They are all filed against this one event, so each after the first is
+    // tagged apart: an entry's id carries no account.
+    const shares = new Map<string, bigint>();
+    reporters.forEach(reporter =>
+      shares.set(reporter, (shares.get(reporter) ?? BigInt(0)) + perReporter)
+    );
+
+    await Promise.all(
+      [...shares].map(([reporter, amount], index) =>
+        postTransition(
+          args,
+          {
+            to: { address: reporter, pool: PolyxPool.Free },
+            amount,
+            kind: MovementKind.StakingReward,
+            source: validator,
+          },
+          { idTag: index === 0 ? undefined : `p${index}` }
+        )
+      )
+    );
   }
 
   const toTreasury = slashed - perReporter * BigInt(reporters.length);
