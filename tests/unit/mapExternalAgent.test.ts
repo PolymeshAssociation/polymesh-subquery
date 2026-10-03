@@ -45,6 +45,8 @@ describe('AgentAdded — one event, three tables', () => {
       identityId: DID_A,
       type: 'AgentAdded',
     });
+    // append-only: a history row is never rewritten, so it records only the event that made it
+    expect(history.updatedEventId).toBeUndefined();
   });
 });
 

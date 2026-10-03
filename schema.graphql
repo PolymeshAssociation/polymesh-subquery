@@ -2495,7 +2495,6 @@ type AssetAgentHistory @entity {
   type: AgentHistoryType!
   "The permissions as at this history row, JSON-in-a-string. An `AgentGroup`'s `ExtrinsicPermissions` is a richer structure (`Whole | These | Except`, nesting per-pallet dispatchable names) than the `PermissionsJson` jsonField's flat shape, so typing it properly is a separate exercise rather than a lossy flattening"
   permissions: String
-  updatedEvent: Event!
   createdEvent: Event!
 }
 
