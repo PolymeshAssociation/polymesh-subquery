@@ -3322,10 +3322,16 @@ account-level holder. Identity-level holdings are derived from these (see `Asset
 
 A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
 filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
+
+Indexes: `asset`, `portfolio` and `identity` are indexed as relations. The `(asset, identity)`
+composite serves one identity's holdings of one asset across its portfolios and accounts, the
+per-identity total the `AssetHolder` rollup has to agree with. No handler reads it; it is kept for
+that consumer query and has not been measured. There is no `(portfolio, asset)` composite: that pair
+is the id of a portfolio holding, so it is already a point lookup.
 """
 type Holding
   @entity
-  @compositeIndexes(fields: [["asset", "identity"], ["portfolio", "asset"]]) {
+  @compositeIndexes(fields: [["asset", "identity"]]) {
   id: ID! # assetId/portfolioId  or  assetId/address
   asset: Asset!
   holderKind: HolderKind!
