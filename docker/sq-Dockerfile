@@ -26,6 +26,8 @@ RUN corepack enable \
   && rm -rf /root/.npm /root/.cache
 
 # Stage 2: Production Stage
+# The base image provides the runtime (Node.js and tini). The node itself runs from the project's
+# own `node_modules` (see `docker/docker-entrypoint.sh`), so it carries `.yarn/patches`.
 FROM onfinality/subql-node:v6.4.6 AS production
 
 USER root

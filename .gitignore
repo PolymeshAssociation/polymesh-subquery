@@ -62,4 +62,6 @@ metadata.json
 .project-cid
 
 .env
-.yarn/
+.yarn/*
+# dependency patches, explained in .yarn/patches/README.md
+!.yarn/patches/

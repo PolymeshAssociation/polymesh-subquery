@@ -1,0 +1,105 @@
+diff --git a/dist/indexer/dictionary/v1/dictionaryV1.js b/dist/indexer/dictionary/v1/dictionaryV1.js
+index b252020b99875aadf399c39d924f6ac89b3cb2c5..439d6e21a8a88559b5aca7da1c384d7b83cbbead 100644
+--- a/dist/indexer/dictionary/v1/dictionaryV1.js
++++ b/dist/indexer/dictionary/v1/dictionaryV1.js
+@@ -2,7 +2,7 @@
+ // Copyright 2020-2025 SubQuery Pte Ltd authors & contributors
+ // SPDX-License-Identifier: GPL-3.0
+ Object.defineProperty(exports, "__esModule", { value: true });
+-exports.DictionaryV1 = void 0;
++exports.DictionaryV1 = exports.DictionaryQueryError = void 0;
+ const tslib_1 = require("tslib");
+ const core_1 = require("@apollo/client/core");
+ const utils_1 = require("@subql/utils");
+@@ -12,6 +12,21 @@ const utils_2 = require("../../../utils");
+ const coreDictionary_1 = require("../coreDictionary");
+ const utils_3 = require("./utils");
+ const logger = (0, logger_1.getLogger)('dictionary-v1');
++/**
++ * A dictionary query that failed. `graphQLErrors` holds the errors the dictionary returned, if any,
++ * which callers inspect to tell an unsupported argument from a failed request.
++ */
++class DictionaryQueryError extends Error {
++    status;
++    graphQLErrors;
++    constructor(message, status, graphQLErrors = []) {
++        super(message);
++        this.status = status;
++        this.graphQLErrors = graphQLErrors;
++        this.name = 'DictionaryQueryError';
++    }
++}
++exports.DictionaryQueryError = DictionaryQueryError;
+ class DictionaryV1 extends coreDictionary_1.CoreDictionary {
+     dictionaryEndpoint;
+     metadataKeys;
+@@ -38,13 +53,38 @@ class DictionaryV1 extends coreDictionary_1.CoreDictionary {
+             },
+         });
+     }
++    /**
++     * Posts a GraphQL query to the dictionary and returns its `data`.
++     *
++     * Sent without a GraphQL client: each batch's query text differs, and a client parses and caches
++     * a document for every one.
++     */
++    async query(query, variables) {
++        const response = await fetch(this.dictionaryEndpoint, {
++            method: 'POST',
++            headers: { 'content-type': 'application/json', accept: 'application/json' },
++            body: JSON.stringify({ query, variables }),
++        });
++        let body;
++        try {
++            body = (await response.json());
++        }
++        catch {
++            throw new DictionaryQueryError(`Dictionary returned HTTP ${response.status} without a JSON body`, response.status);
++        }
++        if (body.errors?.length) {
++            throw new DictionaryQueryError(`Dictionary query failed: ${body.errors.map((e) => e.message).join('; ')}`, response.status, body.errors);
++        }
++        if (!response.ok || body.data === undefined) {
++            throw new DictionaryQueryError(`Dictionary returned HTTP ${response.status} without data`, response.status);
++        }
++        return body.data;
++    }
+     async init() {
+         const { query } = this.metadataQuery();
+         try {
+-            const resp = await (0, utils_2.timeout)(this.client.query({
+-                query: (0, core_1.gql)(query),
+-            }), this.nodeConfig.dictionaryTimeout, `Dictionary metadata query timeout in ${this.nodeConfig.dictionaryTimeout} seconds. Please increase --dictionary-timeout. ${this.nodeConfig.debug ? `\n GraphQL: ${query}` : ''}`);
+-            this._metadata = resp.data._metadata;
++            const data = await (0, utils_2.timeout)(this.query(query), this.nodeConfig.dictionaryTimeout, `Dictionary metadata query timeout in ${this.nodeConfig.dictionaryTimeout} seconds. Please increase --dictionary-timeout. ${this.nodeConfig.debug ? `\n GraphQL: ${query}` : ''}`);
++            this._metadata = data._metadata;
+             this.setDictionaryStartHeight(this.metadata.startHeight);
+         }
+         catch (err) {
+@@ -83,21 +123,15 @@ class DictionaryV1 extends coreDictionary_1.CoreDictionary {
+         logger.debug(`query: ${query}`);
+         logger.debug(`variables: ${JSON.stringify(variables, null, 2)}`);
+         try {
+-            const resp = await (0, utils_2.timeout)(this.client.query({
+-                query: (0, core_1.gql)(query),
+-                variables,
+-            }), this.nodeConfig.dictionaryTimeout, `Dictionary query timeout in ${this.nodeConfig.dictionaryTimeout} seconds. Please increase --dictionary-timeout. ${this.nodeConfig.debug ? `\n GraphQL: ${query}, \n Variables: ${variables}` : ''}`);
++            const { _metadata, ...entities } = await (0, utils_2.timeout)(this.query(query, variables), this.nodeConfig.dictionaryTimeout, `Dictionary query timeout in ${this.nodeConfig.dictionaryTimeout} seconds. Please increase --dictionary-timeout. ${this.nodeConfig.debug ? `\n GraphQL: ${query}, \n Variables: ${variables}` : ''}`);
+             const blockHeightSet = new Set();
+             const entityEndBlock = {};
+-            for (const entity of Object.keys(resp.data)) {
+-                if (entity !== '_metadata' && resp.data[entity].nodes.length >= 0) {
+-                    for (const node of resp.data[entity].nodes) {
+-                        blockHeightSet.add(Number(node.blockHeight));
+-                        entityEndBlock[entity] = Number(node.blockHeight); //last added event blockHeight
+-                    }
++            for (const [entity, { nodes }] of Object.entries(entities)) {
++                for (const node of nodes) {
++                    blockHeightSet.add(Number(node.blockHeight));
++                    entityEndBlock[entity] = Number(node.blockHeight); //last added event blockHeight
+                 }
+             }
+-            const _metadata = resp.data._metadata;
+             const endBlock = Math.min(...Object.values(entityEndBlock).map((height) => (isNaN(height) ? Infinity : height)));
+             const batchBlocks = Array.from(blockHeightSet)
+                 .filter((block) => block <= endBlock)

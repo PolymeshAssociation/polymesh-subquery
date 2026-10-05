@@ -4819,7 +4819,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subql/node-core@npm:~19.0.0":
+"@subql/node-core@npm:19.0.0":
   version: 19.0.0
   resolution: "@subql/node-core@npm:19.0.0"
   dependencies:
@@ -4849,6 +4849,39 @@ __metadata:
     vm2: "npm:3.9.19"
     yargs: "npm:^16.2.0"
   checksum: 10c0/96a722b41d5740473ad2630ecb2d6a3622d68829515c77f6eeef072586faa0240a4c3be448895d94d15a248c1a53522b8cf4f2f302a9df1bb48342bf26658eff
+  languageName: node
+  linkType: hard
+
+"@subql/node-core@patch:@subql/node-core@npm%3A19.0.0#~/.yarn/patches/@subql-node-core-npm-19.0.0-c2902d0908.patch":
+  version: 19.0.0
+  resolution: "@subql/node-core@patch:@subql/node-core@npm%3A19.0.0#~/.yarn/patches/@subql-node-core-npm-19.0.0-c2902d0908.patch::version=19.0.0&hash=bc21e0"
+  dependencies:
+    "@apollo/client": "npm:^3.14.0"
+    "@nestjs/common": "npm:^11.0.16"
+    "@nestjs/event-emitter": "npm:^3.0.0"
+    "@nestjs/schedule": "npm:^5.0.1"
+    "@subql/common": "npm:~5.8.2"
+    "@subql/testing": "npm:~2.3.1"
+    "@subql/types": "npm:~3.15.0"
+    "@subql/utils": "npm:~2.22.1"
+    "@willsoto/nestjs-prometheus": "npm:^6.0.2"
+    async-mutex: "npm:^0.5.0"
+    cron-converter: "npm:^2.0.1"
+    csv-stringify: "npm:^6.5.1"
+    dayjs: "npm:^1.11.12"
+    dotenv: "npm:^16.4.5"
+    graphql: "npm:^15.8.0"
+    lodash: "npm:^4.17.21"
+    lru-cache: "npm:10.1.0"
+    merkle-tools: "npm:^1.4.1"
+    pg: "npm:^8.12.0"
+    prom-client: "npm:^15.1.3"
+    source-map: "npm:^0.7.4"
+    tar: "npm:^7.4.3"
+    toposort-class: "npm:^1.0.1"
+    vm2: "npm:3.9.19"
+    yargs: "npm:^16.2.0"
+  checksum: 10c0/30f82ec3c85b5532124b90ef85899bfdb680fc8a236a99b629ade74de1f4a286c57d7dccdf75174cd31e8c8c8572dc50986f3479c9b7e38f33c9b8be61252d08
   languageName: node
   linkType: hard
 

@@ -27,8 +27,10 @@ npm run migrations
 # Defaults to 3 GB (expecting at least 4 GB available).
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
 
+# The node is the project's own `@subql/node`, not the one in the base image, so it carries the
+# project's dependency patches (`.yarn/patches`) and the version its lockfile pins.
 NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
-	/bin/run --disable-historical=false \
+	node /app/node_modules/@subql/node/bin/run --disable-historical=false \
 	--db-schema=public "$@" &
 child=$!
 wait "$child"
