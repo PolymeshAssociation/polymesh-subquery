@@ -158,7 +158,7 @@ export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic)
     return;
   }
 
-  const treasuryShare = treasuryShareAt(block, closing.idx - 1, extrinsic.idx);
+  const treasuryShare = treasuryShareAt(block, closing.idx - 1, closing.idx);
   const fee = await uneventedFee(extrinsic, closing, treasuryShare);
 
   if (fee === BigInt(0)) {

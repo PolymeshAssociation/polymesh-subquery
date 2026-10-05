@@ -151,12 +151,29 @@ const extrinsicEvents = (
   // The block's own event list, as the node hands it over — the fee paths read which events the
   // extrinsic emitted from it, rather than trusting the block's spec label.
   const records = events.map(event => ({
-    phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => 1 } },
+    phase: {
+      isApplyExtrinsic: true,
+      asApplyExtrinsic: { toNumber: () => 1 },
+      toString: () => '{"applyExtrinsic":1}',
+    },
     event: (event as any).event,
   }));
   events.forEach(event => {
     (event as any).block.events = records;
   });
+
+  return events;
+};
+
+/** `extrinsicEvents`, emitted as the block initialises: outside any extrinsic. */
+const initializationEvents = (...args: Parameters<typeof extrinsicEvents>): SubstrateEvent[] => {
+  const events = extrinsicEvents(...args);
+  const records = (events[0] as any).block.events as { phase: unknown }[];
+
+  records.forEach(record => {
+    record.phase = { isApplyExtrinsic: false, toString: () => 'Initialization' };
+  });
+  events.forEach(event => delete (event as { extrinsic?: unknown }).extrinsic);
 
   return events;
 };
@@ -367,6 +384,31 @@ describe('Event → pool transition', () => {
     expect(entries().every(r => r.holdReason === HoldReason.Staking)).toBe(true);
   });
 
+  it('Held{Staking}: drops the legacy staking lock the migration to holds removed', async () => {
+    // Mainnet block 24,767,706 (spec 8000020): a stash's legacy `staking ` lock goes, with no event,
+    // when its stake moves to a `Staking` hold. The index kept the lock, so `frozen` stayed high.
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+    (globalThis as any).api.query = {
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        ledger: jest.fn().mockResolvedValue({ toJSON: () => ({ total: '900', active: '900' }) }),
+      },
+    };
+    await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '900'], 7_004_001));
+    expect(balance(ALICE)?.frozen).toBe(BigInt(900));
+
+    (globalThis as any).api.query = {
+      balances: { locks: jest.fn().mockResolvedValue({ toJSON: () => [] }) },
+    };
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
+    );
+
+    expect(balance(ALICE)).toMatchObject({ frozen: BigInt(0), reserved: BigInt(900) });
+    expect(balance(ALICE)?.locks).toEqual([]);
+    (globalThis as any).api.query = {};
+  });
+
   it('Held{Staking}: decodes the real v8 composite RuntimeHoldReason, not just a bare string', async () => {
     // `{ staking: 'Staking' }` stringifies to `'{"staking":"Staking"}'`, which matched no
     // HoldReason member — so every v8 hold landed as `Unknown` and `bonded` was always 0.
@@ -549,6 +591,71 @@ describe('Event → pool transition', () => {
     expect(entries()).toHaveLength(6);
     expect(entries().every(r => r.kind === MovementKind.TreasuryDisbursement)).toBe(true);
   });
+
+  it('records once a 5.x disbursement that pays by a transfer creating its recipient', async () => {
+    // Mainnet block 10,084,847 (spec 5004003): PIP 93 paid 100,000 POLYX to a new account as
+    // `Endowed`, `Transfer{treasury → recipient}`, then `TreasuryDisbursement`. The transfer's credit
+    // is the endowment, so the disbursement found no transfer credit and posted a second movement.
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const recipientDid = '0x8015a1702789fedf8474a042af07ba6a37f94e8d24b4eed89414e6eb79df084e';
+    const treasuryDid = '0x73797374656d3a74726561737572795f6d6f64756c655f646964000000000000';
+    const NEW_ACCOUNT = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+
+    const events = v7ExtrinsicEvents(
+      10_084_847,
+      [
+        ['balances', 'Endowed', ['0x00', NEW_ACCOUNT, '100000']],
+        ['balances', 'Transfer', [treasuryDid, treasury, recipientDid, NEW_ACCOUNT, '100000']],
+        ['treasury', 'TreasuryDisbursement', [committeeDid, recipientDid, NEW_ACCOUNT, '100000']],
+      ],
+      5_004_003
+    );
+    events.forEach(event => delete (event as { extrinsic?: unknown }).extrinsic);
+
+    await handleBalanceEndowed(events[0]);
+    await handleBalanceTransfer(events[1]);
+    await handleTreasuryDisbursement(events[2]);
+
+    expect(balance(NEW_ACCOUNT)?.free).toBe(BigInt(100_000));
+    expect(balance(treasury)?.free).toBe(BigInt(-100_000));
+    expect(entries()).toHaveLength(2);
+    expect(entries().every(r => r.kind === MovementKind.TreasuryDisbursement)).toBe(true);
+  });
+
+  it('credits once a pre-5.0 disbursement that creates its recipient account', async () => {
+    // Mainnet block 85,785 (spec 3000): PIP 9 paid 669,920 POLYX to a new account. The deposit
+    // emits `Endowed`, then the empty reserve's `Endowed(…, 0)`, then `TreasuryDisbursement`, and
+    // no `Transfer`; posting the disbursement as its own credit paid the recipient twice.
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const recipientDid = '0x4dfc4fc610db8b59e29bb3df5b0a0b097fd5df5934dcdba475c470e302f205ea';
+    const NEW_ACCOUNT = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const RESERVE = getAccountId(systematicIssuers.blockRewardReserve.accountId, 42);
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+    db['Identity'] = { [recipientDid]: { id: recipientDid, primaryAccount: NEW_ACCOUNT } };
+
+    const events = v7ExtrinsicEvents(
+      85_785,
+      [
+        ['balances', 'Endowed', [recipientDid, NEW_ACCOUNT, '669920']],
+        ['balances', 'Endowed', ['0x00', RESERVE, '0']],
+        ['treasury', 'TreasuryDisbursement', [committeeDid, recipientDid, '669920']],
+      ],
+      3000
+    );
+    events.forEach(event => delete (event as { extrinsic?: unknown }).extrinsic);
+
+    await handleBalanceEndowed(events[0]);
+    await handleBalanceEndowed(events[1]);
+    await handleTreasuryDisbursement(events[2]);
+
+    expect(balance(NEW_ACCOUNT)?.free).toBe(BigInt(669_920));
+    expect(balance(treasury)?.free).toBe(BigInt(-669_920));
+    expect(entries().find(r => r.accountId === NEW_ACCOUNT)).toMatchObject({
+      kind: MovementKind.TreasuryDisbursement,
+      counterpartyAddress: treasury,
+    });
+  });
 });
 
 describe('properties the one-column model could not satisfy', () => {
@@ -711,9 +818,21 @@ describe('staking — era-dependent, inverted at v8', () => {
   });
 
   describe('the v5–v7 lock → v8 hold storage migration', () => {
+    // testnet migrated in two passes: the hold first, with the lock still standing on chain
+    const lockStillStanding = () => {
+      (globalThis as any).api.query = {
+        balances: {
+          locks: jest
+            .fn()
+            .mockResolvedValue({ toJSON: () => [{ id: 'staking ', amount: '4000' }] }),
+        },
+      };
+    };
+
     it('a v8 Held{Staking} moves the bonded amount free → reserved, lock still standing', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
       await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+      lockStillStanding();
 
       // pass 1 of the migration — Held with no paired Deposit
       await handleBalanceHeld(
@@ -731,6 +850,7 @@ describe('staking — era-dependent, inverted at v8', () => {
     it('a v8 Unlocked that covers the staking lock clears it (pass 2)', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
       await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+      lockStillStanding();
       await handleBalanceHeld(
         balancesEvent('Held', { reason: 'Staking', who: ALICE, amount: '4000' })
       );
@@ -2058,6 +2178,26 @@ describe('the block author is paid the fee', () => {
         ['treasury', 'TreasuryReimbursement', { did: '0xdid', amount: '400' }],
       ],
       { specVersion: 5_000_002 }
+    );
+
+    await handleTransactionFeeCharged(feeCharged);
+
+    expect(balance(ALICE)?.free).toBe(BigInt(-500));
+    expect(balance(AUTHOR)?.free).toBe(BigInt(100));
+  });
+
+  it('leaves the treasury its cut of a protocol fee charged as the block initialises', async () => {
+    // Mainnet block 5,561,169 (spec 5001002): a multisig proposal ran at block initialisation and
+    // paid a 500 POLYX fee, 400 of it to the treasury. With no extrinsic to find the cut in, the
+    // author was paid the whole fee.
+    (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
+    const [feeCharged] = initializationEvents(
+      5_561_169,
+      [
+        ['protocolFee', 'FeeCharged', { who: ALICE, amount: '500' }],
+        ['treasury', 'TreasuryReimbursement', { did: '0xdid', amount: '400' }],
+      ],
+      { specVersion: 5_001_002 }
     );
 
     await handleTransactionFeeCharged(feeCharged);
