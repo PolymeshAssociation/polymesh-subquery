@@ -93,19 +93,15 @@ const getSubsidyOrAnomaly = (
  * The allowance the chain records for `userKey` right now.
  *
  * `relayer.subsidies(userKey)` is `Option<{ payingKey, remaining }>`. Only needed on the pre-v8
- * acceptance path, which does not carry a limit in the event — `undefined` on an unreadable or
- * absent entry, which the caller treats as "start at zero" rather than guessing.
+ * acceptance path, which does not carry a limit in the event — `undefined` on an absent entry,
+ * which the caller treats as "start at zero" rather than guessing.
  */
 const readChainAllowance = async (userKey: string): Promise<bigint | undefined> => {
-  try {
-    const raw = (await api.query.relayer.subsidies(userKey)).toJSON() as {
-      remaining?: string | number;
-    } | null;
+  const raw = (await api.query.relayer.subsidies(userKey)).toJSON() as {
+    remaining?: string | number;
+  } | null;
 
-    return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
-  } catch {
-    return undefined;
-  }
+  return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
 };
 
 /**

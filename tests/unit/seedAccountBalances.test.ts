@@ -5,6 +5,7 @@
  */
 
 import { seedAccountBalances } from '../../src/seed/accountBalance';
+import { __resetStakingCaches } from '../../src/utils/staking';
 
 const A = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const B = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -36,6 +37,7 @@ describe('seedAccountBalances', () => {
 
   beforeEach(() => {
     db = {};
+    __resetStakingCaches();
 
     storeGet().mockImplementation((entity: string, id: string) => {
       if (entity === 'Account') {
@@ -63,6 +65,12 @@ describe('seedAccountBalances', () => {
           ]),
         },
       },
+      // no bond and no locks unless a test says otherwise
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        ledger: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+      balances: { locks: jest.fn().mockResolvedValue({ toJSON: () => [] }) },
     };
   });
 
@@ -135,6 +143,7 @@ describe('seedAccountBalances', () => {
 
     it('v8: takes holds from chain, so a seeded bond is bonded and otherReserved is right', async () => {
       (globalThis as any).api.query.balances = {
+        locks: jest.fn().mockResolvedValue({ toJSON: () => [] }),
         holds: jest.fn().mockResolvedValue({
           toJSON: () => [
             { id: { staking: 'Staking' }, amount: '200' },

@@ -40,11 +40,12 @@ describe('readStakingLedger', () => {
     expect(ledger).toHaveBeenCalledTimes(2);
   });
 
-  it('does not keep a failed read', async () => {
-    ledger.mockRejectedValueOnce(new Error('pruned'));
+  it('fails on a failed read rather than reporting an empty ledger', async () => {
+    ledger.mockRejectedValueOnce(new Error('WebSocket is not connected'));
 
-    expect(await readStakingLedger(STASH, '0000000100')).toBeUndefined();
+    await expect(readStakingLedger(STASH, '0000000100')).rejects.toThrow(
+      'WebSocket is not connected'
+    );
     expect(await readStakingLedger(STASH, '0000000100')).toBeDefined();
-    expect(ledger).toHaveBeenCalledTimes(2);
   });
 });

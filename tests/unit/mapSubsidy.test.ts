@@ -20,6 +20,11 @@ const seedAccounts = () => ({
   },
 });
 
+/** `relayer.subsidies` holding no entry for the user key. */
+const noSubsidyEntry = () => ({
+  relayer: { subsidies: jest.fn().mockResolvedValue({ toJSON: () => null }) },
+});
+
 describe('v8 subsidy lifecycle', () => {
   it('approve → accept → debit → remove produces one row through the full lifecycle', async () => {
     const db = mockStore(seedAccounts());
@@ -261,9 +266,9 @@ describe('an acceptance with no preceding relayer approval', () => {
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(0);
   });
 
-  it('falls back to a zero allowance when chain state cannot be read', async () => {
+  it('starts at a zero allowance when the chain holds no subsidy entry', async () => {
     const db = mockStore(seedAccounts());
-    (globalThis as any).api.query = {};
+    (globalThis as any).api.query = noSubsidyEntry();
 
     await handleSubsidyAccepted(
       tupleEvent({
@@ -277,9 +282,27 @@ describe('an acceptance with no preceding relayer approval', () => {
     expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isAccepted: true, allowance: BigInt(0) });
   });
 
+  it('fails the block when the subsidy read fails', async () => {
+    mockStore(seedAccounts());
+    (globalThis as any).api.query = {
+      relayer: { subsidies: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')) },
+    };
+
+    await expect(
+      handleSubsidyAccepted(
+        tupleEvent({
+          section: 'relayer',
+          method: 'AcceptedPayingKey',
+          data: [codec('0xdid'), codec(USER_KEY), codec(PAYING_KEY)],
+          specVersion: 3002,
+        })
+      )
+    ).rejects.toThrow('WebSocket is not connected');
+  });
+
   it('a later removal then finds the row instead of anomalying', async () => {
     const db = mockStore(seedAccounts());
-    (globalThis as any).api.query = {};
+    (globalThis as any).api.query = noSubsidyEntry();
 
     await handleSubsidyAccepted(
       tupleEvent({

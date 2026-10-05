@@ -9,9 +9,15 @@ import {
   handlePositionWithdrawn,
   handleSetController,
 } from '../../src/mappings/entities/events/mapStakingPosition';
-import { IndexerAnomaly } from '../../src/types';
 import { __resetStakingCaches } from '../../src/utils/staking';
-import { codec, mockLedgerAccountQuery, mockStore, namedEvent, tupleEvent } from './helpers';
+import {
+  codec,
+  mockLedgerAccountQuery,
+  mockSelfControlled,
+  mockStore,
+  namedEvent,
+  tupleEvent,
+} from './helpers';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
@@ -69,32 +75,26 @@ describe('handlePositionBonded', () => {
     expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(4200));
   });
 
-  it('falls back to accumulating the event amount when the ledger cannot be read', async () => {
+  it('fails the block when the ledger read fails, rather than estimating from the event', async () => {
     const db = mockStore();
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        ...mockSelfControlled(),
+        ledger: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')),
+      },
+    };
 
-    await handlePositionBonded(
-      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
-    );
-
-    expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(4000));
-  });
-
-  it('floors the fallback delta at zero instead of going negative on a first, ledger-unreadable Unbonded', async () => {
-    const db = mockStore();
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
-
-    // No prior `Bonded` seen (e.g. mid-resync) — the fallback has nothing to subtract from.
-    await handlePositionUnbonded(
-      namedEvent({
-        section: 'staking',
-        method: 'Unbonded',
-        fields: { stash: ALICE, amount: '1000' },
-      })
-    );
-
-    expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(0));
-    expect(db.StakingPosition[ALICE].unbonding).toBe(BigInt(1000));
+    await expect(
+      handlePositionBonded(
+        namedEvent({
+          section: 'staking',
+          method: 'Bonded',
+          fields: { stash: ALICE, amount: '4000' },
+        })
+      )
+    ).rejects.toThrow('WebSocket is not connected');
+    expect(db.StakingPosition?.[ALICE]?.bonded ?? BigInt(0)).toBe(BigInt(0));
   });
 });
 
@@ -235,45 +235,6 @@ describe('a controller change', () => {
 
     expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
     expect(db.Account.CONTROLLER_B).toBeDefined();
-  });
-});
-
-/**
- * When `staking.ledger` cannot be read the figures are estimated from the event, which is worth
- * knowing — and the unlocking schedule cannot be estimated at all, so it is dropped rather than left
- * describing a ledger the estimate has moved past.
- */
-describe('the ledger fallback', () => {
-  it('reports the estimate and drops the unlocking schedule it cannot reconstruct', async () => {
-    const db = mockStore({
-      StakingPosition: {
-        [ALICE]: {
-          id: ALICE,
-          stashId: ALICE,
-          controllerId: ALICE,
-          bonded: BigInt(5000),
-          unbonding: BigInt(0),
-          unlocking: [{ value: BigInt(10), era: 3 }],
-        },
-      },
-    });
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
-    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
-
-    await handlePositionUnbonded(
-      namedEvent({
-        section: 'staking',
-        method: 'Unbonded',
-        fields: { stash: ALICE, amount: '1000' },
-      })
-    );
-
-    expect(db.StakingPosition[ALICE]).toMatchObject({
-      bonded: BigInt(4000),
-      unbonding: BigInt(1000),
-    });
-    expect(db.StakingPosition[ALICE].unlocking).toBeUndefined();
-    expect(anomaly).toHaveBeenCalled();
   });
 });
 

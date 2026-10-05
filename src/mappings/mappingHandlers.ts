@@ -14,7 +14,7 @@ export async function handleGenesis(block: SubstrateBlock): Promise<void> {
   await ensureTrueSpecVersion(block);
   // this is need to populate subquery version on startup
   await handleStartup();
-  await genesisHandler(block).catch(e => logError(e));
+  await genesisHandler(block);
 }
 
 /** The first block of an index started after genesis — see `seedFromStartBlock`. */
@@ -28,7 +28,7 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
   /**
    * In case of major chain upgrade, we need to process some entities
    */
-  await mapChainUpgrade(substrateEvent).catch(e => logError(e));
+  await mapChainUpgrade(substrateEvent);
 }
 
 export async function handleStartup(): Promise<void> {

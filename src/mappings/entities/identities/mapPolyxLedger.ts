@@ -40,7 +40,7 @@ import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { storageEntriesAtParent } from '../../../utils/storageAtParent';
+import { storageEntriesAtParent, UndecodableStateError } from '../../../utils/storageAtParent';
 import { resolveFeePayer } from './feePayer';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
 
@@ -220,54 +220,51 @@ export const PIPS_LOCK_ID = 'pips    ';
 /**
  * `balances.holds(who)` — the v8 per-reason breakdown of `reserved`.
  *
- * `undefined` on a runtime with no hold storage (pre-v8) or a failed read, which callers treat as
- * "no information", never as "no holds".
+ * `undefined` on a runtime with no hold storage (pre-v8), which callers treat as "no information",
+ * never as "no holds".
  */
 export const readChainHolds = async (address: string): Promise<HoldEntry[] | undefined> => {
-  try {
-    const raw = (await api.query.balances.holds(address)).toJSON() as
-      | { id?: unknown; amount?: string | number }[]
-      | null;
-
-    if (!Array.isArray(raw)) {
-      return undefined;
-    }
-
-    return raw.map(entry => ({
-      reason: holdReasonFromJson(entry.id),
-      amount: BigInt(entry.amount ?? 0),
-    }));
-  } catch {
+  if (typeof api.query.balances?.holds !== 'function') {
     return undefined;
   }
+
+  const raw = (await api.query.balances.holds(address)).toJSON() as
+    | { id?: unknown; amount?: string | number }[]
+    | null;
+
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+
+  return raw.map(entry => ({
+    reason: holdReasonFromJson(entry.id),
+    amount: BigInt(entry.amount ?? 0),
+  }));
 };
 
 /**
  * The amount of the lock `lockId` on chain for `address`, from `balances.locks(who)` — `0` once
- * there is none, `undefined` on a failed read. Both eras keep `balances.locks`.
+ * there is none, `undefined` when the locks do not decode as a list. Both eras keep
+ * `balances.locks`.
  */
 export const readChainLock = async (
   address: string,
   lockId: string
 ): Promise<bigint | undefined> => {
-  try {
-    const raw = (await api.query.balances.locks(address)).toJSON() as
-      | { id?: string; amount?: string | number }[]
-      | null;
+  const raw = (await api.query.balances.locks(address)).toJSON() as
+    | { id?: string; amount?: string | number }[]
+    | null;
 
-    if (!Array.isArray(raw)) {
-      return undefined;
-    }
-
-    const lock = raw.find(entry => {
-      const id = entry.id ?? '';
-      return (hexHasPrefix(id) ? hexToString(id) : id) === lockId;
-    });
-
-    return lock ? BigInt(lock.amount ?? 0) : BigInt(0);
-  } catch {
+  if (!Array.isArray(raw)) {
     return undefined;
   }
+
+  const lock = raw.find(entry => {
+    const id = entry.id ?? '';
+    return (hexHasPrefix(id) ? hexToString(id) : id) === lockId;
+  });
+
+  return lock ? BigInt(lock.amount ?? 0) : BigInt(0);
 };
 
 /**
@@ -725,20 +722,10 @@ export const setLock = async (
  * Sets the pre-v8 `'staking '` lock on `stash` to `staking.ledger.total` read from chain.
  *
  * The chain read is authoritative — it already accounts for the max-bond cap, the rounding of a
- * compounded `Staked` reward, unbonding chunks, and slashes. When the ledger cannot be read the
- * `fallbackDelta` keeps the old accumulator behaviour, so the lock still moves by the event's amount.
+ * compounded `Staked` reward, unbonding chunks, and slashes.
  */
-const syncStakingLock = async (
-  stash: string,
-  fallbackDelta: bigint,
-  args: HandlerArgs
-): Promise<void> => {
+const syncStakingLock = async (stash: string, args: HandlerArgs): Promise<void> => {
   const total = await readStakingLock(stash, args.blockId);
-
-  if (total === undefined) {
-    await adjustLock(stash, STAKING_LOCK_ID, fallbackDelta, args.blockEventId, 'staking');
-    return;
-  }
 
   await setLock(stash, STAKING_LOCK_ID, total, args.blockEventId, 'staking');
 };
@@ -1492,7 +1479,7 @@ export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => 
   await creditFromReserve(args, recipient, amount, MovementKind.Mint);
 };
 
-/** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1) or a failed read. */
+/** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1). */
 const isChildIdentity = async (did: string): Promise<boolean> => {
   // Not in the v8 type augmentation (the storage was dropped with child identities there).
   const identity = (
@@ -1502,11 +1489,7 @@ const isChildIdentity = async (did: string): Promise<boolean> => {
     >
   ).identity;
 
-  try {
-    return (await identity?.parentDid?.(did))?.isSome === true;
-  } catch {
-    return false;
-  }
+  return (await identity?.parentDid?.(did))?.isSome === true;
 };
 
 /**
@@ -2274,7 +2257,9 @@ const rewardRecipient = async (
      * 141,981,208, on one testnet account).
      */
     if (destination === 'Controller') {
-      const controller = await resolveController(stash, blockId).catch(() => stash);
+      // A stash with no controller already resolves to itself. A read that fails is not that, and
+      // is left to fail the block, so the retry credits the right account.
+      const controller = await resolveController(stash, blockId);
 
       return { recipient: controller, restaked: false };
     }
@@ -2347,7 +2332,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
 
   // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
   if (restaked) {
-    await syncStakingLock(recipient, amount, args);
+    await syncStakingLock(recipient, args);
   }
 };
 
@@ -2389,7 +2374,7 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
     await adjustHold(stash, HoldReason.Staking, -amount, args.blockEventId);
   } else {
     // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
-    await syncStakingLock(stash, -amount, args);
+    await syncStakingLock(stash, args);
     await creditSlashReporters(args, stash, amount);
   }
 };
@@ -2413,7 +2398,14 @@ interface DeferredSlash {
 const deferredSlashesBefore = async (
   block: SubstrateBlock
 ): Promise<DeferredSlash[] | undefined> => {
-  const entries = await storageEntriesAtParent(block, 'staking', 'unappliedSlashes');
+  const entries = await storageEntriesAtParent(block, 'staking', 'unappliedSlashes').catch(
+    (error: unknown) => {
+      if (error instanceof UndecodableStateError) {
+        return undefined;
+      }
+      throw error;
+    }
+  );
 
   // a key whose era didn't decode leaves its slashes unplaceable, which is not "none deferred"
   if (entries?.some(({ args }) => args.length === 0)) {
@@ -2681,7 +2673,7 @@ export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
   }
 
   await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId);
-  await syncStakingLock(stash, amountOf(decoded), args);
+  await syncStakingLock(stash, args);
 };
 
 /**
@@ -2707,5 +2699,5 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  await syncStakingLock(stash, -amountOf(decoded), args);
+  await syncStakingLock(stash, args);
 };

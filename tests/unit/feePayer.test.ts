@@ -1,7 +1,10 @@
 import { SubstrateExtrinsic } from '@subql/types';
 
-jest.mock('../../src/utils/storageAtParent', () => ({ storageAtParent: jest.fn() }));
-import { storageAtParent } from '../../src/utils/storageAtParent';
+jest.mock('../../src/utils/storageAtParent', () => ({
+  ...jest.requireActual('../../src/utils/storageAtParent'),
+  storageAtParent: jest.fn(),
+}));
+import { storageAtParent, UndecodableStateError } from '../../src/utils/storageAtParent';
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 
 const SIGNER = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -205,15 +208,25 @@ describe('resolveFeePayer', () => {
     );
   });
 
-  it('falls back to the signer, and says so, when reading the state fails', async () => {
-    // a decode failure is deterministic: thrown into the fee path, the block would be retried forever
-    (storageAtParent as jest.Mock).mockRejectedValue(new Error('createType(Lookup96):: bad input'));
+  it('falls back to the signer, and says so, when the state does not decode', async () => {
+    (storageAtParent as jest.Mock).mockRejectedValue(
+      new UndecodableStateError('could not decode identity.authorizations', new Error('bad input'))
+    );
 
     expect(await resolveFeePayer(extrinsic('identity', 'joinIdentityAsKey', { auth_id: 7 }))).toBe(
       SIGNER
     );
     expect(anomalies()).toHaveLength(1);
     expect((anomalies()[0] as { detail: string }).detail).toContain('bad input');
+  });
+
+  it('fails the block when reading the state fails', async () => {
+    (storageAtParent as jest.Mock).mockRejectedValue(new Error('WebSocket is not connected'));
+
+    await expect(
+      resolveFeePayer(extrinsic('identity', 'joinIdentityAsKey', { auth_id: 7 }))
+    ).rejects.toThrow('WebSocket is not connected');
+    expect(anomalies()).toHaveLength(0);
   });
 
   it('falls back to the signer, and says so, when the payer cannot be found', async () => {

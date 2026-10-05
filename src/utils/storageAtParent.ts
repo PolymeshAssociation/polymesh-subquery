@@ -58,6 +58,25 @@ const parentReadable = (block: SubstrateBlock): Promise<boolean> => {
   return readable;
 };
 
+/**
+ * A storage key or value this block's registry cannot encode or decode. Unlike a failed read, it
+ * fails the same way on every retry, so callers handle it rather than fail the block.
+ */
+export class UndecodableStateError extends Error {
+  constructor(what: string, cause: unknown) {
+    super(cause instanceof Error ? `${what}: ${cause.message}` : what, { cause });
+    this.name = 'UndecodableStateError';
+  }
+}
+
+const decoding = <T>(what: string, run: () => T): T => {
+  try {
+    return run();
+  } catch (cause) {
+    throw new UndecodableStateError(what, cause);
+  }
+};
+
 /** `api.query[section][item]`, or `undefined` when this runtime has no such item. */
 const storageItem = (section: string, item: string): StorageItem | undefined =>
   (api.query as unknown as Record<string, Record<string, StorageItem>>)[section]?.[item];
@@ -66,7 +85,8 @@ const storageItem = (section: string, item: string): StorageItem | undefined =>
 const readAtParent = async (
   block: SubstrateBlock,
   storage: StorageItem,
-  key: unknown
+  key: unknown,
+  name: string
 ): Promise<Codec | undefined> => {
   const raw = (await api.rpc.state.getStorage(
     key as string,
@@ -77,12 +97,14 @@ const readAtParent = async (
     return undefined;
   }
 
-  const { type } = storage.creator.meta;
-  const valueType = api.registry.createLookupType(
-    (type.isMap ? type.asMap?.value : type.asPlain) as never
-  );
+  return decoding(`could not decode ${name}`, () => {
+    const { type } = storage.creator.meta;
+    const valueType = api.registry.createLookupType(
+      (type.isMap ? type.asMap?.value : type.asPlain) as never
+    );
 
-  return api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as Codec;
+    return api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as Codec;
+  });
 };
 
 /**
@@ -95,7 +117,8 @@ const readAtParent = async (
  * runtimes' types.
  *
  * `undefined` when nothing is stored, when this runtime has no such item, or when the parent's state
- * was written by a runtime other than the one this block's registry describes.
+ * was written by a runtime other than the one this block's registry describes. Throws
+ * `UndecodableStateError` when the keys or the value don't fit the item's types.
  */
 export const storageAtParent = async (
   block: SubstrateBlock,
@@ -109,7 +132,10 @@ export const storageAtParent = async (
     return undefined;
   }
 
-  return readAtParent(block, storage, storage.key(...keys));
+  const name = `${section}.${item}`;
+  const key = decoding(`could not encode a key for ${name}`, () => storage.key(...keys));
+
+  return readAtParent(block, storage, key, name);
 };
 
 /** How many keys one `state_getKeysPaged` call asks for. */
@@ -160,7 +186,9 @@ export const storageEntriesAtParent = async (
       parentHash
     );
 
-    const values = await Promise.all(keys.map(key => readAtParent(block, storage, key)));
+    const values = await Promise.all(
+      keys.map(key => readAtParent(block, storage, key, `${section}.${item}`))
+    );
 
     keys.forEach((key, index) => {
       const value = values[index];

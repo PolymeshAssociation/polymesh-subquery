@@ -2,7 +2,7 @@ import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { AnomalyKind, Authorization, Identity } from '../../../types';
 import { padNumericId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { storageAtParent } from '../../../utils/storageAtParent';
+import { storageAtParent, UndecodableStateError } from '../../../utils/storageAtParent';
 
 /**
  * Who paid a transaction fee up to v5.4.0, before any relayer subsidy: before v5.4 the fee was
@@ -64,8 +64,12 @@ const primaryKeyOf = async (block: SubstrateBlock, did: string): Promise<string 
 const authIssuerPrimaryKey = async (
   block: SubstrateBlock,
   signer: string,
-  authId: string | number
+  authId: unknown
 ): Promise<string | undefined> => {
+  if (typeof authId !== 'string' && typeof authId !== 'number') {
+    return undefined;
+  }
+
   const auth = (
     await storageAtParent(block, 'identity', 'authorizations', { Account: signer }, authId)
   )?.toJSON() as Record<string, unknown> | null | undefined;
@@ -109,24 +113,20 @@ export const resolveFeePayer = async (extrinsic: SubstrateExtrinsic): Promise<st
   let payer: string | undefined;
   let failure = 'could not find who the runtime charged its fee to';
 
-  // Never thrown into the fee path: a decode failure is deterministic, so the block would be retried
-  // forever and indexing would stop. One fee charged to the signer, and recorded as such, is the
-  // smaller harm; the reconciler then sees the difference.
+  // State that does not decode is charged to the signer and recorded, rather than failing the block:
+  // a decode failure is the same on every retry, so indexing would stop. A failed read still fails
+  // the block, so it is retried.
   try {
     const args =
       (extrinsic.extrinsic.method.toJSON() as { args?: Record<string, unknown> }).args ?? {};
 
     if (call in AUTH_ISSUER_PAYS) {
-      payer = await authIssuerPrimaryKey(
-        block,
-        signer,
-        field(args, AUTH_ISSUER_PAYS[call]) as string | number
-      );
+      payer = await authIssuerPrimaryKey(block, signer, field(args, AUTH_ISSUER_PAYS[call]));
     } else if (call === 'identity.removeauthorization') {
       if (field(args, 'authissuerpays') !== true) {
         return signer;
       }
-      payer = await authIssuerPrimaryKey(block, signer, field(args, 'authid') as string | number);
+      payer = await authIssuerPrimaryKey(block, signer, field(args, 'authid'));
     } else if (MULTISIG_PAYS.has(call)) {
       payer = await multisigPrimaryKey(block, field(args, 'multisig'));
     } else {
@@ -134,7 +134,10 @@ export const resolveFeePayer = async (extrinsic: SubstrateExtrinsic): Promise<st
       payer = controller ? await multisigPrimaryKey(block, controller) : undefined;
     }
   } catch (error) {
-    failure = `could not read who the runtime charged its fee to (${(error as Error).message})`;
+    if (!(error instanceof UndecodableStateError)) {
+      throw error;
+    }
+    failure = `could not read who the runtime charged its fee to (${error.message})`;
   }
 
   if (!payer) {

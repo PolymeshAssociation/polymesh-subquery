@@ -32,24 +32,19 @@ const getOrCreateEra = (eraIndex: number, blockEventId: string): Era => {
 
 export const handleStakersElected = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
-  const reportUnreadable = (detail: string) =>
-    recordAnomaly({
-      kind: AnomalyKind.UnreadableValue,
-      detail,
-      block,
-      eventIdx,
-      moduleId,
-      eventId,
-    });
-
   const eraIndex = await readCurrentEraIndex();
 
   // The event carries no payload, so the era it opens is only knowable from chain state. Without
   // it there is no row to write — but an era boundary the index skipped is a gap, not a no-op.
   if (eraIndex === undefined) {
-    await reportUnreadable(
-      'staking.currentEra could not be read, so the era this election opened was not recorded'
-    );
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: 'staking.currentEra is not set, so the era this election opened was not recorded',
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
 
     return;
   }
@@ -60,18 +55,6 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
   await era.save();
 
   const validators = await readEraValidators(eraIndex);
-
-  // A failed read means "unknown," not "nobody elected" — leaving the prior active set alone is
-  // safer than deactivating every validator on a transient RPC error. The `Era` row above is
-  // still worth recording even when this part can't be completed.
-  if (validators === undefined) {
-    await reportUnreadable(
-      `the validators elected for era ${eraIndex} could not be read, so the previous active set was kept`
-    );
-
-    return;
-  }
-
   const activeSet = new Set(validators);
 
   const previouslyActive = await getAllByFields<Validator>('Validator', [['isActive', '=', true]]);

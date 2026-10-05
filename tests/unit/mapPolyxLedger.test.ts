@@ -650,9 +650,17 @@ describe('properties the one-column model could not satisfy', () => {
 });
 
 describe('staking — era-dependent, inverted at v8', () => {
+  const stakingLedgerOf = (total: string) => ({
+    staking: {
+      bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      ledger: jest.fn().mockResolvedValue({ toJSON: () => ({ total, active: total }) }),
+    },
+  });
+
   it('v7 Bonded produces no PolyxEntry and raises frozen via the staking lock', async () => {
     await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
     const beforeEntries = entries().length;
+    (globalThis as any).api.query = stakingLedgerOf('4000');
 
     await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
 
@@ -667,8 +675,10 @@ describe('staking — era-dependent, inverted at v8', () => {
 
   it('v7 Withdrawn lowers the staking lock', async () => {
     await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+    (globalThis as any).api.query = stakingLedgerOf('4000');
     await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
 
+    (globalThis as any).api.query = stakingLedgerOf('2500');
     await handleWithdrawn(tupleEvent('staking', 'Withdrawn', [ALICE, '1500'], 7_004_001));
 
     expect(balance(ALICE)?.frozen).toBe(BigInt(2500));
@@ -772,11 +782,27 @@ describe('staking — era-dependent, inverted at v8', () => {
     (globalThis as any).api.query = {};
   });
 
+  it('pre-v8 Reward fails the block when the payee read fails, rather than crediting the stash', async () => {
+    (globalThis as any).api.query = {
+      staking: {
+        payee: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')),
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+    };
+
+    await expect(
+      handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '900'], 7_004_001))
+    ).rejects.toThrow('WebSocket is not connected');
+    expect(entries().find(r => r.kind === MovementKind.StakingReward)).toBeUndefined();
+
+    (globalThis as any).api.query = {};
+  });
+
   it('pre-v8 Reward with a Staked payee credits free AND raises the staking lock', async () => {
     (globalThis as any).api.query = {
       staking: {
+        ...stakingLedgerOf('500').staking,
         payee: jest.fn().mockResolvedValue({ toJSON: () => 'Staked' }),
-        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
       },
     };
 
@@ -947,13 +973,19 @@ describe('staking — era-dependent, inverted at v8', () => {
       expect(balance(ALICE)?.frozen).toBe(BigInt(2500));
     });
 
-    it('falls back to the delta accumulator when the ledger cannot be read', async () => {
+    it('fails the block when the ledger read fails, rather than moving the lock by the event', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
-      (globalThis as any).api.query = {}; // no staking.ledger
+      (globalThis as any).api.query = {
+        staking: {
+          bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+          ledger: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')),
+        },
+      };
 
-      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
-
-      expect(balance(ALICE)?.frozen).toBe(BigInt(4000));
+      await expect(
+        handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001))
+      ).rejects.toThrow('WebSocket is not connected');
+      expect(balance(ALICE)?.frozen).toBe(BigInt(0));
     });
   });
 
@@ -1770,6 +1802,19 @@ describe('v8 reward destinations', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(250));
   });
 
+  it('fails the block when the controller read fails, rather than crediting the stash', async () => {
+    (globalThis as any).api.query = {
+      staking: { bonded: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')) },
+    };
+
+    await expect(
+      handleReward(
+        structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
+      )
+    ).rejects.toThrow('WebSocket is not connected');
+    expect(balance(ALICE)).toBeUndefined();
+  });
+
   it('still credits Stash and Staked payees to the stash, and Account to the named account', async () => {
     bondedTo(CONTROLLER);
 
@@ -2419,6 +2464,9 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
           keyPrefix: () => '0xunappliedSlashes',
           creator: { meta: { type: { isMap: true, asMap: { value: 587 } } } },
         },
+        // the slashed stash's staking lock is resynced from its ledger
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        ledger: jest.fn().mockResolvedValue({ toJSON: () => null }),
       },
     };
     // the block's registry describes its own runtime, and no upgrade came in the parent, so the
@@ -2632,6 +2680,43 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     expect(balance(REPORTER)).toBeUndefined();
     expect(anomalies()).toHaveLength(1);
     expect(anomalies()[0].detail).toContain('could not be read');
+  });
+
+  it('records it, and pays no one, when a deferred slash does not decode', async () => {
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+    const registry = (globalThis as any).api.registry;
+    const createType = registry.createType;
+    registry.createType = (type: string, input: unknown) => {
+      if (type === 'StorageKey') {
+        return createType(type, input);
+      }
+      throw new Error('Unable to decode Lookup587');
+    };
+
+    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)).toBeUndefined();
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0].detail).toContain('could not be read');
+  });
+
+  it('fails the block when the deferred slashes cannot be fetched', async () => {
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+    getStorage.mockReset().mockRejectedValue(new Error('WebSocket is not connected'));
+
+    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
+
+    await expect(handleStakingSlash(slash)).rejects.toThrow('WebSocket is not connected');
+    expect(balance(REPORTER)).toBeUndefined();
   });
 
   it('leaves a v8 slash alone: it comes out of the hold and is burned, with no treasury share', async () => {

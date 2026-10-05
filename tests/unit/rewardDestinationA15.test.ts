@@ -158,6 +158,23 @@ describe('A15 — pre-v8 reward destination', () => {
     expect(row.rewardDestinationAccount).toBeUndefined();
   });
 
+  it('propagates a failed payee read rather than recording LegacyUnknown', async () => {
+    // The storage exists but the read failed — a dropped connection, not a pruned node. Recording
+    // `LegacyUnknown` here would index a guess the retry of this block would not have made.
+    (globalThis as any).api.query = {
+      staking: {
+        payee: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')),
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+    };
+
+    await expect(
+      handleStakingEvent(
+        rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1000')], 7_004_001)
+      )
+    ).rejects.toThrow('WebSocket is not connected');
+  });
+
   it('v8 resolves the destination account for an explicit Account payee', async () => {
     await handleStakingEvent(
       rewardEventV8({
