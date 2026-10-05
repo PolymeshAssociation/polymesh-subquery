@@ -1,7 +1,12 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { BallotVoteEntry, CorporateBallot, CorporateBallotVote } from '../../../types';
+import {
+  BallotVoteEntry,
+  CorporateAction,
+  CorporateBallot,
+  CorporateBallotVote,
+} from '../../../types';
 import { bytesToString, getBooleanValue, getCaIdValue } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
 
@@ -62,11 +67,18 @@ export const handleBallotCreated = async (event: SubstrateEvent): Promise<void> 
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const range = rawRange.toJSON() as unknown as RangeJson;
+  const id = ballotId(assetId, localId);
+  const corporateAction = await getOrAnomaly(
+    caId => CorporateAction.get(caId),
+    id,
+    'CorporateAction',
+    event
+  );
 
   await CorporateBallot.create({
-    id: ballotId(assetId, localId),
+    id,
     assetId,
-    corporateActionId: ballotId(assetId, localId),
+    corporateActionId: corporateAction?.id,
     startDate: new Date(range.start),
     endDate: new Date(range.end),
     meta: decodeMeta(rawMeta),

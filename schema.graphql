@@ -2922,7 +2922,8 @@ A shareholder ballot on a `CorporateAction`, from `corporateBallot.Created`
 type CorporateBallot @entity {
   id: ID! # assetId/localId
   asset: Asset! @index
-  corporateAction: CorporateAction!
+  "The corporate action this ballot is attached to — the same `CAId`, so the same row id. Nullable for the same reason as `Distribution.corporateAction`: the action comes from an earlier extrinsic, which can be outside the index"
+  corporateAction: CorporateAction
   startDate: Date!
   endDate: Date!
   "title, motions"
