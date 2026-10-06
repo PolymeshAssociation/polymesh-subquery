@@ -1,17 +1,25 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { AnomalyKind, Era, Validator } from '../../../types';
+import { AnomalyKind, Era, Validator, ValidatorEra } from '../../../types';
 import { blockTime, getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { readCurrentEraIndex, readEraTotalStake, readEraValidators } from '../../../utils/staking';
+import {
+  EraExposure,
+  EraValidatorPrefs,
+  readCurrentEraIndex,
+  readEraExposures,
+  readEraRewardPoints,
+  readEraTotalStake,
+  readEraValidatorPrefs,
+} from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { getOrCreateValidator } from './mapValidator';
 
 /**
  * `StakersElected`/`EraPaid` — era boundaries. `StakersElected` carries no payload in either era
  * (`AugmentedEvent<ApiType, []>`), so the era index and the elected validator set are both
- * resolved from chain storage (`staking.currentEra()` / `staking.erasStakers(eraIndex)` keys, NOT
- * `activeEra()` / `session.validators()` — see `readCurrentEraIndex`/`readEraValidators` in
+ * resolved from chain storage (`staking.currentEra()` and the era's exposures, NOT
+ * `activeEra()` / `session.validators()` — see `readCurrentEraIndex`/`readEraExposures` in
  * `src/utils/staking.ts` for why) when it fires; that resolution also doubles as the era-start
  * signal, since no event marks that directly.
  *
@@ -49,12 +57,18 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
     return;
   }
 
+  const [exposures, prefs] = await Promise.all([
+    readEraExposures(eraIndex),
+    readEraValidatorPrefs(eraIndex),
+  ]);
+
   const id = padId(eraIndex.toString());
   const era = (await Era.get(id)) ?? getOrCreateEra(eraIndex, blockEventId);
+  era.validatorCount = exposures.length;
 
   await era.save();
 
-  const validators = await readEraValidators(eraIndex);
+  const validators = exposures.map(({ stash }) => stash);
   const activeSet = new Set(validators);
 
   const previouslyActive = await getAllByFields<Validator>('Validator', [['isActive', '=', true]]);
@@ -68,15 +82,49 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
 
         return validator.save();
       }),
-    ...validators.map(async stash => {
-      const validator = await getOrCreateValidator(stash, blockId, blockTime(block), blockEventId);
+    ...exposures.map(async exposure => {
+      const validator = await getOrCreateValidator(
+        exposure.stash,
+        blockId,
+        blockTime(block),
+        blockEventId
+      );
       validator.isActive = true;
       validator.updatedEventId = blockEventId;
 
-      await validator.save();
+      await Promise.all([
+        validator.save(),
+        validatorEra(eraIndex, validator, exposure, prefs.get(exposure.stash), blockEventId).save(),
+      ]);
     }),
   ]);
 };
+
+const validatorEraId = (eraIndex: number, stash: string): string =>
+  `${padId(eraIndex.toString())}/${stash}`;
+
+/** A validator's row in an era's elected set, as the election stored it. */
+const validatorEra = (
+  eraIndex: number,
+  validator: Validator,
+  exposure: EraExposure,
+  prefs: EraValidatorPrefs | undefined,
+  blockEventId: string
+): ValidatorEra =>
+  ValidatorEra.create({
+    id: validatorEraId(eraIndex, exposure.stash),
+    eraId: padId(eraIndex.toString()),
+    eraIndex,
+    validatorId: validator.id,
+    identityId: validator.identityId,
+    ownStake: exposure.own,
+    totalStake: exposure.total,
+    nominatorCount: exposure.nominatorCount,
+    commission: prefs?.commission,
+    blocked: prefs?.blocked,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  });
 
 export const handleEraPaid = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
@@ -93,7 +141,20 @@ export const handleEraPaid = async (event: SubstrateEvent): Promise<void> => {
   era.endEventId = blockEventId;
   era.validatorPayout = getBigIntValue(rawPayout);
   era.remainder = getBigIntValue(rawRemainder);
-  era.totalStaked = await readEraTotalStake(eraIndex);
+  const [totalStaked, points, elected] = await Promise.all([
+    readEraTotalStake(eraIndex),
+    readEraRewardPoints(eraIndex),
+    getAllByFields<ValidatorEra>('ValidatorEra', [['eraIndex', '=', eraIndex]]),
+  ]);
 
-  await era.save();
+  era.totalStaked = totalStaked;
+  era.totalPoints = points.total;
+
+  // A validator that authored nothing has no entry, which is 0 points, not unknown.
+  elected.forEach(row => {
+    row.points = points.individual.get(row.validatorId) ?? 0;
+    row.updatedEventId = blockEventId;
+  });
+
+  await Promise.all([era.save(), ...elected.map(row => row.save())]);
 };

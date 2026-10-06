@@ -2616,7 +2616,13 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const REPORTER = '5EFbtwDBQu64WjUGqAgC3kuaiH86E34CHtqxbN7zAgwwT2cg';
   const SPEC = 5_003_001;
 
-  type Deferred = { validator: string; own: string; reporters: string[]; payout: string };
+  type Deferred = {
+    validator: string;
+    own: string;
+    others?: [string, string][];
+    reporters: string[];
+    payout: string;
+  };
 
   /** A `Twox64Concat` key on the era, which the registry decodes back to the era. */
   const eraKey = (era: number) => {
@@ -2676,6 +2682,10 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         return byEra[new DataView(bytes.buffer).getUint32(16, true)].map(slash => ({
           validator: mockCodec(slash.validator),
           own: mockCodec(slash.own),
+          others: (slash.others ?? []).map(([stash, amount]) => [
+            mockCodec(stash),
+            mockCodec(amount),
+          ]),
           reporters: slash.reporters.map(mockCodec),
           payout: mockCodec(slash.payout),
         }));

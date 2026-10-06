@@ -290,19 +290,107 @@ export const readCurrentEraIndex = async (): Promise<number | undefined> => {
   return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
 };
 
-/**
- * The validator set `StakersElected` just elected, for `eraIndex` (from `readCurrentEraIndex`
- * above) — read from `staking.erasStakers(eraIndex)` keys, **not** `session.validators()`.
- * `trigger_new_era` populates `ErasStakers` (via `store_stakers_info`) for the new era in the same
- * block `StakersElected` fires; `session.validators()` still reports the *outgoing*,
- * currently-serving set at that point — the new set only takes over once the session pallet
- * rotates onto it, later. Enumerating the double-map's keys for a fixed era index is the standard
- * way to list its validators without reading each `Exposure` value.
- */
-export const readEraValidators = async (eraIndex: number): Promise<string[]> => {
-  const keys = await api.query.staking.erasStakers.keys(eraIndex);
+/** One elected validator's exposure for an era. */
+export interface EraExposure {
+  stash: string;
+  own: bigint;
+  total: bigint;
+  nominatorCount: number;
+}
 
-  return keys.map(key => key.args[1].toString());
+/**
+ * The validators `StakersElected` just elected for `eraIndex` (from `readCurrentEraIndex` above),
+ * with their exposure — **not** `session.validators()`, which still reports the outgoing set until
+ * the session pallet rotates onto the new one, later.
+ *
+ * The election stores the exposures in the same block it fires. Before v8 the whole exposure goes
+ * to `staking.erasStakers`; v8 stores a summary in `erasStakersOverview` and the nominators in
+ * `erasStakersPaged`, and no longer writes `erasStakers`. The runtime that ran the election is the
+ * one the block decodes with, so whichever map it has is the one it wrote.
+ */
+export const readEraExposures = async (eraIndex: number): Promise<EraExposure[]> => {
+  const staking = api.query.staking;
+
+  if (typeof staking.erasStakersOverview?.entries === 'function') {
+    const entries = await staking.erasStakersOverview.entries(eraIndex);
+
+    return entries.flatMap(([key, value]) => {
+      if (value.isNone) {
+        return [];
+      }
+
+      const overview = value.unwrap();
+
+      return [
+        {
+          stash: key.args[1].toString(),
+          own: BigInt(overview.own.toString()),
+          total: BigInt(overview.total.toString()),
+          nominatorCount: overview.nominatorCount.toNumber(),
+        },
+      ];
+    });
+  }
+
+  const entries = await staking.erasStakers.entries(eraIndex);
+
+  return entries.map(([key, exposure]) => ({
+    stash: key.args[1].toString(),
+    own: BigInt(exposure.own.toString()),
+    total: BigInt(exposure.total.toString()),
+    nominatorCount: exposure.others.length,
+  }));
+};
+
+/** An elected validator's preferences for an era: commission in Perbill parts, and `blocked`. */
+export interface EraValidatorPrefs {
+  commission?: bigint;
+  blocked?: boolean;
+}
+
+/**
+ * Each elected validator's preferences for `eraIndex`, `staking.erasValidatorPrefs`, which the
+ * election stores alongside the exposures. Runtimes before `blocked` existed leave it undefined.
+ */
+export const readEraValidatorPrefs = async (
+  eraIndex: number
+): Promise<Map<string, EraValidatorPrefs>> => {
+  const entries = await api.query.staking.erasValidatorPrefs.entries(eraIndex);
+
+  return new Map(
+    entries.map(([key, prefs]) => {
+      const json = prefs.toJSON() as { commission?: number; blocked?: boolean };
+
+      return [
+        key.args[1].toString(),
+        {
+          commission: json.commission !== undefined ? BigInt(json.commission) : undefined,
+          blocked: json.blocked,
+        },
+      ];
+    })
+  );
+};
+
+/**
+ * `staking.erasRewardPoints(eraIndex)`: the era's total points and each validator's. Points go to
+ * the active era as blocks are authored, and the era ends and the next begins in the same session
+ * rotation, so in the block that pays an era its points are final.
+ */
+export const readEraRewardPoints = async (
+  eraIndex: number
+): Promise<{ total: number; individual: Map<string, number> }> => {
+  const points = await api.query.staking.erasRewardPoints(eraIndex);
+
+  return {
+    total: points.total.toNumber(),
+    individual: new Map(
+      [...points.individual.entries()].map(([stash, earned]) => [
+        stash.toString(),
+        earned.toNumber(),
+      ])
+    ),
+  };
 };
 
 /**

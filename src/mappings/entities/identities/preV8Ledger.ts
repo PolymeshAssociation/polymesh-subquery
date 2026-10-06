@@ -11,13 +11,7 @@ import {
   Proposal,
   ProposalVote,
 } from '../../../types';
-import {
-  getAllByFields,
-  getBigIntValue,
-  getProposerValue,
-  getTextValue,
-  padNumericId,
-} from '../../../utils';
+import { getAllByFields, getProposerValue, getTextValue, padNumericId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
@@ -25,7 +19,7 @@ import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/
 import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { storageEntriesAtParent, UndecodableStateError } from '../../../utils/storageAtParent';
+import { deferredSlashesBefore } from '../../../utils/deferredSlashes';
 import {
   findBlockEntries,
   findExtrinsicEntries,
@@ -182,57 +176,6 @@ export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<voi
 // ---------------------------------------------------------------------------------------------
 // Slashes — the reporters' share
 // ---------------------------------------------------------------------------------------------
-
-/** One `staking.UnappliedSlash`: a slash the chain holds back until its era comes due. */
-interface DeferredSlash {
-  era: number;
-  validator: string;
-  own: bigint;
-  reporters: string[];
-  payout: bigint;
-}
-
-/**
- * The slashes still deferred as `block` begins, which is the set it applies from; `undefined` when
- * that state can't be read (see `storageEntriesAtParent`).
- *
- * Read at the parent hash, because applying a slash takes it out of storage, so the block's own
- * state no longer holds it.
- */
-const deferredSlashesBefore = async (
-  block: SubstrateBlock
-): Promise<DeferredSlash[] | undefined> => {
-  const entries = await storageEntriesAtParent(block, 'staking', 'unappliedSlashes').catch(
-    (error: unknown) => {
-      if (error instanceof UndecodableStateError) {
-        return undefined;
-      }
-      throw error;
-    }
-  );
-
-  // a key whose era didn't decode leaves its slashes unplaceable, which is not "none deferred"
-  if (entries?.some(({ args }) => args.length === 0)) {
-    return undefined;
-  }
-
-  return entries?.flatMap(({ args: [era], value }) => {
-    const deferred = value as unknown as {
-      validator: Codec;
-      own: Codec;
-      reporters: Codec[];
-      payout: Codec;
-    }[];
-
-    return deferred.map(slash => ({
-      era: Number(getBigIntValue(era)),
-      validator: getTextValue(slash.validator),
-      own: getBigIntValue(slash.own),
-      reporters: slash.reporters.map(reporter => getTextValue(reporter)),
-      payout: getBigIntValue(slash.payout),
-    }));
-  });
-};
 
 /**
  * What applying a slash took, from the validator's `Slash` at `eventIdx` and the nominators' after
