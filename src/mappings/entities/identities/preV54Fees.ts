@@ -1,15 +1,11 @@
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { AnomalyKind, MovementKind, PolyxPool } from '../../../types';
+import { AnomalyKind, EventIdEnum, MovementKind, PolyxPool, Subsidy } from '../../../types';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { closingEventOf, indexClosingEvent } from '../block/closingEvent';
-import { extractArgs } from '../common';
-import {
-  creditBlockAuthor,
-  extrinsicEmits,
-  postTransition,
-  resolveFeeAccount,
-  treasuryShareAt,
-} from './mapPolyxLedger';
+import { extractArgs, HandlerArgs } from '../common';
+import { resolveFeePayer } from './feePayer';
+import { extrinsicEmits, postTransition } from './ledgerCore';
+import { creditBlockAuthor, treasuryShareAt } from './preV8Ledger';
 
 /**
  * Transaction fees before v5.4.0 (spec 5004000), which the chain charged without announcing them.
@@ -17,9 +13,9 @@ import {
  * `transactionPayment.TransactionFeePaid` first appears at v5.4.0. Before it, every transaction
  * fee was taken with no event of its own: on testnet, every one in the first 8.48 million blocks.
  * This module reconstructs each one: how much was taken (computed as the runtime did, and checked
- * against the treasury's cut), who paid it (`feePayer.ts`),
- * and what reached the block author. From v5.4.0 the fee events say all of that, and the ledger's
- * own fee handlers take over.
+ * against the treasury's cut), who paid it (`feePayer.ts`), and what reached the block author.
+ * From v5.4.0 the fee events say all of that, and the ledger's own fee handlers take over, though
+ * until v5.4.1 those events name someone other than the account charged (see `chargedFor`).
  */
 
 /**
@@ -175,4 +171,57 @@ export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic)
     kind: MovementKind.Fee,
   });
   await creditBlockAuthor(args, fee, treasuryShare);
+};
+
+/**
+ * The account a fee event's fee was taken from, when no withdrawal of it was recorded.
+ *
+ * From v5.4.1 (spec 5004001) both fee events name it, subsidiser included (`fee_key`), so it is
+ * taken as is: applying a subsidy again charged a subsidised paying key's own subsidiser instead
+ * (testnet block 14,872,581, where a two-level subsidy moved 25 POLYX on to the wrong account).
+ * Checked on testnet at 5004001, 5004002, 6002010, 7000005 and 7003003, where the named account
+ * fell by the fee and the signer did not; v8 names `fee_key` too.
+ *
+ * Before it, each named someone else:
+ * - `protocolFee.FeeCharged` the payer, before its subsidy (`check_subsidy(account, fee, None)`
+ *   then `FeeCharged(account, …)`), which covers any call.
+ * - `transactionPayment.TransactionFeePaid`, only on v5.4.0 (spec 5004000), the signer, while the
+ *   fee was charged as before v5.4 (see `resolveFeeAccount`). So a call someone else pays for,
+ *   such as `relayer.accept_paying_key`, left its signer low and its payer high.
+ *
+ * Gated on `block.specVersion`, which `ensureTrueSpecVersion` has already set to the runtime that
+ * executed the block. So the subsidy is looked up only on the runtimes whose events left it out.
+ */
+export const chargedFor = async (args: HandlerArgs, who: string): Promise<string> => {
+  if (args.block.specVersion >= 5_004_001) {
+    return who;
+  }
+  if (args.eventId === EventIdEnum.FeeCharged) {
+    return (await activeSubsidiser(who)) ?? who;
+  }
+
+  return args.extrinsic ? resolveFeeAccount(args.extrinsic) : who;
+};
+
+/** The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows. */
+export const activeSubsidiser = async (user: string): Promise<string | undefined> => {
+  const subsidies = await Subsidy.getByBeneficiaryAccountId(user, { limit: 10 });
+
+  return subsidies.find(subsidy => subsidy.isAccepted && !subsidy.isRemoved)?.payingAccountId;
+};
+
+/**
+ * The account a transaction fee was taken from, up to v5.4.0, when the runtime announced no fee
+ * or named the signer: the payer `get_valid_payer` chose (`resolveFeePayer`), or the paying key of
+ * that payer's subsidy (`check_subsidy(&payer_key, …)`). A subsidy covers every call but the
+ * relayer's own: a subsidised payer's call to any other unsubsidised pallet is rejected, so never
+ * reaches the chain.
+ */
+export const resolveFeeAccount = async (extrinsic: SubstrateExtrinsic): Promise<string> => {
+  const payer = await resolveFeePayer(extrinsic);
+  const subsidiser = await activeSubsidiser(payer);
+
+  return subsidiser && extrinsic.extrinsic.method.section.toLowerCase() !== 'relayer'
+    ? subsidiser
+    : payer;
 };

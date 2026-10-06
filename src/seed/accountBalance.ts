@@ -10,7 +10,7 @@ import {
   readChainHolds,
   readChainLock,
   readChainStakingLock,
-} from '../mappings/entities/identities/mapPolyxLedger';
+} from '../mappings/entities/identities/ledgerCore';
 import { ledgerAccount } from '../utils/accounts';
 import { readStakingLock } from '../utils/staking';
 

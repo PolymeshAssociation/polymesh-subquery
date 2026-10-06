@@ -16,7 +16,6 @@ jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 import { EntryDirection, HoldReason, MovementKind, PolyxPool } from '../../src/types';
 import {
-  adjustLock,
   handleBalanceBurned,
   handleBalanceEndowed,
   handleBalanceFrozen,
@@ -31,15 +30,9 @@ import {
   handleBalanceTransferWithMemo,
   handleBalanceUnlocked,
   handleBalanceUnreserved,
-  handleBonded,
-  handleBridgeMint,
   handlePayoutStarted,
   handleReward,
-  handleWithdrawn,
   handleDustLost,
-  handleIdentityGrant,
-  handlePipsDeposit,
-  handleProposalRefund,
   handleReserveRepatriated,
   handleStakingSlash,
   handleTransactionFeeCharged,
@@ -47,15 +40,24 @@ import {
   handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
+import {
+  handleBonded,
+  handleBridgeMint,
+  handleIdentityGrant,
+  handlePipsDeposit,
+  handleProposalRefund,
+  handleWithdrawn,
+} from '../../src/mappings/entities/identities/preV8Ledger';
 import { postUneventedTransactionFee } from '../../src/mappings/entities/identities/preV54Fees';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
 import { blockAuthor } from '../../src/utils/blockAuthor';
 import { __resetStakingCaches } from '../../src/utils/staking';
 import { __resetBlockContext } from '../../src/mappings/blockContext';
 import {
+  adjustLock,
   applyChainFreezes,
   emptyBalance,
-} from '../../src/mappings/entities/identities/mapPolyxLedger';
+} from '../../src/mappings/entities/identities/ledgerCore';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
