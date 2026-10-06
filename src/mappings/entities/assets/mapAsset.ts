@@ -46,7 +46,7 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
-import { extractArgs, getAsset, getAssetOrAnomaly } from './../common';
+import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
 
 export const createFunding = (
   blockId: string,
@@ -771,7 +771,7 @@ export const processUpdateReason = (
       : null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
-      : (blockEvents[eventIdx + 1]?.event.method as EventIdEnum) ?? EventIdEnum.Unknown;
+      : toEnum(EventIdEnum, blockEvents[eventIdx + 1]?.event.method, EventIdEnum.Unknown);
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
   }
 
