@@ -1067,26 +1067,37 @@ const refileFeeWithdrawal = async (
  * the same route through `ledger.update()`, emitting `Held` after its `Deposit`.
  */
 
-/** `staking.PayoutStarted { eraIndex, validatorStash, … }` precedes the payout's `Rewarded` events. */
-let payoutEraBlock: string | undefined;
+/**
+ * `staking.PayoutStarted { eraIndex, validatorStash, … }` opens each payout, from v7.0, and v8 emits
+ * one per page of a paged payout. The rewards after it, up to the next one, are paid for that era
+ * from that validator's payout. Runtimes before v7.0 emit no such event, so their rewards have
+ * neither.
+ */
+let payoutBlock: string | undefined;
 let payoutEraIndex: number | undefined;
+let payoutValidator: string | undefined;
 
 export const handlePayoutStarted = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const decoded = decodeEvent(event);
-  const raw = optionalField(decoded, 'eraIndex');
+  const era = optionalField(decoded, 'eraIndex');
+  const validator = optionalField(decoded, 'validatorStash');
 
-  payoutEraBlock = args.blockId;
-  payoutEraIndex = raw !== undefined ? Number(getTextValue(raw)) : undefined;
+  payoutBlock = args.blockId;
+  payoutEraIndex = era !== undefined ? Number(getTextValue(era)) : undefined;
+  payoutValidator = validator !== undefined ? getTextValue(validator) : undefined;
 };
 
 /**
- * Exported so `mapStakingEvent.ts` can stamp the same era onto `StakingEvent` rows that
- * `PolyxEntry` already gets stamped with — one cache, one answer to "what era is this block's
- * payout for," rather than two that could disagree.
+ * The era of the payout in progress in `blockId`. Exported so `mapStakingEvent.ts` stamps the same
+ * era onto `StakingEvent` rows as `PolyxEntry` gets.
  */
 export const currentPayoutEra = (blockId: string): number | undefined =>
-  payoutEraBlock === blockId ? payoutEraIndex : undefined;
+  payoutBlock === blockId ? payoutEraIndex : undefined;
+
+/** The validator whose payout is in progress in `blockId`. */
+export const currentPayoutValidator = (blockId: string): string | undefined =>
+  payoutBlock === blockId ? payoutValidator : undefined;
 
 /**
  * The account a reward was actually paid to: on v8, the `RewardDestination` that `Rewarded`

@@ -2222,6 +2222,8 @@ type StakingEvent @entity {
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
   eraIndex: Int @index
+  "the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
+  validator: Validator @index
   position: StakingPosition
   createdEvent: Event!
 }
