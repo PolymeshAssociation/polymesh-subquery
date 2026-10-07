@@ -190,6 +190,13 @@ On the portal side, `origin/main` has **removed** the `paddedIds` compatibility 
 - Every new paginated entity in this review (`PolyxEntry`, `Holding`, `IdentityKey`) needs a padded block-then-index composite id for the same reason — which also settles the deterministic sub-index question in `polyx-balance-model.md` §7.6 Q9: it is required, not optional.
 - `@dbType(type: "Int")` cannot substitute: a numeric block id gives no ordering *within* a block, which is precisely the failure mode described above.
 
+**The rule for consumers:** to list rows in the order they were created, order by `createdEvent`
+(`CREATED_EVENT_ID_ASC`/`_DESC`). It is zero-padded on both block and event index, so it sorts
+correctly as text and is a total order, which keeps pages from repeating or skipping rows. Where an
+entity carries the chain's own number (`localId`, `checkpointId`, `proposalId`, `nftId` and so on),
+order by that. An id is for looking a row up: compound ids (`assetId/localId`) and the few unpadded
+ones (`GlobalMetadataKey`, `CustomAssetType`, `CustomClaimType`) do not sort numerically.
+
 ## 8. Consumers have dropped chain v7
 
 `polymesh-portal` `origin/main` HEAD is `chore: migrate to SDK v31 and remove chain v7 support` **[V]**.
