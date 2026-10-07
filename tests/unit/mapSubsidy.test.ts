@@ -75,7 +75,8 @@ describe('v8 subsidy lifecycle', () => {
       })
     );
 
-    expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
+    // `RemovedSubsidy`'s third field is the allowance left when it ended, not an amount drawn
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(700) });
   });
 });
 
@@ -94,7 +95,9 @@ describe('pre-v8 paying-key lifecycle', () => {
       })
     );
 
+    // nothing accumulates a debited total before v8, and a null says so where a zero would not
     expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ allowance: BigInt(500), isAccepted: false });
+    expect(db.Subsidy[SUBSIDY_ID].totalDebited).toBeUndefined();
 
     await handleSubsidyAccepted(
       tupleEvent({
@@ -119,7 +122,73 @@ describe('pre-v8 paying-key lifecycle', () => {
       })
     );
 
-    expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
+    // `RemovedPayingKey` carries no figure, so the allowance stands as it was
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(500) });
+  });
+
+  /**
+   * The sequence a testnet resync tripped over: the paying key offered again while its subsidy was
+   * live, and the acceptance removed the old subsidy and accepted the new one in the same call.
+   * The row ended up both accepted and removed, so the ledger stopped charging the paying key and
+   * debited the user for fees the chain had taken from the paying key.
+   */
+  it('keeps a subsidy live through a re-offer and its acceptance', async () => {
+    const db = mockStore(seedAccounts());
+    (globalThis as any).api.query = {
+      relayer: { subsidies: jest.fn().mockResolvedValue({ toJSON: () => ({ remaining: 700 }) }) },
+    };
+    const pairEvent = (method: string, idx: number, extra: unknown[] = []) =>
+      tupleEvent({
+        section: 'relayer',
+        method,
+        data: [
+          codec(TEST_DID),
+          codec(USER_KEY),
+          codec(PAYING_KEY),
+          ...extra.map(v => codec(v as number)),
+        ],
+        specVersion: PRE_V8_SPEC,
+        idx,
+      });
+
+    await handleSubsidyApproved(pairEvent('AuthorizedPayingKey', 0, [500, 1]));
+    await handleSubsidyAccepted(pairEvent('AcceptedPayingKey', 1));
+    await handleSubsidyApproved(pairEvent('AuthorizedPayingKey', 2, [700, 2]));
+
+    // an offer changes nothing while the earlier subsidy is live
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      isAccepted: true,
+      isRemoved: false,
+      allowance: BigInt(500),
+    });
+
+    await handleSubsidyRemoved(pairEvent('RemovedPayingKey', 3));
+    await handleSubsidyAccepted(pairEvent('AcceptedPayingKey', 4));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      isAccepted: true,
+      isRemoved: false,
+      allowance: BigInt(700),
+    });
+  });
+
+  /**
+   * `RemovedPendingSubsidy`'s third field is the initial limit of the offer being withdrawn, not an
+   * allowance that was ever live — so it must not be written over one.
+   */
+  it('leaves the allowance alone when a pending subsidy is withdrawn', async () => {
+    const db = mockStore(seedAccounts());
+    db.Subsidy = { [SUBSIDY_ID]: { id: SUBSIDY_ID, allowance: BigInt(500), isRemoved: false } };
+
+    await handleSubsidyRemoved(
+      tupleEvent({
+        section: 'relayer',
+        method: 'RemovedPendingSubsidy',
+        data: [codec(USER_KEY), codec(PAYING_KEY), codec(999)],
+      })
+    );
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(500) });
   });
 });
 
@@ -166,11 +235,9 @@ describe('an acceptance with no preceding relayer approval', () => {
 
     (globalThis as any).api.query = {
       relayer: {
-        subsidies: jest
-          .fn()
-          .mockResolvedValue({
-            toJSON: () => ({ payingKey: PAYING_KEY, remaining: 1_000_000_000 }),
-          }),
+        subsidies: jest.fn().mockResolvedValue({
+          toJSON: () => ({ payingKey: PAYING_KEY, remaining: 1_000_000_000 }),
+        }),
       },
     };
 

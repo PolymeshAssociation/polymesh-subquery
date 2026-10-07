@@ -3,14 +3,16 @@ import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
 import {
   bytesToString,
+  getAllByFields,
   getBigIntValue,
   getBooleanValue,
+  getNumberValue,
   getProposerValue,
   getTextValue,
   padNumericId,
   serializeAccount,
 } from '../../../utils';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
 
 /**
  * A PIP id is a bare numeric sequence. Zero-pad it (D12 / A14) so `Proposal.id` and
@@ -43,8 +45,11 @@ export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise
   const { params, blockEventId } = extractArgs(event);
   const [, rawPipId, rawState] = params;
 
-  const pipId = processPipId(rawPipId);
-  const proposal = await Proposal.get(pipId);
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
 
   proposal.state = getTextValue(rawState) as ProposalStateEnum;
   proposal.updatedEventId = blockEventId;
@@ -61,12 +66,16 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
   const vote = getBooleanValue(rawVote);
   const weight = getBigIntValue(rawWeight);
 
-  let proposal: Proposal = null;
-  let proposalVote: ProposalVote = null;
-  [proposal, proposalVote] = await Promise.all([
-    Proposal.get(pipId),
+  const [proposal, existingVote] = await Promise.all([
+    getProposal(rawPipId, event),
     ProposalVote.get(`${pipId}/${account}`),
   ]);
+
+  if (!proposal) {
+    return;
+  }
+
+  let proposalVote = existingVote;
 
   if (proposalVote) {
     // when vote is changed, remove the previous weights
@@ -102,16 +111,140 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
 
 export const handleSnapshotTaken = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId } = extractArgs(event);
-  const pips = params[2].toJSON() as any;
-  const promises = [];
-  pips.forEach(pip => {
-    const job = async () => {
-      const proposal = await Proposal.get(padNumericId(String(pip.id)));
+  const snapshotId = getNumberValue(params[1]);
+  const pips = params[2].toJSON() as { id: number }[];
+
+  await Promise.all(
+    pips.map(async pip => {
+      const proposal = await getProposal(pip.id, event);
+
+      if (!proposal) {
+        return;
+      }
+
       proposal.snapshotted = true;
+      proposal.snapshotId = snapshotId;
       proposal.updatedEventId = blockEventId;
-      return proposal.save();
-    };
-    promises.push(job());
+      await proposal.save();
+    })
+  );
+};
+
+/**
+ * The PIP an event names, recorded as missing rather than left to fail the block when the index
+ * does not have it — a PIP created before an arbitrary start block, for one.
+ */
+const getProposal = (
+  rawPipId: Codec | number,
+  event: SubstrateEvent
+): Promise<Proposal | undefined> =>
+  getOrAnomaly(
+    id => Proposal.get(id),
+    typeof rawPipId === 'number' ? padNumericId(String(rawPipId)) : processPipId(rawPipId),
+    'Proposal',
+    event
+  );
+
+/** Applies `change` to the PIP an event names, stamping the event as its latest. */
+const updateProposal = async (
+  rawPipId: Codec | number,
+  event: SubstrateEvent,
+  change: (proposal: Proposal) => void
+): Promise<void> => {
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
+
+  change(proposal);
+  proposal.updatedEventId = extractArgs(event).blockEventId;
+
+  await proposal.save();
+};
+
+/** Takes a PIP out of the snapshot queue — the queue was cleared, or its result enacted. */
+const leaveSnapshot = (proposal: Proposal): void => {
+  proposal.snapshotted = false;
+  proposal.snapshotId = undefined;
+};
+
+/** `PipSkipped(did, pipId, skippedCount)` — the new skip count, not an increment. */
+export const handlePipSkipped = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId, rawCount] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.skippedCount = getNumberValue(rawCount);
   });
-  await Promise.all(promises);
+};
+
+/** `ExecutionScheduled(did, pipId, block)` — when an approved PIP will run. */
+export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId, rawBlock] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.executionScheduledAt = getNumberValue(rawBlock);
+  });
+};
+
+/** `ExpiryScheduled(did, pipId, block)` — when a pending PIP will lapse. */
+export const handleExpiryScheduled = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId, rawBlock] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.expiresAt = getNumberValue(rawBlock);
+  });
+};
+
+/** `PipClosed(did, pipId, pruned)` — the PIP is closed; whether the chain pruned it does not change the history here. */
+export const handlePipClosed = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId] = extractArgs(event).params;
+  const { blockEventId } = extractArgs(event);
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.closedEventId = blockEventId;
+  });
+};
+
+/**
+ * `SnapshotResultsEnacted(did, snapshotId?, skipped, rejected, approved)` — every PIP it names
+ * leaves the snapshot queue, and a skipped one carries its new skip count. Approval and rejection
+ * arrive as their own state updates.
+ */
+export const handleSnapshotResultsEnacted = async (event: SubstrateEvent): Promise<void> => {
+  const [, , rawSkipped, rawRejected, rawApproved] = extractArgs(event).params;
+  const skipped = (rawSkipped.toJSON() as [number, number][]) ?? [];
+  const decided = [
+    ...((rawRejected.toJSON() as number[]) ?? []),
+    ...((rawApproved.toJSON() as number[]) ?? []),
+  ];
+
+  await Promise.all([
+    ...skipped.map(([pipId, count]) =>
+      updateProposal(pipId, event, proposal => {
+        proposal.skippedCount = count;
+        leaveSnapshot(proposal);
+      })
+    ),
+    ...decided.map(pipId => updateProposal(pipId, event, leaveSnapshot)),
+  ]);
+};
+
+/**
+ * `SnapshotCleared(did, snapshotId)` — the queue is emptied. The flag `SnapshotTaken` set on each
+ * queued PIP used to stay set for good; it follows the queue now.
+ */
+export const handleSnapshotCleared = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockEventId } = extractArgs(event);
+  const snapshotId = getNumberValue(params[1]);
+  const queued = await getAllByFields<Proposal>('Proposal', [['snapshotId', '=', snapshotId]]);
+
+  await Promise.all(
+    queued.map(proposal => {
+      leaveSnapshot(proposal);
+      proposal.updatedEventId = blockEventId;
+
+      return proposal.save();
+    })
+  );
 };

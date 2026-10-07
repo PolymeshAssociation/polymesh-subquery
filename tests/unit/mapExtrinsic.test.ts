@@ -205,6 +205,7 @@ describe('handleExtrinsic', () => {
     expect(evmTransaction).toMatchObject({
       id: expectedId,
       extrinsicId: expectedId,
+      blockId: '0000004242',
       callKind: 'instantiate',
       ethTxType: 2,
       fromEthAddress: FROM_ETH,

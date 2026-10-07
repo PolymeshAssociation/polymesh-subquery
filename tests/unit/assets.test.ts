@@ -43,5 +43,24 @@ describe('getCustomType', () => {
 
     expect(name).toBe('Legacy');
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(1);
+    expect(Object.values(db.IndexerAnomaly)[0].detail).toMatch(/registered on chain/);
+  });
+
+  /**
+   * The chain did not check a custom type id when an NFT collection was created — testnet has
+   * collections naming id 0, never registered, and id 100 long before it was. The chain answers
+   * with empty bytes, which used to be written as an asset type of `''`: a name that happens to be
+   * blank, rather than an unknown one.
+   */
+  it('leaves the type unknown, not blank, when the chain has not registered it either', async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      asset: { customTypes: jest.fn().mockResolvedValue({ toString: () => '0x' }) },
+    };
+
+    const name = await getCustomType(codec(0) as unknown as Codec, blockAt(12_029_979));
+
+    expect(name).toBeUndefined();
+    expect(Object.values(db.IndexerAnomaly)[0].detail).toMatch(/has not registered/);
   });
 });

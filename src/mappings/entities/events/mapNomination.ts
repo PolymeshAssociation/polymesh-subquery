@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Nomination } from '../../../types';
-import { getAllByFields, getTextValue } from '../../../utils';
+import { blockTime, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
@@ -54,7 +54,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   // A `nominate` call is on-chain proof the stash is actively participating again.
   position.isChilled = false;
   position.updatedEventId = blockEventId;
@@ -77,7 +77,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
     ...toOpen.map(async validator => {
       // `validator` is a nomination *target* — a third-party stash that may never have signed an
       // indexed extrinsic of its own, so nothing else guarantees its `Account` row exists yet.
-      await ledgerAccount(validator, blockId, block.timestamp);
+      await ledgerAccount(validator, blockId, blockTime(block));
 
       return Nomination.create({
         id: nominationId(stash, validator, blockEventId),
@@ -103,7 +103,7 @@ export const handleChilled = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   position.isChilled = true;
   position.updatedEventId = blockEventId;
 

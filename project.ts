@@ -29,13 +29,18 @@ const filters: Record<string, Record<string, string[]>> = {
     // `FundsTransferred` / `AssetBalanceUpdated` already records the movement — or, while the
     // receiver's affirmation is pending, has not happened yet.
     CreatedAssetTransfer: [],
+    // Neither controller transfer is a movement of its own: both go through the same unverified
+    // transfer path, which emits `AssetBalanceUpdated` from the source to the destination — including
+    // the named third party `ControllerTransferTo` delivers to — and that records the movement.
     ControllerTransfer: [],
+    ControllerTransferTo: [],
     CustomAssetTypeExists: ['handleCustomAssetTypeExists'],
     CustomAssetTypeRegistered: ['handleCustomAssetTypeRegistered'],
     DivisibilityChanged: ['handleDivisibilityChanged'],
     DocumentAdded: ['handleDocumentAdded'],
     DocumentRemoved: ['handleDocumentRemoved'],
     ExtensionRemoved: [],
+    FrozenBalanceSet: ['handleFrozenBalanceSet'],
     FundingRoundSet: ['handleFundingRoundSet'],
     GlobalMetadataSpecUpdated: ['handleGlobalMetadataSpecUpdated'],
     IdentifiersUpdated: ['handleIdentifiersUpdated'],
@@ -49,6 +54,7 @@ const filters: Record<string, Record<string, string[]>> = {
     RemoveAssetAffirmationExemption: [],
     RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
     Redeemed: ['handleRedeemed', 'handleAssetRedeemedStatistics'],
+    SetAccountFreeze: ['handleSetAccountFreeze'],
     SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
     SetAssetMetadataValueDetails: ['handleSetAssetMetadataValueDetails'],
     TickerLinkedToAsset: ['handleTickerLinkedToAsset'],
@@ -81,13 +87,13 @@ const filters: Record<string, Record<string, string[]>> = {
     ReserveRepatriated: ['handleReserveRepatriated'],
     Restored: ['handleBalanceMinted'],
     Slashed: ['handleBalanceBurned'],
-    Suspended: ['handleBalanceSuspended'], // A3 — the handler did not exist before
+    Suspended: ['handleBalanceSuspended'], // The handler did not exist before
     Thawed: ['handleBalanceThawed'],
     TotalIssuanceForced: [],
     Transfer: ['handleBalanceTransfer'],
     TransferAndHold: ['handleTransferAndHold'],
     TransferOnHold: ['handleTransferOnHold'],
-    TransferWithMemo: ['handleBalanceTransferWithMemo'], // A2 — memo enrichment only, never its own entry
+    TransferWithMemo: ['handleBalanceTransferWithMemo'], // Memo enrichment only, never its own entry
     Unexpected: [], // anomaly marker; consider IndexerAnomaly
     Unlocked: ['handleBalanceUnlocked'],
     Unreserved: ['handleBalanceUnreserved'],
@@ -216,29 +222,38 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalFailedToExecute: [],
   },
   nft: {
+    IssuedNFT: ['handleLegacyNftIssued'],
+    NFTApproval: ['handleNftApproval'],
+    NFTApprovalForAll: ['handleNftApprovalForAll'],
+    NFTApprovalSpent: ['handleNftApprovalSpent'],
     NFTPortfolioUpdated: ['handleNftHoldingsUpdates'],
     NFTHoldingsUpdated: ['handleNftHoldingsUpdates'],
     NftCollectionCreated: ['handleNftCollectionCreated'],
+    RedeemedNFT: ['handleLegacyNftRedeemed'],
   },
   pips: {
+    // Governance settings, not facts about a PIP: nothing derived reads them, and each stays
+    // queryable as the raw `Event` the catch-all handler records.
     ActivePipLimitChanged: [],
     DefaultEnactmentPeriodChanged: [],
-    ExecutionCancellingFailed: [],
-    ExecutionScheduled: [],
-    ExecutionSchedulingFailed: [],
-    ExpiryScheduled: [],
-    ExpirySchedulingFailed: [],
     HistoricalPipsPruned: [],
     MaxPipSkipCountChanged: [],
     MinimumProposalDepositChanged: [],
     PendingPipExpiryChanged: [],
-    PipClosed: [],
-    PipSkipped: [],
+    // The scheduler refused a schedule. The field a successful schedule would set simply stays
+    // unset, and the refusal is kept as its raw `Event`.
+    ExecutionCancellingFailed: [],
+    ExecutionSchedulingFailed: [],
+    ExpirySchedulingFailed: [],
+    ExecutionScheduled: ['handleExecutionScheduled'],
+    ExpiryScheduled: ['handleExpiryScheduled'],
+    PipClosed: ['handlePipClosed'],
+    PipSkipped: ['handlePipSkipped'],
     ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
     ProposalRefund: ['handleProposalRefund'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
-    SnapshotCleared: [],
-    SnapshotResultsEnacted: [],
+    SnapshotCleared: ['handleSnapshotCleared'],
+    SnapshotResultsEnacted: ['handleSnapshotResultsEnacted'],
     SnapshotTaken: ['handleSnapshotTaken'],
     Voted: ['handleVoted', 'handlePipsDeposit'],
   },
@@ -271,6 +286,10 @@ const filters: Record<string, Record<string, string[]>> = {
     RemovedPendingSubsidy: ['handleSubsidyRemoved'],
     RemovedSubsidy: ['handleSubsidyRemoved'],
     SubsidyDebited: ['handleSubsidyDebited'],
+    // unhandled deliberately: the standing relationship and every fee drawn against it are already
+    // recorded on `Subsidy`, and the relayed call itself is indexed as an `Extrinsic` like any other.
+    // A per-relay row would add a third record of the same activity with no query asking for it.
+    RelayedTx: [],
   },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
@@ -278,7 +297,6 @@ const filters: Record<string, Record<string, string[]>> = {
     FundsTransferred: ['handleFundsTransferred'],
     InstructionAffirmed: ['handleInstructionUpdate'],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],
-    InstructionAuthorized: ['handleInstructionUpdate'],
     InstructionCreated: ['handleInstructionCreated'],
     InstructionExecuted: ['handleInstructionFinalizedEvent'],
     InstructionFailed: ['handleInstructionFinalizedEvent'],
@@ -286,7 +304,6 @@ const filters: Record<string, Record<string, string[]>> = {
     InstructionMediators: ['handleInstructionMediators'],
     InstructionRejected: ['handleInstructionRejected'],
     InstructionRescheduled: [],
-    InstructionUnauthorized: ['handleInstructionUpdate'],
     InstructionUnlocked: ['handleInstructionFinalizedEvent'],
     LegFailedExecution: [],
     MediatorAffirmationReceived: ['handleMediatorAffirmationReceived'],
@@ -350,10 +367,14 @@ const filters: Record<string, Record<string, string[]>> = {
     StatTypesRemoved: ['handleStatTypeRemoved'],
     // TransferManager (deprecated, retired) is gone; these still feed StatType /
     // TransferComplianceExemption for the pre-v5 percentage/count restriction model
-    TransferManagerAdded: ['handleStatisticTransferManagerAdded'],
+    // the pre-v5 transfer-manager model is gone from the chain, and its events are not mapped onto
+    // the statistics model that replaced it: the two disagree on what a restriction is, and a
+    // partial mapping left exemptions pointing at restrictions that were never written. Neither
+    // consumer reads this era, so it is recorded as unhandled rather than half-translated.
+    TransferManagerAdded: [],
     TransferManagerRemoved: [],
-    ExemptionsAdded: ['handleTransferManagerExemptionsAdded'],
-    ExemptionsRemoved: ['handleTransferManagerExemptionsRemoved'],
+    ExemptionsAdded: [],
+    ExemptionsRemoved: [],
     TransferConditionExemptionsAdded: ['handleStatisticExemptionsAdded'],
     TransferConditionExemptionsRemoved: ['handleStatisticExemptionsRemoved'],
   },
@@ -502,28 +523,37 @@ const project: SubstrateProject = {
     },
   },
   dataSources: [
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock: 1,
-      endBlock: 1,
-      mapping: {
-        file: './dist/index.js',
-        handlers: [
-          {
-            kind: SubstrateHandlerKind.Block,
-            handler: 'handleGenesis',
+    /**
+     * The first block's own seeding. From genesis that is the genesis handler over `[1, 1]`. From a
+     * later `START_BLOCK` it cannot be: a `[1, 1]` datasource beside `[startBlock, ∞)` declares two
+     * disjoint ranges the node will not bridge, so nothing between them would ever run. The start
+     * block seeds itself from chain storage instead, over `[startBlock, startBlock]`.
+     */
+    startBlock <= 1
+      ? {
+          kind: SubstrateDatasourceKind.Runtime,
+          startBlock: 1,
+          endBlock: 1,
+          mapping: {
+            file: './dist/index.js',
+            handlers: [{ kind: SubstrateHandlerKind.Block, handler: 'handleGenesis' }],
           },
-        ],
-      },
-    },
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock,
-      mapping: {
-        file: './dist/index.js',
-        handlers: eventSpecificHandlers,
-      },
-    },
+        }
+      : {
+          kind: SubstrateDatasourceKind.Runtime,
+          startBlock,
+          endBlock: startBlock,
+          mapping: {
+            file: './dist/index.js',
+            handlers: [{ kind: SubstrateHandlerKind.Block, handler: 'handleSeed' }],
+          },
+        },
+    /**
+     * The catch-all datasource comes first. For every event the node runs each datasource's handlers
+     * in declaration order, and the catch-all handler is where a block's spec label is checked
+     * against the runtime that actually executed it — see `ensureTrueSpecVersion`. Ahead of the
+     * specific handlers, it corrects the label before anything branches on it.
+     */
     {
       kind: SubstrateDatasourceKind.Runtime,
       startBlock,
@@ -538,15 +568,14 @@ const project: SubstrateProject = {
       mapping: {
         file: './dist/index.js',
         handlers: [
+          ...eventSpecificHandlers,
+          // Changes that arrive with no event of their own, caught by the call that makes them.
+          // Filtered to the one call each, which the dictionary indexes like an event, so empty
+          // blocks are still skipped.
           {
-            kind: SubstrateHandlerKind.Block,
-            handler: 'handleBlock',
-            // Runs before this block's own events. Flushes what the PREVIOUS block queued: the
-            // POLYX reconcile queue (only populated on %2000 / forced blocks, and read from chain
-            // at queue time, not here) and the NftHolder write buffer. Both early-return when
-            // there is nothing to do. `modulo: 1` is required — a gap would skip flushing whatever
-            // a skipped block queued.
-            filter: { modulo: 1 },
+            kind: SubstrateHandlerKind.Call,
+            handler: 'handleSetController',
+            filter: { module: 'staking', method: 'setController', success: true },
           },
         ],
       },

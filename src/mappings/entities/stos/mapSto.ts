@@ -2,6 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Investment, RaisingAssetTypeEnum, Sto, StoStatus } from '../../../types';
 import {
+  blockTime,
   coerceHexToString,
   getAssetId,
   getAssetIdWithTicker,
@@ -111,7 +112,7 @@ const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus):
   sto.status = status;
   if (status === StoStatus.Closed) {
     // if sto is closed before the configured end time, status should be set as `ClosedEarly`
-    if (sto.end && block.timestamp < sto.end) {
+    if (sto.end && blockTime(block) < sto.end) {
       sto.status = StoStatus.ClosedEarly;
     }
   }

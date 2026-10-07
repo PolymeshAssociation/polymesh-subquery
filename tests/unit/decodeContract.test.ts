@@ -16,6 +16,8 @@ interface ArityFixture {
   specVersion: number;
   source: string;
   modules: Record<string, Record<string, number>>;
+  /** Per module, the events that name their fields and so decode without a registered shape */
+  named?: Record<string, string[]>;
 }
 
 const fixtures: ArityFixture[] = readdirSync(FIXTURE_DIR)
@@ -72,22 +74,50 @@ describe('registered decoders against checked-in metadata', () => {
         expect(disagreements).toEqual([]);
       });
 
-      it('registers no decoder for an event this runtime does not have', () => {
-        const covered = new Set(
-          declared
-            .filter(({ moduleId }) => fixture.modules[moduleId])
-            .map(({ moduleId, eventId }) => key(moduleId, eventId))
-        );
-        const fixtureModules = Object.keys(fixture.modules).map(moduleId => moduleId.toLowerCase());
+      /**
+       * The failure that stops a block: an event the chain emits, that some handler decodes, with no
+       * shape covering this runtime. Named-field events are exempt — they decode from the block's
+       * own metadata and the table is never consulted for them.
+       *
+       * The opposite direction — a decoder covering a runtime where its event does not exist — is
+       * deliberately not an error. It is never invoked for the wrong era, and the node labels blocks
+       * near an upgrade with the neighbouring runtime's spec, so a range that stops exactly at the
+       * event's introduction would leave those blocks with no decoder at all.
+       */
+      it('has a decoder for every tuple-style event this runtime emits', () => {
+        const uncovered = declared
+          .filter(({ moduleId, eventId }) => !fixture.named?.[moduleId]?.includes(eventId))
+          .filter(({ moduleId, eventId }) => {
+            const registered = shapes.get(key(moduleId, eventId));
 
-        const orphans = [...shapes.entries()]
-          .filter(([shapeKey]) => fixtureModules.includes(shapeKey.split('.')[0]))
-          .filter(([, entries]) => covering(entries, specVersion).length > 0)
-          .map(([shapeKey]) => shapeKey)
-          .filter(shapeKey => !covered.has(shapeKey));
+            return registered !== undefined && covering(registered, specVersion).length === 0;
+          })
+          .map(({ moduleId, eventId }) => `${moduleId}.${eventId}`);
 
-        expect(orphans).toEqual([]);
+        expect(uncovered).toEqual([]);
       });
     }
   );
+
+  /** A decoder whose event no checked-in runtime has is a misspelling or a stale entry. */
+  it('registers decoders only for events some checked-in runtime has', () => {
+    const known = new Set(
+      fixtures.flatMap(fixture =>
+        Object.entries(fixture.modules).flatMap(([moduleId, events]) =>
+          Object.keys(events).map(eventId => key(moduleId, eventId))
+        )
+      )
+    );
+    const capturedModules = new Set(
+      fixtures.flatMap(fixture =>
+        Object.keys(fixture.modules).map(moduleId => moduleId.toLowerCase())
+      )
+    );
+
+    const unknown = [...registeredShapes().keys()]
+      .filter(shapeKey => capturedModules.has(shapeKey.split('.')[0]))
+      .filter(shapeKey => !known.has(shapeKey));
+
+    expect(unknown).toEqual([]);
+  });
 });

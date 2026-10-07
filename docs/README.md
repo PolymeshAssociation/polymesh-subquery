@@ -100,7 +100,7 @@ Ordered by how much they change the plan.
 
 ### Needs a decision, not evidence
 
-1. **Should timestamps also be exposed as an epoch integer alongside `timestamptz`?** D8 settles the correctness half. The integer is a separate question — a second representation of the same fact, on every ordered entity, when the padded composite id already provides deterministic ordering. Pros and cons written up in [`architecture-review.md`](./architecture-review.md) §10.2; **no recommendation is made here**, deliberately.
+1. **Should timestamps also be exposed as an epoch integer alongside the UTC `timestamp` columns?** The parse-as-UTC rule settles the correctness half. The integer is a separate question — a second representation of the same fact, on every ordered entity, when the padded composite id already provides deterministic ordering. Pros and cons written up in [`architecture-review.md`](./architecture-review.md) §10.2; **no recommendation is made here**, deliberately.
 
 2. **Is staking history this indexer's job, or should it stay focused on the securities domain?** Every route to fixing A15 is a step toward a `StakingPosition` / `Nomination` / `Validator` / `Era` model that does not exist today (`staking` is 8/32 handled). The middle line the plans currently assume — index enough staking to make the **POLYX ledger** attributable, and treat validator/nomination/era modelling as a separate later decision — is an assumption, not a decision. Argument both ways in [`implementation/02-polyx-ledger.md`](./implementation/02-polyx-ledger.md); it should be settled before plan [07](./implementation/07-staking.md) is sized.
 

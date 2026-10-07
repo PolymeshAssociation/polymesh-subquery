@@ -1,20 +1,27 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { logError } from '../utils';
 import { getBlockContext } from './blockContext';
+import { ensureTrueSpecVersion } from './trueSpec';
 import { mapExternalAgentAction } from './entities';
 import { mapBlock } from './entities/block/mapBlock';
 import mapChainUpgrade from './entities/block/mapChainUpgrade';
 import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
 import { handleToolingEvent } from './entities/events/mapEvent';
-import { flushNftBuffer } from './entities/assets/mapNfts';
-import { reconcileBlock } from './entities/identities/reconcilePolyx';
-import genesisHandler from './migrations/genesisHandler';
+import genesisHandler, { seedFromStartBlock } from './migrations/genesisHandler';
 
-export async function handleGenesis(): Promise<void> {
+export async function handleGenesis(block: SubstrateBlock): Promise<void> {
+  await ensureTrueSpecVersion(block);
   // this is need to populate subquery version on startup
   await handleStartup();
-  await genesisHandler().catch(e => logError(e));
+  await genesisHandler(block).catch(e => logError(e));
+}
+
+/** The first block of an index started after genesis — see `seedFromStartBlock`. */
+export async function handleSeed(block: SubstrateBlock): Promise<void> {
+  await ensureTrueSpecVersion(block);
+  await handleStartup();
+  await seedFromStartBlock(block);
 }
 
 export async function handleMigration(substrateEvent: SubstrateEvent): Promise<void> {
@@ -22,17 +29,6 @@ export async function handleMigration(substrateEvent: SubstrateEvent): Promise<v
    * In case of major chain upgrade, we need to process some entities
    */
   await mapChainUpgrade(substrateEvent).catch(e => logError(e));
-}
-
-/**
- * Runs before this block's own events (`@subql/node` calls the block handler first). Flushes what
- * the *previous* block queued: the POLYX reconcile queue (only populated on sample blocks / forced
- * checkpoints) and the NftHolder write buffer. Both early-return when idle.
- */
-export async function handleBlock(block: SubstrateBlock): Promise<void> {
-  // Also decides whether this block is a reconciliation sample, before its events run.
-  await reconcileBlock(block).catch(e => logError(e));
-  await flushNftBuffer().catch(e => logError(e));
 }
 
 export async function handleStartup(): Promise<void> {
@@ -46,10 +42,11 @@ export async function handleStartup(): Promise<void> {
 }
 
 export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void> {
+  await ensureTrueSpecVersion(substrateEvent.block);
   await handleStartup();
 
   const context = getBlockContext(substrateEvent.block);
-  const promises = [];
+  const promises: Promise<unknown>[] = [];
 
   if (!context.blockWritten) {
     context.blockWritten = true;
@@ -61,12 +58,12 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
     promises.push(mapBlock(substrateEvent.block).save());
   }
 
-  const extrinsicIdx = substrateEvent.extrinsic?.idx;
+  const { extrinsic } = substrateEvent;
 
-  if (extrinsicIdx !== undefined && !context.handledExtrinsics.has(extrinsicIdx)) {
-    context.handledExtrinsics.add(extrinsicIdx);
+  if (extrinsic && !context.handledExtrinsics.has(extrinsic.idx)) {
+    context.handledExtrinsics.add(extrinsic.idx);
 
-    promises.push(handleExtrinsic(substrateEvent.extrinsic));
+    promises.push(handleExtrinsic(extrinsic));
   }
 
   const event = handleToolingEvent(substrateEvent);

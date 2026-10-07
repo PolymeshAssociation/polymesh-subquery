@@ -1,5 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import {
   CallIdEnum,
   ModuleIdEnum,
@@ -22,12 +23,16 @@ import {
   is7xChain,
   legacyQuery,
 } from '../../../utils';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockEventId, extrinsicId } = extractArgs(event);
+  const { extrinsic, blockEventId, extrinsicId } = extractArgs(event);
 
-  const [rawDid, rawMultiSigAddress, rawProposalId] = params;
+  const {
+    callerDid: rawDid,
+    multisig: rawMultiSigAddress,
+    proposalId: rawProposalId,
+  } = decodeEvent(event);
 
   const creatorId = getTextValue(rawDid);
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -119,10 +124,14 @@ const handleMultiSigProposalStatus = async (
   await proposal.save();
 };
 
+/**
+ * From v7 `ProposalApproved` means the proposal reached its threshold. Before v7 the same name was
+ * one signer's approving vote, which v7 calls `ProposalApprovalVote`, so it is counted as a vote.
+ */
 export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   if (is7xChain(block)) {
-    const [, rawMultiSigAddress, rawProposalId] = params;
+    const { multisig: rawMultiSigAddress, proposalId: rawProposalId } = decodeEvent(event);
     await handleMultiSigProposalStatus(
       rawMultiSigAddress,
       rawProposalId,
@@ -135,8 +144,8 @@ export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Pro
 };
 
 export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockEventId } = extractArgs(event);
-  const [, rawMultiSigAddress, rawProposalId] = params;
+  const { blockEventId } = extractArgs(event);
+  const { multisig: rawMultiSigAddress, proposalId: rawProposalId } = decodeEvent(event);
   await handleMultiSigProposalStatus(
     rawMultiSigAddress,
     rawProposalId,
@@ -146,9 +155,13 @@ export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Pro
 };
 
 export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
 
-  const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
+  const {
+    multisig: rawMultiSigAddress,
+    proposalId: rawProposalId,
+    result: rawSuccess,
+  } = decodeEvent(event);
 
   let success: boolean;
   if (is7xChain(block)) {
@@ -169,8 +182,12 @@ const handleMultiSigProposalVoteAction = async (
   event: SubstrateEvent,
   action: MultiSigProposalVoteActionEnum
 ) => {
-  const { params, block, blockEventId } = extractArgs(event);
-  const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const {
+    multisig: rawMultiSigAddress,
+    signer: rawSigner,
+    proposalId: rawProposalId,
+  } = decodeEvent(event);
 
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalIndex = getNumberValue(rawProposalId);
@@ -181,9 +198,15 @@ const handleMultiSigProposalVoteAction = async (
   const voteId = `${proposalId}/${signerValue}`;
 
   const [proposal, previousVote] = await Promise.all([
-    MultiSigProposal.get(proposalId),
+    getOrAnomaly(id => MultiSigProposal.get(id), proposalId, 'MultiSigProposal', event),
     MultiSigProposalVote.get(voteId),
   ]);
+
+  // A vote counts toward a proposal, so without the proposal there is nothing to count it on —
+  // reported rather than left to fail the block on the first count.
+  if (!proposal) {
+    return;
+  }
 
   let vote = previousVote;
   if (vote) {

@@ -1,9 +1,12 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { StakingPosition } from '../../../types';
-import { getBigIntValue, getTextValue } from '../../../utils';
+import { AnomalyKind, StakingPosition } from '../../../types';
+import { blockTime, getBigIntValue, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { readStakingLedger, resolveController } from '../../../utils/staking';
+import { ensureTrueSpecVersion } from '../../trueSpec';
+import { indexClosingEvent } from '../block/closingEvent';
 import { extractArgs } from '../common';
 
 /**
@@ -16,7 +19,7 @@ import { extractArgs } from '../common';
  * `src/utils/staking.ts`) — a second view onto that number, not an independently accumulated one.
  * Keeping the two in step means re-reading on **every** event that rewrites the ledger, which is
  * more than the three registered here: a compounded reward and a slash both do so silently, and
- * `mapStakingEvent.ts` calls `refreshPositionFromLedger` for those (S1). `rewardDestination`/`rewardDestinationAccount`
+ * `mapStakingEvent.ts` calls `refreshPositionFromLedger` for those. `rewardDestination`/`rewardDestinationAccount`
  * and `totalRewarded`/`totalSlashed` are stamped from `mapStakingEvent.ts`'s `handleStakingEvent`,
  * which already resolves this same `StakingPosition` row to stamp `StakingEvent.position`.
  * `isValidator` is stamped from `mapValidator.ts`. `controller` is resolved here, from the same
@@ -67,21 +70,26 @@ const floorZero = (value: bigint): bigint => (value > BigInt(0) ? value : BigInt
  *
  * Exported because the ledger changes on events this module is not registered for: a compounded
  * (`RewardDestination::Staked`) reward and a slash both rewrite it while emitting only
- * `Rewarded`/`Slashed`, so `mapStakingEvent.ts` calls this from those handlers (S1). `controller`
+ * `Rewarded`/`Slashed`, so `mapStakingEvent.ts` calls this from those handlers. `controller`
  * is refreshed here rather than only at creation because `set_controller` moves the ledger to a
- * new key and emits nothing — leaving a position permanently naming the old one (F6).
+ * new key and emits nothing — leaving a position permanently naming the old one.
  *
  * A failed read leaves `position` untouched: callers either have a delta to fall back on or would
  * rather keep the last known figures than zero them.
+ *
+ * The controller is a relation, and `set_controller` can name an account nothing has indexed yet,
+ * so its row is ensured before the position is pointed at it — the same as at creation.
  */
 export const refreshPositionFromLedger = async (
   position: StakingPosition,
   stash: string,
-  blockId: string
+  event: SubstrateEvent
 ): Promise<boolean> => {
+  const { blockId, block, blockEventId } = extractArgs(event);
   const controller = await resolveController(stash, blockId).catch(() => stash);
 
   if (controller !== position.controllerId) {
+    await ledgerAccount(controller, blockId, blockTime(block), blockEventId);
     position.controllerId = controller;
   }
 
@@ -104,14 +112,18 @@ export const refreshPositionFromLedger = async (
  * read-else-accumulate fallback in `mapPolyxLedger.ts`. The fallback is floored at zero: a
  * position created by this very event (no prior `Bonded` seen, e.g. mid-resync) has nothing to
  * subtract from, and a negative `bonded`/`unbonding` is never meaningful.
+ *
+ * The fallback is an estimate, so it is reported rather than taken quietly, and `unlocking` is
+ * dropped: it is the per-era schedule of the unbonding amount, which no delta can reconstruct, and
+ * kept as it was it would describe a ledger the deltas have already moved past.
  */
 const applyLedgerOrFallback = async (
   position: StakingPosition,
   stash: string,
-  blockId: string,
+  event: SubstrateEvent,
   fallback: { bonded?: bigint; unbonding?: bigint }
 ): Promise<void> => {
-  if (await refreshPositionFromLedger(position, stash, blockId)) {
+  if (await refreshPositionFromLedger(position, stash, event)) {
     return;
   }
 
@@ -121,6 +133,18 @@ const applyLedgerOrFallback = async (
   if (fallback.unbonding !== undefined) {
     position.unbonding = floorZero(position.unbonding + fallback.unbonding);
   }
+  position.unlocking = undefined;
+
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  await recordAnomaly({
+    kind: AnomalyKind.UnreadableValue,
+    detail: `staking.ledger for ${stash} could not be read, so its bonded and unbonding amounts were estimated from the event and its unlocking schedule dropped`,
+    block,
+    eventIdx,
+    moduleId,
+    eventId,
+  });
 };
 
 export const handlePositionBonded = async (event: SubstrateEvent): Promise<void> => {
@@ -133,9 +157,9 @@ export const handlePositionBonded = async (event: SubstrateEvent): Promise<void>
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
 
-  await applyLedgerOrFallback(position, stash, blockId, { bonded: getBigIntValue(rawAmount) });
+  await applyLedgerOrFallback(position, stash, event, { bonded: getBigIntValue(rawAmount) });
 
   position.updatedEventId = blockEventId;
 
@@ -157,10 +181,10 @@ export const handlePositionUnbonded = async (event: SubstrateEvent): Promise<voi
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
   const amount = getBigIntValue(rawAmount);
 
-  await applyLedgerOrFallback(position, stash, blockId, { bonded: -amount, unbonding: amount });
+  await applyLedgerOrFallback(position, stash, event, { bonded: -amount, unbonding: amount });
 
   position.updatedEventId = blockEventId;
 
@@ -177,11 +201,46 @@ export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<vo
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, block.timestamp, blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
 
-  await applyLedgerOrFallback(position, stash, blockId, { unbonding: -getBigIntValue(rawAmount) });
+  await applyLedgerOrFallback(position, stash, event, { unbonding: -getBigIntValue(rawAmount) });
 
   position.updatedEventId = blockEventId;
+
+  await position.save();
+};
+
+/**
+ * `staking.set_controller` — moves a stash's ledger to a new controller and emits nothing.
+ *
+ * Every other ledger change carries an event this module re-reads the ledger on, so without this a
+ * position kept naming the old controller until something else touched the stash — a bond, an
+ * unbond, a reward — which for an idle stash could be never. A call handler, filtered to this one
+ * call, reaches it without subscribing to anything that would stop the node skipping empty blocks.
+ *
+ * A top-level call only: one made inside a batch is not seen here, and is picked up by the next
+ * event that re-reads the ledger, as before.
+ */
+export const handleSetController = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+  // a call can be the first thing the node hands over for a block, ahead of any event
+  await ensureTrueSpecVersion(extrinsic.block);
+
+  const stash = extrinsic.extrinsic.signer.toString();
+  const position = await StakingPosition.get(stash);
+
+  if (!position) {
+    return;
+  }
+
+  const closing = await indexClosingEvent(extrinsic);
+
+  if (!closing) {
+    return;
+  }
+
+  await refreshPositionFromLedger(position, stash, closing);
+
+  position.updatedEventId = extractArgs(closing).blockEventId;
 
   await position.save();
 };

@@ -46,7 +46,7 @@ export interface ChainUpgradeCrossing {
   previousTransactionVersion: number;
   transactionVersion: number;
   block: SubstrateBlock;
-  /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites (D13). */
+  /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites. */
   blockEventId: string;
 }
 
@@ -90,9 +90,19 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
  */
 export default async (substrateEvent: SubstrateEvent): Promise<void> => {
   const block = substrateEvent.block;
-  const { specVersion } = block;
   const blockId = padId(block.block.header.number.toString());
   const blockEventId = `${blockId}/${padId(String(substrateEvent.idx ?? 0))}`;
+
+  // `CodeUpdated` is emitted by the upgrade itself, so the block carrying it still ran under the
+  // runtime being replaced: `block.specVersion` names the spec the chain is *leaving*. The new code
+  // takes effect from the next block. The block-scoped runtime version is the state this block
+  // leaves behind, so it is the one place both the new spec and its transaction version come from
+  // the same runtime — reading the spec from the block instead recorded every upgrade one release
+  // behind, beside the next release's transaction version, and ran the spec-keyed boundary work one
+  // upgrade late.
+  const runtimeVersion = await api.rpc.state.getRuntimeVersion();
+  const specVersion = runtimeVersion.specVersion.toNumber();
+  const transactionVersion = runtimeVersion.transactionVersion.toNumber();
 
   const latest = await getLatestChainUpgrade();
 
@@ -105,9 +115,6 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
   const previous = latest
     ? { specVersion: latest.specVersionId, transactionVersion: latest.transactionVersion }
     : await runtimeVersionBefore(block);
-
-  const runtimeVersion = await api.rpc.state.getRuntimeVersion();
-  const transactionVersion = runtimeVersion.transactionVersion.toNumber();
 
   logger.info(
     `Chain upgrade at block ${blockId}: spec ${previous.specVersion} -> ${specVersion}, transaction version ${previous.transactionVersion} -> ${transactionVersion}`

@@ -1,5 +1,5 @@
 /**
- * A17 follow-up: the asset-holder resolution chain (`rawAssetHolderToAssetHolder` ->
+ * The asset-holder resolution chain (`rawAssetHolderToAssetHolder` ->
  * `extractAssetHolder` -> `meshAssetHolderToAssetHolder`) now threads the real `blockEventId`
  * through to `getOrCreateAccount`, rather than always taking its block-event-0 default. A caller
  * with no event to give (none currently; kept as a fallback) still gets the old behaviour.

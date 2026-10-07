@@ -1,5 +1,5 @@
 /**
- * Defect A8 — `portfolio.FungibleTokensMovedBetweenPortfolios` (6 args) and
+ * `portfolio.FungibleTokensMovedBetweenPortfolios` (6 args) and
  * `NFTsMovedBetweenPortfolios` (5 args) were emitted only at v5.4.3, through `unchecked_move_funds`,
  * and never registered. They are intra-Identity, so they write AssetTransaction rows with
  * isInternalTransfer: true, matching their v6+ successor's shape.

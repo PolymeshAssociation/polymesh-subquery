@@ -60,7 +60,7 @@ errors" counts object literals, not properties; budget for the larger number.
 | Question | Decision | Rationale |
 |---|---|---|
 | Which entities get a `created_event_id` btree in `db/compat.sql`? | **One: `multi_sig_proposals`.** Switch the three hardcoded portal orderings (`assetTransactions` `CREATED_EVENT_ID_DESC`, `distributionPayments` `CREATED_EVENT_ID_DESC`, `portfolioMovements` `CREATED_BLOCK_ID_DESC`) to `ID_DESC`. | The automatic relation index is GiST and cannot return rows in order **[V]**; `id` gets a plain btree. Where an id is `padId(block)/padId(eventIdx)`, `id` and `createdEventId` are the same value, so ordering by `id` is free. Phase 7.2 zero‑pads `Instruction`/`Venue`/`Proposal`/`Authorization` ids, so those order by `ID_DESC`. That leaves `Claim` (composite, issuer‑scoped — no consumer pages it chronologically **[V]**) and **`MultiSigProposal`** (`multisigAddress/proposalId`, which cannot carry chronological order, and `multiSigProposals` **is** one of the five portal connections — `consumer-queries.md` §1). Add the `MultiSigProposal` btree in 7.6; adding an index during the resync window is free, adding it after is not. |
-| `Identity.eventId` / `Account.eventId` | **Drop `Identity.eventId`. Keep `Account.eventId`, flagged.** | `Identity.eventId` is provably constant — every write site passes `DidCreated`, including the genesis mock. `Account.eventId` has three values on a dev chain and overlaps `keyType` + the `identity` relation; drop it only after a mainnet cardinality check. |
+| Which entities keep a denormalised `eventId`? | **The ones consumers filter or group this table by; nowhere else.** Kept, each carrying the same docstring: `PolyxEntry`, `StakingEvent`, `AssetTransaction`, `AssetAgentAction`. Dropped: `Identity`, `Portfolio`, `ChildIdentity`, `IdentityKey`, `DistributionPayment`, `Account`. | SubQuery generates filters and aggregates over an entity's own columns only, so `createdEvent.eventId` can be selected but not filtered or grouped on — which is the whole case for keeping a copy. Where no consumer query filters or groups by event type, the column is a copy of `createdEvent`/`updatedEvent` and is dropped: `Identity.eventId` was provably constant, `DistributionPayment.eventId` restates `reclaimed`, and `Account.eventId` restates `updatedEvent`. `Event` and `IndexerAnomaly` own the field rather than copying it. |
 | `Leg.addresses` | **Keep for now.** Fix only the unguarded `leg.updatedBlockId = blockId` in `updateLegs` (it fires on the scheduled/unsigned paths where `getSignerAddress` is `undefined`). | `legs` is an SDK‑consumed connection and the design note records connections, not field selections. The append‑only `Leg` + drop‑`addresses` change (N×M write amplification) is real but gated on confirming no consumer selects `addresses`; tracked as a follow‑up. |
 | `datetime` timezone | **Docstrings only — no `timestamptz` conversion anywhere.** | The second-revision idea (convert *only* `blocks.datetime`) was wrong: ~13 named `Date` columns survive this rework (`Sto.start`/`end`, `tradeDate`, `valueDate`, four `expiry` fields, `filedAt`, `Portfolio.deletedAt`, `PolyxEntry.date`, `IndexerAnomaly.createdAt`), so converting one leaves exactly the inconsistency the first revision rejected — and `new Date("…+00:00" + "Z")` is `Invalid Date`, breaking 7.1's own docstring. So D8 stands at its **first** revision: all `Date` fields keep the parse-as-UTC docstring, nothing is converted. |
 | `PolyxEntry` block filter | **Keep a plain `PolyxEntry.blockId: Int @index` scalar** (not the FK). | `findBlockEntries` (`mapPolyxLedger.ts`, the v8 staking-reward double-count guard) does `getByFields([['createdBlockId','=',blockId],['accountId','=',account]])`. `store.getByFields` supports only `= != in !in` — no range — so "every entry in this block" cannot be expressed via `createdEventId`. This is the design note's own "keep `blockId` when a measured query needs a direct indexed block filter" exception. Document it on the field. |
@@ -76,14 +76,18 @@ Six families (design note §"Conceptual schema"):
 | Family | Shape | Examples |
 |---|---|---|
 | Raw chain records | keep unpadded `blockId` / `eventIdx` / `extrinsicIdx`; `Block` is the only record with `datetime` | `Block`, `Event`, `Extrinsic` |
-| Event‑backed append‑only | `createdEvent: Event!` only | `AssetTransaction`, `InstructionEvent`, `PolyxEntry`, `Claim`, `Funding`, `DistributionPayment`, `BridgeEvent`, `StakingEvent`, `TickerExternalAgentHistory`, `ConfidentialLegAffirmation`, … |
-| Event‑backed mutable | `createdEvent: Event!` + `updatedEvent: Event!` | `Asset`, `Instruction`, `Portfolio`, `Identity`, `Account`, `MultiSig`, `AssetHolder`, `NftHolder`, `Holding`, `AccountBalance`, `Compliance`, `TransferManager`, … |
+| Event‑backed append‑only | `createdEvent: Event!` only | `AssetTransaction`, `InstructionEvent`, `PolyxEntry`, `Funding`, `DistributionPayment`, `BridgeEvent`, `StakingEvent`, … |
+| Event‑backed mutable | `createdEvent: Event!` + `updatedEvent: Event!` | `Asset`, `Instruction`, `Portfolio`, `Identity`, `Account`, `MultiSig`, `AssetHolder`, `NftHolder`, `Holding`, `AccountBalance`, `Compliance`, `Claim`, `ConfidentialLegAffirmation`, … |
 | Extrinsic‑backed | `extrinsic: Extrinsic!` (drop `block` / `createdBlock` / `updatedBlock` / `datetime`) | `EvmTransaction` |
 | Genesis / storage‑seeded | no special fields — `createdEvent` / `updatedEvent` point at the seed event | the seeded subset of `Account` / `Identity` / `Portfolio` / `MultiSig` / `Permissions`‑equivalent |
 | Indexer‑owned / diagnostic | keep operational fields as‑is | `IndexerAnomaly`, `Debug`, `FoundType`, `Migration`, `SubqueryVersion` |
 
 **`Mutable` has a concrete test** (design note step 2): a handler fetches the row, assigns a field,
-and saves it. Create‑then‑remove and create‑if‑absent are append‑only (the removal's provenance is
+and saves it. It is applied against the handlers rather than against the family a row was first
+sorted into: `Claim` (revocation sets `revokeDate`) and `ConfidentialLegAffirmation` (approval
+sets `status`) both fail the append‑only test and keep `updatedEvent`, while every entity left in
+the append‑only family has no read‑back anywhere in `src/`, so its `updatedEvent` could only ever
+equal its `createdEvent` and is not declared. Create‑then‑remove and create‑if‑absent are append‑only (the removal's provenance is
 the historical `_block_range` close). Applying the test moves `ProposalVote`,
 `MultiSigProposalVote`, `TransferComplianceExemption` into *mutable*, and `AgentGroup`,
 `AgentGroupMembership`, `AssetMandatoryMediator`, `AssetPreApproval`, `Compliance`,
@@ -165,7 +169,9 @@ the historical `_block_range` close). Applying the test moves `ProposalVote`,
 ### 7.5 — `feat!: 🎸 remove the remaining Block-and-index copies` *(breaking)*
 
 - Schema: remove standalone `datetime` from the 14 domain entities that carry the block-copy.
-- Drop `Identity.eventId` (provably constant). Keep `Account.eventId`, flagged for a mainnet check.
+- Drop the denormalised `eventId` wherever no consumer filters or groups by it (`Identity`,
+  `Portfolio`, `ChildIdentity`, `IdentityKey`, `DistributionPayment`, `Account`); document the ones
+  that stay.
 - `EvmTransaction`: drop `block` / `createdBlock` / `updatedBlock` / `datetime`; keep `extrinsic`.
 - Fix every handler / test still writing a removed field.
 

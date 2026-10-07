@@ -55,7 +55,7 @@ export const getFundraiserDetails = async (
     offChainFundingEnabled: false,
     raisingTicker,
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
-    // FK to the padded `Venue.id` (D12) — must carry the same zero-padding. `rest` comes from
+    // FK to the padded `Venue.id` — must carry the same zero-padding. `rest` comes from
     // `JSON.parse`, so `venue_id` is a JS number (polkadot `Int.toJSON()` under 52 bits) — coerce
     // before padding, or `padStart` throws.
     venueId: padNumericId(String(extractString(rest, 'venue_id'))),

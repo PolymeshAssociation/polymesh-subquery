@@ -42,6 +42,7 @@ const snapshot = (overrides: Partial<RuntimeSnapshot> = {}): RuntimeSnapshot => 
   specVersion: 8_000_000,
   modules: ['system', 'balances'],
   events: { balances: { BalanceSet: 2, TransferWithMemo: 4 } },
+  namedEvents: { balances: [] },
   calls: { balances: ['set_balance'] },
   ...overrides,
 });

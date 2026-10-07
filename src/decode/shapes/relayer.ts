@@ -9,7 +9,10 @@ import { discontinuedAt, introducedAt, registerShape, registerShapes } from './r
  * `EventDid` that the v8 events drop. Renamed events don't collide positionally — each name keeps
  * its own shape — so only `UpdatedPolyxLimit`, whose name is unchanged, needs a two-entry shape.
  * Fields are named so one handler can read either era: pre-v8 `AuthorizedPayingKey` and v8+
- * `ApprovedSubsidy` both expose `initialPolyxLimit`.
+ * `ApprovedSubsidy` both expose `initialPolyxLimit`. Where that shared name is not the runtime's own,
+ * the runtime's is kept — the table is the record of what an event looks like, so a convenient
+ * rename here would make it a record of something else. Verified against testnet metadata at
+ * spec 8001020.
  */
 registerShape(
   'relayer',
@@ -33,11 +36,17 @@ registerShape('relayer', 'UpdatedPolyxLimit', [
 
 registerShapes(
   'relayer',
-  ['ApprovedSubsidy', 'AcceptedSubsidy'],
+  ['ApprovedSubsidy', 'AcceptedSubsidy', 'RemovedPendingSubsidy'],
   introducedAt(V8, ['userKey', 'payingKey', 'initialPolyxLimit'])
 );
-registerShapes(
+/** The allowance left when the subsidy ended, not an amount drawn. */
+registerShape(
   'relayer',
-  ['RemovedSubsidy', 'RemovedPendingSubsidy', 'SubsidyDebited'],
+  'RemovedSubsidy',
+  introducedAt(V8, ['userKey', 'payingKey', 'remaining'])
+);
+registerShape(
+  'relayer',
+  'SubsidyDebited',
   introducedAt(V8, ['userKey', 'payingKey', 'amount'])
 );

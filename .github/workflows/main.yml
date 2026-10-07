@@ -40,6 +40,8 @@ jobs:
         run: yarn typecheck
       - name: check handlers
         run: yarn check-handlers
+      - name: strictNullChecks ratchet
+        run: yarn check-strict-null
       - name: lint
         run: yarn lint
   release:

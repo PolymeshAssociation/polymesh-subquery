@@ -31,6 +31,13 @@ export interface BlockContext {
    * link or unlink a key mid-block, so `Account` is read from the store on every lookup.
    */
   keyRecords: Map<string, KeyRecordResolution | undefined>;
+  /**
+   * The account that authored the block, once something has asked — `null` when it resolved to none.
+   * A chain read, and the same answer for every event in the block, so it is read at most once.
+   */
+  author?: string | null;
+  /** Whether `block.specVersion` has been checked against the runtime that executed the block */
+  specChecked?: boolean;
 }
 
 let current: BlockContext | undefined;
@@ -40,7 +47,7 @@ const contextFor = (blockId: string, blockHash?: string): BlockContext => {
     current?.blockId === blockId &&
     (blockHash === undefined || current.blockHash === undefined || current.blockHash === blockHash);
 
-  if (!isSameBlock) {
+  if (!current || !isSameBlock) {
     current = {
       blockId,
       blockHash,
@@ -70,3 +77,42 @@ export const getBlockContext = (block: SubstrateBlock): BlockContext =>
  */
 export const getKeyRecordCache = (blockId: string): Map<string, KeyRecordResolution | undefined> =>
   contextFor(blockId).keyRecords;
+
+const eventIndexes = new WeakMap<object, Map<number, number[]>>();
+
+/**
+ * Where extrinsic `extrinsicIdx`'s events sit in `block.events`, in order.
+ *
+ * Built in one pass the first time anything asks, rather than by scanning the block on every
+ * question: a block of a few hundred transactions asked this once per transaction was quadratic,
+ * and on testnet's busiest early blocks that alone held indexing to under a block a minute. Held
+ * against the event list itself, so it lives exactly as long as the block does.
+ */
+export const extrinsicEventIndices = (block: SubstrateBlock, extrinsicIdx: number): number[] => {
+  const events = block.events ?? [];
+  let byExtrinsic = eventIndexes.get(events);
+
+  if (!byExtrinsic) {
+    const index = new Map<number, number[]>();
+
+    events.forEach((record, position) => {
+      if (!record.phase?.isApplyExtrinsic) {
+        return;
+      }
+
+      const owner = record.phase.asApplyExtrinsic.toNumber();
+      const positions = index.get(owner);
+
+      if (positions) {
+        positions.push(position);
+      } else {
+        index.set(owner, [position]);
+      }
+    });
+
+    eventIndexes.set(events, index);
+    byExtrinsic = index;
+  }
+
+  return byExtrinsic.get(extrinsicIdx) ?? [];
+};

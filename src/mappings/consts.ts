@@ -49,7 +49,7 @@ export const systematicIssuers = {
 export const MAX_PERMISSIBLE_BLOCKS = 1000000;
 
 /**
- * The id of the synthetic seed `Event` (decision D13). Genesis- and storage-seeded rows point
+ * The id of the synthetic seed `Event`. Genesis- and storage-seeded rows point
  * their `createdEvent` / `updatedEvent` at it, so those relations stay non-null with no
  * origin-discriminator column. `genesisHandler` writes the row; kept here so seed helpers can
  * reference it without importing the handler (circular).

@@ -16,26 +16,25 @@ import {
 } from './mapPolyxLedger';
 
 /**
- * In-flight reconciliation (D11).
+ * In-flight reconciliation.
  *
  * `api.query` targets the block being indexed, and `.at` is unsupported, so authoritative state
- * can only be read while that block is current — which for `@subql/node` is true for the *whole*
- * pass over a block (block handler, then that block's own init/extrinsic/finalize events all
- * share the same api context), but is no longer true once the next block starts. The block
- * handler itself runs *before* its own block's events (confirmed against
- * `@subql/node`'s `indexBlockData`), so it cannot see that block's final derived state — only the
- * previous block's.
+ * can only be read while that block is current, and no longer once the next block starts.
  *
  * `reconcileAccount`, called from event handlers, therefore reads `system.account` **immediately**
  * (the api context is still correctly bound to the account's own block at that point) and queues
- * the snapshot. `reconcileBlock`, called from the block handler, runs one block later: by the time
- * block K+1's handler fires, block K's own events have all finished, so the derived
- * `AccountBalance` matches the on-chain snapshot captured back in K — without needing to re-read
- * chain state through K+1's (wrong) api context. Comparing per-event, or re-reading on-chain state
- * at flush time, both compare against the wrong side: a *partial* mid-block balance against
- * already-final `system.account` on a `%N` block that pays several validators corrects to that
- * end-of-block value and then lets the block's remaining payout events apply on top — drifting
- * each account by one reward amount per correction.
+ * the snapshot. `reconcilePending` compares it later, from the first ledger write of a *later*
+ * block — before that block's own movement is applied, so the derived side is still exactly the
+ * queued block's final state and matches the snapshot, with no need to re-read chain state through
+ * the wrong api context.
+ *
+ * Any later block works, not just the next height: a block the index skipped contributed nothing,
+ * so the derived balance does not move between the queued block and whichever indexed block flushes
+ * it. `reconcileOne` re-checks that from the row itself and skips an account whose row did move on.
+ * Comparing per-event, or re-reading on-chain state at flush time, both compare against the wrong
+ * side: a *partial* mid-block balance against already-final `system.account` on a block that pays
+ * several validators corrects to that end-of-block value and then lets the block's remaining payout
+ * events apply on top — drifting each account by one reward amount per correction.
  *
  * On a mismatch it records a `BalanceReconciliationDrift` anomaly **and corrects** the derived
  * value, so drift from one missed or mis-signed event cannot compound. The offline harness
@@ -57,33 +56,42 @@ const abs = (value: bigint): bigint => (value < BigInt(0) ? -value : value);
 const blockNumber = (block: SubstrateBlock): number => Number(block.block.header.number.toString());
 
 /**
- * Whether the block currently being indexed is a sample point — decided once, by the block
- * handler, before any of that block's events run.
+ * Whether the block currently being indexed is a sample point.
  *
  * This used to be `height % 2000 === 0`, but the dictionary only hands a worker the blocks that
  * carry events it subscribes to — measured on a testnet genesis resync at ~1.6% of heights. So
  * almost no multiple of 2000 was ever processed, and the check sampled ~350× less often than
- * designed: 27 comparisons across ~272,000 block handlers. Measuring the *gap* since this worker's
- * last sample instead gives one sample per ~2000 heights whatever the sparsity, with nothing to
- * retune as the chain gets denser.
+ * designed: 27 comparisons across ~272,000 blocks. Measuring the *gap* since this worker's last
+ * sample instead gives one sample per ~2000 heights whatever the sparsity, with nothing to retune
+ * as the chain gets denser.
  *
  * Per worker, since each thread has its own copy; the workers cover disjoint ranges, so the
  * chain-wide rate is still about one per 2000 heights.
  */
 let sampleThisBlock = false;
 let lastSampledHeight = Number.NEGATIVE_INFINITY;
+let decidedHeight = -1;
 
-const decideSampling = (block: SubstrateBlock): void => {
+/**
+ * Whether the block being indexed is a sample point, decided once per block on the first ask.
+ *
+ * Deciding it once matters: the gap test moves `lastSampledHeight` when it passes, so asking twice
+ * in one block would answer "yes" and then "no" and drop the rest of the block's accounts.
+ */
+const shouldSample = (block: SubstrateBlock, force: boolean): boolean => {
   const height = blockNumber(block);
 
-  sampleThisBlock = height - lastSampledHeight >= RECONCILE_EVERY_N_BLOCKS;
+  if (height !== decidedHeight) {
+    decidedHeight = height;
+    sampleThisBlock = height - lastSampledHeight >= RECONCILE_EVERY_N_BLOCKS;
 
-  if (sampleThisBlock) {
-    lastSampledHeight = height;
+    if (sampleThisBlock) {
+      lastSampledHeight = height;
+    }
   }
-};
 
-const shouldSample = (force: boolean): boolean => force || sampleThisBlock;
+  return force || sampleThisBlock;
+};
 
 interface OnChain extends ChainFreezes {
   free: bigint;
@@ -96,15 +104,15 @@ const onChainCache = new Map<string, OnChain>();
 interface PendingEntry {
   /** First provoking event index, kept for the anomaly's provenance. */
   eventIdx: number | undefined;
-  /** The block the snapshot was captured in — not the block `reconcileBlock` later runs in. */
+  /** The block the snapshot was captured in — not the block the flush later runs in. */
   block: SubstrateBlock;
   onChain: OnChain;
 }
 
 /**
  * Accounts queued to reconcile, with their on-chain snapshot already captured (read while `api`
- * was still correctly bound to their block). `reconcileBlock`, called one block later, only needs
- * to wait for the derived side to catch up — see the module docstring.
+ * was still correctly bound to their block). `reconcilePending`, called from a later block, only
+ * needs the derived side to have caught up — see the module docstring.
  */
 let pendingBlock = -1;
 const pending = new Map<string, PendingEntry>();
@@ -117,6 +125,7 @@ export const __resetOnChainCache = (): void => {
   pending.clear();
   sampleThisBlock = false;
   lastSampledHeight = Number.NEGATIVE_INFINITY;
+  decidedHeight = -1;
   __resetReconcileCounters();
 };
 
@@ -172,7 +181,7 @@ const readOnChain = async (address: string, block: SubstrateBlock): Promise<OnCh
  * block — but kept so the call sites do not change.
  *
  * Reads `system.account` right away, while `api` is still correctly bound to `block` — by the
- * time `reconcileBlock` runs, `api` will be bound to a later block instead.
+ * time the flush runs, `api` will be bound to a later block instead.
  */
 export const reconcileAccount = async (
   address: string,
@@ -180,7 +189,7 @@ export const reconcileAccount = async (
   block: SubstrateBlock,
   { force = false, eventIdx }: { force?: boolean; eventIdx?: number } = {}
 ): Promise<void> => {
-  if (!address || !shouldSample(force)) {
+  if (!address || !shouldSample(block, force)) {
     return;
   }
 
@@ -224,26 +233,36 @@ export const reconcileAccount = async (
 let comparedCount = 0;
 let driftedCount = 0;
 let skippedStaleCount = 0;
-let flushCount = 0;
+let ledgerWrites = 0;
 let lastReportedAt = 0;
 
 /**
- * Report every N *flushes*, not every N comparisons.
+ * Report every N *ledger writes*, not every N comparisons.
  *
  * Keyed on comparisons, the report could never fire while `compared` stayed 0 — which is the one
  * state it exists to make visible, and the same shape of un-fireable condition that left the
- * reconciler dead in the first place. Every block handler counts as a flush, so a silent
- * reconciler now says so out loud.
+ * reconciler dead in the first place. Keying it on something that happens whether or not anything
+ * is compared is the point, so a silent reconciler says so out loud.
+ *
+ * The interval is scaled for what is being counted. This used to tick once per block and report
+ * every 2,000 of them; it now ticks once per balance-moving write, of which an active block has
+ * several, so the interval is raised to keep roughly the old cadence in blocks. The rate is
+ * data-dependent either way — a quiet stretch of chain reports less often — which is acceptable for
+ * a liveness signal but is why the number is not exact.
+ *
+ * One sample per worker per run is lost: the queue from the last block a worker processes is never
+ * compared, because nothing follows it to trigger the flush.
  */
-const REPORT_EVERY_FLUSHES = 2000;
+const REPORT_EVERY_LEDGER_WRITES = 20_000;
 
 /** Test hook — the counters are process-lifetime. */
 export const __resetReconcileCounters = (): void => {
   comparedCount = 0;
   driftedCount = 0;
   skippedStaleCount = 0;
-  flushCount = 0;
+  ledgerWrites = 0;
   lastReportedAt = 0;
+  positiveControl = 'pending';
 };
 
 /** The running liveness tally, for assertions after a resync. */
@@ -251,40 +270,39 @@ export const reconcileStats = (): {
   compared: number;
   drifted: number;
   skippedStale: number;
+  positiveControl: typeof positiveControl;
 } => ({
   compared: comparedCount,
   drifted: driftedCount,
   skippedStale: skippedStaleCount,
+  positiveControl,
 });
 
 const maybeReport = (): void => {
-  if (flushCount - lastReportedAt < REPORT_EVERY_FLUSHES) {
+  if (ledgerWrites - lastReportedAt < REPORT_EVERY_LEDGER_WRITES) {
     return;
   }
 
-  lastReportedAt = flushCount;
+  lastReportedAt = ledgerWrites;
 
   logger.info(
-    `POLYX reconciliation (D11): compared=${comparedCount} drifted=${driftedCount} ` +
-      `skippedStale=${skippedStaleCount} over ${flushCount} flushes`
+    `POLYX reconciliation: compared=${comparedCount} drifted=${driftedCount} ` +
+      `skippedStale=${skippedStaleCount} positiveControl=${positiveControl} over ${ledgerWrites} ledger writes`
   );
 };
 
 /**
- * Runs every reconciliation queued by the previous block. Called from the block handler, which
- * (per `@subql/node`'s handler order) runs after the previous block's own events have finished but
- * before this block's — so the derived `AccountBalance` now reflects the previous block's final
- * state, matching the on-chain snapshot `reconcileAccount` captured back then.
+ * Runs every reconciliation queued by an earlier block.
+ *
+ * Called from the ledger's own read path, before the current block's first movement is applied, so
+ * the derived side still reflects the queued block. A queue from *this* block is left alone: it is
+ * only complete once the block is.
  */
-export const reconcileBlock = async (block?: SubstrateBlock): Promise<void> => {
-  flushCount += 1;
+export const reconcilePending = async (block: SubstrateBlock): Promise<void> => {
+  ledgerWrites += 1;
   maybeReport();
 
-  if (block) {
-    decideSampling(block);
-  }
-
-  if (pending.size === 0) {
+  if (pending.size === 0 || blockNumber(block) === pendingBlock) {
     return;
   }
 
@@ -294,6 +312,62 @@ export const reconcileBlock = async (block?: SubstrateBlock): Promise<void> => {
 
   for (const [address, entry] of queued) {
     await reconcileOne(address, entry);
+  }
+};
+
+/** How a derived balance differs from chain state, one entry per pool beyond the tolerance. */
+export const driftBetween = (
+  derived: Pick<AccountBalance, 'free' | 'reserved' | 'frozen'>,
+  onChain: Pick<OnChain, 'free' | 'reserved' | 'frozen'>
+): string[] => {
+  const drifts: string[] = [];
+
+  if (abs(derived.free - onChain.free) >= MIN_DRIFT) {
+    drifts.push(`free ${derived.free} vs ${onChain.free}`);
+  }
+  if (abs(derived.reserved - onChain.reserved) >= MIN_DRIFT) {
+    drifts.push(`reserved ${derived.reserved} vs ${onChain.reserved}`);
+  }
+  if (abs(derived.frozen - onChain.frozen) >= MIN_DRIFT) {
+    drifts.push(`frozen ${derived.frozen} vs ${onChain.frozen}`);
+  }
+
+  return drifts;
+};
+
+/**
+ * The reconciler's positive control: proof, once per process, that it can see a drift at all.
+ *
+ * `drifted=0` means either that every balance checked was right or that the check cannot fail,
+ * and the counters alone cannot tell those apart — the same blind spot the liveness counter closes
+ * for `compared=0`. So the first real comparison is repeated against a copy of the same chain
+ * snapshot pushed off by exactly the tolerance, which a working comparison must flag. It uses the
+ * real chain values rather than a fixture, so a field mix-up or a threshold that has drifted is
+ * caught the same way a broken comparison is. Nothing is written for it: a deliberate anomaly would
+ * sit in every run's drift count, and the result is reported in the log alongside the counters.
+ */
+let positiveControl: 'pending' | 'passed' | 'failed' = 'pending';
+
+const runPositiveControl = (address: string, onChain: OnChain): void => {
+  if (positiveControl !== 'pending') {
+    return;
+  }
+
+  const canary = {
+    free: onChain.free + MIN_DRIFT,
+    reserved: onChain.reserved,
+    frozen: onChain.frozen,
+  };
+  positiveControl = driftBetween(canary, onChain).length > 0 ? 'passed' : 'failed';
+
+  if (positiveControl === 'failed') {
+    logger.error(
+      `POLYX reconciliation positive control FAILED: a drift of ${MIN_DRIFT} on ${address} went undetected, so no drifted count from this process can be trusted`
+    );
+  } else {
+    logger.info(
+      `POLYX reconciliation positive control passed: a drift of ${MIN_DRIFT} on ${address} was detected`
+    );
   }
 };
 
@@ -310,7 +384,7 @@ const reconcileOne = async (
 
   /**
    * The snapshot is chain state at the end of `block`, so it may only be compared against a
-   * derived balance that is *also* as of `block`. The flush runs from the next block handler this
+   * derived balance that is *also* as of `block`. The flush runs from the next ledger write this
    * worker reaches, and that is not reliably `block + 1`: `--workers` hands each thread a
    * contiguous *range*, and the dictionary makes those ranges sparse, so the next processed block
    * can be hundreds of heights later. If the row moved on in between, comparing the two measures
@@ -330,17 +404,9 @@ const reconcileOne = async (
   // Counted here, where a derived balance is genuinely measured against chain state — not at
   // queue time, which says only that a comparison was intended.
   comparedCount += 1;
+  runPositiveControl(address, onChain);
 
-  const drifts: string[] = [];
-  if (abs(balance.free - onChain.free) >= MIN_DRIFT) {
-    drifts.push(`free ${balance.free} vs ${onChain.free}`);
-  }
-  if (abs(balance.reserved - onChain.reserved) >= MIN_DRIFT) {
-    drifts.push(`reserved ${balance.reserved} vs ${onChain.reserved}`);
-  }
-  if (abs(balance.frozen - onChain.frozen) >= MIN_DRIFT) {
-    drifts.push(`frozen ${balance.frozen} vs ${onChain.frozen}`);
-  }
+  const drifts = driftBetween(balance, onChain);
 
   if (drifts.length === 0) {
     return;

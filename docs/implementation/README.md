@@ -70,9 +70,18 @@ Extends the id scheme above into a rule that also covers *reads*:
 
 Three violations exist today and are the same defect: `createdBlockId` alone (fixed upstream in the SDK, which is why D4 exists), `getPaginatedData` ordering by the column it filters on (A13), and `Instruction.id` sorting lexicographically because a numeric sequence is stored as a `String` (A14). Each produces a list that is ordered, stable, paged and wrong. Chain-assigned numeric ids are therefore zero-padded like block ids.
 
-### Timestamps (D8)
+### Timestamps
 
-Every date column is `timestamptz`, so the GraphQL wire form carries `+00:00`. Where `compat.sql` converts an existing column the `USING … AT TIME ZONE 'UTC'` clause is mandatory — without it Postgres reads existing values in the server's zone and bakes in the very error being fixed.
+Date columns stay SubQuery's `Date` — `timestamp without time zone` — and are not converted. The
+stored instant is already UTC; what is missing is only the zone marker on the wire, so the fix is a
+parse-as-UTC rule stated where readers meet it: once on `Block.datetime` for every `Date` field, and
+again on the fields where a misread date changes an outcome — trade and value dates, expiries,
+filing dates, schedule starts and ends. Converting columns to `timestamptz` was considered and set
+aside: SubQuery has no temporal scalar that produces it, and an `ALTER` would change the wire string
+for every consumer comparing timestamps exactly, for a value that is already correct.
+
+So a new date column needs nothing special in its type — but if a misread zone would change what a
+consumer does with it, its docstring says to parse it as UTC.
 
 Whether to *also* expose an epoch integer is **open** — trade-off in [`../architecture-review.md`](../architecture-review.md) §10.2. Do not add one to a new entity until that is decided; adding it later is a mechanical one-column change, removing it is not.
 

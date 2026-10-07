@@ -10,7 +10,7 @@
  *
  * Note: `extract8xStakingAmount` (B1) was retired — `handleStakingEvent` decodes named v8 fields
  * directly now, covered in `mapStakingEvent.test.ts`, along with the B3 fallthrough fix. The
- * pre-v8 reward-destination (A15) resolution is covered in `rewardDestinationA15.test.ts`. This
+ * pre-v8 reward-destination resolution is covered in `rewardDestinationA15.test.ts`. This
  * file focuses on `is8xChain` detection logic.
  */
 

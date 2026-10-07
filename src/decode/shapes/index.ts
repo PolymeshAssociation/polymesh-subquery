@@ -17,6 +17,8 @@ import './balances';
 import './corporateActions';
 import './externalAgents';
 import './identity';
+import './multiSig';
+import './nft';
 import './portfolio';
 import './relayer';
 import './settlement';

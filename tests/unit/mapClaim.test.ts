@@ -1,5 +1,5 @@
 /**
- * Regression tests for defect A12: `Claim`'s id omitted `issuer`, so two trusted issuers
+ * Regression tests: `Claim`'s id omitted `issuer`, so two trusted issuers
  * attesting the same target/type/scope collided on one row. Depending on write order this
  * either silently lost one issuer's claim (`handleClaimAdded` overwrite) or silently revoked
  * it (`handleClaimRevoked` mutating the shared row) — both invisible to the SDK's

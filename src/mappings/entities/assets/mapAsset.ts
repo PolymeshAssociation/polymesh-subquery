@@ -62,7 +62,6 @@ export const createFunding = (
     amount: issuedAmount,
     totalFundingAmount,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -140,7 +139,6 @@ export const createAssetTransaction = (
     toAccount,
     toIdentityId,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -191,6 +189,7 @@ export const getHolding = async (
       accountId: holder.holderKind === HolderKind.Account ? holder.account : undefined,
       identityId: holder.identityId || undefined,
       amount: BigInt(0),
+      frozen: BigInt(0),
       nftCount: 0,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
@@ -335,7 +334,7 @@ export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> =
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.name = bytesToString(rawName);
   asset.updatedEventId = blockEventId;
 
@@ -348,7 +347,7 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
 
   asset.fundingRound = bytesToString(rawFundingRound);
   asset.updatedEventId = blockEventId;
@@ -364,7 +363,7 @@ export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> 
   const documentId = getNumberValue(rawDocId);
   const docDetails = getDocValue(rawDoc);
 
-  await getAsset(assetId);
+  await getAsset(assetId, event);
 
   await AssetDocument.create({
     id: `${assetId}/${documentId}`,
@@ -392,7 +391,7 @@ export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<v
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
   asset.updatedEventId = blockEventId;
 
@@ -405,7 +404,7 @@ export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isDivisible = true;
   asset.updatedEventId = blockEventId;
 
@@ -428,7 +427,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   const fundingRound = bytesToString(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.totalSupply += issuedAmount;
   asset.updatedEventId = blockEventId;
 
@@ -445,7 +444,6 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     amount: issuedAmount,
     fundingRound,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   });
 
   const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
@@ -478,7 +476,7 @@ export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
   const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.totalSupply -= issuedAmount;
   asset.updatedEventId = blockEventId;
 
@@ -497,7 +495,7 @@ export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isFrozen = true;
   asset.updatedEventId = blockEventId;
 
@@ -510,11 +508,58 @@ export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isFrozen = false;
   asset.updatedEventId = blockEventId;
 
   await asset.save();
+};
+
+/**
+ * An agent set how much of one holder's balance is frozen — through `set_frozen_tokens`,
+ * `freeze_partial_tokens` or `unfreeze_partial_tokens`, which all report the same way.
+ *
+ * The event carries the resulting absolute frozen balance whichever call produced it, so the column
+ * is assigned rather than adjusted, and a missed event is corrected by the next one instead of
+ * compounding. The holder is the chain's own `AssetHolder` — an account or a portfolio — which is
+ * exactly the grain a `Holding` row is keyed on, so this is an upsert onto a row that already
+ * exists for anyone holding the asset.
+ */
+export const handleFrozenBalanceSet = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockId, blockEventId } = extractArgs(event);
+  const { assetHolder, assetId: rawAssetId, frozenBalance } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const holder = await rawAssetHolderToAssetHolder(assetHolder, block, blockId, blockEventId);
+
+  const holding = await getHolding(assetId, holder, blockEventId);
+  holding.frozen = getBigIntValue(frozenBalance);
+  holding.updatedEventId = blockEventId;
+
+  await holding.save();
+};
+
+/**
+ * An agent froze or unfroze one whole holder against transfers of the asset — narrower than an
+ * asset-wide freeze, which is `AssetFrozen`, and independent of any partial frozen balance.
+ *
+ * Freezing an already-frozen holder keeps the original moment, since that is when it became frozen;
+ * the chain treats a repeat as the same state, not a new one.
+ */
+export const handleSetAccountFreeze = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockId, blockEventId } = extractArgs(event);
+  const { holder: rawHolder, assetId: rawAssetId, freeze } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const holder = await rawAssetHolderToAssetHolder(rawHolder, block, blockId, blockEventId);
+
+  const holding = await getHolding(assetId, holder, blockEventId);
+  holding.frozenSince = getBooleanValue(freeze)
+    ? holding.frozenSince ?? block.timestamp
+    : undefined;
+  holding.updatedEventId = blockEventId;
+
+  await holding.save();
 };
 
 export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Promise<void> => {
@@ -523,7 +568,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.ownerId = getTextValue(rawNewOwnerDid);
   asset.updatedEventId = blockEventId;
 
@@ -569,7 +614,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   const promises = [];
 
   if (fromHolder && toHolder) {
-    const asset = await getAsset(assetId);
+    const asset = await getAsset(assetId, event);
     asset.totalTransfers += BigInt(1);
     asset.updatedEventId = blockEventId;
     promises.push(asset.save());
@@ -655,7 +700,7 @@ export const processUpdateReason = (
       instructionId: number | null;
       instructionMemo: `0x${string}` | null;
     };
-    // FK to the padded `Instruction.id` (D12) — must carry the same zero-padding
+    // FK to the padded `Instruction.id` — must carry the same zero-padding
     const instructionId = details.instructionId
       ? padNumericId(details.instructionId.toString())
       : null;

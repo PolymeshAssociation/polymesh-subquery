@@ -1,6 +1,15 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
-import { Asset, EventIdEnum, HolderKind, Nft, NftHolder } from '../../../types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
+import {
+  AnomalyKind,
+  Asset,
+  EventIdEnum,
+  HolderKind,
+  Nft,
+  NftApproval,
+  NftHolder,
+} from '../../../types';
 import {
   AssetHolderDetails,
   bytesToString,
@@ -8,6 +17,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getNftId,
+  getNumberValue,
   getPortfolioId,
   getTextValue,
   padId,
@@ -15,8 +25,10 @@ import {
   portfolioHolder,
   rawAssetHolderToAssetHolder,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction, getHolding } from './mapAsset';
+import { nftApprovalId } from './mapNftApprovals';
 
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
 
@@ -82,6 +94,28 @@ const burnNft = async (
   return nft;
 };
 
+/**
+ * Clears the per-token approvals on tokens leaving an account holder.
+ *
+ * The chain drops a per-token approval whenever the token leaves the account that held it, and emits
+ * nothing for that — `NFTApprovalSpent` covers only the case where the approved spender did the
+ * moving. Only an account holder can grant one, which is also the chain's own reason for clearing
+ * them only there: a token leaving a portfolio has nothing to clear, and neither does any move made
+ * before account-level holders existed, so the old high-volume NFT ranges pay nothing for this.
+ */
+const clearTokenApprovals = (
+  assetId: string,
+  ids: number[],
+  fromHolder: AssetHolderDetails | undefined,
+  promises: Promise<void>[]
+): void => {
+  if (fromHolder?.holderKind !== HolderKind.Account) {
+    return;
+  }
+
+  ids.forEach(nftId => promises.push(NftApproval.remove(nftApprovalId(assetId, nftId))));
+};
+
 /** One round trip for N minted tokens instead of N individual inserts. */
 const bulkCreateNfts = (nfts: Nft[]): Promise<void> =>
   nfts.length > 0 ? store.bulkCreate('Nft', nfts) : Promise.resolve();
@@ -124,11 +158,24 @@ const countHolderChange = (asset: Asset, before: number, after: number): void =>
 /**
  * `NftHolder.nftIds` is a JSON array, and under historical mode every `.save()` writes a new
  * versioned row carrying the whole array. A bulk mint — hundreds of `NFTPortfolioUpdated` for one
- * holder in one block — turned that into Σ(1..n) array serialisations and poisoned the store
- * cache with 30k-element arrays. So holder mutations are buffered per block and each holder is
- * saved once, when the block changes (or `flushNftBuffer` is called from the block handler).
- * Nothing inside the indexer reads `NftHolder` — it is written for external queries only — so a
- * holder being at most one block-handler interval stale is acceptable.
+ * holder in one block — turned that into Σ(1..n) array serialisations and poisoned the store cache
+ * with 30k-element arrays. So holder mutations are buffered across the block's events and each
+ * holder is saved once, by the block's last holdings event.
+ *
+ * The flush stays inside the block that made the change. A row's validity begins at the block it is
+ * saved in, so flushing from a later block would date the change to that later block instead — and
+ * relying on a block handler to do it means subscribing to every block, which costs the dictionary's
+ * ability to skip the ~98% of heights that carry nothing. The block-change flush below is kept as a
+ * backstop for the case where the event stream cannot be read.
+ *
+ * **Why this is module state, and stays so.** It is the one piece of mutable state in the mappings
+ * that lives outside the block context, deliberately. The block context holds only what can be
+ * lost and redone without changing what is written; a write buffer is the opposite. Dropping the
+ * buffer altogether brings back a full rewrite of the holder's array on every event. What makes it
+ * safe is how narrow its lifetime is: filled and flushed within one block, by the same worker that
+ * indexes the whole block, and lost only when that block is itself replayed — a handler that throws
+ * fails the block, and the worker restarts with nothing buffered. The backstop is the one path
+ * that breaks the rule, and it reports itself: a late flush is recorded rather than taken quietly.
  */
 let bufferedBlock: string | undefined;
 const bufferedHolders = new Map<string, NftHolder>();
@@ -143,14 +190,55 @@ export const flushNftBuffer = async (): Promise<void> => {
   bufferedBlock = undefined;
 };
 
+const HOLDINGS_EVENTS = new Set([
+  'NFTPortfolioUpdated',
+  'NFTHoldingsUpdated',
+  'IssuedNFT',
+  'RedeemedNFT',
+]);
+
+/**
+ * Whether this is the last event in its block that can add to the buffer, and so the one that has
+ * to write it out. Read from the block's own event list, which is what the runtime already handed
+ * the worker — no extra chain read.
+ */
+const lastHoldingsEvent = (event: SubstrateEvent): boolean => {
+  const records = (event.block.events ?? []) as unknown as {
+    event: { section: string; method: string };
+  }[];
+
+  for (let i = event.idx + 1; i < records.length; i += 1) {
+    const emitted = records[i]?.event;
+
+    if (emitted?.section === 'nft' && HOLDINGS_EVENTS.has(emitted.method)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 /** Test hook. */
 export const __resetNftBuffer = (): void => {
   bufferedHolders.clear();
   bufferedBlock = undefined;
 };
 
-const bufferHolder = async (blockId: string, holder: NftHolder): Promise<void> => {
+const bufferHolder = async (
+  blockId: string,
+  holder: NftHolder,
+  event: SubstrateEvent
+): Promise<void> => {
   if (blockId !== bufferedBlock) {
+    if (bufferedHolders.size > 0) {
+      await recordAnomaly({
+        kind: AnomalyKind.DeferredWrite,
+        detail: `${bufferedHolders.size} NftHolder write(s) from block ${bufferedBlock} were flushed from block ${blockId}, so they are dated one block late`,
+        block: event.block,
+        eventIdx: event.idx,
+      });
+    }
+
     await flushNftBuffer();
     bufferedBlock = blockId;
   }
@@ -192,19 +280,90 @@ export const getNftHolder = async (
 };
 
 export const handleNftCollectionCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockEventId } = extractArgs(event);
-  const [, rawAssetId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId } = decodeEvent(event);
   const assetId = await getAssetId(rawAssetId, block);
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
 
   asset.isNftCollection = true;
   asset.updatedEventId = blockEventId;
   return asset.save();
 };
 
+interface NftSupplyChange {
+  asset: Asset;
+  did: string;
+  holder: AssetHolderDetails;
+  ids: number[];
+  blockId: string;
+  blockEventId: string;
+  event: SubstrateEvent;
+  promises: Promise<void>[];
+}
+
+/** Mints tokens into `holder`: supply, the identity rollup, one row per token, and the holding count. */
+const issueNfts = async ({
+  asset,
+  did,
+  holder,
+  ids,
+  blockId,
+  blockEventId,
+  event,
+  promises,
+}: NftSupplyChange): Promise<void> => {
+  asset.totalSupply += BigInt(ids.length);
+
+  // the whole-array rollup, kept for the SDK and still buffered per block
+  const nftHolder = await getNftHolder(asset.id, did, blockId, blockEventId);
+  const heldBefore = nftHolder.nftIds.length;
+  nftHolder.nftIds.push(...ids.map(BigInt));
+  countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
+  nftHolder.updatedEventId = blockEventId;
+  await bufferHolder(blockId, nftHolder, event);
+
+  // per-token rows — one bulk insert instead of N round trips
+  promises.push(bulkCreateNfts(ids.map(nftId => mintNft(asset.id, nftId, holder, blockEventId))));
+  await adjustNftCount(asset.id, holder, blockEventId, ids.length, promises);
+};
+
+/** Burns tokens out of `holder` — the mirror of `issueNfts`. The token rows stay, marked burned. */
+const redeemNfts = async ({
+  asset,
+  did,
+  holder,
+  ids,
+  blockId,
+  blockEventId,
+  event,
+  promises,
+}: NftSupplyChange): Promise<void> => {
+  asset.totalSupply -= BigInt(ids.length);
+
+  const bigIds = ids.map(BigInt);
+  const nftHolder = await getNftHolder(asset.id, did, blockId, blockEventId);
+  const heldBefore = nftHolder.nftIds.length;
+  nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !bigIds.includes(heldId));
+  countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
+  nftHolder.updatedEventId = blockEventId;
+  await bufferHolder(blockId, nftHolder, event);
+
+  // one bulk update instead of N round trips (and no n-element array filter per token)
+  const burnedNfts = await Promise.all(ids.map(nftId => burnNft(asset.id, nftId, blockEventId)));
+  promises.push(bulkUpdateNfts(burnedNfts));
+  clearTokenApprovals(asset.id, ids, holder, promises);
+  await adjustNftCount(asset.id, holder, blockEventId, -ids.length, promises);
+};
+
 export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
-  const [rawId, rawNftId, rawFromHolder, rawToHolder, rawUpdateReason] = params;
+  const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
+  const {
+    did: rawId,
+    nfts: rawNftId,
+    fromHolder: rawFromHolder,
+    toHolder: rawToHolder,
+    reason: rawUpdateReason,
+  } = decodeEvent(event);
 
   let fromHolder: AssetHolderDetails | undefined;
   let fromDid: string;
@@ -231,7 +390,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   // NftHolder.nftIds is [BigInt] (G10); getNftId still yields JS numbers
   const bigIds = ids.map(BigInt);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.updatedEventId = blockEventId;
 
   let instructionId: string;
@@ -239,37 +398,28 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   let eventId: EventIdEnum;
   if (reason === 'issued') {
     eventId = EventIdEnum.IssuedNFT;
-    asset.totalSupply += BigInt(ids.length);
-
-    // the whole-array rollup, kept for the SDK and still buffered per block
-    const nftHolder = await getNftHolder(assetId, did, blockId, blockEventId);
-    const heldBefore = nftHolder.nftIds.length;
-    nftHolder.nftIds.push(...bigIds);
-    countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
-    nftHolder.updatedEventId = blockEventId;
-    await bufferHolder(blockId, nftHolder);
-
-    // per-token rows — one bulk insert instead of N round trips
-    const holder = toHolder ?? portfolioHolder(did, 0);
-    const mintedNfts = ids.map(nftId => mintNft(assetId, nftId, holder, blockEventId));
-    promises.push(bulkCreateNfts(mintedNfts));
-    await adjustNftCount(assetId, holder, blockEventId, ids.length, promises);
+    await issueNfts({
+      asset,
+      did,
+      holder: toHolder ?? portfolioHolder(did, 0),
+      ids,
+      blockId,
+      blockEventId,
+      event,
+      promises,
+    });
   } else if (reason === 'redeemed') {
     eventId = EventIdEnum.RedeemedNFT;
-    asset.totalSupply -= BigInt(ids.length);
-
-    const nftHolder = await getNftHolder(assetId, did, blockId, blockEventId);
-    const heldBefore = nftHolder.nftIds.length;
-    nftHolder.nftIds = nftHolder.nftIds.filter(heldId => !bigIds.includes(heldId));
-    countHolderChange(asset, heldBefore, nftHolder.nftIds.length);
-    nftHolder.updatedEventId = blockEventId;
-    await bufferHolder(blockId, nftHolder);
-
-    // one bulk update instead of N round trips (and no n-element array filter per token)
-    const holder = fromHolder ?? portfolioHolder(did, 0);
-    const burnedNfts = await Promise.all(ids.map(nftId => burnNft(assetId, nftId, blockEventId)));
-    promises.push(bulkUpdateNfts(burnedNfts));
-    await adjustNftCount(assetId, holder, blockEventId, -ids.length, promises);
+    await redeemNfts({
+      asset,
+      did,
+      holder: fromHolder ?? portfolioHolder(did, 0),
+      ids,
+      blockId,
+      blockEventId,
+      event,
+      promises,
+    });
   } else if (reason === 'transferred' || reason === 'controllerTransfer') {
     // Same-identity moves share one rollup row. Resolving `toRollup` independently would, for the
     // first same-block touch of that holder, create a second in-memory copy of the same
@@ -290,13 +440,14 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
     fromRollup.updatedEventId = blockEventId;
     toRollup.updatedEventId = blockEventId;
 
-    await bufferHolder(blockId, fromRollup);
-    await bufferHolder(blockId, toRollup);
+    await bufferHolder(blockId, fromRollup, event);
+    await bufferHolder(blockId, toRollup, event);
 
     const movedNfts = await Promise.all(
       ids.map(nftId => moveNft(assetId, nftId, toHolder, blockEventId))
     );
     promises.push(bulkUpdateNfts(movedNfts));
+    clearTokenApprovals(assetId, ids, fromHolder, promises);
     await adjustNftCount(assetId, fromHolder, blockEventId, -ids.length, promises);
     await adjustNftCount(assetId, toHolder, blockEventId, ids.length, promises);
 
@@ -309,7 +460,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
         readonly instructionMemo: Codec;
       };
 
-      // FK to the padded `Instruction.id` (D12) — must carry the same zero-padding
+      // FK to the padded `Instruction.id` — must carry the same zero-padding
       instructionId = padNumericId(getTextValue(details.instructionId));
       instructionMemo = bytesToString(details.instructionMemo);
     } else {
@@ -338,4 +489,141 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   );
 
   await Promise.all(promises);
+
+  if (lastHoldingsEvent(event)) {
+    await flushNftBuffer();
+  }
+};
+
+/**
+ * The asset a pre-6.0 NFT collection belongs to.
+ *
+ * Before 6.0 an issuance named the collection, never the ticker, and nothing in the event maps one
+ * to the other. The collection's own storage does, so it is read at the block that issued.
+ */
+export const assetOfCollection = async (
+  rawCollectionId: Codec,
+  block: SubstrateBlock
+): Promise<string | undefined> => {
+  const collection = (await api.query.nft.collection(getNumberValue(rawCollectionId))).toJSON() as {
+    ticker?: string;
+  } | null;
+
+  return collection?.ticker ? getAssetId(collection.ticker, block) : undefined;
+};
+
+/**
+ * The portfolio a pre-6.0 issuance or redemption used. Only the call names it — `issue_nft` and
+ * `redeem_nft` both take it as their third argument — never the event. For a call made inside
+ * another (a batch, a multisig) the default portfolio is assumed and the guess reported.
+ */
+const legacyPortfolioNumber = async (event: SubstrateEvent): Promise<number> => {
+  const call = event.extrinsic?.extrinsic.method;
+
+  if (call?.section === 'nft' && (call.method === 'issueNft' || call.method === 'redeemNft')) {
+    const kind = call.args[2]?.toJSON() as { user?: number } | null;
+
+    return kind && typeof kind === 'object' && kind.user !== undefined ? Number(kind.user) : 0;
+  }
+
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  await recordAnomaly({
+    kind: AnomalyKind.UnreadableValue,
+    detail: `${eventId} names no portfolio and was not a direct NFT call, so the default portfolio was assumed`,
+    block,
+    eventIdx,
+    moduleId,
+    eventId,
+  });
+
+  return 0;
+};
+
+/**
+ * One pre-6.0 issuance or redemption, applied the way the holdings event applies them later.
+ *
+ * Before 6.0 minting and burning an NFT reported only `IssuedNFT` / `RedeemedNFT` — the holdings
+ * event did not exist yet — so without this a pre-6.0 token was absent from every holding, supply
+ * and count the index keeps for it.
+ */
+const applyLegacySupplyChange = async (
+  event: SubstrateEvent,
+  change: 'issue' | 'redeem',
+  assetId: string,
+  did: string,
+  nftId: number
+): Promise<void> => {
+  const { blockId, block, blockEventId, eventIdx, extrinsic } = extractArgs(event);
+  const holder = portfolioHolder(did, await legacyPortfolioNumber(event));
+  const asset = await getAsset(assetId, event);
+  asset.updatedEventId = blockEventId;
+
+  const promises: Promise<void>[] = [];
+  const supplyChange = { asset, did, holder, ids: [nftId], blockId, blockEventId, event, promises };
+
+  if (change === 'issue') {
+    await issueNfts(supplyChange);
+  } else {
+    await redeemNfts(supplyChange);
+  }
+
+  promises.push(
+    createAssetTransaction(
+      blockId,
+      eventIdx,
+      block.timestamp,
+      {
+        assetId,
+        fromHolder: change === 'redeem' ? holder : undefined,
+        toHolder: change === 'issue' ? holder : undefined,
+        nftIds: [BigInt(nftId)],
+      },
+      blockEventId,
+      change === 'issue' ? EventIdEnum.IssuedNFT : EventIdEnum.RedeemedNFT,
+      extrinsic
+    ),
+    asset.save()
+  );
+
+  await Promise.all(promises);
+
+  if (lastHoldingsEvent(event)) {
+    await flushNftBuffer();
+  }
+};
+
+/** Pre-6.0 `IssuedNFT(IdentityId, NFTCollectionId, NFTId)`. */
+export const handleLegacyNftIssued = async (event: SubstrateEvent): Promise<void> => {
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+  const { did, collectionId, nftId } = decodeEvent(event);
+
+  const assetId = await assetOfCollection(collectionId, block);
+
+  if (!assetId) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `IssuedNFT named NFT collection ${getNumberValue(
+        collectionId
+      )}, which has no asset on chain`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+
+    return;
+  }
+
+  await applyLegacySupplyChange(event, 'issue', assetId, getTextValue(did), getNumberValue(nftId));
+};
+
+/** Pre-6.0 `RedeemedNFT(IdentityId, Ticker, NFTId)`. */
+export const handleLegacyNftRedeemed = async (event: SubstrateEvent): Promise<void> => {
+  const { block } = extractArgs(event);
+  const { did, ticker, nftId } = decodeEvent(event);
+
+  const assetId = await getAssetId(ticker, block);
+
+  await applyLegacySupplyChange(event, 'redeem', assetId, getTextValue(did), getNumberValue(nftId));
 };

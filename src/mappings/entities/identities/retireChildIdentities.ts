@@ -8,7 +8,7 @@ import { ChainUpgradeCrossing } from '../block/mapChainUpgrade';
  * `v8.0.0:pallets/identity/src/migrations.rs` drains `ParentDid` and removes every `ChildDid` in
  * a storage migration that emits **no events**, and `ChildDidCreated` / `ChildDidUnlinked` do not
  * exist in the v8 runtime at all. An indexer cannot observe an absence, so without this the rows
- * survive forever asserting parent/child links the chain deleted (defect A11).
+ * survive forever asserting parent/child links the chain deleted.
  *
  * This is still required under a full resync: the rows are written while indexing v5 to v7
  * blocks, and only stop being true at the upgrade block.

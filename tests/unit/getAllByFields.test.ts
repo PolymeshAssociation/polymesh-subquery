@@ -5,7 +5,7 @@ import { getAllByFields } from '../../src/utils/common';
 
 /**
  * `getAllByFields` replaced a hand-rolled helper that set `orderBy` to the column it was
- * filtering on (defect A13). Every row in a filtered set holds an identical value for that
+ * filtering on. Every row in a filtered set holds an identical value for that
  * column, so the order is not total and offset paging can return one row twice and skip
  * another. It must order by `id`, which is unique on every entity.
  */

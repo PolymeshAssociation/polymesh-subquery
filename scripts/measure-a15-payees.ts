@@ -1,5 +1,5 @@
 /**
- * Defect A15 — measures the share of pre-v8 staking rewards paid somewhere other than the stash.
+ * Measures the share of pre-v8 staking rewards paid somewhere other than the stash.
  *
  * Pre-8.x `staking.Reward`/`Rewarded` carries only the stash, so where a staker set a payee of
  * `Controller` or an explicit `Account` the index cannot say which account received the POLYX

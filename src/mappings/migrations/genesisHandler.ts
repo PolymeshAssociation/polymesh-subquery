@@ -1,9 +1,10 @@
+import { SubstrateBlock } from '@subql/types';
 import {
   Block,
   Event,
   EventIdEnum,
-  KeyRole,
-  KeyRoleEnum,
+  IdentityKeyRole,
+  AccountKeyRole,
   ModuleIdEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
@@ -15,8 +16,9 @@ import {
   legacyQuery,
   padId,
 } from '../../utils';
+import { upsertAccount } from '../../utils/accounts';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
-import { createAccount, createIdentity } from '../entities/identities/mapIdentities';
+import { createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
@@ -27,6 +29,8 @@ import {
 import { upsertEvmAccountMapping } from '../entities/revive/mapEvmAccountMapping';
 import { seedAccountBalances } from '../../seed/accountBalance';
 import { seedHoldings } from '../../seed/holding';
+import { mapBlock } from '../entities/block/mapBlock';
+import { writeIndexOrigin } from '../indexOrigin';
 
 const genesisBlock = padId('0');
 type DidWithAccount = { did: string; accountId: string };
@@ -54,7 +58,7 @@ const insertGenesisBlock = async (datetime: Date) =>
   }).save();
 
 /**
- * The id of the one synthetic seed `Event` (decision D13). Genesis- and storage-seeded rows
+ * The id of the one synthetic seed `Event`. Genesis- and storage-seeded rows
  * point their `createdEvent` / `updatedEvent` at it, so those relations stay non-null without an
  * origin-discriminator column.
  */
@@ -62,16 +66,19 @@ export const seedEventId = SEED_EVENT_ID;
 
 /**
  * Writes the seed `Event`. Must run after `insertGenesisBlock` (`Event.block` is non-null) and
- * before any entity insert. Fixes defect A17: `createPortfolio` has always been called with
+ * before any entity insert. It used to be missing: `createPortfolio` has always been called with
  * `createdEventId: '0000000000/0000000000'` for a row that did not exist — historical mode's
  * foreign keys are virtual, so Postgres never caught the dangling reference.
  */
-export const insertSeedEvent = async (): Promise<void> =>
+export const insertSeedEvent = async (
+  blockId: string = genesisBlock,
+  specVersion = 3000
+): Promise<void> =>
   Event.create({
     id: seedEventId,
-    blockId: genesisBlock,
+    blockId,
     eventIdx: 0,
-    specVersionId: 3000,
+    specVersionId: specVersion,
     moduleId: ModuleIdEnum.seeding,
     moduleIdText: 'seeding',
     eventId: EventIdEnum.Seeded,
@@ -123,11 +130,10 @@ const handleGenesisDids = async () => {
     if (primaryKey.length) {
       [primaryKey, ...secondaryKeys].forEach((key, keyIndex) => {
         accountInserts.push(
-          createAccount(
+          upsertAccount(
             {
               identityId: did,
-              keyRole: keyIndex === 0 ? KeyRoleEnum.PrimaryKey : KeyRoleEnum.SecondaryKey,
-              eventId: EventIdEnum.DidCreated,
+              keyRole: keyIndex === 0 ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
               address: key,
             },
             SEED_EVENT_ID
@@ -140,7 +146,7 @@ const handleGenesisDids = async () => {
             {
               identityId: did,
               address: key,
-              role: keyIndex === 0 ? KeyRole.Primary : KeyRole.Secondary,
+              role: keyIndex === 0 ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
               addedReason: EventIdEnum.DidCreated,
               eventIdx: keyIndex,
             },
@@ -184,7 +190,7 @@ const handleGenesisDids = async () => {
 /**
  * This method adds all the MultiSigs and their signers present in the genesis block
  */
-const handleMultiSigs = async (datetime: Date): Promise<void> => {
+const handleMultiSigs = async (datetime: Date, blockId: string = genesisBlock): Promise<void> => {
   let multiSigEntries;
   const is7xChainAtGenesis = 'adminDid' in api.query.multiSig;
   if (is7xChainAtGenesis) {
@@ -219,7 +225,7 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
         undefined,
         undefined,
         +signaturesRequired.toString(),
-        genesisBlock,
+        blockId,
         datetime,
         SEED_EVENT_ID
       )
@@ -227,7 +233,11 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
 
     if (adminDid.length) {
       multiSigInserts.push(
-        createMultiSigAdmin(multiSigAddress, adminDid, genesisBlock, SEED_EVENT_ID)
+        createMultiSigAdmin(multiSigAddress, adminDid, blockId, SEED_EVENT_ID, {
+          reason: 'the multisig storage scan',
+          eventIdx: 0,
+          blockEventId: SEED_EVENT_ID,
+        })
       );
     }
 
@@ -257,7 +267,7 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
             signerType,
             signerValue,
             MultiSigSignerStatusEnum.Approved,
-            genesisBlock,
+            blockId,
             datetime,
             SEED_EVENT_ID
           )
@@ -276,7 +286,10 @@ const handleMultiSigs = async (datetime: Date): Promise<void> => {
  * field, so these mappings exist without a `revive.mapAccount` extrinsic ever being dispatched and
  * would otherwise be invisible to the indexer
  */
-const handleEvmAccountMappings = async (datetime: Date): Promise<void> => {
+const handleEvmAccountMappings = async (
+  datetime: Date,
+  blockId: string = genesisBlock
+): Promise<void> => {
   // the revive pallet only exists from the 8.x chain onwards
   if (!api.query.revive?.originalAccount) {
     return;
@@ -297,16 +310,45 @@ const handleEvmAccountMappings = async (datetime: Date): Promise<void> => {
           address: rawAddress.toString(),
           mapped: true,
           datetime,
-          blockId: genesisBlock,
+          blockId,
         })
     )
   );
 };
 
 /**
+ * Seeds an index that starts after genesis, from chain storage at its start block.
+ *
+ * The same storage scans the genesis handler runs, pointed at a later block — `api.query` reads the
+ * state of whichever block is being indexed. What it can seed is listed in `IndexOrigin`, and so is
+ * what it cannot, with the reason; a total the index accumulates is only absolute over a domain the
+ * origin lists as seeded.
+ */
+export const seedFromStartBlock = async (block: SubstrateBlock): Promise<void> => {
+  const blockId = padId(block.block.header.number.toString());
+  const datetime = block.timestamp;
+
+  logger.info(`Seeding a partial index from chain storage at block ${blockId}`);
+
+  // the start block and the seed Event must exist before anything points a relation at them
+  await mapBlock(block).save();
+  await insertSeedEvent(blockId, block.specVersion);
+
+  await handleMultiSigs(datetime, blockId);
+  await handleEvmAccountMappings(datetime, blockId);
+  await seedAccountBalances({ blockId, datetime, specVersion: block.specVersion });
+  await seedHoldings({ blockId, datetime });
+
+  await writeIndexOrigin(block, true);
+
+  logger.info('Seeded the partial index');
+};
+
+/**
  * This adds in all the entries which are present in the genesisBlock
  */
-export default async (): Promise<void> => {
+export default async (block: SubstrateBlock): Promise<void> => {
+  const { specVersion } = block;
   logger.info('Running genesis handler');
 
   const timestamp = await api.query.timestamp.now();
@@ -323,11 +365,14 @@ export default async (): Promise<void> => {
 
   // opening balance snapshot for the POLYX ledger — without it every derived balance is wrong by
   // the genesis allocation (docs/implementation/02-polyx-ledger.md)
-  await seedAccountBalances({ blockId: genesisBlock, datetime });
+  await seedAccountBalances({ blockId: genesisBlock, datetime, specVersion });
 
   // opening asset-holding snapshot — Holding is rebuilt from the movement stream, so it needs
   // the same genesis baseline (docs/implementation/03-holdings-nfts.md)
   await seedHoldings({ blockId: genesisBlock, datetime });
+
+  // a genesis replay derives everything, so it vouches for every domain
+  await writeIndexOrigin(block, false);
 
   logger.info('Applied genesis migrations');
 };

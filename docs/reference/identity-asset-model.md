@@ -78,7 +78,7 @@ Registered with an empty handler list: `AuthorizationRetryLimitReached`, `CddCla
 
 Separately, `Account` records `keyType` (`substrate` / `ethereum` — the cryptographic shape) but nothing about the key's *role*. A bare `Account` with no identity is ambiguous: `ledgerAccount` builds the same shape for the treasury pot, the block-reward pot, and a multisig signer key, even though the chain's `KeyRecord` (`PrimaryKey` / `SecondaryKey` / `MultiSigSignerKey`) distinguishes them and the indexer already reads that distinction via `resolveKeyIdentity` before discarding it.
 
-Fix: `Account.keyRole: KeyRoleEnum` (`PrimaryKey` / `SecondaryKey` / `MultiSigSigner` / `Unlinked`), derived in one place from the key record; `MultiSigSigner.signerAccount: Account` (nullable — `SignerTypeEnum` also has `Identity` on pre-7.x, so `signerValue` stays canonical). Together they make `Account (signer) → MultiSigSigner → MultiSig → Account (multisig) → Identity` one joinable path.
+Fix: `Account.keyRole: AccountKeyRole` (`PrimaryKey` / `SecondaryKey` / `MultiSigSigner` / `Unlinked`), derived in one place from the key record; `MultiSigSigner.signerAccount: Account` (nullable — `SignerTypeEnum` also has `Identity` on pre-7.x, so `signerValue` stays canonical). Together they make `Account (signer) → MultiSigSigner → MultiSig → Account (multisig) → Identity` one joinable path.
 
 ## 1.3 From scratch
 
@@ -106,7 +106,7 @@ type IdentityKey @entity {
   id: ID!                        # did/address/fromBlock
   identity: Identity! @index
   account: Account! @index
-  role: KeyRole!                 # Primary | Secondary | MultiSigSigner
+  role: IdentityKeyRole!                 # PrimaryKey | SecondaryKey
   permissions: PermissionsJson
 
   validFromBlock: Block!
@@ -116,7 +116,7 @@ type IdentityKey @entity {
   removedReason: EventIdEnum
 }
 
-enum KeyRole { Primary, Secondary }
+enum IdentityKeyRole { PrimaryKey, SecondaryKey }
 ```
 
 This makes every question in G3 a single indexed query, makes G1 impossible by construction (role is explicit), and subsumes `AccountHistory` entirely.
