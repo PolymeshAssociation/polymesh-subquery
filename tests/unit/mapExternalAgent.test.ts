@@ -45,6 +45,8 @@ describe('AgentAdded — one event, three tables', () => {
       identityId: DID_A,
       type: 'AgentAdded',
     });
+    // append-only: a history row is never rewritten, so it records only the event that made it
+    expect(history.updatedEventId).toBeUndefined();
   });
 });
 
@@ -113,5 +115,33 @@ describe('membership lifecycle', () => {
       .sort();
 
     expect(types).toEqual(['AgentAdded', 'AgentRemoved', 'GroupChanged'].sort());
+  });
+});
+
+describe('agent-permissioned asset calls recorded as agent actions', () => {
+  const HOLDER = codec({ account: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY' });
+
+  it.each([
+    ['SetAccountFreeze', [codec(DID_A), HOLDER, codec(ASSET_ID), codec(true)]],
+    ['FrozenBalanceSet', [codec(DID_A), HOLDER, codec(ASSET_ID), codec(100)]],
+    ['ControllerTransferTo', [codec(DID_A), codec(ASSET_ID), HOLDER, HOLDER, codec(5)]],
+    ['TickerLinkedToAsset', [codec(DID_A), codec('0x5449434b4552000000000000'), codec(ASSET_ID)]],
+    [
+      'TickerUnlinkedFromAsset',
+      [codec(DID_A), codec('0x5449434b4552000000000000'), codec(ASSET_ID)],
+    ],
+  ])('%s', async (method, data) => {
+    const db = mockStore();
+
+    await mapExternalAgentAction(tupleEvent({ section: 'asset', method, data }));
+
+    const actions = Object.values(db.AssetAgentAction ?? {}) as any[];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      assetId: ASSET_ID,
+      callerId: DID_A,
+      palletName: 'asset',
+      eventId: method,
+    });
   });
 });

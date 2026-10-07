@@ -262,6 +262,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.Issued,
           EventIdEnum.Redeemed,
           EventIdEnum.ControllerTransfer,
+          EventIdEnum.ControllerTransferTo,
           EventIdEnum.AssetFrozen,
           EventIdEnum.AssetUnfrozen,
           EventIdEnum.AssetRenamed,
@@ -291,7 +292,10 @@ class ExternalAgentEventsManager {
       .add(
         ModuleIdEnum.asset,
         [
-          // EventIdEnum.TickerLinkedToAsset,
+          EventIdEnum.TickerLinkedToAsset,
+          EventIdEnum.TickerUnlinkedFromAsset,
+          EventIdEnum.FrozenBalanceSet,
+          EventIdEnum.SetAccountFreeze,
         ],
         2
       )

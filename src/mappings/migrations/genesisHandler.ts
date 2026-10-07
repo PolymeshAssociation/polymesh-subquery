@@ -18,6 +18,7 @@ import {
 } from '../../utils';
 import { upsertAccount } from '../../utils/accounts';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
+import { seedGenesisClaims } from '../entities/identities/mapClaim';
 import { createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
@@ -359,6 +360,9 @@ export default async (block: SubstrateBlock): Promise<void> => {
   await insertSeedEvent();
 
   await Promise.all([handleGenesisDids(), handleMultiSigs(datetime)]);
+
+  // after the identities, which the genesis claims are made about
+  await seedGenesisClaims(block, genesisBlock, SEED_EVENT_ID);
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);

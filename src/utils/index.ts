@@ -14,5 +14,5 @@ export * from './portfolios';
 export * from './proposals';
 export * from './settlements';
 export * from './staking';
-export * from './transferManagers';
+export * from './compliance';
 export * from './stos';

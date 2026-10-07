@@ -1,3 +1,5 @@
+import { Option } from '@polkadot/types';
+import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, metadataTypeNames } from '../../../decode';
 import {
@@ -15,8 +17,8 @@ import {
   extractClaimInfo,
   getAssetIdWithTicker,
   getTextValue,
-  logFoundType,
   recordAnomaly,
+  scanDoubleMap,
 } from '../../../utils';
 import { serializeLikeHarvester } from '../../serializeLikeHarvester';
 import { extractArgs } from '../common';
@@ -34,7 +36,7 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
   const types = metadataTypeNames(event);
 
   return params.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i], logFoundType),
+    value: serializeLikeHarvester(arg, types[i]),
   }));
 };
 
@@ -97,11 +99,22 @@ const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promis
   return scope;
 };
 
-export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const harvesterArgs = extractHarvesterArgs(event);
-  const target = getTextValue(decodeEvent(event).did);
+interface ClaimContext {
+  block: SubstrateBlock;
+  blockId: string;
+  eventIdx: number;
+  blockEventId: string;
+}
 
+/**
+ * Writes the claim `harvesterArgs` describes, in `ClaimAdded`'s argument form: the target, then the
+ * `IdentityClaim` serialised as the harvester serialises it.
+ */
+const writeClaim = async (
+  target: string,
+  harvesterArgs: { value: unknown }[],
+  { block, blockId, eventIdx, blockEventId }: ClaimContext
+): Promise<void> => {
   const {
     claimExpiry,
     claimIssuer,
@@ -150,6 +163,61 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
     updatedEventId: blockEventId,
     customClaimTypeId,
   }).save();
+};
+
+export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const target = getTextValue(decodeEvent(event).did);
+
+  await writeClaim(target, extractHarvesterArgs(event), { block, blockId, eventIdx, blockEventId });
+};
+
+/**
+ * An `identity.claims` value as the runtime stores it: a plain `IdentityClaim` in early runtimes,
+ * the genesis one (v3.0) among them, and an `Option` in later ones.
+ */
+const storedClaim = (value: Codec): Codec | undefined => {
+  const optional = value as Partial<Option<Codec>>;
+
+  if (typeof optional.unwrap !== 'function') {
+    return value;
+  }
+
+  return optional.isNone ? undefined : optional.unwrap();
+};
+
+/**
+ * The claims in the chain's genesis config, which no `ClaimAdded` announces: CDD claims for genesis
+ * and system identities, issued by the governance committee and the CDD system identity. Read from
+ * `identity.claims` at the genesis block and written as if added there, so a later `ClaimRevoked`
+ * finds them.
+ */
+export const seedGenesisClaims = async (
+  block: SubstrateBlock,
+  blockId: string,
+  blockEventId: string
+): Promise<void> => {
+  const entries = await scanDoubleMap(api.query.identity.claims);
+
+  await Promise.all(
+    entries.map(([key, value], eventIdx) => {
+      const stored = storedClaim(value);
+
+      if (!stored) {
+        return undefined;
+      }
+
+      const target = (key.args[0] as unknown as { target: Codec }).target.toString();
+      const claim = serializeLikeHarvester(stored, 'IdentityClaim');
+
+      return writeClaim(target, [{ value: target }, { value: claim }], {
+        block,
+        blockId,
+        eventIdx,
+        blockEventId,
+      });
+    })
+  );
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {

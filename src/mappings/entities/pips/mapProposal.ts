@@ -21,12 +21,38 @@ import { extractArgs, getOrAnomaly } from '../common';
  */
 const processPipId = (rawPipId: Codec): string => padNumericId(getTextValue(rawPipId));
 
+/**
+ * The block the PIP's expiry was scheduled for, if it was.
+ *
+ * `propose` schedules the expiry before it emits `ProposalCreated`, so `ExpiryScheduled` comes
+ * earlier in the same extrinsic, before its PIP exists. Nothing is scheduled for a PIP without an
+ * expiry, and `ExpirySchedulingFailed` replaces it when the scheduler refuses.
+ */
+const scheduledExpiry = (event: SubstrateEvent, pipId: string): number | undefined => {
+  const records = (event.block.events ?? []) as unknown as {
+    phase: { toString: () => string };
+    event: { section: string; method: string; data: Codec[] };
+  }[];
+  const phase = records[event.idx]?.phase.toString();
+
+  for (let i = event.idx - 1; i >= 0 && records[i].phase.toString() === phase; i -= 1) {
+    const { section, method, data } = records[i].event;
+
+    if (section === 'pips' && method === 'ExpiryScheduled' && processPipId(data[1]) === pipId) {
+      return getNumberValue(data[2]);
+    }
+  }
+
+  return undefined;
+};
+
 export const handleProposalCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
+  const id = processPipId(rawPipId);
 
   await Proposal.create({
-    id: processPipId(rawPipId),
+    id,
     proposer: getProposerValue(rawProposer),
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
@@ -34,6 +60,7 @@ export const handleProposalCreated = async (event: SubstrateEvent): Promise<void
     url: bytesToString(rawUrl),
     description: bytesToString(rawDescription),
     snapshotted: false,
+    expiresAt: scheduledExpiry(event, id),
     totalAyeWeight: BigInt(0),
     totalNayWeight: BigInt(0),
     createdEventId: blockEventId,
@@ -184,15 +211,6 @@ export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<v
 
   await updateProposal(rawPipId, event, proposal => {
     proposal.executionScheduledAt = getNumberValue(rawBlock);
-  });
-};
-
-/** `ExpiryScheduled(did, pipId, block)` — when a pending PIP will lapse. */
-export const handleExpiryScheduled = async (event: SubstrateEvent): Promise<void> => {
-  const [, rawPipId, rawBlock] = extractArgs(event).params;
-
-  await updateProposal(rawPipId, event, proposal => {
-    proposal.expiresAt = getNumberValue(rawBlock);
   });
 };
 

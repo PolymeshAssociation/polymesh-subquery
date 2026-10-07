@@ -246,7 +246,8 @@ const filters: Record<string, Record<string, string[]>> = {
     ExecutionSchedulingFailed: [],
     ExpirySchedulingFailed: [],
     ExecutionScheduled: ['handleExecutionScheduled'],
-    ExpiryScheduled: ['handleExpiryScheduled'],
+    // Read by `ProposalCreated`, which follows it in the same extrinsic (see `scheduledExpiry`).
+    ExpiryScheduled: [],
     PipClosed: ['handlePipClosed'],
     PipSkipped: ['handlePipSkipped'],
     ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],

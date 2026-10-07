@@ -1,8 +1,8 @@
 import {
   handleExecutionScheduled,
-  handleExpiryScheduled,
   handlePipClosed,
   handlePipSkipped,
+  handleProposalCreated,
   handleProposalStateUpdated,
   handleSnapshotCleared,
   handleSnapshotResultsEnacted,
@@ -24,17 +24,62 @@ const pipsEvent = (method: string, data: unknown[], idx = 0) =>
   tupleEvent({ section: 'pips', method, data: data.map(value => codec(value)), idx });
 
 describe('the PIP lifecycle beyond creation and votes', () => {
-  it('records the skip count, the execution block and the expiry block the chain scheduled', async () => {
+  it('records the skip count and the execution block the chain scheduled', async () => {
     const db = seeded(4);
 
     await handlePipSkipped(pipsEvent('PipSkipped', [TEST_DID, 4, 2]));
     await handleExecutionScheduled(pipsEvent('ExecutionScheduled', [TEST_DID, 4, 900], 1));
-    await handleExpiryScheduled(pipsEvent('ExpiryScheduled', [TEST_DID, 4, 1200], 2));
 
-    expect(db.Proposal[pip(4)]).toMatchObject({
-      skippedCount: 2,
-      executionScheduledAt: 900,
-      expiresAt: 1200,
+    expect(db.Proposal[pip(4)]).toMatchObject({ skippedCount: 2, executionScheduledAt: 900 });
+  });
+
+  /**
+   * `propose` schedules a PIP's expiry before it emits `ProposalCreated`, so `ExpiryScheduled`
+   * arrives first, before the PIP exists (mainnet block 68,657, PIP 0).
+   */
+  describe('the expiry scheduled when the PIP is proposed', () => {
+    const inExtrinsic = (section: string, method: string, data: unknown[]) => ({
+      phase: { toString: () => '{"applyExtrinsic":1}' },
+      event: { section, method, data: data.map(value => codec(value)) },
+    });
+    const created = (expiry: 'scheduled' | 'none') => {
+      const records = [
+        ...(expiry === 'scheduled'
+          ? [inExtrinsic('pips', 'ExpiryScheduled', [TEST_DID, 4, 1200])]
+          : []),
+        inExtrinsic('pips', 'ProposalCreated', []),
+      ];
+
+      return tupleEvent({
+        section: 'pips',
+        method: 'ProposalCreated',
+        data: [
+          codec(TEST_DID),
+          codec({ committee: { technical: null } }),
+          codec(4),
+          codec(0),
+          codec('https://example.com'),
+          codec('A proposal'),
+        ],
+        idx: records.length - 1,
+        events: records,
+      });
+    };
+
+    it('takes the expiry from the ExpiryScheduled before it', async () => {
+      const db = mockStore();
+
+      await handleProposalCreated(created('scheduled'));
+
+      expect(db.Proposal[pip(4)].expiresAt).toBe(1200);
+    });
+
+    it('leaves it unset for a PIP with no scheduled expiry', async () => {
+      const db = mockStore();
+
+      await handleProposalCreated(created('none'));
+
+      expect(db.Proposal[pip(4)].expiresAt).toBeUndefined();
     });
   });
 

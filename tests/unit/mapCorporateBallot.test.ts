@@ -6,6 +6,7 @@ import {
   handleBallotRemoved,
   handleBallotVoteCast,
 } from '../../src/mappings/entities/assets/mapCorporateBallot';
+import { IndexerAnomaly } from '../../src/types';
 import { codec, mockStore, tupleEvent } from './helpers';
 
 const ASSET_ID = '0xassetballot00000000000000000000';
@@ -29,22 +30,23 @@ const seedBallot = () =>
   });
 
 describe('handleBallotCreated', () => {
-  it('creates a CorporateBallot from the range, meta and rcv params', async () => {
-    const db = mockStore();
+  const ballotCreated = () =>
+    tupleEvent({
+      section: 'corporateBallot',
+      method: 'Created',
+      data: [
+        codec(DID_A),
+        caIdCodec(0),
+        codec({ start: 1_000, end: 2_000 }),
+        codec({ title: 'Annual Meeting', motions: [] }),
+        codec(true),
+      ],
+    });
 
-    await handleBallotCreated(
-      tupleEvent({
-        section: 'corporateBallot',
-        method: 'Created',
-        data: [
-          codec(DID_A),
-          caIdCodec(0),
-          codec({ start: 1_000, end: 2_000 }),
-          codec({ title: 'Annual Meeting', motions: [] }),
-          codec(true),
-        ],
-      })
-    );
+  it('creates a CorporateBallot from the range, meta and rcv params', async () => {
+    const db = mockStore({ CorporateAction: { [ballotId]: { id: ballotId } } });
+
+    await handleBallotCreated(ballotCreated());
 
     const ballot = db.CorporateBallot[ballotId];
 
@@ -57,6 +59,18 @@ describe('handleBallotCreated', () => {
       isRemoved: false,
     });
     expect(JSON.parse(ballot.meta)).toMatchObject({ title: 'Annual Meeting' });
+  });
+
+  it('keeps the ballot, without its corporate action, when the index does not hold the action', async () => {
+    const db = mockStore();
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleBallotCreated(ballotCreated());
+
+    expect(db.CorporateBallot[ballotId]).toMatchObject({ assetId: ASSET_ID, rcv: true });
+    expect(db.CorporateBallot[ballotId].corporateActionId).toBeUndefined();
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    anomaly.mockRestore();
   });
 });
 
@@ -225,9 +239,7 @@ describe('ballot meta decoding', () => {
 
     expect(JSON.parse(db.CorporateBallot[ballotId].meta)).toEqual({
       title: 'Annual Meeting',
-      motions: [
-        { title: 'Appoint auditor', infoLink: 'https://a.io', choices: ['Yes', 'No'] },
-      ],
+      motions: [{ title: 'Appoint auditor', infoLink: 'https://a.io', choices: ['Yes', 'No'] }],
     });
   });
 });

@@ -51,7 +51,6 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
         type: AgentHistoryType.AgentPermissionsChanged,
         permissions,
         createdEventId: blockEventId,
-        updatedEventId: blockEventId,
       }).save()
     );
   }
@@ -131,7 +130,6 @@ export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
       identityId: did,
       type: AgentHistoryType.AgentRemoved,
       createdEventId: blockEventId,
-      updatedEventId: blockEventId,
     }).save(),
   ];
 
@@ -159,7 +157,6 @@ const addExternalAgentHistory = async (
     type,
     permissions,
     createdEventId: blockEventId,
-    updatedEventId: blockEventId,
   }).save();
 };
 
