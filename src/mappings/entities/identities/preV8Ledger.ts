@@ -33,6 +33,7 @@ import {
   loadBalance,
   PIPS_LOCK_ID,
   postTransition,
+  readChainFrozen,
   readChainLock,
   readChainStakingLock,
   recentEventIds,
@@ -145,9 +146,14 @@ export const clearMigratedStakingLock = async (
 };
 
 /**
- * A stash moving from the legacy `staking ` lock to a `Staking` hold loses the lock with no event:
- * `do_migrate_currency` removes it, then holds the whole stake. So a staking hold on an account
- * the index still shows locked re-reads that lock from chain.
+ * Re-reads the legacy `'staking '` lock of a stash the index still shows locked, as v8 moves it to
+ * a `Staking` hold. Called on a `Staking` hold and on `staking.CurrencyMigrated`.
+ *
+ * The lock goes in two steps, neither announced for it. On mainnet the stash's chain `frozen` falls
+ * to 0 when its stake is first held, while the lock is still listed in `balances.locks`; then
+ * `do_migrate_currency` removes the lock and emits only `CurrencyMigrated` (a `remove_lock` that
+ * lowers nothing emits no `Unlocked`). So the lock is what the chain lists, capped at what the
+ * chain freezes: a listed lock that freezes nothing is not frozen.
  */
 export const syncMigratedStakingLock = async (who: string, blockEventId: string): Promise<void> => {
   const balance = await AccountBalance.get(who);
@@ -157,9 +163,20 @@ export const syncMigratedStakingLock = async (who: string, blockEventId: string)
     return;
   }
 
-  const onChain = (await readChainStakingLock(who)) ?? BigInt(0);
+  const [listed, frozen] = await Promise.all([readChainStakingLock(who), readChainFrozen(who)]);
+  const onChain = (listed ?? BigInt(0)) < frozen ? listed ?? BigInt(0) : frozen;
 
   await setLock(who, STAKING_LOCK_ID, onChain, blockEventId, 'staking');
+};
+
+/** `staking.CurrencyMigrated { stash, force_withdraw }`: v8 has removed the stash's legacy lock. */
+export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<void> => {
+  const { blockEventId } = extractArgs(event);
+  const stash = stakingStash(decodeEvent(event));
+
+  if (stash) {
+    await syncMigratedStakingLock(stash, blockEventId);
+  }
 };
 
 // ---------------------------------------------------------------------------------------------

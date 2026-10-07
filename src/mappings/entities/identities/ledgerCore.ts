@@ -242,15 +242,21 @@ export const readChainLock = async (
 };
 
 /**
- * The `'staking '` lock still present on chain for `address` — `0` once there is none.
+ * The `'staking '` lock still listed on chain for `address` — `0` once there is none, `undefined`
+ * when the locks do not decode as a list.
  *
- * Needed on v8 because the lock → hold migration runs in two passes some ~420k blocks apart: the
- * first adds the `Staking` hold and leaves the old lock in place, the second drops the lock. In
- * between, an account's chain `frozen` *is* that staking lock, and only reading the lock list says
- * so. `undefined` on a failed read.
+ * On v8 the lock → hold migration first holds the stake and leaves the lock listed, then removes
+ * it. Whether a listed lock still freezes anything is `frozen` (see `readChainFrozen`).
  */
 export const readChainStakingLock = (address: string): Promise<bigint | undefined> =>
   readChainLock(address, STAKING_LOCK_ID);
+
+/** `frozen` from `system.account(address)`, the amount the chain freezes. */
+export const readChainFrozen = async (address: string): Promise<bigint> => {
+  const { data } = await api.query.system.account(address);
+
+  return accountDataFrozen(data as unknown as Record<string, Codec>);
+};
 
 /**
  * An authoritative snapshot of everything that freezes an account's POLYX, read from chain.

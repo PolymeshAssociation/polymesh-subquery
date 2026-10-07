@@ -328,7 +328,7 @@ const filters: Record<string, Record<string, string[]>> = {
     Chilled: ['handleChilled'],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
-    CurrencyMigrated: [],
+    CurrencyMigrated: ['handleCurrencyMigrated'],
     EraPaid: ['handleEraPaid'],
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
