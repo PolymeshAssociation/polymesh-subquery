@@ -42,7 +42,7 @@ type Holding @entity @compositeIndexes(fields: [["assetId", "identityId"], ["por
 
 enum HolderKind { Portfolio, Account }
 
-type Nft @entity @compositeIndexes(fields: [["assetId", "nftId"]]) {
+type Nft @entity {               # no ["asset","nftId"] composite: `id` already serves point lookups
   id: ID!                        # assetId/padId(nftId)
   asset: Asset! @index           # the collection
   nftId: BigInt!                 # BigInt everywhere — resolves G10
@@ -52,13 +52,13 @@ type Nft @entity @compositeIndexes(fields: [["assetId", "nftId"]]) {
   account: Account @index
   identity: Identity @index
 
-  metadata: [NftMetadataEntry]
   mintedBlock: Block!
   "null = still in circulation. Filter `burnedBlockId: { isNull: true }` (Boolean cannot be indexed, §8b)"
   burnedBlock: Block @index
 }
 
-type NftMetadataEntry @jsonField { key: String!, value: String! }
+<!-- `metadata: [NftMetadataEntry]` was dropped: nothing filled it, and a
+jsonField carries a GIN index that every mint, move and burn maintained over an empty array. -->
 
 type AssetAllowance @entity {
   id: ID!                        # assetId/owner/spender
@@ -90,7 +90,7 @@ enum MetadataScope { Local, Global }
   type Asset @entity {
 -   id: ID! # ticker
 +   id: ID!                      # assetId
-+   assetId: String! @index(unique: true)
++   assetId: String!             # no @index: equal to `id`, and `unique` is dropped under historical mode
     "current linked ticker, if any — NOT the asset's identity post-7.x"
     ticker: String @index(unique: false)
 -   isUniquenessRequired: Boolean!        # pre-6.0 concept, dead
@@ -126,7 +126,7 @@ Identity-level holding becomes **derived**. Two options:
 | `handleAssetCreated` | Populate `assetId`; drop `isUniquenessRequired`. |
 | **new** `handleApproval` | Upsert `AssetAllowance.amount`. |
 | **new** `handleAllowanceSpent` | Set `amount = remainingAllowance` (chain already computed it — take it rather than subtracting, avoiding drift); increment `totalSpent`. |
-| **new** `handleCreatedAssetTransfer` | Write an `AssetTransaction` with account-side from/to. If `pendingTransferId` is present, link to the `Instruction` — it is an `InstructionId` **[V]**, so pending transfers are already-modelled Instructions and need no new state machine. |
+| ~~**new** `handleCreatedAssetTransfer`~~ | **Withdrawn.** `transfer_asset` emits it *after* `settlement::transfer_funds`, so the movement is already an `AssetTransaction` from `FundsTransferred` (same identity) or `AssetBalanceUpdated` (executed instruction) — or, with the receiver's affirmation pending, has not happened yet. Writing a row here duplicated the first two and recorded the third as a completed movement. The event stays unhandled. |
 | **new** `handleSetAssetMetadataValue` etc. | Upsert `AssetMetadata`. |
 
 `rawAssetHolderToAssetHolder` in `src/utils/portfolios.ts` already branches on `is8xChain` for the `MeshAssetHolder` (`{account}` | `{portfolio}`) shape **[V]** — extend it to return the `HolderKind` discriminator rather than collapsing to a DID.
@@ -235,7 +235,7 @@ With `Nft`, a mint is N inserts of a small immutable row and a burn is N updates
 |---|---|---|
 | SDK | `assetHolders`, `nftHolders` | **Compatible** if `AssetHolder`/`NftHolder` are kept as rollups (recommended). `NftHolder.nftIds` narrows `[Int]` → `[BigInt]` — check SDK typings. |
 | SDK | `assets` | `Asset.assetId` added, `isUniquenessRequired` removed, `holders` derived field may change shape. |
-| SDK | `assetTransactions` | Gains account-side rows from `CreatedAssetTransfer`. Existing filters still work. |
+| SDK | `assetTransactions` | Unchanged by `CreatedAssetTransfer` (see the withdrawn handler above). |
 | Portal | `assetTransactions` | Same. Its `fromPortfolioId`/`toPortfolioId` filters are unaffected and become better-served once `Holding` exists. |
 
 New capability: `holdings(filter: { portfolioId: { equalTo: "did/1" } })` — the query neither consumer can express today.

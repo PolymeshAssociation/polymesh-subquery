@@ -25,7 +25,10 @@ const filters: Record<string, Record<string, string[]>> = {
     AssetTypeChanged: ['handleAssetTypeChanged'],
     AssetUnfrozen: ['handleUnfrozen'],
     ClassicTickerClaimed: [],
-    CreatedAssetTransfer: ['handleCreatedAssetTransfer'],
+    // Not a movement of its own: `transfer_asset` emits it after `settlement::transfer_funds`, whose
+    // `FundsTransferred` / `AssetBalanceUpdated` already records the movement — or, while the
+    // receiver's affirmation is pending, has not happened yet.
+    CreatedAssetTransfer: [],
     ControllerTransfer: [],
     CustomAssetTypeExists: ['handleCustomAssetTypeExists'],
     CustomAssetTypeRegistered: ['handleCustomAssetTypeRegistered'],

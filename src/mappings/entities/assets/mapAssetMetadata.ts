@@ -242,15 +242,32 @@ const resolveMetadataKey = async (
 const metadataId = (assetId: string, key: MetadataKey): string =>
   `${assetId}/${key.scope}/${key.keyId}`;
 
-const detailFrom = (rawDetail: unknown): { isLocked: boolean; expiry: Date | undefined } => {
+interface ValueDetail {
+  isLocked: boolean;
+  lockedUntil: Date | undefined;
+  expiry: Date | undefined;
+}
+
+/**
+ * `AssetMetadataValueDetail { expire, lock_status }`, where `lock_status` is
+ * `Unlocked | Locked | LockedUntil(Moment)` (primitives `asset_metadata.rs`). The `LockedUntil`
+ * moment is kept: the chain emits nothing when that lock ends, so without it `isLocked` stayed
+ * true for good and nothing said when the value became editable again.
+ */
+const detailFrom = (rawDetail: unknown): ValueDetail => {
   const detail = rawDetail as { expire?: number | null; lockStatus?: unknown } | null;
   if (!detail) {
-    return { isLocked: false, expiry: undefined };
+    return { isLocked: false, lockedUntil: undefined, expiry: undefined };
   }
   const lock = detail.lockStatus;
   const isLocked = typeof lock === 'string' ? lock !== 'Unlocked' : lock != null;
+  const until =
+    lock && typeof lock === 'object'
+      ? (lock as { lockedUntil?: number | string }).lockedUntil
+      : undefined;
+  const lockedUntil = until !== undefined && until !== null ? new Date(Number(until)) : undefined;
   const expiry = detail.expire ? new Date(Number(detail.expire)) : undefined;
-  return { isLocked, expiry };
+  return { isLocked, lockedUntil, expiry };
 };
 
 const upsertMetadata = async (
@@ -326,7 +343,9 @@ export const handleGlobalMetadataSpecUpdated = async (event: SubstrateEvent): Pr
   const { blockEventId } = extractArgs(event);
   const { name: rawName, spec: rawSpec } = decodeEvent(event);
 
-  // the event carries the name, not the id; match on the indexed name
+  // The event carries the name, not the id. Matching on the indexed name is exact: the chain
+  // refuses to register a global name twice (`AssetMetadataGlobalNameToKey` is checked first, v8.0.0)
+  // and has no rename.
   const name = bytesToString(rawName);
   const [match] = await GlobalMetadataKey.getByName(name, { limit: 1, offset: 0 });
   if (match) {
@@ -353,11 +372,14 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
     return;
   }
 
-  const { isLocked, expiry } = detailFrom(rawDetail?.isEmpty ? null : rawDetail?.toJSON());
+  const { isLocked, lockedUntil, expiry } = detailFrom(
+    rawDetail?.isEmpty ? null : rawDetail?.toJSON()
+  );
 
   await upsertMetadata(assetId, key, blockEventId, row => {
     row.value = bytesToString(rawValue);
     row.isLocked = isLocked;
+    row.lockedUntil = lockedUntil;
     row.expiry = expiry;
   });
 };
@@ -372,10 +394,11 @@ export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent):
     return;
   }
 
-  const { isLocked, expiry } = detailFrom(rawDetail?.toJSON());
+  const { isLocked, lockedUntil, expiry } = detailFrom(rawDetail?.toJSON());
 
   await upsertMetadata(assetId, key, blockEventId, row => {
     row.isLocked = isLocked;
+    row.lockedUntil = lockedUntil;
     row.expiry = expiry;
   });
 };
@@ -404,6 +427,7 @@ export const handleMetadataValueDeleted = async (event: SubstrateEvent): Promise
   if (row) {
     row.value = undefined;
     row.isLocked = false;
+    row.lockedUntil = undefined;
     row.expiry = undefined;
     row.updatedEventId = blockEventId;
     await row.save();
