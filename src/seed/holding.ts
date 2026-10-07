@@ -6,15 +6,9 @@ import {
   getBigIntValue,
   getPortfolioId,
   is7xSpecVersion,
+  scanDoubleMap,
 } from '../utils';
 import { meshPortfolioToAssetHolder } from '../utils/portfolios';
-
-/**
- * A full storage scan of a double map. `@polkadot`'s `.entries()` type requires the first key
- * for a double map, but passing none is a valid full-prefix scan at runtime.
- */
-const scanDoubleMap = (entry: { entries: unknown }): Promise<[{ args: Codec[] }, Codec][]> =>
-  (entry.entries as () => Promise<[{ args: Codec[] }, Codec][]>)();
 
 /**
  * Snapshots `portfolio.portfolioAssetBalances` into `Holding` rows at the portfolio grain, plus

@@ -399,3 +399,10 @@ export const blockTime = (block: SubstrateBlock): Date => {
 
   return block.timestamp;
 };
+
+/**
+ * A full storage scan of a double map. `@polkadot`'s `.entries()` type requires the first key
+ * for a double map, but passing none is a valid full-prefix scan at runtime.
+ */
+export const scanDoubleMap = (entry: { entries: unknown }): Promise<[{ args: Codec[] }, Codec][]> =>
+  (entry.entries as () => Promise<[{ args: Codec[] }, Codec][]>)();

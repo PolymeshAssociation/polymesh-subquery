@@ -20,6 +20,7 @@ import {
   getId,
   handleClaimAdded,
   handleClaimRevoked,
+  seedGenesisClaims,
 } from '../../src/mappings/entities/identities/mapClaim';
 
 const TARGET = TEST_DID;
@@ -148,6 +149,57 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       }
       return Promise.resolve();
     });
+  });
+
+  /**
+   * Mainnet block 20,842,777: PIP 149 revoked a CDD claim from the chain's genesis config, which no
+   * `ClaimAdded` announced. The index had never written it, so the revocation found nothing.
+   */
+  it('seeds the genesis claims, so a later revocation finds them', async () => {
+    const genesisClaim = {
+      claim: { CustomerDueDiligence: 'cdd-genesis' },
+      claim_issuer: ISSUER_A,
+      issuance_date: '0',
+      last_update_date: '0',
+    };
+    (globalThis as any).api.query = {
+      identity: {
+        claims: {
+          entries: jest.fn().mockResolvedValue([
+            // the genesis runtime (v3.0) stores the claim itself, not an `Option` of it
+            [{ args: [{ target: mockCodec(TARGET) }, {}] }, genesisClaim],
+            // a later runtime's empty `Option` is no claim
+            [
+              { args: [{ target: mockCodec(ISSUER_B) }, {}] },
+              { isNone: true, unwrap: () => genesisClaim },
+            ],
+          ]),
+        },
+      },
+    };
+    const genesis = {
+      block: { header: { number: { toString: () => '0' } } },
+      timestamp: new Date('2020-01-01T00:00:00Z'),
+      specVersion: 3000,
+    };
+
+    await seedGenesisClaims(genesis as never, '0000000000', '0000000000/0000000000');
+
+    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence/cdd-genesis`;
+    expect(Object.keys(claims)).toEqual([id]);
+    expect(claims[id]).toMatchObject({
+      targetId: TARGET,
+      issuerId: ISSUER_A,
+      issuanceDate: '0',
+      createdEventId: '0000000000/0000000000',
+    });
+
+    await handleClaimRevoked(
+      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-genesis', dateValue: '5000' })
+    );
+
+    expect(claims[id].revokeDate).toBe('5000');
+    (globalThis as any).api.query = {};
   });
 
   it('gives two issuers attesting the same target/type/scope two distinct Claim rows', async () => {
