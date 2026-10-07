@@ -16,7 +16,6 @@ jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 import { EntryDirection, HoldReason, MovementKind, PolyxPool } from '../../src/types';
 import {
-  adjustLock,
   handleBalanceBurned,
   handleBalanceEndowed,
   handleBalanceFrozen,
@@ -31,15 +30,9 @@ import {
   handleBalanceTransferWithMemo,
   handleBalanceUnlocked,
   handleBalanceUnreserved,
-  handleBonded,
-  handleBridgeMint,
   handlePayoutStarted,
   handleReward,
-  handleWithdrawn,
   handleDustLost,
-  handleIdentityGrant,
-  handlePipsDeposit,
-  handleProposalRefund,
   handleReserveRepatriated,
   handleStakingSlash,
   handleTransactionFeeCharged,
@@ -47,15 +40,25 @@ import {
   handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
+import {
+  handleBonded,
+  handleBridgeMint,
+  handleCurrencyMigrated,
+  handleIdentityGrant,
+  handlePipsDeposit,
+  handleProposalRefund,
+  handleWithdrawn,
+} from '../../src/mappings/entities/identities/preV8Ledger';
 import { postUneventedTransactionFee } from '../../src/mappings/entities/identities/preV54Fees';
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
 import { blockAuthor } from '../../src/utils/blockAuthor';
 import { __resetStakingCaches } from '../../src/utils/staking';
 import { __resetBlockContext } from '../../src/mappings/blockContext';
 import {
+  adjustLock,
   applyChainFreezes,
   emptyBalance,
-} from '../../src/mappings/entities/identities/mapPolyxLedger';
+} from '../../src/mappings/entities/identities/ledgerCore';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -75,6 +78,20 @@ const mockCodec = (value: unknown) => ({
   toJSON: () => value,
   toU8a: () => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)),
 });
+/**
+ * The chain's view of a stash's legacy staking lock: what `balances.locks` lists, and what
+ * `system.account` says is frozen.
+ */
+const chainStakingLock = (listed: string | undefined, frozen: string) => {
+  (globalThis as any).api.query = {
+    balances: {
+      locks: jest
+        .fn()
+        .mockResolvedValue({ toJSON: () => (listed ? [{ id: 'staking ', amount: listed }] : []) }),
+    },
+    system: { account: jest.fn().mockResolvedValue({ data: { frozen: mockCodec(frozen) } }) },
+  };
+};
 
 let blockHeight = 1_000_000;
 
@@ -397,14 +414,48 @@ describe('Event → pool transition', () => {
     await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '900'], 7_004_001));
     expect(balance(ALICE)?.frozen).toBe(BigInt(900));
 
-    (globalThis as any).api.query = {
-      balances: { locks: jest.fn().mockResolvedValue({ toJSON: () => [] }) },
-    };
+    chainStakingLock(undefined, '0');
     await handleBalanceHeld(
       balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
     );
 
     expect(balance(ALICE)).toMatchObject({ frozen: BigInt(0), reserved: BigInt(900) });
+    expect(balance(ALICE)?.locks).toEqual([]);
+    (globalThis as any).api.query = {};
+  });
+
+  /**
+   * Mainnet block 24,767,700: the payout that first holds the stake leaves the lock listed in
+   * `balances.locks`, but the chain's `frozen` is already 0. The lock was kept until a later
+   * `Held{Staking}`, about 29k blocks on.
+   */
+  it('Held{Staking}: drops a legacy lock the chain still lists but no longer freezes', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+    await adjustLock(ALICE, 'staking ', BigInt(900), '0000001000000', 'staking');
+
+    chainStakingLock('900', '0');
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
+    );
+
+    expect(balance(ALICE)).toMatchObject({ frozen: BigInt(0), reserved: BigInt(900) });
+    (globalThis as any).api.query = {};
+  });
+
+  /**
+   * Mainnet block 24,785,595: `staking.migrate_currency` removes the lock and emits only
+   * `CurrencyMigrated`, with no `Unlocked`, because the lock no longer froze anything.
+   */
+  it('CurrencyMigrated: drops the legacy lock the migration removed', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+    await adjustLock(ALICE, 'staking ', BigInt(900), '0000001000000', 'staking');
+
+    chainStakingLock(undefined, '0');
+    await handleCurrencyMigrated(
+      balancesEvent('CurrencyMigrated', { stash: ALICE, forceWithdraw: '0' })
+    );
+
+    expect(balance(ALICE)?.frozen).toBe(BigInt(0));
     expect(balance(ALICE)?.locks).toEqual([]);
     (globalThis as any).api.query = {};
   });
@@ -818,16 +869,8 @@ describe('staking — era-dependent, inverted at v8', () => {
   });
 
   describe('the v5–v7 lock → v8 hold storage migration', () => {
-    // testnet migrated in two passes: the hold first, with the lock still standing on chain
-    const lockStillStanding = () => {
-      (globalThis as any).api.query = {
-        balances: {
-          locks: jest
-            .fn()
-            .mockResolvedValue({ toJSON: () => [{ id: 'staking ', amount: '4000' }] }),
-        },
-      };
-    };
+    // testnet migrated in two passes: the hold first, with the lock still standing and frozen
+    const lockStillStanding = () => chainStakingLock('4000', '4000');
 
     it('a v8 Held{Staking} moves the bonded amount free → reserved, lock still standing', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));

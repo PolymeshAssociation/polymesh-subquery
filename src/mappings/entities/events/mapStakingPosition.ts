@@ -9,7 +9,7 @@ import { indexClosingEvent } from '../block/closingEvent';
 import { extractArgs } from '../common';
 
 /**
- * Maintains `StakingPosition` — kept separate from `mapPolyxLedger.ts`'s `handleBonded`/
+ * Maintains `StakingPosition` — kept separate from the POLYX ledger's `handleBonded`/
  * `handleUnbonded`/`handleWithdrawn`, which fire on the same events but answer a different
  * question (did POLYX move). Registered as an additional handler on the same three events.
  *

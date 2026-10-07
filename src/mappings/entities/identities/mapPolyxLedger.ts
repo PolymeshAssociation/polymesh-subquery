@@ -1,6 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { hexHasPrefix } from '@polkadot/util';
-import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, optionalField } from '../../../decode';
 import {
   Account,
@@ -8,727 +7,71 @@ import {
   AnomalyKind,
   EntryDirection,
   EventIdEnum,
-  HoldEntry,
   HoldReason,
   Identity,
   MovementKind,
   PolyxEntry,
   PolyxPool,
-  Proposal,
-  ProposalVote,
-  Subsidy,
 } from '../../../types';
-import {
-  bytesToString,
-  getAllByFields,
-  getBigIntValue,
-  getProposerValue,
-  getTextValue,
-  padId,
-  padNumericId,
-} from '../../../utils';
+import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { hexToString, is8xChain } from '../../../utils/common';
+import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
-import {
-  readRewardDestination,
-  readStakingLock,
-  resolveController,
-  resolveLegacyRewardDestination,
-} from '../../../utils/staking';
-import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
+import { readRewardDestination, resolveController } from '../../../utils/staking';
+import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { storageEntriesAtParent, UndecodableStateError } from '../../../utils/storageAtParent';
-import { resolveFeePayer } from './feePayer';
-import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
+import { getLedgerEntries } from '../../blockContext';
+import {
+  adjustHold,
+  adjustLock,
+  amountOf,
+  bumpLifetimeByKind,
+  extrinsicEmits,
+  findBlockEntries,
+  findExtrinsicEntries,
+  firstText,
+  holder,
+  holdReasonOf,
+  loadBalance,
+  memoOf,
+  nearestPreceding,
+  poolTag,
+  postTransition,
+  previousEventId,
+  recentEventIds,
+  recomputeDerived,
+  relabelEntry,
+  stakingStash,
+  startOfUtcDay,
+} from './ledgerCore';
+import {
+  burnDisbursedReserveShare,
+  clearMigratedStakingLock,
+  creditBlockAuthor,
+  creditFromReserve,
+  creditSlashReporters,
+  drawReserveFor,
+  legacyRewardRecipient,
+  syncMigratedStakingLock,
+  syncStakingLock,
+  treasuryShareAt,
+} from './preV8Ledger';
+import { chargedFor } from './preV54Fees';
 
 /**
- * POLYX ledger — entry-centric replacement for `mapPolyxTransaction`.
+ * POLYX ledger handlers. Every balances-pallet movement decodes to a pool transition (the
+ * "Event → pool transition" table in docs/implementation/02-polyx-ledger.md), which
+ * `postTransition` turns into one `PolyxEntry` per account side plus a running `AccountBalance`.
  *
- * Every balances-pallet movement decodes to a pool transition (the "Event → pool transition"
- * table in docs/implementation/02-polyx-ledger.md), which this module turns into one `PolyxEntry`
- * per account-side plus a running `AccountBalance`. `BalanceSet` (a checkpoint), locks and staking
- * are layered on in the later commits of the phase.
+ * The ledger's model is in `ledgerCore.ts`; what only applies before v8 is in `preV8Ledger.ts`,
+ * and the fees no event announced before v5.4 in `preV54Fees.ts`.
  */
-
-// ---------------------------------------------------------------------------------------------
-// Decoded-field helpers
-// ---------------------------------------------------------------------------------------------
-
-const firstText = (decoded: Record<string, Codec>, names: string[]): string | undefined => {
-  for (const name of names) {
-    const value = optionalField(decoded, name);
-
-    if (value !== undefined) {
-      return getTextValue(value);
-    }
-  }
-
-  return undefined;
-};
-
-const holder = (decoded: Record<string, Codec>): string | undefined =>
-  firstText(decoded, ['who', 'account', 'stash']);
-
-const amountOf = (decoded: Record<string, Codec>): bigint => {
-  for (const name of ['amount', 'balance', 'freeBalance', 'free', 'value', 'actualFee']) {
-    const value = optionalField(decoded, name);
-
-    if (value !== undefined) {
-      return getBigIntValue(value);
-    }
-  }
-
-  return BigInt(0);
-};
-
-/**
- * A `HoldReason` from a decoded `RuntimeHoldReason`'s **JSON** form.
- *
- * v8's `RuntimeHoldReason` is a *composite* enum — each pallet's own reason enum nested under that
- * pallet's name — so the staking hold is `Staking(pallet_staking::HoldReason::Staking)` and encodes
- * as `{ staking: 'Staking' }`, never as a bare string. Reading it with `toString()` (what
- * `getTextValue` does, via polkadot-js's `stringify(toJSON())`) yields `'{"staking":"Staking"}'`,
- * which matches no member — so every v8 hold decoded as `Unknown`, `bonded` was always 0 and
- * `otherReserved` always equalled `reserved`. The outer variant key is the reason; a runtime whose
- * reason is a plain unit enum encodes as the bare string instead.
- *
- * Takes JSON rather than a `Codec` so the same decode serves `balances.holds(who)` entries, whose
- * `id` arrives already-JSON from a storage read (see `readChainHolds`).
- */
-export const holdReasonFromJson = (json: unknown): HoldReason => {
-  let variant: string | undefined;
-
-  if (typeof json === 'string') {
-    variant = json;
-  } else if (json && typeof json === 'object' && !Array.isArray(json)) {
-    [variant] = Object.keys(json);
-  }
-
-  const key = variant?.toLowerCase();
-
-  return (
-    Object.values(HoldReason).find(member => member.toLowerCase() === key) ?? HoldReason.Unknown
-  );
-};
-
-const holdReasonOf = (decoded: Record<string, Codec>): HoldReason | undefined => {
-  const raw = optionalField(decoded, 'reason');
-
-  return raw === undefined ? undefined : holdReasonFromJson(raw.toJSON());
-};
-
-const memoOf = (decoded: Record<string, Codec>): string | undefined => {
-  const raw = optionalField(decoded, 'memo');
-
-  return raw !== undefined ? bytesToString(raw) : undefined;
-};
-
-const startOfUtcDay = (datetime: Date): Date =>
-  new Date(Date.UTC(datetime.getUTCFullYear(), datetime.getUTCMonth(), datetime.getUTCDate()));
-
-const floorZero = (value: bigint): bigint => (value > BigInt(0) ? value : BigInt(0));
-
-/** `Math.max` for `bigint`, which `Math.max` itself cannot take. */
-const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
-
-/**
- * `frozen` from an on-chain `AccountData`: `{ free, reserved, frozen, flags }` on v8,
- * `{ free, reserved, miscFrozen, feeFrozen }` (frozen is the max of the two) on ≤ v7.4.
- */
-export const accountDataFrozen = (data: Record<string, Codec>): bigint => {
-  if (data.frozen !== undefined) {
-    return getBigIntValue(data.frozen);
-  }
-
-  const misc = getBigIntValue(data.miscFrozen);
-  const fee = getBigIntValue(data.feeFrozen);
-
-  return maxBig(misc, fee);
-};
-
-// ---------------------------------------------------------------------------------------------
-// Account / balance state
-// ---------------------------------------------------------------------------------------------
-
-export const emptyBalance = (
-  address: string,
-  identityId: string | undefined,
-  blockEventId: string
-): AccountBalance =>
-  AccountBalance.create({
-    id: address,
-    accountId: address,
-    identityId,
-    free: BigInt(0),
-    reserved: BigInt(0),
-    frozen: BigInt(0),
-    total: BigInt(0),
-    transferable: BigInt(0),
-    bonded: BigInt(0),
-    otherReserved: BigInt(0),
-    totalReceived: BigInt(0),
-    totalSent: BigInt(0),
-    totalFeesPaid: BigInt(0),
-    totalRewards: BigInt(0),
-    totalSlashed: BigInt(0),
-    movementCount: 0,
-    lifetimeByKind: [],
-    locks: [],
-    holds: [],
-    updatedEventId: blockEventId,
-  });
-
-/**
- * The balance row for an address, created empty when the ledger has not seen it before.
- *
- * Every balance mutation goes through here.
- */
-export const loadBalance = async (
-  address: string,
-  identityId: string | undefined,
-  blockEventId: string
-): Promise<AccountBalance> => {
-  const existing = await AccountBalance.get(address);
-
-  if (existing) {
-    if (!existing.identityId && identityId) {
-      existing.identityId = identityId;
-    }
-
-    return existing;
-  }
-
-  return emptyBalance(address, identityId, blockEventId);
-};
-
-/** Pre-v8 staking bonds via a lock with this identifier; v8 bonds via a `Staking` hold. */
-export const STAKING_LOCK_ID = 'staking ';
-
-/**
- * Frozen POLYX that a chain read could not attribute to a specific lock. Deliberately **not** the
- * staking lock: `bonded` is derived from that one, so filing an unattributed freeze there would
- * report it as a bond.
- */
-export const RESIDUAL_LOCK_ID = 'residual';
-
-/** The pips pallet's `LockIdentifier` for proposal and vote deposits (`*b"pips    "`). */
-export const PIPS_LOCK_ID = 'pips    ';
-
-/**
- * `balances.holds(who)` — the v8 per-reason breakdown of `reserved`.
- *
- * `undefined` on a runtime with no hold storage (pre-v8), which callers treat as "no information",
- * never as "no holds".
- */
-export const readChainHolds = async (address: string): Promise<HoldEntry[] | undefined> => {
-  if (typeof api.query.balances?.holds !== 'function') {
-    return undefined;
-  }
-
-  const raw = (await api.query.balances.holds(address)).toJSON() as
-    | { id?: unknown; amount?: string | number }[]
-    | null;
-
-  if (!Array.isArray(raw)) {
-    return undefined;
-  }
-
-  return raw.map(entry => ({
-    reason: holdReasonFromJson(entry.id),
-    amount: BigInt(entry.amount ?? 0),
-  }));
-};
-
-/**
- * The amount of the lock `lockId` on chain for `address`, from `balances.locks(who)` — `0` once
- * there is none, `undefined` when the locks do not decode as a list. Both eras keep
- * `balances.locks`.
- */
-export const readChainLock = async (
-  address: string,
-  lockId: string
-): Promise<bigint | undefined> => {
-  const raw = (await api.query.balances.locks(address)).toJSON() as
-    | { id?: string; amount?: string | number }[]
-    | null;
-
-  if (!Array.isArray(raw)) {
-    return undefined;
-  }
-
-  const lock = raw.find(entry => {
-    const id = entry.id ?? '';
-    return (hexHasPrefix(id) ? hexToString(id) : id) === lockId;
-  });
-
-  return lock ? BigInt(lock.amount ?? 0) : BigInt(0);
-};
-
-/**
- * The `'staking '` lock still present on chain for `address` — `0` once there is none.
- *
- * Needed on v8 because the lock → hold migration runs in two passes some ~420k blocks apart: the
- * first adds the `Staking` hold and leaves the old lock in place, the second drops the lock. In
- * between, an account's chain `frozen` *is* that staking lock, and only reading the lock list says
- * so. `undefined` on a failed read.
- */
-export const readChainStakingLock = (address: string): Promise<bigint | undefined> =>
-  readChainLock(address, STAKING_LOCK_ID);
-
-/**
- * An authoritative snapshot of everything that freezes an account's POLYX, read from chain.
- *
- * Captured by whoever does the chain read, rather than read inside `applyChainFreezes`, because the
- * read has to happen against a specific block: the seeder reads at its start block.
- */
-export interface ChainFreezes {
-  frozen: bigint;
-  /** v8: `balances.holds(who)`. `undefined` pre-v8 or on a failed read. */
-  holds?: HoldEntry[];
-  /**
-   * The amount of the `'staking '` lock on chain. Pre-v8 that is `staking.ledger.total` — the
-   * value passed to `Currency::set_lock` — and on v8 it is read from `balances.locks`, since it
-   * only survives there until the second migration pass drops it.
-   */
-  stakingLock?: bigint;
-  /**
-   * Pre-v8: the `'pips    '` lock from `balances.locks`. Left unset on v8, where pips deposits
-   * reach the ledger through `balances.Locked`/`Unlocked` under the generic id instead.
-   */
-  pipsLock?: bigint;
-}
-
-/**
- * Rebuilds `locks` and `holds` from chain state, then recomputes the derived fields.
- *
- * Used where a derived balance is replaced wholesale by a chain read — the genesis / partial-index
- * seed. Attribution matters because
- * `bonded` comes from the staking lock (pre-v8) or the `Staking` hold (v8): filing the whole
- * frozen amount under the staking lock calls every freeze a bond, and filing a pre-v8 staker's
- * freeze under a neutral id loses the bond entirely.
- *
- * - **v8:** bonds are holds, so `holds` is taken from `balances.holds`.
- * - **both eras:** whatever part of `frozen` is still a `'staking '` lock on chain keeps that id,
- *   and only the unexplained remainder goes under `RESIDUAL_LOCK_ID`.
- * - **pre-v8:** a PIPs deposit lock keeps its `'pips    '` id too, so the refund that clears it
- *   (see `handleProposalRefund`) is not left behind by a residual copy of the same amount.
- *
- * The lock rule is the same on v8 because of the two-pass lock → hold migration: between the
- * passes a v8 staker carries both the new `Staking` hold *and* its old `'staking '` lock. Filing
- * that lock as residual broke the second pass, whose `Unlocked` is recognised by the lock's id —
- * the lock was never cleared, and a testnet resync caught ten accounts reporting `frozen` of up to
- * 4.96M POLYX against a chain value of 0.
- *
- * A lock can never exceed what is frozen, so each is capped there. Locks overlap rather than add
- * (`frozen` is their MAX), so the residual is only what exceeds the largest attributed lock.
- *
- * **An empty `holds` on v8 is written as-is, even though it can mean "not migrated yet".** v8
- * converts locks to holds lazily, so an account the migration has not reached reads `[]` from
- * `balances.holds` while it is still bonded. That is safe only because of the order the migration
- * works in — the hold is added before the lock is removed, so an account is never without both —
- * and because `bonded` is the MAX of the staking hold and the staking lock: until the account
- * migrates, its lock carries the bond. Treating `[]` as "unknown" and keeping the derived holds
- * instead would be worse, since those were derived before the chain was consulted at all. Anything
- * that changes how `bonded` is derived has to keep this case, which the seeder's reserved-nothing
- * test pins.
- */
-export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes): void => {
-  const { frozen, holds, stakingLock, pipsLock } = chain;
-
-  if (holds !== undefined) {
-    balance.holds = holds;
-  }
-
-  const capped = (amount?: bigint): bigint => {
-    const value = amount ?? BigInt(0);
-    return value < frozen ? value : frozen;
-  };
-  const stakingPart = capped(stakingLock);
-  const pipsPart = capped(pipsLock);
-  const explained = stakingPart > pipsPart ? stakingPart : pipsPart;
-
-  balance.locks = [
-    ...(stakingPart > BigInt(0)
-      ? [{ lockId: STAKING_LOCK_ID, amount: stakingPart, reasons: 'staking' }]
-      : []),
-    ...(pipsPart > BigInt(0) ? [{ lockId: PIPS_LOCK_ID, amount: pipsPart, reasons: 'pips' }] : []),
-    ...(frozen > explained ? [{ lockId: RESIDUAL_LOCK_ID, amount: frozen }] : []),
-  ];
-
-  recomputeDerived(balance);
-};
-
-/**
- * Recomputes every field that is a pure function of the pools, `locks` and `holds`:
- *
- * - `frozen` is the **MAX** over active locks, never a sum — the property the old model could not
- *   represent.
- * - `bonded` is the staking lock (≤ v7.4) or the `Staking` hold (v8).
- * - `total = free + reserved`; `transferable = free - frozen`, floored at 0.
- */
-export const recomputeDerived = (balance: AccountBalance): void => {
-  const locks = balance.locks ?? [];
-  const holds = balance.holds ?? [];
-
-  const stakingHold = holds.find(hold => hold.reason === HoldReason.Staking)?.amount ?? BigInt(0);
-  const stakingLock = locks.find(lock => lock.lockId === STAKING_LOCK_ID)?.amount ?? BigInt(0);
-
-  balance.frozen = locks.reduce((max, lock) => maxBig(max, lock.amount), BigInt(0));
-  balance.bonded = maxBig(stakingHold, stakingLock);
-  balance.otherReserved = floorZero(balance.reserved - stakingHold);
-  balance.total = balance.free + balance.reserved;
-  balance.transferable = floorZero(balance.free - balance.frozen);
-};
-
-/**
- * Folds one entry into `lifetimeByKind`. A negative `amountAbs` with `countDelta: -1` takes it back
- * out again, which is how `relabelEntry` moves an entry from one kind to another.
- */
-const bumpLifetimeByKind = (
-  balance: AccountBalance,
-  kind: MovementKind,
-  direction: EntryDirection,
-  amountAbs: bigint,
-  countDelta = 1
-): void => {
-  const totals = balance.lifetimeByKind ?? [];
-  const signed = direction === EntryDirection.Credit ? amountAbs : -amountAbs;
-  const entry = totals.find(total => total.kind === kind);
-
-  if (entry) {
-    entry.totalAbs += amountAbs;
-    entry.net += signed;
-    entry.count += countDelta;
-  } else {
-    totals.push({ kind, totalAbs: amountAbs, net: signed, count: countDelta });
-  }
-
-  balance.lifetimeByKind = totals.filter(total => total.count > 0);
-};
-
-// ---------------------------------------------------------------------------------------------
-// Pool transition → entries + balance mutation
-// ---------------------------------------------------------------------------------------------
-
-interface Endpoint {
-  address: string;
-  pool: PolyxPool;
-}
-
-interface Transition {
-  /** debit side; absent when value entered the system (mint, endow, reward) */
-  from?: Endpoint;
-  /** credit side; absent when value left the system (burn, slash, fee, dust) */
-  to?: Endpoint;
-  amount: bigint;
-  kind: MovementKind;
-  holdReason?: HoldReason;
-  memo?: string;
-  /** who the value came from, for a credit with no debit side here (a slash's reporter reward) */
-  source?: string;
-  /** who the value went to, for a debit with no credit side here (a reserve funding a credit) */
-  destination?: string;
-}
-
-export const poolTag = (pool: PolyxPool): string => (pool === PolyxPool.Free ? 'f' : 'r');
-
-interface MovementSide {
-  endpoint: Endpoint;
-  direction: EntryDirection;
-  counterparty?: string;
-}
-
-/** The one or two account-sides a transition touches, each paired with its counterparty. */
-const movementSides = (transition: Transition): MovementSide[] => {
-  const sides: MovementSide[] = [];
-
-  if (transition.from?.address) {
-    sides.push({
-      endpoint: transition.from,
-      direction: EntryDirection.Debit,
-      counterparty: transition.to?.address ?? transition.destination,
-    });
-  }
-
-  if (transition.to?.address) {
-    sides.push({
-      endpoint: transition.to,
-      direction: EntryDirection.Credit,
-      counterparty: transition.from?.address ?? transition.source,
-    });
-  }
-
-  return sides;
-};
-
-/** The lifetime aggregate a movement kind feeds, if any. */
-const LIFETIME_TOTAL: Partial<
-  Record<MovementKind, 'totalFeesPaid' | 'totalRewards' | 'totalSlashed'>
-> = {
-  [MovementKind.Fee]: 'totalFeesPaid',
-  [MovementKind.StakingReward]: 'totalRewards',
-  [MovementKind.Slash]: 'totalSlashed',
-};
-
-/**
- * The direction an entry of that kind normally has. An entry pointing the other way is a reversal
- * of one — a refunded fee — and lowers the lifetime total instead of raising it.
- */
-const LIFETIME_DIRECTION: Partial<Record<MovementKind, EntryDirection>> = {
-  [MovementKind.Fee]: EntryDirection.Debit,
-  [MovementKind.StakingReward]: EntryDirection.Credit,
-  [MovementKind.Slash]: EntryDirection.Debit,
-};
-
-const rollupDelta = (kind: MovementKind, entry: Pick<PolyxEntry, 'direction' | 'amountAbs'>) =>
-  entry.direction === LIFETIME_DIRECTION[kind] ? entry.amountAbs : -entry.amountAbs;
-
-/** Advances the running `AccountBalance` for one side of a movement (pools + aggregates). */
-const advanceBalance = (
-  balance: AccountBalance,
-  side: MovementSide,
-  transition: Transition,
-  signed: bigint,
-  isInternal: boolean
-): void => {
-  if (side.endpoint.pool === PolyxPool.Free) {
-    balance.free += signed;
-  } else {
-    balance.reserved += signed;
-  }
-
-  if (!isInternal) {
-    if (side.direction === EntryDirection.Credit) {
-      balance.totalReceived += transition.amount;
-    } else {
-      balance.totalSent += transition.amount;
-    }
-  }
-
-  // Only on the side the total is about: a reward paid from the block reward reserve has a debit
-  // side too, and the reserve received no reward.
-  const lifetimeTotal = LIFETIME_TOTAL[transition.kind];
-  const lifetimeSide = LIFETIME_DIRECTION[transition.kind];
-  if (lifetimeTotal && (lifetimeSide === undefined || lifetimeSide === side.direction)) {
-    balance[lifetimeTotal] += transition.amount;
-  }
-
-  bumpLifetimeByKind(balance, transition.kind, side.direction, transition.amount);
-  balance.movementCount += 1;
-  recomputeDerived(balance);
-};
-
-/**
- * `idTag` keeps apart the entries of two movements filed under one event, which would otherwise
- * share ids: an entry's id is its event and pool and direction, and carries no account.
- */
-interface TransitionOptions {
-  eraIndex?: number;
-  idTag?: string;
-}
-
-interface TransitionContext {
-  args: HandlerArgs;
-  transition: Transition;
-  options: TransitionOptions;
-  isInternal: boolean;
-  date: Date;
-  params: ReturnType<typeof getEventParams>;
-}
-
-/** Advances one account and writes its `PolyxEntry`. */
-const writeMovementSide = async (
-  side: MovementSide,
-  { args, transition, options, isInternal, date, params }: TransitionContext
-): Promise<void> => {
-  const { blockId, block, eventIdx, blockEventId } = args;
-  const { address, pool } = side.endpoint;
-  const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
-
-  const account = await ledgerAccount(address, blockId, block.timestamp);
-  const balance = await loadBalance(address, account.identityId, blockEventId);
-
-  advanceBalance(balance, side, transition, signed, isInternal);
-  balance.updatedEventId = blockEventId;
-  await balance.save();
-
-  const counterpartyAccount = side.counterparty ? await Account.get(side.counterparty) : undefined;
-
-  const entry = PolyxEntry.create({
-    id: `${blockId}/${padId(eventIdx.toString())}/${poolTag(pool)}${
-      side.direction === EntryDirection.Debit ? 'd' : 'c'
-    }${options.idTag ?? ''}`,
-    movementId: blockEventId,
-    accountId: address,
-    identityId: account.identityId,
-    counterpartyAddress: side.counterparty,
-    counterpartyIdentityId: counterpartyAccount?.identityId,
-    pool,
-    amount: signed,
-    amountAbs: transition.amount,
-    kind: transition.kind,
-    direction: side.direction,
-    holdReason: transition.holdReason,
-    memo: transition.memo,
-    freeAfter: balance.free,
-    reservedAfter: balance.reserved,
-    frozenAfter: balance.frozen,
-    moduleId: params.moduleId,
-    callId: params.callId,
-    eventId: params.eventId,
-    specVersionId: block.specVersion,
-    date,
-    eraIndex: options.eraIndex,
-    createdEventId: blockEventId,
-    blockId,
-    extrinsicId: params.extrinsicId,
-  });
-  await entry.save();
-  getLedgerEntries(blockId).add(entry);
-};
-
-/**
- * Writes the entries for one pool transition and advances every touched `AccountBalance`.
- *
- * Sibling entries of one movement share `movementId` (the block/event id). Each entry carries the
- * balance-after snapshot, so Balance History is a pure index scan.
- */
-export const postTransition = async (
-  args: HandlerArgs,
-  transition: Transition,
-  options: TransitionOptions = {}
-): Promise<void> => {
-  // A movement of nothing writes nothing. Left in, a `Withdraw` of 0 ahead of a v8 Ethereum
-  // transaction's fee was taken for the fee's own withdrawal, being the payer's first burn, so the
-  // fee was charged twice (testnet block 25,118,132), and every empty event wrote an entry and a
-  // balance version for no change.
-  if ((!transition.from && !transition.to) || transition.amount === BigInt(0)) {
-    return;
-  }
-
-  const isInternal =
-    transition.from?.address !== undefined && transition.from.address === transition.to?.address;
-
-  const context: TransitionContext = {
-    args,
-    transition,
-    options,
-    isInternal,
-    date: startOfUtcDay(args.block.timestamp),
-    params: getEventParams(args),
-  };
-
-  for (const side of movementSides(transition)) {
-    await writeMovementSide(side, context);
-  }
-};
-
-/**
- * v8-only hold tracking. `Held`/`Released`/`BurnedHeld` move the balance through `postTransition`;
- * this keeps the per-reason breakdown in `AccountBalance.holds` so `bonded`/`otherReserved` stay
- * derivable without a scan. On a v8 chain `SUM(holds) == reserved`.
- */
-const adjustHold = async (
-  address: string,
-  reason: HoldReason,
-  delta: bigint,
-  blockEventId: string
-): Promise<void> => {
-  const balance = await AccountBalance.get(address);
-
-  if (!balance) {
-    return;
-  }
-
-  const holds = balance.holds ?? [];
-  const entry = holds.find(hold => hold.reason === reason);
-
-  if (entry) {
-    entry.amount = floorZero(entry.amount + delta);
-  } else if (delta > BigInt(0)) {
-    holds.push({ reason, amount: delta });
-  }
-
-  balance.holds = holds.filter(hold => hold.amount > BigInt(0));
-  recomputeDerived(balance);
-  balance.updatedEventId = blockEventId;
-
-  await balance.save();
-};
 
 // ---------------------------------------------------------------------------------------------
 // Locks (Locked / Unlocked / Frozen / Thawed) — a floor on `free`, not a pool. No PolyxEntry.
 // ---------------------------------------------------------------------------------------------
-
-/**
- * Adjusts one lock on `address` by `delta`, then recomputes `frozen = MAX(active locks)`.
- *
- * Locks aggregate by maximum, not by sum: two overlapping locks of 100 and 150 leave
- * `frozen = 150`. This is why each lock is tracked individually in `AccountBalance.locks` rather
- * than folded into a single number.
- *
- * Pre-v8 PIPs deposit locks have no lock event; `syncPipsLock` reads them back from chain.
- */
-export const adjustLock = async (
-  address: string,
-  lockId: string,
-  delta: bigint,
-  blockEventId: string,
-  reasons?: string
-): Promise<void> => {
-  const balance = await AccountBalance.get(address);
-
-  if (!balance) {
-    return;
-  }
-
-  const locks = balance.locks ?? [];
-  const entry = locks.find(lock => lock.lockId === lockId);
-
-  if (entry) {
-    entry.amount = floorZero(entry.amount + delta);
-    if (reasons !== undefined) {
-      entry.reasons = reasons;
-    }
-  } else if (delta > BigInt(0)) {
-    locks.push({ lockId, amount: delta, reasons });
-  }
-
-  balance.locks = locks.filter(lock => lock.amount > BigInt(0));
-  recomputeDerived(balance);
-  balance.updatedEventId = blockEventId;
-
-  await balance.save();
-};
-
-/** Sets one lock on `address` to an absolute amount (0 clears it). */
-export const setLock = async (
-  address: string,
-  lockId: string,
-  amount: bigint,
-  blockEventId: string,
-  reasons?: string
-): Promise<void> => {
-  const balance = await AccountBalance.get(address);
-  const current = balance?.locks?.find(lock => lock.lockId === lockId)?.amount ?? BigInt(0);
-
-  await adjustLock(address, lockId, amount - current, blockEventId, reasons);
-};
-
-/**
- * Sets the pre-v8 `'staking '` lock on `stash` to `staking.ledger.total` read from chain.
- *
- * The chain read is authoritative — it already accounts for the max-bond cap, the rounding of a
- * compounded `Staked` reward, unbonding chunks, and slashes.
- */
-const syncStakingLock = async (stash: string, args: HandlerArgs): Promise<void> => {
-  const total = await readStakingLock(stash, args.blockId);
-
-  await setLock(stash, STAKING_LOCK_ID, total, args.blockEventId, 'staking');
-};
 
 const lockHandler =
   (lockId: string, sign: bigint) =>
@@ -750,19 +93,8 @@ const lockHandler =
   };
 
 /**
- * `balances.Locked` / `Unlocked` — the `LockableCurrency` floor on `free`.
- *
- * v8 adds one more source of `Unlocked`: the lock → hold storage migration. Polymesh holds a
- * pre-v8 bond as `Currency::set_lock("staking ", …)`, and v8 converts it to a `Staking` hold,
- * emitting per account — across two migration passes, in no extrinsic of the staker's own —
- * `balances.Upgraded`, the paired `balances.Held{Staking}` (which `handleBalanceHeld` already
- * turns into the `free → reserved` movement), and `balances.Unlocked{who, amount}` for the lock
- * removal. Only the lock side is left to do here. Post-v8 nothing re-creates a `'staking '`
- * `Currency` lock (new bonds are holds), so an account that still carries one on a v8 block has
- * an un-migrated pre-v8 lock and the `Unlocked` it sees is that migration removing it — clear the
- * `'staking '` lock rather than the generic `'balances'` one. Without this the pre-v8 staking lock
- * lingers and `frozen` over-reports for the ~420k blocks between the hold appearing (pass 1) and
- * the chain dropping the lock (pass 2).
+ * `balances.Locked` / `Unlocked` — the `LockableCurrency` floor on `free`. On v8 an `Unlocked` can
+ * also be the migration of a pre-v8 staking lock to a hold (see `clearMigratedStakingLock`).
  */
 export const handleBalanceLocked = lockHandler('balances', BigInt(1));
 
@@ -771,16 +103,11 @@ const unlockGeneric = lockHandler('balances', BigInt(-1));
 export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
-  if (is8xChain(args.block)) {
-    const who = holder(decodeEvent(event));
-    const hasStakingLock =
-      !!who &&
-      ((await AccountBalance.get(who))?.locks ?? []).some(lock => lock.lockId === STAKING_LOCK_ID);
-
-    if (who && hasStakingLock) {
-      await setLock(who, STAKING_LOCK_ID, BigInt(0), args.blockEventId, 'staking');
-      return;
-    }
+  if (
+    is8xChain(args.block) &&
+    (await clearMigratedStakingLock(holder(decodeEvent(event)), args.blockEventId))
+  ) {
+    return;
   }
 
   await unlockGeneric(event);
@@ -789,10 +116,6 @@ export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void
 /** `balances.Frozen` / `Thawed` — the upstream `fungible` freeze, also a floor on `free`. */
 export const handleBalanceFrozen = lockHandler('freeze', BigInt(1));
 export const handleBalanceThawed = lockHandler('freeze', BigInt(-1));
-
-// ---------------------------------------------------------------------------------------------
-// Cross-event pairing helpers
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Memos seen before their paired `Transfer`, keyed by extrinsic + endpoints + amount, per block.
@@ -851,117 +174,6 @@ const takePendingMemo = (
 
   return memo;
 };
-
-/**
- * Re-files an already-written entry under a different `kind`, moving every aggregate that was
- * bumped when it was first written.
- *
- * Several handlers correct an earlier entry's classification once a later event in the same
- * extrinsic or block explains it — a `balances` deposit that turns out to be a staking reward, a
- * transfer that turns out to be a treasury disbursement, a withdrawal that turns out to be the
- * transaction fee. Changing `kind` alone leaves `AccountBalance.lifetimeByKind` (and the
- * `totalFeesPaid` / `totalRewards` / `totalSlashed` rollups) still counting the entry under the
- * kind it no longer has — so both sides move together here.
- */
-const relabelEntry = async (
-  entry: PolyxEntry,
-  kind: MovementKind,
-  blockEventId: string,
-  { eraIndex }: { eraIndex?: number } = {}
-): Promise<void> => {
-  const previous = entry.kind;
-
-  if (previous !== kind) {
-    const balance = await AccountBalance.get(entry.accountId);
-
-    if (balance) {
-      bumpLifetimeByKind(balance, previous, entry.direction, -entry.amountAbs, -1);
-      bumpLifetimeByKind(balance, kind, entry.direction, entry.amountAbs);
-
-      const from = LIFETIME_TOTAL[previous];
-      const to = LIFETIME_TOTAL[kind];
-
-      if (from) {
-        balance[from] = floorZero(balance[from] - rollupDelta(previous, entry));
-      }
-      if (to) {
-        balance[to] += rollupDelta(kind, entry);
-      }
-
-      balance.updatedEventId = blockEventId;
-      await balance.save();
-    }
-
-    entry.kind = kind;
-  }
-
-  if (eraIndex !== undefined) {
-    entry.eraIndex = eraIndex;
-  }
-
-  await entry.save();
-};
-
-/**
- * Entries already written in this extrinsic for `(kind, account)`, narrowed to `amountAbs` if given.
- * The live objects, from the block's own index (see `LedgerEntries`).
- */
-const findExtrinsicEntries = (
-  args: HandlerArgs,
-  kind: MovementKind,
-  account: string | undefined,
-  amountAbs?: bigint
-): PolyxEntry[] => {
-  if (!args.extrinsicId || !account) {
-    return [];
-  }
-
-  return getLedgerEntries(args.blockId)
-    .inExtrinsic(args.extrinsicId)
-    .filter(
-      row =>
-        row.kind === kind &&
-        row.accountId === account &&
-        (amountAbs === undefined || row.amountAbs === amountAbs)
-    );
-};
-
-/**
- * The entry among `candidates` written closest *before* the current event — the one a paired event
- * refers to when several match on account and amount. Block-scoped ids are zero-padded, so
- * `movementId` order is event order.
- */
-const nearestPreceding = (candidates: PolyxEntry[], args: HandlerArgs): PolyxEntry | undefined =>
-  candidates
-    .filter(entry => entry.movementId < args.blockEventId)
-    .sort((a, b) => (a.movementId < b.movementId ? 1 : -1))[0];
-
-/** The `movementId`s of the two events before the current one in this block. */
-const recentEventIds = (args: HandlerArgs): Set<string> =>
-  new Set([1, 2].map(back => `${args.blockId}/${padId(String(args.eventIdx - back))}`));
-
-/** The `movementId` of the event immediately before the current one in this block. */
-const previousEventId = (args: HandlerArgs): string =>
-  `${args.blockId}/${padId(String(args.eventIdx - 1))}`;
-
-/**
- * Entries written earlier in this block for `account` of one of `kinds`, narrowed to `amountAbs`.
- *
- * Staking rewards arrive from `on_initialize`, not an extrinsic, so the reward event and any
- * paired `balances` deposit can only be matched on the block. Used to keep a v8 reward from being
- * counted twice — once as `Mint`, once as `StakingReward`.
- */
-const findBlockEntries = (
-  blockId: string,
-  account: string | undefined,
-  amountAbs: bigint,
-  kinds: MovementKind[]
-): PolyxEntry[] =>
-  account
-    ? getLedgerEntries(blockId)
-        .ofAccount(account)
-        .filter(row => kinds.includes(row.kind) && row.amountAbs === amountAbs)
-    : [];
 
 // ---------------------------------------------------------------------------------------------
 // Balances-pallet handlers
@@ -1185,24 +397,6 @@ export const handleBalanceHeld = async (event: SubstrateEvent): Promise<void> =>
   }
 };
 
-/**
- * A stash moving from the legacy `staking ` lock to a `Staking` hold loses the lock with no event:
- * `do_migrate_currency` removes it, then holds the whole stake. So a staking hold on an account
- * the index still shows locked re-reads that lock from chain.
- */
-const syncMigratedStakingLock = async (who: string, blockEventId: string): Promise<void> => {
-  const balance = await AccountBalance.get(who);
-  const locked = balance?.locks?.some(lock => lock.lockId === STAKING_LOCK_ID);
-
-  if (!locked) {
-    return;
-  }
-
-  const onChain = (await readChainStakingLock(who)) ?? BigInt(0);
-
-  await setLock(who, STAKING_LOCK_ID, onChain, blockEventId, 'staking');
-};
-
 export const handleBalanceReleased = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const decoded = decodeEvent(event);
@@ -1371,149 +565,6 @@ export const handleBalanceMinted = async (event: SubstrateEvent): Promise<void> 
       ? MovementKind.BlockAuthorFee
       : MovementKind.Mint,
   });
-};
-
-/**
- * `identity.InitialPOLYX` for the block's runtime — 100,000 POLYX on testnet, 0 on mainnet and
- * develop. A `#[pallet::constant]`, so read from metadata rather than assumed per chain.
- * `undefined` when the runtime does not expose it.
- */
-const initialPolyx = (): bigint | undefined => {
-  try {
-    const raw = (
-      api.consts as unknown as Record<string, Record<string, Codec | undefined> | undefined>
-    ).identity?.initialPOLYX;
-
-    return raw === undefined || raw === null ? undefined : BigInt(raw.toString());
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * The POLYX `identity.do_register_did` gives a new identity's primary key.
- *
- * Pre-v8 the grant was invisible. `do_register_did` calls `deposit_creating(&sender,
- * InitialPOLYX)` and then emits `DidCreated` — and Polymesh's own balances pallet emits nothing for
- * a deposit, only `Endowed` when the account is new. So a key that already held POLYX before its
- * identity was registered (common on testnet: fund a key, then register it) received 100,000 POLYX
- * with no balance event at all. A resync found one such account exactly 100,000 POLYX short.
- *
- * `DidCreated` names the same account right after, so the grant is credited here — unless:
- * - the account was new, in which case the `Endowed` for exactly this amount already credited it;
- * - the chain is v8, whose upstream `Currency::deposit_creating` emits `Deposit`, already a `Mint`;
- * - the grant is 0, as on mainnet;
- * - the key is a systematic issuer, whose identity comes from `do_register_id`, which grants nothing.
- */
-export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const decoded = decodeEvent(event);
-  const primaryKey = firstText(decoded, ['primaryKey']);
-
-  if (!primaryKey) {
-    return;
-  }
-
-  const grant = initialPolyx();
-
-  if (!grant || grant <= BigInt(0)) {
-    return;
-  }
-
-  const systematic = Object.values(systematicIssuers).some(
-    issuer => getAccountId(issuer.accountId, api.registry.chainSS58) === primaryKey
-  );
-
-  if (systematic) {
-    return;
-  }
-
-  // `create_child_identity(ies)` emits `DidCreated` for the child too, but through
-  // `base_create_child_identity`, which grants nothing (v6.1.0, v7.4.0): only
-  // `register_did_without_cdd` does. The child is told apart by the `ParentDid` it stores before
-  // the event; a testnet resync credited a child's key 100,000 POLYX it never received.
-  const did = firstText(decoded, ['did']);
-
-  if (did && (await isChildIdentity(did))) {
-    return;
-  }
-
-  const [endowed] = args.extrinsicId
-    ? findExtrinsicEntries(args, MovementKind.Endowment, primaryKey, grant)
-    : findBlockEntries(args.blockId, primaryKey, grant, [MovementKind.Endowment]);
-
-  // A deposit like any other, funded from the block reward reserve first (see `reserveShare`).
-  if (endowed) {
-    await drawReserveFor(args, endowed, MovementKind.Mint);
-    return;
-  }
-
-  await creditFromReserve(args, primaryKey, grant, MovementKind.Mint);
-};
-
-/**
- * `bridge.Bridged(did, BridgeTx { nonce, recipient, amount, tx_hash })` — POLY locked on Ethereum,
- * POLYX minted here. The bridge pallet (removed in v7.0.0) credits it with
- * `balances::deposit_creating(recipient, amount)` (verified at v3.3.0 and v6.0.0), and the pre-v8
- * balances pallet emits nothing for a deposit, so the only record of the credit is this event: a
- * testnet resync found an account 30,000 POLYX short from one bridge transfer.
- *
- * A recipient with no account yet does get `Endowed(recipient, amount)` from the same deposit, and
- * that endowment already is the credit. It is emitted inside `deposit_creating`, then dropping the
- * imbalance touches the block reward reserve (which emits its own `Endowed(brr, 0)` the first time),
- * then `Bridged` — so the endowment is one or two events back.
- *
- * Dropping the imbalance takes the POLYX from the block reward reserve while that has free
- * balance, and mints the rest, with no event either way (see `reserveShare`).
- */
-export const handleBridgeMint = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const tx = (args.params[1] as Codec | undefined)?.toJSON() as
-    | { recipient?: string; amount?: string | number }
-    | null
-    | undefined;
-
-  if (!tx?.recipient || tx.amount === undefined) {
-    return;
-  }
-
-  const recipient = getAccountKey(tx.recipient, api.registry.chainSS58);
-  const amount = BigInt(String(tx.amount));
-
-  const endowed = findBlockEntries(args.blockId, recipient, amount, [MovementKind.Endowment]).find(
-    entry => recentEventIds(args).has(entry.movementId)
-  );
-
-  // Funded from the block reward reserve first (see `reserveShare`).
-  if (endowed) {
-    await drawReserveFor(args, endowed, MovementKind.Mint);
-    return;
-  }
-
-  await creditFromReserve(args, recipient, amount, MovementKind.Mint);
-};
-
-/** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1). */
-const isChildIdentity = async (did: string): Promise<boolean> => {
-  // Not in the v8 type augmentation (the storage was dropped with child identities there).
-  const identity = (
-    api.query as unknown as Record<
-      string,
-      { parentDid?: (id: string) => Promise<{ isSome?: boolean }> } | undefined
-    >
-  ).identity;
-
-  return (await identity?.parentDid?.(did))?.isSome === true;
 };
 
 /**
@@ -1691,107 +742,6 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
 };
 
 // ---------------------------------------------------------------------------------------------
-// The block reward reserve, before v8
-// ---------------------------------------------------------------------------------------------
-
-const blockRewardReserve = (): string =>
-  getAccountId(systematicIssuers.blockRewardReserve.accountId, api.registry.chainSS58);
-
-/**
- * How much of a deposit the block reward reserve paid, before v8.
- *
- * Pre-v8 a deposit not offset by a withdrawal, such as a staking reward, a bridge mint or the
- * testnet identity grant, leaves a positive imbalance, and dropping it does not simply mint:
- * `drop_positive_imbalance` takes what it can from the reserve's free balance and mints only the
- * rest, with no event either way (balances pallet, v3.0.0 to v7.4.0; v8 has no reserve). Read from
- * the index's own reserve balance, which genesis seeds and every movement since keeps.
- *
- * On testnet the reserve held 1 POLYX and paid the first reward of block 9,259,823; on mainnet it
- * held real funds and paid rewards for a long time, and every one was recorded as newly minted.
- */
-const reserveShare = async (args: HandlerArgs, amount: bigint): Promise<bigint> => {
-  if (is8xChain(args.block) || amount <= BigInt(0)) {
-    return BigInt(0);
-  }
-
-  const free = (await AccountBalance.get(blockRewardReserve()))?.free ?? BigInt(0);
-
-  if (free <= BigInt(0)) {
-    return BigInt(0);
-  }
-
-  return free < amount ? free : amount;
-};
-
-/**
- * Credits `to` with a deposit as the runtime funded it: from the block reward reserve for its share
- * (see `reserveShare`), and minted for the rest. A deposit the reserve only part-covered is two
- * movements under one event, the minted one tagged apart.
- */
-const creditFromReserve = async (
-  args: HandlerArgs,
-  to: string,
-  amount: bigint,
-  kind: MovementKind,
-  options: TransitionOptions = {}
-): Promise<void> => {
-  const fromReserve = await reserveShare(args, amount);
-
-  if (fromReserve > BigInt(0)) {
-    await postTransition(
-      args,
-      {
-        from: { address: blockRewardReserve(), pool: PolyxPool.Free },
-        to: { address: to, pool: PolyxPool.Free },
-        amount: fromReserve,
-        kind,
-      },
-      options
-    );
-  }
-
-  if (amount > fromReserve) {
-    await postTransition(
-      args,
-      { to: { address: to, pool: PolyxPool.Free }, amount: amount - fromReserve, kind },
-      { ...options, idTag: fromReserve > BigInt(0) ? `${options.idTag ?? ''}m` : options.idTag }
-    );
-  }
-};
-
-/**
- * The reserve's side of a deposit already credited, by the `Endowed` the deposit emitted for an
- * account it created: the reserve's share (see `reserveShare`) debited, naming the account it
- * went to, and the credit marked as coming from the reserve.
- */
-const drawReserveFor = async (
-  args: HandlerArgs,
-  credit: PolyxEntry,
-  kind: MovementKind,
-  options: TransitionOptions = {}
-): Promise<void> => {
-  const fromReserve = await reserveShare(args, credit.amountAbs);
-
-  if (fromReserve <= BigInt(0)) {
-    return;
-  }
-
-  await postTransition(
-    args,
-    {
-      from: { address: blockRewardReserve(), pool: PolyxPool.Free },
-      amount: fromReserve,
-      kind,
-      destination: credit.accountId,
-    },
-    options
-  );
-
-  credit.counterpartyAddress = blockRewardReserve();
-  await credit.save();
-};
-
-// ---------------------------------------------------------------------------------------------
 // Treasury and fees
 // ---------------------------------------------------------------------------------------------
 
@@ -1887,23 +837,8 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
     });
   }
 
-  // Before 5.0.0 the payment was a withdrawal from the treasury, burned, and a deposit to the
-  // recipient, which the block reward reserve funded first (see `reserveShare`). Net, the
-  // recipient gained what the treasury lost, and the reserve's share was destroyed.
   if (!hasToAddress) {
-    const burned = await reserveShare(args, amount);
-
-    if (burned > BigInt(0)) {
-      await postTransition(
-        args,
-        {
-          from: { address: blockRewardReserve(), pool: PolyxPool.Free },
-          amount: burned,
-          kind: MovementKind.Burn,
-        },
-        { idTag: 'b' }
-      );
-    }
+    await burnDisbursedReserveShare(args, amount);
   }
 };
 
@@ -2019,81 +954,6 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
 };
 
 /**
- * Whether the block's events show extrinsic `extrinsicIdx` emitting `section.method`.
- *
- * The fee paths decide which runtime they are in from what the extrinsic actually emitted, not from
- * the block's reported spec version. That label comes from the dictionary's map of spec ranges,
- * which starts each runtime late — by up to a few hundred blocks on testnet — so a gate on it
- * misfiles the blocks either side of an upgrade: a fee counted twice, or not at all. What the
- * runtime emitted cannot be mislabelled.
- */
-export const extrinsicEmits = (
-  block: SubstrateBlock,
-  extrinsicIdx: number | undefined,
-  section: string,
-  method: string
-): boolean =>
-  extrinsicIdx !== undefined &&
-  extrinsicEventIndices(block, extrinsicIdx).some(index => {
-    const { event } = (block.events ?? [])[index];
-
-    return event.section === section && event.method === method;
-  });
-
-/**
- * The treasury's cut of a fee, announced by the event at `index` — `0` when that event is not one.
- *
- * Up to v5.4.0 the runtime split every fee rather than paying it all to the block author: 80% went
- * to the treasury, which announced it as `treasury.TreasuryReimbursement`, and the remaining 20% to
- * the author, unannounced. The treasury's event sits at a fixed point beside the fee it came from —
- * right after a protocol fee's `FeeCharged`, and right before a transaction fee is settled (its
- * `TransactionFeePaid` from v5.4.0, or the extrinsic's closing event before it) — so its position
- * says which fee it is a cut of. From v5.4.2 fees go to the author whole and no such event appears.
- * `feeIndex` is the fee's own event; the cut is in its phase, which is the block's initialisation
- * for a fee charged outside any extrinsic.
- */
-export const treasuryShareAt = (block: SubstrateBlock, index: number, feeIndex: number): bigint => {
-  const records = block.events ?? [];
-  const record = records[index];
-
-  // the same phase as the fee: its extrinsic, or a fee charged as the block initialises
-  if (
-    record?.event.section !== 'treasury' ||
-    record.event.method !== 'TreasuryReimbursement' ||
-    record.phase.toString() !== records[feeIndex]?.phase.toString()
-  ) {
-    return BigInt(0);
-  }
-
-  return BigInt(record.event.data[1].toString());
-};
-
-/**
- * Pays a pre-v8 fee to the block author — what is left of it once the treasury's announced cut is
- * taken, which is all of it from v5.4.2 (see `treasuryShareAt`). With no author the chain drops
- * that part instead, so nothing is credited. A treasury event larger than the fee cannot be its
- * cut, and leaves the fee whole.
- */
-export const creditBlockAuthor = async (
-  args: HandlerArgs,
-  fee: bigint,
-  treasuryShare: bigint
-): Promise<void> => {
-  const author = await blockAuthor(args.block);
-  const amount = treasuryShare <= fee ? fee - treasuryShare : fee;
-
-  if (!author || amount === BigInt(0)) {
-    return;
-  }
-
-  await postTransition(args, {
-    to: { address: author, pool: PolyxPool.Free },
-    amount,
-    kind: MovementKind.BlockAuthorFee,
-  });
-};
-
-/**
  * Whether a v8 `balances.Deposit` is the block author being paid a fee, rather than new POLYX.
  *
  * The runtime pays each fee to the author through a `Deposit` it emits at a fixed point: a
@@ -2187,59 +1047,6 @@ const refileFeeWithdrawal = async (
   return true;
 };
 
-/**
- * The account a fee event's fee was taken from, when no withdrawal of it was recorded.
- *
- * From v5.4.1 (spec 5004001) both fee events name it, subsidiser included (`fee_key`), so it is
- * taken as is: applying a subsidy again charged a subsidised paying key's own subsidiser instead
- * (testnet block 14,872,581, where a two-level subsidy moved 25 POLYX on to the wrong account).
- * Checked on testnet at 5004001, 5004002, 6002010, 7000005 and 7003003, where the named account
- * fell by the fee and the signer did not; v8 names `fee_key` too.
- *
- * Before it, each named someone else:
- * - `protocolFee.FeeCharged` the payer, before its subsidy (`check_subsidy(account, fee, None)`
- *   then `FeeCharged(account, …)`), which covers any call.
- * - `transactionPayment.TransactionFeePaid`, only on v5.4.0 (spec 5004000), the signer, while the
- *   fee was charged as before v5.4 (see `resolveFeeAccount`). So a call someone else pays for,
- *   such as `relayer.accept_paying_key`, left its signer low and its payer high.
- *
- * Gated on `block.specVersion`, which `ensureTrueSpecVersion` has already set to the runtime that
- * executed the block. So the subsidy is looked up only on the runtimes whose events left it out.
- */
-const chargedFor = async (args: HandlerArgs, who: string): Promise<string> => {
-  if (args.block.specVersion >= 5_004_001) {
-    return who;
-  }
-  if (args.eventId === EventIdEnum.FeeCharged) {
-    return (await activeSubsidiser(who)) ?? who;
-  }
-
-  return args.extrinsic ? resolveFeeAccount(args.extrinsic) : who;
-};
-
-/** The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows. */
-export const activeSubsidiser = async (user: string): Promise<string | undefined> => {
-  const subsidies = await Subsidy.getByBeneficiaryAccountId(user, { limit: 10 });
-
-  return subsidies.find(subsidy => subsidy.isAccepted && !subsidy.isRemoved)?.payingAccountId;
-};
-
-/**
- * The account a transaction fee was taken from, up to v5.4.0, when the runtime announced no fee
- * or named the signer: the payer `get_valid_payer` chose (`resolveFeePayer`), or the paying key of
- * that payer's subsidy (`check_subsidy(&payer_key, …)`). A subsidy covers every call but the
- * relayer's own: a subsidised payer's call to any other unsubsidised pallet is rejected, so never
- * reaches the chain.
- */
-export const resolveFeeAccount = async (extrinsic: SubstrateExtrinsic): Promise<string> => {
-  const payer = await resolveFeePayer(extrinsic);
-  const subsidiser = await activeSubsidiser(payer);
-
-  return subsidiser && extrinsic.extrinsic.method.section.toLowerCase() !== 'relayer'
-    ? subsidiser
-    : payer;
-};
-
 // ---------------------------------------------------------------------------------------------
 // Staking — era-dependent, and inverted at v8
 // ---------------------------------------------------------------------------------------------
@@ -2281,15 +1088,9 @@ export const handlePayoutStarted = async (event: SubstrateEvent): Promise<void> 
 export const currentPayoutEra = (blockId: string): number | undefined =>
   payoutEraBlock === blockId ? payoutEraIndex : undefined;
 
-const stakingStash = (decoded: Record<string, Codec>): string | undefined =>
-  firstText(decoded, ['stash', 'account', 'staker', 'who']);
-
 /**
- * The account a reward was actually paid to.
- *
- * v8: the `Rewarded` event carries the `RewardDestination`. Pre-v8 it carries only the stash, so
- * `staking.payee(stash)` is read from chain storage — measured on mainnet to matter for a
- * large share of pre-v8 rewards.
+ * The account a reward was actually paid to: on v8, the `RewardDestination` that `Rewarded`
+ * carries, and before it the payee read from chain (see `legacyRewardRecipient`).
  */
 const rewardRecipient = async (
   decoded: Record<string, Codec>,
@@ -2301,46 +1102,27 @@ const rewardRecipient = async (
     return undefined;
   }
 
-  if (is8x) {
-    // v8: `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
-    const dest = optionalField(decoded, 'dest');
-    const { destination, account } = readRewardDestination(
-      (dest?.toJSON() ?? null) as Parameters<typeof readRewardDestination>[0]
-    );
-
-    if (destination === 'Account' && account) {
-      return { recipient: account, restaked: false };
-    }
-
-    /**
-     * v8 `make_payout` still honours the deprecated `Controller` payee — it mints to
-     * `bonded(stash)`, not to the stash. The variant carries no account, and as a unit variant it
-     * decodes to a bare string, so the old object-only check sent every such reward to the stash:
-     * the stash ran high and the controller low by exactly the reward total (57 rewards,
-     * 141,981,208, on one testnet account).
-     */
-    if (destination === 'Controller') {
-      // A stash with no controller already resolves to itself. A read that fails is not that, and
-      // is left to fail the block, so the retry credits the right account.
-      const controller = await resolveController(stash, blockId);
-
-      return { recipient: controller, restaked: false };
-    }
-
-    return { recipient: stash, restaked: false };
+  if (!is8x) {
+    return legacyRewardRecipient(stash, blockId);
   }
 
-  const { rewardDestination, rewardDestinationAccount } = await resolveLegacyRewardDestination(
-    stash,
-    blockId
+  // `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
+  const dest = optionalField(decoded, 'dest');
+  const { destination, account } = readRewardDestination(
+    (dest?.toJSON() ?? null) as Parameters<typeof readRewardDestination>[0]
   );
 
-  // Pre-v8 `Staked` auto-restakes: the reward lands in `free` and is immediately locked, and no
-  // `staking.Bonded` is emitted for it — so the lock has to be raised here.
-  return {
-    recipient: rewardDestinationAccount ?? stash,
-    restaked: rewardDestination === 'Staked',
-  };
+  if (destination === 'Account' && account) {
+    return { recipient: account, restaked: false };
+  }
+
+  // `make_payout` still honours the deprecated `Controller` payee and pays `bonded(stash)`. A
+  // stash with no controller resolves to itself; a read that fails fails the block.
+  if (destination === 'Controller') {
+    return { recipient: await resolveController(stash, blockId), restaked: false };
+  }
+
+  return { recipient: stash, restaked: false };
 };
 
 /**
@@ -2442,325 +1224,10 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
   }
 };
 
-/** One `staking.UnappliedSlash`: a slash the chain holds back until its era comes due. */
-interface DeferredSlash {
-  era: number;
-  validator: string;
-  own: bigint;
-  reporters: string[];
-  payout: bigint;
-}
-
-/**
- * The slashes still deferred as `block` begins, which is the set it applies from; `undefined` when
- * that state can't be read (see `storageEntriesAtParent`).
- *
- * Read at the parent hash, because applying a slash takes it out of storage, so the block's own
- * state no longer holds it.
- */
-const deferredSlashesBefore = async (
-  block: SubstrateBlock
-): Promise<DeferredSlash[] | undefined> => {
-  const entries = await storageEntriesAtParent(block, 'staking', 'unappliedSlashes').catch(
-    (error: unknown) => {
-      if (error instanceof UndecodableStateError) {
-        return undefined;
-      }
-      throw error;
-    }
-  );
-
-  // a key whose era didn't decode leaves its slashes unplaceable, which is not "none deferred"
-  if (entries?.some(({ args }) => args.length === 0)) {
-    return undefined;
-  }
-
-  return entries?.flatMap(({ args: [era], value }) => {
-    const deferred = value as unknown as {
-      validator: Codec;
-      own: Codec;
-      reporters: Codec[];
-      payout: Codec;
-    }[];
-
-    return deferred.map(slash => ({
-      era: Number(getBigIntValue(era)),
-      validator: getTextValue(slash.validator),
-      own: getBigIntValue(slash.own),
-      reporters: slash.reporters.map(reporter => getTextValue(reporter)),
-      payout: getBigIntValue(slash.payout),
-    }));
-  });
-};
-
-/**
- * Pays a pre-v8 slash's reporters their share. The chain announces nothing for it.
- *
- * `slashing::apply_slash` takes the slash from the validator and its nominators, each announced
- * by `staking.Slash`, then `pay_reporters` gives the offence's reporters up to the deferred
- * slash's `payout`, split evenly, through `resolve_creating`, which emits nothing. The rest,
- * including any remainder of the split, goes to the treasury as one `TreasuryReimbursement`. So
- * the reporters' share left the validator and arrived nowhere. On testnet that left the one
- * reporter of the era-2159 slash 637.5 POLYX short from block 7,751,343.
- *
- * Done once per deferred slash, on the validator's own `Slash`, which comes first: a nominator's
- * `Slash` names an account that is not the deferred slash's validator. Of the deferred slashes
- * that match, the oldest era is the one applied, because eras are applied in order.
- *
- * Checked against the treasury's event. The slashes of this offence, less what the reporters were
- * paid, must be what the treasury received; anything else is recorded, not guessed at.
- */
-/**
- * What applying a slash took, from the validator's `Slash` at `eventIdx` and the nominators' after
- * it, up to the treasury's receipt; and what the treasury announced it received, if it did.
- */
-const slashProceeds = (
-  block: SubstrateBlock,
-  eventIdx: number
-): { slashed: bigint; announced?: bigint } => {
-  const records = (block.events ?? []).slice(eventIdx);
-  const treasuryAt = records.findIndex(
-    ({ event }) => event.section === 'treasury' && event.method === 'TreasuryReimbursement'
-  );
-  const upToTreasury = treasuryAt === -1 ? records : records.slice(0, treasuryAt);
-  const slashed = upToTreasury
-    .filter(({ event }) => event.section === 'staking' && event.method === 'Slash')
-    .reduce((sum, { event }) => sum + BigInt(event.data[1].toString()), BigInt(0));
-
-  return {
-    slashed,
-    announced: treasuryAt === -1 ? undefined : BigInt(records[treasuryAt].event.data[1].toString()),
-  };
-};
-
-const creditSlashReporters = async (
-  args: HandlerArgs,
-  validator: string,
-  own: bigint
-): Promise<void> => {
-  const { block, eventIdx } = args;
-  const deferred = await deferredSlashesBefore(block);
-
-  if (!deferred) {
-    await recordAnomaly({
-      kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash of ${own} on ${validator}: the deferred slashes could not be read, so its reporters were not paid`,
-      block,
-      eventIdx,
-    });
-    return;
-  }
-
-  const candidates = deferred.filter(slash => slash.validator === validator);
-
-  if (candidates.length === 0) {
-    // A nominator's share of someone else's slash. Its validator's `Slash` paid the reporters.
-    return;
-  }
-
-  const applied = candidates.filter(slash => slash.own === own).sort((a, b) => a.era - b.era)[0];
-
-  if (!applied) {
-    await recordAnomaly({
-      kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash of ${own} on ${validator} matches no deferred slash, so its reporters were not paid`,
-      block,
-      eventIdx,
-    });
-    return;
-  }
-
-  const { slashed, announced } = slashProceeds(block, eventIdx);
-
-  const reporters = applied.reporters;
-  const payout = applied.payout < slashed ? applied.payout : slashed;
-  const perReporter = reporters.length === 0 ? BigInt(0) : payout / BigInt(reporters.length);
-
-  if (perReporter > BigInt(0)) {
-    // One credit per account, of its share for each time it is listed, so no two credits touch
-    // the same balance. They are all filed against this one event, so each after the first is
-    // tagged apart: an entry's id carries no account.
-    const shares = new Map<string, bigint>();
-    reporters.forEach(reporter =>
-      shares.set(reporter, (shares.get(reporter) ?? BigInt(0)) + perReporter)
-    );
-
-    await Promise.all(
-      [...shares].map(([reporter, amount], index) =>
-        postTransition(
-          args,
-          {
-            to: { address: reporter, pool: PolyxPool.Free },
-            amount,
-            kind: MovementKind.StakingReward,
-            source: validator,
-          },
-          { idTag: index === 0 ? undefined : `p${index}` }
-        )
-      )
-    );
-  }
-
-  const toTreasury = slashed - perReporter * BigInt(reporters.length);
-
-  if (announced !== toTreasury) {
-    await recordAnomaly({
-      kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash on ${validator}: ${slashed} slashed and ${
-        perReporter * BigInt(reporters.length)
-      } paid to reporters should leave ${toTreasury} for the treasury, which announced ${
-        announced ?? 'nothing'
-      }`,
-      block,
-      eventIdx,
-    });
-  }
-};
-
-const ensureBalanceRow = async (
-  address: string,
-  blockId: string,
-  datetime: Date,
-  blockEventId: string
-): Promise<void> => {
-  await ledgerAccount(address, blockId, datetime);
-  const balance = await loadBalance(address, undefined, blockEventId);
-  await balance.save();
-};
-
-// ---------------------------------------------------------------------------------------------
-// PIPs deposits — a pre-v8 lock with no balance event
-// ---------------------------------------------------------------------------------------------
-
-/**
- * Sets `address`'s `'pips    '` lock to what the chain holds after this block.
- *
- * The pips pallet locks proposal and vote deposits with `Currency::increase_lock` /
- * `reduce_lock(PIPS_LOCK_ID, …)` (verified at v3.3.0, v4.1.0, v6.0.0, v7.4.0 and v8.0.0), and the
- * pre-v8 balances pallet emits nothing for a lock change, so the deposit was never on the ledger:
- * a testnet resync found accounts reporting `frozen` 0 against a chain value of exactly the
- * 2,000 POLYX minimum proposal deposit. The lock is an aggregate over every PIP the account has a
- * deposit on, so it is read back rather than accumulated from the event amounts.
- *
- * v8 is skipped: upstream `update_locks` emits `Locked`/`Unlocked` for the change in `frozen`,
- * which `handleBalanceLocked`/`handleBalanceUnlocked` already record.
- */
-const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> => {
-  const amount = await readChainLock(address, PIPS_LOCK_ID);
-
-  if (amount === undefined) {
-    return;
-  }
-
-  await ensureBalanceRow(address, args.blockId, args.block.timestamp, args.blockEventId);
-  await setLock(address, PIPS_LOCK_ID, amount, args.blockEventId, 'pips');
-};
-
-/**
- * `pips.ProposalCreated(did, proposer, pipId, deposit, …)` locks a community proposer's deposit;
- * `pips.Voted(did, voter, pipId, aye, deposit)` raises or lowers the voter's. A committee proposer
- * has no account and no deposit.
- */
-export const handlePipsDeposit = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const rawAccount = args.params[1] as Codec;
-  const address =
-    args.eventId === EventIdEnum.ProposalCreated
-      ? communityProposer(rawAccount)
-      : getTextValue(rawAccount);
-
-  if (address) {
-    await syncPipsLock(address, args);
-  }
-};
-
-const communityProposer = (rawProposer: Codec): string | undefined => {
-  const proposer = getProposerValue(rawProposer);
-
-  return proposer.type === 'Community' ? proposer.value : undefined;
-};
-
-/**
- * `pips.ProposalRefund(did, pipId, total)` — the deposits on `pipId` are unlocked, but the event
- * names neither the depositors nor their amounts, and by the time it fires the chain has already
- * removed them from `Deposits`. The depositors are the community proposer and every voter, both
- * already indexed, so each is re-read. From v7 a refund can be split over several blocks
- * (`remove_pending_storage` takes a bounded batch); an account not refunded yet still reads its
- * lock, so re-reading everyone is safe.
- */
-export const handleProposalRefund = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const pipId = padNumericId(getTextValue(args.params[1] as Codec));
-  const [proposal, votes] = await Promise.all([
-    Proposal.get(pipId),
-    getAllByFields<ProposalVote>('ProposalVote', [['proposalId', '=', pipId]]),
-  ]);
-
-  // `ProposalVote.account` is the raw public key; balances are keyed by SS58 address.
-  const addresses = new Set<string>(
-    votes.map(vote => getAccountKey(vote.account, api.registry.chainSS58))
-  );
-
-  if (proposal?.proposer.type === 'Community') {
-    addresses.add(proposal.proposer.value);
-  }
-
-  for (const address of addresses) {
-    await syncPipsLock(address, args);
-  }
-};
-
-/** `staking.Bonded` — pre-v8 raises the staking lock; v8 is ledger state only (see `Held`). */
-export const handleBonded = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const decoded = decodeEvent(event);
-  const stash = stakingStash(decoded);
-
-  if (!stash) {
-    return;
-  }
-
-  await ensureBalanceRow(stash, args.blockId, args.block.timestamp, args.blockEventId);
-  await syncStakingLock(stash, args);
-};
-
 /**
  * `staking.Unbonded` — the unbonding queue keeps the balance locked (`ledger.total` is unchanged
  * until `withdraw_unbonded`), so the lock does not move here on either era.
  */
 export const handleUnbonded = async (): Promise<void> => {
   // intentionally a no-op for the balance ledger
-};
-
-/** `staking.Withdrawn` — pre-v8 lowers the staking lock as matured chunks leave; v8 is state only. */
-export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-
-  if (is8xChain(args.block)) {
-    return;
-  }
-
-  const decoded = decodeEvent(event);
-  const stash = stakingStash(decoded);
-
-  if (!stash) {
-    return;
-  }
-
-  await syncStakingLock(stash, args);
 };
