@@ -220,6 +220,29 @@ Notes on each decision:
 
 It is listed separately because turning it on will produce a large, unrelated diff, and it should not be bundled with a change whose value is that it is otherwise behaviour-neutral. **[I]** — the size of that diff has not been measured.
 
+### 12.9 Audit the `as unknown as` casts — after landing, with the strictNullChecks burn-down
+
+A double cast tells the compiler to stop checking, so a chain change that breaks the read compiles
+anyway. Hand-written code has 71 (`src/types`, which SubQuery generates, is excluded), plus 51 in
+tests. As of 2026-10-07 they fall into:
+
+| Kind | Count | What to do |
+|---|---|---|
+| `serializeLikeHarvester.ts` | 14 | nothing: they go with the file if §9.10 is accepted |
+| Codec field reads (`Codec`, `Record<string, Codec>`, `Option`) | ~17 | where the code only runs at v8, use the augmented type directly; where it also decodes older runtimes, keep the cast, since the augmentation describes v8 only (§12.5) |
+| Block events and records (`block.events`, `GenericEvent`, `EventRecord`) | ~10 | mostly avoidable with SubQuery's typed `EventRecord` |
+| `api.query` for storage v8 removed (e.g. `identity.parentDid`) | ~6 | keep: the storage exists only on older runtimes |
+| Others (`assetFromChain.ts`, `storageAtParent.ts`, …) | ~24 | case by case |
+
+Some casts exist only to get past the `@polkadot/types-codec` dual-declaration clash, which `tsc`
+accepts and `subql build` rejects (§12.2). Where that is the only reason, read through
+`.toString()` instead, as `readEraTotalStake` does, which needs no cast.
+
+**The rule going forward:** a cast that stays has a one-line comment saying which runtimes need it,
+or that it is the build clash. Do this together with the strictNullChecks burn-down, since both
+touch the same files, and run `yarn build` on every step, because only the build catches the
+clash.
+
 ---
 
 ## Tests
