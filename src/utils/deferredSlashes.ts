@@ -5,7 +5,11 @@ import { storageEntriesAtParent, UndecodableStateError } from './storageAtParent
 
 /** One `staking.UnappliedSlash`: a slash the chain holds back until its era comes due. */
 export interface DeferredSlash {
-  /** the era the slash is applied in */
+  /**
+   * The era it is held under. From v7.0 that is the era it is applied in, `slash_era + defer + 1`;
+   * before v7.0 it is the era it was reported in, applied once the active era passes it by more
+   * than the defer duration.
+   */
   era: number;
   validator: string;
   own: bigint;

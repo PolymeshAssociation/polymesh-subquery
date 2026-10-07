@@ -4,7 +4,11 @@
  * `activeEra()` / `session.validators()` — see `src/utils/staking.ts` for why those are stale at
  * `StakersElected` time), not decoded from the event. `EraPaid` then closes the era it opened.
  */
-import { handleEraPaid, handleStakersElected } from '../../src/mappings/entities/events/mapEra';
+import {
+  handleEraPaid,
+  handleStakersElected,
+  recordElection,
+} from '../../src/mappings/entities/events/mapEra';
 import { IndexerAnomaly } from '../../src/types';
 import {
   mockGetByFields,
@@ -202,6 +206,26 @@ describe('handleStakersElected', () => {
 
     // a failed read is not "nobody elected"
     expect(db.Validator[VAL_OLD].isActive).toBe(true);
+  });
+
+  /** The genesis config elects era 0 with no election event; the genesis seed records it. */
+  it('records the era the genesis config elects', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Validator');
+    mockElection(0, [VAL_OLD, VAL_NEW]);
+    const { block } = namedEvent({ section: 'staking', method: 'StakersElected', fields: {} });
+
+    await recordElection(0, {
+      block,
+      blockId: '0000000000',
+      blockEventId: '0000000000/0000000000',
+    });
+
+    expect(Object.values(db.Era)[0]).toMatchObject({ eraIndex: 0, validatorCount: 2 });
+    expect(Object.keys(db.ValidatorEra)).toEqual([
+      `0000000000/${VAL_OLD}`,
+      `0000000000/${VAL_NEW}`,
+    ]);
   });
 
   it('handles the pre-v7 StakingElection the same way, ignoring its ElectionCompute payload', async () => {

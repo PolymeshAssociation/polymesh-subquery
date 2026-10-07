@@ -290,6 +290,13 @@ export const readCurrentEraIndex = async (): Promise<number | undefined> => {
   return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
 };
 
+/** `staking.activeEra().index`, the era being staked in at this block; `undefined` before the first. */
+export const readActiveEraIndex = async (): Promise<number | undefined> => {
+  const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
+
+  return active?.index ?? undefined;
+};
+
 /** One elected validator's exposure for an era. */
 export interface EraExposure {
   stash: string;

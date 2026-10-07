@@ -1,4 +1,4 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { AnomalyKind, Era, Validator, ValidatorEra } from '../../../types';
 import { blockTime, getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
@@ -57,6 +57,18 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
     return;
   }
 
+  await recordElection(eraIndex, { block, blockId, blockEventId });
+};
+
+/**
+ * Records the validators elected for `eraIndex`: the `Era`, a `ValidatorEra` per validator with its
+ * exposure and preferences, and which `Validator`s are active. Called on each election event, and
+ * by the genesis seed for the era the genesis config elects, which has no election event.
+ */
+export const recordElection = async (
+  eraIndex: number,
+  { block, blockId, blockEventId }: { block: SubstrateBlock; blockId: string; blockEventId: string }
+): Promise<void> => {
   const [exposures, prefs] = await Promise.all([
     readEraExposures(eraIndex),
     readEraValidatorPrefs(eraIndex),

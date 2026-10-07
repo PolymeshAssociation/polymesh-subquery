@@ -59,6 +59,18 @@ describe('appliedDeferredSlash', () => {
 });
 
 describe('handleSlash', () => {
+  /** The active era at the slash's block, and the runtime's `SlashDeferDuration` (14 on testnet). */
+  const chainEras = (activeEra: number) => {
+    (globalThis as any).api.query = {
+      staking: {
+        activeEra: jest.fn().mockResolvedValue({ toJSON: () => ({ index: activeEra }) }),
+      },
+    };
+    (globalThis as any).api.consts = {
+      staking: { slashDeferDuration: { toNumber: () => 14 } },
+    };
+  };
+
   beforeEach(() => {
     jest.mocked(deferredSlashesBefore).mockReset();
     jest
@@ -66,11 +78,13 @@ describe('handleSlash', () => {
       .mockImplementation(address => Promise.resolve({ id: address } as never));
   });
 
-  it("records a v8 nominator's slash against its validator and the era it was applied in", async () => {
+  it("records a v8 nominator's slash with its validator, applied era and offence era", async () => {
     const db = mockStore();
+    // testnet block 25,176,378: held under 7029, the era it is applied in, for an offence in 7014
     jest
       .mocked(deferredSlashesBefore)
-      .mockResolvedValue([deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]])]);
+      .mockResolvedValue([deferred(7029, BigInt(1000), [[NOMINATOR, BigInt(40)]])]);
+    chainEras(7029);
 
     await handleSlash(
       namedEvent({
@@ -84,15 +98,19 @@ describe('handleSlash', () => {
       expect.objectContaining({
         accountId: NOMINATOR,
         validatorId: VALIDATOR,
-        eraIndex: 2159,
+        eraIndex: 7029,
+        offenceEraIndex: 7014,
         amount: BigInt(40),
       }),
     ]);
   });
 
-  it("records a pre-v8 validator's own slash", async () => {
+  it("records a pre-v7 validator's own slash with its applied era and no offence era", async () => {
     const db = mockStore();
+    // testnet block 7,751,343: before v7.0 the slash is held under 2159, the era it was reported
+    // in, and applied once the active era passes it by more than 14
     jest.mocked(deferredSlashesBefore).mockResolvedValue([deferred(2159, BigInt(1000))]);
+    chainEras(2174);
 
     await handleSlash(
       tupleEvent({
@@ -104,13 +122,19 @@ describe('handleSlash', () => {
     );
 
     expect(Object.values(db.Slash)).toEqual([
-      expect.objectContaining({ accountId: VALIDATOR, validatorId: VALIDATOR, eraIndex: 2159 }),
+      expect.objectContaining({
+        accountId: VALIDATOR,
+        validatorId: VALIDATOR,
+        eraIndex: 2174,
+        offenceEraIndex: undefined,
+      }),
     ]);
   });
 
   it('keeps the slash and reports it when the deferred slashes cannot be read', async () => {
     const db = mockStore();
     jest.mocked(deferredSlashesBefore).mockResolvedValue(undefined);
+    chainEras(7029);
     const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
     await handleSlash(
@@ -125,7 +149,8 @@ describe('handleSlash', () => {
       expect.objectContaining({
         accountId: NOMINATOR,
         validatorId: undefined,
-        eraIndex: undefined,
+        eraIndex: 7029,
+        offenceEraIndex: undefined,
       }),
     ]);
     expect(anomaly).toHaveBeenCalledTimes(1);

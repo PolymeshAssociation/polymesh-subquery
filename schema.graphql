@@ -2353,9 +2353,8 @@ type ValidatorEra
 """
 A stash's stake slashed: `staking.Slash` before v8, `staking.Slashed` from v8. Slashes are
 deferred on Polymesh, so each is placed from the deferred slash it was applied from: the offending
-`validator` (the stash itself when it is the validator, otherwise the validator it nominated), and
-the era it was applied in. Both are null when the deferred slash could not be read, which records an
-anomaly
+`validator` is the stash itself when it is the validator, otherwise the validator it nominated.
+Null when the deferred slash could not be read, which records an anomaly
 """
 type Slash @entity {
   id: ID! # blockEventId
@@ -2363,6 +2362,8 @@ type Slash @entity {
   validator: Validator @index
   "the era the slash was applied in"
   eraIndex: Int @index
+  "the era of the offence: exact from v7.0, null before, where the chain keeps only the era it was reported in"
+  offenceEraIndex: Int @index
   amount: BigInt!
   createdEvent: Event!
 }
