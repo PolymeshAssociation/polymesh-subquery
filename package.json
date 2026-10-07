@@ -13,6 +13,7 @@
     "prepack": "rm -rf dist && yarn build",
     "prepare": "husky install",
     "lint": "eslint . --ext .ts",
+    "check": "yarn lint && yarn build && yarn test:unit",
     "test": "jest",
     "test:unit": "jest --config jest.unit.config.js",
     "test:integration": "./scripts/integration-test.sh",
