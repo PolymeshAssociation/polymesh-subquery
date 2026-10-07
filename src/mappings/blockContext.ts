@@ -1,14 +1,63 @@
 import { SubstrateBlock } from '@subql/types';
+import type { PolyxEntry } from '../types';
 import type { KeyRecordResolution } from '../utils/accounts';
 import { padId } from '../utils/common';
 
 /**
+ * The ledger entries written while a block is indexed, looked up by extrinsic, account and
+ * movement: what the ledger pairs one event against another with.
+ *
+ * Pairing only ever matches entries of the same block or the same extrinsic, all written earlier
+ * in the block by the thread indexing it, and every entry is registered here as it is written, so
+ * this holds all of them. Searching the store instead cost a `getByFields` per transfer, fee and
+ * deposit, and each one sorts every cached `PolyxEntry` and sends their ids to Postgres as a
+ * `NOT IN` list: quadratic in a block's size. The entries are the live objects, so a relabel
+ * through one is seen by every later lookup.
+ */
+export class LedgerEntries {
+  private readonly byExtrinsicId = new Map<string, PolyxEntry[]>();
+  private readonly byAccountId = new Map<string, PolyxEntry[]>();
+  private readonly byMovementId = new Map<string, PolyxEntry[]>();
+
+  add(entry: PolyxEntry): void {
+    const into = (map: Map<string, PolyxEntry[]>, key: string | undefined) => {
+      if (key === undefined) {
+        return;
+      }
+      const list = map.get(key);
+      if (list) {
+        list.push(entry);
+      } else {
+        map.set(key, [entry]);
+      }
+    };
+
+    into(this.byExtrinsicId, entry.extrinsicId);
+    into(this.byAccountId, entry.accountId);
+    into(this.byMovementId, entry.movementId);
+  }
+
+  inExtrinsic(extrinsicId: string): PolyxEntry[] {
+    return this.byExtrinsicId.get(extrinsicId) ?? [];
+  }
+
+  ofAccount(accountId: string): PolyxEntry[] {
+    return this.byAccountId.get(accountId) ?? [];
+  }
+
+  ofMovement(movementId: string): PolyxEntry[] {
+    return this.byMovementId.get(movementId) ?? [];
+  }
+}
+
+/**
  * State that lives for exactly one block.
  *
- * Every field here is a cache or a within-block deduplication marker, never a decision the index
- * depends on: losing it re-does work, it does not change what is written. That is what makes it
- * safe under `--workers`, where each thread holds its own copy - a worker indexes a whole block,
- * so a block's context is never split across threads.
+ * Every field but `ledgerEntries` is a cache or a within-block deduplication marker, never a
+ * decision the index depends on: losing it re-does work, it does not change what is written.
+ * `ledgerEntries` is complete instead, for the reasons on `LedgerEntries`. All of it is safe under
+ * `--workers`, where each thread holds its own copy: a worker indexes a whole block, in order, so
+ * a block's context is never split across threads.
  *
  * Anything that must survive a block, a restart or a worker boundary belongs in an entity
  * instead. `ChainUpgrade` is the worked example: it used to be two module level variables.
@@ -38,6 +87,8 @@ export interface BlockContext {
   author?: string | null;
   /** Whether `block.specVersion` has been checked against the runtime that executed the block */
   specChecked?: boolean;
+  /** Every ledger entry written while this block is indexed (see `LedgerEntries`) */
+  ledgerEntries: LedgerEntries;
 }
 
 let current: BlockContext | undefined;
@@ -54,6 +105,7 @@ const contextFor = (blockId: string, blockHash?: string): BlockContext => {
       blockWritten: false,
       handledExtrinsics: new Set(),
       keyRecords: new Map(),
+      ledgerEntries: new LedgerEntries(),
     };
   } else if (blockHash !== undefined) {
     current.blockHash = blockHash;
@@ -68,9 +120,22 @@ const contextFor = (blockId: string, blockHash?: string): BlockContext => {
  * Handlers are invoked in block order, so holding one block at a time is enough and keeps the
  * memory bounded regardless of how long the process runs. A different hash at the same height -
  * a reorg the node replayed - also starts a fresh context.
+ *
+ * The hash is the header's. `block.hash` is the generic codec hash of the whole signed block, every
+ * extrinsic included: not the block's hash, and rebuilt on every read, so in a block of 600 events
+ * it cost ~5 ms a call, and this is called several times an event (testnet block 13,617,686).
  */
 export const getBlockContext = (block: SubstrateBlock): BlockContext =>
-  contextFor(padId(block.block.header.number.toString()), block.hash.toHex());
+  contextFor(padId(block.block.header.number.toString()), block.block.header.hash.toHex());
+
+/** Test hook — forget the current block, so a test reusing a height starts afresh. */
+export const __resetBlockContext = (): void => {
+  current = undefined;
+};
+
+/** The ledger entries written in a block so far, reachable from layers that carry only its id. */
+export const getLedgerEntries = (blockId: string): LedgerEntries =>
+  contextFor(blockId).ledgerEntries;
 
 /**
  * The key record cache for a block, reachable from layers that carry only the block id.

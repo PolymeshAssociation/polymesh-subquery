@@ -41,8 +41,7 @@ const rewardDestinationByVariant: Record<string, RewardDestinationName> = {
  * deliberately: the generated types describe one metadata snapshot — the current one — while
  * both callers read blocks from runtimes that predate it, and `api` decodes against the block's
  * own registry. `.unwrap()` written against today's `OptionQuery` throws on a block where the
- * entry decodes as a bare `RewardDestination`, and that throw lands in a `catch` that would turn
- * every reward into `LegacyUnknown`. `.toJSON()` is the one accessor whose output is the same
+ * entry decodes as a bare `RewardDestination`. `.toJSON()` is the one accessor whose output is the same
  * either way: `null`, a bare string (`"Staked"` — when every variant of that runtime's type is a
  * unit variant), or a single-key object with the variant camel-cased (`{ staked: null }`,
  * `{ account: "0x…" }`).
@@ -70,8 +69,8 @@ export const readRewardDestination = (
 };
 
 /**
- * Per-block caches of the two chain reads every staking path starts with: `staking.payee(stash)`
- * and `staking.bonded(stash)`.
+ * Per-block caches of the chain reads every staking path starts with: `staking.payee(stash)` and
+ * `staking.bonded(stash)`, and `staking.ledger(controller)` behind them.
  *
  * **Block scoped, not process lifetime.** `set_payee` and `set_controller` emit no event, so
  * there is nothing a longer-lived entry could be invalidated on, and both went stale silently and
@@ -91,24 +90,31 @@ export const readRewardDestination = (
 let cacheBlock: string | undefined;
 let payeeCache = new Map<string, LegacyRewardDestination>();
 let controllerCache = new Map<string, string>();
+let ledgerCache = new Map<string, StakingLedgerSnapshot>();
 
 const cachesFor = (
   blockId: string
-): { payees: Map<string, LegacyRewardDestination>; controllers: Map<string, string> } => {
+): {
+  payees: Map<string, LegacyRewardDestination>;
+  controllers: Map<string, string>;
+  ledgers: Map<string, StakingLedgerSnapshot>;
+} => {
   if (cacheBlock !== blockId) {
     cacheBlock = blockId;
     payeeCache = new Map();
     controllerCache = new Map();
+    ledgerCache = new Map();
   }
 
-  return { payees: payeeCache, controllers: controllerCache };
+  return { payees: payeeCache, controllers: controllerCache, ledgers: ledgerCache };
 };
 
-/** Test hook — a suite re-mocking `staking.payee` / `staking.bonded` within one block must clear. */
+/** Test hook — a suite re-mocking staking storage within one block must clear. */
 export const __resetStakingCaches = (): void => {
   cacheBlock = undefined;
   payeeCache = new Map();
   controllerCache = new Map();
+  ledgerCache = new Map();
 };
 
 /**
@@ -132,40 +138,41 @@ export const resolveLegacyRewardDestination = async (
     return cached;
   }
 
-  try {
-    const payee = await api.query.staking.payee(stash);
-    const { destination, account } = readRewardDestination(payee.toJSON());
-
-    let result: LegacyRewardDestination;
-
-    if (destination === 'Staked' || destination === 'Stash') {
-      result = {
-        rewardDestination: destination,
-        rewardDestinationAccount: stash,
-      };
-    } else if (destination === 'Controller') {
-      const controller = (await api.query.staking.bonded(stash)).toJSON();
-
-      result = {
-        rewardDestination: 'Controller',
-        rewardDestinationAccount: typeof controller === 'string' ? controller : undefined,
-      };
-    } else if (destination === 'Account') {
-      result = {
-        rewardDestination: 'Account',
-        rewardDestinationAccount: account,
-      };
-    } else {
-      result = { rewardDestination: 'None' };
-    }
-
-    payees.set(stash, result);
-
-    return result;
-  } catch {
-    // A pruned node, or a runtime with no `staking.payee` storage — fall back to the placeholder.
+  // Only a runtime without the storage falls back to the placeholder. A failed read fails the block,
+  // so it is retried.
+  if (typeof api.query.staking?.payee !== 'function') {
     return { rewardDestination: 'LegacyUnknown' };
   }
+
+  const payee = await api.query.staking.payee(stash);
+  const { destination, account } = readRewardDestination(payee.toJSON());
+
+  let result: LegacyRewardDestination;
+
+  if (destination === 'Staked' || destination === 'Stash') {
+    result = {
+      rewardDestination: destination,
+      rewardDestinationAccount: stash,
+    };
+  } else if (destination === 'Controller') {
+    const controller = (await api.query.staking.bonded(stash)).toJSON();
+
+    result = {
+      rewardDestination: 'Controller',
+      rewardDestinationAccount: typeof controller === 'string' ? controller : undefined,
+    };
+  } else if (destination === 'Account') {
+    result = {
+      rewardDestination: 'Account',
+      rewardDestinationAccount: account,
+    };
+  } else {
+    result = { rewardDestination: 'None' };
+  }
+
+  payees.set(stash, result);
+
+  return result;
 };
 
 /**
@@ -213,37 +220,46 @@ export interface StakingLedgerSnapshot {
  * `bonded`/`unbonding`/`unlocking` split (`active` vs the queued chunks) would otherwise each
  * issue the same chain read.
  *
- * `undefined` when the ledger cannot be read (a runtime with a different shape, a pruned node) —
- * callers keep their delta accumulator as the fallback. A killed ledger (fully withdrawn) reads
- * back as all-zero, not `undefined`.
+ * A killed ledger (fully withdrawn) reads back as all-zero. A failed read fails the block.
  */
 export const readStakingLedger = async (
   stash: string,
   blockId: string
-): Promise<StakingLedgerSnapshot | undefined> => {
-  try {
-    const controller = await resolveController(stash, blockId);
-    const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
-      total?: string | number;
-      active?: string | number;
-      unlocking?: { value?: string | number; era?: number }[];
-    } | null;
-
-    if (!ledger) {
-      return { total: BigInt(0), active: BigInt(0), unlocking: [] };
-    }
-
-    return {
-      total: BigInt(ledger.total ?? 0),
-      active: BigInt(ledger.active ?? 0),
-      unlocking: (ledger.unlocking ?? []).map(({ value, era }) => ({
-        amount: BigInt(value ?? 0),
-        era: Number(era ?? 0),
-      })),
-    };
-  } catch {
-    return undefined;
+): Promise<StakingLedgerSnapshot> => {
+  // Per block, like the payee and controller above: a payout block restakes many rewards, and both
+  // the ledger and `StakingPosition` read each stash's ledger.
+  const ledgers = cachesFor(blockId).ledgers;
+  const cached = ledgers.get(stash);
+  if (cached) {
+    return cached;
   }
+
+  const snapshot = await readLedger(stash, blockId);
+  ledgers.set(stash, snapshot);
+
+  return snapshot;
+};
+
+const readLedger = async (stash: string, blockId: string): Promise<StakingLedgerSnapshot> => {
+  const controller = await resolveController(stash, blockId);
+  const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
+    total?: string | number;
+    active?: string | number;
+    unlocking?: { value?: string | number; era?: number }[];
+  } | null;
+
+  if (!ledger) {
+    return { total: BigInt(0), active: BigInt(0), unlocking: [] };
+  }
+
+  return {
+    total: BigInt(ledger.total ?? 0),
+    active: BigInt(ledger.active ?? 0),
+    unlocking: (ledger.unlocking ?? []).map(({ value, era }) => ({
+      amount: BigInt(value ?? 0),
+      era: Number(era ?? 0),
+    })),
+  };
 };
 
 /**
@@ -254,14 +270,9 @@ export const readStakingLedger = async (
  * Read rather than accumulated from `Bonded` / `Withdrawn` / restaked-`Reward` deltas: the deltas
  * do not see the max-bond cap, the rounding of a compounded `RewardDestination::Staked` reward,
  * or a slash — each of which leaves the accumulator drifting from the real lock.
- *
- * `undefined` when the ledger cannot be read — the caller keeps its delta accumulator as the
- * fallback.
  */
-export const readStakingLock = async (
-  stash: string,
-  blockId: string
-): Promise<bigint | undefined> => (await readStakingLedger(stash, blockId))?.total;
+export const readStakingLock = async (stash: string, blockId: string): Promise<bigint> =>
+  (await readStakingLedger(stash, blockId)).total;
 
 /**
  * The era `StakersElected` just elected, read from `staking.currentEra()` — **not**
@@ -271,17 +282,12 @@ export const readStakingLock = async (
  * pallet actually rotates onto that era (`start_session` → `start_era`, a separate, later block),
  * so reading `activeEra()` here would still return the *outgoing* era for a session or more.
  *
- * `undefined` when the read fails (a pruned node, or a runtime with no current era yet) — the
- * caller leaves the era unset rather than guessing.
+ * `undefined` when the chain has no current era yet.
  */
 export const readCurrentEraIndex = async (): Promise<number | undefined> => {
-  try {
-    const currentEra = (await api.query.staking.currentEra()).toJSON() as number | null;
+  const currentEra = (await api.query.staking.currentEra()).toJSON() as number | null;
 
-    return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
-  } catch {
-    return undefined;
-  }
+  return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
 };
 
 /**
@@ -293,14 +299,10 @@ export const readCurrentEraIndex = async (): Promise<number | undefined> => {
  * rotates onto it, later. Enumerating the double-map's keys for a fixed era index is the standard
  * way to list its validators without reading each `Exposure` value.
  */
-export const readEraValidators = async (eraIndex: number): Promise<string[] | undefined> => {
-  try {
-    const keys = await api.query.staking.erasStakers.keys(eraIndex);
+export const readEraValidators = async (eraIndex: number): Promise<string[]> => {
+  const keys = await api.query.staking.erasStakers.keys(eraIndex);
 
-    return keys.map(key => key.args[1].toString());
-  } catch {
-    return undefined;
-  }
+  return keys.map(key => key.args[1].toString());
 };
 
 /**
@@ -311,7 +313,7 @@ export const readEraValidators = async (eraIndex: number): Promise<string[] | un
  * the one present — both are tried rather than gating on a spec version. The value is
  * `Option<PermissionedIdentityPrefs>`: any `Some` means permissioned.
  *
- * `undefined` when neither pallet can be read, which the caller treats as "not known to be
+ * `undefined` when neither pallet has the storage, which the caller treats as "not known to be
  * permissioned" rather than guessing.
  */
 export const readPermissionedIdentity = async (
@@ -325,16 +327,10 @@ export const readPermissionedIdentity = async (
   for (const pallet of ['validators', 'staking']) {
     const read = query[pallet]?.permissionedIdentity;
 
-    if (!read) {
-      continue;
-    }
-
-    try {
+    if (read) {
       const prefs = (await read(identityId)).toJSON();
 
       return prefs !== null && prefs !== undefined;
-    } catch {
-      // try the other pallet
     }
   }
 
@@ -342,14 +338,9 @@ export const readPermissionedIdentity = async (
 };
 
 /** Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`. */
-export const readEraTotalStake = async (eraIndex: number): Promise<bigint | undefined> => {
-  try {
-    // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
-    // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
-    // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
-    // type mismatch under the webpack build that `tsc`/jest don't surface.
-    return BigInt((await api.query.staking.erasTotalStake(eraIndex)).toString());
-  } catch {
-    return undefined;
-  }
-};
+export const readEraTotalStake = async (eraIndex: number): Promise<bigint> =>
+  // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
+  // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
+  // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
+  // type mismatch under the webpack build that `tsc`/jest don't surface.
+  BigInt((await api.query.staking.erasTotalStake(eraIndex)).toString());

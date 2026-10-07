@@ -45,6 +45,19 @@ export const mockStore = (db: MockDb = {}): MockDb => {
     delete db[entity]?.[id];
     return Promise.resolve();
   });
+  // equality filters over the in-memory rows, paged as the real store pages them
+  ((globalThis as any).store.getByFields as jest.Mock).mockImplementation(
+    (
+      entity: string,
+      filter: [string, string, unknown][],
+      { offset = 0, limit = 100 }: { offset?: number; limit?: number } = {}
+    ) =>
+      Promise.resolve(
+        Object.values(db[entity] ?? {})
+          .filter(row => filter.every(([field, , value]) => (row as any)[field] === value))
+          .slice(offset, offset + limit)
+      )
+  );
   (globalThis as any).api.query = {};
   return db;
 };
@@ -66,6 +79,14 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
 
   return { identity: { keyRecords: jest.fn().mockResolvedValue({ isEmpty: true }) } };
 };
+
+/**
+ * `staking.bonded` reporting no controller, so `resolveController` treats a stash as its own
+ * controller. Creating or refreshing a `StakingPosition` reads it.
+ */
+export const mockSelfControlled = (): { bonded: jest.Mock } => ({
+  bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+});
 
 /**
  * Wires `store.getByFields` — used by `getAllByFields` — to read live from the same in-memory

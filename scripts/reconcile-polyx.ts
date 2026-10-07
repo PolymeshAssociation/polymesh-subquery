@@ -1,9 +1,9 @@
 /**
  * The POLYX reconciliation harness — the acceptance gate for the POLYX ledger.
  *
- * The in-flight reconciliation in `src/mappings/entities/identities/reconcilePolyx.ts` only ever
- * compares at the block being indexed, so it cannot answer "is the history right". This script
- * does, offline, against a synced local database and a public archive RPC.
+ * An in-flight check can only compare at the block being indexed, so it cannot answer "is the
+ * history right". This script does, offline, against a synced local database and a public archive
+ * RPC.
  *
  * Method (docs/implementation/02-polyx-ledger.md §"The reconciliation harness"):
  *

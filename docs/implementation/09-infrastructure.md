@@ -88,12 +88,11 @@ enum AnomalyKind {
   NoDecoderForSpecVersion
   UnknownEnumValue
   MissingReferencedEntity
-  BalanceReconciliationDrift
   HandlerError
 }
 ```
 
-Wire into: `toEnum` fallbacks (currently silently `Unknown`), decode failures, `getAsset` misses, and the reconciliation check in [02](./02-polyx-ledger.md).
+Wire into: `toEnum` fallbacks (currently silently `Unknown`), decode failures and `getAsset` misses. The in-flight reconciliation check in [02](./02-polyx-ledger.md) also wrote here as `BalanceReconciliationDrift`, until it was removed.
 
 **Acceptance:** after a full resync, review every distinct `(kind, moduleId, eventId)` — each is either a genuine chain oddity to document or a bug to fix.
 

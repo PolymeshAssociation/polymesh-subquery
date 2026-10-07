@@ -274,7 +274,7 @@ export const toCallNode = async (call: RawCall | undefined): Promise<CallNode> =
   }
 
   const bySection: Record<string, () => Promise<CallNode | undefined>> = {
-    asset: async () => assetCallNode(call, method),
+    asset: () => Promise.resolve(assetCallNode(call, method)),
     utility: () => utilityCallNode(call, method),
     multiSig: () => multiSigCallNode(call, method),
   };

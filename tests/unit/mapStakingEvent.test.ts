@@ -171,7 +171,10 @@ describe('handleStakingEvent', () => {
     const db = mockStore();
     (globalThis as any).api.query = {
       ...mockLedgerAccountQuery(),
-      staking: { bonded: jest.fn().mockRejectedValue(new Error('no ledger')) },
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        ledger: jest.fn().mockResolvedValue({ toJSON: () => ({ total: '4000', active: '4000' }) }),
+      },
     };
 
     const event = namedEvent({

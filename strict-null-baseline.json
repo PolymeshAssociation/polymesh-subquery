@@ -1,6 +1,6 @@
 {
   "src/mappings/entities/assets/mapAsset.ts": 24,
-  "src/mappings/entities/assets/mapNfts.ts": 22,
+  "src/mappings/entities/assets/mapNfts.ts": 16,
   "src/mappings/entities/assets/mapStatistics.ts": 12,
   "src/mappings/entities/assets/mapTickers.ts": 5,
   "src/mappings/entities/assets/metadataKeyResolver.ts": 3,
@@ -10,7 +10,7 @@
   "src/mappings/entities/identities/mapClaim.ts": 3,
   "src/mappings/entities/identities/mapIdentities.ts": 1,
   "src/mappings/entities/identities/mapIdentityKey.ts": 1,
-  "src/mappings/entities/identities/mapPolyxLedger.ts": 35,
+  "src/mappings/entities/identities/mapPolyxLedger.ts": 34,
   "src/mappings/entities/identities/mapPortfolio.ts": 14,
   "src/mappings/entities/identities/repairAuthorizations.ts": 3,
   "src/mappings/entities/multiSig/mapMultiSig.ts": 10,

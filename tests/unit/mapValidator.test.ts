@@ -7,6 +7,7 @@ import {
   codec,
   mockGetByFields,
   mockLedgerAccountQuery,
+  mockSelfControlled,
   mockStore,
   namedEvent,
   tupleEvent,
@@ -17,7 +18,7 @@ const STASH = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 describe('handleValidatorPrefsSet', () => {
   it('upserts commission/blocked idempotently', async () => {
     const db = mockStore();
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
 
     await handleValidatorPrefsSet(
       namedEvent({
@@ -48,7 +49,7 @@ describe('handleValidatorPrefsSet', () => {
 
   it('decodes a pre-v8 tuple ValidatorPrefsSet event the same way', async () => {
     const db = mockStore();
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
 
     await handleValidatorPrefsSet(
       tupleEvent({
@@ -67,7 +68,7 @@ describe('handlePermissionedIdentityAdded / handlePermissionedIdentityRemoved', 
   it('round-trips isPermissioned on an existing Validator row for that identity', async () => {
     const db = mockStore();
     mockGetByFields(db, 'Validator');
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
 
     await handleValidatorPrefsSet(
       namedEvent({
@@ -135,16 +136,19 @@ describe('a Validator created after its identity was permissioned', () => {
       fields: { stash: STASH, prefs: { commission: 0, blocked: false } },
     });
 
-  const permissionedIn = (pallet: 'validators' | 'staking', prefs: unknown) => {
-    (globalThis as any).api.query = {
+  const permissionedIn = (pallet: 'validators' | 'staking', read: jest.Mock) => {
+    const query: Record<string, Record<string, jest.Mock>> = {
       ...mockLedgerAccountQuery(),
-      [pallet]: { permissionedIdentity: jest.fn().mockResolvedValue({ toJSON: () => prefs }) },
+      staking: mockSelfControlled(),
     };
+    query[pallet] = { ...query[pallet], permissionedIdentity: read };
+    (globalThis as any).api.query = query;
   };
+  const prefsOf = (prefs: unknown) => jest.fn().mockResolvedValue({ toJSON: () => prefs });
 
   it('picks up the flag from the v8 validators pallet', async () => {
     const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
-    permissionedIn('validators', { intendedCount: 2, runningCount: 0 });
+    permissionedIn('validators', prefsOf({ intendedCount: 2, runningCount: 0 }));
 
     await handleValidatorPrefsSet(prefsSet());
 
@@ -153,7 +157,7 @@ describe('a Validator created after its identity was permissioned', () => {
 
   it('picks up the flag from the pre-v8 staking pallet', async () => {
     const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
-    permissionedIn('staking', { intendedCount: 2, runningCount: 0 });
+    permissionedIn('staking', prefsOf({ intendedCount: 2, runningCount: 0 }));
 
     await handleValidatorPrefsSet(prefsSet());
 
@@ -162,19 +166,29 @@ describe('a Validator created after its identity was permissioned', () => {
 
   it('leaves it false when the identity is not permissioned', async () => {
     const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
-    permissionedIn('validators', null);
+    permissionedIn('validators', prefsOf(null));
 
     await handleValidatorPrefsSet(prefsSet());
 
     expect(db.Validator[STASH].isPermissioned).toBe(false);
   });
 
-  it('leaves it false when the chain cannot be read', async () => {
+  it('leaves it false on a runtime with neither storage item', async () => {
     const db = mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
 
     await handleValidatorPrefsSet(prefsSet());
 
     expect(db.Validator[STASH].isPermissioned).toBe(false);
+  });
+
+  it('fails the block when the read fails', async () => {
+    mockStore({ Account: { [STASH]: { id: STASH, identityId: DID } } });
+    permissionedIn(
+      'validators',
+      jest.fn().mockRejectedValue(new Error('WebSocket is not connected'))
+    );
+
+    await expect(handleValidatorPrefsSet(prefsSet())).rejects.toThrow('WebSocket is not connected');
   });
 });

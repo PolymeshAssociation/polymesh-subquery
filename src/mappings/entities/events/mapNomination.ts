@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Nomination } from '../../../types';
-import { blockTime, getAllByFields, getTextValue } from '../../../utils';
+import { blockTime, EXPLICIT_NULL, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
@@ -25,24 +25,25 @@ const nominationId = (stash: string, validator: string, blockEventId: string): s
 /**
  * `Nominated` carries no era — a nomination applies to future elections, not a specific past one.
  * Read `staking.activeEra()` once per call so `Nomination.eraIndex` at least records "as of which
- * era this nomination was submitted." A missing/unreadable value leaves `eraIndex` null rather
- * than guessed at.
+ * era this nomination was submitted." `undefined` when the chain has no active era yet, which
+ * leaves `eraIndex` null rather than guessed at.
  */
 const currentEraIndex = async (): Promise<number | undefined> => {
-  try {
-    const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
+  const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
 
-    return active?.index;
-  } catch {
-    return undefined;
-  }
+  return active?.index ?? undefined;
 };
 
-const getOpenNominations = async (stash: string): Promise<Nomination[]> => {
-  const rows = await getAllByFields<Nomination>('Nomination', [['positionId', '=', stash]]);
-
-  return rows.filter(row => !row.validToEventId);
-};
+/**
+ * A stash's open nominations, read through the `(position, validToEvent)` index: only the open
+ * ones, rather than every nomination the stash ever made, which grew with each re-nomination. An
+ * open nomination is written with an explicit `null`, which the store's cache needs to match one.
+ */
+const getOpenNominations = (stash: string): Promise<Nomination[]> =>
+  getAllByFields<Nomination>('Nomination', [
+    ['positionId', '=', stash],
+    ['validToEventId', '=', EXPLICIT_NULL],
+  ]);
 
 export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId } = extractArgs(event);
@@ -85,6 +86,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
         validatorId: validator,
         eraIndex,
         validFromEventId: blockEventId,
+        validToEventId: EXPLICIT_NULL, // explicitly open (see `getOpenNominations`)
       }).save();
     }),
   ]);

@@ -9,6 +9,7 @@ import { IndexerAnomaly } from '../../src/types';
 import {
   mockGetByFields,
   mockLedgerAccountQuery,
+  mockSelfControlled,
   mockStore,
   namedEvent,
   tupleEvent,
@@ -21,6 +22,7 @@ const mockElection = (eraIndex: number | null, validators: string[] | 'unreadabl
   (globalThis as any).api.query = {
     ...mockLedgerAccountQuery(),
     staking: {
+      ...mockSelfControlled(),
       currentEra: jest.fn().mockResolvedValue({ toJSON: () => eraIndex }),
       erasStakers: {
         keys:
@@ -64,10 +66,10 @@ describe('handleStakersElected', () => {
    * The event has no payload, so the era it opens is only knowable from chain state. Without it there
    * is nothing to write — but an era boundary the index skipped is a gap, so it is reported.
    */
-  it('writes nothing and reports the gap when the current era cannot be read', async () => {
+  it('writes nothing and reports the gap when the chain has no current era', async () => {
     const db = mockStore();
     mockGetByFields(db, 'Validator');
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    mockElection(null, []);
     const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
     await expect(
@@ -78,7 +80,7 @@ describe('handleStakersElected', () => {
     expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
-  it('still records the Era, but leaves the active-validator set untouched, when the validator-set read fails', async () => {
+  it('fails the block when the validator-set read fails, leaving the active set untouched', async () => {
     const db = mockStore({
       Validator: {
         [VAL_OLD]: {
@@ -92,17 +94,13 @@ describe('handleStakersElected', () => {
     });
     mockGetByFields(db, 'Validator');
     mockElection(5, 'unreadable');
-    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
-    await handleStakersElected(
-      namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
-    );
+    await expect(
+      handleStakersElected(namedEvent({ section: 'staking', method: 'StakersElected', fields: {} }))
+    ).rejects.toThrow('no such storage');
 
-    expect(Object.values(db.Era)).toHaveLength(1);
-    // A failed read must not be treated as "nobody elected" — the prior set stays active.
+    // a failed read is not "nobody elected"
     expect(db.Validator[VAL_OLD].isActive).toBe(true);
-    // …which is a decision about what to keep, not a reason to keep quiet about it
-    expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
   it('handles the pre-v7 StakingElection the same way, ignoring its ElectionCompute payload', async () => {

@@ -31,7 +31,7 @@ export const indexClosingEvent = async (
 export const closingEventOf = (extrinsic: SubstrateExtrinsic): SubstrateEvent | undefined => {
   const records = (extrinsic.block.events ?? []) as unknown as SubstrateEvent[];
   const own = extrinsicEventIndices(extrinsic.block, extrinsic.idx);
-  const closingIdx = own[own.length - 1];
+  const closingIdx = own.at(-1);
 
   if (closingIdx === undefined) {
     return undefined;

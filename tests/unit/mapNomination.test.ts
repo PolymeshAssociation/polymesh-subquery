@@ -3,10 +3,12 @@ import {
   handleKicked,
   handleNominated,
 } from '../../src/mappings/entities/events/mapNomination';
+import { IndexerAnomaly } from '../../src/types';
 import {
   codec,
   mockGetByFields,
   mockLedgerAccountQuery,
+  mockSelfControlled,
   mockStore,
   namedEvent,
   tupleEvent,
@@ -21,6 +23,7 @@ const mockActiveEra = (index: number | null) => {
   (globalThis as any).api.query = {
     ...mockLedgerAccountQuery(),
     staking: {
+      ...mockSelfControlled(),
       activeEra: jest.fn().mockResolvedValue({ toJSON: () => (index === null ? null : { index }) }),
     },
   };
@@ -60,9 +63,9 @@ describe('handleNominated', () => {
 
     expect(aRow.validToEventId).toBeDefined();
     expect(bRow.id).toBe(bRowId);
-    expect(bRow.validToEventId).toBeUndefined();
+    expect(bRow.validToEventId).toBeNull();
     expect(cRow).toBeDefined();
-    expect(cRow.validToEventId).toBeUndefined();
+    expect(cRow.validToEventId).toBeNull();
     expect(rows.every(r => r.eraIndex === 500)).toBe(true);
   });
 
@@ -101,13 +104,58 @@ describe('handleNominated', () => {
     expect(row).toMatchObject({ positionId: STASH, validatorId: VALIDATOR_A });
     expect(row.eraIndex).toBeUndefined();
   });
+
+  it('fails the block when the active era cannot be read, rather than writing rows without one', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        ...mockSelfControlled(),
+        activeEra: jest.fn().mockRejectedValue(new Error('rpc down')),
+      },
+    };
+
+    await expect(
+      handleNominated(
+        namedEvent({
+          section: 'validators',
+          method: 'Nominated',
+          fields: {
+            nominatorIdentity: TEST_DID,
+            stash: STASH,
+            targets: [VALIDATOR_A, VALIDATOR_B],
+          },
+        })
+      )
+    ).rejects.toThrow('rpc down');
+    expect(Object.values(db.Nomination ?? {})).toHaveLength(0);
+  });
+
+  it('writes rows without an era, quietly, when the chain has no active era yet', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    mockActiveEra(null);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleNominated(
+      namedEvent({
+        section: 'validators',
+        method: 'Nominated',
+        fields: { nominatorIdentity: TEST_DID, stash: STASH, targets: [VALIDATOR_A] },
+      })
+    );
+
+    expect(anomaly).not.toHaveBeenCalled();
+    anomaly.mockRestore();
+  });
 });
 
 describe('handleChilled', () => {
   it('decodes a pre-v8 tuple Chilled event through the registered shape', async () => {
     const db = mockStore();
     mockGetByFields(db, 'Nomination');
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery() };
+    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
 
     await expect(
       handleChilled(
@@ -199,6 +247,6 @@ describe('handleKicked', () => {
 
     const rows = Object.values(db.Nomination) as any[];
     expect(rows.find(r => r.validatorId === VALIDATOR_A).validToEventId).toBeDefined();
-    expect(rows.find(r => r.validatorId === VALIDATOR_B).validToEventId).toBeUndefined();
+    expect(rows.find(r => r.validatorId === VALIDATOR_B).validToEventId).toBeNull();
   });
 });

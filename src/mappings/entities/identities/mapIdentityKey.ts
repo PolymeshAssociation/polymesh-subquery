@@ -1,6 +1,12 @@
 import { SubstrateBlock } from '@subql/types';
-import { AnomalyKind, EventIdEnum, IdentityKey, IdentityKeyRole, PermissionsJson } from '../../../types';
-import { getAllByFields, padId } from '../../../utils';
+import {
+  AnomalyKind,
+  EventIdEnum,
+  IdentityKey,
+  IdentityKeyRole,
+  PermissionsJson,
+} from '../../../types';
+import { EXPLICIT_NULL, getAllByFields, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 
 /**
@@ -52,19 +58,29 @@ export const openIdentityKey = async (
     role,
     permissions,
     validFromBlockId: blockId,
+    validToBlockId: EXPLICIT_NULL, // explicitly open (see `openIntervals`)
     addedReason,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
 };
 
-/** The open interval(s) for an account, optionally narrowed to one role. */
+/**
+ * An account's open membership intervals, of `role` if given.
+ *
+ * Only the open ones are read, through the `(account, validToBlock)` index. Reading every interval
+ * the account ever had and filtering made each change cost the key's whole history: testnet block
+ * 1,056,718 re-permissioned one key 100 times, after 1,400 earlier changes, at ~15 paged reads a
+ * time. An open interval is written with an explicit `null` (`openIdentityKey`), which the store's
+ * cache needs to match one.
+ */
 const openIntervals = async (address: string, role?: IdentityKeyRole): Promise<IdentityKey[]> => {
-  const rows = await getAllByFields<IdentityKey>('IdentityKey', [['accountId', '=', address]]);
+  const rows = await getAllByFields<IdentityKey>('IdentityKey', [
+    ['accountId', '=', address],
+    ['validToBlockId', '=', EXPLICIT_NULL],
+  ]);
 
-  return rows.filter(
-    row => row.validToBlockId == null && (role === undefined || row.role === role)
-  );
+  return role === undefined ? rows : rows.filter(row => row.role === role);
 };
 
 interface CloseArgs {

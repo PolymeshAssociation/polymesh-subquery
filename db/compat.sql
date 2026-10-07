@@ -60,6 +60,33 @@ CREATE INDEX IF NOT EXISTS data_polyx_entry_date ON polyx_entries (date);
 -- 7.2 (`Instruction` / `Venue` / `Proposal` / `Authorization`).
 CREATE INDEX IF NOT EXISTS data_multi_sig_proposal_created_event_id ON multi_sig_proposals (created_event_id);
 
+-- `(id, _block_range)` for entities rewritten many times. Every save of a historical entity closes
+-- its current row with `UPDATE ... WHERE id = $1 AND _block_range @> $2`, and the only index
+-- SubQuery gives `id` is a plain btree: `addHistoricalIdIndex` runs after `_block_range` has been
+-- appended to the declared indexes, so it never gets one. An account touched every block builds up
+-- tens of thousands of row versions, and each close-out scanned all of them. On a testnet genesis
+-- resync, `account_balances` and `staking_positions` held ~27,000 versions for busy ids, the
+-- update took 3-12 s per batch with Postgres at 100% CPU, and this index took a lookup from
+-- 157 ms to 0.8 ms and the sync from ~180 to ~1,280 heights/s.
+--
+-- Created only when the table has no such index already, under any name. On an existing database
+-- this builds while holding writes back, so the node pauses until it is done; build it by hand
+-- with `CREATE INDEX CONCURRENTLY` first to avoid that.
+DO $$
+DECLARE
+  tbl TEXT;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY['account_balances', 'staking_positions'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = current_schema() AND tablename = tbl
+        AND indexdef LIKE '%USING gist (id, _block_range)%'
+    ) THEN
+      EXECUTE format('CREATE INDEX %I ON %I USING gist (id, _block_range)', tbl || '_id_block_range', tbl);
+    END IF;
+  END LOOP;
+END $$;
+
 -- Legacy views, dropped if an older deployment left them behind.
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;

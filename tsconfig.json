@@ -19,6 +19,10 @@
     "baseUrl": ".",
     "rootDir": "src",
     "target": "es2017",
+    // The library types follow the runtime, Node 22, so newer built-ins such as `Array.prototype.at`
+    // type-check; the emitted syntax stays es2017. `dom` and `dom.iterable` are what the default
+    // library for es2017 already included.
+    "lib": ["es2022", "dom", "dom.iterable"],
     // Explicit, not inherited. TypeScript's own default is `false`, but an editor running the
     // native preview (tsgo) defaults to `strict: true` — so the handler layer showed hundreds of
     // `possibly undefined` errors in-editor that CI never reported, and it was not obvious which

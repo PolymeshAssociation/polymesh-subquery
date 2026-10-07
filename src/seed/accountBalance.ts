@@ -37,73 +37,106 @@ export interface SeedContext {
   specVersion: number;
 }
 
-export const seedAccountBalances = async ({
-  blockId,
-  datetime,
-  specVersion,
-}: SeedContext): Promise<{ seeded: number }> => {
+/** How many accounts are seeded at once: a partial index can open on a chain of many accounts. */
+const SEED_BATCH = 100;
+
+/** `run` over `items`, `size` at a time, in order. */
+const inBatches = async <T, R>(
+  items: T[],
+  size: number,
+  run: (item: T) => Promise<R>
+): Promise<R[]> => {
+  const batches = Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size)
+  );
+
+  return batches.reduce<Promise<R[]>>(
+    async (done, batch) => [...(await done), ...(await Promise.all(batch.map(run)))],
+    Promise.resolve([])
+  );
+};
+
+/**
+ * The chain's account of what `address` has frozen and held, as `applyChainFreezes` takes it.
+ *
+ * The seeded freeze used to go in wholesale under a `'genesis'` lock, which nothing ever lowered:
+ * `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was never reported as
+ * bonded, and because `frozen` is the MAX over locks the `'genesis'` entry kept `frozen` pinned at
+ * the seeded amount even after the staker unbonded. So it is attributed from chain instead.
+ */
+const chainFreezes = async (
+  address: string,
+  { reserved, frozen }: { reserved: bigint; frozen: bigint },
+  { blockId, specVersion }: SeedContext
+) => {
   const is8x = is8xSpecVersion(specVersion);
+
+  // `holds` exists only from v8, so an absent value must mean exactly that. Reading it only when
+  // something was reserved made a v8 account with nothing reserved look pre-v8 and sent its freeze
+  // through the pre-v8 lock reads. On v8, nothing reserved means nothing held — an empty list, not
+  // an unknown one — and the era decides every branch below, not whether a read answered.
+  let holds: Awaited<ReturnType<typeof readChainHolds>> | undefined;
+  if (is8x) {
+    holds = reserved > BigInt(0) ? await readChainHolds(address) : [];
+  }
+
+  if (frozen <= BigInt(0)) {
+    return { frozen, holds, stakingLock: undefined, pipsLock: undefined };
+  }
+
+  // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
+  // so on v8 it is read from the lock list rather than assumed away. Pre-v8 only: a v8 pips
+  // deposit is tracked through the generic `Locked` / `Unlocked`.
+  const [stakingLock, pipsLock] = is8x
+    ? [await readChainStakingLock(address), undefined]
+    : await Promise.all([readStakingLock(address, blockId), readChainLock(address, PIPS_LOCK_ID)]);
+
+  return { frozen, holds, stakingLock, pipsLock };
+};
+
+/** One account's opening balance, or `undefined` for an account holding nothing. */
+const seedBalance = async (
+  address: string,
+  accountInfo: unknown,
+  context: SeedContext
+): Promise<AccountBalance | undefined> => {
+  // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen`
+  // on older runtimes, so only this inner shape is read spec-agnostically.
+  const data = (accountInfo as unknown as { data: Record<string, Codec> }).data;
+
+  const free = getBigIntValue(data.free);
+  const reserved = getBigIntValue(data.reserved);
+  const frozen = accountDataFrozen(data);
+
+  if (free === BigInt(0) && reserved === BigInt(0) && frozen === BigInt(0)) {
+    return undefined;
+  }
+
+  // Seeded rows have no causing event, so both the account and its balance carry the seed
+  // marker rather than a bare block id in an `Event` foreign key.
+  const account = await ledgerAccount(address, context.blockId, context.datetime, SEED_EVENT_ID);
+  const balance = emptyBalance(address, account.identityId, SEED_EVENT_ID);
+
+  balance.free = free;
+  balance.reserved = reserved;
+  applyChainFreezes(balance, await chainFreezes(address, { reserved, frozen }, context));
+
+  return balance;
+};
+
+export const seedAccountBalances = async (context: SeedContext): Promise<{ seeded: number }> => {
   const entries = await api.query.system.account.entries();
 
-  const rows: AccountBalance[] = [];
-
-  for (const [key, accountInfo] of entries) {
-    const address = key.args[0].toString();
-    // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen`
-    // on older runtimes, so only this inner shape is read spec-agnostically.
-    const data = accountInfo.data as unknown as Record<string, Codec>;
-
-    const free = getBigIntValue(data.free);
-    const reserved = getBigIntValue(data.reserved);
-    const frozen = accountDataFrozen(data);
-
-    if (free === BigInt(0) && reserved === BigInt(0) && frozen === BigInt(0)) {
-      continue;
-    }
-
-    // Seeded rows have no causing event, so both the account and its balance carry the seed
-    // marker rather than a bare block id in an `Event` foreign key.
-    const account = await ledgerAccount(address, blockId, datetime, SEED_EVENT_ID);
-    const balance = emptyBalance(address, account.identityId, SEED_EVENT_ID);
-
-    balance.free = free;
-    balance.reserved = reserved;
-
-    /**
-     * The seeded freeze used to go in wholesale under a `'genesis'` lock, which nothing ever
-     * lowered: `bonded` is derived from the `'staking '` lock, so a seeded staker's bond was
-     * never reported as bonded, and because `frozen` is the MAX over locks the `'genesis'` entry
-     * kept `frozen` pinned at the seeded amount even after the staker unbonded.
-     *
-     * Attributed from chain instead, the same way the reconciler's correction is. Which read
-     * applies is decided by the chain itself: `balances.holds` only exists from v8, so an
-     * `undefined` there *is* the pre-v8 signal, and only the unexplained remainder stays neutral.
-     */
-    // `holds` exists only from v8, so an absent value must mean exactly that. Reading it only when
-    // something was reserved made a v8 account with nothing reserved look pre-v8 and sent its freeze
-    // through the pre-v8 lock reads. On v8, nothing reserved means nothing held — an empty list, not
-    // an unknown one — and the era decides every branch below, not whether a read answered.
-    const holds = is8x ? (reserved > BigInt(0) ? await readChainHolds(address) : []) : undefined;
-    // A start block inside the two-pass v8 lock → hold migration still sees the old staking lock,
-    // so on v8 it is read from the lock list rather than assumed away.
-    let stakingLock: bigint | undefined;
-    let pipsLock: bigint | undefined;
-    if (frozen > BigInt(0)) {
-      stakingLock = is8x
-        ? await readChainStakingLock(address)
-        : await readStakingLock(address, blockId);
-      // Pre-v8 only: a v8 pips deposit is tracked through the generic `Locked` / `Unlocked`.
-      pipsLock = is8x ? undefined : await readChainLock(address, PIPS_LOCK_ID);
-    }
-
-    applyChainFreezes(balance, { frozen, holds, stakingLock, pipsLock });
-
-    rows.push(balance);
-  }
+  const seeded = await inBatches(entries, SEED_BATCH, ([key, accountInfo]) =>
+    seedBalance(key.args[0].toString(), accountInfo, context)
+  );
+  const rows = seeded.filter((row): row is AccountBalance => row !== undefined);
 
   await Promise.all(rows.map(row => row.save()));
 
-  logger.info(`Seeded ${rows.length} AccountBalance rows from system.account at ${blockId}`);
+  logger.info(
+    `Seeded ${rows.length} AccountBalance rows from system.account at ${context.blockId}`
+  );
 
   return { seeded: rows.length };
 };
