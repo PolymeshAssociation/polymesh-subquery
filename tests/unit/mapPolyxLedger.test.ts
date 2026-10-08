@@ -589,6 +589,20 @@ describe('Event → pool transition', () => {
     expect(balance(BOB)?.free).toBe(BigInt(4014));
   });
 
+  it('reports a pre-5.0 disbursement whose recipient identity the index does not hold', async () => {
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const unknownDid = '0x9999999999999999999999999999999999999999999999999999999999999999';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+
+    await handleTreasuryDisbursement(
+      tupleEvent('treasury', 'TreasuryDisbursement', [committeeDid, unknownDid, '500'], 3010)
+    );
+
+    expect(balance(treasury)?.free).toBe(BigInt(-500));
+    expect(entries()).toHaveLength(1);
+    expect(Object.values(db['IndexerAnomaly'] ?? {})).toHaveLength(1);
+  });
+
   it('credits a new account once when a transfer outside any extrinsic creates it', async () => {
     // Testnet block 10,036,148 (spec 6000001): scheduled settlement instructions ran as the block
     // initialised, each paying a new account: `Endowed` then `Transfer`, adjacent. Paired only

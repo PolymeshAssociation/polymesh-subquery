@@ -812,6 +812,17 @@ export const handleTreasuryDisbursement = async (event: SubstrateEvent): Promise
   const args = extractArgs(event);
   const { toAddress, amount, hasToAddress } = await disbursementOf(args);
   const treasury = treasuryPalletAccount();
+
+  // Before 5.0.0 the event names only the target identity, whose primary key the index may lack.
+  if (!toAddress) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `treasury.TreasuryDisbursement of ${amount}: the recipient's account could not be resolved, so only the treasury's debit was recorded`,
+      block: args.block,
+      eventIdx: args.eventIdx,
+    });
+  }
+
   const recorded = recordedDisbursementSides(args, treasury, toAddress, amount);
 
   // Every side already recorded is this payment's, relabelled rather than written again. Each is a
