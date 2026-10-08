@@ -317,8 +317,8 @@ const blockRewardReserve = (): string =>
  * rest, with no event either way (balances pallet, v3.0.0 to v7.4.0; v8 has no reserve). Read from
  * the index's own reserve balance, which genesis seeds and every movement since keeps.
  *
- * On testnet the reserve held 1 POLYX and paid the first reward of block 9,259,823; on mainnet it
- * held real funds and paid rewards for a long time, and every one was recorded as newly minted.
+ * On testnet the reserve held 1 POLYX and paid the first reward of block 9,259,823. On mainnet it
+ * held nothing (0 at every height checked, blocks 1 to 24,000,000), so every deposit there is minted.
  */
 const reserveShare = async (args: HandlerArgs, amount: bigint): Promise<bigint> => {
   if (is8xChain(args.block) || amount <= BigInt(0)) {
