@@ -203,11 +203,23 @@ export const chargedFor = async (args: HandlerArgs, who: string): Promise<string
   return args.extrinsic ? resolveFeeAccount(args.extrinsic) : who;
 };
 
-/** The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows. */
+/**
+ * The paying key of `user`'s accepted, unremoved subsidy, from the indexed `Subsidy` rows.
+ *
+ * Filtered in the query: a user has a row for every offer it was made, and the chain allows one
+ * live subsidy at a time (accepting another removes it).
+ */
 export const activeSubsidiser = async (user: string): Promise<string | undefined> => {
-  const subsidies = await Subsidy.getByBeneficiaryAccountId(user, { limit: 10 });
+  const [live] = await Subsidy.getByFields(
+    [
+      ['beneficiaryAccountId', '=', user],
+      ['isAccepted', '=', true],
+      ['isRemoved', '=', false],
+    ],
+    { limit: 1 }
+  );
 
-  return subsidies.find(subsidy => subsidy.isAccepted && !subsidy.isRemoved)?.payingAccountId;
+  return live?.payingAccountId;
 };
 
 /**
