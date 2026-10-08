@@ -3760,6 +3760,7 @@ type AccountBalance @entity {
   "lifetime totals — free, this row is already versioned on these blocks"
   totalReceived: BigInt!
   totalSent: BigInt!
+  "Lifetime fees, net of refunds. From v8 it leaves out a fee that was not taken by a withdrawal of its own: an Ethereum transaction's fee, or one paid from withdrawals that also covered contract deposits. Its POLYX is in `Burn` entries, so the balance is right"
   totalFeesPaid: BigInt!
   totalRewards: BigInt!
   totalSlashed: BigInt!
