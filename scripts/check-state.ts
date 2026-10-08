@@ -11,7 +11,8 @@
  * Holdings, for every holder:
  *   4. each portfolio's fungible `Holding.amount` equals `portfolio.portfolioAssetBalances`, and
  *      from v8 each account's equals `asset.assetBalance`;
- *   5. each portfolio's `Holding.nftCount` equals its count in `portfolio.portfolioNFT`.
+ *   5. each portfolio's `Holding.nftCount` equals its count in `portfolio.portfolioNFT`. Account
+ *      NFT counts (v8) are not checked here.
  *
  * The index is read as it stood after `--block` (its historical rows), and the chain at that block,
  * so it can be run against a database still syncing. The block defaults to the last one the index
@@ -143,13 +144,19 @@ const entrySums = async (db: DataSource, block: number) => {
 };
 
 const indexedHoldings = async (db: DataSource, block: number) => {
-  const rows: { id: string; amount: string; nft_count: number }[] = await db.query(
-    `SELECT id, amount, nft_count FROM holdings
-       WHERE _block_range @> $1::int8 AND (amount <> 0 OR nft_count <> 0)`,
-    [block]
-  );
+  const rows: { id: string; amount: string; nft_count: number; holder_kind: string }[] =
+    await db.query(
+      `SELECT id, amount, nft_count, holder_kind FROM holdings
+         WHERE _block_range @> $1::int8 AND (amount <> 0 OR nft_count <> 0)`,
+      [block]
+    );
 
-  return new Map(rows.map(row => [row.id, { amount: big(row.amount), nfts: row.nft_count }]));
+  return new Map(
+    rows.map(row => [
+      row.id,
+      { amount: big(row.amount), nfts: row.nft_count, portfolio: row.holder_kind === 'Portfolio' },
+    ])
+  );
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -250,8 +257,9 @@ const chainHoldings = async (at: ApiDecoration<'promise'>, staging: boolean) => 
   ).portfolioNFT;
   if (portfolioNft?.entries) {
     (await portfolioNft.entries()).forEach(([key]) => {
-      const [portfolio, assetAndNft] = key.args;
-      const [asset] = assetAndNft as unknown as Codec[];
+      // `(portfolio, (asset, nftId))` before v8, `(portfolio, asset, nftId)` from it
+      const [portfolio, second] = key.args;
+      const asset = key.args.length === 3 ? second : (second as unknown as Codec[])[0];
       const id = `${assetIdOf(asset, staging)}/${portfolioIdOf(portfolio)}`;
       nfts.set(id, (nfts.get(id) ?? 0) + 1);
     });
@@ -309,7 +317,7 @@ const checkHoldings = async (
   );
   new Set([
     ...chain.nfts.keys(),
-    ...[...indexed].filter(([, row]) => row.nfts).map(([id]) => id),
+    ...[...indexed].filter(([, row]) => row.portfolio && row.nfts).map(([id]) => id),
   ]).forEach(id =>
     differ(out, '5 holding nftCount', id, indexed.get(id)?.nfts, chain.nfts.get(id))
   );
