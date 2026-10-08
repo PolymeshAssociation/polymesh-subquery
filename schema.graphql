@@ -1988,6 +1988,32 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   eventArg_2: String
   eventArg_3: String
   extrinsic: Extrinsic
+  references: [EventReference!]! @derivedFrom(field: "event")
+}
+
+enum EventReferenceKind {
+  Identity
+  Account
+  Asset
+  Portfolio
+}
+
+"""
+Something an event refers to, in any of its arguments: an identity, account, asset or portfolio.
+Find an event by what it involves with `references: { some: { kind, value } }`, at any argument
+position. A portfolio also refers to its identity. Before v7.0 a ticker refers to the asset it
+maps to; from v7.0 events name the asset itself
+"""
+type EventReference
+  @entity
+  @compositeIndexes(fields: [["kind", "value"], ["event", "kind"]]) {
+  id: ID! # eventId/padded ordinal
+  event: Event!
+  kind: EventReferenceKind!
+  "the canonical encoding of what is referred to: SS58 for an account, hex for an identity or asset, `did/number` for a portfolio"
+  value: String!
+  "the argument it was found in: its field name, or its position when the metadata names none"
+  argument: String!
 }
 
 """
