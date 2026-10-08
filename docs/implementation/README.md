@@ -25,6 +25,7 @@ Event shapes for every domain below are verified in [`../reference/event-shape-v
 | [12](./12-types-and-ci.md) | Types & CI | `polymesh-types` augmentation, `typecheck` gate, `legacyQuery` | — |
 | [13](./13-entity-provenance.md) | Entity provenance | `createdEvent`/`updatedEvent` replace `createdBlock`/`datetime`/`eventIdx` copies; synthetic seed `Event`; `Extrinsic.events` | folds into Phase 7; touches every domain, so lands after 02–08 |
 | [14](./14-consumer-requests.md) | Consumer requests | Portal v2's `G-IDX` register checked against the redesign; staking per era, history of mutable state | 07, 13-historical-scoping |
+| [15](./15-entity-seeding.md) | Entity seeding | Every chain-held entity resolvable from chain state at any block and spec version, through one `resolve()`; start-block scans for holdings and counts | 10 |
 
 **06 is in scope but low priority (D6)** — purely additive, dependency-free in both directions, so it can land in parallel whenever capacity allows.
 

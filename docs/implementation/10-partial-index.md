@@ -6,6 +6,8 @@ Makes `START_BLOCK > 1` a **supported deployment mode** rather than a broken fla
 
 **Depends on:** [09](./09-infrastructure.md) (`IndexerAnomaly`, `ChainUpgrade`).
 
+**Completed by:** [15](./15-entity-seeding.md). This plan built `IndexOrigin`, the start-block datasource and the first seeders; plan 15 extends resolution to every entity a handler reads.
+
 ---
 
 ## Problem

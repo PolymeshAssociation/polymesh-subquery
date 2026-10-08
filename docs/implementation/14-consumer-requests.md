@@ -21,7 +21,7 @@ awaits a full resync (step O), 14.5 is on hold, and 14.6 (locked amounts) is def
 | G-IDX-04 | corporate actions | ✅ `CorporateAction`, `CorporateActionDefaultConfig` | — |
 | G-IDX-08 | holdings per portfolio | ✅ `Holding`, portfolio and account grain | — |
 | G-IDX-09 | numeric ids sort numerically | ✅ for `Instruction`, `Authorization`, `Venue`, `Proposal` | ✅ **14.3** decided: no change; consumers order by `createdEvent` |
-| G-IDX-10 | staking history per operator per era | ✅ `ValidatorEra`, `Slash`, `Era.totalPoints` | **14.4** built (`701b642`, PR #365); awaiting step O |
+| G-IDX-10 | staking history per operator per era | ✅ `ValidatorEra`, `Slash`, `Era.totalPoints` | **14.4** built (`e398850`, `21b620e`, `3fea009`, PR #365); awaiting step O |
 | G-IDX-05 | subsidies | ✅ `Subsidy` | — |
 | G-IDX-06 | allowances and their history | ✅ `AssetAllowance`; "what was it before" needs **14.5** | **14.5:** on hold (see §14.5) |
 
@@ -114,7 +114,7 @@ number. An id is for lookups, padded or not. This is recorded in
 
 ## 14.4 Staking per validator per era (G-IDX-10)
 
-**Built** in `701b642` (PR #365), awaiting validation by a full mainnet and testnet resync (step
+**Built** in `e398850`, `21b620e` and `3fea009` (PR #365), awaiting validation by a full mainnet and testnet resync (step
 O). This was plan [07](./07-staking.md)'s open scope
 question, and the Portal's request (exposure, points, commission history, active-set membership
 and slashes per operator per era) answered it.
@@ -128,7 +128,13 @@ and slashes per operator per era) answered it.
   history. Indexed by `eraIndex`, `identity` and `(validator, eraIndex)`.
 - **`Era`** gains `validatorCount`, `totalPoints` and the derived `validators`.
 - **`Slash`** (`blockEventId`): the slashed `account`, the offending `validator` (the account itself,
-  or the validator it nominated), the `eraIndex` it was applied in, and the `amount`.
+  or the validator it nominated), the `amount`, `eraIndex` (the active era at the slash's block,
+  which is the era it was applied in on every runtime) and `offenceEraIndex` (exact from v7.0,
+  where the deferred slash is keyed by `slash_era + SlashDeferDuration + 1`; null before, where the
+  chain keeps only the era it was reported in).
+- **Era 0**, which the genesis config elects with no election event, is recorded by the genesis
+  seed. An election that finds no exposures records an `UnreadableValue` anomaly and leaves the
+  active set as it was.
 
 ### Where the data comes from, as the chain code shows
 
