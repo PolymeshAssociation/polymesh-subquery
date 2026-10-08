@@ -1,3 +1,4 @@
+import { TypeRegistry } from '@polkadot/types';
 /**
  * Shared unit-test scaffolding for handler tests — a Codec stand-in, an in-memory `store`, and
  * tuple-style / struct-style `SubstrateEvent` builders. Not a test file (no `.test.ts`), so jest
@@ -236,3 +237,16 @@ export const portfolioCodec = (did: string, number = 0) =>
 /** `AssetHolder` codec wrapping a portfolio: `{ portfolio: { did, kind } }`. */
 export const meshPortfolioHolderCodec = (did: string, number = 0) =>
   codec({ portfolio: { did, kind: number ? { user: number } : { default: null } } });
+
+const callRegistry = new TypeRegistry();
+
+/**
+ * A runtime call as `GenericCall` presents it: arguments as real codecs, with the names and types
+ * its metadata declares for them.
+ */
+export const callOf = (section: string, method: string, args: [string, string, unknown][]) => ({
+  section,
+  method,
+  args: args.map(([, type, value]) => callRegistry.createType(type as never, value)),
+  meta: { args: args.map(([name, type]) => ({ name, type })) },
+});

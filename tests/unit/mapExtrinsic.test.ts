@@ -1,6 +1,7 @@
 import { hexToU8a } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
 import { createExtrinsic, handleExtrinsic } from '../../src/mappings/entities/block/mapExtrinsic';
+import { callOf } from './helpers';
 
 /** signed by 0x4c0883a6...2318, whose address is `FROM_ETH` */
 const FROM_ETH = '0x2c7536E3605D9C16a7a3D7b1898e529396a65c23';
@@ -15,7 +16,7 @@ const payloads = {
     '0x02f85983190d5a07808477359400825208808084deadbeefc001a0678b44834b3ccc478253db225af42f9fc25d27e18453338d164b3ce62816aa4fa01c8f9951ee084d5e707172f7c5bce88b578db99d730c4d19e972aa4c487adc0e',
 };
 
-const INNER_CALL = { section: 'asset', method: 'issue', args: { asset_id: '0x1234' } };
+const INNER_CALL = callOf('asset', 'issue', [['asset_id', 'u128', 7]]);
 
 interface MockOptions {
   section?: string;
@@ -23,7 +24,7 @@ interface MockOptions {
   payload?: string;
   events?: { section: string; method: string; data: any[] }[];
   success?: boolean;
-  innerCall?: { section: string; method: string; args: Record<string, unknown> };
+  innerCall?: ReturnType<typeof callOf>;
   idx?: number;
   blockNumber?: number;
   signer?: string;
@@ -71,16 +72,11 @@ const mockExtrinsic = ({
           if (!innerCall) {
             throw new Error('unable to decode');
           }
-          return {
-            section: innerCall.section,
-            method: innerCall.method,
-            toHuman: () => ({ args: innerCall.args }),
-          };
+          return innerCall;
         },
       },
-      method: { section, method },
+      method: callOf(section, method, [['payload', 'Bytes', payload]]),
       args: [{ toU8a: () => hexToU8a(payload) }],
-      toHuman: () => ({ method: { args: { payload } } }),
     },
   } as unknown as SubstrateExtrinsic);
 
@@ -98,6 +94,8 @@ describe('createExtrinsic', () => {
     expect(extrinsic.nonce).toEqual(99);
     expect(extrinsic.ethAddress).toBeUndefined();
     expect(extrinsic.ethTxHash).toBeUndefined();
+    // RLP is not UTF-8, so the payload stays hex
+    expect(extrinsic.args).toEqual({ payload: payloads.runtimeCall });
   });
 
   it('should attribute an eth_transact to the signing Ethereum key while staying unsigned', () => {
@@ -120,24 +118,24 @@ describe('createExtrinsic', () => {
     expect(extrinsic.moduleIdText).toEqual('asset');
     expect(extrinsic.callId).toEqual('issue');
     expect(extrinsic.callIdText).toEqual('issue');
-    expect(extrinsic.paramsTxt).toEqual(JSON.stringify(INNER_CALL.args));
+    expect(extrinsic.args).toEqual({ assetId: '7' });
   });
 
   it('should use the Ethereum nonce rather than the (always zero) extrinsic nonce', () => {
     expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).nonce).toEqual(7);
   });
 
-  it('should omit the init code from paramsTxt, since EvmTransaction stores it', () => {
+  it('should omit the init code from args, since EvmTransaction stores it', () => {
     const extrinsic = createExtrinsic(mockExtrinsic({ payload: payloads.deploy }));
 
     expect(extrinsic.callId).toEqual('eth_instantiate_with_code');
-    expect(JSON.parse(extrinsic.paramsTxt)).toEqual({
+    expect(extrinsic.args).toEqual({
       to: null,
       value: '0',
       gasLimit: '21000',
       nonce: '7',
     });
-    expect(extrinsic.paramsTxt).not.toContain('deadbeef');
+    expect(JSON.stringify(extrinsic.args)).not.toContain('deadbeef');
   });
 
   it('should mark a reverted transaction as unsuccessful despite the extrinsic succeeding', () => {
