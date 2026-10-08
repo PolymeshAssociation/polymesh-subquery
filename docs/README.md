@@ -108,15 +108,15 @@ Ordered by how much they change the plan.
 
 ### Answerable with a database, not a decision
 
-3. **Do balance mutations exist with no event?** Determines whether reconciliation is a safety net or load-bearing. Best settled empirically via Phase-1 mismatch rates rather than by reading Rust exhaustively. The reconciliation harness in plan [02](./implementation/02-polyx-ledger.md) is what answers it.
+4. **Do balance mutations exist with no event?** Determines whether reconciliation is a safety net or load-bearing. Best settled empirically via Phase-1 mismatch rates rather than by reading Rust exhaustively. The reconciliation harness in plan [02](./implementation/02-polyx-ledger.md) is what answers it.
 
-4. **How large is the pre-v8 staking-reward attribution gap in practice?** `rewardDestination` is `LegacyUnknown` for every pre-8.x reward **[V]**, but the share of stakers who set a payee other than their stash is unmeasured. If it is near zero the gap is cosmetic and `LegacyUnknown` documented in the schema is a defensible answer; if it is material, one of the two recovery routes in plan [02](./implementation/02-polyx-ledger.md) is warranted. Measurable from public archive endpoints.
+5. **How large is the pre-v8 staking-reward attribution gap in practice?** `rewardDestination` is `LegacyUnknown` for every pre-8.x reward **[V]**, but the share of stakers who set a payee other than their stash is unmeasured. If it is near zero the gap is cosmetic and `LegacyUnknown` documented in the schema is a defensible answer; if it is material, one of the two recovery routes in plan [02](./implementation/02-polyx-ledger.md) is warranted. Measurable from public archive endpoints.
 
-5. **How slow is a slow block in wall-clock terms?** The mechanism is now established and quantified — testnet block 15,391,572 writes ~1.16M integers to delete 399 NFT ids **[V]** — but no timing has been taken. Two testnet replay fixtures are identified in plan [11](./implementation/11-throughput.md) §11.1; the mainnet equivalents are not.
+6. **How slow is a slow block in wall-clock terms?** The mechanism is now established and quantified — testnet block 15,391,572 writes ~1.16M integers to delete 399 NFT ids **[V]** — but no timing has been taken. Two testnet replay fixtures are identified in plan [11](./implementation/11-throughput.md) §11.1; the mainnet equivalents are not.
 
 ### Needs information I do not have locally
 
-6. **`polymesh_private_dev` spec offsets** (2_000_000 / 2_001_000 / 2_002_000) are internally consistent but unverified against the private chain's actual release history.
+7. **`polymesh_private_dev` spec offsets** (2_000_000 / 2_001_000 / 2_002_000) are internally consistent but unverified against the private chain's actual release history.
 
 ---
 

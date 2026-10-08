@@ -143,6 +143,29 @@ const adjustNftCount = async (
 };
 
 /**
+ * Moves NFTs between two holders of one identity (portfolios, or v8 accounts), which the chain
+ * reports only as a movement: each token's row and both holders' counts move, approvals on tokens
+ * leaving an account are cleared, and the identity's rollup does not change.
+ */
+export const moveNftsWithinIdentity = async (
+  assetId: string,
+  ids: number[],
+  from: AssetHolderDetails,
+  to: AssetHolderDetails,
+  blockEventId: string
+): Promise<void> => {
+  const promises: Promise<void>[] = [];
+  const moved = await Promise.all(ids.map(nftId => moveNft(assetId, nftId, to, blockEventId)));
+
+  await adjustNftCount(assetId, from, blockEventId, -ids.length, promises);
+  await adjustNftCount(assetId, to, blockEventId, ids.length, promises);
+  clearTokenApprovals(assetId, ids, from, promises);
+  promises.push(bulkUpdateNfts(moved));
+
+  await Promise.all(promises);
+};
+
+/**
  * `Asset.holderCount` counts identities, and for a collection an identity holds it while its
  * `NftHolder` rollup is non-empty — the NFT counterpart of `applyHoldingDelta`'s zero crossing on
  * `AssetHolder`. Without it every collection reported 0 holders.

@@ -24,7 +24,11 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, HandlerArgs } from '../common';
-import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
+import {
+  createPortfolioIfNotExists,
+  applyMoveWithinIdentity,
+  mapAssetMovement,
+} from '../identities/mapPortfolio';
 import {
   AffirmStatusEnum,
   EventIdEnum,
@@ -907,7 +911,7 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
   const assetType = Object.keys(description)[0];
   const fundDescription = description[assetType];
 
-  await mapAssetMovement({
+  const moved = await mapAssetMovement({
     blockEventId,
     blockId,
     eventIdx,
@@ -921,4 +925,7 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
     block,
     extrinsic,
   });
+
+  // only a transfer within one identity emits `FundsTransferred`, with no balance event of its own
+  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId, block.specVersion);
 };

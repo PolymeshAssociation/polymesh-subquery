@@ -589,6 +589,20 @@ describe('Event → pool transition', () => {
     expect(balance(BOB)?.free).toBe(BigInt(4014));
   });
 
+  it('reports a pre-5.0 disbursement whose recipient identity the index does not hold', async () => {
+    const committeeDid = '0x73797374656d3a676f7665726e616e63655f636f6d6d69747465650000000000';
+    const unknownDid = '0x9999999999999999999999999999999999999999999999999999999999999999';
+    const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
+
+    await handleTreasuryDisbursement(
+      tupleEvent('treasury', 'TreasuryDisbursement', [committeeDid, unknownDid, '500'], 3010)
+    );
+
+    expect(balance(treasury)?.free).toBe(BigInt(-500));
+    expect(entries()).toHaveLength(1);
+    expect(Object.values(db['IndexerAnomaly'] ?? {})).toHaveLength(1);
+  });
+
   it('credits a new account once when a transfer outside any extrinsic creates it', async () => {
     // Testnet block 10,036,148 (spec 6000001): scheduled settlement instructions ran as the block
     // initialised, each paying a new account: `Endowed` then `Transfer`, adjacent. Paired only
@@ -1568,8 +1582,32 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
       expect(entries()).toHaveLength(1);
       expect(entries()[0]).toMatchObject({ kind: MovementKind.Fee, accountId: PAYER });
       // and no subsidy lookup: from v5.4.1 the event already names the account charged
-      const getByField = (globalThis as any).store.getByField as jest.Mock;
-      expect(getByField.mock.calls.some(([entity]) => entity === 'Subsidy')).toBe(false);
+      expect(storeGetByFields().mock.calls.some(([entity]) => entity === 'Subsidy')).toBe(false);
+    });
+
+    it('finds the live subsidy among many offers', async () => {
+      // ten offers that were never accepted, held under ids that sort ahead of the live one
+      for (let i = 0; i < 10; i += 1) {
+        db['Subsidy'][`${ALICE}/0${i}`] = {
+          id: `${ALICE}/0${i}`,
+          beneficiaryAccountId: ALICE,
+          payingAccountId: BOB,
+          isAccepted: false,
+          isRemoved: false,
+        };
+      }
+
+      await handleTransactionFeeCharged(
+        structEvent(
+          'protocolFee',
+          'FeeCharged',
+          { who: ALICE, amount: '7' },
+          { specVersion: 5_003_001 }
+        )
+      );
+
+      expect(balance(PAYER)?.free).toBe(BigInt(-7));
+      expect(balance(BOB)).toBeUndefined();
     });
 
     it('ignores a subsidy that was removed', async () => {
@@ -2616,7 +2654,13 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const REPORTER = '5EFbtwDBQu64WjUGqAgC3kuaiH86E34CHtqxbN7zAgwwT2cg';
   const SPEC = 5_003_001;
 
-  type Deferred = { validator: string; own: string; reporters: string[]; payout: string };
+  type Deferred = {
+    validator: string;
+    own: string;
+    others?: [string, string][];
+    reporters: string[];
+    payout: string;
+  };
 
   /** A `Twox64Concat` key on the era, which the registry decodes back to the era. */
   const eraKey = (era: number) => {
@@ -2676,6 +2720,10 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         return byEra[new DataView(bytes.buffer).getUint32(16, true)].map(slash => ({
           validator: mockCodec(slash.validator),
           own: mockCodec(slash.own),
+          others: (slash.others ?? []).map(([stash, amount]) => [
+            mockCodec(stash),
+            mockCodec(amount),
+          ]),
           reporters: slash.reporters.map(mockCodec),
           payout: mockCodec(slash.payout),
         }));

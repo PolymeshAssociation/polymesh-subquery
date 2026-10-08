@@ -5,7 +5,9 @@
  * across the block. The payer's balance should fall by the fee; a signer who isn't the payer
  * should be untouched, unless something else in the block moved it.
  *
- *   yarn ts-node scripts/verify-fee-payer.ts --rpc wss://dev-fsn001.nsite.dev/testnet/ 466634 469641 801695 1056229 1056451
+ *   yarn ts-node scripts/verify-fee-payer.ts --rpc <archive node> 466634 469641 801695 1056229 1056451
+ *
+ * The blocks are before v5.4, so the node must be an archive node.
  */
 import '@polkadot/types-augment';
 import '@polymeshassociation/polymesh-types/polkadot/types-lookup';
@@ -119,7 +121,13 @@ const reportBlock = async (api: ApiPromise, height: number): Promise<void> => {
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const rpcAt = argv.indexOf('--rpc');
-  const rpc = rpcAt >= 0 ? argv[rpcAt + 1] : 'wss://dev-fsn001.nsite.dev/testnet/';
+  const rpc = rpcAt >= 0 ? argv[rpcAt + 1] : undefined;
+
+  if (!rpc) {
+    console.error('usage: verify-fee-payer.ts --rpc <archive node> <block> [<block> ...]');
+    process.exit(1);
+  }
+
   const blocks = argv.filter((arg, i) => /^\d+$/.test(arg) && i !== rpcAt + 1).map(Number);
 
   // The chain types the indexer is built with: blocks before metadata v14 name Polymesh types

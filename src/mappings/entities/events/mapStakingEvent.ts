@@ -12,7 +12,7 @@ import {
   RewardDestinationName,
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
-import { currentPayoutEra } from '../identities/mapPolyxLedger';
+import { currentPayoutEra, currentPayoutValidator } from '../identities/mapPolyxLedger';
 import { refreshPositionFromLedger } from './mapStakingPosition';
 
 const bondedUnbondedOrReward = new Set([
@@ -290,6 +290,7 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     ...details,
     transactionId,
     eraIndex: currentPayoutEra(blockId),
+    validatorId: rewardEvents.has(eventId) ? currentPayoutValidator(blockId) : undefined,
     positionId: position?.id,
     createdEventId: blockEventId,
   }).save();

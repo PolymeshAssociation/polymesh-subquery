@@ -137,6 +137,11 @@ Direct consequences:
 - The denormalised `eventId` column is kept only where a consumer filters or groups by event type: `PolyxEntry`, `StakingEvent`, `AssetTransaction`, `AssetAgentAction`. It is gone from `Account` and `DistributionPayment` — read `updatedEvent { eventId }` / `createdEvent { eventId }`, or `reclaimed` for a distribution payment.
 - An account's permissions moved from the `Permissions` entity into `IdentityKey.permissions`, a jsonField. SubQuery generates no filters over a jsonField's contents, so `transactionGroups` in particular is no longer filterable — filter on `IdentityKey`'s own columns and read the permissions off the rows returned. No consumer query in this document filtered on it.
 - `EvmTransaction.block` is available again alongside `extrinsic`, matching `Event` and `Extrinsic`.
+- `CorporateBallot.corporateAction` is nullable, as `Distribution.corporateAction` already was: the action comes from an earlier extrinsic, which can be outside the index. A query that selects it must allow `null`.
+- `Claim.revokeDate` is the timestamp of the block that revoked the claim. It used to be the revoked claim's own issuance date. A filter on `revokeDate: { isNull: true }`, as the SDK uses for current claims, is unaffected.
+- The `AssetTransaction` of a pre-v6 issuance names the beneficiary's default portfolio, where the chain credited it, rather than the asset owner's.
+- `FoundType` and `Debug` are removed.
+- New, additive: `ValidatorEra` (one row per validator per elected era), `Slash` (with `eraIndex` and `offenceEraIndex`), `Era.validatorCount`/`totalPoints`/`validators`, `StakingEvent.validator` (from v7.0) and `Instruction.legCount`.
 - An agent's group move is now recorded as `AgentHistoryType.GroupChanged`, where it used to be written as `AgentPermissionsChanged`. The new value is the more accurate one — a group move is not a permissions edit — but a group move *does* change the agent's effective permissions, so anything rebuilding a permission timeline has to read both members, not just `AgentPermissionsChanged`.
 - `AssetAgent` no longer carries `group` or `permissions`. Both were always null: an agent's permissions belong to the `AgentGroup`, and copying them onto the membership row would go stale the first time the agent moved groups. Read the group through `AgentGroupMembership`, and the group/permission timeline from `AssetAgentHistory`.
 - `AssetAgent` is reachable from both sides now: `Asset.agents` and `Identity.agentOf`. Both list *current* memberships only — ended ones are `AssetAgentHistory`.
@@ -189,6 +194,13 @@ On the portal side, `origin/main` has **removed** the `paddedIds` compatibility 
 - The `padId` scheme must be **preserved**, not retired. It is the correct solution to intra-block ordering, not a workaround.
 - Every new paginated entity in this review (`PolyxEntry`, `Holding`, `IdentityKey`) needs a padded block-then-index composite id for the same reason — which also settles the deterministic sub-index question in `polyx-balance-model.md` §7.6 Q9: it is required, not optional.
 - `@dbType(type: "Int")` cannot substitute: a numeric block id gives no ordering *within* a block, which is precisely the failure mode described above.
+
+**The rule for consumers:** to list rows in the order they were created, order by `createdEvent`
+(`CREATED_EVENT_ID_ASC`/`_DESC`). It is zero-padded on both block and event index, so it sorts
+correctly as text and is a total order, which keeps pages from repeating or skipping rows. Where an
+entity carries the chain's own number (`localId`, `checkpointId`, `proposalId`, `nftId` and so on),
+order by that. An id is for looking a row up: compound ids (`assetId/localId`) and the few unpadded
+ones (`GlobalMetadataKey`, `CustomAssetType`, `CustomClaimType`) do not sort numerically.
 
 ## 8. Consumers have dropped chain v7
 

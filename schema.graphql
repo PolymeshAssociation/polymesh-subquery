@@ -2222,6 +2222,8 @@ type StakingEvent @entity {
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
   eraIndex: Int @index
+  "the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
+  validator: Validator @index
   position: StakingPosition
   createdEvent: Event!
 }
@@ -2314,6 +2316,56 @@ type Era @entity {
   validatorPayout: BigInt
   remainder: BigInt
   totalStaked: BigInt
+  "how many validators were elected for the era"
+  validatorCount: Int
+  "the era's total reward points; null until the era is paid"
+  totalPoints: Int
+  validators: [ValidatorEra!]! @derivedFrom(field: "era")
+}
+
+"""
+One validator in one era's elected set. Its stake and commission are what the chain stored when
+the era was planned, and its points what it earned once the era is paid. A row exists exactly when
+the validator was elected, so the rows of an era are its active set, and one validator's rows are
+its history: stake, commission and points per era
+"""
+type ValidatorEra
+  @entity
+  @compositeIndexes(fields: [["validator", "eraIndex"]]) {
+  id: ID! # padId(eraIndex)/stash
+  era: Era!
+  eraIndex: Int! @index
+  validator: Validator!
+  "the operator's identity when the era was planned"
+  identity: Identity @index
+  ownStake: BigInt!
+  totalStake: BigInt!
+  nominatorCount: Int!
+  "Perbill parts, as `Validator.commission`"
+  commission: BigInt
+  blocked: Boolean
+  "null until the era is paid"
+  points: Int
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A stash's stake slashed: `staking.Slash` before v8, `staking.Slashed` from v8. Slashes are
+deferred on Polymesh, so each is placed from the deferred slash it was applied from: the offending
+`validator` is the stash itself when it is the validator, otherwise the validator it nominated.
+Null when the deferred slash could not be read, which records an anomaly
+"""
+type Slash @entity {
+  id: ID! # blockEventId
+  account: Account! @index
+  validator: Validator @index
+  "the era the slash was applied in"
+  eraIndex: Int @index
+  "the era of the offence: exact from v7.0, null before, where the chain keeps only the era it was reported in"
+  offenceEraIndex: Int @index
+  amount: BigInt!
+  createdEvent: Event!
 }
 
 """
@@ -3404,6 +3456,7 @@ type Asset @entity {
   holdings: [Holding!]! @derivedFrom(field: "asset")
   nfts: [Nft!]! @derivedFrom(field: "asset")
   metadata: [AssetMetadata!]! @derivedFrom(field: "asset")
+  "for a fungible asset, `asset.assets(id).totalSupply`; for an NFT collection, the number of NFTs in existence, `nft.nftsInCollection(id)` (the chain's `totalSupply` is 0 for a collection)"
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
@@ -3707,6 +3760,7 @@ type AccountBalance @entity {
   "lifetime totals — free, this row is already versioned on these blocks"
   totalReceived: BigInt!
   totalSent: BigInt!
+  "Lifetime fees, net of refunds. From v8 it leaves out a fee that was not taken by a withdrawal of its own: an Ethereum transaction's fee, or one paid from withdrawals that also covered contract deposits. Its POLYX is in `Burn` entries, so the balance is right"
   totalFeesPaid: BigInt!
   totalRewards: BigInt!
   totalSlashed: BigInt!

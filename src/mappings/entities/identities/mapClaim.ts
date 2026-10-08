@@ -12,6 +12,7 @@ import {
   Scope,
 } from '../../../types';
 import {
+  blockTime,
   END_OF_TIME,
   emptyDid,
   extractClaimInfo,
@@ -223,15 +224,8 @@ export const seedGenesisClaims = async (
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
   const { block, eventIdx, blockEventId } = extractArgs(event);
   const harvesterArgs = extractHarvesterArgs(event);
-  const {
-    claimIssuer,
-    claimScope,
-    claimType,
-    issuanceDate,
-    cddId,
-    jurisdiction,
-    customClaimTypeId,
-  } = extractClaimInfo(harvesterArgs);
+  const { claimIssuer, claimScope, claimType, cddId, jurisdiction, customClaimTypeId } =
+    extractClaimInfo(harvesterArgs);
 
   let scope: Scope;
   if (claimScope) {
@@ -252,7 +246,8 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
   const claim = await Claim.get(id);
 
   if (claim) {
-    claim.revokeDate = issuanceDate;
+    // `issuanceDate` in the event is the revoked claim's own; the revocation happens at this block
+    claim.revokeDate = BigInt(blockTime(block).getTime());
     claim.updatedEventId = blockEventId;
     await claim.save();
   } else {

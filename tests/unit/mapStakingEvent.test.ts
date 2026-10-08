@@ -167,6 +167,56 @@ describe('handleStakingEvent', () => {
     });
   });
 
+  it("records which validator's payout paid each reward, and nothing on other events", async () => {
+    const db = mockStore();
+    const CAROL = '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y';
+    const payout = (validator: string, idx: number) =>
+      handlePayoutStarted(
+        namedEvent({
+          section: 'staking',
+          method: 'PayoutStarted',
+          fields: { eraIndex: 7, validatorStash: validator, page: 0, next: null },
+          blockNumber: '2000',
+          idx,
+        })
+      );
+    const event = (method: string, fields: Record<string, unknown>, idx: number) =>
+      handleStakingEvent(
+        namedEvent({ section: 'staking', method, fields, blockNumber: '2000', idx })
+      );
+
+    // two payouts back to back in one block, each paying a nominator
+    await payout(ALICE, 0);
+    await event('Rewarded', { stash: BOB, dest: 'Staked', amount: '10' }, 1);
+    await payout(CAROL, 2);
+    await event('Rewarded', { stash: BOB, dest: 'Staked', amount: '20' }, 3);
+    await event('Bonded', { stash: BOB, amount: '5' }, 4);
+
+    const rows = Object.values(db.StakingEvent) as any[];
+    expect(rows.map(row => [row.eventId, row.validatorId])).toEqual([
+      ['Rewarded', ALICE],
+      ['Rewarded', CAROL],
+      ['Bonded', undefined],
+    ]);
+  });
+
+  /** Before v7.0 no `PayoutStarted` names the validator, so a reward records none. */
+  it('records no validator for a pre-v7 reward', async () => {
+    const db = mockStore();
+
+    await handleStakingEvent(
+      tupleEvent({
+        section: 'staking',
+        method: 'Reward',
+        data: [codec('0xdid'), codec(BOB), codec('10')],
+        specVersion: 6_000_000,
+        blockNumber: '3000',
+      })
+    );
+
+    expect(Object.values(db.StakingEvent)[0]).toMatchObject({ validatorId: undefined });
+  });
+
   it("links StakingEvent.position on a stash's very first Bonded (project.ts must run handlePositionBonded before handleStakingEvent)", async () => {
     const db = mockStore();
     (globalThis as any).api.query = {

@@ -127,7 +127,7 @@ const zero: Triple = { free: BigInt(0), reserved: BigInt(0), frozen: BigInt(0) }
 /** Derived balance at block N: the historical `account_balance` row whose range covers N. */
 const derivedAt = async (db: DataSource, address: string, block: number): Promise<Triple> => {
   const [row]: Array<{ free: string; reserved: string; frozen: string }> = await db.query(
-    `SELECT free, reserved, frozen FROM account_balance
+    `SELECT free, reserved, frozen FROM account_balances
        WHERE id = $1 AND _block_range @> $2::int8 LIMIT 1`,
     [address, block]
   );
@@ -147,8 +147,8 @@ const summedAt = async (
 ): Promise<{ free: bigint; reserved: bigint }> => {
   const rows: Array<{ pool: string; s: string }> = await db.query(
     `SELECT pool, COALESCE(sum(amount), 0) AS s FROM polyx_entries
-       WHERE account_id = $1 AND created_block_id <= $2 GROUP BY pool`,
-    [address, padId(block)]
+       WHERE account_id = $1 AND block_id <= $2 AND _block_range @> $3::int8 GROUP BY pool`,
+    [address, padId(block), block]
   );
 
   const map = new Map(rows.map(r => [r.pool, BigInt(r.s)]));

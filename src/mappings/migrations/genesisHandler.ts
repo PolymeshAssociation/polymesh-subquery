@@ -17,7 +17,9 @@ import {
   padId,
 } from '../../utils';
 import { upsertAccount } from '../../utils/accounts';
+import { readCurrentEraIndex } from '../../utils/staking';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
+import { recordElection } from '../entities/events/mapEra';
 import { seedGenesisClaims } from '../entities/identities/mapClaim';
 import { createIdentity } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
@@ -363,6 +365,12 @@ const genesisHandler = async (block: SubstrateBlock): Promise<void> => {
 
   // after the identities, which the genesis claims are made about
   await seedGenesisClaims(block, genesisBlock, SEED_EVENT_ID);
+
+  // the era the genesis config elects, which no election event announces
+  const genesisEra = await readCurrentEraIndex();
+  if (genesisEra !== undefined) {
+    await recordElection(genesisEra, { block, blockId: genesisBlock, blockEventId: SEED_EVENT_ID });
+  }
 
   // runs last so that it can link to the Accounts created above
   await handleEvmAccountMappings(datetime);
