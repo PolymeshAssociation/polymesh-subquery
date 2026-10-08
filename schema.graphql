@@ -1880,7 +1880,8 @@ type Extrinsic @entity {
   moduleIdText: String!
   callId: CallIdEnum! @index
   callIdText: String!
-  paramsTxt: String!
+  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`"
+  args: ArgumentsJson!
   success: Int! @index(unique: false)
   nonce: Int
   extrinsicHash: String @index(unique: false)

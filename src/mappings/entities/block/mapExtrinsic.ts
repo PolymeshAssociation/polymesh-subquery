@@ -1,5 +1,6 @@
+import { GenericCall } from '@polkadot/types';
 import { SubstrateExtrinsic } from '@subql/types';
-import { CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
+import { ArgumentsJson, CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
 import {
   blockTime,
   camelToSnakeCase,
@@ -10,6 +11,7 @@ import {
   ResolvedEthTransact,
   resolveEthTransact,
 } from '../../../utils';
+import { callArgs } from '../../args/encode';
 import { toEnum } from '../common';
 import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
@@ -20,7 +22,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
-  const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
+  const args = callArgs(extrinsic.extrinsic.method as unknown as GenericCall);
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
 
@@ -40,7 +42,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
       block: extrinsic.block,
     }),
     callIdText: callId,
-    paramsTxt,
+    args: args as unknown as ArgumentsJson,
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
@@ -70,7 +72,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
       block: extrinsic.block,
     });
     created.callIdText = resolved.callId;
-    created.paramsTxt = resolved.paramsTxt;
+    created.args = resolved.args as unknown as ArgumentsJson;
     created.nonce = Number(resolved.tx.nonce);
     created.success = extrinsic.success && !resolved.reverted ? 1 : 0;
   }
