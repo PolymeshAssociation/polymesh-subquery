@@ -7,7 +7,7 @@ The Portal v2 team keeps a register of what it needs from this indexer
 that this check turned up.
 
 Status (2026-10-07): 14.1 and 14.2 are done, 14.3 is decided (no change), 14.4 is built and
-awaits a full resync (step O), and 14.5 is on hold.
+awaits a full resync (step O), 14.5 is on hold, and 14.6 (locked amounts) is deferred.
 
 ## Summary
 
@@ -264,6 +264,38 @@ question: consumers issue no historical queries, so the indexes that only serve 
 waiting on agreement from the SDK and portal maintainers. Its `EventReference` would let a consumer
 find every event that names an account, identity or asset in any position, which makes (c) indexed
 and typed without a change log per entity. Revisit 14.5 when §9.10 is decided.
+
+## 14.6 Locked amounts — deferred
+
+`Holding` records what is frozen but not what is locked. The chain locks a holder's assets while
+they are committed elsewhere: a sender's affirmed settlement legs, an STO's unsold offering, and a
+capital distribution's unpaid amount (`portfolio.portfolioLockedAssets`, and from v8
+`asset.lockedBalance` for account holders). A consumer that wants what a holder can move today
+needs `amount − frozen − locked`.
+
+**Decided 2026-10-08: not indexed for now.** No consumer has asked for locks across holders or for
+their history, and the SDK already reads a portfolio's current lock from chain. Revisit when a
+screen needs it.
+
+What it would take, so it need not be worked out again:
+
+- **Lock changes emit no event** (`set_portfolio_locked_balance` writes silently), so `locked` follows
+  the events that cause them:
+
+  | Pallet | Locks | Unlocks |
+  |---|---|---|
+  | Settlement | `InstructionAffirmed`: the on-chain legs sent from the affirming holder | `AffirmationWithdrawn` (that holder's legs); `InstructionExecuted` and `InstructionRejected` (every locked leg). A failed execution changes nothing: v8 releases the locks and transfers inside one transaction, which rolls back |
+  | STOs | `FundraiserCreated`: the offering amount | `Invested`: the amount sold; closing or stopping: the remainder |
+  | Capital distributions | `Created`: the amount | `BenefitClaimed`, `Reclaimed`, `Removed` |
+
+- **Re-read, rather than derive.** On each of those events, read the lock for the holders it touches
+  (the index's `Leg`, `Sto` and `Distribution` rows say which). It costs one or two reads per event
+  and is exact by construction. Deriving the amounts from the events instead saves the reads but has
+  to get every runtime's rules right: receipts could settle an on-chain leg off-chain before v6,
+  affirmation changed at v6, mediators arrived in v7, and NFTs lock by token, not by amount.
+- **Schema:** `Holding.locked: BigInt!`, plus a locked-NFT count if NFT locks are wanted.
+- **Validation:** compare against `portfolioLockedAssets` and `asset.lockedBalance`, as the dev
+  server's asset check already does for frozen amounts.
 
 ## Not a gap
 
