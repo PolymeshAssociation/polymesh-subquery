@@ -25,7 +25,7 @@ test('extractEventArgs', () => {
 });
 
 test('extractClaimInfo', () => {
-  expect(extractClaimInfo([{ value: 'hello' }])).toStrictEqual({
+  expect(extractClaimInfo(undefined)).toStrictEqual({
     claimExpiry: undefined,
     claimIssuer: undefined,
     claimScope: null,
@@ -38,18 +38,13 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: { CustomerDueDiligence: '0x000001' },
-          claim_issuer: 'me',
-          expiry: 400,
-          last_update_date: 12345,
-          issuance_date: 12345,
-        },
-      },
-    ])
+    extractClaimInfo({
+      claim: { CustomerDueDiligence: '0x000001' },
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '12345',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
@@ -63,20 +58,15 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: {
-            InvestorUniqueness: { col1: { type: 'Ticker', value: 'STONK' } },
-          },
-          claim_issuer: 'me',
-          expiry: 400,
-          last_update_date: 12345,
-          issuance_date: 12345,
-        },
+    extractClaimInfo({
+      claim: {
+        InvestorUniqueness: [{ type: 'Ticker', value: 'STONK' }],
       },
-    ])
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '12345',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
@@ -90,23 +80,15 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: {
-            Jurisdiction: {
-              col1: 'IN',
-              col2: { type: 'Ticker', value: 'STONK' },
-            },
-          },
-          claim_issuer: 'me',
-          expiry: 400,
-          last_update_date: 12345,
-          issuance_date: 12345,
-        },
+    extractClaimInfo({
+      claim: {
+        Jurisdiction: ['IN', { type: 'Ticker', value: 'STONK' }],
       },
-    ])
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '12345',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
@@ -120,20 +102,15 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: {
-            Affiliate: { type: 'Ticker', value: 'STONK' },
-          },
-          claim_issuer: 'me',
-          expiry: 400,
-          last_update_date: 12345,
-          issuance_date: 0,
-        },
+    extractClaimInfo({
+      claim: {
+        Affiliate: { type: 'Ticker', value: 'STONK' },
       },
-    ])
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '0',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
@@ -147,20 +124,15 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: {
-            Affiliate: { type: 'Ticker', value: 'STONK' },
-          },
-          claimIssuer: 'me',
-          expiry: 400,
-          lastUpdateDate: 12345,
-          issuanceDate: 0,
-        },
+    extractClaimInfo({
+      claim: {
+        Affiliate: { type: 'Ticker', value: 'STONK' },
       },
-    ])
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '0',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
@@ -174,25 +146,20 @@ test('extractClaimInfo', () => {
   });
 
   expect(
-    extractClaimInfo([
-      { value: 'hello' },
-      {
-        value: {
-          claim: {
-            Custom: {
-              col1: 1,
-              col2: {
-                Identity: '0x0100000000000000000000000000000000000000000000000000000000000000',
-              },
-            },
+    extractClaimInfo({
+      claim: {
+        Custom: [
+          '1',
+          {
+            Identity: '0x0100000000000000000000000000000000000000000000000000000000000000',
           },
-          claimIssuer: 'me',
-          expiry: 400,
-          lastUpdateDate: 12345,
-          issuanceDate: 0,
-        },
+        ],
       },
-    ])
+      claimIssuer: 'me',
+      expiry: '400',
+      lastUpdateDate: '12345',
+      issuanceDate: '0',
+    })
   ).toStrictEqual({
     claimExpiry: '400',
     claimIssuer: 'me',
