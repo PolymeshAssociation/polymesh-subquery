@@ -53,6 +53,22 @@ describe('appliedDeferredSlash', () => {
     });
   });
 
+  it("places a nominator's share matching two validators' slashes under the one slashed just before", () => {
+    const OTHER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+    const sameEra = [
+      deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
+      { ...deferred(2159, BigInt(900), [[NOMINATOR, BigInt(40)]]), validator: OTHER },
+    ];
+
+    // `OTHER` was slashed after `VALIDATOR`, so it is the slash being applied
+    expect(
+      appliedDeferredSlash(sameEra, NOMINATOR, BigInt(40), [OTHER, VALIDATOR])?.slash.validator
+    ).toBe(OTHER);
+    expect(
+      appliedDeferredSlash(sameEra, NOMINATOR, BigInt(40), [VALIDATOR, OTHER])?.slash.validator
+    ).toBe(VALIDATOR);
+  });
+
   it('places nothing whose amount matches no slash', () => {
     expect(appliedDeferredSlash(waiting, NOMINATOR, BigInt(41))).toBeUndefined();
   });

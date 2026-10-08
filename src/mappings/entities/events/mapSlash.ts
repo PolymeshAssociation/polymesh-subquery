@@ -4,7 +4,11 @@ import { AnomalyKind, Slash } from '../../../types';
 import { blockTime } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { appliedDeferredSlash, deferredSlashesBefore } from '../../../utils/deferredSlashes';
+import {
+  appliedDeferredSlash,
+  deferredSlashesBefore,
+  slashedBefore,
+} from '../../../utils/deferredSlashes';
 import { readActiveEraIndex } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { amountOf, stakingStash } from '../identities/ledgerCore';
@@ -42,7 +46,9 @@ export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
     deferredSlashesBefore(block),
     readActiveEraIndex(),
   ]);
-  const applied = deferred ? appliedDeferredSlash(deferred, stash, amount) : undefined;
+  const applied = deferred
+    ? appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx))
+    : undefined;
 
   if (!applied) {
     await recordAnomaly({

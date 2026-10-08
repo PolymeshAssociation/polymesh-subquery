@@ -81,14 +81,33 @@ export const deferredSlashesBefore = (
 };
 
 /**
+ * The stashes slashed before event `eventIdx` in `block`, nearest first: `staking.Slash` before v8,
+ * `staking.Slashed` from v8, each naming the stash first.
+ */
+export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[] =>
+  (block.events ?? [])
+    .slice(0, eventIdx)
+    .filter(
+      ({ event }) =>
+        event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed')
+    )
+    .map(({ event }) => event.data[0].toString())
+    .reverse();
+
+/**
  * The deferred slash a `Slash` of `amount` on `stash` was applied from, and whether `stash` was its
  * validator rather than a nominator. Eras are applied in order, so of several that match, the oldest
  * is the one applied.
+ *
+ * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
+ * the validator's own share first and then its nominators', so the nominator's is the one whose
+ * validator was slashed most recently before it (`earlier`, nearest first).
  */
 export const appliedDeferredSlash = (
   deferred: DeferredSlash[],
   stash: string,
-  amount: bigint
+  amount: bigint,
+  earlier: string[] = []
 ): { slash: DeferredSlash; asValidator: boolean } | undefined => {
   const oldest = (matches: DeferredSlash[]): DeferredSlash | undefined =>
     [...matches].sort((a, b) => a.era - b.era)[0];
@@ -99,10 +118,12 @@ export const appliedDeferredSlash = (
     return { slash: own, asValidator: true };
   }
 
+  const shares = deferred.filter(slash =>
+    slash.others.some(([nominator, value]) => nominator === stash && value === amount)
+  );
+  const nearest = earlier.find(validator => shares.some(slash => slash.validator === validator));
   const share = oldest(
-    deferred.filter(slash =>
-      slash.others.some(([nominator, value]) => nominator === stash && value === amount)
-    )
+    nearest === undefined ? shares : shares.filter(slash => slash.validator === nearest)
   );
 
   return share ? { slash: share, asValidator: false } : undefined;
