@@ -4,18 +4,11 @@
  * either silently lost one issuer's claim (`handleClaimAdded` overwrite) or silently revoked
  * it (`handleClaimRevoked` mutating the shared row) — both invisible to the SDK's
  * `issuerId: { in: $trustedClaimIssuers }` / `revokeDate: { isNull: true }` filters.
- *
- * `serializeLikeHarvester` is mocked to the identity function so event params can be passed
- * as plain decoded objects instead of real polkadot `Codec`s — this file is only concerned
- * with the id/store logic in mapClaim.ts, not with harvester-style serialization.
  */
 
+import { TypeRegistry } from '@polkadot/types';
+import { typesBundle } from '@polymeshassociation/polymesh-types';
 import { SubstrateEvent } from '@subql/types';
-
-jest.mock('../../src/mappings/serializeLikeHarvester', () => ({
-  serializeLikeHarvester: (item: unknown) => item,
-}));
-
 import {
   getId,
   handleClaimAdded,
@@ -26,6 +19,26 @@ import {
 const TARGET = TEST_DID;
 const ISSUER_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const ISSUER_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const CDD_1 = `0x${'c1'.repeat(32)}`;
+const CDD_GENESIS = `0x${'c0'.repeat(32)}`;
+
+/** The chain types of the latest runtime, so claims are real `IdentityClaim` codecs. */
+const registry = new TypeRegistry();
+registry.setKnownTypes({ typesBundle: typesBundle as never });
+registry.register(
+  ((typesBundle as any).spec.polymesh_mainnet.types as { minmax: number[]; types: never }[]).find(
+    ({ minmax }) => minmax[0] === 8_000_000
+  )?.types as never
+);
+
+const identityClaim = (issuer: string, cddId: string, date: string) =>
+  registry.createType('IdentityClaim', {
+    claimIssuer: issuer,
+    issuanceDate: date,
+    lastUpdateDate: date,
+    expiry: null,
+    claim: { CustomerDueDiligence: cddId },
+  });
 
 const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
@@ -49,15 +62,7 @@ const mockClaimEvent = (
   method: 'ClaimAdded' | 'ClaimRevoked',
   { issuer, cddId, dateValue }: { issuer: string; cddId: string; dateValue: string }
 ): SubstrateEvent => {
-  const data = [
-    mockCodec(TARGET),
-    {
-      claim: { CustomerDueDiligence: cddId },
-      claim_issuer: issuer,
-      issuance_date: dateValue,
-      last_update_date: dateValue,
-    },
-  ];
+  const data = [mockCodec(TARGET), identityClaim(issuer, cddId, dateValue)];
 
   return {
     idx: 3,
@@ -162,12 +167,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
    * `ClaimAdded` announced. The index had never written it, so the revocation found nothing.
    */
   it('seeds the genesis claims, so a later revocation finds them', async () => {
-    const genesisClaim = {
-      claim: { CustomerDueDiligence: 'cdd-genesis' },
-      claim_issuer: ISSUER_A,
-      issuance_date: '0',
-      last_update_date: '0',
-    };
+    const genesisClaim = identityClaim(ISSUER_A, CDD_GENESIS, '0');
     (globalThis as any).api.query = {
       identity: {
         claims: {
@@ -191,7 +191,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
     await seedGenesisClaims(genesis as never, '0000000000', '0000000000/0000000000');
 
-    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence/cdd-genesis`;
+    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence/${CDD_GENESIS}`;
     expect(Object.keys(claims)).toEqual([id]);
     expect(claims[id]).toMatchObject({
       targetId: TARGET,
@@ -201,7 +201,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     });
 
     await handleClaimRevoked(
-      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-genesis', dateValue: '5000' })
+      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: CDD_GENESIS, dateValue: '5000' })
     );
 
     expect(claims[id].revokeDate).toBe(REVOKED_AT);
@@ -210,10 +210,10 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
   it('gives two issuers attesting the same target/type/scope two distinct Claim rows', async () => {
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '1000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
     );
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_B, cddId: 'cdd-1', dateValue: '2000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_B, cddId: CDD_1, dateValue: '2000' })
     );
 
     const ids = Object.keys(claims);
@@ -225,7 +225,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'CustomerDueDiligence',
       undefined,
       undefined,
-      'cdd-1',
+      CDD_1,
       undefined
     );
     const idB = getId(
@@ -234,7 +234,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'CustomerDueDiligence',
       undefined,
       undefined,
-      'cdd-1',
+      CDD_1,
       undefined
     );
 
@@ -244,14 +244,14 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
   it('leaves issuer A untouched and unrevoked when issuer B revokes its own claim', async () => {
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '1000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
     );
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_B, cddId: 'cdd-1', dateValue: '2000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_B, cddId: CDD_1, dateValue: '2000' })
     );
 
     await handleClaimRevoked(
-      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_B, cddId: 'cdd-1', dateValue: '3000' })
+      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_B, cddId: CDD_1, dateValue: '3000' })
     );
 
     const idA = getId(
@@ -260,7 +260,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'CustomerDueDiligence',
       undefined,
       undefined,
-      'cdd-1',
+      CDD_1,
       undefined
     );
     const idB = getId(
@@ -269,7 +269,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'CustomerDueDiligence',
       undefined,
       undefined,
-      'cdd-1',
+      CDD_1,
       undefined
     );
 
@@ -279,11 +279,11 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
   it('clears revokeDate when the same issuer re-issues the claim after revoking it', async () => {
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '1000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
     );
 
     await handleClaimRevoked(
-      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '2000' })
+      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '2000' })
     );
 
     const id = getId(
@@ -292,13 +292,13 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'CustomerDueDiligence',
       undefined,
       undefined,
-      'cdd-1',
+      CDD_1,
       undefined
     );
     expect(claims[id].revokeDate).toBe(REVOKED_AT);
 
     await handleClaimAdded(
-      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '3000' })
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '3000' })
     );
 
     expect(claims[id].revokeDate).toBeUndefined();
@@ -306,7 +306,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
   it('records an anomaly instead of silently returning when a revocation matches no row', async () => {
     await handleClaimRevoked(
-      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '1000' })
+      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
     );
 
     const anomalies = storeSet()
@@ -323,7 +323,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     await handleClaimRevoked(
       mockClaimEvent('ClaimRevoked', {
         issuer: '0x0000000000000000000000000000000000000000000000000000000000000000',
-        cddId: 'cdd-1',
+        cddId: CDD_1,
         dateValue: '0',
       })
     );

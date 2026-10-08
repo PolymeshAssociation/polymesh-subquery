@@ -8,7 +8,6 @@
   "src/mappings/entities/externalAgents/mapExternalAgentHistory.ts": 3,
   "src/mappings/entities/identities/ledgerCore.ts": 2,
   "src/mappings/entities/identities/mapAuthorization.ts": 1,
-  "src/mappings/entities/identities/mapClaim.ts": 3,
   "src/mappings/entities/identities/mapIdentities.ts": 1,
   "src/mappings/entities/identities/mapIdentityKey.ts": 1,
   "src/mappings/entities/identities/mapPolyxLedger.ts": 30,
@@ -24,7 +23,6 @@
   "src/mappings/serializeLikeHarvester.ts": 1,
   "src/seed/holding.ts": 3,
   "src/utils/assets.ts": 3,
-  "src/utils/claims.ts": 9,
   "src/utils/common.ts": 8,
   "src/utils/ethExtrinsic.ts": 3,
   "src/utils/settlements.ts": 2

@@ -21,25 +21,13 @@ import {
   recordAnomaly,
   scanDoubleMap,
 } from '../../../utils';
-import { serializeLikeHarvester } from '../../serializeLikeHarvester';
+import { CanonicalValue, encodeValue } from '../../args/encode';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
-/**
- * Reads `event.event.data` through `extractArgs`'s `AnyTuple` cast rather than directly, so
- * `Codec` resolves through the same module path `serializeLikeHarvester` expects. Reading it
- * bare surfaces the `@polkadot/types-codec` CJS/ESM dual-declaration hazard noted in
- * docs/implementation/12-types-and-ci.md — `subql build`'s stricter resolution catches it even
- * though `tsc --noEmit` does not.
- */
-const extractHarvesterArgs = (event: SubstrateEvent) => {
-  const { params } = extractArgs(event);
-  const types = metadataTypeNames(event);
-
-  return params.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i]),
-  }));
-};
+/** The event's `IdentityClaim` (its second parameter) in the canonical encoding. */
+const encodedClaim = (event: SubstrateEvent): CanonicalValue =>
+  encodeValue(extractArgs(event).params[1], metadataTypeNames(event)[1]);
 
 /**
  * Claim id: `(target, issuer, claimType, …)` — current-state semantics, one row per
@@ -54,10 +42,10 @@ const extractHarvesterArgs = (event: SubstrateEvent) => {
 export const getId = (
   target: string,
   issuer: string,
-  claimType: string,
-  scope: Scope,
-  jurisdiction: string,
-  cddId: string,
+  claimType: string | undefined,
+  scope: Scope | undefined,
+  jurisdiction: string | undefined,
+  cddId: string | undefined,
   customClaimTypeId: string | undefined
 ): string => {
   const idAttributes = [target, issuer, claimType];
@@ -107,13 +95,10 @@ interface ClaimContext {
   blockEventId: string;
 }
 
-/**
- * Writes the claim `harvesterArgs` describes, in `ClaimAdded`'s argument form: the target, then the
- * `IdentityClaim` serialised as the harvester serialises it.
- */
+/** Writes the claim `identityClaim` describes, an `IdentityClaim` in the canonical encoding. */
 const writeClaim = async (
   target: string,
-  harvesterArgs: { value: unknown }[],
+  identityClaim: CanonicalValue,
   { block, blockId, eventIdx, blockEventId }: ClaimContext
 ): Promise<void> => {
   const {
@@ -126,14 +111,18 @@ const writeClaim = async (
     cddId,
     jurisdiction,
     customClaimTypeId,
-  } = extractClaimInfo(harvesterArgs);
+  } = extractClaimInfo(identityClaim);
+  // every `IdentityClaim` names its issuer
+  const issuer = claimIssuer as string;
 
-  let scope: Scope;
+  let scope: Scope | undefined;
   if (claimScope) {
     scope = await processClaimScope(claimScope, block);
   }
 
-  const filterExpiry = claimExpiry || END_OF_TIME;
+  // the encoding's decimal strings, which the store writes into the numeric columns as they are
+  const moment = (value: string | null | undefined) => value as unknown as bigint;
+  const filterExpiry = moment(claimExpiry) || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(
@@ -146,12 +135,12 @@ const writeClaim = async (
   );
 
   await Claim.create({
-    id: getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
+    id: getId(target, issuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
     targetId: target,
-    issuerId: claimIssuer,
-    issuanceDate,
-    lastUpdateDate,
-    expiry: claimExpiry,
+    issuerId: issuer,
+    issuanceDate: moment(issuanceDate),
+    lastUpdateDate: moment(lastUpdateDate),
+    expiry: moment(claimExpiry),
     type: claimType as ClaimTypeEnum,
     scope,
     jurisdiction,
@@ -170,7 +159,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
   const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const target = getTextValue(decodeEvent(event).did);
 
-  await writeClaim(target, extractHarvesterArgs(event), { block, blockId, eventIdx, blockEventId });
+  await writeClaim(target, encodedClaim(event), { block, blockId, eventIdx, blockEventId });
 };
 
 /**
@@ -209,9 +198,7 @@ export const seedGenesisClaims = async (
       }
 
       const target = (key.args[0] as unknown as { target: Codec }).target.toString();
-      const claim = serializeLikeHarvester(stored, 'IdentityClaim');
-
-      return writeClaim(target, [{ value: target }, { value: claim }], {
+      return writeClaim(target, encodeValue(stored, 'IdentityClaim'), {
         block,
         blockId,
         eventIdx,
@@ -223,11 +210,10 @@ export const seedGenesisClaims = async (
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
   const { block, eventIdx, blockEventId } = extractArgs(event);
-  const harvesterArgs = extractHarvesterArgs(event);
   const { claimIssuer, claimScope, claimType, cddId, jurisdiction, customClaimTypeId } =
-    extractClaimInfo(harvesterArgs);
+    extractClaimInfo(encodedClaim(event));
 
-  let scope: Scope;
+  let scope: Scope | undefined;
   if (claimScope) {
     scope = await processClaimScope(claimScope, block);
   }
