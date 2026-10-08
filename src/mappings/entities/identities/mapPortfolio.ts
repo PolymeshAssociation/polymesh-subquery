@@ -188,7 +188,7 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
     EventIdEnum.MovedBetweenPortfolios,
     extrinsic
   );
-  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId);
+  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId, block.specVersion);
 };
 
 type AssetMovementArgs = {
@@ -281,7 +281,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
     extrinsic,
   });
 
-  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId);
+  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId, block.specVersion);
 };
 
 /**
@@ -293,10 +293,18 @@ export const applyMoveWithinIdentity = async (
   moved: Awaited<ReturnType<typeof mapAssetMovement>>,
   fromHolder: AssetHolderDetails,
   toHolder: AssetHolderDetails,
-  blockEventId: string
+  blockEventId: string,
+  specVersion: number
 ): Promise<void> => {
   if (moved?.amount !== undefined) {
-    await moveFungibleHolding(moved.assetId, fromHolder, toHolder, moved.amount, blockEventId);
+    await moveFungibleHolding(
+      moved.assetId,
+      fromHolder,
+      toHolder,
+      moved.amount,
+      blockEventId,
+      specVersion
+    );
   } else if (moved?.nftIds) {
     await moveNftsWithinIdentity(
       moved.assetId,
@@ -351,7 +359,7 @@ export const handleFungibleTokensMovedBetweenPortfolios = async (
     EventIdEnum.FungibleTokensMovedBetweenPortfolios,
     extrinsic
   );
-  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId);
+  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId, block.specVersion);
 };
 
 /**
@@ -375,13 +383,14 @@ export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): P
   }
 
   const nfts = rawNfts.toJSON() as { ticker?: string; assetId?: string; ids: number[] };
+  const assetId = await getAssetId(nfts.ticker ?? nfts.assetId, block);
 
   await createAssetTransaction(
     blockId,
     eventIdx,
     block.timestamp,
     {
-      assetId: await getAssetId(nfts.ticker ?? nfts.assetId, block),
+      assetId,
       fromHolder,
       toHolder,
       nftIds: nfts.ids.map(BigInt),
@@ -392,4 +401,5 @@ export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): P
     EventIdEnum.NFTsMovedBetweenPortfolios,
     extrinsic
   );
+  await moveNftsWithinIdentity(assetId, nfts.ids, fromHolder, toHolder, blockEventId);
 };

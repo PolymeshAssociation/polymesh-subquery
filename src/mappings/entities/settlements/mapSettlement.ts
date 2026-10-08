@@ -927,5 +927,5 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
   });
 
   // only a transfer within one identity emits `FundsTransferred`, with no balance event of its own
-  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId);
+  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId, block.specVersion);
 };

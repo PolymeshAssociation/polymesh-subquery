@@ -10,7 +10,11 @@ import {
   handleIssued,
   handleRedeemed,
 } from '../../src/mappings/entities/assets/mapAsset';
-import { handleFundsMovedBetweenPortfolios } from '../../src/mappings/entities/identities/mapPortfolio';
+import {
+  handleFundsMovedBetweenPortfolios,
+  handleNftsMovedBetweenPortfolios,
+  handlePortfolioMovement,
+} from '../../src/mappings/entities/identities/mapPortfolio';
 import { handleFundsTransferred } from '../../src/mappings/entities/settlements/mapSettlement';
 import { accountHolder, emptyDid, padId, portfolioHolder } from '../../src/utils';
 import { codec, MockDb, mockStore, tupleEvent } from './helpers';
@@ -382,5 +386,109 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(db.Holding[`${ASSET_ID}/${FROM}`].amount).toBe(BigInt(9));
     expect(db.Holding[`${ASSET_ID}/${TO}`].amount).toBe(BigInt(1));
+  });
+
+  /**
+   * Testnet block 6,599,003: one move listed 70,000,000 twice from a portfolio holding 100,000,000.
+   * The chain debits with `saturating_sub`, so the source ends at 0 and the destination at 140M.
+   */
+  it('stops a portfolio move at 0, as the chain does, when it takes more than the source holds', async () => {
+    db.Holding = {
+      [`${ASSET_ID}/${DID}/0`]: {
+        id: `${ASSET_ID}/${DID}/0`,
+        assetId: ASSET_ID,
+        amount: BigInt(100),
+        nftCount: 0,
+      },
+    };
+    const move = (idx: number) =>
+      handlePortfolioMovement(
+        tupleEvent({
+          section: 'portfolio',
+          method: 'MovedBetweenPortfolios',
+          data: [
+            codec(DID),
+            portfolio(DID, 0),
+            portfolio(DID, 1),
+            codec(ASSET_ID),
+            codec('70'),
+            codec(null),
+          ],
+          specVersion: 5_001_020,
+          idx,
+        })
+      );
+
+    await move(0);
+    await move(1);
+
+    expect(holding(DID, 0).amount).toBe(BigInt(0));
+    expect(holding(DID, 1).amount).toBe(BigInt(140));
+  });
+
+  /** v6.0 rejects such a move, so a debit past the balance afterwards is the index's error, shown. */
+  it('does not stop a v6+ move at 0', async () => {
+    db.Holding = {
+      [`${ASSET_ID}/${DID}/0`]: {
+        id: `${ASSET_ID}/${DID}/0`,
+        assetId: ASSET_ID,
+        amount: BigInt(100),
+        nftCount: 0,
+      },
+    };
+
+    await handleFundsMovedBetweenPortfolios(
+      tupleEvent({
+        section: 'portfolio',
+        method: 'FundsMovedBetweenPortfolios',
+        data: [
+          codec(DID),
+          portfolio(DID, 0),
+          portfolio(DID, 1),
+          codec({ fungible: { assetId: ASSET_ID, amount: 140 } }),
+          codec(null),
+        ],
+      })
+    );
+
+    expect(holding(DID, 0).amount).toBe(BigInt(-40));
+  });
+
+  /** Testnet block 7,786,536: v5.3's `NFTsMovedBetweenPortfolios` moved NFT #1 to portfolio 1. */
+  it("moves NFTs on v5.3's NFTsMovedBetweenPortfolios", async () => {
+    db.Holding = {
+      [`${ASSET_ID}/${DID}/0`]: {
+        id: `${ASSET_ID}/${DID}/0`,
+        assetId: ASSET_ID,
+        amount: BigInt(0),
+        nftCount: 1,
+      },
+    };
+    db.Nft = {
+      [`${ASSET_ID}/${padId('1')}`]: { id: `${ASSET_ID}/${padId('1')}`, portfolioId: `${DID}/0` },
+    };
+    (globalThis as any).store.bulkUpdate = jest.fn((entity: string, rows: any[]) => {
+      rows.forEach(row => (db[entity][row.id] = { ...row }));
+      return Promise.resolve();
+    });
+
+    await handleNftsMovedBetweenPortfolios(
+      tupleEvent({
+        section: 'portfolio',
+        method: 'NFTsMovedBetweenPortfolios',
+        data: [
+          codec(DID),
+          portfolio(DID, 0),
+          portfolio(DID, 1),
+          codec({ assetId: ASSET_ID, ids: [1] }),
+          codec(null),
+        ],
+        specVersion: 5_003_001,
+      })
+    );
+
+    expect(holding(DID, 0).nftCount).toBe(0);
+    expect(holding(DID, 1).nftCount).toBe(1);
+    expect(db.Nft[`${ASSET_ID}/${padId('1')}`].portfolioId).toBe(`${DID}/1`);
   });
 });

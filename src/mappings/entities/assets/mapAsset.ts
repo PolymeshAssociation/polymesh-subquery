@@ -250,6 +250,18 @@ export const applyHoldingDelta = async (
 };
 
 /**
+ * Before v6.0, `move_portfolio_funds` checked each item against the source's whole balance and then
+ * applied them all, debiting with `saturating_sub`. One move that listed an asset twice could
+ * therefore take more than the source held: the source stopped at 0 and the destination was
+ * credited in full (testnet block 6,599,003). v6.0 rejects a repeated asset
+ * (`NoDuplicateAssetsAllowed`), so from then on no move exceeds the source.
+ *
+ * The chain never corrected that surplus, so the identity's portfolios still sum to more than its
+ * `balanceOf`, and its `Holding` rows to more than its `AssetHolder`, as on chain.
+ */
+const MOVE_DEBIT_CHECKED_FROM = 6_000_000;
+
+/**
  * Moves a fungible amount between two holders of one identity (portfolios, or v8 accounts), which
  * the chain reports only as a movement: no balance event names it, and the identity's total is
  * unchanged, so only the two `Holding` rows move.
@@ -259,10 +271,15 @@ export const moveFungibleHolding = async (
   from: AssetHolderDetails,
   to: AssetHolderDetails,
   amount: bigint,
-  blockEventId: string
+  blockEventId: string,
+  specVersion: number
 ): Promise<void> => {
   const source = await getHolding(assetId, from, blockEventId);
-  source.amount -= amount;
+  // the pre-v6 chain stopped such a debit at 0; later, a debit past 0 would be the index's error
+  source.amount =
+    specVersion < MOVE_DEBIT_CHECKED_FROM && amount > source.amount
+      ? BigInt(0)
+      : source.amount - amount;
   source.updatedEventId = blockEventId;
   await source.save();
 
