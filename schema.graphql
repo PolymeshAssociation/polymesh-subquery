@@ -3456,6 +3456,7 @@ type Asset @entity {
   holdings: [Holding!]! @derivedFrom(field: "asset")
   nfts: [Nft!]! @derivedFrom(field: "asset")
   metadata: [AssetMetadata!]! @derivedFrom(field: "asset")
+  "for a fungible asset, `asset.assets(id).totalSupply`; for an NFT collection, the number of NFTs in existence, `nft.nftsInCollection(id)` (the chain's `totalSupply` is 0 for a collection)"
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!

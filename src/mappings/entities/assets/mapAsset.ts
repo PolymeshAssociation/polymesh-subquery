@@ -32,6 +32,7 @@ import {
   getDocValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
+  portfolioHolder,
   getNumberValue,
   getPortfolioId,
   getSecurityIdentifiers,
@@ -248,6 +249,29 @@ export const applyHoldingDelta = async (
   }
 };
 
+/**
+ * Moves a fungible amount between two holders of one identity (portfolios, or v8 accounts), which
+ * the chain reports only as a movement: no balance event names it, and the identity's total is
+ * unchanged, so only the two `Holding` rows move.
+ */
+export const moveFungibleHolding = async (
+  assetId: string,
+  from: AssetHolderDetails,
+  to: AssetHolderDetails,
+  amount: bigint,
+  blockEventId: string
+): Promise<void> => {
+  const source = await getHolding(assetId, from, blockEventId);
+  source.amount -= amount;
+  source.updatedEventId = blockEventId;
+  await source.save();
+
+  const destination = await getHolding(assetId, to, blockEventId);
+  destination.amount += amount;
+  destination.updatedEventId = blockEventId;
+  await destination.save();
+};
+
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId, eventIdx } = extractArgs(event);
   const decoded = decodeEvent(event);
@@ -433,14 +457,20 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   asset.totalSupply += issuedAmount;
   asset.updatedEventId = blockEventId;
 
-  const assetIssuer = await getAssetHolder(assetId, issuerDid, blockEventId);
-  assetIssuer.amount += issuedAmount;
-  assetIssuer.updatedEventId = blockEventId;
+  // Before v6 `_mint` credits the beneficiary's default portfolio (v3.0 to v5.4)
+  const promises: Promise<void>[] = [];
+  await applyHoldingDelta(
+    asset,
+    portfolioHolder(issuerDid, 0),
+    blockEventId,
+    issuedAmount,
+    promises
+  );
 
   const assetTransaction = AssetTransaction.create({
     id: blockEventId,
     assetId,
-    toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
+    toPortfolioId: `${issuerDid}/0`,
     toIdentityId: issuerDid,
     eventId: EventIdEnum.Issued,
     amount: issuedAmount,
@@ -448,7 +478,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
     createdEventId: blockEventId,
   });
 
-  const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
+  promises.push(asset.save(), assetTransaction.save());
   if (fundingRound) {
     promises.push(
       createFunding(
@@ -466,29 +496,22 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   await Promise.all(promises);
 };
 
+/**
+ * Before v6 a redemption emits `asset.Transfer` from the portfolio it redeems, to no one, and then
+ * `Redeemed` (v3.0 to v5.4). The holding is debited there, where the portfolio is named, so this
+ * only lowers the supply.
+ */
 export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const {
-    assetId: rawAssetId,
-    beneficiaryDid: rawBeneficiaryDid,
-    amount: rawAmount,
-  } = decodeEvent(event);
+  const { assetId: rawAssetId, amount: rawAmount } = decodeEvent(event);
 
-  const issuerDid = getTextValue(rawBeneficiaryDid);
   const assetId = await getAssetId(rawAssetId, block);
-  const issuedAmount = getBigIntValue(rawAmount);
 
   const asset = await getAsset(assetId, event);
-  asset.totalSupply -= issuedAmount;
+  asset.totalSupply -= getBigIntValue(rawAmount);
   asset.updatedEventId = blockEventId;
 
-  const assetRedeemer = await getAssetHolder(assetId, issuerDid, blockEventId);
-  assetRedeemer.amount -= issuedAmount;
-  assetRedeemer.updatedEventId = blockEventId;
-
-  const promises = [asset.save(), assetRedeemer.save()];
-
-  await Promise.all(promises);
+  await asset.save();
 };
 
 export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
@@ -673,25 +696,19 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
 
   const promises = [];
 
-  if (fromHolder && toHolder) {
+  if (fromHolder) {
+    // a transfer, or a redemption (to no one): the portfolios it names, debited then credited
     const asset = await getAsset(assetId, event);
-    asset.totalTransfers += BigInt(1);
     asset.updatedEventId = blockEventId;
+    await applyHoldingDelta(asset, fromHolder, blockEventId, -transferAmount, promises);
+    if (toHolder) {
+      asset.totalTransfers += BigInt(1);
+      await applyHoldingDelta(asset, toHolder, blockEventId, transferAmount, promises);
+    }
     promises.push(asset.save());
+  }
 
-    const [fromHolder, toHolder] = await Promise.all([
-      getAssetHolder(assetId, fromDid, blockEventId),
-      getAssetHolder(assetId, toDid, blockEventId),
-    ]);
-
-    fromHolder.amount = fromHolder.amount - transferAmount;
-    fromHolder.updatedEventId = blockEventId;
-    promises.push(fromHolder.save());
-
-    toHolder.amount = toHolder.amount + transferAmount;
-    toHolder.updatedEventId = blockEventId;
-    promises.push(toHolder.save());
-
+  if (fromHolder && toHolder) {
     const settled = transferInstruction(block, eventIdx);
     instructionId = settled.instructionId;
 
