@@ -12,7 +12,6 @@ import {
   AssetPermissions,
   ChildIdentity,
   CustomClaimType,
-  Event,
   EventIdEnum,
   Identity,
   IdentityKeyRole,
@@ -220,20 +219,10 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
 };
 
 export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const { blockEventId } = getEventParams(args);
-
-  let childDid: string, parentDid: string;
-
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [{ value: parentDid }, { value: childDid }] = attributes;
-  } else {
-    const { did: rawParentDid, childDid: rawChildDid } = decodeEvent(event);
-
-    parentDid = getTextValue(rawParentDid);
-    childDid = getTextValue(rawChildDid);
-  }
+  const { blockEventId } = getEventParams(extractArgs(event));
+  const { did: rawParentDid, childDid: rawChildDid } = decodeEvent(event);
+  const parentDid = getTextValue(rawParentDid);
+  const childDid = getTextValue(rawChildDid);
 
   await ChildIdentity.create({
     id: childDid,
@@ -245,17 +234,7 @@ export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleChildDidUnlinked = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  let childDid: string;
-
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [, , { value: childDid }] = attributes;
-  } else {
-    childDid = getTextValue(decodeEvent(event).childDid);
-  }
-
-  await ChildIdentity.remove(childDid);
+  await ChildIdentity.remove(getTextValue(decodeEvent(event).childDid));
 };
 
 interface PermissionsLike {
