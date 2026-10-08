@@ -30,6 +30,12 @@ const ISSUER_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
 
+/**
+ * When a revocation happens: the block's timestamp, not the `issuanceDate` the `ClaimRevoked`
+ * payload carries, which is the revoked claim's own.
+ */
+const REVOKED_AT = BigInt(new Date('2026-01-01T00:00:00Z').getTime());
+
 /** A minimal Codec-like stand-in — only `.toString()` is exercised by the code under test. */
 const mockCodec = (value: string) => ({ toString: () => value });
 
@@ -198,7 +204,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: 'cdd-genesis', dateValue: '5000' })
     );
 
-    expect(claims[id].revokeDate).toBe('5000');
+    expect(claims[id].revokeDate).toBe(REVOKED_AT);
     (globalThis as any).api.query = {};
   });
 
@@ -268,7 +274,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     );
 
     expect(claims[idA].revokeDate).toBeUndefined();
-    expect(claims[idB].revokeDate).toBe('3000');
+    expect(claims[idB].revokeDate).toBe(REVOKED_AT);
   });
 
   it('clears revokeDate when the same issuer re-issues the claim after revoking it', async () => {
@@ -289,7 +295,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       'cdd-1',
       undefined
     );
-    expect(claims[id].revokeDate).toBe('2000');
+    expect(claims[id].revokeDate).toBe(REVOKED_AT);
 
     await handleClaimAdded(
       mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: 'cdd-1', dateValue: '3000' })
