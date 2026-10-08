@@ -30,7 +30,7 @@ ALTER TABLE extrinsics DROP COLUMN IF EXISTS params;
 
 -- (The denormalised `claim_type` / `claim_scope` / `claim_issuer` / `corporate_action_ticker` /
 -- `fundraiser_offering_asset` / `transfer_to` columns on `events` and their indexes were dropped —
--- a harvester-era carry-over, empty or wrong on the vast majority of events, and the same facts
+-- a carry-over from an older indexer, empty or wrong on the vast majority of events, and the same facts
 -- live on the `Claim` / corporate-action / STO entities. See docs/implementation/09-infrastructure.md.)
 
 -- Plain indexes that would otherwise be `@index` in schema.graphql but cannot be: `@subql/node`
