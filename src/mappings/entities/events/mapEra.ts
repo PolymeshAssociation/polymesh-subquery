@@ -57,22 +57,42 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
     return;
   }
 
-  await recordElection(eraIndex, { block, blockId, blockEventId });
+  await recordElection(eraIndex, { block, blockId, blockEventId, eventIdx });
 };
 
 /**
  * Records the validators elected for `eraIndex`: the `Era`, a `ValidatorEra` per validator with its
  * exposure and preferences, and which `Validator`s are active. Called on each election event, and
  * by the genesis seed for the era the genesis config elects, which has no election event.
+ *
+ * An election always stores its exposures, so finding none means they were read from the wrong
+ * map, such as a v7 `erasStakers` on a block whose `api` carries a neighbouring runtime's metadata.
+ * That is recorded, and nothing is written: an empty set would mark every validator inactive.
  */
 export const recordElection = async (
   eraIndex: number,
-  { block, blockId, blockEventId }: { block: SubstrateBlock; blockId: string; blockEventId: string }
+  {
+    block,
+    blockId,
+    blockEventId,
+    eventIdx,
+  }: { block: SubstrateBlock; blockId: string; blockEventId: string; eventIdx?: number }
 ): Promise<void> => {
   const [exposures, prefs] = await Promise.all([
     readEraExposures(eraIndex),
     readEraValidatorPrefs(eraIndex),
   ]);
+
+  if (exposures.length === 0) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `no exposures were found for era ${eraIndex}, so its elected set was not recorded`,
+      block,
+      eventIdx,
+    });
+
+    return;
+  }
 
   const id = padId(eraIndex.toString());
   const era = (await Era.get(id)) ?? getOrCreateEra(eraIndex, blockEventId);

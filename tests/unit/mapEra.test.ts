@@ -208,6 +208,33 @@ describe('handleStakersElected', () => {
     expect(db.Validator[VAL_OLD].isActive).toBe(true);
   });
 
+  it('records an election that stores no exposures, leaving the active set untouched', async () => {
+    const db = mockStore({
+      Validator: {
+        [VAL_OLD]: {
+          id: VAL_OLD,
+          accountId: VAL_OLD,
+          isActive: true,
+          blocked: false,
+          isPermissioned: false,
+        },
+      },
+    });
+    mockGetByFields(db, 'Validator');
+    // a v8 election read through v7 metadata: `erasStakers` is empty
+    mockElection(5, []);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleStakersElected(
+      namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
+    );
+
+    expect(db.Validator[VAL_OLD].isActive).toBe(true);
+    expect(Object.keys(db.Era ?? {})).toHaveLength(0);
+    expect(Object.keys(db.ValidatorEra ?? {})).toHaveLength(0);
+    expect(anomaly).toHaveBeenCalledTimes(1);
+  });
+
   /** The genesis config elects era 0 with no election event; the genesis seed records it. */
   it('records the era the genesis config elects', async () => {
     const db = mockStore();
