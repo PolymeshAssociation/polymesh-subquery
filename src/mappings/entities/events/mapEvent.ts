@@ -1,11 +1,13 @@
 import { SubstrateEvent } from '@subql/types';
-import { metadataTypeNames } from '../../../decode';
-import { Event } from '../../../types';
-import { extractEventArgs } from '../../../utils';
-import { serializeLikeHarvester } from '../../serializeLikeHarvester';
+import { argumentNames, metadataTypeNames } from '../../../decode';
+import { ArgumentsJson, Event, EventReference } from '../../../types';
+import { encodeArgs } from '../../args/encode';
+import { toEventReferences } from '../../args/references';
 import { extractArgs } from '../common';
 
-export function handleToolingEvent(event: SubstrateEvent): Event {
+export async function handleToolingEvent(
+  event: SubstrateEvent
+): Promise<{ event: Event; references: EventReference[] }> {
   const {
     block,
     blockEventId,
@@ -17,31 +19,24 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     eventIdText,
     moduleId,
     moduleIdText,
-    params: args,
+    params,
   } = extractArgs(event);
-  const types = metadataTypeNames(event);
+  const { args, refs } = encodeArgs(params, argumentNames(event), metadataTypeNames(event));
 
-  const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i]),
-  }));
-
-  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
-
-  return Event.create({
-    id: blockEventId,
-    blockId,
-    eventIdx,
-    extrinsicIdx,
-    specVersionId: block.specVersion,
-    eventId,
-    moduleId,
-    moduleIdText,
-    eventIdText,
-    attributesTxt: JSON.stringify(harvesterLikeArgs),
-    eventArg_0,
-    eventArg_1,
-    eventArg_2,
-    eventArg_3,
-    extrinsicId,
-  });
+  return {
+    event: Event.create({
+      id: blockEventId,
+      blockId,
+      eventIdx,
+      extrinsicIdx,
+      specVersionId: block.specVersion,
+      eventId,
+      moduleId,
+      moduleIdText,
+      eventIdText,
+      args: args as unknown as ArgumentsJson,
+      extrinsicId,
+    }),
+    references: await toEventReferences(refs, blockEventId, block.specVersion),
+  };
 }

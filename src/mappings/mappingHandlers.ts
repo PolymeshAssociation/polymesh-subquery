@@ -66,8 +66,11 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
     promises.push(handleExtrinsic(extrinsic));
   }
 
-  const event = handleToolingEvent(substrateEvent);
+  const { event, references } = await handleToolingEvent(substrateEvent);
   promises.push(event.save());
+  if (references.length > 0) {
+    promises.push(store.bulkCreate('EventReference', references));
+  }
 
   promises.push(mapExternalAgentAction(substrateEvent));
 

@@ -13,6 +13,11 @@ jest.mock('../../src/utils/blockAuthor', () => ({ blockAuthor: jest.fn() }));
 jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
   resolveFeePayer: jest.fn(),
 }));
+// the closing events here are hand-made stand-ins, not codecs; their encoding isn't under test
+jest.mock('../../src/mappings/args/encode', () => ({
+  ...jest.requireActual('../../src/mappings/args/encode'),
+  encodeArgs: () => ({ args: {}, refs: [] }),
+}));
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 import { EntryDirection, HoldReason, MovementKind, PolyxPool } from '../../src/types';
 import {
