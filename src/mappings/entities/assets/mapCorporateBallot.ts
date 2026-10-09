@@ -182,7 +182,7 @@ export const handleBallotRemoved = async (event: SubstrateEvent): Promise<void> 
 
 export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { did: rawDid, caId: rawCaId, votes: rawVotes } = decodeEvent(event);
+  const { voterDid: rawDid, caId: rawCaId, votes: rawVotes } = decodeEvent(event);
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const voterId = rawDid.toString();

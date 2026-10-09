@@ -324,7 +324,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   const address = getSignerAddress(extrinsic);
 
   const {
-    did: rawCreator,
+    callerDid: rawCreator,
     venueId: rawVenueId,
     instructionId: rawInstructionId,
     settlementType: rawSettlementType,
@@ -450,7 +450,7 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   const { extrinsic, blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const address = getSignerAddress(extrinsic);
 
-  const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
+  const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const { identity, account, portfolio } = await getPortfolioOrAccount(
@@ -531,7 +531,7 @@ const addSignerToLegs = async (
 export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId } = extractArgs(event);
 
-  const { portfolio: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
+  const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const { identity, account, portfolio } = await getPortfolioOrAccount(
@@ -599,7 +599,7 @@ export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise
  */
 export const handleInstructionRejected = async (event: SubstrateEvent): Promise<void> => {
   const { eventId, blockEventId } = extractArgs(event);
-  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
+  const { callerDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
@@ -680,7 +680,7 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
  */
 export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
+  const { callerDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const manuallyExecutedEvent = InstructionEvent.create({
     id: blockEventId,
@@ -731,7 +731,7 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
 export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
   const {
-    did: rawIdentityId,
+    mediatorDid: rawIdentityId,
     instructionId: rawInstructionId,
     expiry: expiryOpt,
   } = decodeEvent(event);
@@ -767,7 +767,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
 
 export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { did: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
+  const { mediatorDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
@@ -829,7 +829,7 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
 export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
   const {
-    did: rawIdentityId,
+    callerDid: rawIdentityId,
     instructionId: rawInstructionId,
     legId: rawLegId,
     receiptUid: rawReceiptUid,
@@ -899,7 +899,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 
 export const handleFundsTransferred = async (event: SubstrateEvent): Promise<void> => {
   const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const { fromHolder: rawFromHolder, toHolder: rawToHolder, fund: rawFund } = decodeEvent(event);
+  const { from: rawFromHolder, to: rawToHolder, fund: rawFund } = decodeEvent(event);
 
   const [fromHolder, toHolder] = await Promise.all([
     rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId),

@@ -307,7 +307,7 @@ export const handleSecondaryKeysPermissionsUpdated = async (
 ): Promise<void> => {
   const { blockEventId, eventId, eventIdx, block } = extractArgs(event);
 
-  const { account: rawSignerDetails, updatedPermissions: rawUpdatedPermissions } =
+  const { secondaryKey: rawSignerDetails, newPermissions: rawUpdatedPermissions } =
     decodeEvent(event);
 
   const address = legacyPermissionsUpdatedAddress(rawSignerDetails);
@@ -375,7 +375,7 @@ const unlinkAccount = async (
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
   const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
-  const { signers: rawAccounts } = decodeEvent(event);
+  const { removedKeys: rawAccounts } = decodeEvent(event);
 
   const addresses = legacyRemovedAddresses(rawAccounts);
 
@@ -557,7 +557,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
   const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
 
-  const { account: rawAccount } = decodeEvent(event);
+  const { secondaryKey: rawAccount } = decodeEvent(event);
 
   const address = getTextValue(rawAccount);
 
@@ -573,7 +573,7 @@ export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Pro
 export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
   const {
-    did: rawDid,
+    callerDid: rawDid,
     customClaimTypeId: rawCustomClaimTypeId,
     name: rawName,
   } = decodeEvent(event);

@@ -41,7 +41,7 @@ const getVenue = async (venueId: string): Promise<Venue> => {
 
 export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { did, venueId, details, venueType } = decodeEvent(event);
+  const { callerDid: did, venueId, details, venueType } = decodeEvent(event);
 
   await Venue.create({
     id: processVenueId(venueId),
@@ -80,7 +80,7 @@ export const handleVenueTypeUpdated = async (event: SubstrateEvent): Promise<voi
 
 export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { venueId, signers: rawSigners, updateType: rawUpdateType } = decodeEvent(event);
+  const { venueId, signers: rawSigners, added: rawUpdateType } = decodeEvent(event);
 
   const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
 

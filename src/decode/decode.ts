@@ -159,10 +159,14 @@ export const decodeEvent = (event: SubstrateEvent): DecodedEvent => {
      * not carry. Those read as `undefined`, which is what the handlers reading them already
      * expect; a name the shape does not declare at all still throws
      */
-    return guard(
-      event,
-      Object.fromEntries(shape.fields.map((name, index) => [name, data[index] as unknown as Codec]))
+    const fields: Record<string, Codec> = Object.fromEntries(
+      shape.fields.map((name, index) => [name, data[index] as unknown as Codec])
     );
+    for (const [alias, field] of Object.entries(shape.aliases ?? {})) {
+      fields[alias] = fields[field];
+    }
+
+    return guard(event, fields);
   } catch (error) {
     if (error instanceof DecodeError) {
       record(event, error);

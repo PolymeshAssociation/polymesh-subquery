@@ -91,7 +91,7 @@ export const handleRegisterAssetMetadataLocalType = async (
   event: SubstrateEvent
 ): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, name: rawName, localKeyId: rawKeyId } = decodeEvent(event);
+  const { assetId: rawAssetId, name: rawName, localKey: rawKeyId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   await getAsset(assetId, event);
@@ -110,7 +110,7 @@ export const handleRegisterAssetMetadataGlobalType = async (
   event: SubstrateEvent
 ): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { name: rawName, globalKeyId: rawKeyId, spec: rawSpec } = decodeEvent(event);
+  const { name: rawName, globalKey: rawKeyId, spec: rawSpec } = decodeEvent(event);
 
   const id = getTextValue(rawKeyId);
   const row =
@@ -146,7 +146,7 @@ export const handleGlobalMetadataSpecUpdated = async (event: SubstrateEvent): Pr
 
 export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, value: rawValue, detail: rawDetail } = decodeEvent(event);
+  const { assetId: rawAssetId, value: rawValue, valueDetail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const key = await resolveMetadataKey(event);
@@ -177,7 +177,7 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
 
 export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, detail: rawDetail } = decodeEvent(event);
+  const { assetId: rawAssetId, valueDetail: rawDetail } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const key = await resolveMetadataKey(event);
@@ -203,7 +203,7 @@ export const handleSetAssetMetadataValueDetails = async (event: SubstrateEvent):
 
 export const handleLocalMetadataKeyDeleted = async (event: SubstrateEvent): Promise<void> => {
   const { block } = extractArgs(event);
-  const { assetId: rawAssetId, localKeyId: rawKeyId } = decodeEvent(event);
+  const { assetId: rawAssetId, localKey: rawKeyId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   await AssetMetadata.remove(
@@ -253,7 +253,7 @@ export const handleAssetTypeChanged = async (event: SubstrateEvent): Promise<voi
 
 const upsertCustomAssetType = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { typeId: rawTypeId, name: rawName } = decodeEvent(event);
+  const { customAssetTypeId: rawTypeId, name: rawName } = decodeEvent(event);
 
   const id = getNumberValue(rawTypeId).toString();
   const existing = await CustomAssetType.get(id);

@@ -9,19 +9,15 @@ const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
 };
 
 /**
- * Also reached from `handleTickerTransferred`, which passes its own event: before 6.0.0
- * `TickerTransferred` was emitted first, so the reservation does not exist yet. Both events name
- * their first two parameters `did` and `ticker`, so the decode is correct either way.
+ * The reservation of a classic (pre-v6) ticker, created with `identityId` as its holder when the
+ * index has none yet. `ClassicTickerClaimed` is not routed to a handler: before 6.0.0
+ * `TickerTransferred` was emitted first, so it reserves the ticker from its own values.
  */
-export const handleClassicTickerClaimed = async (
-  event: SubstrateEvent
+const reserveClassicTicker = async (
+  ticker: string,
+  identityId: string,
+  blockEventId: string
 ): Promise<TickerReservation> => {
-  const { blockEventId } = extractArgs(event);
-  const { did, ticker: rawTicker } = decodeEvent(event);
-
-  const identityId = getTextValue(did);
-  const ticker = serializeTicker(rawTicker);
-
   let reservation = await TickerReservation.get(ticker);
 
   if (!reservation) {
@@ -41,7 +37,7 @@ export const handleClassicTickerClaimed = async (
 
 export const handleTickerRegistered = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { did, ticker: rawTicker, expiry: rawExpiry } = decodeEvent(event);
+  const { ownerDid: did, ticker: rawTicker, expiry: rawExpiry } = decodeEvent(event);
 
   const identityId = getTextValue(did);
   const ticker = serializeTicker(rawTicker);
@@ -110,7 +106,7 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {
   const { blockEventId } = extractArgs(event);
-  const { did: rawDid, ticker: rawTicker } = decodeEvent(event);
+  const { newOwnerDid: rawDid, ticker: rawTicker } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
   const ticker = serializeTicker(rawTicker);
@@ -119,7 +115,7 @@ export const handleTickerTransferred = async (event: SubstrateEvent): Promise<vo
 
   // before 6.0.0 TickerTransferred was emitted before ClassicTickerClaimed
   if (!reservation) {
-    reservation = await handleClassicTickerClaimed(event);
+    reservation = await reserveClassicTicker(ticker, did, blockEventId);
   }
 
   reservation.identityId = did;

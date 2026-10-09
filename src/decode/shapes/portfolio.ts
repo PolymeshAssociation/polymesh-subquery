@@ -1,5 +1,5 @@
 import { LAST_V5 } from './consts';
-import { discontinuedAt, registerShape } from './registry';
+import { discontinuedAt, registerShape, stable, tickerBeforeV7 } from './registry';
 
 /**
  * `portfolio` pallet parameter shapes.
@@ -21,3 +21,30 @@ registerShape(
   'NFTsMovedBetweenPortfolios',
   discontinuedAt(LAST_V5, ['did', 'fromPortfolio', 'toPortfolio', 'nfts', 'memo'])
 );
+
+registerShape('portfolio', 'AllowIdentityToCreatePortfolios', stable(['callerDid', 'allowedDid']));
+registerShape(
+  'portfolio',
+  'FundsMovedBetweenPortfolios',
+  stable(['callerDid', 'from', 'to', 'fund', 'memo'])
+);
+registerShape('portfolio', 'PortfolioCreated', stable(['callerDid', 'portfolioNumber', 'name']));
+registerShape(
+  'portfolio',
+  'PortfolioCustodianChanged',
+  stable(['callerDid', 'portfolioId', 'custodianDid'])
+);
+registerShape('portfolio', 'PortfolioDeleted', stable(['callerDid', 'portfolioNumber']));
+registerShape('portfolio', 'PortfolioRenamed', stable(['callerDid', 'portfolioNumber', 'name']));
+registerShape(
+  'portfolio',
+  'PreApprovedPortfolio',
+  tickerBeforeV7(stable(['callerDid', 'portfolioId', 'assetId']))
+);
+registerShape('portfolio', 'RevokeCreatePortfoliosPermission', stable(['callerDid', 'revokedDid']));
+registerShape(
+  'portfolio',
+  'RevokePreApprovedPortfolio',
+  tickerBeforeV7(stable(['callerDid', 'portfolioId', 'assetId']))
+);
+registerShape('portfolio', 'UserPortfolios', stable(['did', 'portfolios']));

@@ -1,0 +1,1057 @@
+{
+  "Asset.AssetAffirmationExemption": [
+    "asset_id"
+  ],
+  "Asset.AssetBalanceUpdated": [
+    "caller_did",
+    "asset_id",
+    "amount",
+    "from",
+    "to",
+    "update_reason"
+  ],
+  "Asset.AssetCreated": [
+    "caller_did",
+    "asset_id",
+    "divisible",
+    "asset_type",
+    "owner_did",
+    "name",
+    "identifiers",
+    "funding_round"
+  ],
+  "Asset.AssetFrozen": [
+    "caller_did",
+    "asset_id"
+  ],
+  "Asset.AssetMediatorsAdded": [
+    "caller_did",
+    "asset_id",
+    "mediators"
+  ],
+  "Asset.AssetMediatorsRemoved": [
+    "caller_did",
+    "asset_id",
+    "mediators"
+  ],
+  "Asset.AssetOwnershipTransferred": [
+    "new_owner_did",
+    "asset_id",
+    "old_owner_did"
+  ],
+  "Asset.AssetRenamed": [
+    "caller_did",
+    "asset_id",
+    "name"
+  ],
+  "Asset.AssetTypeChanged": [
+    "caller_did",
+    "asset_id",
+    "asset_type"
+  ],
+  "Asset.AssetUnfrozen": [
+    "caller_did",
+    "asset_id"
+  ],
+  "Asset.ControllerTransfer": [
+    "caller_did",
+    "asset_id",
+    "source",
+    "amount"
+  ],
+  "Asset.CustomAssetTypeExists": [
+    "caller_did",
+    "custom_asset_type_id",
+    "name"
+  ],
+  "Asset.CustomAssetTypeRegistered": [
+    "caller_did",
+    "custom_asset_type_id",
+    "name"
+  ],
+  "Asset.DivisibilityChanged": [
+    "caller_did",
+    "asset_id",
+    "divisible"
+  ],
+  "Asset.DocumentAdded": [
+    "caller_did",
+    "asset_id",
+    "document_id",
+    "document"
+  ],
+  "Asset.DocumentRemoved": [
+    "caller_did",
+    "asset_id",
+    "document_id"
+  ],
+  "Asset.FundingRoundSet": [
+    "caller_did",
+    "asset_id",
+    "funding_round"
+  ],
+  "Asset.GlobalMetadataSpecUpdated": [
+    "name",
+    "spec"
+  ],
+  "Asset.IdentifiersUpdated": [
+    "caller_did",
+    "asset_id",
+    "identifiers"
+  ],
+  "Asset.LocalMetadataKeyDeleted": [
+    "caller_did",
+    "asset_id",
+    "local_key"
+  ],
+  "Asset.MetadataValueDeleted": [
+    "caller_did",
+    "asset_id",
+    "key"
+  ],
+  "Asset.PreApprovedAsset": [
+    "caller_did",
+    "asset_id"
+  ],
+  "Asset.RegisterAssetMetadataGlobalType": [
+    "name",
+    "global_key",
+    "spec"
+  ],
+  "Asset.RegisterAssetMetadataLocalType": [
+    "caller_did",
+    "asset_id",
+    "name",
+    "local_key",
+    "spec"
+  ],
+  "Asset.RemoveAssetAffirmationExemption": [
+    "asset_id"
+  ],
+  "Asset.RemovePreApprovedAsset": [
+    "caller_did",
+    "asset_id"
+  ],
+  "Asset.SetAssetMetadataValue": [
+    "caller_did",
+    "asset_id",
+    "value",
+    "value_detail"
+  ],
+  "Asset.SetAssetMetadataValueDetails": [
+    "caller_did",
+    "asset_id",
+    "value_detail"
+  ],
+  "Asset.TickerLinkedToAsset": [
+    "caller_did",
+    "ticker",
+    "asset_id"
+  ],
+  "Asset.TickerRegistered": [
+    "owner_did",
+    "ticker",
+    "expiry"
+  ],
+  "Asset.TickerTransferred": [
+    "new_owner_did",
+    "ticker",
+    "old_owner_did"
+  ],
+  "Asset.TickerUnlinkedFromAsset": [
+    "caller_did",
+    "ticker",
+    "asset_id"
+  ],
+  "CapitalDistribution.BenefitClaimed": [
+    "caller_did",
+    "holder_did",
+    "ca_id",
+    "distribution",
+    "benefit",
+    "tax"
+  ],
+  "CapitalDistribution.Created": [
+    "agent_did",
+    "ca_id",
+    "distribution"
+  ],
+  "CapitalDistribution.Reclaimed": [
+    "agent_did",
+    "ca_id",
+    "amount"
+  ],
+  "CapitalDistribution.Removed": [
+    "agent_did",
+    "ca_id"
+  ],
+  "Checkpoint.CheckpointCreated": [
+    "caller_did",
+    "asset_id",
+    "checkpoint_id",
+    "total_supply",
+    "timestamp"
+  ],
+  "Checkpoint.MaximumSchedulesComplexityChanged": [
+    "caller_did",
+    "max_complexity"
+  ],
+  "Checkpoint.ScheduleCreated": [
+    "caller_did",
+    "asset_id",
+    "schedule_id",
+    "schedule"
+  ],
+  "Checkpoint.ScheduleRemoved": [
+    "caller_did",
+    "asset_id",
+    "schedule_id",
+    "schedule"
+  ],
+  "CommitteeMembership.ActiveLimitChanged": [
+    "caller_did",
+    "new_limit",
+    "old_limit"
+  ],
+  "CommitteeMembership.MemberAdded": [
+    "caller_did",
+    "member_did"
+  ],
+  "CommitteeMembership.MemberRemoved": [
+    "caller_did",
+    "member_did"
+  ],
+  "CommitteeMembership.MemberRevoked": [
+    "caller_did",
+    "member_did"
+  ],
+  "CommitteeMembership.MembersReset": [
+    "caller_did",
+    "members"
+  ],
+  "CommitteeMembership.MembersSwapped": [
+    "caller_did",
+    "removed_did",
+    "added_did"
+  ],
+  "ComplianceManager.AssetCompliancePaused": [
+    "caller_did",
+    "asset_id"
+  ],
+  "ComplianceManager.AssetComplianceReplaced": [
+    "caller_did",
+    "asset_id",
+    "requirements"
+  ],
+  "ComplianceManager.AssetComplianceReset": [
+    "caller_did",
+    "asset_id"
+  ],
+  "ComplianceManager.AssetComplianceResumed": [
+    "caller_did",
+    "asset_id"
+  ],
+  "ComplianceManager.ComplianceRequirementChanged": [
+    "caller_did",
+    "asset_id",
+    "requirement"
+  ],
+  "ComplianceManager.ComplianceRequirementCreated": [
+    "caller_did",
+    "asset_id",
+    "requirement"
+  ],
+  "ComplianceManager.ComplianceRequirementRemoved": [
+    "caller_did",
+    "asset_id",
+    "requirement_id"
+  ],
+  "ComplianceManager.TrustedDefaultClaimIssuerAdded": [
+    "caller_did",
+    "asset_id",
+    "issuer"
+  ],
+  "ComplianceManager.TrustedDefaultClaimIssuerRemoved": [
+    "caller_did",
+    "asset_id",
+    "issuer_did"
+  ],
+  "CorporateAction.CAInitiated": [
+    "agent_did",
+    "ca_id",
+    "ca",
+    "details"
+  ],
+  "CorporateAction.CALinkedToDoc": [
+    "agent_did",
+    "ca_id",
+    "doc_ids"
+  ],
+  "CorporateAction.CARemoved": [
+    "agent_did",
+    "ca_id"
+  ],
+  "CorporateAction.DefaultTargetIdentitiesChanged": [
+    "agent_did",
+    "asset_id",
+    "targets"
+  ],
+  "CorporateAction.DefaultWithholdingTaxChanged": [
+    "agent_did",
+    "asset_id",
+    "tax"
+  ],
+  "CorporateAction.DidWithholdingTaxChanged": [
+    "agent_did",
+    "asset_id",
+    "taxed_did",
+    "tax"
+  ],
+  "CorporateAction.MaxDetailsLengthChanged": [
+    "caller_did",
+    "max_length"
+  ],
+  "CorporateAction.RecordDateChanged": [
+    "agent_did",
+    "ca_id",
+    "ca"
+  ],
+  "CorporateBallot.Created": [
+    "agent_did",
+    "ca_id",
+    "range",
+    "meta",
+    "rcv"
+  ],
+  "CorporateBallot.MetaChanged": [
+    "agent_did",
+    "ca_id",
+    "meta"
+  ],
+  "CorporateBallot.RCVChanged": [
+    "agent_did",
+    "ca_id",
+    "rcv"
+  ],
+  "CorporateBallot.RangeChanged": [
+    "agent_did",
+    "ca_id",
+    "range"
+  ],
+  "CorporateBallot.Removed": [
+    "agent_did",
+    "ca_id"
+  ],
+  "CorporateBallot.VoteCast": [
+    "voter_did",
+    "ca_id",
+    "votes"
+  ],
+  "DidRegistrars.ActiveLimitChanged": [
+    "caller_did",
+    "new_limit",
+    "old_limit"
+  ],
+  "DidRegistrars.MemberAdded": [
+    "caller_did",
+    "member_did"
+  ],
+  "DidRegistrars.MemberRemoved": [
+    "caller_did",
+    "member_did"
+  ],
+  "DidRegistrars.MemberRevoked": [
+    "caller_did",
+    "member_did"
+  ],
+  "DidRegistrars.MembersReset": [
+    "caller_did",
+    "members"
+  ],
+  "DidRegistrars.MembersSwapped": [
+    "caller_did",
+    "removed_did",
+    "added_did"
+  ],
+  "ExternalAgents.AgentAdded": [
+    "agent_did",
+    "asset_id",
+    "group"
+  ],
+  "ExternalAgents.AgentRemoved": [
+    "caller_did",
+    "asset_id",
+    "agent_did"
+  ],
+  "ExternalAgents.GroupChanged": [
+    "caller_did",
+    "asset_id",
+    "agent_did",
+    "group"
+  ],
+  "ExternalAgents.GroupCreated": [
+    "caller_did",
+    "asset_id",
+    "ag_id",
+    "permissions"
+  ],
+  "ExternalAgents.GroupPermissionsUpdated": [
+    "caller_did",
+    "asset_id",
+    "ag_id",
+    "permissions"
+  ],
+  "Identity.AuthorizationAdded": [
+    "authorized_by",
+    "target_did",
+    "target_key",
+    "auth_id",
+    "authorization_data",
+    "expiry"
+  ],
+  "Identity.AuthorizationConsumed": [
+    "target_did",
+    "target_key",
+    "auth_id"
+  ],
+  "Identity.AuthorizationRejected": [
+    "target_did",
+    "target_key",
+    "auth_id"
+  ],
+  "Identity.AuthorizationRetryLimitReached": [
+    "target_did",
+    "target_key",
+    "auth_id"
+  ],
+  "Identity.AuthorizationRevoked": [
+    "target_did",
+    "target_key",
+    "auth_id"
+  ],
+  "Identity.ClaimAdded": [
+    "target_did",
+    "claim"
+  ],
+  "Identity.ClaimRevoked": [
+    "target_did",
+    "claim"
+  ],
+  "Identity.CustomClaimTypeAdded": [
+    "caller_did",
+    "custom_claim_type_id",
+    "name"
+  ],
+  "Identity.DidCreated": [
+    "did",
+    "primary_key",
+    "secondary_keys"
+  ],
+  "Identity.PrimaryKeyUpdated": [
+    "did",
+    "old_primary_key",
+    "new_primary_key"
+  ],
+  "Identity.SecondaryKeyLeftIdentity": [
+    "did",
+    "secondary_key"
+  ],
+  "Identity.SecondaryKeyPermissionsUpdated": [
+    "did",
+    "secondary_key",
+    "old_permissions",
+    "new_permissions"
+  ],
+  "Identity.SecondaryKeysAdded": [
+    "did",
+    "secondary_keys"
+  ],
+  "Identity.SecondaryKeysFrozen": [
+    "did"
+  ],
+  "Identity.SecondaryKeysRemoved": [
+    "did",
+    "removed_keys"
+  ],
+  "Identity.SecondaryKeysUnfrozen": [
+    "did"
+  ],
+  "Nft.NFTHoldingsUpdated": [
+    "caller_did",
+    "nfts",
+    "from",
+    "to",
+    "update_reason"
+  ],
+  "Nft.NftCollectionCreated": [
+    "caller_did",
+    "asset_id",
+    "collection_id"
+  ],
+  "Pips.ActivePipLimitChanged": [
+    "caller_did",
+    "old_limit",
+    "new_limit"
+  ],
+  "Pips.DefaultEnactmentPeriodChanged": [
+    "caller_did",
+    "old_period",
+    "new_period"
+  ],
+  "Pips.ExecutionCancellingFailed": [
+    "pip_id"
+  ],
+  "Pips.ExecutionScheduled": [
+    "caller_did",
+    "pip_id",
+    "at"
+  ],
+  "Pips.ExecutionSchedulingFailed": [
+    "caller_did",
+    "pip_id",
+    "at"
+  ],
+  "Pips.ExpiryScheduled": [
+    "caller_did",
+    "pip_id",
+    "at"
+  ],
+  "Pips.ExpirySchedulingFailed": [
+    "caller_did",
+    "pip_id",
+    "at"
+  ],
+  "Pips.HistoricalPipsPruned": [
+    "caller_did",
+    "old_value",
+    "new_value"
+  ],
+  "Pips.MaxPipSkipCountChanged": [
+    "caller_did",
+    "old_max",
+    "new_max"
+  ],
+  "Pips.MinimumProposalDepositChanged": [
+    "caller_did",
+    "old_deposit",
+    "new_deposit"
+  ],
+  "Pips.PendingPipExpiryChanged": [
+    "caller_did",
+    "old_expiry",
+    "new_expiry"
+  ],
+  "Pips.PipClosed": [
+    "caller_did",
+    "pip_id",
+    "pruned"
+  ],
+  "Pips.PipSkipped": [
+    "caller_did",
+    "pip_id",
+    "skipped_count"
+  ],
+  "Pips.ProposalCreated": [
+    "caller_did",
+    "proposer",
+    "pip_id",
+    "deposit",
+    "url",
+    "description",
+    "expiry",
+    "proposal_data"
+  ],
+  "Pips.ProposalRefund": [
+    "caller_did",
+    "pip_id",
+    "amount"
+  ],
+  "Pips.ProposalStateUpdated": [
+    "caller_did",
+    "pip_id",
+    "state"
+  ],
+  "Pips.SnapshotCleared": [
+    "caller_did",
+    "snapshot_id"
+  ],
+  "Pips.SnapshotResultsEnacted": [
+    "caller_did",
+    "snapshot_id",
+    "skipped",
+    "rejected",
+    "approved"
+  ],
+  "Pips.SnapshotTaken": [
+    "caller_did",
+    "snapshot_id",
+    "pips"
+  ],
+  "Pips.Voted": [
+    "caller_did",
+    "voter",
+    "pip_id",
+    "aye",
+    "deposit"
+  ],
+  "PolymeshCommittee.Approved": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "PolymeshCommittee.Executed": [
+    "caller_did",
+    "proposal_hash",
+    "result"
+  ],
+  "PolymeshCommittee.ExpiresAfterUpdated": [
+    "caller_did",
+    "expires_after"
+  ],
+  "PolymeshCommittee.FinalVotes": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "yes_voters",
+    "no_voters"
+  ],
+  "PolymeshCommittee.Proposed": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash"
+  ],
+  "PolymeshCommittee.Rejected": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "PolymeshCommittee.ReleaseCoordinatorUpdated": [
+    "release_coordinator"
+  ],
+  "PolymeshCommittee.VoteRetracted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye"
+  ],
+  "PolymeshCommittee.VoteThresholdUpdated": [
+    "caller_did",
+    "numerator",
+    "denominator"
+  ],
+  "PolymeshCommittee.Voted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "Portfolio.AllowIdentityToCreatePortfolios": [
+    "caller_did",
+    "allowed_did"
+  ],
+  "Portfolio.FundsMovedBetweenPortfolios": [
+    "caller_did",
+    "from",
+    "to",
+    "fund",
+    "memo"
+  ],
+  "Portfolio.PortfolioCreated": [
+    "caller_did",
+    "portfolio_number",
+    "name"
+  ],
+  "Portfolio.PortfolioCustodianChanged": [
+    "caller_did",
+    "portfolio_id",
+    "custodian_did"
+  ],
+  "Portfolio.PortfolioDeleted": [
+    "caller_did",
+    "portfolio_number"
+  ],
+  "Portfolio.PortfolioRenamed": [
+    "caller_did",
+    "portfolio_number",
+    "name"
+  ],
+  "Portfolio.PreApprovedPortfolio": [
+    "caller_did",
+    "portfolio_id",
+    "asset_id"
+  ],
+  "Portfolio.RevokeCreatePortfoliosPermission": [
+    "caller_did",
+    "revoked_did"
+  ],
+  "Portfolio.RevokePreApprovedPortfolio": [
+    "caller_did",
+    "portfolio_id",
+    "asset_id"
+  ],
+  "Portfolio.UserPortfolios": [
+    "did",
+    "portfolios"
+  ],
+  "ProtocolFee.CoefficientSet": [
+    "caller_did",
+    "coefficient"
+  ],
+  "ProtocolFee.FeeCharged": [
+    "account",
+    "fee"
+  ],
+  "ProtocolFee.FeeSet": [
+    "caller_did",
+    "fee"
+  ],
+  "Settlement.AffirmationWithdrawn": [
+    "caller_did",
+    "holder",
+    "instruction_id"
+  ],
+  "Settlement.FailedToExecuteInstruction": [
+    "instruction_id",
+    "error"
+  ],
+  "Settlement.FundsTransferred": [
+    "caller_did",
+    "from",
+    "to",
+    "fund"
+  ],
+  "Settlement.InstructionAffirmed": [
+    "caller_did",
+    "holder",
+    "instruction_id"
+  ],
+  "Settlement.InstructionAutomaticallyAffirmed": [
+    "caller_did",
+    "holder",
+    "instruction_id"
+  ],
+  "Settlement.InstructionCreated": [
+    "caller_did",
+    "venue_id",
+    "instruction_id",
+    "settlement_type",
+    "trade_date",
+    "value_date",
+    "legs",
+    "memo"
+  ],
+  "Settlement.InstructionExecuted": [
+    "caller_did",
+    "instruction_id"
+  ],
+  "Settlement.InstructionLocked": [
+    "caller_did",
+    "instruction_id"
+  ],
+  "Settlement.InstructionMediators": [
+    "instruction_id",
+    "mediators"
+  ],
+  "Settlement.InstructionRejected": [
+    "caller_did",
+    "instruction_id"
+  ],
+  "Settlement.InstructionUnlocked": [
+    "caller_did",
+    "instruction_id"
+  ],
+  "Settlement.LegFailedExecution": [
+    "caller_did",
+    "instruction_id",
+    "leg_id"
+  ],
+  "Settlement.MandatoryReceiverAffirmationSet": [
+    "caller_did",
+    "requirement"
+  ],
+  "Settlement.MediatorAffirmationReceived": [
+    "mediator_did",
+    "instruction_id",
+    "expiry"
+  ],
+  "Settlement.MediatorAffirmationWithdrawn": [
+    "mediator_did",
+    "instruction_id"
+  ],
+  "Settlement.ReceiptClaimed": [
+    "caller_did",
+    "instruction_id",
+    "leg_id",
+    "receipt_uid",
+    "signer",
+    "metadata"
+  ],
+  "Settlement.SettlementManuallyExecuted": [
+    "caller_did",
+    "instruction_id"
+  ],
+  "Settlement.VenueCreated": [
+    "caller_did",
+    "venue_id",
+    "details",
+    "venue_type"
+  ],
+  "Settlement.VenueDetailsUpdated": [
+    "caller_did",
+    "venue_id",
+    "details"
+  ],
+  "Settlement.VenueFiltering": [
+    "caller_did",
+    "asset_id",
+    "enabled"
+  ],
+  "Settlement.VenueSignersUpdated": [
+    "caller_did",
+    "venue_id",
+    "signers",
+    "added"
+  ],
+  "Settlement.VenueTypeUpdated": [
+    "caller_did",
+    "venue_id",
+    "venue_type"
+  ],
+  "Settlement.VenueUnauthorized": [
+    "caller_did",
+    "asset_id",
+    "venue_id"
+  ],
+  "Settlement.VenuesAllowed": [
+    "caller_did",
+    "asset_id",
+    "venue_ids"
+  ],
+  "Settlement.VenuesBlocked": [
+    "caller_did",
+    "asset_id",
+    "venue_ids"
+  ],
+  "Statistics.AssetStatsUpdated": [
+    "caller_did",
+    "asset_id",
+    "stat_type",
+    "updates"
+  ],
+  "Statistics.SetAssetTransferCompliance": [
+    "caller_did",
+    "asset_id",
+    "transfer_conditions"
+  ],
+  "Statistics.StatTypesAdded": [
+    "caller_did",
+    "asset_id",
+    "stat_types"
+  ],
+  "Statistics.StatTypesRemoved": [
+    "caller_did",
+    "asset_id",
+    "stat_types"
+  ],
+  "Statistics.TransferConditionExemptionsAdded": [
+    "caller_did",
+    "exempt_key",
+    "entities"
+  ],
+  "Statistics.TransferConditionExemptionsRemoved": [
+    "caller_did",
+    "exempt_key",
+    "entities"
+  ],
+  "TechnicalCommittee.Approved": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "TechnicalCommittee.Executed": [
+    "caller_did",
+    "proposal_hash",
+    "result"
+  ],
+  "TechnicalCommittee.ExpiresAfterUpdated": [
+    "caller_did",
+    "expires_after"
+  ],
+  "TechnicalCommittee.FinalVotes": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "yes_voters",
+    "no_voters"
+  ],
+  "TechnicalCommittee.Proposed": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash"
+  ],
+  "TechnicalCommittee.Rejected": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "TechnicalCommittee.ReleaseCoordinatorUpdated": [
+    "release_coordinator"
+  ],
+  "TechnicalCommittee.VoteRetracted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye"
+  ],
+  "TechnicalCommittee.VoteThresholdUpdated": [
+    "caller_did",
+    "numerator",
+    "denominator"
+  ],
+  "TechnicalCommittee.Voted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "TechnicalCommitteeMembership.ActiveLimitChanged": [
+    "caller_did",
+    "new_limit",
+    "old_limit"
+  ],
+  "TechnicalCommitteeMembership.MemberAdded": [
+    "caller_did",
+    "member_did"
+  ],
+  "TechnicalCommitteeMembership.MemberRemoved": [
+    "caller_did",
+    "member_did"
+  ],
+  "TechnicalCommitteeMembership.MemberRevoked": [
+    "caller_did",
+    "member_did"
+  ],
+  "TechnicalCommitteeMembership.MembersReset": [
+    "caller_did",
+    "members"
+  ],
+  "TechnicalCommitteeMembership.MembersSwapped": [
+    "caller_did",
+    "removed_did",
+    "added_did"
+  ],
+  "Treasury.TreasuryDisbursement": [
+    "treasury_did",
+    "target_did",
+    "target_primary_key",
+    "amount"
+  ],
+  "Treasury.TreasuryDisbursementFailed": [
+    "treasury_did",
+    "target_did",
+    "target_primary_key",
+    "amount"
+  ],
+  "Treasury.TreasuryReimbursement": [
+    "source_did",
+    "amount"
+  ],
+  "UpgradeCommittee.Approved": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "UpgradeCommittee.Executed": [
+    "caller_did",
+    "proposal_hash",
+    "result"
+  ],
+  "UpgradeCommittee.ExpiresAfterUpdated": [
+    "caller_did",
+    "expires_after"
+  ],
+  "UpgradeCommittee.FinalVotes": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "yes_voters",
+    "no_voters"
+  ],
+  "UpgradeCommittee.Proposed": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash"
+  ],
+  "UpgradeCommittee.Rejected": [
+    "caller_did",
+    "proposal_hash",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "UpgradeCommittee.ReleaseCoordinatorUpdated": [
+    "release_coordinator"
+  ],
+  "UpgradeCommittee.VoteRetracted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye"
+  ],
+  "UpgradeCommittee.VoteThresholdUpdated": [
+    "caller_did",
+    "numerator",
+    "denominator"
+  ],
+  "UpgradeCommittee.Voted": [
+    "caller_did",
+    "proposal_index",
+    "proposal_hash",
+    "aye",
+    "yes_votes",
+    "no_votes",
+    "seats"
+  ],
+  "UpgradeCommitteeMembership.ActiveLimitChanged": [
+    "caller_did",
+    "new_limit",
+    "old_limit"
+  ],
+  "UpgradeCommitteeMembership.MemberAdded": [
+    "caller_did",
+    "member_did"
+  ],
+  "UpgradeCommitteeMembership.MemberRemoved": [
+    "caller_did",
+    "member_did"
+  ],
+  "UpgradeCommitteeMembership.MemberRevoked": [
+    "caller_did",
+    "member_did"
+  ],
+  "UpgradeCommitteeMembership.MembersReset": [
+    "caller_did",
+    "members"
+  ],
+  "UpgradeCommitteeMembership.MembersSwapped": [
+    "caller_did",
+    "removed_did",
+    "added_did"
+  ]
+}
