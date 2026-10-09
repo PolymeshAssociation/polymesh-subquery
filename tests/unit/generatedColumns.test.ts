@@ -60,28 +60,6 @@ test('extractClaimInfo', () => {
   expect(
     extractClaimInfo({
       claim: {
-        InvestorUniqueness: [{ type: 'Ticker', value: 'STONK' }],
-      },
-      claimIssuer: 'me',
-      expiry: '400',
-      lastUpdateDate: '12345',
-      issuanceDate: '12345',
-    })
-  ).toStrictEqual({
-    claimExpiry: '400',
-    claimIssuer: 'me',
-    claimScope: '{"type":"type","value":"Ticker"}',
-    claimType: 'InvestorUniqueness',
-    lastUpdateDate: '12345',
-    issuanceDate: '12345',
-    cddId: undefined,
-    jurisdiction: undefined,
-    customClaimTypeId: undefined,
-  });
-
-  expect(
-    extractClaimInfo({
-      claim: {
         Jurisdiction: ['IN', { type: 'Ticker', value: 'STONK' }],
       },
       claimIssuer: 'me',

@@ -3128,9 +3128,6 @@ enum ClaimTypeEnum {
   Jurisdiction
   Exempted
   Blocked
-  InvestorUniqueness
-  NoData
-  InvestorUniquenessV2
   NoType
 }
 
