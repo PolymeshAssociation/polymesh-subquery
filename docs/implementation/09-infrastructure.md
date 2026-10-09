@@ -2,7 +2,7 @@
 
 Prerequisite for most other plans. Ships no consumer-visible feature; delivers the decode layer, anomaly recording, upgrade tracking, and index consolidation everything else depends on.
 
-**Entities:** `IndexerAnomaly` (new), `ChainUpgrade` (new), `Event`/`Extrinsic` (index consolidation), `Debug`/`FoundType` (removal). §9.10 *proposes* an argument encoding and an `EventReference` entity, pending a decision.
+**Entities:** `IndexerAnomaly` (new), `ChainUpgrade` (new), `Event`/`Extrinsic` (index consolidation), `Debug`/`FoundType` (removal). §9.10's argument encoding and `EventReference` entity are built on `redesign/15-canonical-args`, pending a decision.
 
 ---
 
@@ -244,9 +244,9 @@ Three adjacent plans were split out of this one because they are independently s
 
 ---
 
-## 9.10 Event and call argument encoding — proposed, pending a decision
+## 9.10 Event and call argument encoding — built, pending a decision
 
-**Status: a proposal, not a decision, and not built.** It is breaking for both consumers (see *SDK and portal* below and [`../reference/consumer-queries.md`](../reference/consumer-queries.md) §5), so it needs agreement from the SDK and portal maintainers first. It is listed as open question 3 in [`../README.md`](../README.md); if accepted, it becomes a decision there and this status line changes. Until then the current encoding stands.
+**Status: built on `redesign/15-canonical-args`, pending a decision.** The branch implements this section; it lands only if the SDK and portal maintainers agree to the consumer changes below (see *SDK and portal* and [`../reference/consumer-queries.md`](../reference/consumer-queries.md) §5). It is open question 3 in [`../README.md`](../README.md). The half that does not depend on the decision — the encoder, claims read from it (no longer indexing the claim types the v6.0 upgrade deleted), the dead `attributesTxt` readers removed — is `redesign/14-harvester-cleanup`, which can land whatever is decided. The migration note for consumers is [`../reference/canonical-args-migration.md`](../reference/canonical-args-migration.md).
 
 ### Current state
 
@@ -263,30 +263,32 @@ Consumers filter events **positionally**: the SDK's public `Network.getEventByIn
 
 ### Target
 
-**1. One canonical encoding, for event and call arguments alike.** Built on polkadot's own `Codec.toPrimitive()`, with a short, documented normalisation on top, rather than a serialiser of our own:
+**1. One canonical encoding, for event and call arguments alike.** (Proposed on top of polkadot's `Codec.toPrimitive()`; built as a walk of its own — see *Built differently from the proposal*.)
 
 | Value | Encoded as |
 |---|---|
 | any integer (`u8`…`u128`, `Compact`, `Balance`, `Moment`) | decimal **string**, never a JSON number — no precision loss, and one type to compare |
 | `AccountId` | SS58 address, with the chain's prefix |
-| `IdentityId`, `AssetId`, hashes, fixed byte arrays | `0x` hex |
-| `Ticker` | text, trailing nulls removed |
-| `Bytes`, `Text` | UTF-8 text when valid, else `0x` hex |
-| struct | object keyed by the metadata's field names |
-| tuple | array |
-| enum | `{ "<variant>": value }`, or the variant name for a unit variant |
+| `IdentityId`, `AssetId`, hashes, memos, fixed byte arrays | `0x` hex, all of the bytes (a memo's text is on the entity that holds it, such as `Instruction.memo`) |
+| `Ticker` | text without the trailing NULs that pad it to 12 bytes; `0x` hex of all 12 bytes when the rest is not NUL-free UTF-8 |
+| `Bytes`, `Text` | UTF-8 text when valid and free of NUL (`jsonb` rejects `\u0000`), else `0x` hex |
+| struct | object keyed by the metadata's field names, camelCased (pre-v14 metadata names them in snake_case) |
+| tuple, `Vec`, fixed array, `BTreeSet` | array |
+| enum | `{ "<Variant>": value }`, or the bare variant name for a unit variant; variant names as the metadata spells them |
 | `Option` | the value, or `null` |
 | `Result` | `{ "ok": value }` / `{ "err": value }` |
+| `BTreeMap`, `HashMap` | array of `[key, value]` pairs |
+| `Call` | `{ "section", "method", "args" }` |
 
-The exact casing `toPrimitive()` gives enum variants and struct fields is to be pinned down when building it, and fixed by tests, since it then becomes the contract **[I]**.
+The contract is pinned by `tests/unit/argsContract.test.ts` against real mainnet events and calls from each runtime era **[V]**.
 
 **2. Schema.**
 
 ```graphql
 type Event @entity {
   # …
-  "The event's arguments, canonically encoded (plan 09 §9.10), keyed by field name where the metadata names them"
-  args: JSON!            # jsonField: filterable with `contains`
+  "The event's arguments, canonically encoded (plan 09 §9.10): by field name, or by position where nothing names them"
+  args: ArgumentsJson!   # jsonb, filterable with `contains`
   references: [EventReference!]! @derivedFrom(field: "event")
 }
 
@@ -302,11 +304,15 @@ type EventReference @entity
 
 type Extrinsic @entity {
   # …
-  args: JSON!            # the call's arguments, the same encoding
+  args: ArgumentsJson!   # the call's arguments, the same encoding
+}
+
+type ArgumentsJson @jsonField(indexed: false) {
+  _: String              # placeholder: a @jsonField type must declare a field
 }
 ```
 
-`args` is shaped as an object keyed by field name when the metadata names every field (every v8 event, and the struct-style events before it), and as an array otherwise (Polymesh's tuple-style events before v8).
+`args` is always an object, keyed by field name: the metadata's when it names every field (upstream Substrate pallets throughout, and Polymesh's own events from the runtime that declares them as structs), else the registered shape's for that event, spec version and parameter count. Only an event no shape covers is keyed by position (`"0"`, `"1"`, …).
 
 **Removed:** `Event.attributesTxt`, `Event.eventArg_0` … `eventArg_3`, `Extrinsic.paramsTxt`, and from `compat.sql` the generated `attributes` / `params` columns, the four `left(event_arg_n, 100)` indexes, the `(module_id, event_id, left(event_arg_2, 100))` index and the `attributes #>> '{2,value,did}'` path index.
 
@@ -316,7 +322,15 @@ type Extrinsic @entity {
 
 - `serializeLikeHarvester.ts` is deleted, not renamed.
 - `mapClaim` currently reads its claim fields out of the serialiser's output (`extractHarvesterArgs`); it moves to `decodeEvent`, like every other handler.
-- Write cost: the `eventArg_n` expression indexes go and `EventReference` rows come in, about 1–3 per event **[I]**. Measure on a testnet resync against the current run's throughput before settling; the fallback is reference arrays on `Event` with one GIN index in `compat.sql`.
+- Write cost: the `eventArg_n` expression indexes go and `EventReference` rows come in, about 1–3 per event **[I]**. **Not measured**: it needs a testnet resync of `redesign/15-canonical-args` compared against the current run's throughput. The fallback is reference arrays on `Event` with one GIN index in `compat.sql`.
+
+### Built differently from the proposal
+
+1. **`args` is a `@jsonField(indexed: false)` type, not `JSON!`.** SubQuery's schema has no `JSON` scalar (`subql codegen`: `Unknown type "JSON"`). A `@jsonField` column is `jsonb`, and the query service exposes it with a `JsonFilter` (`contains`, `containsKey`, …). `indexed: false` because a GIN index on every `events` row is the write cost this section warned about; lookups by identity, account, asset or portfolio go through `EventReference`, and `args` filters run after `(moduleId, eventId)` narrows the set.
+2. **`args` is always an object.** A tuple-style event takes its keys from the shape table `decodeEvent` reads, whose names match the ones the chain gives each event once it declares it as a struct, so an event's keys do not change at that upgrade. An event no shape covers, at its spec version and parameter count, is keyed by position (`"0"`, `"1"`, …): JSONB containment on an array matches an element at *any* position, so `{ "1": x }` is the only way to filter by position. A shape added later renames that event's keys in every block it covers, so it ships with a reindex. A field that held a `Ticker` before v7.0 and an `AssetId` from it is keyed `ticker` up to v6 and `assetId` from v7 (`tickerBeforeV7` in the shape registry): the value changed type, so the key changes with it. Handlers still read it as `assetId` in every era, through an alias the shape declares, since `getAssetId` takes either.
+3. **`toPrimitive()` is not the base.** On this repo's `@polkadot/types` it returns small integers as JSON numbers, unit enum variants as `{ "unitA": null }` with camelCased names, and a `[u8;32]` whose bytes happen to be printable as garbled text. The encoder (`src/mappings/args/encode.ts`, ~200 lines) walks the codec by its raw type and metadata type name, as the harvester serialiser did, but to the table above.
+4. **A `Ticker` refers to an asset only before v7.0.** Before v7 every ticker maps to its asset id (`getAssetIdForLegacyTicker`). From v7 a ticker is a registration that may be linked to any asset, so the derived id would be wrong; those events carry the `AssetId` itself.
+5. **Claims read the canonical encoding of the `IdentityClaim`, not `decodeEvent`.** A claim's fields sit several enum and tuple levels deep; the encoder already flattens that into the shape `Event.args` stores, so the claim is read from what a consumer sees. A parity test pins every indexed claim variant to the `Claim` id and columns the harvester path wrote, except that a claim without a scope now has scope `null`. `InvestorUniqueness`, `InvestorUniquenessV2` and `NoData` claims are no longer indexed: the v6.0 upgrade's storage migration deleted them without an event.
 
 ### SDK and portal
 
@@ -327,7 +341,7 @@ type Extrinsic @entity {
 | a value that is not a reference (an amount, a flag) | `args: { … }` — a JSONB `contains` filter on `Event.args` |
 | `Extrinsic.paramsTxt` / `params` (`toHuman` text) | `Extrinsic.args`, canonical encoding — balances become integer strings, not formatted text |
 
-The GraphQL for `involving` is `events(filter: { moduleId, eventId, references: { some: { kind: { equalTo: Identity }, value: { equalTo: $did } } } })`. The portal's multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`), and the SDK selects `paramsTxt` (`middleware/queries/extrinsics.ts`) and `params` (`middleware/queries/multisigs.ts`); all three move to `args` **[V]**.
+The GraphQL for `involving` is `events(filter: { moduleId, eventId, references: { some: { kind: { equalTo: Identity }, value: { equalTo: $did } } } })`. The portal's multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`) and the SDK selects `paramsTxt` (`middleware/queries/extrinsics.ts`); both move to `args` **[V]**. The `params` that `middleware/queries/multisigs.ts` selects is `MultiSigProposal.params`, which does not change **[V]**.
 
 ### Tests
 

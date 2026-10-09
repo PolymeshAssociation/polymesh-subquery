@@ -135,7 +135,7 @@ Direct consequences:
 - The key-role enums are `AccountKeyRole` (`Account.keyRole`) and `IdentityKeyRole` (`IdentityKey.role`), and both spell the shared values `PrimaryKey` / `SecondaryKey`. A query written against the earlier `KeyRoleEnum` / `KeyRole` names, or against `Primary` / `Secondary`, fails validation rather than returning wrong rows.
 - `updatedEvent` is gone from the append-only tables (`AssetTransaction`, `InstructionEvent`, `Funding`, `DistributionPayment`, `BridgeEvent`, `StakingEvent`, `AssetAgentHistory`) — nothing ever updated those rows, so it always equalled `createdEvent`. Select `createdEvent` instead.
 - The denormalised `eventId` column is kept only where a consumer filters or groups by event type: `PolyxEntry`, `StakingEvent`, `AssetTransaction`, `AssetAgentAction`. It is gone from `Account` and `DistributionPayment` — read `updatedEvent { eventId }` / `createdEvent { eventId }`, or `reclaimed` for a distribution payment.
-- An account's permissions moved from the `Permissions` entity into `IdentityKey.permissions`, a jsonField. SubQuery generates no filters over a jsonField's contents, so `transactionGroups` in particular is no longer filterable — filter on `IdentityKey`'s own columns and read the permissions off the rows returned. No consumer query in this document filtered on it.
+- An account's permissions moved from the `Permissions` entity into `IdentityKey.permissions`, a jsonField. SubQuery exposes a jsonField with a `JsonFilter` (`contains`, `containsKey`, …), not with per-key typed filters, so `transactionGroups` can be matched only by JSON containment — filter on `IdentityKey`'s own columns and read the permissions off the rows returned. No consumer query in this document filtered on it.
 - `EvmTransaction.block` is available again alongside `extrinsic`, matching `Event` and `Extrinsic`.
 - `CorporateBallot.corporateAction` is nullable, as `Distribution.corporateAction` already was: the action comes from an earlier extrinsic, which can be outside the index. A query that selects it must allow `null`.
 - `Claim.revokeDate` is the timestamp of the block that revoked the claim. It used to be the revoked claim's own issuance date. A filter on `revokeDate: { isNull: true }`, as the SDK uses for current claims, is unaffected.
@@ -156,12 +156,18 @@ Direct consequences:
 
 The two consumers will need coordinated updates. The SDK's 27 connections and the portal's 6 are a bounded, enumerable surface — this document is the checklist.
 
-**Proposed, not decided — event and call argument encoding (plan 09 §9.10, open question 3 in [`../README.md`](../README.md)).** If accepted, `Event.eventArg_0..3` and `attributesTxt` are replaced by `Event.args` (a jsonField in one canonical encoding: integers as decimal strings, accounts as SS58, struct fields by name) and an `EventReference` relation, and the consumers change as follows. For the SDK:
+**Built on `redesign/15-canonical-args`, not decided — event and call argument encoding (plan 09 §9.10, open question 3 in [`../README.md`](../README.md)).** If accepted, `Event.eventArg_0..3` and `attributesTxt` are replaced by `Event.args` (a jsonField in one canonical encoding: integers as decimal strings, accounts as SS58, arguments and struct fields by name, by position only where nothing names them) and an `EventReference` relation, and the consumers change as follows; [`canonical-args-migration.md`](./canonical-args-migration.md) has every query before and after. It removes:
+
+- `Event.attributesTxt` and its generated JSONB copy `Event.attributes`.
+- `Event.eventArg_0` … `eventArg_3`.
+- `Extrinsic.paramsTxt` and its generated JSONB copy `Extrinsic.params`.
+
+For the SDK:
 
 - `Network.getEventByIndexedArgs` / `getEventsByIndexedArgs` (`middleware/queries/events.ts`) become a `getEvents({ moduleId?, eventId?, involving?: { identity | account | asset | portfolio }, args? })`. `involving` filters `references: { some: { kind, value } }` at any argument position; `args` is a JSONB `contains` filter for values that are not references. A caller that passed `eventArg0: '<hex account>'` passes `involving: { account: '<SS58 address>' }`.
-- `extrinsics.ts` selects `paramsTxt` and `multisigs.ts` selects `params`: both move to `Extrinsic.args`, the same encoding, so balances arrive as integer strings rather than `toHuman` text such as `"75.8040 mPOLYX"`.
+- `extrinsics.ts` selects `paramsTxt`, which moves to `Extrinsic.args`, the same encoding, so balances arrive as integer strings rather than `toHuman` text such as `"75.8040 mPOLYX"`. (`multisigs.ts` selects `MultiSigProposal.params`, which does not change.)
 
-For the portal: the multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`) and moves to `createdEvent.extrinsic.args`.
+For the portal: the multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`) and moves to `createdEvent.extrinsic.args`. A proposal's `expiry` there is a decimal string of milliseconds, so it needs `new Date(Number(expiry))`: `new Date` reads a numeric string as a date string and returns an Invalid Date. (So did the old `toHuman` text, `"1,714,153,254,000"`, so the portal's expiry is likely broken today.)
 
 **What does *not* change:** every one of these still requires a genesis replay to produce correct history. Breaking-change freedom removes the *schema* constraint, not the *backfill* constraint. The reindex-budget question remains open and is now the main sequencing risk.
 
