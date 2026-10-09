@@ -12,7 +12,6 @@ import {
 } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
   getAssetId,
   getFirstKeyFromJson,
   getFirstValueFromJson,
@@ -29,6 +28,7 @@ import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction, getHolding } from './mapAsset';
 import { nftApprovalId } from './mapNftApprovals';
+import { memoText } from '../../../utils/text';
 
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
 
@@ -464,7 +464,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   asset.updatedEventId = blockEventId;
 
   let instructionId: string;
-  let instructionMemo: string;
+  let instructionMemo: string | undefined;
   let eventId: EventIdEnum;
   if (reason === 'issued') {
     eventId = EventIdEnum.IssuedNFT;
@@ -532,7 +532,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
 
       // FK to the padded `Instruction.id` — must carry the same zero-padding
       instructionId = padNumericId(getTextValue(details.instructionId));
-      instructionMemo = bytesToString(details.instructionMemo);
+      instructionMemo = memoText(details.instructionMemo);
     } else {
       eventId = EventIdEnum.ControllerTransfer;
     }

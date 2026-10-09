@@ -17,6 +17,7 @@ import { createAssetTransaction, moveFungibleHolding } from '../assets/mapAsset'
 import { moveNftsWithinIdentity } from '../assets/mapNfts';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
+import { memoText } from '../../../utils/text';
 
 export const getPortfolio = async ({
   identityId,
@@ -181,7 +182,7 @@ export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<vo
       fromHolder,
       toHolder,
       amount,
-      memo: bytesToString(rawMemo),
+      memo: memoText(rawMemo),
       address: getSignerAddress(extrinsic),
     },
     blockEventId,
@@ -276,7 +277,7 @@ export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): 
     toHolder,
     assetType: getFirstKeyFromJson(rawFundDescription),
     fundDescription: getFirstValueFromJson(rawFundDescription),
-    memo: bytesToString(rawMemo),
+    memo: memoText(rawMemo),
     block,
     extrinsic,
   });
@@ -352,7 +353,7 @@ export const handleFungibleTokensMovedBetweenPortfolios = async (
       fromHolder,
       toHolder,
       amount,
-      memo: bytesToString(rawMemo),
+      memo: memoText(rawMemo),
       address: getSignerAddress(extrinsic),
     },
     blockEventId,
@@ -394,7 +395,7 @@ export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): P
       fromHolder,
       toHolder,
       nftIds: nfts.ids.map(BigInt),
-      memo: bytesToString(rawMemo),
+      memo: memoText(rawMemo),
       address: getSignerAddress(extrinsic),
     },
     blockEventId,
