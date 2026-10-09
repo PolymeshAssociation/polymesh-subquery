@@ -11,13 +11,13 @@ import { discontinuedAt, registerShape, stable } from './registry';
  * `Bonded` / `Unbonded` / `Reward` / `Rewarded` carried the `IdentityId` as their first parameter
  * through v7.4.0; `Withdrawn` and `Slash` / `Slashed` never did (verified — defect log §C).
  */
-registerShape('staking', 'Bonded', discontinuedAt(LAST_V7, ['identityId', 'stash', 'amount']));
-registerShape('staking', 'Unbonded', discontinuedAt(LAST_V7, ['identityId', 'stash', 'amount']));
-registerShape('staking', 'Reward', discontinuedAt(LAST_V7, ['identityId', 'stash', 'amount']));
-registerShape('staking', 'Rewarded', discontinuedAt(LAST_V7, ['identityId', 'stash', 'amount']));
+registerShape('staking', 'Bonded', discontinuedAt(LAST_V7, ['identity', 'stash', 'amount']));
+registerShape('staking', 'Unbonded', discontinuedAt(LAST_V7, ['identity', 'stash', 'amount']));
+registerShape('staking', 'Reward', discontinuedAt(LAST_V7, ['identity', 'stash', 'amount']));
+registerShape('staking', 'Rewarded', discontinuedAt(LAST_V7, ['identity', 'stash', 'amount']));
 registerShape('staking', 'Withdrawn', discontinuedAt(LAST_V7, ['stash', 'amount']));
 registerShape('staking', 'Slash', discontinuedAt(LAST_V7, ['stash', 'amount']));
-registerShape('staking', 'Slashed', discontinuedAt(LAST_V7, ['stash', 'amount']));
+registerShape('staking', 'Slashed', discontinuedAt(LAST_V7, ['staker', 'amount']));
 
 /**
  * Verified against `pallets/staking/src/pallet/mod.rs` at v7.4.0: at that version Polymesh's own

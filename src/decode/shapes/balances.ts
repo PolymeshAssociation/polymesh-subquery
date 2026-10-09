@@ -1,5 +1,5 @@
 import { LAST_V7 } from './consts';
-import { discontinuedAt, registerShape } from './registry';
+import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
  * `balances` pallet parameter shapes.
@@ -36,8 +36,8 @@ registerShape(
 );
 
 // Reserved(AccountId, Balance) / Unreserved(AccountId, Balance)
-registerShape('balances', 'Reserved', discontinuedAt(LAST_V7, ['account', 'amount']));
-registerShape('balances', 'Unreserved', discontinuedAt(LAST_V7, ['account', 'amount']));
+registerShape('balances', 'Reserved', discontinuedAt(LAST_V7, ['who', 'amount']));
+registerShape('balances', 'Unreserved', discontinuedAt(LAST_V7, ['who', 'amount']));
 
 // ReserveRepatriated(AccountId, AccountId, Balance, BalanceStatus)
 registerShape(
@@ -73,3 +73,6 @@ registerShape('balances', 'Withdraw', discontinuedAt(LAST_V7, ['account', 'amoun
 registerShape('balances', 'Minted', discontinuedAt(LAST_V7, ['account', 'amount']));
 registerShape('balances', 'Restored', discontinuedAt(LAST_V7, ['account', 'amount']));
 registerShape('balances', 'DustLost', discontinuedAt(LAST_V7, ['account', 'amount']));
+
+// Upstream's one tuple-style event: `Unexpected(UnexpectedKind)`, from v8.0.0
+registerShape('balances', 'Unexpected', stable(['kind']));
