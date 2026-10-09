@@ -25,6 +25,12 @@ import { CanonicalValue, encodeValue } from '../../args/encode';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
+/**
+ * Claim types the v6.0 upgrade's storage migration deleted, every claim of them, without an event.
+ * Indexing them would leave claims live that the chain no longer holds, so they are not indexed.
+ */
+const RETIRED_CLAIM_TYPES = new Set(['InvestorUniqueness', 'InvestorUniquenessV2', 'NoData']);
+
 /** The event's `IdentityClaim` (its second parameter) in the canonical encoding. */
 const encodedClaim = (event: SubstrateEvent): CanonicalValue =>
   encodeValue(extractArgs(event).params[1], metadataTypeNames(event)[1]);
@@ -55,7 +61,7 @@ export const getId = (
   }
 
   if (scope) {
-    // Not applicable in case of CustomerDueDiligence, InvestorUniquenessV2Claim, NoData claim types
+    // Not applicable in case of CustomerDueDiligence
     idAttributes.push(scope.type);
     idAttributes.push(scope.assetId ?? scope.value);
   }
@@ -112,6 +118,9 @@ const writeClaim = async (
     jurisdiction,
     customClaimTypeId,
   } = extractClaimInfo(identityClaim);
+  if (claimType && RETIRED_CLAIM_TYPES.has(claimType)) {
+    return;
+  }
   // every `IdentityClaim` names its issuer
   const issuer = claimIssuer as string;
 
@@ -213,6 +222,10 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
   const { claimIssuer, claimScope, claimType, cddId, jurisdiction, customClaimTypeId } =
     extractClaimInfo(encodedClaim(event));
 
+  if (claimType && RETIRED_CLAIM_TYPES.has(claimType)) {
+    return;
+  }
+
   let scope: Scope | undefined;
   if (claimScope) {
     scope = await processClaimScope(claimScope, block);
@@ -220,9 +233,8 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
 
   const target = getTextValue(decodeEvent(event).did);
 
-  // Some early-chain revocations emit a stripped `ClaimRevoked` with a zero issuer and a `NoData`
-  // claim — there is no indexed claim these could match, and it is not a real attributable
-  // revocation, so it is skipped rather than recorded as a missing-entity anomaly.
+  // A revocation with a zero issuer has no indexed claim to match and is not attributable, so it is
+  // skipped rather than recorded as a missing-entity anomaly.
   if (!claimIssuer || claimIssuer === emptyDid) {
     return;
   }

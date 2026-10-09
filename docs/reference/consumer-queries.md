@@ -139,6 +139,8 @@ Direct consequences:
 - `EvmTransaction.block` is available again alongside `extrinsic`, matching `Event` and `Extrinsic`.
 - `CorporateBallot.corporateAction` is nullable, as `Distribution.corporateAction` already was: the action comes from an earlier extrinsic, which can be outside the index. A query that selects it must allow `null`.
 - `Claim.revokeDate` is the timestamp of the block that revoked the claim. It used to be the revoked claim's own issuance date. A filter on `revokeDate: { isNull: true }`, as the SDK uses for current claims, is unaffected.
+- `InvestorUniqueness`, `InvestorUniquenessV2` and `NoData` claims are not indexed, and the three values are removed from `ClaimTypeEnum`. The v6.0 upgrade's storage migration deleted every claim of those types without an event, so the index held them as live forever. Neither consumer reads them.
+- A claim without a scope (a `Custom` claim whose scope is `None`) has `scope: null`. It used to be `{ "type": null, "value": null }`, against `Scope`'s non-null fields, and its id ended in `//`; the id is now `target/issuer/Custom/<id>`. The SDK already treats both forms as no scope.
 - The `AssetTransaction` of a pre-v6 issuance names the beneficiary's default portfolio, where the chain credited it, rather than the asset owner's.
 - `FoundType` and `Debug` are removed.
 - New, additive: `ValidatorEra` (one row per validator per elected era), `Slash` (with `eraIndex` and `offenceEraIndex`), `Era.validatorCount`/`totalPoints`/`validators`, `StakingEvent.validator` (from v7.0) and `Instruction.legCount`.

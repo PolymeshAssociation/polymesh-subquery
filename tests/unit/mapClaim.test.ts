@@ -31,6 +31,15 @@ registry.register(
   )?.types as never
 );
 
+/** The chain types of v5, which still had the claim types the v6.0 upgrade removed. */
+const v5 = new TypeRegistry();
+v5.setKnownTypes({ typesBundle: typesBundle as never });
+v5.register(
+  ((typesBundle as any).spec.polymesh_mainnet.types as { minmax: number[]; types: never }[]).find(
+    ({ minmax }) => minmax[0] === 5_004_000
+  )?.types as never
+);
+
 const identityClaim = (issuer: string, cddId: string, date: string) =>
   registry.createType('IdentityClaim', {
     claimIssuer: issuer,
@@ -61,8 +70,11 @@ const mockCodec = (value: string) => ({ toString: () => value });
 const mockClaimEvent = (
   method: 'ClaimAdded' | 'ClaimRevoked',
   { issuer, cddId, dateValue }: { issuer: string; cddId: string; dateValue: string }
-): SubstrateEvent => {
-  const data = [mockCodec(TARGET), identityClaim(issuer, cddId, dateValue)];
+): SubstrateEvent => claimEvent(method, identityClaim(issuer, cddId, dateValue));
+
+/** A `ClaimAdded`/`ClaimRevoked` event for `target` carrying `claim`, an `IdentityClaim` codec. */
+const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): SubstrateEvent => {
+  const data = [mockCodec(TARGET), claim];
 
   return {
     idx: 3,
@@ -333,6 +345,33 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       .map(([, , row]) => row);
 
     expect(anomalies).toHaveLength(0);
+    expect(Object.keys(claims)).toHaveLength(0);
+  });
+
+  /**
+   * The v6.0 upgrade's storage migration deleted every `InvestorUniqueness`, `InvestorUniquenessV2`
+   * and `NoData` claim without an event, so indexing them would leave them live forever.
+   */
+  it.each([
+    [
+      'InvestorUniqueness',
+      { InvestorUniqueness: [{ Ticker: '0x414243000000000000000000' }, CDD_1, CDD_1] },
+    ],
+    ['InvestorUniquenessV2', { InvestorUniquenessV2: CDD_1 }],
+    ['NoData', { NoData: null }],
+  ])('does not index a %s claim, which the v6.0 upgrade removed from storage', async (_, claim) => {
+    const stored = v5.createType('IdentityClaim', {
+      claim_issuer: ISSUER_A,
+      issuance_date: 1,
+      last_update_date: 1,
+      expiry: null,
+      claim,
+    });
+
+    await handleClaimAdded(claimEvent('ClaimAdded', stored));
+    await handleClaimRevoked(claimEvent('ClaimRevoked', stored));
+
+    expect(storeSet().mock.calls.map(([entity]) => entity)).toEqual([]);
     expect(Object.keys(claims)).toHaveLength(0);
   });
 });

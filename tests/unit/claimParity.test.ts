@@ -51,7 +51,8 @@ const v8Dates = {
 const v5Dates = { claimIssuer: DID, claimExpiry: '5', issuanceDate: '1', lastUpdateDate: '2' };
 const scope = (type: string | null, value: string | null) => JSON.stringify({ type, value });
 
-// The expected column is what the harvester path wrote for the same claim; never edit it.
+// The expected column is what the harvester path wrote for the same claim, except that a claim
+// without a scope now has none rather than `{"type":null,"value":null}`.
 const cases: [string, ReturnType<typeof v8Claim>, Record<string, unknown>][] = [
   [
     'CustomerDueDiligence',
@@ -86,7 +87,7 @@ const cases: [string, ReturnType<typeof v8Claim>, Record<string, unknown>][] = [
   [
     'Custom without a scope',
     v8Claim({ Custom: [8, null] }),
-    { claimType: 'Custom', claimScope: scope(null, null), customClaimTypeId: '8', ...v8Dates },
+    { claimType: 'Custom', claimScope: null, customClaimTypeId: '8', ...v8Dates },
   ],
   [
     'Custom with a u32::MAX id',
@@ -133,18 +134,6 @@ const cases: [string, ReturnType<typeof v8Claim>, Record<string, unknown>][] = [
       ...v5Dates,
     },
   ],
-  [
-    'v5 InvestorUniqueness',
-    v5Claim({ InvestorUniqueness: [{ Ticker: TICKER }, `0x${'ee'.repeat(32)}`, CDD] }),
-    { claimType: 'InvestorUniqueness', claimScope: scope('Ticker', 'ST0CK'), ...v5Dates },
-  ],
-  [
-    // the harvester path read the CDD id string's first index as a scope; its ids keep that
-    'v5 InvestorUniquenessV2',
-    v5Claim({ InvestorUniquenessV2: CDD }),
-    { claimType: 'InvestorUniquenessV2', claimScope: scope('0', '0'), ...v5Dates },
-  ],
-  ['v5 NoData', v5Claim({ NoData: null }), { claimType: 'NoData', claimScope: null, ...v5Dates }],
 ];
 
 describe('claims read from the canonical encoding match the harvester path', () => {
