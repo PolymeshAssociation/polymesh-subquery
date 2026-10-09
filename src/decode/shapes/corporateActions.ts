@@ -1,5 +1,5 @@
 import { LAST_V5, V6 } from './consts';
-import { registerShape, stable } from './registry';
+import { registerShape, stable, tickerBeforeV7 } from './registry';
 
 /**
  * `corporateAction` / `checkpoint` / `corporateBallot` pallet parameter shapes.
@@ -13,45 +13,57 @@ import { registerShape, stable } from './registry';
  * v6.0.0, `ScheduleId` inserted at index 2 and the payload type changing from `StoredSchedule` to
  * `ScheduleCheckpoints`.
  */
-registerShape(
-  'corporateaction',
-  'CAInitiated',
-  stable(['did', 'caId', 'corporateAction', 'details'])
-);
-registerShape('corporateaction', 'CARemoved', stable(['did', 'caId']));
-registerShape('corporateaction', 'RecordDateChanged', stable(['did', 'caId', 'corporateAction']));
-registerShape('corporateaction', 'CALinkedToDoc', stable(['did', 'caId', 'docIds']));
+registerShape('corporateaction', 'CAInitiated', stable(['agentDid', 'caId', 'ca', 'details']));
+registerShape('corporateaction', 'CARemoved', stable(['agentDid', 'caId']));
+registerShape('corporateaction', 'RecordDateChanged', stable(['agentDid', 'caId', 'ca']));
+registerShape('corporateaction', 'CALinkedToDoc', stable(['agentDid', 'caId', 'docIds']));
 registerShape(
   'corporateaction',
   'DefaultTargetIdentitiesChanged',
-  stable(['did', 'assetId', 'targets'])
+  tickerBeforeV7(stable(['agentDid', 'assetId', 'targets']))
 );
-registerShape('corporateaction', 'DefaultWithholdingTaxChanged', stable(['did', 'assetId', 'tax']));
+registerShape(
+  'corporateaction',
+  'DefaultWithholdingTaxChanged',
+  tickerBeforeV7(stable(['agentDid', 'assetId', 'tax']))
+);
 registerShape(
   'corporateaction',
   'DidWithholdingTaxChanged',
-  stable(['did', 'assetId', 'targetDid', 'tax'])
+  tickerBeforeV7(stable(['agentDid', 'assetId', 'taxedDid', 'tax']))
 );
-registerShape('corporateaction', 'MaxDetailsLengthChanged', stable(['did', 'length']));
+registerShape('corporateaction', 'MaxDetailsLengthChanged', stable(['callerDid', 'maxLength']));
 
 registerShape(
   'checkpoint',
   'CheckpointCreated',
-  stable(['did', 'assetId', 'checkpointId', 'totalSupply', 'moment'])
+  tickerBeforeV7(stable(['callerDid', 'assetId', 'checkpointId', 'totalSupply', 'timestamp']))
 );
-registerShape('checkpoint', 'MaximumSchedulesComplexityChanged', stable(['did', 'complexity']));
-registerShape('checkpoint', 'ScheduleCreated', [
-  { from: 0, to: LAST_V5, fields: ['did', 'assetId', 'storedSchedule'] },
-  { from: V6, fields: ['did', 'assetId', 'scheduleId', 'scheduleCheckpoints'] },
-]);
-registerShape('checkpoint', 'ScheduleRemoved', [
-  { from: 0, to: LAST_V5, fields: ['did', 'assetId', 'storedSchedule'] },
-  { from: V6, fields: ['did', 'assetId', 'scheduleId', 'scheduleCheckpoints'] },
-]);
+registerShape(
+  'checkpoint',
+  'MaximumSchedulesComplexityChanged',
+  stable(['callerDid', 'maxComplexity'])
+);
+registerShape(
+  'checkpoint',
+  'ScheduleCreated',
+  tickerBeforeV7([
+    { from: 0, to: LAST_V5, fields: ['callerDid', 'assetId', 'storedSchedule'] },
+    { from: V6, fields: ['callerDid', 'assetId', 'scheduleId', 'schedule'] },
+  ])
+);
+registerShape(
+  'checkpoint',
+  'ScheduleRemoved',
+  tickerBeforeV7([
+    { from: 0, to: LAST_V5, fields: ['callerDid', 'assetId', 'storedSchedule'] },
+    { from: V6, fields: ['callerDid', 'assetId', 'scheduleId', 'schedule'] },
+  ])
+);
 
-registerShape('corporateballot', 'Created', stable(['did', 'caId', 'range', 'meta', 'rcv']));
-registerShape('corporateballot', 'MetaChanged', stable(['did', 'caId', 'meta']));
-registerShape('corporateballot', 'RangeChanged', stable(['did', 'caId', 'range']));
-registerShape('corporateballot', 'RCVChanged', stable(['did', 'caId', 'rcv']));
-registerShape('corporateballot', 'Removed', stable(['did', 'caId']));
-registerShape('corporateballot', 'VoteCast', stable(['did', 'caId', 'votes']));
+registerShape('corporateballot', 'Created', stable(['agentDid', 'caId', 'range', 'meta', 'rcv']));
+registerShape('corporateballot', 'MetaChanged', stable(['agentDid', 'caId', 'meta']));
+registerShape('corporateballot', 'RangeChanged', stable(['agentDid', 'caId', 'range']));
+registerShape('corporateballot', 'RCVChanged', stable(['agentDid', 'caId', 'rcv']));
+registerShape('corporateballot', 'Removed', stable(['agentDid', 'caId']));
+registerShape('corporateballot', 'VoteCast', stable(['voterDid', 'caId', 'votes']));

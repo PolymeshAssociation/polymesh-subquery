@@ -52,7 +52,7 @@ export const parseSchedule = (decoded: DecodedEvent, specVersion: number): Parse
     };
   }
 
-  const { pending } = decoded.scheduleCheckpoints.toJSON() as unknown as ScheduleCheckpointsJson;
+  const { pending } = decoded.schedule.toJSON() as unknown as ScheduleCheckpointsJson;
 
   return {
     scheduleId: getNumberValue(decoded.scheduleId),
@@ -184,7 +184,7 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
     assetId: rawAssetId,
     checkpointId: rawCheckpointId,
     totalSupply: rawTotalSupply,
-    moment,
+    timestamp: moment,
   } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
@@ -216,7 +216,7 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
   // `CheckpointCreated`'s first arg is `Option<IdentityId>`: `Some` for a manual
   // `checkpoint.createCheckpoint`, `None` only when a schedule triggered it. A manual checkpoint
   // belongs to no schedule, so it skips the lookup entirely.
-  const scheduled = decodeEvent(event).did.isEmpty;
+  const scheduled = decodeEvent(event).callerDid.isEmpty;
 
   await Checkpoint.create({
     id: `${assetId}/${checkpointId}`,

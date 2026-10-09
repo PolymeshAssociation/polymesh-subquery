@@ -34,6 +34,8 @@ const nftEvent = (
     ids,
     idx = 1,
     events = [],
+    method = 'NFTHoldingsUpdated',
+    specVersion,
   }: {
     holderDid: string;
     from?: unknown;
@@ -41,11 +43,14 @@ const nftEvent = (
     ids: number[];
     idx?: number;
     events?: unknown[];
+    method?: string;
+    specVersion?: number;
   }
 ) =>
   tupleEvent({
     section: 'nft',
-    method: 'NFTHoldingsUpdated',
+    method,
+    specVersion,
     idx,
     events,
     blockNumber: '500',
@@ -106,6 +111,22 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(3);
     // rollup still maintained
     expect(db['NftHolder'][`${ASSET}/${DID_A}`].nftIds).toEqual([BigInt(1), BigInt(2), BigInt(3)]);
+  });
+
+  it('reads the pre-v8 NFTPortfolioUpdated under the same names', async () => {
+    await handleNftHoldingsUpdates(
+      nftEvent('issued', {
+        holderDid: DID_A,
+        // before v8 a holder is always a portfolio, so the event carries the bare PortfolioId
+        to: codec({ did: DID_A, kind: { default: null } }),
+        ids: [4],
+        method: 'NFTPortfolioUpdated',
+        specVersion: 7_000_005,
+      })
+    );
+    await flushNftBuffer();
+
+    expect(db['Nft'][`${ASSET}/0000000004`]).toMatchObject({ identityId: DID_A });
   });
 
   it('moves the Nft row on transfer and adjusts both Holding.nftCount values', async () => {

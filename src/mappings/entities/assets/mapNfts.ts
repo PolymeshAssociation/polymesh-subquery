@@ -428,11 +428,11 @@ const redeemNfts = async ({
 export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const {
-    did: rawId,
+    callerDid: rawId,
     nfts: rawNftId,
-    fromHolder: rawFromHolder,
-    toHolder: rawToHolder,
-    reason: rawUpdateReason,
+    from: rawFromHolder,
+    to: rawToHolder,
+    updateReason: rawUpdateReason,
   } = decodeEvent(event);
 
   let fromHolder: AssetHolderDetails | undefined;

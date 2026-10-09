@@ -139,9 +139,9 @@ describe('decodeEvent, tuple events', () => {
       tupleEvent('externalAgents', 'AgentAdded', ['0xdid', '0xasset', 'Full'])
     );
 
-    expect(decoded.did.toString()).toBe('0xdid');
+    expect(decoded.agentDid.toString()).toBe('0xdid');
     expect(decoded.assetId.toString()).toBe('0xasset');
-    expect(decoded.agentGroup.toString()).toBe('Full');
+    expect(decoded.group.toString()).toBe('Full');
   });
 
   it('matches the section case-insensitively, as the chain reports it', () => {
@@ -318,8 +318,11 @@ describe('every registered shape', () => {
 
     const decoded = decodeEvent(tupleEvent(moduleId, eventId, values, shape.from));
 
-    expect(Object.keys(decoded)).toEqual([...shape.fields]);
+    expect(Object.keys(decoded)).toEqual([...shape.fields, ...Object.keys(shape.aliases ?? {})]);
     expect(shape.fields.map(name => decoded[name].toString())).toEqual(values);
+    for (const [alias, field] of Object.entries(shape.aliases ?? {})) {
+      expect(decoded[alias]).toBe(decoded[field]);
+    }
     expect(values).toHaveLength(max);
   });
 

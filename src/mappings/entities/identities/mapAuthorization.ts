@@ -39,7 +39,7 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
 
     await auth.save();
   } else {
-    const fromId = getTextValue(decoded.fromDid);
+    const fromId = getTextValue(decoded.authorizedBy);
 
     // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
     await createIdentityIfNotExists(fromId, blockId, eventId, eventIdx, block, blockEventId);
@@ -47,8 +47,8 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     await Authorization.create({
       id: authId,
       fromId,
-      toId: getTextValue(decoded.toDid),
-      toKey: serializeAccount(decoded.toKey),
+      toId: getTextValue(decoded.targetDid),
+      toKey: serializeAccount(decoded.targetKey),
       type: capitalizeFirstLetter(getFirstKeyFromJson(decoded.authorizationData)) as AuthTypeEnum,
       data: JSON.stringify(getFirstValueFromJson(decoded.authorizationData)),
       expiry: getDateValue(decoded.expiry),

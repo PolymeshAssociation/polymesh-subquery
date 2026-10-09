@@ -59,7 +59,7 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 
 export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const { did: rawDid, assetId: rawAssetId, agentGroup } = decodeEvent(event);
+  const { agentDid: rawDid, assetId: rawAssetId, group: agentGroup } = decodeEvent(event);
 
   const did = rawDid.toString();
   const assetId = await getAssetId(rawAssetId, block);
@@ -88,7 +88,7 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
 
 export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, agentDid, agentGroup } = decodeEvent(event);
+  const { assetId: rawAssetId, agentDid, group: agentGroup } = decodeEvent(event);
 
   const did = agentDid.toString();
   const group = agentGroup.toJSON() as AgentGroup;

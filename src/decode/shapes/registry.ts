@@ -1,4 +1,5 @@
 import { ArityMismatch, NoDecoderForSpecVersion } from '../errors';
+import { V7 } from './consts';
 
 /**
  * The parameters one event carries over a range of spec versions.
@@ -22,6 +23,8 @@ export interface EventShape {
    * `if (raw)` in a handler body.
    */
   optionalFrom?: number;
+  /** Other names a handler may read a field under: alias to field */
+  aliases?: Readonly<Record<string, string>>;
 }
 
 const shapes = new Map<string, EventShape[]>();
@@ -78,6 +81,31 @@ export const discontinuedAt = (to: number, fields: readonly string[]): EventShap
 export const introducedAt = (from: number, fields: readonly string[]): EventShape[] => [
   { from, fields },
 ];
+
+/**
+ * For an event whose `assetId` field held a `Ticker` until v7.0, when the chain named assets by
+ * ticker: the field is `ticker` up to v6 and `assetId` from v7, so its stored name says which it
+ * holds. A shape spanning v7 is split there. Handlers read the asset as `assetId` in every era
+ * (`getAssetId` takes a ticker or an id), so up to v6 `assetId` stays an alias for `ticker`.
+ */
+export const tickerBeforeV7 = (entries: readonly EventShape[]): EventShape[] =>
+  entries.flatMap(shape => {
+    if (shape.from >= V7) {
+      return [shape];
+    }
+    const ticker: EventShape = {
+      ...shape,
+      fields: shape.fields.map(field => (field === 'assetId' ? 'ticker' : field)),
+      aliases: { ...shape.aliases, assetId: 'ticker' },
+    };
+    if (shape.to !== undefined && shape.to < V7) {
+      return [ticker];
+    }
+    return [
+      { ...ticker, to: V7 - 1 },
+      { ...shape, from: V7 },
+    ];
+  });
 
 /**
  * Declares the parameters an event carries.

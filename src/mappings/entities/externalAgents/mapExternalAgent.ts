@@ -6,7 +6,7 @@ import { extractArgs } from '../common';
 
 export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { did, assetId: rawAssetId } = decodeEvent(event);
+  const { agentDid: did, assetId: rawAssetId } = decodeEvent(event);
 
   const identityId = getTextValue(did);
   const assetId = await getAssetId(rawAssetId, block);

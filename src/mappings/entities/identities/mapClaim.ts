@@ -166,7 +166,7 @@ const writeClaim = async (
 
 export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const target = getTextValue(decodeEvent(event).did);
+  const target = getTextValue(decodeEvent(event).targetDid);
 
   await writeClaim(target, encodedClaim(event), { block, blockId, eventIdx, blockEventId });
 };
@@ -231,7 +231,7 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
     scope = await processClaimScope(claimScope, block);
   }
 
-  const target = getTextValue(decodeEvent(event).did);
+  const target = getTextValue(decodeEvent(event).targetDid);
 
   // A revocation with a zero issuer has no indexed claim to match and is not attributable, so it is
   // skipped rather than recorded as a missing-entity anomaly.

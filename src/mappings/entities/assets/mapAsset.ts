@@ -607,7 +607,7 @@ export const handleSetAccountFreeze = async (event: SubstrateEvent): Promise<voi
 
 export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { did: rawNewOwnerDid, assetId: rawAssetId } = decodeEvent(event);
+  const { newOwnerDid: rawNewOwnerDid, assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
@@ -825,8 +825,8 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const {
     assetId: rawAssetId,
     amount: rawAmount,
-    fromHolder: rawFromHolder,
-    toHolder: rawToHolder,
+    from: rawFromHolder,
+    to: rawToHolder,
     updateReason: rawUpdateReason,
   } = decodeEvent(event);
 
@@ -926,7 +926,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 
 export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { did, assetId: rawAssetId, mediators: rawMediators } = decodeEvent(event);
+  const { callerDid: did, assetId: rawAssetId, mediators: rawMediators } = decodeEvent(event);
 
   const addedById = getTextValue(did);
   const assetId = await getAssetId(rawAssetId, block);
@@ -960,7 +960,7 @@ export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promis
 
 export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { did, assetId: rawAssetId } = decodeEvent(event);
+  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
 
   const identityId = getTextValue(did);
   const assetId = await getAssetId(rawAssetId, block);
@@ -976,7 +976,7 @@ export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<voi
 
 export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
   const { block } = extractArgs(event);
-  const { did, assetId: rawAssetId } = decodeEvent(event);
+  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
 
   const identityId = getTextValue(did);
   const assetId = await getAssetId(rawAssetId, block);
