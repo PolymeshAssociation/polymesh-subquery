@@ -1,0 +1,122 @@
+{
+  "specVersion": 3001,
+  "specName": "polymesh_mainnet",
+  "block": 1002957,
+  "events": [
+    {
+      "section": "system",
+      "method": "ExtrinsicSuccess",
+      "recordHex": "0x0000000000000050b27c1200000000020000",
+      "args": {
+        "0": {
+          "weight": "310162000",
+          "class": "Mandatory",
+          "paysFee": "Yes"
+        }
+      },
+      "refs": []
+    },
+    {
+      "section": "identity",
+      "method": "SecondaryKeysAdded",
+      "recordHex": "0x0001000000070109863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b517017604018ad28d5131edb9e506d92bd0c7545609e56e957fce30523deb18bc0012412c3301000100010000",
+      "args": {
+        "did": "0x09863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b5170176",
+        "secondaryKeys": [
+          {
+            "signer": {
+              "Account": "2FawFuGUJzXtebwxTxwUjTsiwwV63WbK9ckojpPK3WkmwnA2"
+            },
+            "permissions": {
+              "asset": {
+                "These": []
+              },
+              "extrinsic": {
+                "These": []
+              },
+              "portfolio": {
+                "These": []
+              }
+            }
+          }
+        ]
+      },
+      "refs": [
+        {
+          "kind": "identity",
+          "value": "0x09863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b5170176",
+          "argument": "did"
+        },
+        {
+          "kind": "account",
+          "value": "2FawFuGUJzXtebwxTxwUjTsiwwV63WbK9ckojpPK3WkmwnA2",
+          "argument": "secondaryKeys"
+        }
+      ]
+    },
+    {
+      "section": "identity",
+      "method": "AuthorizationConsumed",
+      "recordHex": "0x0001000000070c00018ad28d5131edb9e506d92bd0c7545609e56e957fce30523deb18bc0012412c33b24400000000000000",
+      "args": {
+        "targetDid": null,
+        "targetKey": "2FawFuGUJzXtebwxTxwUjTsiwwV63WbK9ckojpPK3WkmwnA2",
+        "authId": "17586"
+      },
+      "refs": [
+        {
+          "kind": "account",
+          "value": "2FawFuGUJzXtebwxTxwUjTsiwwV63WbK9ckojpPK3WkmwnA2",
+          "argument": "targetKey"
+        }
+      ]
+    },
+    {
+      "section": "treasury",
+      "method": "TreasuryReimbursement",
+      "recordHex": "0x0001000000280109863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b51701760874010000000000000000000000000000",
+      "args": {
+        "sourceDid": "0x09863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b5170176",
+        "amount": "95240"
+      },
+      "refs": [
+        {
+          "kind": "identity",
+          "value": "0x09863f7f34cc40c58004dbe0f3ed10ef06a6e059419aca49d59f30e0b5170176",
+          "argument": "sourceDid"
+        }
+      ]
+    },
+    {
+      "section": "system",
+      "method": "ExtrinsicSuccess",
+      "recordHex": "0x00010000000000908e276400000000000000",
+      "args": {
+        "0": {
+          "weight": "1680314000",
+          "class": "Normal",
+          "paysFee": "Yes"
+        }
+      },
+      "refs": []
+    }
+  ],
+  "calls": [
+    {
+      "section": "timestamp",
+      "method": "set",
+      "callHex": "0x02000b204aa9307e01",
+      "args": {
+        "now": "1641493908000"
+      }
+    },
+    {
+      "section": "identity",
+      "method": "joinIdentityAsKey",
+      "callHex": "0x0705b244000000000000",
+      "args": {
+        "authId": "17586"
+      }
+    }
+  ]
+}

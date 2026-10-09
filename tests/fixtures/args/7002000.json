@@ -1,0 +1,127 @@
+{
+  "specVersion": 7002000,
+  "specName": "polymesh_mainnet",
+  "block": 19000325,
+  "events": [
+    {
+      "section": "system",
+      "method": "ExtrinsicSuccess",
+      "recordHex": "0x00000000000000a25deee500020000",
+      "args": {
+        "dispatchInfo": {
+          "weight": {
+            "refTime": "964401000",
+            "proofSize": "0"
+          },
+          "class": "Mandatory",
+          "paysFee": "Yes"
+        }
+      },
+      "refs": []
+    },
+    {
+      "section": "identity",
+      "method": "DidCreated",
+      "recordHex": "0x0001000000070003941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d82b74511bc677a717185abcbaee12858b32939334c89bdc6d13063586dc7520a10000",
+      "args": {
+        "did": "0x03941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d8",
+        "primaryKey": "2DRtiRUHDjU92cyg2ytS9Mvfh8W9DF4gEkX7Ex6DF5MZf3Tc",
+        "secondaryKeys": []
+      },
+      "refs": [
+        {
+          "kind": "identity",
+          "value": "0x03941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d8",
+          "argument": "did"
+        },
+        {
+          "kind": "account",
+          "value": "2DRtiRUHDjU92cyg2ytS9Mvfh8W9DF4gEkX7Ex6DF5MZf3Tc",
+          "argument": "primaryKey"
+        }
+      ]
+    },
+    {
+      "section": "identity",
+      "method": "ClaimAdded",
+      "recordHex": "0x0001000000070603941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d866bca4b10dee36e535a543de1d95560af3ec53a49bb7c02ca3e2d00353aa59be0017677f970100000017677f970100000004000000000000000000000000000000000000000000000000000000000000000000",
+      "args": {
+        "targetDid": "0x03941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d8",
+        "claim": {
+          "claimIssuer": "0x66bca4b10dee36e535a543de1d95560af3ec53a49bb7c02ca3e2d00353aa59be",
+          "issuanceDate": "1750189152000",
+          "lastUpdateDate": "1750189152000",
+          "expiry": null,
+          "claim": {
+            "CustomerDueDiligence": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "refs": [
+        {
+          "kind": "identity",
+          "value": "0x03941df7574433ce3ed29eaa67ef2521763783af87da8322dce45c5c749424d8",
+          "argument": "targetDid"
+        },
+        {
+          "kind": "identity",
+          "value": "0x66bca4b10dee36e535a543de1d95560af3ec53a49bb7c02ca3e2d00353aa59be",
+          "argument": "claim"
+        }
+      ]
+    },
+    {
+      "section": "transactionPayment",
+      "method": "TransactionFeePaid",
+      "recordHex": "0x000100000006007908879700ab4f061df6bd5afb7b64db716044b88bcc3c39d541a226dff03655b84e02000000000000000000000000000000000000000000000000000000000000",
+      "args": {
+        "who": "2FBcRvVvpxChPdUQhNCy4RPX69dQMh7xHHD2XttaSzrZiAXD",
+        "actualFee": "151224",
+        "tip": "0"
+      },
+      "refs": [
+        {
+          "kind": "account",
+          "value": "2FBcRvVvpxChPdUQhNCy4RPX69dQMh7xHHD2XttaSzrZiAXD",
+          "argument": "who"
+        }
+      ]
+    },
+    {
+      "section": "system",
+      "method": "ExtrinsicSuccess",
+      "recordHex": "0x00010000000000035938f6b000000000",
+      "args": {
+        "dispatchInfo": {
+          "weight": {
+            "refTime": "2968926297",
+            "proofSize": "0"
+          },
+          "class": "Normal",
+          "paysFee": "Yes"
+        }
+      },
+      "refs": []
+    }
+  ],
+  "calls": [
+    {
+      "section": "timestamp",
+      "method": "set",
+      "callHex": "0x02000b0017677f9701",
+      "args": {
+        "now": "1750189152000"
+      }
+    },
+    {
+      "section": "identity",
+      "method": "cddRegisterDidWithCdd",
+      "callHex": "0x07142b74511bc677a717185abcbaee12858b32939334c89bdc6d13063586dc7520a10000",
+      "args": {
+        "targetAccount": "2DRtiRUHDjU92cyg2ytS9Mvfh8W9DF4gEkX7Ex6DF5MZf3Tc",
+        "secondaryKeys": [],
+        "expiry": null
+      }
+    }
+  ]
+}
