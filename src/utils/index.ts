@@ -16,3 +16,4 @@ export * from './settlements';
 export * from './staking';
 export * from './compliance';
 export * from './stos';
+export * from './text';
