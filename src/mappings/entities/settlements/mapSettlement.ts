@@ -4,8 +4,6 @@ import { decodeEvent } from '../../../decode';
 import { AnomalyKind, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
-  bytesToString,
-  coerceHexToString,
   getDateValue,
   getErrorDetails,
   getLegsValue,
@@ -39,6 +37,7 @@ import { InstructionAffirmation } from './../../../types/models/InstructionAffir
 import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
 import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
+import { memoText } from '../../../utils/text';
 
 /**
  * Until spec 6.3.1, `InstructionAutomaticallyAffirmed` was emitted *before* `InstructionCreated`,
@@ -357,7 +356,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   }
 
   const instructionId = processInstructionId(rawInstructionId);
-  const memo = bytesToString(rawOptMemo);
+  const memo = memoText(rawOptMemo);
 
   const instruction = Instruction.create({
     id: instructionId,
@@ -921,7 +920,7 @@ export const handleFundsTransferred = async (event: SubstrateEvent): Promise<voi
     toHolder,
     assetType,
     fundDescription,
-    memo: memo ? coerceHexToString(memo) : undefined,
+    memo: memoText(memo),
     block,
     extrinsic,
   });

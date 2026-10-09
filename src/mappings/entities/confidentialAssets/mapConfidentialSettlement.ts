@@ -9,8 +9,9 @@ import {
   ConfidentialSettlementStatusEnum,
   EventIdEnum,
 } from '../../../types';
-import { bytesToString, getNumberValue, getTextValue } from '../../../utils';
+import { getNumberValue, getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
+import { memoText } from '../../../utils/text';
 
 type LegRefDetails = {
   settlementId: string;
@@ -47,7 +48,7 @@ export const handleConfidentialSettlementCreated = async (event: SubstrateEvent)
 
   const settlementPromise = ConfidentialSettlement.create({
     id: settlementId,
-    memo: bytesToString(rawMemo),
+    memo: memoText(rawMemo),
     assetRootBlock: getNumberValue(rawAssetRootBlock),
     legCount: encryptedLegs.length,
     status: ConfidentialSettlementStatusEnum.Pending,
