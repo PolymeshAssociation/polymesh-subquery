@@ -340,7 +340,12 @@ export const seedFromStartBlock = async (block: SubstrateBlock): Promise<void> =
 
   await handleMultiSigs(datetime, blockId);
   await handleEvmAccountMappings(datetime, blockId);
-  await seedAccountBalances({ blockId, datetime, specVersion: block.specVersion });
+  await seedAccountBalances({
+    blockId,
+    datetime,
+    specVersion: block.specVersion,
+    blockHash: block.block.header.hash.toHex(),
+  });
   await seedHoldings({ blockId, datetime, block });
 
   await writeIndexOrigin(block, true);

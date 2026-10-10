@@ -35,6 +35,8 @@ export interface SeedContext {
    * depends on the era, so it is passed in rather than inferred from which reads happen to answer.
    */
   specVersion: number;
+  /** the seeded block's hash, which holds the current metadata can't decode are read raw at */
+  blockHash?: string;
 }
 
 /** How many accounts are seeded at once: a partial index can open on a chain of many accounts. */
@@ -67,7 +69,7 @@ const inBatches = async <T, R>(
 const chainFreezes = async (
   address: string,
   { reserved, frozen }: { reserved: bigint; frozen: bigint },
-  { blockId, specVersion }: SeedContext
+  { blockId, specVersion, blockHash }: SeedContext
 ) => {
   const is8x = is8xSpecVersion(specVersion);
 
@@ -77,7 +79,7 @@ const chainFreezes = async (
   // an unknown one — and the era decides every branch below, not whether a read answered.
   let holds: Awaited<ReturnType<typeof readChainHolds>> | undefined;
   if (is8x) {
-    holds = reserved > BigInt(0) ? await readChainHolds(address) : [];
+    holds = reserved > BigInt(0) ? await readChainHolds(address, blockHash) : [];
   }
 
   if (frozen <= BigInt(0)) {

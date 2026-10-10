@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { hexHasPrefix } from '@polkadot/util';
+import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock } from '@subql/types';
 import { optionalField } from '../../../decode';
 import {
@@ -16,6 +16,7 @@ import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { hexToString } from '../../../utils/common';
 import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
+import { UndecodableStateError } from '../../../utils/storageAtParent';
 import { HandlerArgs } from '../common';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
 import { memoText } from '../../../utils/text';
@@ -197,15 +198,29 @@ export const PIPS_LOCK_ID = 'pips    ';
  *
  * `undefined` on a runtime with no hold storage (pre-v8), which callers treat as "no information",
  * never as "no holds".
+ *
+ * A hold whose reason today's metadata no longer describes fails the typed decode of the account's
+ * whole list: on testnet, the `contracts` pallet's deposit holds outlived the pallet when `revive`
+ * replaced it at spec 8000020, and index 46 became `unused46`, with no inner reason. Given the
+ * block's hash, such a list is read as raw bytes instead (see `rawChainHolds`).
  */
-export const readChainHolds = async (address: string): Promise<HoldEntry[] | undefined> => {
+export const readChainHolds = async (
+  address: string,
+  blockHash?: string
+): Promise<HoldEntry[] | undefined> => {
   if (typeof api.query.balances?.holds !== 'function') {
     return undefined;
   }
 
-  const raw = (await api.query.balances.holds(address)).toJSON() as
-    | { id?: unknown; amount?: string | number }[]
-    | null;
+  let raw: { id?: unknown; amount?: string | number }[] | null;
+  try {
+    raw = (await api.query.balances.holds(address)).toJSON() as typeof raw;
+  } catch (error) {
+    if (!blockHash) {
+      throw error;
+    }
+    return rawChainHolds(address, blockHash);
+  }
 
   if (!Array.isArray(raw)) {
     return undefined;
@@ -215,6 +230,53 @@ export const readChainHolds = async (address: string): Promise<HoldEntry[] | und
     reason: holdReasonFromJson(entry.id),
     amount: BigInt(entry.amount ?? 0),
   }));
+};
+
+/** A hold entry's bytes: the pallet's index, its fieldless `HoldReason`, and a `u128` amount. */
+const RAW_HOLD_BYTES = 1 + 1 + 16;
+
+/**
+ * `balances.holds(who)` from raw storage, for a list the typed decode rejects.
+ *
+ * A `RuntimeHoldReason` is the pallet's index followed by the pallet's own `HoldReason`, which is a
+ * fieldless enum in every pallet that holds, so each entry is 18 bytes. The pallet is named from
+ * the metadata, which is the variant name `holdReasonFromJson` reads; a pallet the runtime no longer
+ * has becomes `Unknown`, with its amount kept. Bytes that don't fit that layout still fail.
+ */
+const rawChainHolds = async (address: string, blockHash: string): Promise<HoldEntry[]> => {
+  const key = api.query.balances.holds.key(address);
+  const stored = (await api.rpc.state.getStorage(key, blockHash)) as unknown as {
+    isNone: boolean;
+    unwrap(): Codec;
+  };
+
+  if (stored.isNone) {
+    return [];
+  }
+
+  const bytes = stored.unwrap().toU8a(true);
+  const [offset, length] = compactFromU8a(bytes);
+  const count = length.toNumber();
+
+  if (bytes.length !== offset + count * RAW_HOLD_BYTES) {
+    throw new UndecodableStateError(
+      `balances.holds(${address}) does not decode, raw or typed: ${bytes.length} bytes for ${count} entries`,
+      undefined
+    );
+  }
+
+  const pallets = new Map(
+    api.registry.metadata.pallets.map(pallet => [pallet.index.toNumber(), pallet.name.toString()])
+  );
+
+  return Array.from({ length: count }, (_, index) => {
+    const start = offset + index * RAW_HOLD_BYTES;
+
+    return {
+      reason: holdReasonFromJson(pallets.get(bytes[start])),
+      amount: BigInt(u8aToBn(bytes.subarray(start + 2, start + RAW_HOLD_BYTES)).toString()),
+    };
+  });
 };
 
 /**
