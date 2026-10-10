@@ -1,5 +1,5 @@
 import { LAST_V7 } from './consts';
-import { discontinuedAt, registerShape, stable } from './registry';
+import { discontinuedAt, registerShape, stable, tickerBeforeV7 } from './registry';
 
 /**
  * `settlement` pallet parameter shapes.
@@ -8,20 +8,24 @@ import { discontinuedAt, registerShape, stable } from './registry';
  * parameter, which gained NFT and off-chain variants. That branch stays in the handler because
  * it is a payload change, not a positional one.
  */
-registerShape('settlement', 'VenueCreated', stable(['did', 'venueId', 'details', 'venueType']));
-registerShape('settlement', 'VenueDetailsUpdated', stable(['did', 'venueId', 'details']));
-registerShape('settlement', 'VenueTypeUpdated', stable(['did', 'venueId', 'venueType']));
+registerShape(
+  'settlement',
+  'VenueCreated',
+  stable(['callerDid', 'venueId', 'details', 'venueType'])
+);
+registerShape('settlement', 'VenueDetailsUpdated', stable(['callerDid', 'venueId', 'details']));
+registerShape('settlement', 'VenueTypeUpdated', stable(['callerDid', 'venueId', 'venueType']));
 registerShape(
   'settlement',
   'VenueSignersUpdated',
-  stable(['did', 'venueId', 'signers', 'updateType'])
+  stable(['callerDid', 'venueId', 'signers', 'added'])
 );
 
 registerShape('settlement', 'InstructionCreated', [
   {
     from: 0,
     fields: [
-      'did',
+      'callerDid',
       'venueId',
       'instructionId',
       'settlementType',
@@ -35,7 +39,7 @@ registerShape('settlement', 'InstructionCreated', [
   },
 ]);
 
-const portfolioAffirmation = ['did', 'portfolio', 'instructionId'];
+const portfolioAffirmation = ['callerDid', 'holder', 'instructionId'];
 
 registerShape('settlement', 'InstructionAffirmed', stable(portfolioAffirmation));
 // `InstructionAuthorized` / `InstructionUnauthorized` were renamed to the affirmation events before
@@ -44,7 +48,7 @@ registerShape('settlement', 'InstructionAffirmed', stable(portfolioAffirmation))
 registerShape('settlement', 'AffirmationWithdrawn', stable(portfolioAffirmation));
 registerShape('settlement', 'InstructionAutomaticallyAffirmed', stable(portfolioAffirmation));
 
-const identityAndInstruction = ['did', 'instructionId'];
+const identityAndInstruction = ['callerDid', 'instructionId'];
 
 registerShape('settlement', 'InstructionRejected', stable(identityAndInstruction));
 registerShape('settlement', 'InstructionExecuted', stable(identityAndInstruction));
@@ -53,18 +57,49 @@ registerShape('settlement', 'InstructionFailed', discontinuedAt(LAST_V7, identit
 registerShape('settlement', 'InstructionLocked', stable(identityAndInstruction));
 registerShape('settlement', 'InstructionUnlocked', stable(identityAndInstruction));
 registerShape('settlement', 'SettlementManuallyExecuted', stable(identityAndInstruction));
-registerShape('settlement', 'MediatorAffirmationWithdrawn', stable(identityAndInstruction));
+registerShape(
+  'settlement',
+  'MediatorAffirmationWithdrawn',
+  stable(['mediatorDid', 'instructionId'])
+);
 
 registerShape('settlement', 'FailedToExecuteInstruction', stable(['instructionId', 'error']));
 registerShape(
   'settlement',
   'MediatorAffirmationReceived',
-  stable(['did', 'instructionId', 'expiry'])
+  stable(['mediatorDid', 'instructionId', 'expiry'])
 );
 registerShape('settlement', 'InstructionMediators', stable(['instructionId', 'mediators']));
 registerShape(
   'settlement',
   'ReceiptClaimed',
-  stable(['did', 'instructionId', 'legId', 'receiptUid', 'signer', 'metadata'])
+  stable(['callerDid', 'instructionId', 'legId', 'receiptUid', 'signer', 'metadata'])
 );
-registerShape('settlement', 'FundsTransferred', stable(['did', 'fromHolder', 'toHolder', 'fund']));
+registerShape('settlement', 'FundsTransferred', stable(['callerDid', 'from', 'to', 'fund']));
+
+registerShape('settlement', 'LegFailedExecution', stable(['callerDid', 'instructionId', 'legId']));
+registerShape(
+  'settlement',
+  'MandatoryReceiverAffirmationSet',
+  stable(['callerDid', 'requirement'])
+);
+registerShape(
+  'settlement',
+  'VenueFiltering',
+  tickerBeforeV7(stable(['callerDid', 'assetId', 'enabled']))
+);
+registerShape(
+  'settlement',
+  'VenueUnauthorized',
+  tickerBeforeV7(stable(['callerDid', 'assetId', 'venueId']))
+);
+registerShape(
+  'settlement',
+  'VenuesAllowed',
+  tickerBeforeV7(stable(['callerDid', 'assetId', 'venueIds']))
+);
+registerShape(
+  'settlement',
+  'VenuesBlocked',
+  tickerBeforeV7(stable(['callerDid', 'assetId', 'venueIds']))
+);

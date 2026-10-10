@@ -14,15 +14,22 @@
  */
 import './asset';
 import './balances';
+import './capitalDistribution';
+import './committees';
+import './complianceManager';
 import './corporateActions';
 import './externalAgents';
 import './identity';
 import './multiSig';
 import './nft';
+import './pips';
 import './portfolio';
+import './protocolFee';
 import './relayer';
 import './settlement';
 import './staking';
+import './statistics';
+import './treasury';
 
 export * from './consts';
 export * from './registry';

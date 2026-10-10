@@ -15,33 +15,33 @@ import { discontinuedAt, registerShape, stable } from './registry';
  */
 registerShape('identity', 'DidCreated', stable(['did', 'primaryKey', 'secondaryKeys']));
 registerShape('identity', 'SecondaryKeysAdded', stable(['did', 'secondaryKeys']));
-registerShape('identity', 'SecondaryKeysRemoved', stable(['did', 'signers']));
-registerShape('identity', 'SecondaryKeyLeftIdentity', stable(['did', 'account']));
+registerShape('identity', 'SecondaryKeysRemoved', stable(['did', 'removedKeys']));
+registerShape('identity', 'SecondaryKeyLeftIdentity', stable(['did', 'secondaryKey']));
 // Absent from the v8 runtime
 registerShape('identity', 'SignerLeft', discontinuedAt(LAST_V7, ['did', 'signer']));
 registerShape(
   'identity',
   'SecondaryKeyPermissionsUpdated',
-  stable(['did', 'account', 'previousPermissions', 'updatedPermissions'])
+  stable(['did', 'secondaryKey', 'oldPermissions', 'newPermissions'])
 );
 registerShape('identity', 'SecondaryKeysFrozen', stable(['did']));
 registerShape('identity', 'SecondaryKeysUnfrozen', stable(['did']));
+registerShape('identity', 'PrimaryKeyUpdated', stable(['did', 'oldPrimaryKey', 'newPrimaryKey']));
+registerShape('identity', 'ClaimAdded', stable(['targetDid', 'claim']));
+registerShape('identity', 'ClaimRevoked', stable(['targetDid', 'claim']));
 registerShape(
   'identity',
-  'PrimaryKeyUpdated',
-  stable(['did', 'previousPrimaryKey', 'newPrimaryKey'])
+  'CustomClaimTypeAdded',
+  stable(['callerDid', 'customClaimTypeId', 'name'])
 );
-registerShape('identity', 'ClaimAdded', stable(['did', 'claim']));
-registerShape('identity', 'ClaimRevoked', stable(['did', 'claim']));
-registerShape('identity', 'CustomClaimTypeAdded', stable(['did', 'customClaimTypeId', 'name']));
 
 registerShape(
   'identity',
   'AuthorizationAdded',
-  stable(['fromDid', 'toDid', 'toKey', 'authId', 'authorizationData', 'expiry'])
+  stable(['authorizedBy', 'targetDid', 'targetKey', 'authId', 'authorizationData', 'expiry'])
 );
 
-const authorizationOutcome = ['toDid', 'toKey', 'authId'];
+const authorizationOutcome = ['targetDid', 'targetKey', 'authId'];
 
 registerShape('identity', 'AuthorizationRevoked', stable(authorizationOutcome));
 registerShape('identity', 'AuthorizationRejected', stable(authorizationOutcome));

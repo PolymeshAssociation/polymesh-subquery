@@ -80,11 +80,7 @@ const existingCheckpointId = (
 
 export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId, eventIdx } = extractArgs(event);
-  const {
-    caId: rawCaId,
-    corporateAction: rawCorporateAction,
-    details: rawDetails,
-  } = decodeEvent(event);
+  const { caId: rawCaId, ca: rawCorporateAction, details: rawDetails } = decodeEvent(event);
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ca = decodeCorporateAction(rawCorporateAction.toJSON());
@@ -144,7 +140,7 @@ export const handleCaRemoved = async (event: SubstrateEvent): Promise<void> => {
 
 export const handleRecordDateChanged = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { caId: rawCaId, corporateAction: rawCorporateAction } = decodeEvent(event);
+  const { caId: rawCaId, ca: rawCorporateAction } = decodeEvent(event);
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ca = decodeCorporateAction(rawCorporateAction.toJSON());
@@ -248,7 +244,7 @@ export const handleDefaultWithholdingTaxChanged = async (event: SubstrateEvent):
 
 export const handleDidWithholdingTaxChanged = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, targetDid, tax: rawTax } = decodeEvent(event);
+  const { assetId: rawAssetId, taxedDid: targetDid, tax: rawTax } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const did = getTextValue(targetDid);
