@@ -111,7 +111,9 @@ export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> =>
       eventIdx,
     }),
     defaultWithholdingTax: BigInt(ca.defaultWithholdingTax),
-    didWithholdingTax: ca.withholdingTax.map(([did, tax]): DidTax => ({ did, tax: BigInt(tax) })),
+    didWithholdingTax: ca.withholdingTax.map(
+      ([did, tax]): DidTax => ({ did, tax: BigInt(tax).toString() })
+    ),
     documents: [],
     isRemoved: false,
     createdEventId: blockEventId,
@@ -257,7 +259,8 @@ export const handleDidWithholdingTaxChanged = async (event: SubstrateEvent): Pro
   const config = await getOrCreateDefaultConfig(assetId, blockEventId);
   const existing = (config.didWithholdingTax ?? []).filter(entry => entry.did !== did);
 
-  config.didWithholdingTax = tax === null ? existing : [...existing, { did, tax: BigInt(tax) }];
+  config.didWithholdingTax =
+    tax === null ? existing : [...existing, { did, tax: BigInt(tax).toString() }];
   config.updatedEventId = blockEventId;
 
   await config.save();

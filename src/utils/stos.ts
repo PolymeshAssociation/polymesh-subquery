@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
-import { Sto } from '../types';
+import { FundraiserTierJson, Sto } from '../types';
 import { getAssetId, getAssetIdWithTicker } from './assets';
 import {
   capitalizeFirstLetter,
@@ -43,11 +43,13 @@ export const getFundraiserDetails = async (
     status: stoStatus,
     start: getDateValue(start),
     end: getDateValue(end),
-    tiers: tiers.map(tier => ({
-      price: BigInt(tier.price),
-      remaining: BigInt(tier.remaining),
-      total: BigInt(tier.total),
-    })),
+    tiers: tiers.map(
+      (tier: Record<string, string | number>): FundraiserTierJson => ({
+        price: BigInt(tier.price).toString(),
+        remaining: BigInt(tier.remaining).toString(),
+        total: BigInt(tier.total).toString(),
+      })
+    ),
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
     offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),

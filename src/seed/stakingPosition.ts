@@ -35,7 +35,10 @@ export const seedStakingPositions = async ({
 
       position.bonded = snapshot.active;
       position.unbonding = snapshot.total - snapshot.active;
-      position.unlocking = snapshot.unlocking;
+      position.unlocking = snapshot.unlocking.map(chunk => ({
+        ...chunk,
+        amount: chunk.amount.toString(),
+      }));
 
       await position.save();
     })

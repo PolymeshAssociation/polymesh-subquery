@@ -34,6 +34,7 @@ import { deferredSlashesBefore } from '../../../utils/deferredSlashes';
 import {
   adjustHold,
   findBlockEntries,
+  holdsOf,
   findExtrinsicEntries,
   firstText,
   loadBalance,
@@ -202,9 +203,10 @@ export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<voi
   }
 
   const { total } = await readStakingLedger(stash, blockId);
+  const balance = await AccountBalance.get(stash);
   const held =
-    (await AccountBalance.get(stash))?.holds?.find(hold => hold.reason === HoldReason.Staking)
-      ?.amount ?? BigInt(0);
+    (balance ? holdsOf(balance) : []).find(hold => hold.reason === HoldReason.Staking)?.amount ??
+    BigInt(0);
 
   await adjustHold(stash, HoldReason.Staking, total - held, blockEventId);
 };

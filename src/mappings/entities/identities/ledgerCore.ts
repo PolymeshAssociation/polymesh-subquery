@@ -6,7 +6,6 @@ import {
   Account,
   AccountBalance,
   EntryDirection,
-  HoldEntry,
   HoldReason,
   MovementKind,
   PolyxEntry,
@@ -109,6 +108,58 @@ export const floorZero = (value: bigint): bigint => (value > BigInt(0) ? value :
 const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
 
 /**
+ * A lock, hold or kind total with its amounts as `bigint`s, as the ledger computes with them. The
+ * JSON columns (`LockEntry`, `HoldEntry`, `KindTotal`) keep amounts as decimal strings, because
+ * SubQuery writes a `bigint` inside JSON as `"<digits>n"`, which consumers would then receive.
+ */
+export interface Lock {
+  lockId: string;
+  amount: bigint;
+  reasons?: string;
+}
+
+export interface Hold {
+  reason: string;
+  amount: bigint;
+}
+
+interface KindTotalValue {
+  kind: string;
+  totalAbs: bigint;
+  net: bigint;
+  count: number;
+}
+
+export const locksOf = (balance: AccountBalance): Lock[] =>
+  (balance.locks ?? []).map(lock => ({ ...lock, amount: BigInt(lock.amount) }));
+
+const setLocks = (balance: AccountBalance, locks: Lock[]): void => {
+  balance.locks = locks.map(lock => ({ ...lock, amount: lock.amount.toString() }));
+};
+
+export const holdsOf = (balance: AccountBalance): Hold[] =>
+  (balance.holds ?? []).map(hold => ({ ...hold, amount: BigInt(hold.amount) }));
+
+const setHolds = (balance: AccountBalance, holds: Hold[]): void => {
+  balance.holds = holds.map(hold => ({ ...hold, amount: hold.amount.toString() }));
+};
+
+const kindTotalsOf = (balance: AccountBalance): KindTotalValue[] =>
+  (balance.lifetimeByKind ?? []).map(total => ({
+    ...total,
+    totalAbs: BigInt(total.totalAbs),
+    net: BigInt(total.net),
+  }));
+
+const setKindTotals = (balance: AccountBalance, totals: KindTotalValue[]): void => {
+  balance.lifetimeByKind = totals.map(total => ({
+    ...total,
+    totalAbs: total.totalAbs.toString(),
+    net: total.net.toString(),
+  }));
+};
+
+/**
  * `frozen` from an on-chain `AccountData`: `{ free, reserved, frozen, flags }` on v8,
  * `{ free, reserved, miscFrozen, feeFrozen }` (frozen is the max of the two) on ≤ v7.4.
  */
@@ -197,7 +248,7 @@ export const PIPS_LOCK_ID = 'pips    ';
  * `undefined` on a runtime with no hold storage (pre-v8), which callers treat as "no information",
  * never as "no holds".
  */
-export const readChainHolds = async (address: string): Promise<HoldEntry[] | undefined> => {
+export const readChainHolds = async (address: string): Promise<Hold[] | undefined> => {
   if (typeof api.query.balances?.holds !== 'function') {
     return undefined;
   }
@@ -267,7 +318,7 @@ export const readChainFrozen = async (address: string): Promise<bigint> => {
 export interface ChainFreezes {
   frozen: bigint;
   /** v8: `balances.holds(who)`. `undefined` pre-v8 or on a failed read. */
-  holds?: HoldEntry[];
+  holds?: Hold[];
   /**
    * The amount of the `'staking '` lock on chain. Pre-v8 that is `staking.ledger.total` — the
    * value passed to `Currency::set_lock` — and on v8 it is read from `balances.locks`, since it
@@ -319,7 +370,7 @@ export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes):
   const { frozen, holds, stakingLock, pipsLock } = chain;
 
   if (holds !== undefined) {
-    balance.holds = holds;
+    setHolds(balance, holds);
   }
 
   const capped = (amount?: bigint): bigint => {
@@ -330,13 +381,13 @@ export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes):
   const pipsPart = capped(pipsLock);
   const explained = stakingPart > pipsPart ? stakingPart : pipsPart;
 
-  balance.locks = [
+  setLocks(balance, [
     ...(stakingPart > BigInt(0)
       ? [{ lockId: STAKING_LOCK_ID, amount: stakingPart, reasons: 'staking' }]
       : []),
     ...(pipsPart > BigInt(0) ? [{ lockId: PIPS_LOCK_ID, amount: pipsPart, reasons: 'pips' }] : []),
     ...(frozen > explained ? [{ lockId: RESIDUAL_LOCK_ID, amount: frozen }] : []),
-  ];
+  ]);
 
   recomputeDerived(balance);
 };
@@ -350,8 +401,8 @@ export const applyChainFreezes = (balance: AccountBalance, chain: ChainFreezes):
  * - `total = free + reserved`; `transferable = free - frozen`, floored at 0.
  */
 export const recomputeDerived = (balance: AccountBalance): void => {
-  const locks = balance.locks ?? [];
-  const holds = balance.holds ?? [];
+  const locks = locksOf(balance);
+  const holds = holdsOf(balance);
 
   const stakingHold = holds.find(hold => hold.reason === HoldReason.Staking)?.amount ?? BigInt(0);
   const stakingLock = locks.find(lock => lock.lockId === STAKING_LOCK_ID)?.amount ?? BigInt(0);
@@ -374,7 +425,7 @@ export const bumpLifetimeByKind = (
   amountAbs: bigint,
   countDelta = 1
 ): void => {
-  const totals = balance.lifetimeByKind ?? [];
+  const totals = kindTotalsOf(balance);
   const signed = direction === EntryDirection.Credit ? amountAbs : -amountAbs;
   const entry = totals.find(total => total.kind === kind);
 
@@ -386,7 +437,10 @@ export const bumpLifetimeByKind = (
     totals.push({ kind, totalAbs: amountAbs, net: signed, count: countDelta });
   }
 
-  balance.lifetimeByKind = totals.filter(total => total.count > 0);
+  setKindTotals(
+    balance,
+    totals.filter(total => total.count > 0)
+  );
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -629,7 +683,7 @@ export const adjustHold = async (
     return;
   }
 
-  const holds = balance.holds ?? [];
+  const holds = holdsOf(balance);
   const entry = holds.find(hold => hold.reason === reason);
 
   if (entry) {
@@ -638,7 +692,10 @@ export const adjustHold = async (
     holds.push({ reason, amount: delta });
   }
 
-  balance.holds = holds.filter(hold => hold.amount > BigInt(0));
+  setHolds(
+    balance,
+    holds.filter(hold => hold.amount > BigInt(0))
+  );
   recomputeDerived(balance);
   balance.updatedEventId = blockEventId;
 
@@ -671,7 +728,7 @@ export const adjustLock = async (
     return;
   }
 
-  const locks = balance.locks ?? [];
+  const locks = locksOf(balance);
   const entry = locks.find(lock => lock.lockId === lockId);
 
   if (entry) {
@@ -683,7 +740,10 @@ export const adjustLock = async (
     locks.push({ lockId, amount: delta, reasons });
   }
 
-  balance.locks = locks.filter(lock => lock.amount > BigInt(0));
+  setLocks(
+    balance,
+    locks.filter(lock => lock.amount > BigInt(0))
+  );
   recomputeDerived(balance);
   balance.updatedEventId = blockEventId;
 
@@ -699,7 +759,9 @@ export const setLock = async (
   reasons?: string
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
-  const current = balance?.locks?.find(lock => lock.lockId === lockId)?.amount ?? BigInt(0);
+  const current = balance
+    ? locksOf(balance).find(lock => lock.lockId === lockId)?.amount ?? BigInt(0)
+    : BigInt(0);
 
   await adjustLock(address, lockId, amount - current, blockEventId, reasons);
 };

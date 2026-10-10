@@ -55,7 +55,7 @@ describe('seedStakingPositions', () => {
       controllerId: CONTROLLER,
       bonded: BigInt(4000),
       unbonding: BigInt(1000),
-      unlocking: [{ amount: BigInt(1000), era: 3 }],
+      unlocking: [{ amount: '1000', era: 3 }],
       createdEventId: '0000000000/0000000000',
     });
   });

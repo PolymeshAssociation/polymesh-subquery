@@ -168,8 +168,8 @@ describe('handleBallotVoteCast', () => {
       ballotId,
       voterId: DID_A,
       votes: [
-        { power: BigInt(100), fallback: undefined },
-        { power: BigInt(50), fallback: 2 },
+        { power: '100', fallback: undefined },
+        { power: '50', fallback: 2 },
       ],
     });
   });
@@ -198,7 +198,7 @@ describe('handleBallotVoteCast', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       id: `${ballotId}/${DID_A}`,
-      votes: [{ power: BigInt(250), fallback: undefined }],
+      votes: [{ power: '250', fallback: undefined }],
       createdEventId: '0000000042/0000000003',
       updatedEventId: '0000000042/0000000007',
     });

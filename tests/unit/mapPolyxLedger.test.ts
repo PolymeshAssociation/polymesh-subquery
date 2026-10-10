@@ -488,7 +488,7 @@ describe('Event → pool transition', () => {
       bonded: BigInt(24),
       otherReserved: BigInt(23900),
     });
-    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(24) }]);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '24' }]);
     (globalThis as any).api.query = {};
   });
 
@@ -505,7 +505,7 @@ describe('Event → pool transition', () => {
     );
 
     expect(ledger).not.toHaveBeenCalled();
-    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(900) }]);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '900' }]);
     (globalThis as any).api.query = {};
   });
 
@@ -521,7 +521,7 @@ describe('Event → pool transition', () => {
       bonded: BigInt(900),
       otherReserved: BigInt(0),
     });
-    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(900) }]);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '900' }]);
     expect(entries().every(r => r.holdReason === HoldReason.Staking)).toBe(true);
   });
 
@@ -983,9 +983,7 @@ describe('staking — era-dependent, inverted at v8', () => {
         balancesEvent('Unlocked', { who: ALICE, amount: '10' }, { specVersion: 7_004_001 })
       );
 
-      expect(balance(ALICE)?.locks?.find((l: any) => l.lockId === 'staking ')?.amount).toBe(
-        BigInt(4000)
-      );
+      expect(balance(ALICE)?.locks?.find((l: any) => l.lockId === 'staking ')?.amount).toBe('4000');
     });
   });
 
@@ -1720,7 +1718,7 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
       bonded: BigInt(600),
       totalSlashed: BigInt(400),
     });
-    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(600) }]);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '600' }]);
   });
 
   it('F3: two equal transfers to one new account both credit it', async () => {
@@ -1802,7 +1800,7 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     expect(entries()[0]).toMatchObject({ kind: MovementKind.StakingReward });
     expect(balance(ALICE)).toMatchObject({ free: BigInt(900), totalRewards: BigInt(900) });
     expect(balance(ALICE)?.lifetimeByKind).toEqual([
-      { kind: MovementKind.StakingReward, totalAbs: BigInt(900), net: BigInt(900), count: 1 },
+      { kind: MovementKind.StakingReward, totalAbs: '900', net: '900', count: 1 },
     ]);
   });
 });
@@ -2115,8 +2113,10 @@ describe('pre-v8 PIPs deposit locks', () => {
     return locks;
   };
 
-  const pipsLock = (address: string) =>
-    balance(address)?.locks?.find((l: any) => l.lockId === 'pips    ')?.amount;
+  const pipsLock = (address: string) => {
+    const amount = balance(address)?.locks?.find((l: any) => l.lockId === 'pips    ')?.amount;
+    return amount === undefined ? undefined : BigInt(amount);
+  };
 
   it("Voted sets the voter's pips lock from chain", async () => {
     chainLocks({ [ALICE]: [{ id: PIPS, amount: '2000' }] });
@@ -2201,8 +2201,8 @@ describe('pre-v8 PIPs deposit locks', () => {
     });
 
     expect(row.locks).toEqual([
-      { lockId: 'staking ', amount: BigInt(3), reasons: 'staking' },
-      { lockId: 'pips    ', amount: BigInt(2000), reasons: 'pips' },
+      { lockId: 'staking ', amount: '3', reasons: 'staking' },
+      { lockId: 'pips    ', amount: '2000', reasons: 'pips' },
     ]);
     expect(row.frozen).toBe(BigInt(2000));
     expect(row.bonded).toBe(BigInt(3));

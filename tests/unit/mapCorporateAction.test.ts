@@ -55,7 +55,7 @@ describe('handleCaInitiated', () => {
       targetTreatment: 'Exclude',
       targetIdentities: [DID_B],
       defaultWithholdingTax: BigInt(100_000),
-      didWithholdingTax: [{ did: DID_B, tax: BigInt(50_000) }],
+      didWithholdingTax: [{ did: DID_B, tax: '50000' }],
       isRemoved: false,
       details: 'Annual dividend',
     });
@@ -291,7 +291,7 @@ describe('asset-level defaults', () => {
     );
 
     expect(db.CorporateActionDefaultConfig[ASSET_ID].didWithholdingTax).toEqual([
-      { did: DID_B, tax: BigInt(25_000) },
+      { did: DID_B, tax: '25000' },
     ]);
 
     await handleDidWithholdingTaxChanged(

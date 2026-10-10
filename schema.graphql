@@ -2232,7 +2232,8 @@ type StakingEvent @entity {
 An unbonding chunk still in the queue, not yet withdrawable — `staking.ledger(controller).unlocking`
 """
 type UnlockChunk @jsonField {
-  amount: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  amount: String!
   era: Int!
 }
 
@@ -2390,9 +2391,12 @@ type AssetAgentAction @entity {
 Represents how much tokens can be purchased at a certain price as part of an Offering
 """
 type FundraiserTierJson @jsonField {
-  price: BigInt!
-  remaining: BigInt!
-  total: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  price: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  remaining: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  total: String!
 }
 
 """
@@ -2880,8 +2884,8 @@ A per-DID withholding tax override, as set by `corporateAction.DidWithholdingTax
 """
 type DidTax @jsonField {
   did: String!
-  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
-  tax: BigInt!
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%; a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  tax: String!
 }
 
 """
@@ -2992,7 +2996,8 @@ type CorporateBallot @entity {
 Per-motion vote weights cast in a `CorporateBallot`
 """
 type BallotVoteEntry @jsonField {
-  power: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  power: String!
   fallback: Int
 }
 
@@ -3671,21 +3676,25 @@ enum MovementKind {
 type KindTotal @jsonField {
   "a `MovementKind` value — jsonField members cannot be enum-typed, same as `Scope.type` etc."
   kind: String!
-  totalAbs: BigInt!
-  net: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  totalAbs: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  net: String!
   count: Int!
 }
 
 type LockEntry @jsonField {
   lockId: String!
-  amount: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  amount: String!
   reasons: String
 }
 
 type HoldEntry @jsonField {
   "a `HoldReason` value — jsonField members cannot be enum-typed"
   reason: String!
-  amount: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  amount: String!
 }
 
 """
