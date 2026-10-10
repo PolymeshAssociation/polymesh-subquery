@@ -1,10 +1,14 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { TickerReservation } from '../../../types';
+import { AnomalyKind, TickerReservation } from '../../../types';
 import { getDateValue, getTextValue, serializeTicker } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { isPartialIndex } from '../../indexOrigin';
 import { extractArgs, getAsset } from '../common';
+import { resolveIdentity } from '../identities/mapIdentities';
 
-const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
+const getTickerReservation = (ticker: string): Promise<TickerReservation | undefined> => {
   return TickerReservation.get(ticker);
 };
 
@@ -33,6 +37,67 @@ const reserveClassicTicker = async (
   }
 
   return reservation;
+};
+
+/**
+ * The reservation of `ticker`, from the index or, when the index has none, from chain storage
+ * (`asset.uniqueTickerRegistration`, from v7). The index lacks one when it started after the ticker
+ * was registered. `undefined` when the chain has no registration either, such as after an unlink
+ * that removed it; on a genesis replay that is a gap, and recorded.
+ */
+const reservationOf = async (
+  ticker: string,
+  rawTicker: Codec,
+  event: SubstrateEvent
+): Promise<TickerReservation | undefined> => {
+  const indexed = await TickerReservation.get(ticker);
+  if (indexed) {
+    return indexed;
+  }
+
+  const { block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
+  const registrations = api.query.asset?.uniqueTickerRegistration as unknown as
+    | ((ticker: Codec) => Promise<Codec>)
+    | undefined;
+  const registration = registrations
+    ? ((await registrations(rawTicker)).toJSON() as {
+        owner?: string;
+        expiry?: number | null;
+      } | null)
+    : null;
+
+  if (registration?.owner) {
+    const identityId = await resolveIdentity(registration.owner, {
+      reason: 'a ticker registration read from chain storage',
+      eventIdx,
+      block,
+      blockEventId,
+    });
+
+    if (identityId) {
+      return TickerReservation.create({
+        id: ticker,
+        ticker,
+        identityId,
+        expiry: registration.expiry ? new Date(Number(registration.expiry)) : null,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
+      });
+    }
+  }
+
+  if (!(await isPartialIndex())) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `TickerReservation ${ticker} is neither indexed nor registered on chain`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+  }
+
+  return undefined;
 };
 
 export const handleTickerRegistered = async (event: SubstrateEvent): Promise<void> => {
@@ -71,15 +136,18 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
   const assetId = getTextValue(rawAssetId);
   const [asset, reservation] = await Promise.all([
     getAsset(assetId, event),
-    getTickerReservation(ticker),
+    reservationOf(ticker, rawTicker, event),
   ]);
 
   asset.ticker = ticker;
   asset.updatedEventId = blockEventId;
-  reservation.updatedEventId = blockEventId;
-  reservation.assetId = asset.id;
 
-  await Promise.all([asset.save(), reservation.save()]);
+  if (reservation) {
+    reservation.assetId = asset.id;
+    reservation.updatedEventId = blockEventId;
+  }
+
+  await Promise.all([asset.save(), reservation?.save()]);
 };
 
 export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Promise<void> => {
@@ -88,6 +156,8 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
 
   const ticker = serializeTicker(rawTicker);
   const assetId = getTextValue(rawAssetId);
+  // Only the index's own reservation: an unlink can remove the registration, so chain storage may
+  // no longer hold one, and a reservation the index never had has nothing to unlink.
   const [asset, reservation] = await Promise.all([
     getAsset(assetId, event),
     getTickerReservation(ticker),
@@ -98,10 +168,12 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
     asset.updatedEventId = blockEventId;
   }
 
-  reservation.assetId = null;
-  reservation.updatedEventId = blockEventId;
+  if (reservation) {
+    reservation.assetId = null;
+    reservation.updatedEventId = blockEventId;
+  }
 
-  await Promise.all([asset.save(), reservation.save()]);
+  await Promise.all([asset.save(), reservation?.save()]);
 };
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {

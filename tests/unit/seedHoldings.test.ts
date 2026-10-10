@@ -4,7 +4,12 @@
  * snapshot or every derived holding is short by the start-block allocation.
  */
 
+import { assetFromChainAt } from '../../src/mappings/entities/assets/assetFromChain';
 import { seedHoldings } from '../../src/seed/holding';
+
+jest.mock('../../src/mappings/entities/assets/assetFromChain', () => ({
+  assetFromChainAt: jest.fn(),
+}));
 
 const ASSET_A = '0x11111111111111111111111111111111';
 const ASSET_B = '0x22222222222222222222222222222222';
@@ -96,5 +101,43 @@ describe('seedHoldings', () => {
     const { seeded } = await seedHoldings({ blockId: '0000000000', datetime: new Date(0) });
 
     expect(seeded).toBe(0);
+  });
+
+  describe("at a partial index's start block", () => {
+    const UNINDEXED = '0xdeadbeefdeadbeefdeadbeefdeadbeef';
+    const block = { block: { header: { number: { toString: () => '20000000' } } } } as never;
+
+    it('builds an asset the index has not seen from chain storage, and seeds its holding', async () => {
+      (assetFromChainAt as jest.Mock).mockImplementation((id: string) => {
+        const asset = { id, assetId: id, holderCount: 0 };
+        db['Asset'] = { ...db['Asset'], [id]: asset };
+        return Promise.resolve(asset);
+      });
+
+      const { seeded } = await seedHoldings({
+        blockId: '0020000000',
+        datetime: new Date(0),
+        block,
+      });
+
+      expect(seeded).toBe(4);
+      expect(assetFromChainAt).toHaveBeenCalledWith(
+        UNINDEXED,
+        expect.objectContaining({ block, expected: true })
+      );
+      expect(db['Holding'][`${UNINDEXED}/${DID_1}/0`].amount).toBe(BigInt(9));
+    });
+
+    it('skips an asset the chain cannot describe either', async () => {
+      (assetFromChainAt as jest.Mock).mockResolvedValue(undefined);
+
+      const { seeded } = await seedHoldings({
+        blockId: '0020000000',
+        datetime: new Date(0),
+        block,
+      });
+
+      expect(seeded).toBe(3);
+    });
   });
 });

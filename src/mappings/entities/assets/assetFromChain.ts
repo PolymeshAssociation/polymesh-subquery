@@ -1,6 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent } from '@subql/types';
-import { AnomalyKind, Asset } from '../../../types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../../types';
 import {
   bytesToString,
   getAssetType,
@@ -41,6 +41,26 @@ export const assetFromChain = async (
   event: SubstrateEvent
 ): Promise<Asset | undefined> => {
   const { block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  return assetFromChainAt(assetId, { block, blockEventId, eventIdx, moduleId, eventId });
+};
+
+/** Where `assetFromChainAt` writes from: the event that met the asset, or the seed of a partial index. */
+export interface AssetSource {
+  block: SubstrateBlock;
+  blockEventId: string;
+  eventIdx: number;
+  moduleId?: ModuleIdEnum;
+  eventId?: EventIdEnum;
+  /** the index cannot hold it yet, as at a partial index's seed, so building it is not a gap */
+  expected?: boolean;
+}
+
+/** `assetFromChain` for a caller with no event, such as the seeder of a partial index. */
+export const assetFromChainAt = async (
+  assetId: string,
+  { block, blockEventId, eventIdx, moduleId, eventId, expected }: AssetSource
+): Promise<Asset | undefined> => {
   const report = (detail: string) =>
     recordAnomaly({
       kind: AnomalyKind.MissingReferencedEntity,
@@ -112,7 +132,7 @@ export const assetFromChain = async (
 
   await asset.save();
 
-  if (!(await isPartialIndex())) {
+  if (!expected && !(await isPartialIndex())) {
     await report(`asset ${assetId} was not indexed, so it was built from chain storage`);
   }
 

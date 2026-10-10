@@ -1,5 +1,7 @@
 import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
 import { SEED_EVENT_ID } from '../mappings/consts';
+import { assetFromChainAt } from '../mappings/entities/assets/assetFromChain';
 import { Asset, AssetHolder, HolderKind, Holding } from '../types';
 import {
   getAssetIdForLegacyTicker,
@@ -21,18 +23,36 @@ import { meshPortfolioToAssetHolder } from '../utils/portfolios';
  * identical read at an arbitrary `START_BLOCK` (`api.query` always targets the block being
  * indexed).
  *
- * Assets whose `Asset` row is not yet indexed are skipped: at genesis there are none, and the
- * partial-index path seeds `Asset` rows before calling this. NFT holdings are seeded separately
- * once the `Nft` entity exists.
+ * At a partial index's start block no `Asset` row exists yet, so each asset a balance names is
+ * built from chain storage first (`assetFromChainAt`, from v7, where assets are keyed by id). One
+ * the chain can't describe is skipped, and recorded. At genesis there are no balances. NFT
+ * holdings are seeded separately once the `Nft` entity exists.
  */
 
 export interface SeedContext {
   blockId: string;
   /** unused here, kept for signature parity with `seedAccountBalances` and the plan-10 seeder */
   datetime: Date;
+  /** the start block of a partial index, which assets not yet indexed are read at */
+  block?: SubstrateBlock;
 }
 
-export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: number }> => {
+/** The asset's row, built from chain storage at a partial index's start block when it has none yet. */
+const indexedAsset = async (assetId: string, block?: SubstrateBlock): Promise<Asset | undefined> =>
+  (await Asset.get(assetId)) ??
+  (block
+    ? assetFromChainAt(assetId, {
+        block,
+        blockEventId: SEED_EVENT_ID,
+        eventIdx: 0,
+        expected: true,
+      })
+    : undefined);
+
+export const seedHoldings = async ({
+  blockId,
+  block,
+}: SeedContext): Promise<{ seeded: number }> => {
   if (!api.query.portfolio?.portfolioAssetBalances) {
     return { seeded: 0 };
   }
@@ -56,7 +76,7 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
     const [rawPortfolioId, rawAssetId] = key.args;
     const assetId = await resolveAssetId(rawAssetId);
 
-    if (!(await Asset.get(assetId))) {
+    if (!(await indexedAsset(assetId, block))) {
       continue;
     }
 

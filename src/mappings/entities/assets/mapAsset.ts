@@ -835,6 +835,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
     block,
     eventIdx,
     eventId: EventIdEnum.Transfer,
+    event,
   });
 
   if (!asset) {
