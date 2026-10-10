@@ -111,7 +111,7 @@ describe('seedAccountBalances', () => {
         specVersion: 3000,
       });
 
-      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: BigInt(400) }]);
+      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: '400' }]);
       expect(db['AccountBalance'][A].bonded).toBe(BigInt(0));
       expect(db['AccountBalance'][B].locks).toEqual([]);
     });
@@ -131,8 +131,8 @@ describe('seedAccountBalances', () => {
       });
 
       expect(db['AccountBalance'][A].locks).toEqual([
-        { lockId: 'staking ', amount: BigInt(300), reasons: 'staking' },
-        { lockId: 'residual', amount: BigInt(400) },
+        { lockId: 'staking ', amount: '300', reasons: 'staking' },
+        { lockId: 'residual', amount: '400' },
       ]);
       // the bond is now visible as bonded, and frozen is still the MAX
       expect(db['AccountBalance'][A]).toMatchObject({
@@ -164,10 +164,10 @@ describe('seedAccountBalances', () => {
         otherReserved: BigInt(50),
       });
       expect(db['AccountBalance'][A].holds).toEqual([
-        { reason: 'Staking', amount: BigInt(200) },
-        { reason: 'Preimage', amount: BigInt(50) },
+        { reason: 'Staking', amount: '200' },
+        { reason: 'Preimage', amount: '50' },
       ]);
-      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: BigInt(400) }]);
+      expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: '400' }]);
     });
 
     /**
@@ -203,7 +203,7 @@ describe('seedAccountBalances', () => {
       expect(db['AccountBalance'][B].holds).toEqual([]);
       expect(db['AccountBalance'][B]).toMatchObject({ bonded: BigInt(300), frozen: BigInt(300) });
       expect(db['AccountBalance'][B].locks).toEqual([
-        { lockId: 'staking ', amount: BigInt(300), reasons: 'staking' },
+        { lockId: 'staking ', amount: '300', reasons: 'staking' },
       ]);
       // the pre-v8 route through `staking.ledger` is not taken on v8
       expect(ledger).not.toHaveBeenCalled();

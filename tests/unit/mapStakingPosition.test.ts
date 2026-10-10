@@ -123,7 +123,7 @@ describe('handlePositionUnbonded / handlePositionWithdrawn', () => {
       bonded: BigInt(3000),
       unbonding: BigInt(1000),
     });
-    expect(db.StakingPosition[ALICE].unlocking).toEqual([{ amount: BigInt(1000), era: 50 }]);
+    expect(db.StakingPosition[ALICE].unlocking).toEqual([{ amount: '1000', era: 50 }]);
 
     mockLedger('3000', []);
 

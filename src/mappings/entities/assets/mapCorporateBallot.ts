@@ -189,7 +189,7 @@ export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void>
 
   const votes = (rawVotes.toJSON() as unknown as { power: number; fallback: number | null }[]).map(
     (vote): BallotVoteEntry => ({
-      power: BigInt(vote.power),
+      power: BigInt(vote.power).toString(),
       fallback: vote.fallback ?? undefined,
     })
   );
