@@ -48,6 +48,7 @@ import {
 import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
+import { memoText } from '../../../utils/text';
 
 export const createFunding = (
   blockId: string,
@@ -800,9 +801,7 @@ export const processUpdateReason = (
     const instructionId = details.instructionId
       ? padNumericId(details.instructionId.toString())
       : null;
-    const instructionMemo = details.instructionMemo
-      ? coerceHexToString(details.instructionMemo)
-      : null;
+    const instructionMemo = memoText(details.instructionMemo) ?? null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
       : toEnum(EventIdEnum, blockEvents[eventIdx + 1]?.event.method, EventIdEnum.Unknown);

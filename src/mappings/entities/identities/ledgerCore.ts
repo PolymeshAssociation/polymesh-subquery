@@ -12,12 +12,13 @@ import {
   PolyxEntry,
   PolyxPool,
 } from '../../../types';
-import { bytesToString, getBigIntValue, getTextValue, padId } from '../../../utils';
+import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { hexToString } from '../../../utils/common';
 import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
 import { HandlerArgs } from '../common';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
+import { memoText } from '../../../utils/text';
 
 /**
  * The POLYX ledger's model, shared by every era's handlers: the running `AccountBalance`, the
@@ -97,7 +98,7 @@ export const holdReasonOf = (decoded: Record<string, Codec>): HoldReason | undef
 export const memoOf = (decoded: Record<string, Codec>): string | undefined => {
   const raw = optionalField(decoded, 'memo');
 
-  return raw !== undefined ? bytesToString(raw) : undefined;
+  return raw !== undefined ? memoText(raw) : undefined;
 };
 
 export const startOfUtcDay = (datetime: Date): Date =>
