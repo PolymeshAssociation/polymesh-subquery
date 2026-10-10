@@ -51,8 +51,8 @@ const v8Dates = {
 const v5Dates = { claimIssuer: DID, claimExpiry: '5', issuanceDate: '1', lastUpdateDate: '2' };
 const scope = (type: string | null, value: string | null) => JSON.stringify({ type, value });
 
-// The expected column is what the harvester path wrote for the same claim, except that a claim
-// without a scope now has none rather than `{"type":null,"value":null}`.
+// The expected column is what the previous serialiser's path wrote for the same claim, except that a
+// claim without a scope now has none rather than `{"type":null,"value":null}`.
 const cases: [string, ReturnType<typeof v8Claim>, Record<string, unknown>][] = [
   [
     'CustomerDueDiligence',
@@ -136,7 +136,7 @@ const cases: [string, ReturnType<typeof v8Claim>, Record<string, unknown>][] = [
   ],
 ];
 
-describe('claims read from the canonical encoding match the harvester path', () => {
+describe('claims read from the canonical encoding match the previous path', () => {
   it.each(cases)('%s', (_, identityClaim, expected) => {
     expect(extractClaimInfo(encodeValue(identityClaim, 'IdentityClaim'))).toEqual(expected);
   });

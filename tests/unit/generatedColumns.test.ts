@@ -2,7 +2,6 @@ import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
 import { JSONStringifyExceptStringAndNull } from '../../src/utils/common';
 import { extractClaimInfo } from './../../src/utils/claims';
-import { extractEventArgs } from './../../src/utils/events';
 
 test('JSONStringifyExceptStringAndNull', () => {
   expect(JSONStringifyExceptStringAndNull('hello')).toBe('hello');
@@ -11,17 +10,6 @@ test('JSONStringifyExceptStringAndNull', () => {
 
   expect(JSONStringifyExceptStringAndNull({ im: 'anobject' })).toBe('{"im":"anobject"}');
   expect(JSONStringifyExceptStringAndNull(5)).toBe('5');
-});
-
-test('extractEventArgs', () => {
-  expect(
-    extractEventArgs([{ value: null }, { value: 'hello' }, { value: { foo: 5 } }])
-  ).toStrictEqual({
-    eventArg_0: 'null',
-    eventArg_1: 'hello',
-    eventArg_2: '{"foo":5}',
-    eventArg_3: null,
-  });
 });
 
 test('extractClaimInfo', () => {

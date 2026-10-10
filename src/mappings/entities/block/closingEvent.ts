@@ -21,7 +21,11 @@ export const indexClosingEvent = async (
   const closing = closingEventOf(extrinsic);
 
   if (closing) {
-    await handleToolingEvent(closing).save();
+    const { event, references } = await handleToolingEvent(closing);
+    await Promise.all([
+      event.save(),
+      references.length > 0 ? store.bulkCreate('EventReference', references) : undefined,
+    ]);
   }
 
   return closing;

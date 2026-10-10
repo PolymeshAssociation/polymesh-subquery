@@ -1,3 +1,4 @@
+import { GenericCall } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { hexToU8a, stringCamelCase, u8aToHex } from '@polkadot/util';
 import { paddedText, textOrHex } from '../../utils/text';
@@ -254,3 +255,11 @@ export const encodeArgs = (
 
   return { args, refs };
 };
+
+/** A call's arguments in the canonical encoding, keyed by the metadata's argument names. */
+export const callArgs = (call: GenericCall): Record<string, CanonicalValue> =>
+  encodeArgs(
+    call.args,
+    call.meta.args.map(({ name }) => stringCamelCase(name.toString())),
+    call.meta.args.map(({ type }) => type.toString())
+  ).args;

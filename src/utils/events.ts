@@ -1,28 +1,8 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { HandlerArgs, toEnum } from '../mappings/entities/common';
 import { CallIdEnum, EventIdEnum, ModuleIdEnum } from '../types';
-import { blockTime, camelToSnakeCase, JSONStringifyExceptStringAndNull, padId } from './common';
+import { blockTime, camelToSnakeCase, padId } from './common';
 import { resolveEthTransact } from './ethExtrinsic';
-
-export const extractEventArg = (arg: any, exists: boolean) => {
-  if (arg !== undefined && arg !== null && arg?.value != null) {
-    return JSONStringifyExceptStringAndNull(arg?.value);
-  } else if (exists) {
-    return 'null';
-  } else {
-    return null;
-  }
-};
-
-export const extractEventArgs = (args: any[]) => {
-  const [arg0, arg1, arg2, arg3] = args;
-  return {
-    eventArg_0: extractEventArg(arg0, args.length > 0),
-    eventArg_1: extractEventArg(arg1, args.length > 1),
-    eventArg_2: extractEventArg(arg2, args.length > 2),
-    eventArg_3: extractEventArg(arg3, args.length > 3),
-  };
-};
 
 export type EventParams = {
   id: string;

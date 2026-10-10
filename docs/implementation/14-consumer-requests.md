@@ -6,8 +6,9 @@ The Portal v2 team keeps a register of what it needs from this indexer
 `redesign/12-review-fixes` and lists what is left. The last section lists gaps of the same kind
 that this check turned up.
 
-Status (2026-10-07): 14.1 and 14.2 are done, 14.3 is decided (no change), 14.4 is built and
-awaits a full resync (step O), 14.5 is on hold, and 14.6 (locked amounts) is deferred.
+Status (2026-10-10): 14.1 and 14.2 are done, 14.3 is decided (no change), 14.4 is built and
+validated by full testnet and mainnet resyncs, 14.5 is on hold, and 14.6 (locked amounts) is
+deferred.
 
 ## Summary
 
@@ -21,7 +22,7 @@ awaits a full resync (step O), 14.5 is on hold, and 14.6 (locked amounts) is def
 | G-IDX-04 | corporate actions | ✅ `CorporateAction`, `CorporateActionDefaultConfig` | — |
 | G-IDX-08 | holdings per portfolio | ✅ `Holding`, portfolio and account grain | — |
 | G-IDX-09 | numeric ids sort numerically | ✅ for `Instruction`, `Authorization`, `Venue`, `Proposal` | ✅ **14.3** decided: no change; consumers order by `createdEvent` |
-| G-IDX-10 | staking history per operator per era | ✅ `ValidatorEra`, `Slash`, `Era.totalPoints` | **14.4** built (`e398850`, `21b620e`, `3fea009`, PR #365); awaiting step O |
+| G-IDX-10 | staking history per operator per era | ✅ `ValidatorEra`, `Slash`, `Era.totalPoints` | **14.4** built (`e398850`, `21b620e`, `3fea009`, PR #365) and validated on both chains |
 | G-IDX-05 | subsidies | ✅ `Subsidy` | — |
 | G-IDX-06 | allowances and their history | ✅ `AssetAllowance`; "what was it before" needs **14.5** | **14.5:** on hold (see §14.5) |
 
@@ -114,8 +115,10 @@ number. An id is for lookups, padded or not. This is recorded in
 
 ## 14.4 Staking per validator per era (G-IDX-10)
 
-**Built** in `e398850`, `21b620e` and `3fea009` (PR #365), awaiting validation by a full mainnet and testnet resync (step
-O). This was plan [07](./07-staking.md)'s open scope
+**Built** in `e398850`, `21b620e` and `3fea009` (PR #365), and validated by full testnet and mainnet
+resyncs: every era's elected set, `validatorCount`, sampled fields, the active set at the head, each
+`Rewarded` against its `PayoutStarted`, and testnet's 14 slashes match the chain. This was plan
+[07](./07-staking.md)'s open scope
 question, and the Portal's request (exposure, points, commission history, active-set membership
 and slashes per operator per era) answered it.
 

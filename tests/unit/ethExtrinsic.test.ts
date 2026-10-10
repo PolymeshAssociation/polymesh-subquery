@@ -2,6 +2,7 @@ import { hexToU8a } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
 import { EvmCallKindEnum } from '../../src/types';
 import { isEthTransact, resolveEthTransact } from '../../src/utils/ethExtrinsic';
+import { callOf } from './helpers';
 
 const FROM_ETH = '0x2c7536E3605D9C16a7a3D7b1898e529396a65c23';
 /** `FROM_ETH` padded with 12 `0xEE` bytes and SS58 encoded with the Polymesh prefix */
@@ -22,7 +23,7 @@ interface MockOptions {
   payload?: string;
   events?: { section: string; method: string; data: any[] }[];
   /** the call `registry.createType('Call', ...)` resolves the runtime call calldata to */
-  innerCall?: { section: string; method: string; args: Record<string, unknown> };
+  innerCall?: ReturnType<typeof callOf>;
   blockNumber?: number;
   idx?: number;
 }
@@ -42,11 +43,7 @@ const mockExtrinsic = ({
       if (!innerCall) {
         throw new Error('unable to decode');
       }
-      return {
-        section: innerCall.section,
-        method: innerCall.method,
-        toHuman: () => ({ args: innerCall.args }),
-      };
+      return innerCall;
     },
   };
 
@@ -96,7 +93,7 @@ describe('resolveEthTransact', () => {
     expect(resolved.callKind).toEqual(EvmCallKindEnum.substrateCall);
     expect(resolved.moduleId).toEqual('asset');
     expect(resolved.callId).toEqual('issue');
-    expect(resolved.paramsTxt).toEqual(JSON.stringify(RUNTIME_CALL.args));
+    expect(resolved.args).toEqual({ assetId: '0x1234', amount: '1000' });
   });
 
   it('should fall back to eth_substrate_call when the runtime call cannot be decoded', () => {
@@ -179,8 +176,7 @@ describe('resolveEthTransact', () => {
 });
 
 const CONTRACT_ADDRESS = '0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D';
-const RUNTIME_CALL = {
-  section: 'asset',
-  method: 'issue',
-  args: { asset_id: '0x1234', amount: '1,000' },
-};
+const RUNTIME_CALL = callOf('asset', 'issue', [
+  ['asset_id', '[u8;2]', '0x1234'],
+  ['amount', 'u128', 1000],
+]);

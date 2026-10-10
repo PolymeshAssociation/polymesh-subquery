@@ -20,7 +20,6 @@
   "src/mappings/entities/settlements/mapSettlement.ts": 13,
   "src/mappings/entities/stos/mapSto.ts": 4,
   "src/mappings/migrations/genesisHandler.ts": 10,
-  "src/mappings/serializeLikeHarvester.ts": 1,
   "src/seed/holding.ts": 3,
   "src/utils/assets.ts": 3,
   "src/utils/common.ts": 8,

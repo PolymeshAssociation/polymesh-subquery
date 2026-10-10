@@ -2,14 +2,6 @@
 -- indexes are declared with `@index` / `@compositeIndexes` in the schema instead, so that the
 -- index set has one source of truth. Each block below says why it has to live here.
 
--- Generated columns. SubQuery writes the JSON payloads as text; these expose them as JSONB for
--- the query layer. There is no directive for a generated column.
-ALTER TABLE events
-ADD COLUMN IF NOT EXISTS attributes JSONB GENERATED ALWAYS AS (attributes_txt::jsonb) STORED NULL;
-
-ALTER TABLE extrinsics
-ADD COLUMN IF NOT EXISTS params JSONB GENERATED ALWAYS AS (params_txt::jsonb) STORED NULL;
-
 -- `data_block_datetime_timestamp` was an expression index on `((datetime)::timestamp(0) without
 -- time zone)`. Nothing could use it: PostGraphile compares the bare column, and Postgres uses an
 -- expression index only when the query repeats the expression exactly (defect A18, verified
@@ -26,21 +18,19 @@ CREATE INDEX IF NOT EXISTS data_block_datetime ON blocks (datetime);
 CREATE UNIQUE INDEX IF NOT EXISTS data_extrinsic_id ON extrinsics (block_id, extrinsic_idx);
 CREATE UNIQUE INDEX IF NOT EXISTS data_event_id ON events (block_id, event_idx);
 
--- Expression indexes over the event argument columns. Each is indexed on its first 100
--- characters to keep the entry inside Postgres' btree row limit, which no directive can say.
-CREATE INDEX IF NOT EXISTS data_event_event_arg_0 ON events (left(event_arg_0, 100));
-CREATE INDEX IF NOT EXISTS data_event_event_arg_1 ON events (left(event_arg_1, 100));
-CREATE INDEX IF NOT EXISTS data_event_event_arg_2 ON events (left(event_arg_2, 100));
-CREATE INDEX IF NOT EXISTS data_event_event_arg_3 ON events (left(event_arg_3, 100));
-CREATE INDEX IF NOT EXISTS data_event_module_id_event_id_event_arg_2 ON events (module_id, event_id, left(event_arg_2, 100));
-
--- JSONB path index, over the generated column above. Neither the path expression nor the column
--- it reads exists in `schema.graphql`.
-CREATE INDEX IF NOT EXISTS data_event_transfer_from ON events (trim( '"' from attributes #>> '{2,value,did}'));
+-- Left behind by deployments from before the canonical argument encoding (plan 09 §9.10).
+DROP INDEX IF EXISTS data_event_event_arg_0;
+DROP INDEX IF EXISTS data_event_event_arg_1;
+DROP INDEX IF EXISTS data_event_event_arg_2;
+DROP INDEX IF EXISTS data_event_event_arg_3;
+DROP INDEX IF EXISTS data_event_module_id_event_id_event_arg_2;
+DROP INDEX IF EXISTS data_event_transfer_from;
+ALTER TABLE events DROP COLUMN IF EXISTS attributes;
+ALTER TABLE extrinsics DROP COLUMN IF EXISTS params;
 
 -- (The denormalised `claim_type` / `claim_scope` / `claim_issuer` / `corporate_action_ticker` /
 -- `fundraiser_offering_asset` / `transfer_to` columns on `events` and their indexes were dropped —
--- a harvester-era carry-over, empty or wrong on the vast majority of events, and the same facts
+-- a carry-over from an older indexer, empty or wrong on the vast majority of events, and the same facts
 -- live on the `Claim` / corporate-action / STO entities. See docs/implementation/09-infrastructure.md.)
 
 -- Plain indexes that would otherwise be `@index` in schema.graphql but cannot be: `@subql/node`

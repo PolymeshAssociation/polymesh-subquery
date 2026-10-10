@@ -1880,7 +1880,8 @@ type Extrinsic @entity {
   moduleIdText: String!
   callId: CallIdEnum! @index
   callIdText: String!
-  paramsTxt: String!
+  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`"
+  args: ArgumentsJson!
   success: Int! @index(unique: false)
   nonce: Int
   extrinsicHash: String @index(unique: false)
@@ -1981,13 +1982,35 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   moduleIdText: String!
   eventId: EventIdEnum! @index
   eventIdText: String!
-  attributesTxt: String!
-  "Indexed in `db/compat.sql` as `left(event_arg_0, 100)`, which no directive can express"
-  eventArg_0: String
-  eventArg_1: String
-  eventArg_2: String
-  eventArg_3: String
+  "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`; to find events involving an identity, account, asset or portfolio, use `references`"
+  args: ArgumentsJson!
   extrinsic: Extrinsic
+  references: [EventReference!]! @derivedFrom(field: "event")
+}
+
+enum EventReferenceKind {
+  Identity
+  Account
+  Asset
+  Portfolio
+}
+
+"""
+Something an event refers to, in any of its arguments: an identity, account, asset or portfolio.
+Find an event by what it involves with `references: { some: { kind, value } }`, at any argument
+position. A portfolio also refers to its identity. Before v7.0 a ticker refers to the asset it
+maps to; from v7.0 events name the asset itself
+"""
+type EventReference
+  @entity
+  @compositeIndexes(fields: [["kind", "value"], ["event", "kind"]]) {
+  id: ID! # eventId/padded ordinal
+  event: Event!
+  kind: EventReferenceKind!
+  "the canonical encoding of what is referred to: SS58 for an account, hex for an identity or asset, `did/number` for a portfolio"
+  value: String!
+  "the argument it was found in: its key in the event's `args`"
+  argument: String!
 }
 
 """
@@ -2036,6 +2059,30 @@ type IndexerAnomaly @entity {
   specVersionId: Int! @index
   block: Block!
   createdAt: Date!
+}
+
+"""
+An event's or call's arguments, as a JSON object. Values are encoded as:
+
+- integers: decimal strings, never JSON numbers
+- accounts: SS58 addresses
+- identities, asset ids, hashes, memos and other fixed-size bytes: `0x` hex
+- tickers: text without their trailing NUL padding, or `0x` hex when not text
+- bytes and text: text when valid UTF-8 without NULs, otherwise `0x` hex
+- structs: objects keyed by camelCase field name
+- tuples, lists and sets: arrays
+- enums: `{ "Variant": value }`, or the bare variant name when it carries no value
+- options: the value, or `null`
+- results: `{ "ok": value }` or `{ "err": value }`
+- maps: arrays of `[key, value]` pairs
+- calls: `{ "section", "method", "args" }`
+
+Filter with `contains`. Not indexed: to find events by an identity, account, asset or portfolio,
+use `Event.references`
+"""
+type ArgumentsJson @jsonField(indexed: false) {
+  "not a field: a `@jsonField` type must declare one"
+  _: String
 }
 
 """

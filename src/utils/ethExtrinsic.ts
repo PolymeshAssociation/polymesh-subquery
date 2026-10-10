@@ -1,6 +1,7 @@
 import { GenericCall } from '@polkadot/types';
 import { ethereumEncode } from '@polkadot/util-crypto';
 import { SubstrateExtrinsic } from '@subql/types';
+import { CanonicalValue, callArgs } from '../mappings/args/encode';
 import { EvmCallKindEnum } from '../types';
 import { camelToSnakeCase } from './common';
 import { RUNTIME_PALLETS_ADDR, ss58FromEthAddress } from './eth';
@@ -18,7 +19,7 @@ export interface ResolvedEthTransact {
   moduleId: string;
   /** the call that is actually dispatched, normalised for `CallIdEnum` */
   callId: string;
-  paramsTxt: string;
+  args: Record<string, CanonicalValue>;
   reverted: boolean;
   revertReason?: string;
   /** address of the deployed contract, taken from `revive.Instantiated` */
@@ -39,21 +40,20 @@ export const isEthTransact = (extrinsic?: SubstrateExtrinsic): boolean =>
  * The Ethereum transaction envelope, for the calls that have no runtime call to describe.
  *
  * `input` is deliberately left out. It is the contract's init code for a deployment, which can run
- * to hundreds of kilobytes, and `extrinsics.params_txt` is additionally materialised into the
- * `params` jsonb column by `db/compat.sql`. `EvmTransaction.input` holds it once, under the same id
+ * to hundreds of kilobytes, and `extrinsics.args` is `jsonb`. `EvmTransaction.input` holds it
+ * once, under the same id
  */
-const extractEthTxParams = (tx: DecodedEthTx) =>
-  JSON.stringify({
-    to: tx.to ?? null,
-    value: tx.value.toString(),
-    gasLimit: tx.gasLimit.toString(),
-    nonce: tx.nonce.toString(),
-  });
+const extractEthTxParams = (tx: DecodedEthTx): Record<string, CanonicalValue> => ({
+  to: tx.to ?? null,
+  value: tx.value.toString(),
+  gasLimit: tx.gasLimit.toString(),
+  nonce: tx.nonce.toString(),
+});
 
 const resolveDispatchedCall = (
   extrinsic: SubstrateExtrinsic,
   tx: DecodedEthTx
-): Pick<ResolvedEthTransact, 'callKind' | 'moduleId' | 'callId' | 'paramsTxt'> => {
+): Pick<ResolvedEthTransact, 'callKind' | 'moduleId' | 'callId' | 'args'> => {
   if (tx.to?.toLowerCase() === RUNTIME_PALLETS_ADDR) {
     try {
       /**
@@ -69,7 +69,7 @@ const resolveDispatchedCall = (
         callKind: EvmCallKindEnum.substrateCall,
         moduleId: call.section.toLowerCase(),
         callId: camelToSnakeCase(call.method),
-        paramsTxt: JSON.stringify((call.toHuman() as any).args),
+        args: callArgs(call),
       };
     } catch (e) {
       logger.error(`Unable to decode the runtime call of an eth_transact extrinsic: ${e.message}`);
@@ -78,7 +78,7 @@ const resolveDispatchedCall = (
         callKind: EvmCallKindEnum.substrateCall,
         moduleId: 'revive',
         callId: 'eth_substrate_call',
-        paramsTxt: extractEthTxParams(tx),
+        args: extractEthTxParams(tx),
       };
     }
   }
@@ -88,7 +88,7 @@ const resolveDispatchedCall = (
       callKind: EvmCallKindEnum.instantiate,
       moduleId: 'revive',
       callId: 'eth_instantiate_with_code',
-      paramsTxt: extractEthTxParams(tx),
+      args: extractEthTxParams(tx),
     };
   }
 
@@ -96,7 +96,7 @@ const resolveDispatchedCall = (
     callKind: EvmCallKindEnum.call,
     moduleId: 'revive',
     callId: 'eth_call',
-    paramsTxt: extractEthTxParams(tx),
+    args: extractEthTxParams(tx),
   };
 };
 
