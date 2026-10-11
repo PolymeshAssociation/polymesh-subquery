@@ -181,3 +181,50 @@ export const handleSetController = async (extrinsic: SubstrateExtrinsic): Promis
 
   await position.save();
 };
+
+/**
+ * `staking.rebond` — moves unbonding chunks back to `active`, and before v7 emits nothing.
+ *
+ * Until v7 nothing else re-reads the ledger for it: a restaked reward adds to `bonded` without a
+ * read, so the split between `bonded` and `unbonding` stayed wrong until the stash next bonded or
+ * unbonded. From v7 the call emits `Bonded`, which `handlePositionBonded` re-reads the ledger on,
+ * so a rebond that emitted it is left to that.
+ *
+ * Signed by the controller, so the stash is the one its ledger names. A top-level call only, like
+ * `handleSetController`.
+ */
+export const handleRebond = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+  await ensureTrueSpecVersion(extrinsic.block);
+
+  const emittedBonded = (extrinsic.block.events ?? []).some(
+    ({ phase, event }) =>
+      phase.isApplyExtrinsic &&
+      phase.asApplyExtrinsic.toNumber() === extrinsic.idx &&
+      event.section === 'staking' &&
+      event.method === 'Bonded'
+  );
+
+  if (emittedBonded) {
+    return;
+  }
+
+  const controller = extrinsic.extrinsic.signer.toString();
+  const ledger = (await api.query.staking.ledger(controller)).toJSON() as { stash?: string } | null;
+  const position = ledger?.stash ? await StakingPosition.get(ledger.stash) : undefined;
+
+  if (!position) {
+    return;
+  }
+
+  const closing = await indexClosingEvent(extrinsic);
+
+  if (!closing) {
+    return;
+  }
+
+  await refreshPositionFromLedger(position, position.id, closing);
+
+  position.updatedEventId = extractArgs(closing).blockEventId;
+
+  await position.save();
+};

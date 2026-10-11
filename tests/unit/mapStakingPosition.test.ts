@@ -7,6 +7,7 @@ import {
   handlePositionBonded,
   handlePositionUnbonded,
   handlePositionWithdrawn,
+  handleRebond,
   handleSetController,
 } from '../../src/mappings/entities/events/mapStakingPosition';
 import { __resetStakingCaches } from '../../src/utils/staking';
@@ -315,6 +316,101 @@ describe('handleSetController', () => {
     mockLedger('4200', [], 'CONTROLLER_B');
 
     await handleSetController(setControllerCall('5001'));
+
+    expect(db.StakingPosition).toBeUndefined();
+  });
+});
+
+describe('handleRebond', () => {
+  const STASH = 'STASH_A';
+
+  const rebondCall = (
+    blockNumber: string,
+    extraEvents: { section: string; method: string }[] = []
+  ) =>
+    ({
+      idx: 1,
+      block: {
+        block: {
+          header: {
+            number: { toString: () => blockNumber },
+            parentHash: '0xparent',
+            hash: { toHex: () => `0xhash${blockNumber}` },
+          },
+        },
+        timestamp: new Date('2020-01-01T00:00:00Z'),
+        specVersion: 3_002,
+        events: [...extraEvents, { section: 'system', method: 'ExtrinsicSuccess' }].map(
+          ({ section, method }) => ({
+            phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => 1 } },
+            event: { section, method, data: [], meta: { fields: [] } },
+          })
+        ),
+      },
+      extrinsic: {
+        signer: { toString: () => 'CONTROLLER_A' },
+        method: { section: 'staking', method: 'rebond' },
+      },
+      success: true,
+    } as any);
+
+  const chain = (active: string, unlocking: { value: string; era: number }[]) => {
+    const total = unlocking.reduce((sum, c) => sum + BigInt(c.value), BigInt(active));
+    (globalThis as any).api.rpc = {
+      state: {
+        getRuntimeVersion: jest.fn(async () => ({ specVersion: { toNumber: () => 3_002 } })),
+      },
+    };
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => 'CONTROLLER_A' }),
+        ledger: jest.fn().mockResolvedValue({
+          toJSON: () => ({ stash: STASH, total: total.toString(), active, unlocking }),
+        }),
+      },
+    };
+  };
+
+  const position = () => ({
+    StakingPosition: {
+      [STASH]: {
+        id: STASH,
+        stashId: STASH,
+        controllerId: 'CONTROLLER_A',
+        bonded: BigInt(0),
+        unbonding: BigInt(5000),
+      },
+    },
+  });
+
+  it('moves the rebonded amount back to bonded, which no event announces before v7', async () => {
+    const db = mockStore(position());
+    chain('2000', [{ value: '3000', era: 10 }]);
+
+    await handleRebond(rebondCall('1893033'));
+
+    expect(db.StakingPosition[STASH]).toMatchObject({
+      bonded: BigInt(2000),
+      unbonding: BigInt(3000),
+      updatedEventId: '0001893033/0000000000',
+    });
+  });
+
+  it('leaves a rebond that emitted Bonded to the Bonded handler', async () => {
+    const db = mockStore(position());
+    chain('2000', [{ value: '3000', era: 10 }]);
+
+    await handleRebond(rebondCall('1893034', [{ section: 'staking', method: 'Bonded' }]));
+
+    expect(db.StakingPosition[STASH]).toMatchObject({ bonded: BigInt(0), unbonding: BigInt(5000) });
+  });
+
+  it('does nothing for a stash the index has no position for', async () => {
+    const db = mockStore();
+    chain('2000', [{ value: '3000', era: 10 }]);
+
+    await handleRebond(rebondCall('1893035'));
 
     expect(db.StakingPosition).toBeUndefined();
   });

@@ -251,6 +251,25 @@ describe('handleStakingEvent', () => {
  * and a slash, which `do_slash` subtracts. Refreshing only on the three registered events left the
  * position falling further behind the real bond every era.
  */
+/**
+ * A v8 payout's events for one reward, as `make_payout` emits them: the mint's `Deposit`, then,
+ * when the ledger write took, the `Staking` hold, then `Rewarded` (which the test event stands for).
+ */
+const payoutEvents = (stash: string, amount: string, held: boolean) =>
+  [
+    { section: 'balances', method: 'Deposit', data: [codec(stash), codec(amount)] },
+    ...(held
+      ? [
+          {
+            section: 'balances',
+            method: 'Held',
+            data: [codec({ staking: 'Staking' }), codec(stash), codec(amount)],
+          },
+        ]
+      : []),
+    { section: 'staking', method: 'Rewarded', data: [] },
+  ].map(event => ({ event }));
+
 describe('a ledger change with no Bonded event still refreshes the position', () => {
   const mockLedger = (active: string) => {
     (globalThis as any).api.query = {
@@ -264,7 +283,7 @@ describe('a ledger change with no Bonded event still refreshes the position', ()
     };
   };
 
-  it('a compounded Staked reward re-reads the ledger', async () => {
+  it('a compounded Staked reward adds to the bond on v8, without reading the ledger', async () => {
     const db = mockStore();
 
     mockLedger('4000');
@@ -273,19 +292,54 @@ describe('a ledger change with no Bonded event still refreshes the position', ()
     );
     expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(4000));
 
-    // the payout compounded 150 into the bond; only `Rewarded` is emitted
+    // the payout compounded 150 into the bond: make_payout's `active += amount` is the whole
+    // change, and the hold it writes announces it, so nothing is read
     mockLedger('4150');
+    const { ledger } = (globalThis as any).api.query.staking;
     await handleStakingEvent(
       namedEvent({
         section: 'staking',
         method: 'Rewarded',
         fields: { stash: ALICE, dest: 'Staked', amount: '150' },
         blockNumber: '1001',
+        idx: 2,
+        events: payoutEvents(ALICE, '150', true),
       })
     );
 
     expect(db.StakingPosition[ALICE]).toMatchObject({
       bonded: BigInt(4150),
+      totalRewarded: BigInt(150),
+    });
+    expect(ledger).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Testnet 25,037,006–25,106,271: a stash whose currency hadn't migrated to holds got 19
+   * `Rewarded { dest: Staked }`, each with a `Deposit` and no `Held`. `make_payout` ignores a
+   * failed ledger write, so the reward stayed free and `active` didn't move.
+   */
+  it('a v8 Staked reward with no Staking hold before it leaves the bond alone', async () => {
+    const db = mockStore();
+
+    mockLedger('4000');
+    await handlePositionBonded(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+
+    await handleStakingEvent(
+      namedEvent({
+        section: 'staking',
+        method: 'Rewarded',
+        fields: { stash: ALICE, dest: 'Staked', amount: '150' },
+        blockNumber: '1001',
+        idx: 1,
+        events: payoutEvents(ALICE, '150', false),
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      bonded: BigInt(4000),
       totalRewarded: BigInt(150),
     });
   });

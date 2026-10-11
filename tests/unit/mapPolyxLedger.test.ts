@@ -1126,17 +1126,18 @@ describe('staking — era-dependent, inverted at v8', () => {
       expect(balance(ALICE)).toMatchObject({ frozen: BigInt(4200), bonded: BigInt(4200) });
     });
 
-    it('a restaked Staked reward pins the lock to ledger.total (capped below the gross reward)', async () => {
+    it('a restaked Staked reward raises the lock by the reward, without reading the ledger', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
-      mockLedger('4000000000000'); // at the max-bond cap
+      mockLedger('4000');
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
+      const { ledger } = (globalThis as any).api.query.staking;
+      ledger.mockClear();
 
+      // make_payout does `active += amount; total += amount`, and the lock is `total`
       await handleReward(tupleEvent('staking', 'Reward', ['0xdid', ALICE, '900'], 7_004_001));
 
-      // free still takes the whole reward; the lock is whatever the ledger says, not += 900
-      expect(balance(ALICE)).toMatchObject({
-        free: BigInt(10900),
-        frozen: BigInt('4000000000000'),
-      });
+      expect(balance(ALICE)).toMatchObject({ free: BigInt(10900), frozen: BigInt(4900) });
+      expect(ledger).not.toHaveBeenCalled();
     });
 
     it('v7 Withdrawn pins the lock to the reduced ledger.total', async () => {
@@ -1991,6 +1992,18 @@ describe('v8 reward destinations', () => {
 
     expect(balance(CONTROLLER)?.free).toBe(BigInt(250));
     expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('pays the controller the index holds for the stash, without a chain read', async () => {
+    bondedTo(null);
+    db['StakingPosition'] = { [ALICE]: { id: ALICE, controllerId: CONTROLLER } as Row };
+
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
+    );
+
+    expect(balance(CONTROLLER)?.free).toBe(BigInt(250));
+    expect((globalThis as any).api.query.staking.bonded).not.toHaveBeenCalled();
   });
 
   it('falls back to the stash when the controller cannot be resolved', async () => {

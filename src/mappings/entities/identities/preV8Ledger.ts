@@ -105,11 +105,13 @@ export const handleWithdrawn = async (event: SubstrateEvent): Promise<void> => {
  */
 export const legacyRewardRecipient = async (
   stash: string,
-  blockId: string
+  blockId: string,
+  block?: SubstrateBlock
 ): Promise<{ recipient: string; restaked: boolean }> => {
   const { rewardDestination, rewardDestinationAccount } = await resolveLegacyRewardDestination(
     stash,
-    blockId
+    blockId,
+    block
   );
 
   return {

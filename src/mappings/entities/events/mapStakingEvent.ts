@@ -2,7 +2,14 @@ import { hexAddPrefix } from '@polkadot/util';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, DecodedEvent, optionalField } from '../../../decode';
-import { Account, AnomalyKind, EventIdEnum, StakingEvent, StakingPosition } from '../../../types';
+import {
+  Account,
+  AnomalyKind,
+  EventIdEnum,
+  HoldReason,
+  StakingEvent,
+  StakingPosition,
+} from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
@@ -12,6 +19,7 @@ import {
   RewardDestinationName,
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
+import { holdReasonFromJson } from '../identities/ledgerCore';
 import { currentPayoutEra, currentPayoutValidator } from '../identities/mapPolyxLedger';
 import { refreshPositionFromLedger } from './mapStakingPosition';
 
@@ -146,6 +154,7 @@ const get8xStakingEventDetails = async (
 const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[],
+  block: SubstrateBlock,
   blockId: string
 ): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
@@ -160,7 +169,7 @@ const getLegacyStakingEventDetails = async (
 
     if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
       // The pre-v8 event names only the stash; read the payee from chain storage.
-      const resolved = await resolveLegacyRewardDestination(stashAccount, blockId);
+      const resolved = await resolveLegacyRewardDestination(stashAccount, blockId, block);
       details.rewardDestination = resolved.rewardDestination;
       details.rewardDestinationAccount = resolved.rewardDestinationAccount;
     }
@@ -204,7 +213,7 @@ const getStakingEventDetails = async (
     // one on the way to a branch that never uses the result.
     details = await get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx, blockId);
   } else {
-    details = await getLegacyStakingEventDetails(eventId, params, blockId);
+    details = await getLegacyStakingEventDetails(eventId, params, block, blockId);
   }
 
   if (details.stashAccount && !details.identityId) {
@@ -217,6 +226,38 @@ const getStakingEventDetails = async (
 /**
  * Rolls a reward or slash into the stash's `StakingPosition`. Other staking events leave it alone.
  */
+/**
+ * Whether v8 really compounded the `Staked` reward `event` reports for `stash`.
+ *
+ * `make_payout` mints the reward, then writes the ledger, whose hold emits `balances.Held` with
+ * reason `Staking` for the stash, then emits `Rewarded`. It ignores a failed ledger write, which is
+ * what a stash whose currency hadn't yet migrated to holds gets: its `Rewarded` still says `Staked`,
+ * but the reward stays free and `active` doesn't move.
+ */
+const heldForStaking = (event: SubstrateEvent, stash: string): boolean => {
+  const records = event.block.events ?? [];
+
+  for (let index = event.idx - 1; index >= 0; index -= 1) {
+    const { section, method, data } = records[index].event;
+
+    // the previous reward, or the start of this payout: this reward's own events are all after it
+    if (section === 'staking') {
+      return false;
+    }
+
+    if (
+      section === 'balances' &&
+      method === 'Held' &&
+      data[1]?.toString() === stash &&
+      holdReasonFromJson(data[0]?.toJSON()) === HoldReason.Staking
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const applyToPosition = async (
   position: StakingPosition,
   eventId: EventIdEnum,
@@ -236,13 +277,16 @@ const applyToPosition = async (
       position.rewardDestinationAccountId = details.rewardDestinationAccount;
     }
 
-    // A `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
-    // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
-    // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
-    // and fell further behind the real active bond every era. Other destinations pay out to a
-    // free balance and leave the ledger alone, so they need no read.
-    if (details.rewardDestination === 'Staked') {
-      await refreshPositionFromLedger(position, stashAccount, event);
+    // A `Staked` payee compounds straight into `staking.ledger`: `make_payout` does
+    // `active += amount; total += amount` and nothing else to it, in every runtime (Polymesh
+    // v3.0 to v7.4 `pallets/staking`, and `pallet-staking` on `polymesh-v8-stable2603-7`). So the
+    // bond grows by the reward, with no ledger read; `check-state.ts` check 6 compares positions
+    // with the ledger. Other destinations pay out to a free balance and leave the ledger alone.
+    if (
+      details.rewardDestination === 'Staked' &&
+      (!is8xChain(event.block) || heldForStaking(event, stashAccount))
+    ) {
+      position.bonded += amount;
     }
   } else if (slashEvents.has(eventId)) {
     position.totalSlashed += amount;

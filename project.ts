@@ -578,6 +578,11 @@ const project: SubstrateProject = {
             handler: 'handleSetController',
             filter: { module: 'staking', method: 'setController', success: true },
           },
+          {
+            kind: SubstrateHandlerKind.Call,
+            handler: 'handleRebond',
+            filter: { module: 'staking', method: 'rebond', success: true },
+          },
         ],
       },
     },
