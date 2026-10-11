@@ -32,6 +32,7 @@ import {
 import { upsertEvmAccountMapping } from '../entities/revive/mapEvmAccountMapping';
 import { seedAccountBalances } from '../../seed/accountBalance';
 import { seedHoldings } from '../../seed/holding';
+import { seedStakingPositions } from '../../seed/stakingPosition';
 import { mapBlock } from '../entities/block/mapBlock';
 import { writeIndexOrigin } from '../indexOrigin';
 
@@ -382,6 +383,9 @@ const genesisHandler = async (block: SubstrateBlock): Promise<void> => {
   // opening asset-holding snapshot — Holding is rebuilt from the movement stream, so it needs
   // the same genesis baseline (docs/implementation/03-holdings-nfts.md)
   await seedHoldings({ blockId: genesisBlock, datetime });
+
+  // genesis stakers emit no `Bonded`, which is otherwise what creates a position
+  await seedStakingPositions({ blockId: genesisBlock, datetime });
 
   // a genesis replay derives everything, so it vouches for every domain
   await writeIndexOrigin(block, false);

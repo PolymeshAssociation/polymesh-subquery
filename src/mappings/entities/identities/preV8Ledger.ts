@@ -5,22 +5,34 @@ import {
   AccountBalance,
   AnomalyKind,
   EventIdEnum,
+  HoldReason,
   MovementKind,
   PolyxEntry,
   PolyxPool,
   Proposal,
   ProposalVote,
 } from '../../../types';
-import { getAllByFields, getProposerValue, getTextValue, padNumericId } from '../../../utils';
+import {
+  getAllByFields,
+  getBigIntValue,
+  getProposerValue,
+  getTextValue,
+  padNumericId,
+} from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
-import { readStakingLock, resolveLegacyRewardDestination } from '../../../utils/staking';
+import {
+  readStakingLedger,
+  readStakingLock,
+  resolveLegacyRewardDestination,
+} from '../../../utils/staking';
 import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import { deferredSlashesBefore } from '../../../utils/deferredSlashes';
 import {
+  adjustHold,
   findBlockEntries,
   findExtrinsicEntries,
   firstText,
@@ -165,14 +177,36 @@ export const syncMigratedStakingLock = async (who: string, blockEventId: string)
   await setLock(who, STAKING_LOCK_ID, onChain, blockEventId, 'staking');
 };
 
-/** `staking.CurrencyMigrated { stash, force_withdraw }`: v8 has removed the stash's legacy lock. */
+/**
+ * `staking.CurrencyMigrated { stash, force_withdraw }`: v8 has removed the stash's legacy lock.
+ *
+ * A stash that can't hold its whole stake has its ledger cut by `force_withdraw`, and its `Staking`
+ * hold set to the new total. That hold isn't always the old one plus the `Held` the migration
+ * emits: where the stash's old holds no longer decode (testnet's removed `contracts` pallet), the
+ * chain rewrites the list with only the new hold, and the rest stays reserved under no hold. So the
+ * hold is set from the ledger, which a force-withdraw is the only case to need.
+ */
 export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
-  const stash = stakingStash(decodeEvent(event));
+  const { blockId, blockEventId } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const stash = stakingStash(decoded);
 
-  if (stash) {
-    await syncMigratedStakingLock(stash, blockEventId);
+  if (!stash) {
+    return;
   }
+
+  await syncMigratedStakingLock(stash, blockEventId);
+
+  if (!decoded.forceWithdraw || getBigIntValue(decoded.forceWithdraw) === BigInt(0)) {
+    return;
+  }
+
+  const { total } = await readStakingLedger(stash, blockId);
+  const held =
+    (await AccountBalance.get(stash))?.holds?.find(hold => hold.reason === HoldReason.Staking)
+      ?.amount ?? BigInt(0);
+
+  await adjustHold(stash, HoldReason.Staking, total - held, blockEventId);
 };
 
 // ---------------------------------------------------------------------------------------------

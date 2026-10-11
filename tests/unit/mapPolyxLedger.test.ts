@@ -460,6 +460,55 @@ describe('Event → pool transition', () => {
     (globalThis as any).api.query = {};
   });
 
+  /**
+   * Testnet block 25,152,521: a stash that can't hold its whole stake has its ledger cut to what it
+   * can, and its `Staking` hold set to the new total. Its old holds (a `Staking` hold and a hold
+   * of the removed `contracts` pallet) no longer decoded, so the chain rewrote the list with only
+   * the new hold, and the rest stays reserved under no hold.
+   */
+  it('CurrencyMigrated with a force-withdraw: sets the Staking hold to the cut ledger total', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '30000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '23900' })
+    );
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '24' })
+    );
+    const ledger = jest.fn().mockResolvedValue({ toJSON: () => ({ total: '24', active: '24' }) });
+    (globalThis as any).api.query = {
+      staking: { bonded: jest.fn().mockResolvedValue({ toJSON: () => null }), ledger },
+    };
+
+    await handleCurrencyMigrated(
+      balancesEvent('CurrencyMigrated', { stash: ALICE, forceWithdraw: '23871' })
+    );
+
+    expect(balance(ALICE)).toMatchObject({
+      reserved: BigInt(23924),
+      bonded: BigInt(24),
+      otherReserved: BigInt(23900),
+    });
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(24) }]);
+    (globalThis as any).api.query = {};
+  });
+
+  it('CurrencyMigrated without a force-withdraw reads no ledger', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
+    );
+    const ledger = jest.fn();
+    (globalThis as any).api.query = { staking: { ledger } };
+
+    await handleCurrencyMigrated(
+      balancesEvent('CurrencyMigrated', { stash: ALICE, forceWithdraw: '0' })
+    );
+
+    expect(ledger).not.toHaveBeenCalled();
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: BigInt(900) }]);
+    (globalThis as any).api.query = {};
+  });
+
   it('Held{Staking}: decodes the real v8 composite RuntimeHoldReason, not just a bare string', async () => {
     // `{ staking: 'Staking' }` stringifies to `'{"staking":"Staking"}'`, which matched no
     // HoldReason member — so every v8 hold landed as `Unknown` and `bonded` was always 0.

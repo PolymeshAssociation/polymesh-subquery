@@ -1,7 +1,7 @@
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { StakingPosition } from '../../../types';
-import { blockTime, getTextValue } from '../../../utils';
+import { blockTime, getBigIntValue, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { readStakingLedger, resolveController } from '../../../utils/staking';
 import { ensureTrueSpecVersion } from '../../trueSpec';
@@ -225,6 +225,32 @@ export const handleRebond = async (extrinsic: SubstrateExtrinsic): Promise<void>
   await refreshPositionFromLedger(position, position.id, closing);
 
   position.updatedEventId = extractArgs(closing).blockEventId;
+
+  await position.save();
+};
+
+/**
+ * `staking.CurrencyMigrated` with a non-zero `force_withdraw`: v8 cut the stash's ledger to what it
+ * could hold, emitting nothing else for the position. Often by 1, the amount the chain keeps free.
+ */
+export const handlePositionCurrencyMigrated = async (event: SubstrateEvent): Promise<void> => {
+  const { blockEventId } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const stash = getTextValue(decoded.stash);
+
+  if (!stash || !decoded.forceWithdraw || getBigIntValue(decoded.forceWithdraw) === BigInt(0)) {
+    return;
+  }
+
+  const position = await StakingPosition.get(stash);
+
+  if (!position) {
+    return;
+  }
+
+  await refreshPositionFromLedger(position, stash, event);
+
+  position.updatedEventId = blockEventId;
 
   await position.save();
 };

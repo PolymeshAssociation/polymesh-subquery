@@ -328,7 +328,7 @@ const readLedger = async (stash: string, blockId: string): Promise<StakingLedger
 };
 
 /** A `staking.ledger` value's amounts; all zero for a killed (fully withdrawn) ledger. */
-const ledgerSnapshot = (
+export const ledgerSnapshot = (
   ledger: {
     total?: string | number;
     active?: string | number;

@@ -7,6 +7,7 @@ import {
   handlePositionBonded,
   handlePositionUnbonded,
   handlePositionWithdrawn,
+  handlePositionCurrencyMigrated,
   handleRebond,
   handleSetController,
 } from '../../src/mappings/entities/events/mapStakingPosition';
@@ -413,5 +414,57 @@ describe('handleRebond', () => {
     await handleRebond(rebondCall('1893035'));
 
     expect(db.StakingPosition).toBeUndefined();
+  });
+});
+
+describe('handlePositionCurrencyMigrated', () => {
+  it('re-reads a position whose ledger the v8 migration cut', async () => {
+    const db = mockStore({
+      StakingPosition: {
+        [ALICE]: {
+          id: ALICE,
+          stashId: ALICE,
+          controllerId: ALICE,
+          bonded: BigInt(7040),
+          unbonding: BigInt(0),
+        },
+      },
+    });
+    mockLedger('7039', [], ALICE);
+
+    await handlePositionCurrencyMigrated(
+      namedEvent({
+        section: 'staking',
+        method: 'CurrencyMigrated',
+        fields: { stash: ALICE, forceWithdraw: '1' },
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({ bonded: BigInt(7039), unbonding: BigInt(0) });
+  });
+
+  it('leaves a position alone when nothing was withdrawn', async () => {
+    const db = mockStore({
+      StakingPosition: {
+        [ALICE]: {
+          id: ALICE,
+          stashId: ALICE,
+          controllerId: ALICE,
+          bonded: BigInt(7040),
+          unbonding: BigInt(0),
+        },
+      },
+    });
+    mockLedger('1', [], ALICE);
+
+    await handlePositionCurrencyMigrated(
+      namedEvent({
+        section: 'staking',
+        method: 'CurrencyMigrated',
+        fields: { stash: ALICE, forceWithdraw: '0' },
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({ bonded: BigInt(7040) });
   });
 });
