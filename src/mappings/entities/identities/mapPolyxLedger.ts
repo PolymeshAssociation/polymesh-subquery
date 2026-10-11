@@ -1117,15 +1117,15 @@ export const currentPayoutValidator = (blockId: string): string | undefined =>
 const rewardRecipient = async (
   decoded: Record<string, Codec>,
   stash: string | undefined,
-  is8x: boolean,
+  block: SubstrateBlock,
   blockId: string
 ): Promise<{ recipient: string; restaked: boolean } | undefined> => {
   if (!stash) {
     return undefined;
   }
 
-  if (!is8x) {
-    return legacyRewardRecipient(stash, blockId);
+  if (!is8xChain(block)) {
+    return legacyRewardRecipient(stash, blockId, block);
   }
 
   // `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
@@ -1161,7 +1161,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
   const stash = stakingStash(decoded);
   const amount = amountOf(decoded);
   const eraIndex = currentPayoutEra(args.blockId);
-  const resolved = await rewardRecipient(decoded, stash, is8xChain(args.block), args.blockId);
+  const resolved = await rewardRecipient(decoded, stash, args.block, args.blockId);
 
   if (!resolved) {
     return;

@@ -1,4 +1,6 @@
 import type { AnyJson } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
+import { is8xChain } from './common';
 
 /**
  * The chain's own `RewardDestination` variants, plus the placeholder recorded when the payee
@@ -112,6 +114,7 @@ const cachesFor = (
 /** Test hook — a suite re-mocking staking storage within one block must clear. */
 export const __resetStakingCaches = (): void => {
   cacheBlock = undefined;
+  prefetching = undefined;
   payeeCache = new Map();
   controllerCache = new Map();
   ledgerCache = new Map();
@@ -130,9 +133,15 @@ export const __resetStakingCaches = (): void => {
  */
 export const resolveLegacyRewardDestination = async (
   stash: string,
-  blockId: string
+  blockId: string,
+  block?: SubstrateBlock
 ): Promise<LegacyRewardDestination> => {
   const payees = cachesFor(blockId).payees;
+
+  if (block && !payees.has(stash)) {
+    await prefetchPayees(block, blockId);
+  }
+
   const cached = payees.get(stash);
   if (cached) {
     return cached;
@@ -144,35 +153,102 @@ export const resolveLegacyRewardDestination = async (
     return { rewardDestination: 'LegacyUnknown' };
   }
 
-  const payee = await api.query.staking.payee(stash);
-  const { destination, account } = readRewardDestination(payee.toJSON());
+  const payee = (await api.query.staking.payee(stash)).toJSON();
+  const controller =
+    readRewardDestination(payee).destination === 'Controller'
+      ? (await api.query.staking.bonded(stash)).toJSON()
+      : undefined;
 
-  let result: LegacyRewardDestination;
-
-  if (destination === 'Staked' || destination === 'Stash') {
-    result = {
-      rewardDestination: destination,
-      rewardDestinationAccount: stash,
-    };
-  } else if (destination === 'Controller') {
-    const controller = (await api.query.staking.bonded(stash)).toJSON();
-
-    result = {
-      rewardDestination: 'Controller',
-      rewardDestinationAccount: typeof controller === 'string' ? controller : undefined,
-    };
-  } else if (destination === 'Account') {
-    result = {
-      rewardDestination: 'Account',
-      rewardDestinationAccount: account,
-    };
-  } else {
-    result = { rewardDestination: 'None' };
-  }
-
+  const result = legacyDestination(stash, payee, controller);
   payees.set(stash, result);
 
   return result;
+};
+
+/** Where a reward to `stash` went, from its `staking.payee`, and `staking.bonded` for a controller. */
+const legacyDestination = (
+  stash: string,
+  payee: AnyJson,
+  controller: AnyJson | undefined
+): LegacyRewardDestination => {
+  const { destination, account } = readRewardDestination(payee);
+
+  if (destination === 'Staked' || destination === 'Stash') {
+    return { rewardDestination: destination, rewardDestinationAccount: stash };
+  }
+  if (destination === 'Controller') {
+    return {
+      rewardDestination: 'Controller',
+      rewardDestinationAccount: typeof controller === 'string' ? controller : undefined,
+    };
+  }
+  if (destination === 'Account') {
+    return { rewardDestination: 'Account', rewardDestinationAccount: account };
+  }
+  return { rewardDestination: 'None' };
+};
+
+let prefetching: { blockId: string; done: Promise<void> } | undefined;
+
+/**
+ * Reads, for every stash a pre-v8 payout block rewards, its payee in one `staking.payee.multi`,
+ * and the controller of those paid to their controller in one `staking.bonded.multi`. The
+ * handlers then find each in the per-block cache.
+ *
+ * Every reward in a payout block is a different stash, so the per-block cache alone saved nothing,
+ * and each reward waited on its own round-trip. Pre-v8 `Reward`/`Rewarded` are
+ * `(identity, stash, amount)`. A v8 `Rewarded` names its destination, so v8 blocks are left alone.
+ */
+const prefetchPayees = (block: SubstrateBlock, blockId: string): Promise<void> => {
+  // every caller in the block waits on the one read, including callers that arrive while it runs;
+  // a failed read fails the block and is forgotten, so SubQuery's retry of the block reads again
+  if (prefetching?.blockId !== blockId) {
+    const done = is8xChain(block)
+      ? Promise.resolve()
+      : readPayees(block, blockId).catch(error => {
+          prefetching = undefined;
+          throw error;
+        });
+    prefetching = { blockId, done };
+  }
+  return prefetching.done;
+};
+
+const readPayees = async (block: SubstrateBlock, blockId: string): Promise<void> => {
+  const payees = cachesFor(blockId).payees;
+  const stashes = [
+    ...new Set(
+      (block.events ?? [])
+        .filter(
+          ({ event }) =>
+            event.section === 'staking' &&
+            (event.method === 'Reward' || event.method === 'Rewarded') &&
+            event.data.length === 3
+        )
+        .map(({ event }) => event.data[1].toString())
+    ),
+  ].filter(stash => !payees.has(stash));
+
+  const read = api.query.staking?.payee as unknown as
+    | { multi?: (keys: string[]) => Promise<{ toJSON(): AnyJson }[]> }
+    | undefined;
+  if (stashes.length < 2 || typeof read?.multi !== 'function') {
+    return;
+  }
+
+  const raw = (await read.multi(stashes)).map(payee => payee.toJSON());
+  const destinations = raw.map(payee => readRewardDestination(payee).destination);
+
+  // a `Controller` payee is paid to `bonded(stash)`
+  const viaController = stashes.filter((_, index) => destinations[index] === 'Controller');
+  const bonded = viaController.length
+    ? (await api.query.staking.bonded.multi(viaController)).map(controller => controller.toJSON())
+    : [];
+  const controllerOf = new Map(viaController.map((stash, index) => [stash, bonded[index]]));
+
+  stashes.forEach((stash, index) =>
+    payees.set(stash, legacyDestination(stash, raw[index], controllerOf.get(stash)))
+  );
 };
 
 /**
@@ -248,6 +324,17 @@ const readLedger = async (stash: string, blockId: string): Promise<StakingLedger
     unlocking?: { value?: string | number; era?: number }[];
   } | null;
 
+  return ledgerSnapshot(ledger);
+};
+
+/** A `staking.ledger` value's amounts; all zero for a killed (fully withdrawn) ledger. */
+const ledgerSnapshot = (
+  ledger: {
+    total?: string | number;
+    active?: string | number;
+    unlocking?: { value?: string | number; era?: number }[];
+  } | null
+): StakingLedgerSnapshot => {
   if (!ledger) {
     return { total: BigInt(0), active: BigInt(0), unlocking: [] };
   }
