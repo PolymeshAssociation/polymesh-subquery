@@ -237,13 +237,14 @@ const applyToPosition = async (
       position.rewardDestinationAccountId = details.rewardDestinationAccount;
     }
 
-    // A `Staked` payee compounds straight into `staking.ledger` — `make_payout` does
-    // `active += amount; total += amount` and emits only `Rewarded`, no `Bonded`. Without this
-    // the position's `bonded` stayed at whatever the last Bonded/Unbonded/Withdrawn left it at
-    // and fell further behind the real active bond every era. Other destinations pay out to a
-    // free balance and leave the ledger alone, so they need no read.
+    // A `Staked` payee compounds straight into `staking.ledger`: `make_payout` does
+    // `active += amount; total += amount` and nothing else to it, in every runtime (Polymesh
+    // v3.0 to v7.4 `pallets/staking`, and `pallet-staking` on `polymesh-v8-stable2603-7`), and
+    // emits only `Rewarded`. So the bond grows by the reward, with no ledger read; `check-state.ts`
+    // check 6 compares positions with the ledger. Other destinations pay out to a free balance and
+    // leave the ledger alone.
     if (details.rewardDestination === 'Staked') {
-      await refreshPositionFromLedger(position, stashAccount, event);
+      position.bonded += amount;
     }
   } else if (slashEvents.has(eventId)) {
     position.totalSlashed += amount;

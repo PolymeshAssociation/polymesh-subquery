@@ -12,6 +12,7 @@ import {
   MovementKind,
   PolyxEntry,
   PolyxPool,
+  StakingPosition,
 } from '../../../types';
 import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
@@ -43,6 +44,7 @@ import {
   recentEventIds,
   recomputeDerived,
   relabelEntry,
+  STAKING_LOCK_ID,
   stakingStash,
   startOfUtcDay,
 } from './ledgerCore';
@@ -1138,10 +1140,12 @@ const rewardRecipient = async (
     return { recipient: account, restaked: false };
   }
 
-  // `make_payout` still honours the deprecated `Controller` payee and pays `bonded(stash)`. A
-  // stash with no controller resolves to itself; a read that fails fails the block.
+  // `make_payout` still honours the deprecated `Controller` payee and pays `bonded(stash)`. The
+  // index tracks the controller (`Bonded`, `set_controller`), so it is read from the stash's
+  // position, and from chain only for a stash the index has no position for.
   if (destination === 'Controller') {
-    return { recipient: await resolveController(stash, blockId), restaked: false };
+    const indexed = (await StakingPosition.get(stash))?.controllerId;
+    return { recipient: indexed ?? (await resolveController(stash, blockId)), restaked: false };
   }
 
   return { recipient: stash, restaked: false };
@@ -1197,9 +1201,10 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
     await creditFromReserve(args, recipient, amount, MovementKind.StakingReward, { eraIndex });
   }
 
-  // Pre-v8 `Staked` payee: the reward is added to the staking lock in the same step.
+  // Pre-v8 `Staked` payee: `make_payout` adds the reward to the ledger's `total`, and the staking
+  // lock is set to that total, so the lock grows by the reward, with no read.
   if (restaked) {
-    await syncStakingLock(recipient, args);
+    await adjustLock(recipient, STAKING_LOCK_ID, amount, args.blockEventId, 'staking');
   }
 };
 

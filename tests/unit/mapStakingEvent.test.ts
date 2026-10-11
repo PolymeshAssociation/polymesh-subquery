@@ -264,7 +264,7 @@ describe('a ledger change with no Bonded event still refreshes the position', ()
     };
   };
 
-  it('a compounded Staked reward re-reads the ledger', async () => {
+  it('a compounded Staked reward adds to the bond on v8, without reading the ledger', async () => {
     const db = mockStore();
 
     mockLedger('4000');
@@ -273,8 +273,10 @@ describe('a ledger change with no Bonded event still refreshes the position', ()
     );
     expect(db.StakingPosition[ALICE].bonded).toBe(BigInt(4000));
 
-    // the payout compounded 150 into the bond; only `Rewarded` is emitted
+    // the payout compounded 150 into the bond; only `Rewarded` is emitted, and make_payout's
+    // `active += amount` is the whole change, so nothing is read
     mockLedger('4150');
+    const { ledger } = (globalThis as any).api.query.staking;
     await handleStakingEvent(
       namedEvent({
         section: 'staking',
@@ -288,6 +290,7 @@ describe('a ledger change with no Bonded event still refreshes the position', ()
       bonded: BigInt(4150),
       totalRewarded: BigInt(150),
     });
+    expect(ledger).not.toHaveBeenCalled();
   });
 
   it('a slash re-reads the ledger', async () => {
