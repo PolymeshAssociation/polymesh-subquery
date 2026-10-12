@@ -8,6 +8,8 @@ import {
   handlePositionUnbonded,
   handlePositionWithdrawn,
   handlePositionCurrencyMigrated,
+  handleBatchedStakingCalls,
+  handlePositionAfterProposal,
   handleRebond,
   handleSetController,
 } from '../../src/mappings/entities/events/mapStakingPosition';
@@ -466,5 +468,198 @@ describe('handlePositionCurrencyMigrated', () => {
     );
 
     expect(db.StakingPosition[ALICE]).toMatchObject({ bonded: BigInt(7040) });
+  });
+});
+
+describe('staking calls nested in a batch or a multisig proposal', () => {
+  const call = (section: string, method: string, args: unknown[] = []) => ({
+    section,
+    method,
+    args,
+  });
+
+  const batchCall = (blockNumber: string, method: unknown) =>
+    ({
+      idx: 1,
+      block: {
+        block: {
+          header: {
+            number: { toString: () => blockNumber },
+            parentHash: '0xparent',
+            hash: { toHex: () => `0xhash${blockNumber}` },
+          },
+        },
+        timestamp: new Date('2024-01-01T00:00:00Z'),
+        specVersion: 7_001_000,
+        events: [
+          {
+            phase: { isApplyExtrinsic: true, asApplyExtrinsic: { toNumber: () => 1 } },
+            event: {
+              section: 'system',
+              method: 'ExtrinsicSuccess',
+              data: [],
+              meta: { fields: [] },
+            },
+          },
+        ],
+      },
+      extrinsic: { signer: { toString: () => ALICE }, method },
+      success: true,
+    } as any);
+
+  const runtimeVersion = () => {
+    (globalThis as any).api.rpc = {
+      state: {
+        getRuntimeVersion: jest.fn(async () => ({ specVersion: { toNumber: () => 7_001_000 } })),
+      },
+    };
+  };
+
+  const alicePosition = () => ({
+    StakingPosition: {
+      [ALICE]: {
+        id: ALICE,
+        stashId: ALICE,
+        controllerId: 'CONTROLLER_A',
+        bonded: BigInt(4200),
+        unbonding: BigInt(0),
+      },
+    },
+  });
+
+  it("re-reads the signer's position after a batch that moved its controller", async () => {
+    runtimeVersion();
+    const db = mockStore(alicePosition());
+    mockLedger('4200', [], 'CONTROLLER_B');
+
+    await handleBatchedStakingCalls(
+      batchCall(
+        '17569823',
+        call('utility', 'batchAll', [[call('staking', 'setController', ['CONTROLLER_B'])]])
+      )
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({
+      controllerId: 'CONTROLLER_B',
+      updatedEventId: '0017569823/0000000000',
+    });
+  });
+
+  it('finds the call inside a batch nested in a batch', async () => {
+    runtimeVersion();
+    const db = mockStore(alicePosition());
+    mockLedger('4200', [], 'CONTROLLER_B');
+
+    const inner = call('utility', 'batch', [[call('staking', 'setController', ['CONTROLLER_B'])]]);
+    await handleBatchedStakingCalls(batchCall('17569824', call('utility', 'batch', [[inner]])));
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
+  });
+
+  it('reads nothing for a batch with no such call', async () => {
+    runtimeVersion();
+    const db = mockStore(alicePosition());
+    mockLedger('4200', [], 'CONTROLLER_B');
+    const { bonded } = (globalThis as any).api.query.staking;
+
+    await handleBatchedStakingCalls(
+      batchCall('17569825', call('utility', 'batch', [[call('balances', 'transfer', [])]]))
+    );
+
+    expect(bonded).not.toHaveBeenCalled();
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
+  });
+
+  const proposal = (id: string, proposals: { module: string; call: string; args: string }[]) => ({
+    [`${ALICE}/${id}`]: {
+      id: `${ALICE}/${id}`,
+      params: { isBatch: false, isBridge: false, proposals },
+    },
+  });
+
+  const executed = (proposalId: string) =>
+    namedEvent({
+      section: 'multiSig',
+      method: 'ProposalExecuted',
+      fields: { callerDid: '0xdid', multisig: ALICE, proposalId, result: { ok: null } },
+      blockNumber: '17569830',
+    });
+
+  it('re-reads a multisig stash position when its executed proposal set its controller', async () => {
+    const db = mockStore({
+      ...alicePosition(),
+      MultiSigProposal: proposal('7', [{ module: 'staking', call: 'set_controller', args: '{}' }]),
+    });
+    mockLedger('4200', [], 'CONTROLLER_B');
+
+    await handlePositionAfterProposal(executed('7'));
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
+  });
+
+  it('finds a set_controller in a batch inside the proposal', async () => {
+    // the call's `toHuman()` args, as `handleMultiSigProposalAdded` stores them
+    const nested = [
+      { args: { controller: 'CONTROLLER_B' }, method: 'setController', section: 'staking' },
+    ];
+    const db = mockStore({
+      ...alicePosition(),
+      MultiSigProposal: proposal('9', [
+        { module: 'utility', call: 'batch', args: JSON.stringify({ calls: nested }) },
+      ]),
+    });
+    mockLedger('4200', [], 'CONTROLLER_B');
+
+    await handlePositionAfterProposal(executed('9'));
+
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
+  });
+
+  it('reads nothing after a proposal that made no such call', async () => {
+    const db = mockStore({
+      ...alicePosition(),
+      MultiSigProposal: proposal('10', [{ module: 'balances', call: 'transfer', args: '{}' }]),
+    });
+    mockLedger('4200', [], 'CONTROLLER_B');
+    const { bonded } = (globalThis as any).api.query.staking;
+
+    await handlePositionAfterProposal(executed('10'));
+
+    expect(bonded).not.toHaveBeenCalled();
+    expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
+  });
+
+  it("re-reads a multisig stash's position when the index has no record of the proposal", async () => {
+    const db = mockStore(alicePosition());
+    mockLedger('4200', [], 'CONTROLLER_B');
+
+    await handlePositionAfterProposal(
+      namedEvent({
+        section: 'multiSig',
+        method: 'ProposalExecuted',
+        fields: { callerDid: '0xdid', multisig: ALICE, proposalId: '7', result: { ok: null } },
+        blockNumber: '17569830',
+      })
+    );
+
+    expect(db.StakingPosition[ALICE]).toMatchObject({ controllerId: 'CONTROLLER_B' });
+  });
+
+  it('does nothing for a multisig that neither stakes nor controls a stash', async () => {
+    const db = mockStore();
+    mockLedger('4200', [], 'CONTROLLER_B');
+    ((globalThis as any).api.query.staking.ledger as jest.Mock).mockResolvedValue({
+      toJSON: () => null,
+    });
+
+    await handlePositionAfterProposal(
+      namedEvent({
+        section: 'multiSig',
+        method: 'ProposalExecuted',
+        fields: { callerDid: '0xdid', multisig: ALICE, proposalId: '8', result: { ok: null } },
+      })
+    );
+
+    expect(db.StakingPosition).toBeUndefined();
   });
 });

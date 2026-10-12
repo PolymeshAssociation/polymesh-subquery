@@ -1,6 +1,6 @@
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { StakingPosition } from '../../../types';
+import { MultiSigProposal, StakingPosition } from '../../../types';
 import { blockTime, getBigIntValue, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { readStakingLedger, resolveController } from '../../../utils/staking';
@@ -185,6 +185,16 @@ export const handleSetController = async (extrinsic: SubstrateExtrinsic): Promis
   await position.save();
 };
 
+/** Whether extrinsic `idx` of `block` emitted `staking.Bonded`, which a `rebond` does from v7 */
+const emittedBonded = (block: SubstrateBlock, idx: number): boolean =>
+  (block.events ?? []).some(
+    ({ phase, event }) =>
+      phase.isApplyExtrinsic &&
+      phase.asApplyExtrinsic.toNumber() === idx &&
+      event.section === 'staking' &&
+      event.method === 'Bonded'
+  );
+
 /**
  * `staking.rebond` — moves unbonding chunks back to `active`, and before v7 emits nothing.
  *
@@ -199,15 +209,7 @@ export const handleSetController = async (extrinsic: SubstrateExtrinsic): Promis
 export const handleRebond = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   await ensureTrueSpecVersion(extrinsic.block);
 
-  const emittedBonded = (extrinsic.block.events ?? []).some(
-    ({ phase, event }) =>
-      phase.isApplyExtrinsic &&
-      phase.asApplyExtrinsic.toNumber() === extrinsic.idx &&
-      event.section === 'staking' &&
-      event.method === 'Bonded'
-  );
-
-  if (emittedBonded) {
+  if (emittedBonded(extrinsic.block, extrinsic.idx)) {
     return;
   }
 
@@ -256,4 +258,114 @@ export const handlePositionCurrencyMigrated = async (event: SubstrateEvent): Pro
   position.updatedEventId = blockEventId;
 
   await position.save();
+};
+
+interface CallLike {
+  section: string;
+  method: string;
+  args: unknown[];
+}
+
+const isCall = (value: unknown): value is CallLike =>
+  typeof (value as CallLike)?.section === 'string' &&
+  typeof (value as CallLike)?.method === 'string' &&
+  Array.isArray((value as CallLike)?.args);
+
+/** Whether `call`, or any call nested in its arguments, is a `staking.set_controller` */
+const setsController = (call: unknown): boolean => {
+  if (Array.isArray(call)) {
+    return call.some(setsController);
+  }
+  if (!isCall(call)) {
+    return false;
+  }
+  return (
+    (call.section === 'staking' && call.method === 'setController') ||
+    call.args.some(setsController)
+  );
+};
+
+/**
+ * Re-reads the staking position `account`'s call could have changed: its own, as a stash, or its
+ * stash's, as a controller. Nothing when it has neither.
+ */
+const refreshPositionOf = async (account: string, event: SubstrateEvent): Promise<void> => {
+  let position = await StakingPosition.get(account);
+
+  if (!position) {
+    const ledger = (await api.query.staking.ledger(account)).toJSON() as { stash?: string } | null;
+    position = ledger?.stash ? await StakingPosition.get(ledger.stash) : undefined;
+  }
+
+  if (!position) {
+    return;
+  }
+
+  await refreshPositionFromLedger(position, position.id, event);
+
+  position.updatedEventId = extractArgs(event).blockEventId;
+
+  await position.save();
+};
+
+/**
+ * A `utility` batch holding a `staking.set_controller`, which emits no event in any runtime and,
+ * nested, never reaches `handleSetController`: call handlers only see top-level calls. Mainnet 17,569,814–17,569,830 moved three stashes'
+ * controllers this way. The batch's signer is the account that made the calls.
+ */
+export const handleBatchedStakingCalls = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+  await ensureTrueSpecVersion(extrinsic.block);
+
+  if (!setsController(extrinsic.extrinsic.method)) {
+    return;
+  }
+
+  const closing = await indexClosingEvent(extrinsic);
+
+  if (closing) {
+    await refreshPositionOf(extrinsic.extrinsic.signer.toString(), closing);
+  }
+};
+
+/**
+ * Whether a multisig proposal sets a controller, from its indexed `MultiSigProposal`: each call by
+ * module and name, and a nested batch's calls in its `args` text. `undefined` when the index holds
+ * no calls for it.
+ */
+const proposalSetsController = async (
+  multisig: string,
+  proposalId: string | undefined
+): Promise<boolean | undefined> => {
+  if (proposalId === undefined) {
+    return undefined;
+  }
+  const proposals = (await MultiSigProposal.get(`${multisig}/${Number(proposalId)}`))?.params
+    ?.proposals;
+  if (!proposals?.length) {
+    return undefined;
+  }
+
+  return proposals.some(
+    ({ module, call, args }) =>
+      (module === 'staking' && call === 'set_controller') ||
+      (args.includes('"section":"staking"') && args.includes('"method":"setController"'))
+  );
+};
+
+/**
+ * `multiSig.ProposalExecuted`: the proposal ran as the multisig account. When it made a
+ * `set_controller`, which emits no event, the multisig's position is re-read: mainnet
+ * 17,569,814–17,569,830 moved three multisig stashes' controllers this way. A proposal the index
+ * holds no calls for is re-read to be safe.
+ */
+export const handlePositionAfterProposal = async (event: SubstrateEvent): Promise<void> => {
+  const decoded = decodeEvent(event);
+  const multisig = getTextValue(decoded.multisig);
+
+  if (
+    multisig &&
+    (await proposalSetsController(multisig, getTextValue(decoded.proposalId))) !== false
+  ) {
+    await refreshPositionOf(multisig, event);
+  }
 };
