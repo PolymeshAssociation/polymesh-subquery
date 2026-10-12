@@ -166,8 +166,17 @@ export interface Resolver<T> {
   entity: string;
   /** storage items read, as `section.item`, for the Task 1 guard */
   reads: string[];
-  /** the row as the chain held it when the block began, saved; `undefined` if the chain has none */
+  /**
+   * The row's fields as the chain held them when the block began, without saving anything;
+   * `undefined` if the chain has none. `resolve` saves what this returns, and `check-entities.ts`
+   * (Task 12) compares it with the indexed row, so one reader serves both.
+   */
   fromChain(id: string, ctx: ResolveContext): Promise<T | undefined>;
+  /**
+   * Every id the chain holds for this entity at the block, where its storage can be scanned. Used
+   * by the start-block scans, and by Task 12 to find rows the index is missing.
+   */
+  enumerate?(ctx: ResolveContext): Promise<string[]>;
   /**
    * The row carries no value the index accumulates from events, so the state at the end of the
    * block is also a correct source (Review focus 1).
@@ -179,6 +188,7 @@ export const registerResolver: <T>(resolver: Resolver<T>) => void;
 export const resolve: <T>(entity: string, id: string, ctx: ResolveContext) => Promise<T | undefined>;
 export const contextOf: (event: SubstrateEvent) => ResolveContext; // from extractArgs
 export const allResolverReads: () => string[];
+export const allResolvers: () => Resolver<unknown>[]; // for Task 12's check
 ```
 
 `resolve` does, in order:
@@ -485,16 +495,48 @@ Each resolves its `CorporateAction` or `Asset` first.
 **Files:**
 - Modify: `src/mappings/indexOrigin.ts`: every domain's reason now says seeded or resolved. What remains in `UNSEEDED_FROM_START_BLOCK` is history only.
 - Modify: `docs/implementation/10-partial-index.md`, `docs/reference/consumer-queries.md` (what a partial index guarantees)
-- Modify: `scripts/check-state.ts`: if any entity in Tasks 4–10 has no check yet, add one for those whose chain state is cheap to compare (venues, in-flight instructions, multisig signers, agent groups).
 
 - [ ] **Step 1:** Run the empty-store harness. Every handler test fixture runs with the store mocked empty and every resolver returning `undefined`. Each must complete without throwing, and record an anomaly or skip. Add this as `tests/unit/emptyStore.test.ts`, iterating the handler map that `check-handlers.ts` already builds.
 - [ ] **Step 2: Dev server, partial runs.** Three start blocks per chain, each in a different runtime era:
   - **Testnet:** one before v6, one in v6–v7, and 25,500,000.
   - **Mainnet:** one before v7, one in v7, and the v8 head minus 100,000.
   - **Each run** goes 50,000 blocks.
-  - **Expect:** no failed blocks; `MissingReferencedEntity` only with pruned-storage reasons; `check-state.ts` 0 differences at the start + 1,000 and at the end.
+  - **Expect:** no failed blocks; `MissingReferencedEntity` only with pruned-storage reasons; `check-state.ts`, `check-entities.ts` and `check-blocks.ts` all at 0 differences at the start + 1,000 and at the end.
 - [ ] **Step 3: Dev server, genesis resync** on the same build: no change from the last clean run (0 drift, 0 anomalies on mainnet). A resolver firing on a genesis replay is a gap and shows up as an anomaly.
 - [ ] **Step 4: Commit** `docs: ✏️ describe what a partial index guarantees`.
+
+---
+
+### Task 12: Every resolver is also a state check
+
+`check-state.ts` compares balances, holdings, staking, locks, holds and assets with the chain, each by a comparison written for it. Every other entity a handler maintains goes unchecked: identities and keys, portfolios, claims, multisigs, agent groups, compliance, pending instructions. The resolvers this plan writes already read exactly that state, at any block and under any runtime. So the check comes free: build each indexed row from the chain at the same block, and compare.
+
+**Files:**
+- Create: `scripts/check-entities.ts`
+- Create: `scripts/lib/resolverHost.ts`: runs resolvers outside the node. It sets the globals they use (`api`, `store` read-only, `logger`) over an archive-node `ApiPromise`, and builds the `ResolveContext` for "the state when block N+1 began", which is the state after block N.
+- Test: `tests/unit/checkEntities.test.ts`
+
+**Interfaces:**
+- Consumes: the registry (`allResolvers()`, added in Task 2 beside `allResolverReads`), each resolver's `fromChain` and `enumerate`.
+- Produces: `yarn ts-node scripts/check-entities.ts --rpc <archive node> [--block N] [--entity Name…] [--show 20]`, which uses the same `DB_*` env, output format and exit code as `check-state.ts`.
+
+**Rules:**
+- **Compare only what the chain holds.** Each resolver declares the fields it builds. The provenance fields (`createdEventId`, `updatedEventId`) and the values the index accumulates (counts, totals, history) are left out, because the chain can't say what they should be.
+- **Rows the index lacks:** for a resolver with `enumerate`, every chain id without an indexed row is a difference.
+- **Rows the chain has dropped:** an indexed row whose `fromChain` is `undefined` is a difference, unless the entity is one the chain prunes (Task 1's `pruned` field) and the row is in a terminal state.
+
+- [ ] **Step 1: Failing test.** With a fake resolver and a mocked store, check that:
+  - matching rows report nothing;
+  - a changed field reports the field, both values and the id;
+  - an enumerated id with no row reports it;
+  - a row the chain dropped reports it, unless the entity is pruned and the row terminal.
+- [ ] **Step 2: Run it.** Expect failure.
+- [ ] **Step 3: Implement** `resolverHost.ts` and `check-entities.ts`.
+- [ ] **Step 4: Run it.** Expect a pass.
+- [ ] **Step 5: Wire it in.** Every later resolver task adds its entity to the run simply by registering. The dev server's check loop runs `check-entities.ts` beside `check-state.ts` at every check height.
+- [ ] **Step 6: Commit** `feat: 🎸 compare every resolvable entity with chain state`.
+
+Do this task straight after Task 3, so that Tasks 4 to 10 each land with their check.
 
 ---
 

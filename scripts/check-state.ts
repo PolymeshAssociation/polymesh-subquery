@@ -11,13 +11,24 @@
  * Holdings, for every holder:
  *   4. each portfolio's fungible `Holding.amount` equals `portfolio.portfolioAssetBalances`, and
  *      from v8 each account's equals `asset.assetBalance`;
- *   5. each portfolio's `Holding.nftCount` equals its count in `portfolio.portfolioNFT`. Account
- *      NFT counts (v8) are not checked here.
+ *   5. each portfolio's `Holding.nftCount` equals its count in `portfolio.portfolioNFT`, and each
+ *      account's (v8, and v7.4's `AccountId` portfolios) its entries in `nft.nftHolder`.
  *
  * Staking, for every stash:
  *   6. each `StakingPosition`'s `bonded` equals its `staking.ledger` `active`, its `unbonding`
  *      equals `total - active`, and its controller equals `staking.bonded`; every stash with a
  *      ledger has a position.
+ *
+ * Locks and holds, for every account:
+ *   7. each lock in `AccountBalance.locks` equals `balances.locks` by id, each hold in `holds`
+ *      equals `balances.holds` by reason (from v8, read raw, so testnet's undecodable `contracts`
+ *      holds count as `Unknown`), and `otherReserved` is `reserved` less the `Staking` hold.
+ *
+ * Assets, for every asset:
+ *   8. `Asset.totalSupply` equals the chain's (`asset.assets`, or `asset.tokens` before v7; an NFT
+ *      collection's, the NFTs its holders hold); each identity's `AssetHolder.amount`
+ *      equals `asset.balanceOf`; and `holderCount` equals the identities with a balance, or for a
+ *      collection with any of its NFTs.
  *
  * The index is read as it stood after `--block` (its historical rows), and the chain at that block,
  * so it can be run against a database still syncing. The block defaults to the last one the index
@@ -34,11 +45,11 @@ import '@polymeshassociation/polymesh-types/polkadot/augment-api';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import type { ApiDecoration } from '@polkadot/api/types';
 import { Codec } from '@polkadot/types/types';
-import { hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
-import { blake2AsU8a } from '@polkadot/util-crypto';
 import { DataSource } from 'typeorm';
 import { getPostgresDataSource } from '../db/utils';
 import chainTypes from '../src/chainTypes';
+import { chainHolds, chainLocks } from './lib/balanceParts';
+import { assetIdOf, chainSupplies, identitiesOf } from './lib/chainAssets';
 
 const SEED_EVENT_ID = '0000000000/0000000000';
 /** The staging chain migrated legacy tickers to asset ids without the RFC 4122 bits. */
@@ -201,29 +212,19 @@ const chainBalances = async (at: ApiDecoration<'promise'>) => {
   );
 };
 
-/** The index's asset id for a storage key: an `AssetId` from v7, a `Ticker` before. */
-const assetIdOf = (raw: Codec, staging: boolean): string => {
-  const hex = raw.toHex();
-
-  if (hexStripPrefix(hex).length === 32) {
-    return hex;
-  }
-
-  // the same derivation as `getAssetIdForLegacyTicker`
-  const bytes = blake2AsU8a(
-    `0x${hexStripPrefix(stringToHex('legacy_ticker'))}${hexStripPrefix(hex)}`,
-    128
-  );
-  if (!staging) {
-    bytes[6] = (bytes[6] & 0x0f) | 0x80;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  }
-  return u8aToHex(bytes);
-};
-
 /** `did/number` for a `PortfolioId`, as the index ids a portfolio. */
+/**
+ * The holder part of a holding's id for a `PortfolioId`: `did/number`, or for v7.4's `AccountId`
+ * kind the account, which the index holds as an account holding.
+ */
 const portfolioIdOf = (raw: Codec): string => {
-  const { did, kind } = raw.toJSON() as { did: string; kind: string | { user?: number } };
+  const { did, kind } = raw.toJSON() as {
+    did: string;
+    kind: string | { user?: number; accountId?: string };
+  };
+  if (typeof kind === 'object' && kind?.accountId) {
+    return kind.accountId;
+  }
   const number = typeof kind === 'object' && kind?.user !== undefined ? kind.user : 0;
 
   return `${did}/${number}`;
@@ -274,6 +275,25 @@ const chainHoldings = async (at: ApiDecoration<'promise'>, staging: boolean) => 
       const [portfolio, second] = key.args;
       const asset = key.args.length === 3 ? second : (second as unknown as Codec[])[0];
       const id = `${assetIdOf(asset, staging)}/${portfolioIdOf(portfolio)}`;
+      nfts.set(id, (nfts.get(id) ?? 0) + 1);
+    });
+  }
+
+  // NFTs held by accounts (v8, and v7.4's `AccountId` portfolios), one `nft.nftHolder` entry each
+  const holders = (
+    at.query.nft as unknown as
+      | Record<string, { entries?: () => Promise<[{ args: Codec[] }, Codec][]> }>
+      | undefined
+  )?.nftHolder;
+  if (holders?.entries) {
+    (await holders.entries()).forEach(([key, status]) => {
+      if (status.toString() === 'NotOwned') {
+        return;
+      }
+      // `(account, (asset, nftId))` on testnet's v7.4 and v8.0, `(account, asset, nftId)` in v8.1
+      const [account, second] = key.args;
+      const asset = key.args.length === 3 ? second : (second as unknown as Codec[])[0];
+      const id = `${assetIdOf(asset, staging)}/${account.toString()}`;
       nfts.set(id, (nfts.get(id) ?? 0) + 1);
     });
   }
@@ -363,7 +383,7 @@ const checkPolyx = async (db: DataSource, at: ApiDecoration<'promise'>, block: n
     }
   });
 
-  return { out, accounts: indexed.size };
+  return { out, accounts: indexed.size, chain };
 };
 
 const checkHoldings = async (
@@ -383,12 +403,12 @@ const checkHoldings = async (
   );
   new Set([
     ...chain.nfts.keys(),
-    ...[...indexed].filter(([, row]) => row.portfolio && row.nfts).map(([id]) => id),
+    ...[...indexed].filter(([, row]) => row.nfts).map(([id]) => id),
   ]).forEach(id =>
     differ(out, '5 holding nftCount', id, indexed.get(id)?.nfts, chain.nfts.get(id))
   );
 
-  return { out, holdings: indexed.size };
+  return { out, holdings: indexed.size, chain };
 };
 
 const checkStaking = async (db: DataSource, at: ApiDecoration<'promise'>, block: number) => {
@@ -420,6 +440,197 @@ const checkStaking = async (db: DataSource, at: ApiDecoration<'promise'>, block:
   return { out, positions: indexed.size };
 };
 
+/** Each account's staking lock and `Staking` hold in the index, as of `block` */
+interface IndexedParts {
+  locks: Map<string, bigint>;
+  holds: Map<string, bigint>;
+  otherReserved: bigint;
+}
+
+/** Each account's locks by id and holds by reason in the index, and its `otherReserved` */
+const indexedParts = async (db: DataSource, block: number) => {
+  const rows: {
+    id: string;
+    locks: { lockId: string; amount: string }[] | null;
+    holds: { reason: string; amount: string }[] | null;
+    other_reserved: string;
+  }[] = await db.query(
+    `SELECT id, locks, holds, other_reserved FROM account_balances WHERE _block_range @> $1::int8`,
+    [block]
+  );
+  const amount = (value: string): bigint => BigInt(String(value).replace(/n$/, ''));
+
+  return new Map<string, IndexedParts>(
+    rows.map(row => [
+      row.id,
+      {
+        locks: new Map((row.locks ?? []).map(lock => [lock.lockId, amount(lock.amount)])),
+        holds: new Map((row.holds ?? []).map(hold => [hold.reason, amount(hold.amount)])),
+        otherReserved: big(row.other_reserved),
+      },
+    ])
+  );
+};
+
+const checkBalanceParts = async (
+  db: DataSource,
+  api: ApiPromise,
+  at: ApiDecoration<'promise'>,
+  hash: string,
+  block: number,
+  balances: Map<string, IndexedBalance>
+) => {
+  const out: Difference[] = [];
+  const [indexed, locks, holds] = await Promise.all([
+    indexedParts(db, block),
+    chainLocks(at),
+    chainHolds(api, at, hash),
+  ]);
+  const compare = (
+    label: string,
+    id: string,
+    index?: Map<string, bigint>,
+    chain?: Map<string, bigint>
+  ) =>
+    new Set([...(index?.keys() ?? []), ...(chain?.keys() ?? [])]).forEach(part =>
+      differ(out, `7 ${label} ${part.trim()}`, id, index?.get(part), chain?.get(part))
+    );
+
+  new Set([...indexed.keys(), ...locks.keys(), ...holds.keys()]).forEach(id => {
+    const row = indexed.get(id);
+    compare('lock', id, row?.locks, locks.get(id));
+    compare('hold', id, row?.holds, holds.get(id));
+  });
+
+  // what is reserved for anything other than staking
+  indexed.forEach((row, id) => {
+    const reserved = balances.get(id)?.reserved ?? BigInt(0);
+    const staking = holds.get(id)?.get('Staking') ?? BigInt(0);
+    differ(out, '7 otherReserved', id, row.otherReserved, reserved - staking);
+  });
+
+  return { out, accounts: indexed.size };
+};
+
+interface IndexedAsset {
+  totalSupply: bigint;
+  holderCount: number;
+}
+
+const indexedAssets = async (db: DataSource, block: number) => {
+  const [assets, holders]: [
+    { id: string; total_supply: string; holder_count: number }[],
+    { id: string; amount: string }[]
+  ] = await Promise.all([
+    db.query(`SELECT id, total_supply, holder_count FROM assets WHERE _block_range @> $1::int8`, [
+      block,
+    ]),
+    db.query(
+      `SELECT id, amount FROM asset_holders WHERE _block_range @> $1::int8 AND amount <> 0`,
+      [block]
+    ),
+  ]);
+
+  return {
+    assets: new Map<string, IndexedAsset>(
+      assets.map(row => [
+        row.id,
+        { totalSupply: big(row.total_supply), holderCount: Number(row.holder_count) },
+      ])
+    ),
+    holders: new Map(holders.map(row => [row.id, big(row.amount)])),
+  };
+};
+
+/**
+ * Each asset's holder identities and each identity's amount, as the chain keeps them.
+ *
+ * A fungible asset's are `asset.balanceOf(asset, did)`: the identity's portfolios, and from v8 its
+ * accounts, which `AssetHolder` mirrors. It is the chain's own figure rather than a sum of
+ * holdings, because the two differ where the chain let them: before v6.0 a portfolio move that
+ * listed an asset twice credited more than it debited (testnet block 6,599,003), and `balanceOf`,
+ * like `AssetHolder`, never took the surplus.
+ *
+ * An NFT collection's holders are the identities holding any of its NFTs, rolled up from the
+ * chain's NFT counts: a portfolio's identity is its `did`, an account's the identity it is a key of.
+ */
+const chainRollups = async (
+  at: ApiDecoration<'promise'>,
+  staging: boolean,
+  nfts: Map<string, number>,
+  collections: Set<string>
+) => {
+  const amounts = new Map<string, bigint>();
+  const holders = new Map<string, Set<string>>();
+  const hold = (asset: string, did: string) =>
+    holders.set(asset, (holders.get(asset) ?? new Set()).add(did));
+
+  const balances = (
+    at.query.asset as unknown as Record<
+      string,
+      { entries?: () => Promise<[{ args: Codec[] }, Codec][]> } | undefined
+    >
+  ).balanceOf;
+  (await balances?.entries?.())?.forEach(([key, value]) => {
+    const asset = assetIdOf(key.args[0], staging);
+    const amount = big(value.toString());
+    if (amount > BigInt(0) && !collections.has(asset)) {
+      const did = key.args[1].toString();
+      amounts.set(`${asset}/${did}`, amount);
+      hold(asset, did);
+    }
+  });
+
+  const split = (id: string) => {
+    const [asset, ...rest] = id.split('/');
+    return { asset, holder: rest.join('/'), portfolio: rest.length > 1 };
+  };
+  const nftAccounts = [...nfts.keys()].map(split).filter(({ portfolio }) => !portfolio);
+  const identities = await identitiesOf(at, [...new Set(nftAccounts.map(({ holder }) => holder))]);
+  nfts.forEach((count, id) => {
+    const { asset, holder, portfolio } = split(id);
+    const did = portfolio ? holder.split('/')[0] : identities.get(holder);
+    if (did && count > 0) {
+      hold(asset, did);
+    }
+  });
+
+  return { amounts, holders };
+};
+
+const checkAssets = async (
+  db: DataSource,
+  at: ApiDecoration<'promise'>,
+  block: number,
+  staging: boolean,
+  holdings: { amounts: Map<string, bigint>; nfts: Map<string, number> }
+) => {
+  const out: Difference[] = [];
+  const [indexed, supplies] = await Promise.all([
+    indexedAssets(db, block),
+    chainSupplies(at, staging),
+  ]);
+  // a collection's supply is its NFTs, all of which someone holds; before v7 its asset record says 0
+  const collections = new Map<string, number>();
+  holdings.nfts.forEach((count, id) => {
+    const asset = id.split('/')[0];
+    collections.set(asset, (collections.get(asset) ?? 0) + count);
+  });
+  const rollups = await chainRollups(at, staging, holdings.nfts, new Set(collections.keys()));
+  collections.forEach((count, asset) => supplies.set(asset, BigInt(count)));
+
+  new Set([...indexed.assets.keys(), ...supplies.keys()]).forEach(id => {
+    const asset = indexed.assets.get(id);
+    differ(out, '8 asset totalSupply', id, asset?.totalSupply, supplies.get(id));
+    differ(out, '8 asset holderCount', id, asset?.holderCount, rollups.holders.get(id)?.size ?? 0);
+  });
+  new Set([...indexed.holders.keys(), ...rollups.amounts.keys()]).forEach(id =>
+    differ(out, '8 asset holder amount', id, indexed.holders.get(id), rollups.amounts.get(id))
+  );
+
+  return { out, assets: indexed.assets.size };
+};
+
 const main = async (): Promise<void> => {
   const rpc = argOf('rpc');
   if (!rpc) {
@@ -440,7 +651,8 @@ const main = async (): Promise<void> => {
     types: chainTypes.types as never,
     typesBundle: chainTypes.typesBundle as never,
   });
-  const at = await api.at(await api.rpc.chain.getBlockHash(block));
+  const hash = (await api.rpc.chain.getBlockHash(block)).toHex();
+  const at = await api.at(hash);
   const staging = api.genesisHash.toHex() === STAGING_GENESIS;
 
   console.log(`Comparing the index with chain state at block ${block}`);
@@ -448,10 +660,13 @@ const main = async (): Promise<void> => {
   const polyx = await checkPolyx(db, at, block);
   const holdings = await checkHoldings(db, at, block, staging);
   const staking = await checkStaking(db, at, block);
-  const differences = [...polyx.out, ...holdings.out, ...staking.out];
+  const parts = await checkBalanceParts(db, api, at, hash, block, polyx.chain);
+  const assets = await checkAssets(db, at, block, staging, holdings.chain);
+  const differences = [...polyx.out, ...holdings.out, ...staking.out, ...parts.out, ...assets.out];
 
   console.log(
-    `${polyx.accounts} balances, ${holdings.holdings} holdings and ${staking.positions} staking positions checked`
+    `${polyx.accounts} balances with their locks and holds, ${holdings.holdings} holdings, ` +
+      `${staking.positions} staking positions and ${assets.assets} assets checked`
   );
 
   const byCheck = new Map<string, Difference[]>();
