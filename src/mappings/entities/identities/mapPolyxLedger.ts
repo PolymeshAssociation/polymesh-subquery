@@ -392,7 +392,7 @@ export const handleBalanceHeld = async (event: SubstrateEvent): Promise<void> =>
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, amount, args.blockEventId);
+  await adjustHold(who, reason, amount, args.blockEventId, args.block);
 
   if (reason === HoldReason.Staking) {
     await syncMigratedStakingLock(who, args.blockEventId);
@@ -419,7 +419,7 @@ export const handleBalanceReleased = async (event: SubstrateEvent): Promise<void
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, -amount, args.blockEventId);
+  await adjustHold(who, reason, -amount, args.blockEventId, args.block);
 };
 
 export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<void> => {
@@ -441,7 +441,7 @@ export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<vo
     holdReason: reason,
   });
 
-  await adjustHold(who, reason, -amount, args.blockEventId);
+  await adjustHold(who, reason, -amount, args.blockEventId, args.block);
 };
 
 export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void> => {
@@ -462,8 +462,8 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
   });
 
   if (reason) {
-    await adjustHold(from, reason, -amount, args.blockEventId);
-    await adjustHold(to, reason, amount, args.blockEventId);
+    await adjustHold(from, reason, -amount, args.blockEventId, args.block);
+    await adjustHold(to, reason, amount, args.blockEventId, args.block);
   }
 };
 
@@ -495,7 +495,7 @@ export const handleTransferAndHold = async (event: SubstrateEvent): Promise<void
   });
 
   if (reason) {
-    await adjustHold(to, reason, amount, args.blockEventId);
+    await adjustHold(to, reason, amount, args.blockEventId, args.block);
   }
 };
 
@@ -1243,7 +1243,7 @@ export const handleStakingSlash = async (event: SubstrateEvent): Promise<void> =
 
   if (is8x) {
     // The hold shrank with the balance, and nothing else reports it.
-    await adjustHold(stash, HoldReason.Staking, -amount, args.blockEventId);
+    await adjustHold(stash, HoldReason.Staking, -amount, args.blockEventId, args.block);
   } else {
     // A slash reduces `ledger.total`, and pre-v8 nothing else re-reads the lock — resync it.
     await syncStakingLock(stash, args);

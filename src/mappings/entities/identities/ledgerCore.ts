@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { hexHasPrefix } from '@polkadot/util';
+import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock } from '@subql/types';
 import { optionalField } from '../../../decode';
 import {
@@ -671,11 +671,71 @@ export const postTransition = async (
  * this keeps the per-reason breakdown in `AccountBalance.holds` so `bonded`/`otherReserved` stay
  * derivable without a scan. On a v8 chain `SUM(holds) == reserved`.
  */
+/** A hold entry's bytes: the pallet's index, its fieldless `HoldReason`, and a `u128` amount */
+const RAW_HOLD_BYTES = 1 + 1 + 16;
+
+/**
+ * `balances.holds(who)` at the end of `block`, from its raw bytes: a compact count, then per entry
+ * the pallet's index, its fieldless `HoldReason` and a `u128`, each pallet named from the block's
+ * metadata. `undefined` when the runtime has no holds, or the bytes don't fit that layout.
+ */
+const rawChainHolds = async (
+  address: string,
+  block: SubstrateBlock
+): Promise<Hold[] | undefined> => {
+  const item = api.query.balances?.holds as unknown as { key: (who: string) => string } | undefined;
+
+  if (!item) {
+    return undefined;
+  }
+
+  const stored = (await api.rpc.state.getStorage(
+    item.key(address),
+    block.block.header.hash.toHex()
+  )) as unknown as { isNone: boolean; unwrap(): Codec };
+
+  if (stored.isNone) {
+    return [];
+  }
+
+  const bytes = stored.unwrap().toU8a(true);
+  const [offset, length] = compactFromU8a(bytes);
+  const count = length.toNumber();
+
+  if (bytes.length !== offset + count * RAW_HOLD_BYTES) {
+    return undefined;
+  }
+
+  const pallets = new Map(
+    api.registry.metadata.pallets.map(pallet => [pallet.index.toNumber(), pallet.name.toString()])
+  );
+  const byReason = new Map<HoldReason, bigint>();
+
+  for (let index = 0; index < count; index += 1) {
+    const start = offset + index * RAW_HOLD_BYTES;
+    const reason = holdReasonFromJson(pallets.get(bytes[start]));
+    const amount = BigInt(u8aToBn(bytes.subarray(start + 2, start + RAW_HOLD_BYTES)).toString());
+    byReason.set(reason, (byReason.get(reason) ?? BigInt(0)) + amount);
+  }
+
+  return [...byReason].map(([reason, amount]) => ({ reason, amount }));
+};
+
+/**
+ * Adjusts one hold on `address` by `delta`, by reason.
+ *
+ * Given the block, an account that still holds for a pallet the runtime no longer has (testnet's
+ * `contracts` holds, filed as `Unknown`) takes its holds from the chain instead. The runtime can't
+ * decode such a list, so it treats it as empty: the next hold it places replaces the whole list,
+ * and its `Held` reports the new total as if nothing was held before (testnet 25,042,637). The
+ * reserved balance still moves as the events say; only the breakdown is the chain's.
+ */
 export const adjustHold = async (
   address: string,
   reason: HoldReason,
   delta: bigint,
-  blockEventId: string
+  blockEventId: string,
+  block?: SubstrateBlock
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
 
@@ -683,13 +743,17 @@ export const adjustHold = async (
     return;
   }
 
-  const holds = holdsOf(balance);
+  let holds = holdsOf(balance);
   const entry = holds.find(hold => hold.reason === reason);
 
   if (entry) {
     entry.amount = floorZero(entry.amount + delta);
   } else if (delta > BigInt(0)) {
     holds.push({ reason, amount: delta });
+  }
+
+  if (block && holds.some(hold => hold.reason === HoldReason.Unknown)) {
+    holds = (await rawChainHolds(address, block)) ?? holds;
   }
 
   setHolds(

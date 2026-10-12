@@ -1,3 +1,4 @@
+import { bnToU8a, u8aConcat } from '@polkadot/util';
 /**
  * The POLYX ledger — one fixture per row of the "Event → pool transition" table in
  * docs/implementation/02-polyx-ledger.md, plus the properties the old `PolyxTransaction` model
@@ -523,6 +524,52 @@ describe('Event → pool transition', () => {
     });
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '900' }]);
     expect(entries().every(r => r.holdReason === HoldReason.Staking)).toBe(true);
+  });
+
+  /**
+   * Testnet 25,042,637: 5Fxhg… held for `Staking` and for the removed `contracts` pallet, which the
+   * runtime can't decode. It treated the list as empty, so a 60 restake held the stash's whole new
+   * total (1,449,219) as if nothing was held, and rewrote the list with only that.
+   */
+  it('Held: an account with an undecodable hold takes its holds from the chain', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1449159' })
+    );
+    await handleBalanceHeld(
+      balancesEvent('Held', {
+        reason: { contracts: 'StorageDepositReserve' },
+        who: ALICE,
+        amount: '500',
+      })
+    );
+
+    // the chain after the restake: one `Staking` entry (pallet 17) of 1,449,219
+    const raw = u8aConcat([0x04, 17, 0], bnToU8a(1449219, { bitLength: 128, isLe: true }));
+    const getStorage = jest
+      .fn()
+      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
+    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
+    (globalThis as any).api.rpc = { state: { getStorage } };
+    (globalThis as any).api.registry.metadata = {
+      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
+    };
+
+    const held = balancesEvent('Held', {
+      reason: STAKING_HOLD_REASON,
+      who: ALICE,
+      amount: '1449219',
+    });
+    (held.block.block.header as any).hash = { toHex: () => '0xblock' };
+    await handleBalanceHeld(held);
+
+    expect(getStorage).toHaveBeenCalledWith('0xkey', '0xblock');
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1449219' }]);
+    // reserved moves as the events say: the chain's `reserved` rose by the whole 1,449,219 too
+    expect(balance(ALICE)?.reserved).toBe(BigInt(1449159 + 500 + 1449219));
+    (globalThis as any).api.query = {};
+    delete (globalThis as any).api.rpc;
+    delete (globalThis as any).api.registry.metadata;
   });
 
   it('Held: an unrecognised hold reason still decodes as Unknown', async () => {
