@@ -319,13 +319,14 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
    */
 
   // `assetNames`/`fundingRound` key on a fixed-width codec: `AssetId` (16 bytes) on 7.x+,
-  // `Ticker` (12 bytes) before it. `.toU8a()` is those exact bytes in both eras, so this is
-  // an explicit encoding of what was previously an implicit `Codec` coercion, not a behaviour
-  // change.
+  // `Ticker` (12 bytes) before it. `.toU8a()` is those exact bytes in both eras. They go straight
+  // back to the host's API, so they stay the host's bytes.
+  // eslint-disable-next-line no-restricted-syntax
+  const assetKey = rawAssetId.toU8a();
   const [assetType, rawName, rawFundingRound] = await Promise.all([
     getAssetType(rawType, block, eventIdx),
-    rawAssetName ?? api.query.asset.assetNames(rawAssetId.toU8a()),
-    rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId.toU8a()),
+    rawAssetName ?? api.query.asset.assetNames(assetKey),
+    rawFundingRoundName ?? api.query.asset.fundingRound(assetKey),
   ]);
 
   const name = bytesToString(rawName as Codec);

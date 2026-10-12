@@ -1,6 +1,6 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
+import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
@@ -149,9 +149,9 @@ export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V):
   }
 };
 
-export const serializeTicker = (item: Codec): string => {
-  return removeNullChars(u8aToString(item.toU8a()));
-};
+/** Decoded through a `Buffer`, as `text.ts` does, rather than the host's bytes and `TextDecoder` */
+export const serializeTicker = (item: Codec): string =>
+  removeNullChars(Buffer.from(hexStripPrefix(item.toHex()), 'hex').toString('utf8'));
 
 export const getFirstKeyFromJson = (item: Codec): string => {
   return Object.keys(item.toJSON())[0];

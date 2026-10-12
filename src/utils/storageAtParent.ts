@@ -103,6 +103,8 @@ const readAtParent = async (
       (type.isMap ? type.asMap?.value : type.asPlain) as never
     );
 
+    // the host's bytes, for the host's registry
+    // eslint-disable-next-line no-restricted-syntax
     return api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as Codec;
   });
 };

@@ -18,6 +18,7 @@ import { getEventParams } from '../../../utils/events';
 import { HandlerArgs } from '../common';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
 import { memoText } from '../../../utils/text';
+import { codecBytes } from '../../../utils/bytes';
 
 /**
  * The POLYX ledger's model, shared by every era's handlers: the running `AccountBalance`, the
@@ -699,9 +700,7 @@ const rawChainHolds = async (
     return [];
   }
 
-  // Copied into this realm: `compactFromU8a` doesn't recognise the host's `Uint8Array` inside the
-  // sandbox, and reads it as text
-  const bytes = Uint8Array.from(stored.unwrap().toU8a(true));
+  const bytes = codecBytes(stored.unwrap());
   const [offset, length] = compactFromU8a(bytes);
   const count = length.toNumber();
 

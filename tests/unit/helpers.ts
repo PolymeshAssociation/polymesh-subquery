@@ -6,6 +6,7 @@ import { TypeRegistry } from '@polkadot/types';
  */
 
 import { SubstrateEvent } from '@subql/types';
+import { runInNewContext } from 'vm';
 
 export const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 export const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
@@ -13,6 +14,14 @@ export const storeRemove = (): jest.Mock => (globalThis as any).store.remove as 
 export const storeGetByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
 export const storeBulkCreate = (): jest.Mock => (globalThis as any).store.bulkCreate as jest.Mock;
 export const storeBulkUpdate = (): jest.Mock => (globalThis as any).store.bulkUpdate as jest.Mock;
+
+/**
+ * `bytes` as a `Uint8Array` from another realm, as the host's API hands a codec's bytes to the
+ * mappings in SubQuery's sandbox. Mock `toU8a` with it: same-realm bytes hide what `@polkadot/util`
+ * does with the host's.
+ */
+export const hostBytes = (bytes: Uint8Array): Uint8Array =>
+  (runInNewContext('Uint8Array') as Uint8ArrayConstructor).from(bytes);
 
 /**
  * A `Codec` stand-in. `toHex()` is deliberately distinct from `toString()` — a real codec's two

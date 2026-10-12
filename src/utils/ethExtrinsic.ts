@@ -3,6 +3,7 @@ import { ethereumEncode } from '@polkadot/util-crypto';
 import { SubstrateExtrinsic } from '@subql/types';
 import { CanonicalValue, callArgs } from '../mappings/args/encode';
 import { EvmCallKindEnum } from '../types';
+import { codecBytes } from './bytes';
 import { camelToSnakeCase } from './common';
 import { RUNTIME_PALLETS_ADDR, ss58FromEthAddress } from './eth';
 import { DecodedEthTx, decodeEthTransaction, ethTxHash, recoverEthSender } from './ethTransaction';
@@ -175,12 +176,7 @@ const decodeEthTransact = (extrinsic: SubstrateExtrinsic): ResolvedEthTransact |
     return undefined;
   }
 
-  /**
-   * Normalise the bytes into this realm as they cross the sandbox boundary. `u8aToU8a`, which
-   * every `@polkadot/util-crypto` helper runs its input through, does not recognise a foreign
-   * `Uint8Array` and silently produces the wrong bytes for it
-   */
-  const raw = Uint8Array.from(payload.toU8a(true));
+  const raw = codecBytes(payload);
   const tx = decodeEthTransaction(raw);
 
   if (!tx) {

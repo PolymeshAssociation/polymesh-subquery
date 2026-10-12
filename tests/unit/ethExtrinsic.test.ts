@@ -2,7 +2,7 @@ import { hexToU8a } from '@polkadot/util';
 import { SubstrateExtrinsic } from '@subql/types';
 import { EvmCallKindEnum } from '../../src/types';
 import { isEthTransact, resolveEthTransact } from '../../src/utils/ethExtrinsic';
-import { callOf } from './helpers';
+import { callOf, hostBytes } from './helpers';
 
 const FROM_ETH = '0x2c7536E3605D9C16a7a3D7b1898e529396a65c23';
 /** `FROM_ETH` padded with 12 `0xEE` bytes and SS58 encoded with the Polymesh prefix */
@@ -59,7 +59,7 @@ const mockExtrinsic = ({
     extrinsic: {
       registry,
       method: { section, method },
-      args: [{ toU8a: () => hexToU8a(payload) }],
+      args: [{ toU8a: () => hostBytes(hexToU8a(payload)) }],
     },
   } as unknown as SubstrateExtrinsic;
 };

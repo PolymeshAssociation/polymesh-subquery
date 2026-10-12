@@ -1,6 +1,7 @@
 import { GenericCall } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { hexToU8a, stringCamelCase, u8aToHex } from '@polkadot/util';
+import { codecBytes } from '../../utils/bytes';
 import { paddedText, textOrHex } from '../../utils/text';
 import { isType, typeNameOf } from './typeName';
 
@@ -113,14 +114,14 @@ const encodeBytes = (codec: Codec, raw: string, name: string, at: Walk): Canonic
   const bytes = hexToU8a(codec.toHex());
   if (raw === 'Text') {
     const text = codec.toString();
-    return text.includes('\u0000') ? u8aToHex(codec.toU8a(true)) : text;
+    return text.includes('\u0000') ? u8aToHex(codecBytes(codec)) : text;
   }
   if (isType(name, 'Ticker')) {
     addRef(at, 'ticker', u8aToHex(bytes));
     return paddedText(bytes);
   }
   if (raw === 'Bytes') {
-    return textOrHex(codec.toU8a(true));
+    return textOrHex(codecBytes(codec));
   }
   const hex = u8aToHex(bytes);
   if (isType(name, 'IdentityId')) {

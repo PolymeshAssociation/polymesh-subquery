@@ -21,5 +21,19 @@
         ]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "CallExpression[callee.property.name='toU8a']",
+            "message": "Inside SubQuery's sandbox, @polkadot/util misreads the host's Uint8Array as text. Use codecBytes (src/utils/bytes.ts), or disable this with a comment where the bytes go straight back to the host's API."
+          }
+        ]
+      }
+    }
+  ]
 }
