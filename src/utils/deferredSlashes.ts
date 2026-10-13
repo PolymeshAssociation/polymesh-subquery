@@ -96,7 +96,10 @@ export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[]
 
 /**
  * The deferred slash a `Slash` of `amount` on `stash` was applied from, and whether `stash` was its
- * validator rather than a nominator. Eras are applied in order, so of several that match, the oldest
+ * validator rather than a nominator. The deferred figure is an upper bound, not the amount: the
+ * runtime slashes no more than the stash's ledger holds and the event reports what was taken, so a
+ * match is a figure at least `amount`, an exact one preferred. Eras are applied in order, so the
+ * oldest of several matches
  * is the one applied.
  *
  * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
@@ -112,7 +115,16 @@ export const appliedDeferredSlash = (
   const oldest = (matches: DeferredSlash[]): DeferredSlash | undefined =>
     [...matches].sort((a, b) => a.era - b.era)[0];
 
-  const own = oldest(deferred.filter(slash => slash.validator === stash && slash.own === amount));
+  const exactOrAll = (
+    matches: DeferredSlash[],
+    exact: (slash: DeferredSlash) => boolean
+  ): DeferredSlash[] => {
+    const exacts = matches.filter(exact);
+    return exacts.length > 0 ? exacts : matches;
+  };
+
+  const owned = deferred.filter(slash => slash.validator === stash && slash.own >= amount);
+  const own = oldest(exactOrAll(owned, slash => slash.own === amount));
 
   if (own) {
     return { slash: own, asValidator: true };

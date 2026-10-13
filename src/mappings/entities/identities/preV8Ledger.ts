@@ -30,7 +30,7 @@ import {
 import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { deferredSlashesBefore } from '../../../utils/deferredSlashes';
+import { appliedDeferredSlash, deferredSlashesBefore } from '../../../utils/deferredSlashes';
 import {
   adjustHold,
   findBlockEntries,
@@ -253,7 +253,9 @@ const slashProceeds = (
  *
  * Done once per deferred slash, on the validator's own `Slash`, which comes first: a nominator's
  * `Slash` names an account that is not the deferred slash's validator. Of the deferred slashes
- * that match, the oldest era is the one applied, because eras are applied in order.
+ * that match, the oldest era is the one applied, because eras are applied in order. A match is
+ * a deferred figure at least `own`, not exactly it: the chain slashes no more than the ledger holds
+ * and announces what it took.
  *
  * Checked against the treasury's event. The slashes of this offence, less what the reporters were
  * paid, must be what the treasury received; anything else is recorded, not guessed at.
@@ -283,7 +285,9 @@ export const creditSlashReporters = async (
     return;
   }
 
-  const applied = candidates.filter(slash => slash.own === own).sort((a, b) => a.era - b.era)[0];
+  // the slash is capped at what the stash's ledger held, so the deferred figure is an upper bound
+  const match = appliedDeferredSlash(candidates, validator, own);
+  const applied = match?.asValidator ? match.slash : undefined;
 
   if (!applied) {
     await recordAnomaly({

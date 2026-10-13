@@ -2915,6 +2915,21 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     expect(anomalies()).toHaveLength(0);
   });
 
+  it('pays the reporters of a slash capped below the deferred figure', async () => {
+    // the ledger held 10,000 POLYX of the 12,750 deferred, so the event reports the 10,000
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+
+    const [slash] = slashEvents([[OFFENDER, '10000000000']], '9362500000');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(637_500_000));
+    expect(anomalies()).toHaveLength(0);
+  });
+
   it('pays no one when the offence had no reporters, and the treasury takes it all', async () => {
     // testnet block 7,737,503: era 2155's slash, with 2159's still waiting behind it
     deferredSlashes({

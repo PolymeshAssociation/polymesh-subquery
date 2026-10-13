@@ -71,6 +71,21 @@ describe('appliedDeferredSlash', () => {
 
   it('places nothing whose amount matches no slash', () => {
     expect(appliedDeferredSlash(waiting, NOMINATOR, BigInt(41))).toBeUndefined();
+    expect(appliedDeferredSlash(waiting, VALIDATOR, BigInt(1001))).toBeUndefined();
+  });
+
+  it("places a validator's slash capped at what its ledger held", () => {
+    expect(appliedDeferredSlash(waiting, VALIDATOR, BigInt(700))).toEqual({
+      slash: waiting[1],
+      asValidator: true,
+    });
+  });
+
+  it('prefers an exact match to a capped one, whatever the era', () => {
+    const mixed = [deferred(2159, BigInt(1000)), deferred(2160, BigInt(700))];
+
+    expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(700))?.slash).toBe(mixed[1]);
+    expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(600))?.slash).toBe(mixed[0]);
   });
 });
 
