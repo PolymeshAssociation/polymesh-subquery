@@ -2197,6 +2197,25 @@ describe('v8 reward destinations', () => {
     expect(balance(ALICE)?.free).toBe(BigInt(250));
   });
 
+  it('credits the stash and records an anomaly when the controller does not decode', async () => {
+    (globalThis as any).api.query = {
+      staking: {
+        bonded: jest
+          .fn()
+          .mockRejectedValue(new Error('createType(AccountId):: Unable to decode on index 0')),
+      },
+    };
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleReward(
+      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
+    );
+
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    anomaly.mockRestore();
+    expect(balance(ALICE)?.free).toBe(BigInt(250));
+  });
+
   it('fails the block when the controller read fails, rather than crediting the stash', async () => {
     (globalThis as any).api.query = {
       staking: { bonded: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')) },
