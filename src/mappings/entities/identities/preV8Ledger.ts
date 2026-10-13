@@ -208,7 +208,7 @@ export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<voi
     (balance ? holdsOf(balance) : []).find(hold => hold.reason === HoldReason.Staking)?.amount ??
     BigInt(0);
 
-  await adjustHold(stash, HoldReason.Staking, total - held, blockEventId, event.block);
+  await adjustHold(stash, HoldReason.Staking, total - held, blockEventId, event.block, event.idx);
 };
 
 // ---------------------------------------------------------------------------------------------

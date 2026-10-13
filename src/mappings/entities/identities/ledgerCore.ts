@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
-import { SubstrateBlock } from '@subql/types';
-import { optionalField } from '../../../decode';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { decodeEvent, optionalField } from '../../../decode';
 import {
   Account,
   AccountBalance,
@@ -724,20 +724,66 @@ const rawChainHolds = async (
 };
 
 /**
+ * The events that end in `adjustHold`, and the fields naming the account each one adjusts. A
+ * transfer-and-hold only adjusts its destination; its source is moved by no hold.
+ */
+const HOLD_EVENT_ACCOUNTS: Record<string, string[][]> = {
+  'balances.Held': [['who', 'account', 'stash']],
+  'balances.Released': [['who', 'account', 'stash']],
+  'balances.BurnedHeld': [['who', 'account', 'stash']],
+  'balances.TransferOnHold': [
+    ['source', 'from'],
+    ['dest', 'to'],
+  ],
+  'balances.TransferAndHold': [['dest', 'to']],
+  'balances.CurrencyMigrated': [['stash']],
+  'staking.Slashed': [['stash', 'who', 'account']],
+};
+
+/** Whether an event after index `eventIdx` in `block` adjusts a hold of `address` */
+const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: string): boolean =>
+  (block.events ?? []).some((record, idx) => {
+    if (idx <= eventIdx) {
+      return false;
+    }
+
+    const accounts =
+      HOLD_EVENT_ACCOUNTS[`${record.event.section.toLowerCase()}.${record.event.method}`];
+
+    if (!accounts) {
+      return false;
+    }
+
+    try {
+      const decoded = decodeEvent({ event: record.event, block, idx } as unknown as SubstrateEvent);
+
+      return accounts.some(names => firstText(decoded, names) === address);
+    } catch {
+      return false;
+    }
+  });
+
+/**
  * Adjusts one hold on `address` by `delta`, by reason.
  *
- * Given the block, an account that still holds for a pallet the runtime no longer has (testnet's
- * `contracts` holds, filed as `Unknown`) takes its holds from the chain instead. The runtime can't
- * decode such a list, so it treats it as empty: the next hold it places replaces the whole list,
- * and its `Held` reports the new total as if nothing was held before (testnet 25,042,637). The
- * reserved balance still moves as the events say; only the breakdown is the chain's.
+ * Given the block and the event's index, an account that still holds for a pallet the runtime no
+ * longer has (testnet's `contracts` holds, filed as `Unknown`) takes its holds from the chain
+ * instead. The runtime can't decode such a list, so it treats it as empty: the next hold it places
+ * replaces the whole list, and its `Held` reports the new total as if nothing was held before
+ * (testnet 25,042,637). The reserved balance still moves as the events say; only the breakdown is
+ * the chain's.
+ *
+ * The chain's list is the state after the whole block, so it is only taken at the account's last
+ * hold change in the block. At an earlier one the delta applies as usual and the `Unknown` entry
+ * stays, or the later event would add its hold on top of a list that already has it.
  */
 export const adjustHold = async (
   address: string,
   reason: HoldReason,
   delta: bigint,
   blockEventId: string,
-  block?: SubstrateBlock
+  block?: SubstrateBlock,
+  eventIdx?: number
 ): Promise<void> => {
   const balance = await AccountBalance.get(address);
 
@@ -754,7 +800,12 @@ export const adjustHold = async (
     holds.push({ reason, amount: delta });
   }
 
-  if (block && holds.some(hold => hold.reason === HoldReason.Unknown)) {
+  if (
+    block &&
+    eventIdx !== undefined &&
+    holds.some(hold => hold.reason === HoldReason.Unknown) &&
+    !holdChangesLater(block, eventIdx, address)
+  ) {
     holds = (await rawChainHolds(address, block)) ?? holds;
   }
 

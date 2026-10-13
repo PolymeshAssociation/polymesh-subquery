@@ -580,6 +580,59 @@ describe('Event → pool transition', () => {
     delete (globalThis as any).api.registry.metadata;
   });
 
+  /**
+   * The chain's list is the state after the whole block. Two holds in one block must not apply the
+   * second on top of a list that already has it: only the account's last hold change in the block
+   * takes the chain's list.
+   */
+  it('Held twice in one block: an undecodable hold takes the chain list once, at the last event', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1000' })
+    );
+    await handleBalanceHeld(
+      balancesEvent('Held', {
+        reason: { contracts: 'StorageDepositReserve' },
+        who: ALICE,
+        amount: '500',
+      })
+    );
+
+    // the chain after both holds: one `Staking` entry (pallet 17) of 1,150
+    const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(1150, { bitLength: 128, isLe: true })));
+    const getStorage = jest
+      .fn()
+      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
+    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
+    (globalThis as any).api.rpc = { state: { getStorage } };
+    (globalThis as any).api.registry.metadata = {
+      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
+    };
+
+    const [first, second] = extrinsicEvents(2_000_000, [
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '100' }],
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '50' }],
+    ]);
+    [first, second].forEach(event => {
+      (event.block.block.header as any).hash = { toHex: () => '0xblock' };
+    });
+
+    await handleBalanceHeld(first);
+    expect(balance(ALICE)?.holds).toEqual(
+      expect.arrayContaining([{ reason: HoldReason.Unknown, amount: '500' }])
+    );
+    expect(getStorage).not.toHaveBeenCalled();
+
+    await handleBalanceHeld(second);
+
+    expect(getStorage).toHaveBeenCalledTimes(1);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1150' }]);
+    expect(balance(ALICE)?.bonded).toBe(BigInt(1150));
+    (globalThis as any).api.query = {};
+    delete (globalThis as any).api.rpc;
+    delete (globalThis as any).api.registry.metadata;
+  });
+
   it('Held: an unrecognised hold reason still decodes as Unknown', async () => {
     await handleBalanceHeld(
       balancesEvent('Held', { reason: { somethingNew: 'Whatever' }, who: ALICE, amount: '5' })
