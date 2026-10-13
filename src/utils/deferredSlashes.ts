@@ -106,7 +106,11 @@ export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[]
  *
  * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
  * the validator's own share first and then its nominators', so the nominator's is the one whose
- * validator was slashed most recently before it (`earlier`, nearest first).
+ * validator was slashed most recently before it (`earlier`, nearest first). A validator whose own
+ * share is nothing, or is capped to nothing, is not announced at all (`do_slash` emits only for a
+ * non-zero amount), so its nominators have no such validator before them: then the share is placed
+ * by the nominator alone, when that leaves a single deferred slash (the exact figures, if any,
+ * otherwise those it could be capped from), and is left unplaced when it leaves several.
  */
 export const appliedDeferredSlash = (
   deferred: DeferredSlash[],
@@ -139,9 +143,38 @@ export const appliedDeferredSlash = (
     slash => holds(slash, value => value === amount)
   );
   const nearest = earlier.find(validator => shares.some(slash => slash.validator === validator));
-  const share = (
-    nearest === undefined ? shares : shares.filter(slash => slash.validator === nearest)
-  )[0];
+  const share =
+    nearest === undefined
+      ? shares.length === 1
+        ? shares[0]
+        : undefined
+      : shares.find(slash => slash.validator === nearest);
 
   return share ? { slash: share, asValidator: false } : undefined;
 };
+
+/**
+ * Whether the `Slash` at `eventIdx` is the first one in `block` that `slash` was applied from. That
+ * is its validator's own, unless the validator's share was nothing and so announced nothing, when
+ * it is the first nominator's. Done once per deferred slash, whatever announced it first.
+ */
+export const isFirstSlashOf = (
+  deferred: DeferredSlash[],
+  slash: DeferredSlash,
+  block: SubstrateBlock,
+  eventIdx: number
+): boolean =>
+  !(block.events ?? []).slice(0, eventIdx).some(({ event }, idx) => {
+    if (event.section !== 'staking' || (event.method !== 'Slash' && event.method !== 'Slashed')) {
+      return false;
+    }
+
+    const placed = appliedDeferredSlash(
+      deferred,
+      event.data[0].toString(),
+      BigInt(event.data[1].toString()),
+      slashedBefore(block, idx)
+    );
+
+    return placed?.slash === slash;
+  });

@@ -69,6 +69,42 @@ describe('appliedDeferredSlash', () => {
     ).toBe(VALIDATOR);
   });
 
+  describe('a validator whose own share was nothing, so it announced no slash', () => {
+    const OTHER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+    it("places its nominator's slash by the nominator alone", () => {
+      const noOwn = [
+        deferred(2159, BigInt(0), [[NOMINATOR, BigInt(40)]]),
+        { ...deferred(2159, BigInt(900), []), validator: OTHER },
+      ];
+
+      // nothing was slashed before it, or only a validator that does not nominate it
+      expect(appliedDeferredSlash(noOwn, NOMINATOR, BigInt(40))).toEqual({
+        slash: noOwn[0],
+        asValidator: false,
+      });
+      expect(appliedDeferredSlash(noOwn, NOMINATOR, BigInt(40), [OTHER])?.slash).toBe(noOwn[0]);
+    });
+
+    it('prefers the exact share when several slashes name the nominator', () => {
+      const several = [
+        deferred(2159, BigInt(0), [[NOMINATOR, BigInt(40)]]),
+        { ...deferred(2159, BigInt(0), [[NOMINATOR, BigInt(25)]]), validator: OTHER },
+      ];
+
+      expect(appliedDeferredSlash(several, NOMINATOR, BigInt(25))?.slash).toBe(several[1]);
+    });
+
+    it('leaves the nominator unplaced when it cannot tell which of several it came from', () => {
+      const several = [
+        deferred(2159, BigInt(0), [[NOMINATOR, BigInt(40)]]),
+        { ...deferred(2159, BigInt(0), [[NOMINATOR, BigInt(40)]]), validator: OTHER },
+      ];
+
+      expect(appliedDeferredSlash(several, NOMINATOR, BigInt(40))).toBeUndefined();
+    });
+  });
+
   it('places nothing whose amount matches no slash', () => {
     expect(appliedDeferredSlash(waiting, NOMINATOR, BigInt(41))).toBeUndefined();
     expect(appliedDeferredSlash(waiting, VALIDATOR, BigInt(1001))).toBeUndefined();
@@ -102,7 +138,8 @@ describe('appliedDeferredSlash', () => {
     ];
 
     expect(appliedDeferredSlash(sameEra, NOMINATOR, BigInt(25))?.slash).toBe(sameEra[1]);
-    expect(appliedDeferredSlash(sameEra, NOMINATOR, BigInt(20))?.slash).toBe(sameEra[0]);
+    // capped, and fitting two slashes with no validator slashed before it to tell them apart
+    expect(appliedDeferredSlash(sameEra, NOMINATOR, BigInt(20))).toBeUndefined();
 
     const shares = [
       deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
