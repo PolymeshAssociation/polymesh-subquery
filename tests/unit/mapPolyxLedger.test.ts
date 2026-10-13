@@ -2844,7 +2844,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   let undecodable: number[] = [];
 
   const getKeysPaged = jest.fn();
-  const getStorage = jest.fn();
+  const queryStorageAt = jest.fn();
   const getHeader = jest.fn();
   const registryRuntime = (globalThis as any).api.runtimeVersion;
   const getRuntimeVersion = jest.fn();
@@ -2852,10 +2852,12 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   /** `staking.unappliedSlashes`, as the parent block's state holds it. */
   const deferredSlashes = (byEra: Record<number, Deferred[]>, spec = SPEC) => {
     getKeysPaged.mockReset().mockResolvedValue(Object.keys(byEra).map(Number).map(eraKey));
-    getStorage
+    queryStorageAt
       .mockReset()
-      .mockImplementation((key: { toU8a: () => Uint8Array }) =>
-        Promise.resolve({ isNone: false, unwrap: () => ({ toU8a: () => key.toU8a() }) })
+      .mockImplementation((keys: { toU8a: () => Uint8Array }[]) =>
+        Promise.resolve(
+          keys.map(key => ({ isNone: false, unwrap: () => ({ toU8a: () => key.toU8a() }) }))
+        )
       );
 
     (globalThis as any).api.query = {
@@ -2879,7 +2881,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     getRuntimeVersion.mockReset();
     (globalThis as any).api.rpc = {
       chain: { getHeader },
-      state: { getKeysPaged, getStorage, getRuntimeVersion },
+      state: { getKeysPaged, queryStorageAt, getRuntimeVersion },
     };
     (globalThis as any).api.registry = {
       chainSS58: 42,
@@ -3155,7 +3157,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
       ],
     });
-    getStorage.mockReset().mockRejectedValue(new Error('WebSocket is not connected'));
+    queryStorageAt.mockReset().mockRejectedValue(new Error('WebSocket is not connected'));
 
     const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
 
