@@ -98,9 +98,11 @@ export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[]
  * The deferred slash a `Slash` of `amount` on `stash` was applied from, and whether `stash` was its
  * validator rather than a nominator. The deferred figure is an upper bound, not the amount: the
  * runtime slashes no more than the stash's ledger holds and the event reports what was taken, so a
- * match is a figure at least `amount`, an exact one preferred. Eras are applied in order, so the
- * oldest of several matches
- * is the one applied.
+ * match is a figure at least `amount`, an exact one preferred.
+ *
+ * A block applies the slashes of one era, the oldest still deferred (the runtime takes them once,
+ * as the era starts), so only that era is matched. A newer era's figure that happens to fit, such
+ * as a validator's own slash seen from the same stash acting as a nominator, is not this slash.
  *
  * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
  * the validator's own share first and then its nominators', so the nominator's is the one whose
@@ -112,8 +114,8 @@ export const appliedDeferredSlash = (
   amount: bigint,
   earlier: string[] = []
 ): { slash: DeferredSlash; asValidator: boolean } | undefined => {
-  const oldest = (matches: DeferredSlash[]): DeferredSlash | undefined =>
-    [...matches].sort((a, b) => a.era - b.era)[0];
+  const era = Math.min(...deferred.map(slash => slash.era));
+  const applying = deferred.filter(slash => slash.era === era);
 
   const exactOrAll = (
     matches: DeferredSlash[],
@@ -123,8 +125,8 @@ export const appliedDeferredSlash = (
     return exacts.length > 0 ? exacts : matches;
   };
 
-  const owned = deferred.filter(slash => slash.validator === stash && slash.own >= amount);
-  const own = oldest(exactOrAll(owned, slash => slash.own === amount));
+  const owned = applying.filter(slash => slash.validator === stash && slash.own >= amount);
+  const own = exactOrAll(owned, slash => slash.own === amount)[0];
 
   if (own) {
     return { slash: own, asValidator: true };
@@ -133,13 +135,13 @@ export const appliedDeferredSlash = (
   const holds = (slash: DeferredSlash, test: (value: bigint) => boolean): boolean =>
     slash.others.some(([nominator, value]) => nominator === stash && test(value));
   const shares = exactOrAll(
-    deferred.filter(slash => holds(slash, value => value >= amount)),
+    applying.filter(slash => holds(slash, value => value >= amount)),
     slash => holds(slash, value => value === amount)
   );
   const nearest = earlier.find(validator => shares.some(slash => slash.validator === validator));
-  const share = oldest(
+  const share = (
     nearest === undefined ? shares : shares.filter(slash => slash.validator === nearest)
-  );
+  )[0];
 
   return share ? { slash: share, asValidator: false } : undefined;
 };

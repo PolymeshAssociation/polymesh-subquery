@@ -88,19 +88,44 @@ describe('appliedDeferredSlash', () => {
     });
   });
 
-  it('prefers an exact match to a capped one, whatever the era', () => {
+  it('prefers an exact match to a capped one within the era being applied, and ignores newer eras', () => {
     const mixed = [deferred(2159, BigInt(1000)), deferred(2160, BigInt(700))];
 
-    expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(700))?.slash).toBe(mixed[1]);
+    // 2159 is the era applied: its figure caps the slash, and 2160's exact figure is not this slash
+    expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(700))?.slash).toBe(mixed[0]);
     expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(600))?.slash).toBe(mixed[0]);
+
+    const OTHER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+    const sameEra = [
+      deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
+      { ...deferred(2159, BigInt(900), [[NOMINATOR, BigInt(25)]]), validator: OTHER },
+    ];
+
+    expect(appliedDeferredSlash(sameEra, NOMINATOR, BigInt(25))?.slash).toBe(sameEra[1]);
+    expect(appliedDeferredSlash(sameEra, NOMINATOR, BigInt(20))?.slash).toBe(sameEra[0]);
 
     const shares = [
       deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
       deferred(2160, BigInt(1000), [[NOMINATOR, BigInt(25)]]),
     ];
 
-    expect(appliedDeferredSlash(shares, NOMINATOR, BigInt(25))?.slash).toBe(shares[1]);
-    expect(appliedDeferredSlash(shares, NOMINATOR, BigInt(20))?.slash).toBe(shares[0]);
+    expect(appliedDeferredSlash(shares, NOMINATOR, BigInt(25))?.slash).toBe(shares[0]);
+  });
+
+  it("does not place a nominator's slash under its own future-era slash as a validator", () => {
+    const OTHER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+    // NOMINATOR is a validator too, with a slash held for a later era; the one applied is OTHER's
+    const waitingBoth = [
+      { ...deferred(2160, BigInt(1000)), validator: NOMINATOR },
+      { ...deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]), validator: OTHER },
+    ];
+
+    expect(appliedDeferredSlash(waitingBoth, NOMINATOR, BigInt(40))).toEqual({
+      slash: waitingBoth[1],
+      asValidator: false,
+    });
+    // nothing of the era applied fits this stash: the future era's figure is no match
+    expect(appliedDeferredSlash(waitingBoth, NOMINATOR, BigInt(41))).toBeUndefined();
   });
 });
 
