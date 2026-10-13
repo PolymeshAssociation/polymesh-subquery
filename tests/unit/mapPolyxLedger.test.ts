@@ -66,7 +66,7 @@ import { postUneventedTransactionFee } from '../../src/mappings/entities/identit
 import { getAccountId, systematicIssuers } from '../../src/mappings/consts';
 import { blockAuthor } from '../../src/utils/blockAuthor';
 import { __resetStakingCaches } from '../../src/utils/staking';
-import { __resetBlockContext } from '../../src/mappings/blockContext';
+import { __resetBlockContext, getLedgerEntries } from '../../src/mappings/blockContext';
 import {
   adjustLock,
   applyChainFreezes,
@@ -108,6 +108,21 @@ const chainStakingLock = (listed: string | undefined, frozen: string) => {
 
 let blockHeight = 1_000_000;
 
+/**
+ * Starts the context of the block at `height` unless it is the current one, as the indexer does on
+ * reaching a block. A lookup under a newer block id that nothing has opened is an error.
+ */
+const openBlock = (height: number): void => {
+  const id = String(height).padStart(10, '0');
+
+  try {
+    getLedgerEntries(id);
+  } catch {
+    __resetBlockContext();
+    getLedgerEntries(id);
+  }
+};
+
 /** A struct-style event: the block metadata names every field. */
 const structEvent = (
   section: string,
@@ -119,6 +134,7 @@ const structEvent = (
     blockHeight += 1;
   }
   const height = atHeight ?? blockHeight;
+  openBlock(height);
 
   return {
     idx: 4,
@@ -218,7 +234,7 @@ const v7ExtrinsicEvents = (
   specVersion = 7_004_001
 ): SubstrateEvent[] =>
   emitted.map(([section, method, values], index) => {
-    const event = tupleEvent(section, method, values, specVersion);
+    const event = tupleEvent(section, method, values, specVersion, height);
 
     (event as unknown as { block: { block: unknown } }).block.block = {
       header: { number: { toString: () => String(height) } },
@@ -238,9 +254,11 @@ const tupleEvent = (
   section: string,
   method: string,
   values: string[],
-  specVersion: number
+  specVersion: number,
+  atHeight?: number
 ): SubstrateEvent => {
   blockHeight += 1;
+  openBlock(atHeight ?? blockHeight);
 
   return {
     idx: 4,
@@ -3075,6 +3093,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
       const event = tupleEvent('staking', method, [stash, amount], specVersion);
       const block = (event as any).block;
 
+      openBlock(7751343);
       block.block = {
         header: { number: { toString: () => '7751343' }, parentHash: '0xparent' },
       };

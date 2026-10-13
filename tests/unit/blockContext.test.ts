@@ -27,4 +27,12 @@ describe('block context lookups by bare block id', () => {
     expect(getKeyRecordCache('0000000001').has('alice')).toBe(true);
     expect(getKeyRecordCache('0000000001').has('bob')).toBe(false);
   });
+
+  it('under a newer block id fail, rather than hand back a context that keeps nothing', () => {
+    getLedgerEntries('0000000001').add(entry as unknown as PolyxEntry);
+
+    expect(() => getLedgerEntries('0000000002')).toThrow(/before its context was opened/);
+    expect(() => getKeyRecordCache('0000000010')).toThrow(/before its context was opened/);
+    expect(getLedgerEntries('0000000001').ofAccount('alice')).toHaveLength(1);
+  });
 });

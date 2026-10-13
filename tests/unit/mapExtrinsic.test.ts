@@ -1,4 +1,5 @@
 import { hexToU8a } from '@polkadot/util';
+import { __resetBlockContext } from '../../src/mappings/blockContext';
 import { SubstrateExtrinsic } from '@subql/types';
 import { createExtrinsic, handleExtrinsic } from '../../src/mappings/entities/block/mapExtrinsic';
 import { callOf } from './helpers';
@@ -175,6 +176,7 @@ describe('handleExtrinsic', () => {
   const DID = '0x0100000000000000000000000000000000000000000000000000000000000000';
 
   beforeEach(() => {
+    __resetBlockContext();
     (globalThis as any).store = {
       get: jest.fn().mockResolvedValue(undefined),
       set: jest.fn().mockResolvedValue(undefined),

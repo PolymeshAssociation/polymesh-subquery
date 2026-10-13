@@ -137,20 +137,31 @@ export const __resetBlockContext = (): void => {
  * The context for a lookup that carries only a block id.
  *
  * Only the block being indexed owns the current context, and `ledgerEntries` in it is complete, so
- * a lookup under another id (the genesis path asks about `0000000000` while block 1 is handled)
- * must not replace it: it gets a throwaway context instead, which keeps nothing past the lookup.
- * With no current context yet, the lookup creates and keeps one, as a handler would.
+ * a lookup under another id must not replace it. An older id (the genesis path asks about
+ * `0000000000` while block 1 is handled) gets a throwaway context instead, which keeps nothing past
+ * the lookup. A newer id is a block whose context nothing has opened yet: whatever is written to a
+ * throwaway would vanish unnoticed, so that is an error. With no current context yet, the lookup
+ * creates and keeps one, as a handler would.
  */
-const lookupContext = (blockId: string): BlockContext =>
-  current && current.blockId !== blockId
-    ? {
-        blockId,
-        blockWritten: false,
-        handledExtrinsics: new Set(),
-        keyRecords: new Map(),
-        ledgerEntries: new LedgerEntries(),
-      }
-    : contextFor(blockId);
+const lookupContext = (blockId: string): BlockContext => {
+  if (!current || current.blockId === blockId) {
+    return contextFor(blockId);
+  }
+
+  if (Number(blockId) > Number(current.blockId)) {
+    throw new Error(
+      `Block ${blockId} was looked up before its context was opened; the current block is ${current.blockId}`
+    );
+  }
+
+  return {
+    blockId,
+    blockWritten: false,
+    handledExtrinsics: new Set(),
+    keyRecords: new Map(),
+    ledgerEntries: new LedgerEntries(),
+  };
+};
 
 /** The ledger entries written in a block so far, reachable from layers that carry only its id. */
 export const getLedgerEntries = (blockId: string): LedgerEntries =>

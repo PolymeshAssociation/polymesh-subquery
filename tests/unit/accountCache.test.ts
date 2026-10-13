@@ -1,4 +1,5 @@
 import { Codec } from '@polkadot/types/types';
+import { __resetBlockContext } from '../../src/mappings/blockContext';
 import { Account, AccountKeyRole, Identity } from '../../src/types';
 import { getOrCreateAccount, upsertAccount } from '../../src/utils/accounts';
 import { createIdentity } from '../../src/mappings/entities/identities/mapIdentities';
@@ -39,7 +40,12 @@ const datetime = new Date('2024-01-01T00:00:00.000Z');
  * own block rather than relying on a reset between them.
  */
 let nextBlock = 100;
-const freshBlockId = () => `${nextBlock++}`.padStart(10, '0');
+const freshBlockId = () => {
+  // a lookup only opens the block it is first asked about; a later block starts from nothing
+  __resetBlockContext();
+
+  return `${nextBlock++}`.padStart(10, '0');
+};
 
 describe('getOrCreateAccount block cache', () => {
   beforeEach(() => {

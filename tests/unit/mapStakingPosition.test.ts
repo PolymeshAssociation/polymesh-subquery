@@ -15,6 +15,7 @@ import {
 } from '../../src/mappings/entities/events/mapStakingPosition';
 import { IndexerAnomaly } from '../../src/types';
 import { __resetStakingCaches } from '../../src/utils/staking';
+import { __resetBlockContext } from '../../src/mappings/blockContext';
 import {
   codec,
   mockLedgerAccountQuery,
@@ -46,6 +47,7 @@ const mockLedger = (
 
 beforeEach(() => {
   __resetStakingCaches();
+  __resetBlockContext();
 });
 
 describe('handlePositionBonded', () => {
@@ -196,6 +198,7 @@ describe('the staking reads are cached per block, not per process (F6)', () => {
 
     // `set_controller` moves the ledger to a new key and emits nothing
     mockLedger('4200', [], 'CONTROLLER_B');
+    __resetBlockContext(); // the indexer opens each block as it reaches it
     await handlePositionBonded(
       namedEvent({
         section: 'staking',
@@ -226,6 +229,7 @@ describe('the staking reads are cached per block, not per process (F6)', () => {
 
     // …and the real controller is picked up as soon as the chain names one
     mockLedger('4200', [], 'CONTROLLER_A');
+    __resetBlockContext(); // the indexer opens each block as it reaches it
     await handlePositionBonded(
       namedEvent({
         section: 'staking',
@@ -257,6 +261,7 @@ describe('a controller change', () => {
       })
     );
     mockLedger('4200', [], 'CONTROLLER_B');
+    __resetBlockContext(); // the indexer opens each block as it reaches it
     await handlePositionBonded(
       namedEvent({
         section: 'staking',
