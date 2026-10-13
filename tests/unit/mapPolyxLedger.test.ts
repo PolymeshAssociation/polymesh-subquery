@@ -3228,6 +3228,43 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     expect(anomalies()).toHaveLength(0);
   });
 
+  it("pays the reporters on a nominator's slash when the validator's own share was nothing", async () => {
+    const NOMINATOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const SECOND = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+    deferredSlashes({
+      2159: [
+        {
+          validator: OFFENDER,
+          own: '0',
+          others: [
+            [NOMINATOR, '400'],
+            [SECOND, '200'],
+          ],
+          reporters: [REPORTER],
+          payout: '120',
+        },
+      ],
+    });
+
+    // the runtime announces no slash for a zero share: the first `Slash` is the first nominator's
+    for (const event of slashEvents(
+      [
+        [NOMINATOR, '400'],
+        [SECOND, '200'],
+      ],
+      '480'
+    )) {
+      await handleStakingSlash(event);
+    }
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(120));
+    expect(entries().filter(row => row.accountId === REPORTER)).toHaveLength(1);
+    expect(entries().find(row => row.accountId === REPORTER)).toMatchObject({
+      counterpartyAddress: OFFENDER,
+    });
+    expect(anomalies()).toHaveLength(0);
+  });
+
   it('pays the reporters of a v7 slash, which the chain announces as `Slashed`', async () => {
     const NOMINATOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
     const V7 = 7_000_000;

@@ -30,7 +30,12 @@ import {
 import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
-import { appliedDeferredSlash, deferredSlashesBefore } from '../../../utils/deferredSlashes';
+import {
+  appliedDeferredSlash,
+  deferredSlashesBefore,
+  isFirstSlashOf,
+  slashedBefore,
+} from '../../../utils/deferredSlashes';
 import {
   adjustHold,
   findBlockEntries,
@@ -290,11 +295,12 @@ const slashProceeds = (
  * So the reporters' share left the validator and arrived nowhere. On testnet that left the one
  * reporter of the era-2159 slash 637.5 POLYX short from block 7,751,343.
  *
- * Done once per deferred slash, on the validator's own `Slash`, which comes first: a nominator's
- * `Slash` names an account that is not the deferred slash's validator. Of the deferred slashes
- * that match, the oldest era is the one applied, because eras are applied in order. A match is
- * a deferred figure at least `own`, not exactly it: the chain slashes no more than the ledger holds
- * and announces what it took.
+ * Done once per deferred slash, on the first `Slash` it is applied from: the validator's own, which
+ * comes first, unless its share was nothing, which the chain does not announce, and then the first
+ * nominator's. A `Slash` is placed as `handleSlash` places it. Of the deferred slashes that match,
+ * the oldest era is the one applied, because eras are applied in order. A match is a deferred figure
+ * at least the amount, not exactly it: the chain slashes no more than the ledger holds and
+ * announces what it took.
  *
  * Checked against the treasury's event. The slashes of this offence, less what the reporters were
  * paid, must be what the treasury received; anything else is recorded, not guessed at. When a slash
@@ -303,8 +309,8 @@ const slashProceeds = (
  */
 export const creditSlashReporters = async (
   args: HandlerArgs,
-  validator: string,
-  own: bigint
+  stash: string,
+  amount: bigint
 ): Promise<void> => {
   const { block, eventIdx } = args;
   const deferred = await deferredSlashesBefore(block);
@@ -312,31 +318,32 @@ export const creditSlashReporters = async (
   if (!deferred) {
     await recordAnomaly({
       kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash of ${own} on ${validator}: the deferred slashes could not be read, so its reporters were not paid`,
+      detail: `staking.Slash of ${amount} on ${stash}: the deferred slashes could not be read, so its reporters were not paid`,
       block,
       eventIdx,
     });
-    return;
-  }
-
-  const candidates = deferred.filter(slash => slash.validator === validator);
-
-  if (candidates.length === 0) {
-    // A nominator's share of someone else's slash. Its validator's `Slash` paid the reporters.
     return;
   }
 
   // the slash is capped at what the stash's ledger held, so the deferred figure is an upper bound
-  const match = appliedDeferredSlash(candidates, validator, own);
-  const applied = match?.asValidator ? match.slash : undefined;
+  const match = appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx));
+  const applied = match?.slash;
 
   if (!applied) {
-    await recordAnomaly({
-      kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash of ${own} on ${validator} matches no deferred slash, so its reporters were not paid`,
-      block,
-      eventIdx,
-    });
+    // A nominator's share that fits no slash is recorded when the slash itself is indexed.
+    if (deferred.some(slash => slash.validator === stash)) {
+      await recordAnomaly({
+        kind: AnomalyKind.UnreadableValue,
+        detail: `staking.Slash of ${amount} on ${stash} matches no deferred slash, so its reporters were not paid`,
+        block,
+        eventIdx,
+      });
+    }
+    return;
+  }
+
+  if (!isFirstSlashOf(deferred, applied, block, eventIdx)) {
+    // an earlier `Slash` of this deferred slash paid the reporters
     return;
   }
 
@@ -363,7 +370,7 @@ export const creditSlashReporters = async (
             to: { address: reporter, pool: PolyxPool.Free },
             amount,
             kind: MovementKind.StakingReward,
-            source: validator,
+            source: applied.validator,
           },
           { idTag: index === 0 ? undefined : `p${index}` }
         )
@@ -376,7 +383,7 @@ export const creditSlashReporters = async (
   if (announced !== toTreasury) {
     await recordAnomaly({
       kind: AnomalyKind.UnreadableValue,
-      detail: `staking.Slash on ${validator}: ${slashed} slashed and ${
+      detail: `staking.Slash on ${applied.validator}: ${slashed} slashed and ${
         perReporter * BigInt(reporters.length)
       } paid to reporters should leave ${toTreasury} for the treasury, which announced ${
         announced ?? 'nothing'
