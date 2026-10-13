@@ -295,7 +295,9 @@ const slashProceeds = (
  * and announces what it took.
  *
  * Checked against the treasury's event. The slashes of this offence, less what the reporters were
- * paid, must be what the treasury received; anything else is recorded, not guessed at.
+ * paid, must be what the treasury received; anything else is recorded, not guessed at. When a slash
+ * is capped, the runtime also lowers the reporters' payout by the amount it could not take; that
+ * reduction is not modelled, so the check records the difference.
  */
 export const creditSlashReporters = async (
   args: HandlerArgs,
