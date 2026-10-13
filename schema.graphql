@@ -2375,7 +2375,7 @@ type ValidatorEra
 }
 
 """
-A stash's stake slashed: `staking.Slash` before v8, `staking.Slashed` from v8. Slashes are
+A stash's stake slashed: `staking.Slash` before v7, `staking.Slashed` from v7. Slashes are
 deferred on Polymesh, so each is placed from the deferred slash it was applied from: the offending
 `validator` is the stash itself when it is the validator, otherwise the validator it nominated.
 Null when the deferred slash could not be read, which records an anomaly
