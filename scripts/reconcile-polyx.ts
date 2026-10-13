@@ -19,15 +19,17 @@
  *      grows is a systematically mis-signed one; a drift confined to `reserved` is a pool-mapping
  *      error. The taxonomy is the output — a count is not actionable.
  *
- * Resumable: progress is checkpointed to `.reconcile-polyx.checkpoint.json`, so a rate-limited
- * public endpoint can be worked through across several runs.
+ * Resumable: progress is checkpointed, so a rate-limited public endpoint can be worked through
+ * across several runs. The checkpoint is `--checkpoint <path>`, or by default one file per
+ * database (`.reconcile-polyx.<host>.<port>.<database>.checkpoint.json`), so runs against
+ * different databases at once don't overwrite each other's.
  *
  * Usage (from the repo root, against a synced DB):
  *
  *   DB_HOST=h DB_PORT=p DB_USER=u DB_PASS=p DB_DATABASE=d \
  *     yarn ts-node scripts/reconcile-polyx.ts \
  *       --rpc wss://mainnet-rpc.polymesh.network \
- *       [--sample 80] [--high 30] [--typical 30] [--reset]
+ *       [--sample 80] [--high 30] [--typical 30] [--reset] [--checkpoint <path>]
  */
 // Chain-type augmentation, in the order `src/index.ts` loads it: `types-lookup` supplies the
 // types `augment-api` imports, and `@polkadot/api-augment` is deliberately not loaded alongside
@@ -42,7 +44,6 @@ import { join } from 'node:path';
 import { DataSource } from 'typeorm';
 import { getPostgresDataSource } from '../db/utils';
 
-const CHECKPOINT = join(__dirname, '..', '.reconcile-polyx.checkpoint.json');
 const PAD = 10;
 const padId = (n: number | string): string => String(n).padStart(PAD, '0');
 
@@ -56,6 +57,16 @@ const argOf = (name: string, fallback?: string): string | undefined => {
 };
 
 const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
+
+const CHECKPOINT =
+  argOf('checkpoint') ??
+  join(
+    __dirname,
+    '..',
+    `.reconcile-polyx.${[process.env.DB_HOST, process.env.DB_PORT, process.env.DB_DATABASE]
+      .map(part => (part ?? '').replace(/[^\w.-]/g, '_'))
+      .join('.')}.checkpoint.json`
+  );
 
 // ---------------------------------------------------------------------------------------------
 // Sampling

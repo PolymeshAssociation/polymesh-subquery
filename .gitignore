@@ -63,3 +63,6 @@ metadata.json
 
 .env
 .yarn/
+
+# reconcile-polyx progress, one file per database
+.reconcile-polyx.*checkpoint.json
