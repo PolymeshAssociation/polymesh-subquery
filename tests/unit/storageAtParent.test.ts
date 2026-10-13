@@ -199,8 +199,10 @@ describe('storageAtParent', () => {
 
     it('is empty, not unreadable, when the map holds nothing', async () => {
       getKeysPaged.mockResolvedValue([]);
+      queryStorageAt.mockRejectedValue(new TypeError('Cannot read properties of undefined'));
 
       expect(await storageEntriesAtParent(block, 'multiSig', 'multiSigToIdentity')).toEqual([]);
+      expect(queryStorageAt).not.toHaveBeenCalled();
     });
   });
 });

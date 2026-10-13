@@ -232,6 +232,12 @@ export const storageEntriesAtParent = async (
       parentHash
     );
 
+    // an empty page has nothing to fetch, and the node answers an empty key list with no
+    // result at all, which the RPC layer cannot map
+    if (keys.length === 0) {
+      return entries;
+    }
+
     // one round trip for the page, rather than one per key
     const raws = (await api.rpc.state.queryStorageAt(
       keys,
