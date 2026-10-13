@@ -3,6 +3,9 @@
  * `AccountBalance.bonded`/`.locks`/`.holds` already track (`readStakingLedger` in
  * `src/utils/staking.ts`), not accumulate an independent delta that can drift from it.
  */
+import { decodeAddress, encodeAddress } from '@polkadot/keyring';
+import { stringToU8a, u8aConcat } from '@polkadot/util';
+import { blake2AsU8a, encodeDerivedAddress } from '@polkadot/util-crypto';
 import {
   handlePositionBonded,
   handlePositionUnbonded,
@@ -588,6 +591,83 @@ describe('staking calls nested in a batch or a multisig proposal', () => {
     await handleBatchedStakingCalls(batchCall('17569824', call('utility', 'batch', [[inner]])));
 
     expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_B');
+  });
+
+  describe('through utility.as_derivative', () => {
+    const asDerivative = (index: number, inner: unknown) =>
+      call('utility', 'asDerivative', [index, inner]);
+    const setController = () => call('staking', 'setController', ['CONTROLLER_B']);
+    const derivativeOf = (who: string, index: number) => encodeDerivedAddress(who, index, 12);
+
+    const derivedPosition = (stash: string) => ({
+      StakingPosition: {
+        [stash]: {
+          id: stash,
+          stashId: stash,
+          controllerId: 'CONTROLLER_A',
+          bonded: BigInt(4200),
+          unbonding: BigInt(0),
+        },
+      },
+    });
+
+    it('derives the account the way the runtime does: blake2_256 of the tag, account and u16', () => {
+      const entropy = blake2AsU8a(
+        u8aConcat(
+          stringToU8a('modlpy/utilisuba'),
+          decodeAddress(ALICE),
+          new Uint8Array([0x03, 0x01]) // 259 as a little-endian u16
+        )
+      );
+
+      expect(derivativeOf(ALICE, 259)).toBe(encodeAddress(entropy, 12));
+    });
+
+    it("re-reads the derived account's position, not the signer's", async () => {
+      runtimeVersion();
+      const derived = derivativeOf(ALICE, 3);
+      const db = mockStore({
+        StakingPosition: {
+          ...alicePosition().StakingPosition,
+          ...derivedPosition(derived).StakingPosition,
+        },
+      });
+      mockLedger('4200', [], 'CONTROLLER_B');
+
+      await handleBatchedStakingCalls(batchCall('17569826', asDerivative(3, setController())));
+
+      expect(db.StakingPosition[derived].controllerId).toBe('CONTROLLER_B');
+      expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
+    });
+
+    it('carries the derived account through a batch inside, and derives again when nested', async () => {
+      runtimeVersion();
+      const once = derivativeOf(ALICE, 1);
+      const twice = derivativeOf(once, 2);
+      const db = mockStore(derivedPosition(twice));
+      mockLedger('4200', [], 'CONTROLLER_B');
+
+      await handleBatchedStakingCalls(
+        batchCall(
+          '17569827',
+          call('utility', 'batchAll', [
+            [asDerivative(1, call('utility', 'batch', [[asDerivative(2, setController())]]))],
+          ])
+        )
+      );
+
+      expect(db.StakingPosition[twice].controllerId).toBe('CONTROLLER_B');
+    });
+
+    it("leaves the signer's position alone when only the derived account has none", async () => {
+      runtimeVersion();
+      const db = mockStore(alicePosition());
+      mockLedger('4200', [], 'CONTROLLER_B');
+
+      await handleBatchedStakingCalls(batchCall('17569828', asDerivative(0, setController())));
+
+      expect(db.StakingPosition[ALICE].controllerId).toBe('CONTROLLER_A');
+    });
   });
 
   it('reads nothing for a batch with no such call', async () => {

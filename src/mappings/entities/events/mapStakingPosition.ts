@@ -1,3 +1,4 @@
+import { encodeDerivedAddress } from '@polkadot/util-crypto';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { MultiSigProposal, StakingPosition } from '../../../types';
@@ -337,18 +338,30 @@ const isCall = (value: unknown): value is CallLike =>
   typeof (value as CallLike)?.method === 'string' &&
   Array.isArray((value as CallLike)?.args);
 
-/** Whether `call`, or any call nested in its arguments, is a `staking.set_controller` */
-const setsController = (call: unknown): boolean => {
+/**
+ * The accounts a `staking.set_controller` inside `call` runs as, given the account `origin` the
+ * call itself runs as. Batches run their calls as the same account; `utility.as_derivative` runs
+ * its call as the account derived from `origin` and the index.
+ */
+const setControllerCallers = (call: unknown, origin: string): string[] => {
   if (Array.isArray(call)) {
-    return call.some(setsController);
+    return call.flatMap(nested => setControllerCallers(nested, origin));
   }
   if (!isCall(call)) {
-    return false;
+    return [];
   }
-  return (
-    (call.section === 'staking' && call.method === 'setController') ||
-    call.args.some(setsController)
-  );
+  if (call.section === 'staking' && call.method === 'setController') {
+    return [origin];
+  }
+  if (call.section === 'utility' && call.method === 'asDerivative') {
+    const [index, inner] = call.args;
+
+    return setControllerCallers(
+      inner,
+      encodeDerivedAddress(origin, Number(String(index)), api.registry.chainSS58)
+    );
+  }
+  return call.args.flatMap(nested => setControllerCallers(nested, origin));
 };
 
 /**
@@ -375,29 +388,35 @@ const refreshPositionOf = async (account: string, event: SubstrateEvent): Promis
 };
 
 /**
- * A `utility` batch holding a `staking.set_controller`, which emits no event in any runtime and,
- * nested, never reaches `handleSetController`: call handlers only see top-level calls. Mainnet
- * 17,569,814–17,569,830 moved three stashes' controllers this way. The batch's signer is the
- * account that made the calls.
+ * A `utility` batch or `as_derivative` holding a `staking.set_controller`, which emits no event in
+ * any runtime and, nested, never reaches `handleSetController`: call handlers only see top-level
+ * calls. Mainnet 17,569,814–17,569,830 moved three stashes' controllers this way. A batch's calls
+ * run as its signer; an `as_derivative` call runs as the account derived from the signer and the
+ * index, so that is the position re-read, however deep the wrappers nest.
  *
- * `relay_tx`, `as_derivative` and v6's `batch_old` are not subscribed. The first two run the inner
- * call as an account other than the signer, so the signer's position would be the wrong one to
- * re-read; `batch_old` runs it as the signer itself, like the five batch calls, and is left out
- * only because nothing needs it. `relay_tx` exists from v5.4. No `set_controller` is nested in any
- * of them, on testnet or mainnet, in the history indexed so far. Were one ever to appear, the
+ * `relay_tx` and v6's `batch_old` are not subscribed. `relay_tx` (from v5.4) runs the inner call
+ * as an account other than the signer, with no derivation to compute; `batch_old` runs it as the
+ * signer itself, like the five batch calls, and is left out only because nothing needs it. Neither
+ * has a `set_controller` nested in any chain's indexed history. Were one ever to appear, the
  * position check would catch the stale controller.
  */
 export const handleBatchedStakingCalls = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   await ensureTrueSpecVersion(extrinsic.block);
 
-  if (!setsController(extrinsic.extrinsic.method)) {
+  const accounts = new Set(
+    setControllerCallers(extrinsic.extrinsic.method, extrinsic.extrinsic.signer.toString())
+  );
+
+  if (!accounts.size) {
     return;
   }
 
   const closing = await indexClosingEvent(extrinsic);
 
   if (closing) {
-    await refreshPositionOf(extrinsic.extrinsic.signer.toString(), closing);
+    for (const account of accounts) {
+      await refreshPositionOf(account, closing);
+    }
   }
 };
 

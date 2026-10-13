@@ -608,6 +608,11 @@ const project: SubstrateProject = {
             handler: 'handleBatchedStakingCalls',
             filter: { module: 'utility', method: 'forceBatch', success: true },
           },
+          {
+            kind: SubstrateHandlerKind.Call,
+            handler: 'handleBatchedStakingCalls',
+            filter: { module: 'utility', method: 'asDerivative', success: true },
+          },
         ],
       },
     },
