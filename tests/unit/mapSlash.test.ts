@@ -186,4 +186,29 @@ describe('handleSlash', () => {
     ]);
     expect(anomaly).toHaveBeenCalledTimes(1);
   });
+
+  it("records a v8 validator's slash capped below its deferred figure, with no anomaly", async () => {
+    const db = mockStore();
+    jest.mocked(deferredSlashesBefore).mockResolvedValue([deferred(7029, BigInt(1000))]);
+    chainEras(7029);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleSlash(
+      namedEvent({
+        section: 'staking',
+        method: 'Slashed',
+        fields: { staker: VALIDATOR, amount: '600' },
+      })
+    );
+
+    expect(Object.values(db.Slash)).toEqual([
+      expect.objectContaining({
+        accountId: VALIDATOR,
+        validatorId: VALIDATOR,
+        offenceEraIndex: 7014,
+        amount: BigInt(600),
+      }),
+    ]);
+    expect(anomaly).not.toHaveBeenCalled();
+  });
 });
