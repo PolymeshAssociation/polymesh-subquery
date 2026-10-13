@@ -81,11 +81,26 @@ describe('appliedDeferredSlash', () => {
     });
   });
 
+  it("places a nominator's share capped at what its ledger held", () => {
+    expect(appliedDeferredSlash(waiting, NOMINATOR, BigInt(25))).toEqual({
+      slash: waiting[1],
+      asValidator: false,
+    });
+  });
+
   it('prefers an exact match to a capped one, whatever the era', () => {
     const mixed = [deferred(2159, BigInt(1000)), deferred(2160, BigInt(700))];
 
     expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(700))?.slash).toBe(mixed[1]);
     expect(appliedDeferredSlash(mixed, VALIDATOR, BigInt(600))?.slash).toBe(mixed[0]);
+
+    const shares = [
+      deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
+      deferred(2160, BigInt(1000), [[NOMINATOR, BigInt(25)]]),
+    ];
+
+    expect(appliedDeferredSlash(shares, NOMINATOR, BigInt(25))?.slash).toBe(shares[1]);
+    expect(appliedDeferredSlash(shares, NOMINATOR, BigInt(20))?.slash).toBe(shares[0]);
   });
 });
 
@@ -207,6 +222,34 @@ describe('handleSlash', () => {
         validatorId: VALIDATOR,
         offenceEraIndex: 7014,
         amount: BigInt(600),
+      }),
+    ]);
+    expect(anomaly).not.toHaveBeenCalled();
+  });
+
+  it("records a v8 nominator's slash capped below its deferred share, with no anomaly", async () => {
+    const db = mockStore();
+    jest
+      .mocked(deferredSlashesBefore)
+      .mockResolvedValue([deferred(7029, BigInt(1000), [[NOMINATOR, BigInt(40)]])]);
+    chainEras(7029);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    anomaly.mockClear();
+
+    await handleSlash(
+      namedEvent({
+        section: 'staking',
+        method: 'Slashed',
+        fields: { staker: NOMINATOR, amount: '25' },
+      })
+    );
+
+    expect(Object.values(db.Slash)).toEqual([
+      expect.objectContaining({
+        accountId: NOMINATOR,
+        validatorId: VALIDATOR,
+        offenceEraIndex: 7014,
+        amount: BigInt(25),
       }),
     ]);
     expect(anomaly).not.toHaveBeenCalled();

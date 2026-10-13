@@ -130,8 +130,11 @@ export const appliedDeferredSlash = (
     return { slash: own, asValidator: true };
   }
 
-  const shares = deferred.filter(slash =>
-    slash.others.some(([nominator, value]) => nominator === stash && value === amount)
+  const holds = (slash: DeferredSlash, test: (value: bigint) => boolean): boolean =>
+    slash.others.some(([nominator, value]) => nominator === stash && test(value));
+  const shares = exactOrAll(
+    deferred.filter(slash => holds(slash, value => value >= amount)),
+    slash => holds(slash, value => value === amount)
   );
   const nearest = earlier.find(validator => shares.some(slash => slash.validator === validator));
   const share = oldest(
