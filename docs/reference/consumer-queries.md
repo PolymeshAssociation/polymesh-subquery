@@ -114,7 +114,7 @@ Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction`
 | **Governance** | `Proposal`, `ProposalVote` | Unobserved. Lowers the priority of the PIP lifecycle gaps — worth confirming nothing external depends on them. |
 | **Identity extras** | `AccountHistory`, `ChildIdentity`, `MultiSig`, `MultiSigAdmin`, `MultiSigSigner`, `AgentGroup`, `AgentGroupMembership` | Unobserved. `IdentityKey` replacing `AccountHistory` is near-zero-risk. [04](../implementation/04-identity-keys.md) also relinks `MultiSig` / `MultiSigAdmin` and adds a nullable `MultiSigSigner.signerAccount` — re-checked, still unqueried, so still near-zero-risk. |
 | **Confidential (8)** | all `Confidential*` | Newest domain; consumers likely not built yet. |
-| **Other** | `BridgeEvent`, `Funding`, `AssetMandatoryMediator`, `AssetPreApproval`, `TickerReservation`, `Migration`, `Debug`, `FoundType` | Mixed; `Debug`/`FoundType` are dev instrumentation. |
+| **Other** | `BridgeEvent`, `Funding`, `AssetMandatoryMediator`, `AssetPreApproval`, `TickerReservation`, `Migration` | Mixed. |
 
 **Do not delete anything on this basis alone** — it establishes *low observed risk*, not *no risk*. But it does mean the redesign has far more freedom than the entity count suggested.
 
