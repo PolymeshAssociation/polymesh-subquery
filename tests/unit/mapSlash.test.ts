@@ -18,6 +18,7 @@ import {
   appliedDeferredSlash,
   DeferredSlash,
   deferredSlashesBefore,
+  isFirstSlashOf,
 } from '../../src/utils/deferredSlashes';
 import { mockStore, namedEvent, tupleEvent } from './helpers';
 
@@ -43,6 +44,46 @@ describe('appliedDeferredSlash', () => {
     expect(appliedDeferredSlash(waiting, VALIDATOR, BigInt(1000))).toEqual({
       slash: waiting[1],
       asValidator: true,
+    });
+  });
+
+  describe('with a stale key beside the due era', () => {
+    // a late-reported offence filed under a key already past is never applied and stays stored
+    const stale = deferred(2100, BigInt(1000), [[NOMINATOR, BigInt(40)]]);
+    const due = deferred(2159, BigInt(1000), [[NOMINATOR, BigInt(40)]]);
+
+    it('matches the due era, not the oldest, when it is given', () => {
+      expect(appliedDeferredSlash([stale, due], VALIDATOR, BigInt(1000), [], 2159)?.slash).toBe(
+        due
+      );
+      expect(appliedDeferredSlash([due, stale], NOMINATOR, BigInt(40), [], 2159)).toEqual({
+        slash: due,
+        asValidator: false,
+      });
+    });
+
+    it('leaves a slash unplaced when the due era holds none of that figure', () => {
+      expect(appliedDeferredSlash([stale], VALIDATOR, BigInt(1000), [], 2159)).toBeUndefined();
+    });
+
+    it('still takes the oldest era present without one', () => {
+      expect(appliedDeferredSlash([due, stale], VALIDATOR, BigInt(1000))?.slash).toBe(stale);
+    });
+
+    it('counts the first slash of the due era only', () => {
+      const event = (method: string, stash: string, amount: string) => ({
+        event: {
+          section: 'staking',
+          method,
+          data: [{ toString: () => stash }, { toString: () => amount }],
+        },
+      });
+      const block = {
+        events: [event('Slashed', VALIDATOR, '1000'), event('Slashed', NOMINATOR, '40')],
+      } as never;
+
+      expect(isFirstSlashOf([stale, due], due, block, 1, 2159)).toBe(false);
+      expect(isFirstSlashOf([stale, due], due, block, 0, 2159)).toBe(true);
     });
   });
 

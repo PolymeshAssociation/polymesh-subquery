@@ -3,6 +3,22 @@ import { SubstrateBlock } from '@subql/types';
 import { getBigIntValue, getTextValue } from './common';
 import { storageEntriesAtParent, UndecodableStateError } from './storageAtParent';
 
+/**
+ * The first runtime that holds a deferred slash under the era it is applied in, rather than the era
+ * it was reported in (`on_offence` from v7.0).
+ */
+export const APPLY_ERA_KEYS_FROM = 7_000_000;
+
+/**
+ * The era whose deferred slashes `block` applies, given the active era: from v7.0 that is the active
+ * era itself, since the runtime takes exactly that key as the era starts. Earlier runtimes apply
+ * every key up to a threshold, so there is none (`undefined`) and the oldest era present is used.
+ */
+export const dueEraAt = (
+  block: SubstrateBlock,
+  activeEra: number | undefined
+): number | undefined => (block.specVersion >= APPLY_ERA_KEYS_FROM ? activeEra : undefined);
+
 /** One `staking.UnappliedSlash`: a slash the chain holds back until its era comes due. */
 export interface DeferredSlash {
   /**
@@ -100,9 +116,12 @@ export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[]
  * runtime slashes no more than the stash's ledger holds and the event reports what was taken, so a
  * match is a figure at least `amount`, an exact one preferred.
  *
- * A block applies the slashes of one era, the oldest still deferred (the runtime takes them once,
- * as the era starts), so only that era is matched. A newer era's figure that happens to fit, such
- * as a validator's own slash seen from the same stash acting as a nominator, is not this slash.
+ * A block applies the slashes of one era (the runtime takes them once, as the era starts), so only
+ * that era is matched: `dueEra` when given (from v7.0, see `dueEraAt`), else the oldest still
+ * deferred. A key that is already past, such as a late-reported offence's, is never applied and
+ * stays in storage, so the oldest era present can be a stale one. A newer era's figure that happens
+ * to fit, such as a validator's own slash seen from the same stash acting as a nominator, is not
+ * this slash.
  *
  * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
  * the validator's own share first and then its nominators', so the nominator's is the one whose
@@ -116,9 +135,10 @@ export const appliedDeferredSlash = (
   deferred: DeferredSlash[],
   stash: string,
   amount: bigint,
-  earlier: string[] = []
+  earlier: string[] = [],
+  dueEra?: number
 ): { slash: DeferredSlash; asValidator: boolean } | undefined => {
-  const era = Math.min(...deferred.map(slash => slash.era));
+  const era = dueEra ?? Math.min(...deferred.map(slash => slash.era));
   const applying = deferred.filter(slash => slash.era === era);
 
   const exactOrAll = (
@@ -162,7 +182,8 @@ export const isFirstSlashOf = (
   deferred: DeferredSlash[],
   slash: DeferredSlash,
   block: SubstrateBlock,
-  eventIdx: number
+  eventIdx: number,
+  dueEra?: number
 ): boolean =>
   !(block.events ?? []).slice(0, eventIdx).some(({ event }, idx) => {
     if (event.section !== 'staking' || (event.method !== 'Slash' && event.method !== 'Slashed')) {
@@ -173,7 +194,8 @@ export const isFirstSlashOf = (
       deferred,
       event.data[0].toString(),
       BigInt(event.data[1].toString()),
-      slashedBefore(block, idx)
+      slashedBefore(block, idx),
+      dueEra
     );
 
     return placed?.slash === slash;
