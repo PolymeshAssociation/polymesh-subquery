@@ -3031,6 +3031,8 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     return { toU8a: () => bytes, toHex: () => `0xunappliedSlashes:${era}` };
   };
   let undecodable: number[] = [];
+  // from v7 the slashes applied are the active era's
+  let activeEra = 2159;
 
   const getKeysPaged = jest.fn();
   const queryStorageAt = jest.fn();
@@ -3055,6 +3057,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
           keyPrefix: () => '0xunappliedSlashes',
           creator: { meta: { type: { isMap: true, asMap: { value: 587 } } } },
         },
+        activeEra: jest.fn().mockResolvedValue({ toJSON: () => ({ index: activeEra }) }),
         // the slashed stash's staking lock is resynced from its ledger
         bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
         ledger: jest.fn().mockResolvedValue({ toJSON: () => null }),
@@ -3097,6 +3100,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
 
   afterEach(() => {
     undecodable = [];
+    activeEra = 2159;
     (globalThis as any).api.query = {};
     (globalThis as any).api.runtimeVersion = registryRuntime;
     delete (globalThis as any).api.rpc;
@@ -3316,6 +3320,27 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     }
 
     expect(balance(REPORTER)?.free).toBe(BigInt(120));
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it("pays only the due era's reporters from v7, past a stale key that was never applied", async () => {
+    const V7 = 7_000_000;
+    const STALE_REPORTER = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    // a late-reported offence filed under a key already past is never taken, so it stays beside
+    // the due era, which is the one the runtime applies
+    deferredSlashes(
+      {
+        2100: [{ validator: OFFENDER, own: '1000', reporters: [STALE_REPORTER], payout: '50' }],
+        2159: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER], payout: '120' }],
+      },
+      V7
+    );
+
+    const [slash] = slashEvents([[OFFENDER, '1000']], '880', V7, 'Slashed');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(120));
+    expect(balance(STALE_REPORTER)).toBeUndefined();
     expect(anomalies()).toHaveLength(0);
   });
 

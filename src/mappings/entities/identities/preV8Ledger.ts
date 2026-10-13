@@ -23,6 +23,7 @@ import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
 import {
+  readActiveEraIndex,
   readStakingLedger,
   readStakingLock,
   resolveLegacyRewardDestination,
@@ -31,6 +32,7 @@ import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import {
+  APPLY_ERA_KEYS_FROM,
   appliedDeferredSlash,
   deferredSlashesBefore,
   isFirstSlashOf,
@@ -316,7 +318,7 @@ const slashProceeds = (
  * Done once per deferred slash, on the first `Slash` it is applied from: the validator's own, which
  * comes first, unless its share was nothing, which the chain does not announce, and then the first
  * nominator's. A `Slash` is placed as `handleSlash` places it. Of the deferred slashes that match,
- * the oldest era is the one applied, because eras are applied in order. A match is a deferred figure
+ * the one applied is the active era's from v7, the oldest before that (eras are applied in order). A match is a deferred figure
  * at least the amount, not exactly it: the chain slashes no more than the ledger holds and
  * announces what it took.
  *
@@ -344,7 +346,21 @@ export const creditSlashReporters = async (
   }
 
   // the slash is capped at what the stash's ledger held, so the deferred figure is an upper bound
-  const match = appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx));
+  const dueEra =
+    block.specVersion >= APPLY_ERA_KEYS_FROM
+      ? await readOrAnomaly(
+          { block, eventIdx, moduleId: args.moduleId, eventId: args.eventId },
+          `the deferred slash applied to ${stash} was placed without the active era`,
+          readActiveEraIndex
+        )
+      : undefined;
+  const match = appliedDeferredSlash(
+    deferred,
+    stash,
+    amount,
+    slashedBefore(block, eventIdx),
+    dueEra
+  );
   const applied = match?.slash;
 
   if (!applied) {
@@ -360,7 +376,7 @@ export const creditSlashReporters = async (
     return;
   }
 
-  if (!isFirstSlashOf(deferred, applied, block, eventIdx)) {
+  if (!isFirstSlashOf(deferred, applied, block, eventIdx, dueEra)) {
     // an earlier `Slash` of this deferred slash paid the reporters
     return;
   }
