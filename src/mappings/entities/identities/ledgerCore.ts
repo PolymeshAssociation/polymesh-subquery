@@ -699,7 +699,9 @@ const rawChainHolds = async (
     return [];
   }
 
-  const bytes = stored.unwrap().toU8a(true);
+  // Copied into this realm: `compactFromU8a` doesn't recognise the host's `Uint8Array` inside the
+  // sandbox, and reads it as text
+  const bytes = Uint8Array.from(stored.unwrap().toU8a(true));
   const [offset, length] = compactFromU8a(bytes);
   const count = length.toNumber();
 

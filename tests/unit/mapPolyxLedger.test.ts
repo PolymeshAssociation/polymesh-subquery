@@ -9,6 +9,7 @@ import { bnToU8a, u8aConcat } from '@polkadot/util';
  */
 
 import { SubstrateEvent } from '@subql/types';
+import { runInNewContext } from 'vm';
 
 jest.mock('../../src/utils/blockAuthor', () => ({ blockAuthor: jest.fn() }));
 jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
@@ -549,8 +550,11 @@ describe('Event → pool transition', () => {
       })
     );
 
-    // the chain after the restake: one `Staking` entry (pallet 17) of 1,449,219
-    const raw = u8aConcat([0x04, 17, 0], bnToU8a(1449219, { bitLength: 128, isLe: true }));
+    // the chain after the restake: one `Staking` entry (pallet 17) of 1,449,219, as a `Uint8Array`
+    // from another realm, as the host's API hands it into SubQuery's sandbox
+    const raw = (runInNewContext('Uint8Array') as Uint8ArrayConstructor).from(
+      u8aConcat([0x04, 17, 0], bnToU8a(1449219, { bitLength: 128, isLe: true }))
+    );
     const getStorage = jest
       .fn()
       .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
