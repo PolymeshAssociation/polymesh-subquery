@@ -9,6 +9,7 @@ import {
 } from '../../../types';
 import { bytesToString, getBooleanValue, getCaIdValue } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
+import { caId } from './mapCorporateAction';
 
 /**
  * `corporateBallot` pallet handlers.
@@ -16,8 +17,6 @@ import { extractArgs, getOrAnomaly } from '../common';
  * All six events are shape-identical across every checked spec version
  * (docs/reference/event-shape-verification.md) — no version branching in this domain.
  */
-const ballotId = (assetId: string, localId: number): string => `${assetId}/${localId}`;
-
 interface RangeJson {
   start: number;
   end: number;
@@ -67,9 +66,9 @@ export const handleBallotCreated = async (event: SubstrateEvent): Promise<void> 
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const range = rawRange.toJSON() as unknown as RangeJson;
-  const id = ballotId(assetId, localId);
+  const id = caId(assetId, localId);
   const corporateAction = await getOrAnomaly(
-    caId => CorporateAction.get(caId),
+    actionId => CorporateAction.get(actionId),
     id,
     'CorporateAction',
     event
@@ -96,7 +95,7 @@ export const handleBallotMetaChanged = async (event: SubstrateEvent): Promise<vo
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ballot = await getOrAnomaly(
     id => CorporateBallot.get(id),
-    ballotId(assetId, localId),
+    caId(assetId, localId),
     'CorporateBallot',
     event
   );
@@ -118,7 +117,7 @@ export const handleBallotRangeChanged = async (event: SubstrateEvent): Promise<v
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ballot = await getOrAnomaly(
     id => CorporateBallot.get(id),
-    ballotId(assetId, localId),
+    caId(assetId, localId),
     'CorporateBallot',
     event
   );
@@ -143,7 +142,7 @@ export const handleBallotRcvChanged = async (event: SubstrateEvent): Promise<voi
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ballot = await getOrAnomaly(
     id => CorporateBallot.get(id),
-    ballotId(assetId, localId),
+    caId(assetId, localId),
     'CorporateBallot',
     event
   );
@@ -165,7 +164,7 @@ export const handleBallotRemoved = async (event: SubstrateEvent): Promise<void> 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const ballot = await getOrAnomaly(
     id => CorporateBallot.get(id),
-    ballotId(assetId, localId),
+    caId(assetId, localId),
     'CorporateBallot',
     event
   );
@@ -194,7 +193,7 @@ export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void>
     })
   );
 
-  const id = `${ballotId(assetId, localId)}/${voterId}`;
+  const id = `${caId(assetId, localId)}/${voterId}`;
 
   // Upserted, because the chain keys `Votes` on `(CAId, IdentityId)`: voting again while the ballot
   // is open replaces the previous vote rather than adding one. A row per `VoteCast` would leave a
@@ -212,7 +211,7 @@ export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void>
 
   await CorporateBallotVote.create({
     id,
-    ballotId: ballotId(assetId, localId),
+    ballotId: caId(assetId, localId),
     voterId,
     votes,
     createdEventId: blockEventId,

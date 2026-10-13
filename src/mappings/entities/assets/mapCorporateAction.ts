@@ -54,7 +54,8 @@ const decodeCorporateAction = (raw: unknown): RawCorporateAction => ({
   withholdingTax: extractValue(raw, 'withholding_tax'),
 });
 
-const caId = (assetId: string, localId: number): string => `${assetId}/${localId}`;
+/** A corporate action's id, which its ballot, if any, shares. */
+export const caId = (assetId: string, localId: number): string => `${assetId}/${localId}`;
 
 /**
  * The `Checkpoint` a record date names, when it names one that already exists.
