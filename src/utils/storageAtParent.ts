@@ -81,18 +81,12 @@ const decoding = <T>(what: string, run: () => T): T => {
 const storageItem = (section: string, item: string): StorageItem | undefined =>
   (api.query as unknown as Record<string, Record<string, StorageItem>>)[section]?.[item];
 
-/** Reads one raw key at the parent hash and decodes it with this block's registry. */
-const readAtParent = async (
-  block: SubstrateBlock,
+/** A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is stored */
+const decodeStored = (
   storage: StorageItem,
-  key: unknown,
+  raw: Option<Codec>,
   name: string
-): Promise<Codec | undefined> => {
-  const raw = (await api.rpc.state.getStorage(
-    key as string,
-    block.block.header.parentHash
-  )) as unknown as Option<Codec>;
-
+): Codec | undefined => {
   if (raw.isNone) {
     return undefined;
   }
@@ -108,6 +102,22 @@ const readAtParent = async (
     return api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as Codec;
   });
 };
+
+/** Reads one raw key at the parent hash and decodes it with this block's registry. */
+const readAtParent = async (
+  block: SubstrateBlock,
+  storage: StorageItem,
+  key: unknown,
+  name: string
+): Promise<Codec | undefined> =>
+  decodeStored(
+    storage,
+    (await api.rpc.state.getStorage(
+      key as string,
+      block.block.header.parentHash
+    )) as unknown as Option<Codec>,
+    name
+  );
 
 /**
  * One storage value as it stood when `block` began: the state its extrinsics were checked against.
@@ -188,12 +198,14 @@ export const storageEntriesAtParent = async (
       parentHash
     );
 
-    const values = await Promise.all(
-      keys.map(key => readAtParent(block, storage, key, `${section}.${item}`))
-    );
+    // one round trip for the page, rather than one per key
+    const raws = (await api.rpc.state.queryStorageAt(
+      keys,
+      parentHash
+    )) as unknown as Option<Codec>[];
 
     keys.forEach((key, index) => {
-      const value = values[index];
+      const value = decodeStored(storage, raws[index], `${section}.${item}`);
       if (value) {
         entries.push({ args: keyArgs(storage, key), value });
       }

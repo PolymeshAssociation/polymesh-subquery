@@ -5,6 +5,7 @@ import { storageAtParent, storageEntriesAtParent } from '../../src/utils/storage
 let block: SubstrateBlock;
 
 const getStorage = jest.fn();
+const queryStorageAt = jest.fn();
 const getKeysPaged = jest.fn();
 const getHeader = jest.fn();
 const getRuntimeVersion = jest.fn();
@@ -26,6 +27,7 @@ beforeEach(() => {
       Promise.resolve(upgrades.filter(row => filter.every(([f, , v]) => (row as any)[f] === v)))
   );
   getStorage.mockReset();
+  queryStorageAt.mockReset();
   getKeysPaged.mockReset();
   getHeader.mockReset().mockResolvedValue({ parentHash: '0xgrandparent' });
   // the parent block ran under the same runtime this block's registry describes
@@ -54,7 +56,10 @@ beforeEach(() => {
       },
     },
     runtimeVersion: spec(3000),
-    rpc: { chain: { getHeader }, state: { getStorage, getKeysPaged, getRuntimeVersion } },
+    rpc: {
+      chain: { getHeader },
+      state: { getStorage, queryStorageAt, getKeysPaged, getRuntimeVersion },
+    },
     registry: { createLookupType: (id: number) => `Lookup${id}`, createType },
   };
 });
@@ -147,14 +152,18 @@ describe('storageAtParent', () => {
     });
 
     it("reads every entry of a map at the parent hash, with each key's decoded arguments", async () => {
-      getKeysPaged.mockResolvedValue([key(1), key(2)]);
-      getStorage.mockImplementation((k: { toU8a: () => Uint8Array }) =>
-        Promise.resolve(stored(k.toU8a()[0]))
+      const keys = [key(1), key(2)];
+      getKeysPaged.mockResolvedValue(keys);
+      queryStorageAt.mockImplementation((keys: { toU8a: () => Uint8Array }[]) =>
+        Promise.resolve(keys.map(k => stored(k.toU8a()[0])))
       );
 
       const entries = await storageEntriesAtParent(block, 'multiSig', 'multiSigToIdentity');
 
       expect(getKeysPaged).toHaveBeenCalledWith('0xprefix', 1000, '0xprefix', '0xparent');
+      expect(queryStorageAt).toHaveBeenCalledTimes(1);
+      expect(queryStorageAt).toHaveBeenCalledWith(keys, '0xparent');
+      expect(getStorage).not.toHaveBeenCalled();
       // the key decoded by this block's registry, against the map's own metadata, from its hex: a
       // mapping slicing the bytes itself meets the sandbox's proxied buffer
       const { meta } = (globalThis as any).api.query.multiSig.multiSigToIdentity.creator;
@@ -167,11 +176,15 @@ describe('storageAtParent', () => {
     it('pages through a map larger than one page', async () => {
       const page = Array.from({ length: 1000 }, (_, i) => key(i % 256));
       getKeysPaged.mockResolvedValueOnce(page).mockResolvedValueOnce([key(7)]);
-      getStorage.mockResolvedValue({ isNone: true });
+      queryStorageAt.mockImplementation((keys: unknown[]) =>
+        Promise.resolve(keys.map(() => ({ isNone: true })))
+      );
 
       await storageEntriesAtParent(block, 'multiSig', 'multiSigToIdentity');
 
       expect(getKeysPaged).toHaveBeenCalledTimes(2);
+      // one call per page: 1,000 keys, then 1
+      expect(queryStorageAt.mock.calls.map(([keys]) => keys.length)).toEqual([1000, 1]);
       expect(getKeysPaged.mock.calls[1][2]).toBe(page[999]);
     });
 
