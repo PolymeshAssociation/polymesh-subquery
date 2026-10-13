@@ -21,7 +21,13 @@ jest.mock('../../src/mappings/args/encode', () => ({
   encodeArgs: () => ({ args: {}, refs: [] }),
 }));
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
-import { EntryDirection, HoldReason, MovementKind, PolyxPool } from '../../src/types';
+import {
+  EntryDirection,
+  HoldReason,
+  IndexerAnomaly,
+  MovementKind,
+  PolyxPool,
+} from '../../src/types';
 import {
   handleBalanceBurned,
   handleBalanceEndowed,
@@ -1323,6 +1329,23 @@ describe('staking — era-dependent, inverted at v8', () => {
       ).rejects.toThrow('WebSocket is not connected');
       expect(balance(ALICE)?.frozen).toBe(BigInt(0));
     });
+
+    it('records an anomaly and leaves the lock as it was when the ledger does not decode', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      mockLedger('4000');
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '4000'], 7_004_001));
+      __resetStakingCaches();
+      (globalThis as any).api.query.staking.ledger = jest
+        .fn()
+        .mockRejectedValue(new Error('createType(StakingLedger):: Struct: failed on total: u128'));
+      const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+      await handleBonded(tupleEvent('staking', 'Bonded', ['0xdid', ALICE, '500'], 7_004_001));
+
+      expect(anomaly).toHaveBeenCalledTimes(1);
+      anomaly.mockRestore();
+      expect(balance(ALICE)?.frozen).toBe(BigInt(4000));
+    });
   });
 
   it('staking Reward is ∅ → stash/Free with the era from the preceding PayoutStarted', async () => {
@@ -2228,6 +2251,35 @@ describe('pre-v8 PIPs deposit locks', () => {
     const amount = balance(address)?.locks?.find((l: any) => l.lockId === 'pips    ')?.amount;
     return amount === undefined ? undefined : BigInt(amount);
   };
+
+  it('records an anomaly and leaves the lock as it was when the locks do not decode', async () => {
+    chainLocks({ [ALICE]: [{ id: PIPS, amount: '2000' }] });
+    await handlePipsDeposit(
+      tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '2000'], 3000)
+    );
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    (globalThis as any).api.query.balances.locks = jest
+      .fn()
+      .mockRejectedValue(new Error('createType(Vec<BalanceLock>):: Unable to decode on index 0'));
+
+    await handlePipsDeposit(
+      tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '3000'], 3001)
+    );
+
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    anomaly.mockRestore();
+    expect(pipsLock(ALICE)).toBe(BigInt(2000));
+  });
+
+  it('still fails the block when the locks read fails', async () => {
+    (globalThis as any).api.query = {
+      balances: { locks: jest.fn().mockRejectedValue(new Error('1006: Abnormal Closure')) },
+    };
+
+    await expect(
+      handlePipsDeposit(tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '2000'], 3000))
+    ).rejects.toThrow('1006: Abnormal Closure');
+  });
 
   it("Voted sets the voter's pips lock from chain", async () => {
     chainLocks({ [ALICE]: [{ id: PIPS, amount: '2000' }] });

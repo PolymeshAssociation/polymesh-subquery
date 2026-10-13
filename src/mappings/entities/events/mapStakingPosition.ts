@@ -3,7 +3,9 @@ import { decodeEvent } from '../../../decode';
 import { MultiSigProposal, StakingPosition } from '../../../types';
 import { blockTime, getBigIntValue, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { readOrAnomaly } from '../../../utils/anomaly';
 import { readStakingLedger, resolveController } from '../../../utils/staking';
+import { readStorage } from '../../../utils/storageAtParent';
 import { ensureTrueSpecVersion } from '../../trueSpec';
 import { indexClosingEvent } from '../block/closingEvent';
 import { extractArgs } from '../common';
@@ -25,17 +27,28 @@ import { extractArgs } from '../common';
  * cached lookup `readStakingLedger` uses internally.
  */
 
+/**
+ * A `staking.bonded` that doesn't decode with the block's metadata is recorded as an anomaly
+ * against `block`, and the new position takes the stash as its controller until the next refresh.
+ * Without a `block` (a seed run) it propagates.
+ */
 export const getOrCreatePosition = async (
   stash: string,
   blockId: string,
   datetime: Date,
-  blockEventId: string
+  blockEventId: string,
+  block?: SubstrateBlock
 ): Promise<StakingPosition> => {
   let position = await StakingPosition.get(stash);
 
   if (!position) {
     const account = await ledgerAccount(stash, blockId, datetime);
-    const controller = await resolveController(stash, blockId);
+    const controller = await readOrAnomaly(
+      { block },
+      `the controller of ${stash} is taken to be the stash`,
+      () => resolveController(stash, blockId),
+      stash
+    );
 
     if (controller !== stash) {
       await ledgerAccount(controller, blockId, datetime);
@@ -71,21 +84,35 @@ export const getOrCreatePosition = async (
  *
  * The controller is a relation, and `set_controller` can name an account nothing has indexed yet,
  * so its row is ensured before the position is pointed at it — the same as at creation.
+ *
+ * A controller or ledger that doesn't decode with the block's metadata is recorded as an anomaly,
+ * and the position is left exactly as it was.
  */
 export const refreshPositionFromLedger = async (
   position: StakingPosition,
   stash: string,
   event: SubstrateEvent
 ): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
-  const controller = await resolveController(stash, blockId);
+  const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
+  const read = await readOrAnomaly(
+    { block, eventIdx, moduleId, eventId },
+    `the staking position of ${stash} was left as it was`,
+    async () => ({
+      controller: await resolveController(stash, blockId),
+      snapshot: await readStakingLedger(stash, blockId),
+    })
+  );
+
+  if (!read) {
+    return;
+  }
+
+  const { controller, snapshot } = read;
 
   if (controller !== position.controllerId) {
     await ledgerAccount(controller, blockId, blockTime(block), blockEventId);
     position.controllerId = controller;
   }
-
-  const snapshot = await readStakingLedger(stash, blockId);
 
   position.bonded = snapshot.active;
   position.unbonding = snapshot.total - snapshot.active;
@@ -103,7 +130,7 @@ export const handlePositionBonded = async (event: SubstrateEvent): Promise<void>
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -124,7 +151,7 @@ export const handlePositionUnbonded = async (event: SubstrateEvent): Promise<voi
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -141,7 +168,7 @@ export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<vo
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -149,6 +176,18 @@ export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<vo
 
   await position.save();
 };
+
+/** The stash `controller`'s ledger names; `undefined` for none, or, with an anomaly, one that won't decode. */
+const readLedgerStash = (
+  controller: string,
+  block: SubstrateBlock
+): Promise<{ stash?: string } | null | undefined> =>
+  readOrAnomaly({ block }, `the staking position of ${controller} was left as it was`, () =>
+    readStorage(
+      `staking.ledger of ${controller}`,
+      async () => (await api.query.staking.ledger(controller)).toJSON() as { stash?: string } | null
+    )
+  );
 
 /**
  * `staking.set_controller` — moves a stash's ledger to a new controller and emits nothing.
@@ -214,7 +253,7 @@ export const handleRebond = async (extrinsic: SubstrateExtrinsic): Promise<void>
   }
 
   const controller = extrinsic.extrinsic.signer.toString();
-  const ledger = (await api.query.staking.ledger(controller)).toJSON() as { stash?: string } | null;
+  const ledger = await readLedgerStash(controller, extrinsic.block);
   const position = ledger?.stash ? await StakingPosition.get(ledger.stash) : undefined;
 
   if (!position) {
@@ -293,7 +332,7 @@ const refreshPositionOf = async (account: string, event: SubstrateEvent): Promis
   let position = await StakingPosition.get(account);
 
   if (!position) {
-    const ledger = (await api.query.staking.ledger(account)).toJSON() as { stash?: string } | null;
+    const ledger = await readLedgerStash(account, event.block);
     position = ledger?.stash ? await StakingPosition.get(ledger.stash) : undefined;
   }
 

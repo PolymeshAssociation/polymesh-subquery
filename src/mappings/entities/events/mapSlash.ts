@@ -3,7 +3,7 @@ import { decodeEvent } from '../../../decode';
 import { AnomalyKind, Slash } from '../../../types';
 import { blockTime } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
-import { recordAnomaly } from '../../../utils/anomaly';
+import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import {
   appliedDeferredSlash,
   deferredSlashesBefore,
@@ -44,7 +44,11 @@ export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
   const [account, deferred, activeEra] = await Promise.all([
     ledgerAccount(stash, blockId, blockTime(block), blockEventId),
     deferredSlashesBefore(block),
-    readActiveEraIndex(),
+    readOrAnomaly(
+      { block, eventIdx, moduleId, eventId },
+      `the era of the slash on ${stash} was not recorded`,
+      readActiveEraIndex
+    ),
   ]);
   const applied = deferred
     ? appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx))

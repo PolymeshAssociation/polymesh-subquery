@@ -15,6 +15,7 @@ import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { hexToString } from '../../../utils/common';
 import { ledgerAccount } from '../../../utils/accounts';
 import { getEventParams } from '../../../utils/events';
+import { readStorage } from '../../../utils/storageAtParent';
 import { HandlerArgs } from '../common';
 import { extrinsicEventIndices, getLedgerEntries } from '../../blockContext';
 import { memoText } from '../../../utils/text';
@@ -248,16 +249,21 @@ export const PIPS_LOCK_ID = 'pips    ';
  * `balances.holds(who)` — the v8 per-reason breakdown of `reserved`.
  *
  * `undefined` on a runtime with no hold storage (pre-v8), which callers treat as "no information",
- * never as "no holds".
+ * never as "no holds". Throws `UndecodableStateError` when the list doesn't decode with the block's
+ * metadata, as for an account that still holds for a removed pallet.
  */
 export const readChainHolds = async (address: string): Promise<Hold[] | undefined> => {
   if (typeof api.query.balances?.holds !== 'function') {
     return undefined;
   }
 
-  const raw = (await api.query.balances.holds(address)).toJSON() as
-    | { id?: unknown; amount?: string | number }[]
-    | null;
+  const raw = await readStorage(
+    `balances.holds of ${address}`,
+    async () =>
+      (await api.query.balances.holds(address)).toJSON() as
+        | { id?: unknown; amount?: string | number }[]
+        | null
+  );
 
   if (!Array.isArray(raw)) {
     return undefined;
@@ -271,16 +277,20 @@ export const readChainHolds = async (address: string): Promise<Hold[] | undefine
 
 /**
  * The amount of the lock `lockId` on chain for `address`, from `balances.locks(who)` — `0` once
- * there is none, `undefined` when the locks do not decode as a list. Both eras keep
- * `balances.locks`.
+ * there is none, `undefined` when the locks are not a list. Both eras keep `balances.locks`. Throws
+ * `UndecodableStateError` when the locks don't decode with the block's metadata.
  */
 export const readChainLock = async (
   address: string,
   lockId: string
 ): Promise<bigint | undefined> => {
-  const raw = (await api.query.balances.locks(address)).toJSON() as
-    | { id?: string; amount?: string | number }[]
-    | null;
+  const raw = await readStorage(
+    `balances.locks of ${address}`,
+    async () =>
+      (await api.query.balances.locks(address)).toJSON() as
+        | { id?: string; amount?: string | number }[]
+        | null
+  );
 
   if (!Array.isArray(raw)) {
     return undefined;
@@ -296,7 +306,8 @@ export const readChainLock = async (
 
 /**
  * The `'staking '` lock still listed on chain for `address` — `0` once there is none, `undefined`
- * when the locks do not decode as a list.
+ * when the locks are not a list. Throws `UndecodableStateError` when they don't decode (see
+ * `readChainLock`).
  *
  * On v8 the lock → hold migration first holds the stake and leaves the lock listed, then removes
  * it. Whether a listed lock still freezes anything is `frozen` (see `readChainFrozen`).
@@ -304,9 +315,14 @@ export const readChainLock = async (
 export const readChainStakingLock = (address: string): Promise<bigint | undefined> =>
   readChainLock(address, STAKING_LOCK_ID);
 
-/** `frozen` from `system.account(address)`, the amount the chain freezes. */
+/**
+ * `frozen` from `system.account(address)`, the amount the chain freezes. Throws
+ * `UndecodableStateError` when the account doesn't decode with the block's metadata.
+ */
 export const readChainFrozen = async (address: string): Promise<bigint> => {
-  const { data } = await api.query.system.account(address);
+  const { data } = await readStorage(`system.account of ${address}`, () =>
+    api.query.system.account(address)
+  );
 
   return accountDataFrozen(data as unknown as Record<string, Codec>);
 };

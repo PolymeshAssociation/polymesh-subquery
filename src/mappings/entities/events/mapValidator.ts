@@ -1,17 +1,23 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Validator } from '../../../types';
 import { blockTime, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { readOrAnomaly } from '../../../utils/anomaly';
 import { readPermissionedIdentity } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
 
+/**
+ * A `permissionedIdentity` that doesn't decode with the block's metadata is recorded as an anomaly
+ * against `block` and leaves the new row not permissioned, as for an unknown one.
+ */
 export const getOrCreateValidator = async (
   stash: string,
   blockId: string,
   datetime: Date,
-  blockEventId: string
+  blockEventId: string,
+  block?: SubstrateBlock
 ): Promise<Validator> => {
   let validator = await Validator.get(stash);
 
@@ -29,7 +35,9 @@ export const getOrCreateValidator = async (
       // resync left all 9,054 validators with `isPermissioned: false`. Reading it here covers that
       // ordering; `setPermissioned` still covers the reverse.
       isPermissioned: account.identityId
-        ? (await readPermissionedIdentity(account.identityId)) ?? false
+        ? (await readOrAnomaly({ block }, `${stash} is recorded as not permissioned`, () =>
+            readPermissionedIdentity(account.identityId as string)
+          )) ?? false
         : false,
       isActive: false,
       createdEventId: blockEventId,
@@ -51,7 +59,13 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
   }
 
   const prefs = rawPrefs.toJSON() as { commission?: number; blocked?: boolean };
-  const validator = await getOrCreateValidator(stash, blockId, blockTime(block), blockEventId);
+  const validator = await getOrCreateValidator(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block
+  );
 
   validator.commission = prefs.commission !== undefined ? BigInt(prefs.commission) : undefined;
   validator.blocked = Boolean(prefs.blocked);

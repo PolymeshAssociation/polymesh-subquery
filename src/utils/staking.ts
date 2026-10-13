@@ -1,6 +1,8 @@
 import type { AnyJson } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
+import { readOrAnomaly } from './anomaly';
 import { is8xChain } from './common';
+import { readStorage, UndecodableStateError } from './storageAtParent';
 
 /**
  * The chain's own `RewardDestination` variants, plus the placeholder recorded when the payee
@@ -130,6 +132,10 @@ export const __resetStakingCaches = (): void => {
  * `staking.payee(stash)` — chain storage, at the block being indexed (`api.query` targets the
  * current block). Cheap during a genesis replay; needs an archive node afterwards, which is
  * why it is done now rather than deferred.
+ *
+ * A payee or controller that doesn't decode with the block's metadata resolves as the same
+ * `LegacyUnknown` placeholder as a runtime without the storage, with an anomaly, and is not cached.
+ * Without a `block` to record it against, `UndecodableStateError` propagates.
  */
 export const resolveLegacyRewardDestination = async (
   stash: string,
@@ -153,17 +159,35 @@ export const resolveLegacyRewardDestination = async (
     return { rewardDestination: 'LegacyUnknown' };
   }
 
-  const payee = (await api.query.staking.payee(stash)).toJSON();
-  const controller =
-    readRewardDestination(payee).destination === 'Controller'
-      ? (await api.query.staking.bonded(stash)).toJSON()
-      : undefined;
+  const read = await readOrAnomaly(
+    { block },
+    `the reward destination of ${stash} is recorded as unknown`,
+    async () => {
+      const payee = await readStorage(`staking.payee of ${stash}`, async () =>
+        (await api.query.staking.payee(stash)).toJSON()
+      );
+      const controller =
+        readRewardDestination(payee).destination === 'Controller'
+          ? await readBonded(stash)
+          : undefined;
 
-  const result = legacyDestination(stash, payee, controller);
-  payees.set(stash, result);
+      return legacyDestination(stash, payee, controller);
+    }
+  );
 
-  return result;
+  if (!read) {
+    return { rewardDestination: 'LegacyUnknown' };
+  }
+
+  payees.set(stash, read);
+
+  return read;
 };
+
+const readBonded = (stash: string): Promise<AnyJson> =>
+  readStorage(`staking.bonded of ${stash}`, async () =>
+    (await api.query.staking.bonded(stash)).toJSON()
+  );
 
 /** Where a reward to `stash` went, from its `staking.payee`, and `staking.bonded` for a controller. */
 const legacyDestination = (
@@ -206,8 +230,11 @@ const prefetchPayees = (block: SubstrateBlock, blockId: string): Promise<void> =
     const done = is8xChain(block)
       ? Promise.resolve()
       : readPayees(block, blockId).catch(error => {
-          prefetching = undefined;
-          throw error;
+          // an undecodable payee is left for its own read, which records it against that stash
+          if (!(error instanceof UndecodableStateError)) {
+            prefetching = undefined;
+            throw error;
+          }
         });
     prefetching = { blockId, done };
   }
@@ -229,20 +256,27 @@ const readPayees = async (block: SubstrateBlock, blockId: string): Promise<void>
     ),
   ].filter(stash => !payees.has(stash));
 
-  const read = api.query.staking?.payee as unknown as
+  const payee = api.query.staking?.payee as unknown as
     | { multi?: (keys: string[]) => Promise<{ toJSON(): AnyJson }[]> }
     | undefined;
-  if (stashes.length < 2 || typeof read?.multi !== 'function') {
+  const readMulti = payee?.multi;
+  if (stashes.length < 2 || typeof readMulti !== 'function') {
     return;
   }
 
-  const raw = (await read.multi(stashes)).map(payee => payee.toJSON());
+  const raw = (
+    await readStorage('staking.payee of a payout block', () => readMulti.call(payee, stashes))
+  ).map(payee => payee.toJSON());
   const destinations = raw.map(payee => readRewardDestination(payee).destination);
 
   // a `Controller` payee is paid to `bonded(stash)`
   const viaController = stashes.filter((_, index) => destinations[index] === 'Controller');
   const bonded = viaController.length
-    ? (await api.query.staking.bonded.multi(viaController)).map(controller => controller.toJSON())
+    ? (
+        await readStorage('staking.bonded of a payout block', () =>
+          api.query.staking.bonded.multi(viaController)
+        )
+      ).map(controller => controller.toJSON())
     : [];
   const controllerOf = new Map(viaController.map((stash, index) => [stash, bonded[index]]));
 
@@ -261,6 +295,8 @@ const readPayees = async (block: SubstrateBlock, blockId: string): Promise<void>
  * but **does not cache that fallback**: `bonded(stash)` is also empty for a stash that has not
  * bonded yet, and pinning `stash` as its answer would keep it wrong for the rest of the block
  *. Only a controller the chain actually named is cached.
+ *
+ * Throws `UndecodableStateError` when the value doesn't decode with the block's metadata.
  */
 export const resolveController = async (stash: string, blockId: string): Promise<string> => {
   const controllers = cachesFor(blockId).controllers;
@@ -270,7 +306,7 @@ export const resolveController = async (stash: string, blockId: string): Promise
     return cached;
   }
 
-  const bonded = (await api.query.staking.bonded(stash)).toJSON();
+  const bonded = await readBonded(stash);
 
   if (typeof bonded !== 'string') {
     return stash;
@@ -296,7 +332,10 @@ export interface StakingLedgerSnapshot {
  * `bonded`/`unbonding`/`unlocking` split (`active` vs the queued chunks) would otherwise each
  * issue the same chain read.
  *
- * A killed ledger (fully withdrawn) reads back as all-zero. A failed read fails the block.
+ * A killed ledger (fully withdrawn) reads back as all-zero. A failed read fails the block, but a
+ * ledger (or controller) that doesn't decode with the block's metadata throws
+ * `UndecodableStateError`: callers leave what the index holds as it was rather than take it as
+ * all-zero.
  */
 export const readStakingLedger = async (
   stash: string,
@@ -318,11 +357,15 @@ export const readStakingLedger = async (
 
 const readLedger = async (stash: string, blockId: string): Promise<StakingLedgerSnapshot> => {
   const controller = await resolveController(stash, blockId);
-  const ledger = (await api.query.staking.ledger(controller)).toJSON() as {
-    total?: string | number;
-    active?: string | number;
-    unlocking?: { value?: string | number; era?: number }[];
-  } | null;
+  const ledger = await readStorage(
+    `staking.ledger of ${controller}`,
+    async () =>
+      (await api.query.staking.ledger(controller)).toJSON() as {
+        total?: string | number;
+        active?: string | number;
+        unlocking?: { value?: string | number; era?: number }[];
+      } | null
+  );
 
   return ledgerSnapshot(ledger);
 };
@@ -357,6 +400,8 @@ export const ledgerSnapshot = (
  * Read rather than accumulated from `Bonded` / `Withdrawn` / restaked-`Reward` deltas: the deltas
  * do not see the max-bond cap, the rounding of a compounded `RewardDestination::Staked` reward,
  * or a slash — each of which leaves the accumulator drifting from the real lock.
+ *
+ * Throws `UndecodableStateError` when the ledger doesn't decode (see `readStakingLedger`).
  */
 export const readStakingLock = async (stash: string, blockId: string): Promise<bigint> =>
   (await readStakingLedger(stash, blockId)).total;
@@ -369,17 +414,27 @@ export const readStakingLock = async (stash: string, blockId: string): Promise<b
  * pallet actually rotates onto that era (`start_session` → `start_era`, a separate, later block),
  * so reading `activeEra()` here would still return the *outgoing* era for a session or more.
  *
- * `undefined` when the chain has no current era yet.
+ * `undefined` when the chain has no current era yet. Throws `UndecodableStateError` when the value
+ * doesn't decode.
  */
 export const readCurrentEraIndex = async (): Promise<number | undefined> => {
-  const currentEra = (await api.query.staking.currentEra()).toJSON() as number | null;
+  const currentEra = await readStorage(
+    'staking.currentEra',
+    async () => (await api.query.staking.currentEra()).toJSON() as number | null
+  );
 
   return currentEra !== null && currentEra !== undefined ? Number(currentEra) : undefined;
 };
 
-/** `staking.activeEra().index`, the era being staked in at this block; `undefined` before the first. */
+/**
+ * `staking.activeEra().index`, the era being staked in at this block; `undefined` before the first.
+ * Throws `UndecodableStateError` when the value doesn't decode.
+ */
 export const readActiveEraIndex = async (): Promise<number | undefined> => {
-  const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
+  const active = await readStorage(
+    'staking.activeEra',
+    async () => (await api.query.staking.activeEra()).toJSON() as { index?: number } | null
+  );
 
   return active?.index ?? undefined;
 };
@@ -401,8 +456,13 @@ export interface EraExposure {
  * to `staking.erasStakers`; v8 stores a summary in `erasStakersOverview` and the nominators in
  * `erasStakersPaged`, and no longer writes `erasStakers`. The runtime that ran the election is the
  * one the block decodes with, so whichever map it has is the one it wrote.
+ *
+ * Throws `UndecodableStateError` when an exposure doesn't decode with the block's metadata.
  */
-export const readEraExposures = async (eraIndex: number): Promise<EraExposure[]> => {
+export const readEraExposures = (eraIndex: number): Promise<EraExposure[]> =>
+  readStorage(`staking exposures of era ${eraIndex}`, () => readExposures(eraIndex));
+
+const readExposures = async (eraIndex: number): Promise<EraExposure[]> => {
   const staking = api.query.staking;
 
   if (typeof staking.erasStakersOverview?.entries === 'function') {
@@ -445,11 +505,14 @@ export interface EraValidatorPrefs {
 /**
  * Each elected validator's preferences for `eraIndex`, `staking.erasValidatorPrefs`, which the
  * election stores alongside the exposures. Runtimes before `blocked` existed leave it undefined.
+ * Throws `UndecodableStateError` when an entry doesn't decode.
  */
 export const readEraValidatorPrefs = async (
   eraIndex: number
 ): Promise<Map<string, EraValidatorPrefs>> => {
-  const entries = await api.query.staking.erasValidatorPrefs.entries(eraIndex);
+  const entries = await readStorage(`staking.erasValidatorPrefs of era ${eraIndex}`, () =>
+    api.query.staking.erasValidatorPrefs.entries(eraIndex)
+  );
 
   return new Map(
     entries.map(([key, prefs]) => {
@@ -470,11 +533,14 @@ export const readEraValidatorPrefs = async (
  * `staking.erasRewardPoints(eraIndex)`: the era's total points and each validator's. Points go to
  * the active era as blocks are authored, and the era ends and the next begins in the same session
  * rotation, so in the block that pays an era its points are final.
+ * Throws `UndecodableStateError` when the value doesn't decode.
  */
 export const readEraRewardPoints = async (
   eraIndex: number
 ): Promise<{ total: number; individual: Map<string, number> }> => {
-  const points = await api.query.staking.erasRewardPoints(eraIndex);
+  const points = await readStorage(`staking.erasRewardPoints of era ${eraIndex}`, () =>
+    api.query.staking.erasRewardPoints(eraIndex)
+  );
 
   return {
     total: points.total.toNumber(),
@@ -496,7 +562,7 @@ export const readEraRewardPoints = async (
  * `Option<PermissionedIdentityPrefs>`: any `Some` means permissioned.
  *
  * `undefined` when neither pallet has the storage, which the caller treats as "not known to be
- * permissioned" rather than guessing.
+ * permissioned" rather than guessing. Throws `UndecodableStateError` when the value doesn't decode.
  */
 export const readPermissionedIdentity = async (
   identityId: string
@@ -510,7 +576,9 @@ export const readPermissionedIdentity = async (
     const read = query[pallet]?.permissionedIdentity;
 
     if (read) {
-      const prefs = (await read(identityId)).toJSON();
+      const prefs = await readStorage(`${pallet}.permissionedIdentity of ${identityId}`, async () =>
+        (await read(identityId)).toJSON()
+      );
 
       return prefs !== null && prefs !== undefined;
     }
@@ -519,10 +587,19 @@ export const readPermissionedIdentity = async (
   return undefined;
 };
 
-/** Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`. */
+/**
+ * Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`.
+ * Throws `UndecodableStateError` when the value doesn't decode.
+ */
 export const readEraTotalStake = async (eraIndex: number): Promise<bigint> =>
   // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
   // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
   // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
   // type mismatch under the webpack build that `tsc`/jest don't surface.
-  BigInt((await api.query.staking.erasTotalStake(eraIndex)).toString());
+  BigInt(
+    (
+      await readStorage(`staking.erasTotalStake of era ${eraIndex}`, () =>
+        api.query.staking.erasTotalStake(eraIndex)
+      )
+    ).toString()
+  );

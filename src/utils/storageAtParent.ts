@@ -69,6 +69,40 @@ export class UndecodableStateError extends Error {
   }
 }
 
+/**
+ * The messages polkadot-js gives a value its types can't hold: `createType(<type>):: …` wraps every
+ * codec construction, with `Struct: failed on …`, `Tuple: failed on …` and `decodeU8a…` naming the
+ * member, `Unable to create Enum via index …` for an unknown variant, and `Unable to decode
+ * storage …` from the RPC layer's own decode of a query result.
+ */
+const DECODE_FAILURE =
+  /createType\(|Unable to decode|Unable to create Enum|decodeU8a|(?:Struct|Tuple|Enum): failed on|Cannot construct unknown type|Expected input with \d+ bytes/;
+
+/**
+ * Whether `error` is a stored value failing to decode with the registry, as opposed to the read
+ * failing (a dropped connection, a timeout, a node error such as `1006: Abnormal Closure` or
+ * `-32000`). The first fails the same way on every retry; the second may not.
+ */
+export const isDecodeFailure = (error: unknown): boolean =>
+  error instanceof Error && DECODE_FAILURE.test(error.message);
+
+/**
+ * Runs a storage read, `what` naming the item and account for the message. A value that doesn't
+ * decode becomes an `UndecodableStateError`, which callers record and carry on from, since retrying
+ * the block would fail identically; any other error propagates unchanged so the block still fails
+ * and is retried.
+ */
+export const readStorage = async <T>(what: string, run: () => Promise<T> | T): Promise<T> => {
+  try {
+    return await run();
+  } catch (cause) {
+    if (isDecodeFailure(cause) && !(cause instanceof UndecodableStateError)) {
+      throw new UndecodableStateError(`could not decode ${what}`, cause);
+    }
+    throw cause;
+  }
+};
+
 const decoding = <T>(what: string, run: () => T): T => {
   try {
     return run();

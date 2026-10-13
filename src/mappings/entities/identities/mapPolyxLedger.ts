@@ -15,7 +15,7 @@ import {
   StakingPosition,
 } from '../../../types';
 import { getBigIntValue, getTextValue, padId } from '../../../utils';
-import { recordAnomaly } from '../../../utils/anomaly';
+import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
 import { readRewardDestination, resolveController } from '../../../utils/staking';
@@ -395,7 +395,7 @@ export const handleBalanceHeld = async (event: SubstrateEvent): Promise<void> =>
   await adjustHold(who, reason, amount, args.blockEventId, args.block, args.eventIdx);
 
   if (reason === HoldReason.Staking) {
-    await syncMigratedStakingLock(who, args.blockEventId);
+    await syncMigratedStakingLock(who, args);
   }
 };
 
@@ -1145,7 +1145,13 @@ const rewardRecipient = async (
   // position, and from chain only for a stash the index has no position for.
   if (destination === 'Controller') {
     const indexed = (await StakingPosition.get(stash))?.controllerId;
-    return { recipient: indexed ?? (await resolveController(stash, blockId)), restaked: false };
+    const recipient =
+      indexed ??
+      (await readOrAnomaly({ block }, `the reward to ${stash} was not recorded`, () =>
+        resolveController(stash, blockId)
+      ));
+
+    return recipient ? { recipient, restaked: false } : undefined;
   }
 
   return { recipient: stash, restaked: false };

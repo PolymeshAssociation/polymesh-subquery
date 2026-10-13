@@ -1,4 +1,4 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Subsidy } from '../../../types';
 import {
@@ -8,6 +8,8 @@ import {
   getTextValue,
   is8xChain,
 } from '../../../utils';
+import { readOrAnomaly } from '../../../utils/anomaly';
+import { readStorage } from '../../../utils/storageAtParent';
 import { extractArgs, getOrAnomaly } from '../common';
 
 /**
@@ -94,15 +96,21 @@ const getSubsidyOrAnomaly = (
  *
  * `relayer.subsidies(userKey)` is `Option<{ payingKey, remaining }>`. Only needed on the pre-v8
  * acceptance path, which does not carry a limit in the event — `undefined` on an absent entry,
- * which the caller treats as "start at zero" rather than guessing.
+ * which the caller treats as "start at zero" rather than guessing. Also `undefined`, with an
+ * anomaly, when the entry doesn't decode with the block's metadata.
  */
-const readChainAllowance = async (userKey: string): Promise<bigint | undefined> => {
-  const raw = (await api.query.relayer.subsidies(userKey)).toJSON() as {
-    remaining?: string | number;
-  } | null;
+const readChainAllowance = (userKey: string, block: SubstrateBlock): Promise<bigint | undefined> =>
+  readOrAnomaly({ block }, `the allowance of ${userKey} was not read from the chain`, async () => {
+    const raw = await readStorage(
+      `relayer.subsidies of ${userKey}`,
+      async () =>
+        (await api.query.relayer.subsidies(userKey)).toJSON() as {
+          remaining?: string | number;
+        } | null
+    );
 
-  return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
-};
+    return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
+  });
 
 /**
  * Acceptance is on-chain proof the subsidy exists, so a missing row is created here rather than
@@ -133,7 +141,7 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
       id,
       beneficiaryAccountId: userKey,
       payingAccountId: payingKey,
-      allowance: (await readChainAllowance(userKey)) ?? BigInt(0),
+      allowance: (await readChainAllowance(userKey, block)) ?? BigInt(0),
       // see `handleSubsidyApproved` — pre-v8 there is nothing to accumulate from
       totalDebited: is8xChain(block) ? BigInt(0) : undefined,
       isAccepted: false,
@@ -157,7 +165,7 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
   if ('initialPolyxLimit' in decoded) {
     subsidy.allowance = getBigIntValue(decoded.initialPolyxLimit);
   } else if (replacedLive) {
-    subsidy.allowance = (await readChainAllowance(userKey)) ?? subsidy.allowance;
+    subsidy.allowance = (await readChainAllowance(userKey, block)) ?? subsidy.allowance;
   }
   subsidy.updatedEventId = blockEventId;
 

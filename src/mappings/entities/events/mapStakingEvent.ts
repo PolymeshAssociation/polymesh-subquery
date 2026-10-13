@@ -113,7 +113,7 @@ const get8xStakingEventDetails = async (
       const dest = optionalField(decoded, 'dest');
 
       if (!dest) {
-        const resolved = await resolveLegacyRewardDestination(stashAccount, blockId);
+        const resolved = await resolveLegacyRewardDestination(stashAccount, blockId, block);
 
         return {
           stashAccount,

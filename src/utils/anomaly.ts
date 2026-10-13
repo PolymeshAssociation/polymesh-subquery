@@ -1,6 +1,7 @@
 import { SubstrateBlock } from '@subql/types';
 import { AnomalyKind, EventIdEnum, IndexerAnomaly, ModuleIdEnum } from '../types';
 import { blockTime, padId } from './common';
+import { UndecodableStateError } from './storageAtParent';
 
 export interface AnomalyInput {
   kind: AnomalyKind;
@@ -93,4 +94,46 @@ export const recordAnomaly = async ({
     blockId,
     createdAt: blockTime(block),
   }).save();
+};
+
+/**
+ * Runs a chain storage read, and if the value doesn't decode with the block's metadata, records
+ * an `UnreadableValue` anomaly and returns `fallback` instead.
+ *
+ * Retrying a block fails identically on a value that can't be decoded, so failing the block would
+ * stop the indexer for good. `fallback` should stand for "what the index already has": the caller
+ * leaves it unchanged rather than zeroing or guessing. `consequence` completes "…, so ", saying
+ * what was left undone. Any other error (an RPC failure) propagates, failing the block to be
+ * retried.
+ *
+ * Without a `block` (a seed run) nothing can be recorded, so the error propagates too.
+ */
+export const readOrAnomaly = async <T>(
+  context: Pick<AnomalyInput, 'eventIdx' | 'moduleId' | 'eventId'> & {
+    block: SubstrateBlock | undefined;
+  },
+  consequence: string,
+  run: () => Promise<T>,
+  fallback?: T
+): Promise<T | undefined> => {
+  try {
+    return await run();
+  } catch (error) {
+    const { block, eventIdx, moduleId, eventId } = context;
+
+    if (!(error instanceof UndecodableStateError) || !block) {
+      throw error;
+    }
+
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${error.message}, so ${consequence}`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+
+    return fallback;
+  }
 };

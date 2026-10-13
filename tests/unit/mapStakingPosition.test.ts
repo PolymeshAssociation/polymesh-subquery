@@ -13,6 +13,7 @@ import {
   handleRebond,
   handleSetController,
 } from '../../src/mappings/entities/events/mapStakingPosition';
+import { IndexerAnomaly } from '../../src/types';
 import { __resetStakingCaches } from '../../src/utils/staking';
 import {
   codec,
@@ -99,6 +100,34 @@ describe('handlePositionBonded', () => {
       )
     ).rejects.toThrow('WebSocket is not connected');
     expect(db.StakingPosition?.[ALICE]?.bonded ?? BigInt(0)).toBe(BigInt(0));
+  });
+});
+
+describe('a ledger that does not decode', () => {
+  it('records an anomaly and leaves the position as it was', async () => {
+    const db = mockStore();
+    mockLedger('4200');
+    await handlePositionBonded(
+      namedEvent({ section: 'staking', method: 'Bonded', fields: { stash: ALICE, amount: '4000' } })
+    );
+    __resetStakingCaches();
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    (globalThis as any).api.query.staking.ledger = jest
+      .fn()
+      .mockRejectedValue(new Error('createType(StakingLedger):: Struct: failed on total: u128'));
+
+    await handlePositionUnbonded(
+      namedEvent({
+        section: 'staking',
+        method: 'Unbonded',
+        fields: { stash: ALICE, amount: '1000' },
+        blockNumber: '1001',
+      })
+    );
+
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    anomaly.mockRestore();
+    expect(db.StakingPosition[ALICE]).toMatchObject({ bonded: BigInt(4200), unbonding: BigInt(0) });
   });
 });
 

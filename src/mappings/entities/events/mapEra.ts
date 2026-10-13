@@ -2,7 +2,7 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { AnomalyKind, Era, Validator, ValidatorEra } from '../../../types';
 import { blockTime, getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
-import { recordAnomaly } from '../../../utils/anomaly';
+import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import {
   EraExposure,
   EraValidatorPrefs,
@@ -40,7 +40,11 @@ const getOrCreateEra = (eraIndex: number, blockEventId: string): Era => {
 
 export const handleStakersElected = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
-  const eraIndex = await readCurrentEraIndex();
+  const eraIndex = await readOrAnomaly(
+    { block, eventIdx, moduleId, eventId },
+    'the era this election opened was not recorded',
+    readCurrentEraIndex
+  );
 
   // The event carries no payload, so the era it opens is only knowable from chain state. Without
   // it there is no row to write — but an era boundary the index skipped is a gap, not a no-op.
@@ -78,10 +82,17 @@ export const recordElection = async (
     eventIdx,
   }: { block: SubstrateBlock; blockId: string; blockEventId: string; eventIdx?: number }
 ): Promise<void> => {
-  const [exposures, prefs] = await Promise.all([
-    readEraExposures(eraIndex),
-    readEraValidatorPrefs(eraIndex),
-  ]);
+  const read = await readOrAnomaly(
+    { block, eventIdx },
+    `the elected set of era ${eraIndex} was not recorded`,
+    () => Promise.all([readEraExposures(eraIndex), readEraValidatorPrefs(eraIndex)])
+  );
+
+  if (!read) {
+    return;
+  }
+
+  const [exposures, prefs] = read;
 
   if (exposures.length === 0) {
     await recordAnomaly({
@@ -119,7 +130,8 @@ export const recordElection = async (
         exposure.stash,
         blockId,
         blockTime(block),
-        blockEventId
+        blockEventId,
+        block
       );
       validator.isActive = true;
       validator.updatedEventId = blockEventId;
@@ -159,7 +171,7 @@ const validatorEra = (
   });
 
 export const handleEraPaid = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
   const {
     eraIndex: rawEraIndex,
     validatorPayout: rawPayout,
@@ -173,20 +185,32 @@ export const handleEraPaid = async (event: SubstrateEvent): Promise<void> => {
   era.endEventId = blockEventId;
   era.validatorPayout = getBigIntValue(rawPayout);
   era.remainder = getBigIntValue(rawRemainder);
-  const [totalStaked, points, elected] = await Promise.all([
-    readEraTotalStake(eraIndex),
-    readEraRewardPoints(eraIndex),
+  const [totals, elected] = await Promise.all([
+    readOrAnomaly(
+      { block, eventIdx, moduleId, eventId },
+      `the stake and points of era ${eraIndex} were left as they were`,
+      async () => {
+        const [totalStaked, points] = await Promise.all([
+          readEraTotalStake(eraIndex),
+          readEraRewardPoints(eraIndex),
+        ]);
+
+        return { totalStaked, points };
+      }
+    ),
     getAllByFields<ValidatorEra>('ValidatorEra', [['eraIndex', '=', eraIndex]]),
   ]);
 
-  era.totalStaked = totalStaked;
-  era.totalPoints = points.total;
+  if (totals) {
+    era.totalStaked = totals.totalStaked;
+    era.totalPoints = totals.points.total;
 
-  // A validator that authored nothing has no entry, which is 0 points, not unknown.
-  elected.forEach(row => {
-    row.points = points.individual.get(row.validatorId) ?? 0;
-    row.updatedEventId = blockEventId;
-  });
+    // A validator that authored nothing has no entry, which is 0 points, not unknown.
+    elected.forEach(row => {
+      row.points = totals.points.individual.get(row.validatorId) ?? 0;
+      row.updatedEventId = blockEventId;
+    });
+  }
 
   await Promise.all([era.save(), ...elected.map(row => row.save())]);
 };

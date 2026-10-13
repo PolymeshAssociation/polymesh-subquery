@@ -19,7 +19,7 @@ import {
   getTextValue,
   padNumericId,
 } from '../../../utils';
-import { recordAnomaly } from '../../../utils/anomaly';
+import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
 import {
@@ -67,9 +67,18 @@ import {
  *
  * The chain read is authoritative — it already accounts for the max-bond cap, the rounding of a
  * compounded `Staked` reward, unbonding chunks, and slashes.
+ *
+ * A ledger that doesn't decode with the block's metadata is recorded as an anomaly and leaves the
+ * lock as it was.
  */
 export const syncStakingLock = async (stash: string, args: HandlerArgs): Promise<void> => {
-  const total = await readStakingLock(stash, args.blockId);
+  const total = await readOrAnomaly(args, `the staking lock of ${stash} was left as it was`, () =>
+    readStakingLock(stash, args.blockId)
+  );
+
+  if (total === undefined) {
+    return;
+  }
 
   await setLock(stash, STAKING_LOCK_ID, total, args.blockEventId, 'staking');
 };
@@ -163,8 +172,14 @@ export const clearMigratedStakingLock = async (
  * `do_migrate_currency` removes the lock and emits only `CurrencyMigrated` (a `remove_lock` that
  * lowers nothing emits no `Unlocked`). So the lock is what the chain lists, capped at what the
  * chain freezes: a listed lock that freezes nothing is not frozen.
+ *
+ * Locks or an account that don't decode with the block's metadata are recorded as an anomaly and
+ * leave the lock as it was.
  */
-export const syncMigratedStakingLock = async (who: string, blockEventId: string): Promise<void> => {
+export const syncMigratedStakingLock = async (
+  who: string,
+  { block, eventIdx, blockEventId }: HandlerArgs
+): Promise<void> => {
   const balance = await AccountBalance.get(who);
   const locked = balance?.locks?.some(lock => lock.lockId === STAKING_LOCK_ID);
 
@@ -172,7 +187,20 @@ export const syncMigratedStakingLock = async (who: string, blockEventId: string)
     return;
   }
 
-  const [listed, frozen] = await Promise.all([readChainStakingLock(who), readChainFrozen(who)]);
+  const read = await readOrAnomaly(
+    { block, eventIdx },
+    `the staking lock of ${who} was left as it was`,
+    async () => ({
+      listed: await readChainStakingLock(who),
+      frozen: await readChainFrozen(who),
+    })
+  );
+
+  if (!read) {
+    return;
+  }
+
+  const { listed, frozen } = read;
   const onChain = (listed ?? BigInt(0)) < frozen ? listed ?? BigInt(0) : frozen;
 
   await setLock(who, STAKING_LOCK_ID, onChain, blockEventId, 'staking');
@@ -188,7 +216,8 @@ export const syncMigratedStakingLock = async (who: string, blockEventId: string)
  * hold is set from the ledger, which a force-withdraw is the only case to need.
  */
 export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, blockEventId } = extractArgs(event);
+  const args = extractArgs(event);
+  const { blockId, blockEventId } = args;
   const decoded = decodeEvent(event);
   const stash = stakingStash(decoded);
 
@@ -196,13 +225,21 @@ export const handleCurrencyMigrated = async (event: SubstrateEvent): Promise<voi
     return;
   }
 
-  await syncMigratedStakingLock(stash, blockEventId);
+  await syncMigratedStakingLock(stash, args);
 
   if (!decoded.forceWithdraw || getBigIntValue(decoded.forceWithdraw) === BigInt(0)) {
     return;
   }
 
-  const { total } = await readStakingLedger(stash, blockId);
+  const ledger = await readOrAnomaly(args, `the Staking hold of ${stash} was left as it was`, () =>
+    readStakingLedger(stash, blockId)
+  );
+
+  if (!ledger) {
+    return;
+  }
+
+  const { total } = ledger;
   const balance = await AccountBalance.get(stash);
   const held =
     (balance ? holdsOf(balance) : []).find(hold => hold.reason === HoldReason.Staking)?.amount ??
@@ -704,7 +741,9 @@ const ensureBalanceRow = async (
  * which `handleBalanceLocked`/`handleBalanceUnlocked` already record.
  */
 const syncPipsLock = async (address: string, args: HandlerArgs): Promise<void> => {
-  const amount = await readChainLock(address, PIPS_LOCK_ID);
+  const amount = await readOrAnomaly(args, `the pips lock of ${address} was left as it was`, () =>
+    readChainLock(address, PIPS_LOCK_ID)
+  );
 
   if (amount === undefined) {
     return;
