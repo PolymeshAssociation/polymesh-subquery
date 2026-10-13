@@ -21,7 +21,7 @@ export const indexClosingEvent = async (
   const closing = closingEventOf(extrinsic);
 
   if (closing) {
-    await handleToolingEvent(closing).save();
+    await (await handleToolingEvent(closing)).save();
   }
 
   return closing;

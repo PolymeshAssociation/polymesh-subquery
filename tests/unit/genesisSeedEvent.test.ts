@@ -27,7 +27,7 @@ describe('insertSeedEvent', () => {
       moduleIdText: 'seeding',
       eventId: EventIdEnum.Seeded,
       eventIdText: 'Seeded',
-      attributesTxt: '[]',
+      args: {},
     });
   });
 });

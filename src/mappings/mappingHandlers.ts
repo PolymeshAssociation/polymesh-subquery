@@ -66,7 +66,7 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
     promises.push(handleExtrinsic(extrinsic));
   }
 
-  const event = handleToolingEvent(substrateEvent);
+  const event = await handleToolingEvent(substrateEvent);
   promises.push(event.save());
 
   promises.push(mapExternalAgentAction(substrateEvent));

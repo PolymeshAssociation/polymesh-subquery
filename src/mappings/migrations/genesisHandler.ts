@@ -1,5 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import {
+  ArgumentsJson,
   Block,
   Event,
   EventIdEnum,
@@ -87,7 +88,7 @@ export const insertSeedEvent = (
     moduleIdText: 'seeding',
     eventId: EventIdEnum.Seeded,
     eventIdText: 'Seeded',
-    attributesTxt: '[]',
+    args: {} as ArgumentsJson,
   }).save();
 
 /**

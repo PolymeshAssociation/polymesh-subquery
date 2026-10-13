@@ -3,7 +3,7 @@ import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum } from '../types';
 import { recordAnomaly } from '../utils/anomaly';
 import { DecodeError, FieldNotFound, NoDecoderForSpecVersion } from './errors';
-import { DecodedEvent, namedFields } from './field';
+import { DecodedEvent, hasNamedFields, metadataFieldNames, namedFields } from './field';
 import { resolveShape } from './shapes';
 import { normaliseSpecVersion } from './specVersion';
 
@@ -119,6 +119,33 @@ const resolveShapeTolerant = (
     }
 
     return resolveShape(section, method, fromRuntime, arity);
+  }
+};
+
+/**
+ * The names an event's stored arguments are keyed by: the block's metadata names when it names
+ * every field, else the registered shape's for this spec version and parameter count, else none,
+ * and the arguments are stored by position.
+ *
+ * Never throws and records nothing: an event no shape covers is still stored, and `decodeEvent`
+ * reports the gap for the events a handler reads.
+ */
+export const argumentNames = (event: SubstrateEvent): (string | undefined)[] => {
+  if (hasNamedFields(event)) {
+    return metadataFieldNames(event);
+  }
+
+  const { section, method, data } = event.event;
+
+  try {
+    return resolveShapeTolerant(
+      section,
+      method,
+      normaliseSpecVersion(event.block.specVersion),
+      data.length
+    ).fields.slice(0, data.length);
+  } catch {
+    return [];
   }
 };
 

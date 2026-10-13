@@ -1,11 +1,11 @@
 import { SubstrateEvent } from '@subql/types';
-import { metadataTypeNames } from '../../../decode';
-import { Event } from '../../../types';
-import { extractEventArgs } from '../../../utils';
-import { serializeLikeHarvester } from '../../serializeLikeHarvester';
+import { argumentNames, metadataTypeNames } from '../../../decode';
+import { ArgumentsJson, Event } from '../../../types';
+import { encodeArgs } from '../../args/encode';
+import { toEventRefs } from '../../args/refs';
 import { extractArgs } from '../common';
 
-export function handleToolingEvent(event: SubstrateEvent): Event {
+export async function handleToolingEvent(event: SubstrateEvent): Promise<Event> {
   const {
     block,
     blockEventId,
@@ -17,15 +17,9 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     eventIdText,
     moduleId,
     moduleIdText,
-    params: args,
+    params,
   } = extractArgs(event);
-  const types = metadataTypeNames(event);
-
-  const harvesterLikeArgs = args.map((arg, i) => ({
-    value: serializeLikeHarvester(arg, types[i]),
-  }));
-
-  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
+  const { args, refs } = encodeArgs(params, argumentNames(event), metadataTypeNames(event));
 
   return Event.create({
     id: blockEventId,
@@ -37,11 +31,8 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     moduleId,
     moduleIdText,
     eventIdText,
-    attributesTxt: JSON.stringify(harvesterLikeArgs),
-    eventArg_0,
-    eventArg_1,
-    eventArg_2,
-    eventArg_3,
+    args: args as unknown as ArgumentsJson,
+    refs: await toEventRefs(refs, block.specVersion),
     extrinsicId,
   });
 }
