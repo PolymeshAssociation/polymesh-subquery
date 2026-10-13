@@ -24,7 +24,7 @@ const DID = `0x${'22'.repeat(32)}`;
 const ACCOUNT_HEX = `0x${'11'.repeat(32)}`;
 const ASSET = `0x${'33'.repeat(16)}`;
 const encode = (type: string, value: unknown, refs: RawReference[] = []) =>
-  encodeValue(registry.createType(type as never, value), type, refs, 'x');
+  encodeValue(registry.createType(type as never, value), type, refs);
 
 describe('encodeValue', () => {
   it('writes every integer as a decimal string, exactly, at any depth', () => {
@@ -88,13 +88,13 @@ describe('encodeValue', () => {
     });
   });
 
-  it('collects the references it passes, with the argument they were in', () => {
+  it('collects the references it passes', () => {
     const refs: RawReference[] = [];
     encode('Holder', { Portfolio: { did: DID, kind: { User: 4 } } }, refs);
 
     expect(refs).toEqual([
-      { kind: 'portfolio', value: `${DID}/4`, argument: 'x' },
-      { kind: 'identity', value: DID, argument: 'x' },
+      { kind: 'portfolio', value: `${DID}/4` },
+      { kind: 'identity', value: DID },
     ]);
   });
 
@@ -104,8 +104,8 @@ describe('encodeValue', () => {
     const account = (value as { kind: { AccountId: string } }).kind.AccountId;
 
     expect(refs).toEqual([
-      { kind: 'identity', value: DID, argument: 'x' },
-      { kind: 'account', value: account, argument: 'x' },
+      { kind: 'identity', value: DID },
+      { kind: 'account', value: account },
     ]);
   });
 });
@@ -222,7 +222,7 @@ describe('encodeValue where constructors are hidden, as in the mappings sandbox'
   const encodeBlind = (type: string, value: unknown, refs: RawReference[] = []) => {
     const codec = registry.createType(type as never, value);
     blindConstructors(codec);
-    return encodeValue(codec, type, refs, 'x');
+    return encodeValue(codec, type, refs);
   };
 
   it('names nested values from their parent, so tickers and references inside them survive', () => {

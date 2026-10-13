@@ -1987,6 +1987,8 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   eventArg_1: String
   eventArg_2: String
   eventArg_3: String
+  "What the event involves, as `kind:value` (`identity:0x…`, `account:5…`, `asset:0x…`, `portfolio:<did>/<number>`), in any argument and at any depth; a portfolio also files its identity, and a ticker before v7 is filed under its asset id. `null` when the event involves none of these. Filter with `contains`, for example `{ contains: [\"asset:0x…\"] }`. GIN-indexed in `db/compat.sql`"
+  refs: [String!]
   extrinsic: Extrinsic
 }
 

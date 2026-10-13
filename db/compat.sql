@@ -87,6 +87,10 @@ BEGIN
   END LOOP;
 END $$;
 
+-- `events.refs`, for `refs: { contains: [...] }`. Historical mode would make a declared index GiST,
+-- which can't index a jsonb array.
+CREATE INDEX IF NOT EXISTS data_event_refs ON events USING gin (refs jsonb_path_ops);
+
 -- Legacy views, dropped if an older deployment left them behind.
 DROP VIEW IF EXISTS data_block;
 DROP VIEW IF EXISTS data_event;

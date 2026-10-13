@@ -13,13 +13,10 @@ export type CanonicalValue =
 export interface RawReference {
   kind: 'identity' | 'account' | 'asset' | 'ticker' | 'portfolio';
   value: string;
-  /** the top-level argument it was found in: its name, or its position */
-  argument: string;
 }
 
 interface Walk {
   refs: RawReference[];
-  argument: string;
 }
 
 const isInteger = (codec: Codec): boolean =>
@@ -104,7 +101,7 @@ const portfolioValue = (encoded: CanonicalValue): string | undefined => {
 };
 
 const addRef = (at: Walk, kind: RawReference['kind'], value: string): void => {
-  at.refs.push({ kind, value, argument: at.argument });
+  at.refs.push({ kind, value });
 };
 
 const isBytes = (raw: string): boolean =>
@@ -207,7 +204,7 @@ const encodeShaped = (
   const portfolio = isType(name, 'PortfolioId') ? portfolioValue(struct) : undefined;
   if (portfolio) {
     // the portfolio before the identity its `did` added
-    at.refs.splice(-1, 0, { kind: 'portfolio', value: portfolio, argument: at.argument });
+    at.refs.splice(-1, 0, { kind: 'portfolio', value: portfolio });
   }
   return struct;
 };
@@ -255,9 +252,8 @@ const walk = (codec: Codec, hint: string | undefined, at: Walk): CanonicalValue 
 export const encodeValue = (
   codec: Codec,
   hint?: string,
-  refs: RawReference[] = [],
-  argument = '0'
-): CanonicalValue => walk(codec, hint, { refs, argument });
+  refs: RawReference[] = []
+): CanonicalValue => walk(codec, hint, { refs });
 
 /**
  * An event's or call's arguments: keyed by name when the metadata names every one, by position
@@ -274,7 +270,7 @@ export const encodeArgs = (
 
   values.forEach((value, i) => {
     const key = named ? (names[i] as string) : String(i);
-    args[key] = encodeValue(value, types[i], refs, key);
+    args[key] = encodeValue(value, types[i], refs);
   });
 
   return { args, refs };
