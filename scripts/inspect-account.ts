@@ -18,7 +18,8 @@ const holdsOf = (raw: Uint8Array, pallets: Map<number, string>): string[] => {
   return Array.from({ length: count.toNumber() }, (_, index) => {
     const start = offset + index * HOLD_BYTES;
     const amount = u8aToBn(raw.subarray(start + 2, start + HOLD_BYTES)).toString();
-    return `${pallets.get(raw[start]) ?? `pallet ${raw[start]}`}: ${amount}`;
+    const pallet = pallets.get(raw[start]) ?? `pallet ${raw[start]}`;
+    return `${pallet}: ${amount}`;
   });
 };
 
@@ -42,39 +43,47 @@ const main = async (): Promise<void> => {
     | { key: (who: string) => string }
     | undefined;
 
-  console.log(`block ${block}, spec ${spec}`);
-  for (const account of accounts) {
+  // read concurrently, printed in the order given: a one-off inspection of a handful of accounts
+  const inspect = async (account: string): Promise<string[]> => {
     const [info, locks, controller, payee] = await Promise.all([
       at.query.system.account(account),
       at.query.balances.locks(account),
       at.query.staking.bonded(account),
       at.query.staking.payee(account),
     ]);
-    console.log(`\n${account}`);
-    console.log(`  account ${JSON.stringify(info.data.toJSON())}`);
-    console.log(
+    const lines = [
+      `\n${account}`,
+      `  account ${JSON.stringify(info.data.toJSON())}`,
       `  locks ${JSON.stringify(
         locks.map(lock => ({ id: hexToString(lock.id.toHex()), amount: lock.amount.toString() }))
-      )}`
-    );
+      )}`,
+    ];
 
     if (holdsItem) {
       const raw = (await api.rpc.state.getStorage(
         holdsItem.key(account),
         hash
       )) as unknown as Option<Raw>;
-      console.log(
+      lines.push(
         `  holds ${JSON.stringify(raw.isSome ? holdsOf(raw.unwrap().toU8a(true), pallets) : [])}`
       );
     }
 
     if (controller.isSome) {
       const ledger = await at.query.staking.ledger(controller.unwrap());
-      console.log(`  controller ${controller.unwrap().toString()}`);
-      console.log(`  ledger ${JSON.stringify(ledger.toJSON())}`);
-      console.log(`  payee ${JSON.stringify(payee.toJSON())}`);
+      lines.push(
+        `  controller ${controller.unwrap().toString()}`,
+        `  ledger ${JSON.stringify(ledger.toJSON())}`,
+        `  payee ${JSON.stringify(payee.toJSON())}`
+      );
     }
-  }
+
+    return lines;
+  };
+
+  console.log(`block ${block}, spec ${spec}`);
+  const reports = await Promise.all(accounts.map(inspect));
+  reports.flat().forEach(line => console.log(line));
 
   await api.disconnect();
 };

@@ -116,7 +116,7 @@ const nftCount = async (
 /** The index's value for `target` as it stood after `height`, as a decimal string */
 const indexValue = async (db: DataSource, target: Target, height: number): Promise<string> => {
   const read = async (sql: string, id: string): Promise<string> => {
-    const [row]: { value: unknown }[] = await db.query(sql, [id, height]);
+    const [row]: { value: string | number | bigint | null }[] = await db.query(sql, [id, height]);
     return BigInt(String(row?.value ?? 0).replace(/n$/, '')).toString();
   };
   const at = '_block_range @> $2::int8';
@@ -200,7 +200,7 @@ const main = async (): Promise<void> => {
   const rpc = argOf('rpc');
   const lo = Number(argOf('from'));
   const hi = Number(argOf('to'));
-  if (!rpc || !(lo < hi)) {
+  if (!rpc || [lo, hi].some(Number.isNaN) || lo >= hi) {
     usage();
     return;
   }

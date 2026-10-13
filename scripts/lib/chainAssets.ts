@@ -3,8 +3,6 @@ import { Codec } from '@polkadot/types/types';
 import { hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 
-const big = (value: string): bigint => BigInt(value);
-
 /** The index's asset id for a storage key: an `AssetId` from v7, a `Ticker` before. */
 export const assetIdOf = (raw: Codec, staging: boolean): string => {
   const hex = raw.toHex();
@@ -35,11 +33,14 @@ export const chainSupplies = async (at: ApiDecoration<'promise'>, staging: boole
   const supplies = new Map<string, bigint>();
 
   (await source?.entries?.())?.forEach(([key, value]) => {
-    const details = value.toJSON() as { totalSupply?: unknown; total_supply?: unknown } | null;
+    const details = value.toJSON() as {
+      totalSupply?: string | number;
+      total_supply?: string | number;
+    } | null;
     if (details) {
       supplies.set(
         assetIdOf(key.args[0], staging),
-        big(String(details.totalSupply ?? details.total_supply ?? 0))
+        BigInt(String(details.totalSupply ?? details.total_supply ?? 0))
       );
     }
   });

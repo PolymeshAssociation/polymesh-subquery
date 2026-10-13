@@ -95,12 +95,11 @@ export const chainHolds = async (
   at: ApiDecoration<'promise'>,
   hash: string
 ): Promise<Parts> => {
-  const holds: Parts = new Map();
   const item = (at.query.balances as unknown as Record<string, unknown>).holds as
     | { keyPrefix: () => string }
     | undefined;
   if (!item) {
-    return holds;
+    return new Map();
   }
 
   const pallets = new Map(
@@ -116,6 +115,7 @@ export const chainHolds = async (
     )
   );
 
+  const holds: Parts = new Map();
   pages.forEach((page, p) =>
     page.forEach((key, index) => {
       const value = values[p][index];

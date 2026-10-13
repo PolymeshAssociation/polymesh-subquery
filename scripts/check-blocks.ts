@@ -114,7 +114,7 @@ const main = async (): Promise<void> => {
   const from = Number(argOf('from'));
   const to = Number(argOf('to'));
   const step = Number(argOf('step') ?? 1);
-  if (!rpc || !(from <= to) || !(step >= 1)) {
+  if (!rpc || [from, to, step].some(Number.isNaN) || from > to || step < 1) {
     console.error(
       'usage: check-blocks.ts --rpc <archive node> --from N --to M [--step 1] [--schema s] [--show n]'
     );
@@ -142,10 +142,8 @@ const main = async (): Promise<void> => {
   await Promise.all(Array.from({ length: CONCURRENCY }, work));
 
   const checked = Math.floor((to - from) / step) + 1;
-  problems
-    .sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))
-    .slice(0, Number(argOf('show') ?? 20))
-    .forEach(problem => console.log(problem));
+  problems.sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10));
+  problems.slice(0, Number(argOf('show') ?? 20)).forEach(problem => console.log(problem));
   console.log(
     problems.length === 0
       ? `${checked} blocks checked. No differences.`
