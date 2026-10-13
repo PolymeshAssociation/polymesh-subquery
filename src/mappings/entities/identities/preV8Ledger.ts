@@ -43,6 +43,7 @@ import {
   findExtrinsicEntries,
   firstText,
   loadBalance,
+  locksOf,
   PIPS_LOCK_ID,
   postTransition,
   readChainFrozen,
@@ -153,16 +154,33 @@ export const legacyRewardRecipient = async (
  * `balances.Unlocked` on v8 that is the lock → hold migration removing a pre-v8 `'staking '` lock:
  * the migration emits `Upgraded`, the paired `Held{Staking}` (the `free → reserved` movement) and
  * `Unlocked{who, amount}` for the lock, in no extrinsic of the staker's own. Nothing on v8 creates
- * a `'staking '` lock, so an account that still has one is being migrated, and the lock is cleared
- * rather than the generic `'balances'` one. `false` when `who` has no such lock.
+ * a `'staking '` lock, so an account that still has one is a candidate for migration; but any other
+ * lock lowered on it emits an `Unlocked` too, and clearing the staking lock for that would leave the
+ * other one too high.
+ *
+ * An `Unlocked` is the fall in what the account's locks freeze (their maximum), so it is the
+ * migration's only when it is exactly the fall removing the staking lock causes: the lock's amount
+ * when it stood alone, or its excess over the highest other lock. Any other amount is another
+ * lock's, and is left to the generic lock. `false` when it is not the migration's, or `who` has no
+ * such lock.
  */
 export const clearMigratedStakingLock = async (
   who: string | undefined,
-  blockEventId: string
+  blockEventId: string,
+  amount: bigint
 ): Promise<boolean> => {
-  const locks = who ? (await AccountBalance.get(who))?.locks : undefined;
+  const balance = who ? await AccountBalance.get(who) : undefined;
+  const locks = balance ? locksOf(balance) : [];
 
-  if (!who || !locks?.some(lock => lock.lockId === STAKING_LOCK_ID)) {
+  if (!who || !locks.some(lock => lock.lockId === STAKING_LOCK_ID)) {
+    return false;
+  }
+
+  const highest = (list: typeof locks): bigint =>
+    list.reduce((max, lock) => (lock.amount > max ? lock.amount : max), BigInt(0));
+  const freed = highest(locks) - highest(locks.filter(lock => lock.lockId !== STAKING_LOCK_ID));
+
+  if (amount !== freed) {
     return false;
   }
 

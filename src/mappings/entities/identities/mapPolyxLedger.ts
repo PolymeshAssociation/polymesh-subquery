@@ -107,7 +107,11 @@ export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void
 
   if (
     is8xChain(args.block) &&
-    (await clearMigratedStakingLock(holder(decodeEvent(event)), args.blockEventId))
+    (await clearMigratedStakingLock(
+      holder(decodeEvent(event)),
+      args.blockEventId,
+      amountOf(decodeEvent(event))
+    ))
   ) {
     return;
   }

@@ -1177,6 +1177,36 @@ describe('staking — era-dependent, inverted at v8', () => {
       expect(balance(ALICE)?.locks ?? []).toHaveLength(0);
     });
 
+    it("a v8 Unlocked that is another lock's fall leaves the staking lock, and lowers the other", async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+      await adjustLock(ALICE, 'balances', BigInt(6000), '0000001000001');
+
+      // a PIPs vote lowered: the maximum falls 6000 → 4000, with the staking lock still standing
+      await handleBalanceUnlocked(
+        balancesEvent('Unlocked', { who: ALICE, amount: '2000' }, { specVersion: 8_000_000 })
+      );
+
+      const locks = balance(ALICE)?.locks ?? [];
+      expect(locks.find((l: any) => l.lockId === 'staking ')?.amount).toBe('4000');
+      expect(locks.find((l: any) => l.lockId === 'balances')?.amount).toBe('4000');
+    });
+
+    it('a v8 Unlocked that is the fall removing the staking lock clears it, and keeps a lower lock', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
+      await adjustLock(ALICE, 'balances', BigInt(1000), '0000001000001');
+
+      // 4000 → 1000 once the staking lock is gone
+      await handleBalanceUnlocked(
+        balancesEvent('Unlocked', { who: ALICE, amount: '3000' }, { specVersion: 8_000_000 })
+      );
+
+      expect(balance(ALICE)?.locks?.map((l: any) => [l.lockId, l.amount])).toEqual([
+        ['balances', '1000'],
+      ]);
+    });
+
     it('a pre-v8 Unlocked leaves the staking lock alone (generic "balances" lock only)', async () => {
       await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
       await adjustLock(ALICE, 'staking ', BigInt(4000), '0000001000000', 'staking');
