@@ -40,12 +40,12 @@ v5.register(
   )?.types as never
 );
 
-const identityClaim = (issuer: string, cddId: string, date: string) =>
+const identityClaim = (issuer: string, cddId: string, date: string, expiry: number | null = null) =>
   registry.createType('IdentityClaim', {
     claimIssuer: issuer,
     issuanceDate: date,
     lastUpdateDate: date,
-    expiry: null,
+    expiry,
     claim: { CustomerDueDiligence: cddId },
   });
 
@@ -231,6 +231,14 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     expect(saved.issuanceDate).toBe(BigInt(1000));
     expect(saved.expiry).toBeUndefined();
     expect(typeof saved.filterExpiry).toBe('bigint');
+  });
+
+  it('keeps a zero expiry, rather than reading it as no expiry', async () => {
+    await handleClaimAdded(claimEvent('ClaimAdded', identityClaim(ISSUER_A, CDD_1, '1000', 0)));
+
+    const [saved] = Object.values(claims);
+    expect(saved.expiry).toBe(BigInt(0));
+    expect(saved.filterExpiry).toBe(BigInt(0));
   });
 
   it('gives two issuers attesting the same target/type/scope two distinct Claim rows', async () => {

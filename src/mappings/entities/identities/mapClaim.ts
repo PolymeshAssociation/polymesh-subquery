@@ -133,7 +133,7 @@ const writeClaim = async (
   const moment = (value: string | null | undefined): bigint | undefined =>
     value === null || value === undefined ? undefined : BigInt(value);
   const expiry = moment(claimExpiry);
-  const filterExpiry = expiry || END_OF_TIME;
+  const filterExpiry = expiry ?? END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(
