@@ -773,5 +773,7 @@ export const handleProposalRefund = async (event: SubstrateEvent): Promise<void>
     addresses.add(proposal.proposer.value);
   }
 
-  await Promise.all([...addresses].map(address => syncPipsLock(address, args)));
+  for (const address of addresses) {
+    await syncPipsLock(address, args);
+  }
 };
