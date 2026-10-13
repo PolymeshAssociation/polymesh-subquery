@@ -6,7 +6,7 @@ import { TypeRegistry } from '@polkadot/types';
  */
 
 import { SubstrateEvent } from '@subql/types';
-import { runInNewContext } from 'vm';
+import { runInNewContext } from 'node:vm';
 
 export const storeGet = (): jest.Mock => (globalThis as any).store.get as jest.Mock;
 export const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
