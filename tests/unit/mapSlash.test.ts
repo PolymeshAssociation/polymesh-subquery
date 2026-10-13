@@ -254,6 +254,30 @@ describe('handleSlash', () => {
     ]);
   });
 
+  it("records the due era's slash, past a stale key that was never applied", async () => {
+    const db = mockStore();
+    // a late-reported offence filed under a key already past stays stored beside the due era
+    jest
+      .mocked(deferredSlashesBefore)
+      .mockResolvedValue([
+        { ...deferred(7020, BigInt(1000), [[NOMINATOR, BigInt(40)]]), validator: NOMINATOR },
+        deferred(7029, BigInt(1000), [[NOMINATOR, BigInt(40)]]),
+      ]);
+    chainEras(7029);
+
+    await handleSlash(
+      namedEvent({
+        section: 'staking',
+        method: 'Slashed',
+        fields: { staker: NOMINATOR, amount: '40' },
+      })
+    );
+
+    expect(Object.values(db.Slash)).toEqual([
+      expect.objectContaining({ validatorId: VALIDATOR, eraIndex: 7029, offenceEraIndex: 7014 }),
+    ]);
+  });
+
   it("records a pre-v7 validator's own slash with its applied era and no offence era", async () => {
     const db = mockStore();
     // testnet block 7,751,343: before v7.0 the slash is held under 2159, the era it was reported

@@ -5,19 +5,15 @@ import { blockTime } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
 import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import {
+  APPLY_ERA_KEYS_FROM,
   appliedDeferredSlash,
   deferredSlashesBefore,
+  dueEraAt,
   slashedBefore,
 } from '../../../utils/deferredSlashes';
 import { readActiveEraIndex } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { amountOf, stakingStash } from '../identities/ledgerCore';
-
-/**
- * The first runtime that holds a deferred slash under the era it is applied in, rather than the era
- * it was reported in (`on_offence` from v7.0).
- */
-const APPLY_ERA_KEYS_FROM = 7_000_000;
 
 /**
  * `staking.Slash` (before v7) / `staking.Slashed` (from v7): one stash's stake slashed.
@@ -51,7 +47,13 @@ export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
     ),
   ]);
   const applied = deferred
-    ? appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx))
+    ? appliedDeferredSlash(
+        deferred,
+        stash,
+        amount,
+        slashedBefore(block, eventIdx),
+        dueEraAt(block, activeEra)
+      )
     : undefined;
 
   if (!applied) {
