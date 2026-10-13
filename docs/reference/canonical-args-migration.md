@@ -2,7 +2,7 @@
 
 **For:** the SDK and portal maintainers deciding on plan 09 §9.10. **Branch:** `redesign/15-canonical-args` (stacked on `redesign/14-harvester-cleanup`, which leaves argument fields alone; its one consumer-visible change, to claims, is in [`consumer-queries.md`](./consumer-queries.md) §5). **Status:** built, not decided; nothing here is merged.
 
-What changes, in one paragraph: `Event.attributesTxt`, `Event.attributes`, `Event.eventArg_0..3`, `Extrinsic.paramsTxt` and `Extrinsic.params` are removed. Every event and extrinsic carries `args` instead, a `jsonb` object in one encoding (the contract below), and every event has `refs`: each identity, account, asset or portfolio found anywhere in its arguments, as a `kind:value` string. An event is found by what it involves with `refs: { contains: ["kind:value"] }`, at any argument position, and by any other value with `args: { contains: … }`.
+What changes, in one paragraph: `Event.attributesTxt`, `Event.attributes`, `Event.eventArg_0..3`, `Extrinsic.paramsTxt` and `Extrinsic.params` are removed. Every event and extrinsic carries `args` instead, a `jsonb` object in one encoding (the contract below), and every event has `refs`: each identity, account, asset, ticker or portfolio found anywhere in its arguments, as a `kind:value` string. An event is found by what it involves with `refs: { contains: ["kind:value"] }`, at any argument position, and by any other value with `args: { contains: … }`.
 
 ## The contract
 
@@ -25,9 +25,9 @@ Pinned by `tests/unit/argsContract.test.ts` against real mainnet blocks from v3 
 
 `args` itself is always an object, keyed by field name: the metadata's when it names every field (Substrate pallets' events, and Polymesh's own once a runtime declares them as structs), else the indexer's registered names for Polymesh's tuple-style events, which are the names the chain gives the same fields. An event the indexer has no names for at that spec version is keyed by position, `"0"`, `"1"`, …. Position keys make a positional filter possible: JSONB containment on an array would match a value at *any* position.
 
-Before v7.0 the chain named assets by ticker, so a field that holds an `AssetId` from v7 held a `Ticker` before it. Its key says which: `ticker` up to v6, `assetId` from v7 (for example `asset.AssetBalanceUpdated`, `asset.Transfer`, the compliance, checkpoint and external-agent events). To find an asset's events across that change, use `refs`, where a pre-v7 ticker is recorded under the asset id it maps to.
+Before v7.0 the chain named assets by ticker, so a field that holds an `AssetId` from v7 held a `Ticker` before it. Its key says which: `ticker` up to v6, `assetId` from v7 (for example `asset.AssetBalanceUpdated`, `asset.Transfer`, the compliance, checkpoint and external-agent events). To find an asset's events across that change, use `refs`, where a pre-v7 ticker is recorded under the asset id it maps to. To find a ticker's events in any era, including events that name only a ticker such as `asset.TickerRegistered`, use `ticker:<text>`.
 
-Each entry in `refs` is `kind:value`, with `kind` one of `identity`, `account`, `asset` or `portfolio`, and `value` the canonical encoding of what is referred to (`did/number` for a portfolio, `number` `0` for the default one): `identity:0x…`, `account:2…`, `asset:0x…`, `portfolio:0x…/0`. Each appears once per event, in the order found. A portfolio also refers to its identity. Before v7.0 a ticker refers to the asset it maps to; from v7.0 events name the asset itself. `refs` is `null` when an event refers to none of these. It is GIN-indexed, so a `contains` filter on it is fast without a `(moduleId, eventId)` filter.
+Each entry in `refs` is `kind:value`, with `kind` one of `identity`, `account`, `asset`, `ticker` or `portfolio`, and `value` the canonical encoding of what is referred to (`did/number` for a portfolio, `number` `0` for the default one): `identity:0x…`, `account:2…`, `asset:0x…`, `ticker:ABC`, `portfolio:0x…/0`. Each appears once per event, in the order found. A portfolio also refers to its identity. A ticker is filed as `ticker:<text>` (its text without the NUL padding, or its hex when the bytes are not text) in every era; before v7.0 it also refers to the asset it maps to, while from v7.0 events name the asset itself. `refs` is `null` when an event refers to none of these. It is GIN-indexed, so a `contains` filter on it is fast without a `(moduleId, eventId)` filter.
 
 ## SDK
 
@@ -37,7 +37,7 @@ Today `eventsByArgs` filters `events` by `moduleId`, `eventId` and `eventArg0`�
 
 | Today | After |
 |---|---|
-| `events(filter: { moduleId: { equalTo: $moduleId }, eventId: { equalTo: $eventId }, eventArg0: { equalTo: $eventArg0 } })` | an identity, account, asset or portfolio: `events(filter: { moduleId: { equalTo: $moduleId }, eventId: { equalTo: $eventId }, refs: { contains: ["identity:<did>"] } })` |
+| `events(filter: { moduleId: { equalTo: $moduleId }, eventId: { equalTo: $eventId }, eventArg0: { equalTo: $eventArg0 } })` | an identity, account, asset, ticker or portfolio: `events(filter: { moduleId: { equalTo: $moduleId }, eventId: { equalTo: $eventId }, refs: { contains: ["identity:<did>"] } })` |
 | `eventArg1: { equalTo: "<hex account>" }` | `refs: { contains: ["account:<SS58 address>"] }` — any position |
 | `eventArg2: { equalTo: "5" }`, a value that is not a reference | `args: { contains: { "amount": "5" } }`, or `args: { contains: { "2": "5" } }` for an event keyed by position |
 

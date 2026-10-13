@@ -164,7 +164,7 @@ The two consumers will need coordinated updates. The SDK's 27 connections and th
 
 For the SDK:
 
-- `Network.getEventByIndexedArgs` / `getEventsByIndexedArgs` (`middleware/queries/events.ts`) become a `getEvents({ moduleId?, eventId?, involving?: { identity | account | asset | portfolio }, args? })`. `involving` filters `refs: { contains: ["<kind>:<value>"] }` at any argument position; `args` is a JSONB `contains` filter for values that are not references. A caller that passed `eventArg0: '<hex account>'` passes `involving: { account: '<SS58 address>' }`.
+- `Network.getEventByIndexedArgs` / `getEventsByIndexedArgs` (`middleware/queries/events.ts`) become a `getEvents({ moduleId?, eventId?, involving?: { identity | account | asset | ticker | portfolio }, args? })`. `involving` filters `refs: { contains: ["<kind>:<value>"] }` at any argument position; `args` is a JSONB `contains` filter for values that are not references. A caller that passed `eventArg0: '<hex account>'` passes `involving: { account: '<SS58 address>' }`.
 - `extrinsics.ts` selects `paramsTxt`, which moves to `Extrinsic.args`, the same encoding, so balances arrive as integer strings rather than `toHuman` text such as `"75.8040 mPOLYX"`. (`multisigs.ts` selects `MultiSigProposal.params`, which does not change.)
 
 For the portal: the multisig table parses `createdEvent.extrinsic.params` (`MultiSigTable/hooks.tsx`) and moves to `createdEvent.extrinsic.args`. A proposal's `expiry` there is a decimal string of milliseconds, so it needs `new Date(Number(expiry))`: `new Date` reads a numeric string as a date string and returns an Invalid Date. (So did the old `toHuman` text, `"1,714,153,254,000"`, so the portal's expiry is likely broken today.)
