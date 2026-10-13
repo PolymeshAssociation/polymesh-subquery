@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { decodeEvent, optionalField } from '../../../decode';
+import { namedFields, optionalField } from '../../../decode';
 import {
   Account,
   AccountBalance,
@@ -752,11 +752,20 @@ const HOLD_EVENT_ACCOUNTS: Record<string, string[][]> = {
     ['dest', 'to'],
   ],
   'balances.TransferAndHold': [['dest', 'to']],
-  'balances.CurrencyMigrated': [['stash']],
-  'staking.Slashed': [['stash', 'who', 'account']],
+  'staking.Slashed': [['staker', 'stash', 'who', 'account']],
 };
 
-/** Whether an event after index `eventIdx` in `block` adjusts a hold of `address` */
+/**
+ * Whether an event after index `eventIdx` in `block` adjusts a hold of `address`.
+ *
+ * A later event is only looked at, not handled, so one that does not decode is left to its own
+ * handler to record. Every event here is struct-style, which names its fields without the shape
+ * table.
+ *
+ * A currency migration is not among them: it sets the hold from the ledger rather than by a delta,
+ * and usually follows the `Held` that stakes the migrated balance without withdrawing anything, so
+ * deferring to it would leave the hold list untouched.
+ */
 const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: string): boolean =>
   (block.events ?? []).some((record, idx) => {
     if (idx <= eventIdx) {
@@ -771,9 +780,9 @@ const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: stri
     }
 
     try {
-      const decoded = decodeEvent({ event: record.event, block, idx } as unknown as SubstrateEvent);
+      const decoded = namedFields({ event: record.event } as unknown as SubstrateEvent);
 
-      return accounts.some(names => firstText(decoded, names) === address);
+      return !!decoded && accounts.some(names => firstText(decoded, names) === address);
     } catch {
       return false;
     }

@@ -639,6 +639,76 @@ describe('Event → pool transition', () => {
     delete (globalThis as any).api.registry.metadata;
   });
 
+  /**
+   * A migration that withdraws nothing leaves the hold as the `Held` before it set it, and its
+   * handler returns without reading the ledger. The `Held` must therefore take the chain's list
+   * itself, rather than wait for an event that never will.
+   */
+  it('Held then a CurrencyMigrated without a force-withdraw: the Held takes the chain list', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1000' })
+    );
+    await handleBalanceHeld(
+      balancesEvent('Held', {
+        reason: { contracts: 'StorageDepositReserve' },
+        who: ALICE,
+        amount: '500',
+      })
+    );
+
+    const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(1150, { bitLength: 128, isLe: true })));
+    const getStorage = jest
+      .fn()
+      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
+    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
+    (globalThis as any).api.rpc = { state: { getStorage } };
+    (globalThis as any).api.registry.metadata = {
+      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
+    };
+
+    const [held] = extrinsicEvents(2_100_000, [
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '150' }],
+      ['staking', 'CurrencyMigrated', { stash: ALICE, forceWithdraw: '0' }],
+    ]);
+    (held.block.block.header as any).hash = { toHex: () => '0xblock' };
+
+    await handleBalanceHeld(held);
+
+    expect(getStorage).toHaveBeenCalledTimes(1);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1150' }]);
+    (globalThis as any).api.query = {};
+    delete (globalThis as any).api.rpc;
+    delete (globalThis as any).api.registry.metadata;
+  });
+
+  it('Held then a v8 Slashed naming the staker: the Held waits for the slash', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
+    await handleBalanceHeld(
+      balancesEvent('Held', {
+        reason: { contracts: 'StorageDepositReserve' },
+        who: ALICE,
+        amount: '500',
+      })
+    );
+
+    const getStorage = jest.fn();
+    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
+    (globalThis as any).api.rpc = { state: { getStorage } };
+
+    const [held] = extrinsicEvents(2_200_000, [
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '100' }],
+      ['staking', 'Slashed', { staker: ALICE, amount: '10' }],
+    ]);
+    (held.block.block.header as any).hash = { toHex: () => '0xblock' };
+
+    await handleBalanceHeld(held);
+
+    expect(getStorage).not.toHaveBeenCalled();
+    (globalThis as any).api.query = {};
+    delete (globalThis as any).api.rpc;
+  });
+
   it('Held: an unrecognised hold reason still decodes as Unknown', async () => {
     await handleBalanceHeld(
       balancesEvent('Held', { reason: { somethingNew: 'Whatever' }, who: ALICE, amount: '5' })
