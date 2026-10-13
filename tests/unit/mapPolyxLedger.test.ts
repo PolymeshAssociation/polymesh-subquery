@@ -1211,6 +1211,9 @@ describe('staking — era-dependent, inverted at v8', () => {
 
     it('draws on the reserve for a reward whose payout created its payee', async () => {
       await fundReserve('1000');
+      // the indexer starts a block's context as it reaches the block; a lookup under another id
+      // no longer does
+      __resetBlockContext();
       payee({ account: NEW_PAYEE });
       const [endowed, reward] = v7ExtrinsicEvents(
         9_259_823,
