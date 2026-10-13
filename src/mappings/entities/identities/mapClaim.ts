@@ -129,9 +129,11 @@ const writeClaim = async (
     scope = await processClaimScope(claimScope, block);
   }
 
-  // the encoding's decimal strings, which the store writes into the numeric columns as they are
-  const moment = (value: string | null | undefined) => value as unknown as bigint;
-  const filterExpiry = moment(claimExpiry) || END_OF_TIME;
+  // the encoding carries moments as decimal strings; the numeric columns hold bigints
+  const moment = (value: string | null | undefined): bigint | undefined =>
+    value === null || value === undefined ? undefined : BigInt(value);
+  const expiry = moment(claimExpiry);
+  const filterExpiry = expiry || END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(
@@ -147,9 +149,10 @@ const writeClaim = async (
     id: getId(target, issuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
     targetId: target,
     issuerId: issuer,
-    issuanceDate: moment(issuanceDate),
-    lastUpdateDate: moment(lastUpdateDate),
-    expiry: moment(claimExpiry),
+    // both are always present on an `IdentityClaim`
+    issuanceDate: moment(issuanceDate) as bigint,
+    lastUpdateDate: moment(lastUpdateDate) as bigint,
+    expiry,
     type: claimType as ClaimTypeEnum,
     scope,
     jurisdiction,

@@ -208,7 +208,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     expect(claims[id]).toMatchObject({
       targetId: TARGET,
       issuerId: ISSUER_A,
-      issuanceDate: '0',
+      issuanceDate: BigInt(0),
       createdEventId: '0000000000/0000000000',
     });
 
@@ -218,6 +218,19 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
     expect(claims[id].revokeDate).toBe(REVOKED_AT);
     (globalThis as any).api.query = {};
+  });
+
+  it("stores the claim dates as bigints, not the encoding's decimal strings", async () => {
+    await handleClaimAdded(
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
+    );
+
+    const [saved] = Object.values(claims);
+    expect(typeof saved.issuanceDate).toBe('bigint');
+    expect(typeof saved.lastUpdateDate).toBe('bigint');
+    expect(saved.issuanceDate).toBe(BigInt(1000));
+    expect(saved.expiry).toBeUndefined();
+    expect(typeof saved.filterExpiry).toBe('bigint');
   });
 
   it('gives two issuers attesting the same target/type/scope two distinct Claim rows', async () => {
