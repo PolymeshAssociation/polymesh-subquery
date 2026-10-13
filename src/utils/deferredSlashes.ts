@@ -81,8 +81,8 @@ export const deferredSlashesBefore = (
 };
 
 /**
- * The stashes slashed before event `eventIdx` in `block`, nearest first: `staking.Slash` before v8,
- * `staking.Slashed` from v8, each naming the stash first.
+ * The stashes slashed before event `eventIdx` in `block`, nearest first: `staking.Slash` before v7,
+ * `staking.Slashed` from v7, each naming the stash first.
  */
 export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[] =>
   (block.events ?? [])
