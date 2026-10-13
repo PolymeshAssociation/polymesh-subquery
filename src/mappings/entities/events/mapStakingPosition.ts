@@ -376,13 +376,16 @@ const refreshPositionOf = async (account: string, event: SubstrateEvent): Promis
 
 /**
  * A `utility` batch holding a `staking.set_controller`, which emits no event in any runtime and,
- * nested, never reaches `handleSetController`: call handlers only see top-level calls. Mainnet 17,569,814–17,569,830 moved three stashes'
- * controllers this way. The batch's signer is the account that made the calls.
+ * nested, never reaches `handleSetController`: call handlers only see top-level calls. Mainnet
+ * 17,569,814–17,569,830 moved three stashes' controllers this way. The batch's signer is the
+ * account that made the calls.
  *
- * `relay_tx`, `as_derivative` and `batch_old` are deliberately not subscribed: neither chain has one
- * carrying a `set_controller`, and they run the inner call as an account other than the signer, so
- * the signer's position would be the wrong one to re-read. Were one ever to appear, the position
- * check would catch the stale controller.
+ * `relay_tx`, `as_derivative` and v6's `batch_old` are not subscribed. The first two run the inner
+ * call as an account other than the signer, so the signer's position would be the wrong one to
+ * re-read; `batch_old` runs it as the signer itself, like the five batch calls, and is left out
+ * only because nothing needs it. `relay_tx` exists from v5.4. No `set_controller` is nested in any
+ * of them, on testnet or mainnet, in the history indexed so far. Were one ever to appear, the
+ * position check would catch the stale controller.
  */
 export const handleBatchedStakingCalls = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   await ensureTrueSpecVersion(extrinsic.block);
