@@ -17,7 +17,8 @@ export const getOrCreateValidator = async (
   blockId: string,
   datetime: Date,
   blockEventId: string,
-  block?: SubstrateBlock
+  block: SubstrateBlock | undefined,
+  eventIdx?: number
 ): Promise<Validator> => {
   let validator = await Validator.get(stash);
 
@@ -35,8 +36,10 @@ export const getOrCreateValidator = async (
       // resync left all 9,054 validators with `isPermissioned: false`. Reading it here covers that
       // ordering; `setPermissioned` still covers the reverse.
       isPermissioned: account.identityId
-        ? (await readOrAnomaly({ block }, `${stash} is recorded as not permissioned`, () =>
-            readPermissionedIdentity(account.identityId as string)
+        ? (await readOrAnomaly(
+            { block, eventIdx },
+            `${stash} is recorded as not permissioned`,
+            () => readPermissionedIdentity(account.identityId as string)
           )) ?? false
         : false,
       isActive: false,
@@ -49,7 +52,7 @@ export const getOrCreateValidator = async (
 };
 
 export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const { stash: rawStash, prefs: rawPrefs } = decodeEvent(event);
 
   const stash = getTextValue(rawStash);
@@ -64,7 +67,8 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
     blockId,
     blockTime(block),
     blockEventId,
-    block
+    block,
+    eventIdx
   );
 
   validator.commission = prefs.commission !== undefined ? BigInt(prefs.commission) : undefined;
@@ -72,7 +76,14 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
   validator.updatedEventId = blockEventId;
 
   // `validate()` is on-chain proof the stash is a validator and actively participating again.
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
   position.isValidator = true;
   position.isChilled = false;
   position.updatedEventId = blockEventId;

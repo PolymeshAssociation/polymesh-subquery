@@ -1120,14 +1120,15 @@ const rewardRecipient = async (
   decoded: Record<string, Codec>,
   stash: string | undefined,
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  eventIdx: number
 ): Promise<{ recipient: string; restaked: boolean } | undefined> => {
   if (!stash) {
     return undefined;
   }
 
   if (!is8xChain(block)) {
-    return legacyRewardRecipient(stash, blockId, block);
+    return legacyRewardRecipient(stash, blockId, block, eventIdx);
   }
 
   // `dest: Staked` restakes via the paired `balances.Held{Staking}`, so no lock work here.
@@ -1150,7 +1151,7 @@ const rewardRecipient = async (
     const recipient =
       indexed ??
       (await readOrAnomaly(
-        { block },
+        { block, eventIdx },
         `the reward to ${stash} was credited to the stash because the controller could not be read`,
         () => resolveController(stash, blockId),
         stash
@@ -1176,7 +1177,7 @@ export const handleReward = async (event: SubstrateEvent): Promise<void> => {
   const stash = stakingStash(decoded);
   const amount = amountOf(decoded);
   const eraIndex = currentPayoutEra(args.blockId);
-  const resolved = await rewardRecipient(decoded, stash, args.block, args.blockId);
+  const resolved = await rewardRecipient(decoded, stash, args.block, args.blockId, args.eventIdx);
 
   if (!resolved) {
     return;

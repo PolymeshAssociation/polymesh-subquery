@@ -113,7 +113,12 @@ const get8xStakingEventDetails = async (
       const dest = optionalField(decoded, 'dest');
 
       if (!dest) {
-        const resolved = await resolveLegacyRewardDestination(stashAccount, blockId, block);
+        const resolved = await resolveLegacyRewardDestination(
+          stashAccount,
+          blockId,
+          block,
+          eventIdx
+        );
 
         return {
           stashAccount,
@@ -155,7 +160,8 @@ const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[],
   block: SubstrateBlock,
-  blockId: string
+  blockId: string,
+  eventIdx: number
 ): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
   const stashAccount = getTextValue(rawAccount);
@@ -169,7 +175,7 @@ const getLegacyStakingEventDetails = async (
 
     if ((eventId === EventIdEnum.Reward || eventId === EventIdEnum.Rewarded) && stashAccount) {
       // The pre-v8 event names only the stash; read the payee from chain storage.
-      const resolved = await resolveLegacyRewardDestination(stashAccount, blockId, block);
+      const resolved = await resolveLegacyRewardDestination(stashAccount, blockId, block, eventIdx);
       details.rewardDestination = resolved.rewardDestination;
       details.rewardDestinationAccount = resolved.rewardDestinationAccount;
     }
@@ -213,7 +219,7 @@ const getStakingEventDetails = async (
     // one on the way to a branch that never uses the result.
     details = await get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx, blockId);
   } else {
-    details = await getLegacyStakingEventDetails(eventId, params, block, blockId);
+    details = await getLegacyStakingEventDetails(eventId, params, block, blockId, eventIdx);
   }
 
   if (details.stashAccount && !details.identityId) {

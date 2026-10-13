@@ -31,7 +31,13 @@ export const seedStakingPositions = async ({
   await Promise.all(
     ledgers.map(async ({ ledger, stash }) => {
       const snapshot = ledgerSnapshot(ledger);
-      const position = await getOrCreatePosition(stash, blockId, datetime, SEED_EVENT_ID);
+      const position = await getOrCreatePosition(
+        stash,
+        blockId,
+        datetime,
+        SEED_EVENT_ID,
+        undefined
+      );
 
       position.bonded = snapshot.active;
       position.unbonding = snapshot.total - snapshot.active;

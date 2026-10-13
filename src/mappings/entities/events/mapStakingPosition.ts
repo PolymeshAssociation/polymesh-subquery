@@ -37,14 +37,15 @@ export const getOrCreatePosition = async (
   blockId: string,
   datetime: Date,
   blockEventId: string,
-  block?: SubstrateBlock
+  block: SubstrateBlock | undefined,
+  eventIdx?: number
 ): Promise<StakingPosition> => {
   let position = await StakingPosition.get(stash);
 
   if (!position) {
     const account = await ledgerAccount(stash, blockId, datetime);
     const controller = await readOrAnomaly(
-      { block },
+      { block, eventIdx },
       `the controller of ${stash} is taken to be the stash`,
       () => resolveController(stash, blockId),
       stash
@@ -123,14 +124,21 @@ export const refreshPositionFromLedger = async (
 };
 
 export const handlePositionBonded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const stash = getTextValue(decodeEvent(event).stash);
 
   if (!stash) {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -144,14 +152,21 @@ export const handlePositionBonded = async (event: SubstrateEvent): Promise<void>
  * amount from `active` to `unlocking`, which only a chain read distinguishes.
  */
 export const handlePositionUnbonded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const stash = getTextValue(decodeEvent(event).stash);
 
   if (!stash) {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -161,14 +176,21 @@ export const handlePositionUnbonded = async (event: SubstrateEvent): Promise<voi
 };
 
 export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const stash = getTextValue(decodeEvent(event).stash);
 
   if (!stash) {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId, block);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
 
   await refreshPositionFromLedger(position, stash, event);
 
@@ -180,13 +202,18 @@ export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<vo
 /** The stash `controller`'s ledger names; `undefined` for none, or, with an anomaly, one that won't decode. */
 const readLedgerStash = (
   controller: string,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  eventIdx?: number
 ): Promise<{ stash?: string } | null | undefined> =>
-  readOrAnomaly({ block }, `the staking position of ${controller} was left as it was`, () =>
-    readStorage(
-      `staking.ledger of ${controller}`,
-      async () => (await api.query.staking.ledger(controller)).toJSON() as { stash?: string } | null
-    )
+  readOrAnomaly(
+    { block, eventIdx },
+    `the staking position of ${controller} was left as it was`,
+    () =>
+      readStorage(
+        `staking.ledger of ${controller}`,
+        async () =>
+          (await api.query.staking.ledger(controller)).toJSON() as { stash?: string } | null
+      )
   );
 
 /**
@@ -332,7 +359,7 @@ const refreshPositionOf = async (account: string, event: SubstrateEvent): Promis
   let position = await StakingPosition.get(account);
 
   if (!position) {
-    const ledger = await readLedgerStash(account, event.block);
+    const ledger = await readLedgerStash(account, event.block, event.idx);
     position = ledger?.stash ? await StakingPosition.get(ledger.stash) : undefined;
   }
 

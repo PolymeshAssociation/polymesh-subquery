@@ -1,8 +1,10 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { Nomination } from '../../../types';
 import { blockTime, EXPLICIT_NULL, getAllByFields, getTextValue } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
+import { readOrAnomaly } from '../../../utils/anomaly';
+import { readActiveEraIndex } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { getOrCreatePosition } from './mapStakingPosition';
 
@@ -26,13 +28,15 @@ const nominationId = (stash: string, validator: string, blockEventId: string): s
  * `Nominated` carries no era — a nomination applies to future elections, not a specific past one.
  * Read `staking.activeEra()` once per call so `Nomination.eraIndex` at least records "as of which
  * era this nomination was submitted." `undefined` when the chain has no active era yet, which
- * leaves `eraIndex` null rather than guessed at.
+ * leaves `eraIndex` null rather than guessed at, as does an `activeEra` that doesn't decode with the
+ * block's metadata, which is recorded as an anomaly.
  */
-const currentEraIndex = async (): Promise<number | undefined> => {
-  const active = (await api.query.staking.activeEra()).toJSON() as { index?: number } | null;
-
-  return active?.index ?? undefined;
-};
+const currentEraIndex = (block: SubstrateBlock, eventIdx: number): Promise<number | undefined> =>
+  readOrAnomaly(
+    { block, eventIdx },
+    'the era of the nomination is left unrecorded',
+    readActiveEraIndex
+  );
 
 /**
  * A stash's open nominations, read through the `(position, validToEvent)` index: only the open
@@ -46,7 +50,7 @@ const getOpenNominations = (stash: string): Promise<Nomination[]> =>
   ]);
 
 export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const { stash: rawStash, targets: rawTargets } = decodeEvent(event);
 
   const stash = getTextValue(rawStash);
@@ -55,7 +59,14 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
   // A `nominate` call is on-chain proof the stash is actively participating again.
   position.isChilled = false;
   position.updatedEventId = blockEventId;
@@ -64,7 +75,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
   const targets = (rawTargets.toJSON() as string[] | null) ?? [];
   const open = await getOpenNominations(stash);
   const openValidators = new Set(open.map(({ validatorId }) => validatorId));
-  const eraIndex = await currentEraIndex();
+  const eraIndex = await currentEraIndex(block, eventIdx);
 
   const toClose = open.filter(({ validatorId }) => !targets.includes(validatorId));
   const toOpen = targets.filter(validator => !openValidators.has(validator));
@@ -96,7 +107,7 @@ export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
  * open nominations (as a nominator) and mark the position chilled. Does not touch nominations
  * pointing *at* a chilled validator — the chain doesn't invalidate those either. */
 export const handleChilled = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const { stash: rawStash } = decodeEvent(event);
 
   const stash = getTextValue(rawStash);
@@ -105,7 +116,14 @@ export const handleChilled = async (event: SubstrateEvent): Promise<void> => {
     return;
   }
 
-  const position = await getOrCreatePosition(stash, blockId, blockTime(block), blockEventId);
+  const position = await getOrCreatePosition(
+    stash,
+    blockId,
+    blockTime(block),
+    blockEventId,
+    block,
+    eventIdx
+  );
   position.isChilled = true;
   position.updatedEventId = blockEventId;
 

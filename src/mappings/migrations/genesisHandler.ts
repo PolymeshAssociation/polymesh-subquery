@@ -18,6 +18,7 @@ import {
   padId,
 } from '../../utils';
 import { upsertAccount } from '../../utils/accounts';
+import { readOrAnomaly } from '../../utils/anomaly';
 import { readCurrentEraIndex } from '../../utils/staking';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
 import { recordElection } from '../entities/events/mapEra';
@@ -369,7 +370,11 @@ const genesisHandler = async (block: SubstrateBlock): Promise<void> => {
   await seedGenesisClaims(block, genesisBlock, SEED_EVENT_ID);
 
   // the era the genesis config elects, which no election event announces
-  const genesisEra = await readCurrentEraIndex();
+  const genesisEra = await readOrAnomaly(
+    { block },
+    'the era the genesis config elects was not recorded',
+    readCurrentEraIndex
+  );
   if (genesisEra !== undefined) {
     await recordElection(genesisEra, { block, blockId: genesisBlock, blockEventId: SEED_EVENT_ID });
   }

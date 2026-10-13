@@ -140,7 +140,8 @@ export const __resetStakingCaches = (): void => {
 export const resolveLegacyRewardDestination = async (
   stash: string,
   blockId: string,
-  block?: SubstrateBlock
+  block?: SubstrateBlock,
+  eventIdx?: number
 ): Promise<LegacyRewardDestination> => {
   const payees = cachesFor(blockId).payees;
 
@@ -160,7 +161,7 @@ export const resolveLegacyRewardDestination = async (
   }
 
   const read = await readOrAnomaly(
-    { block },
+    { block, eventIdx },
     `the reward destination of ${stash} is recorded as unknown`,
     async () => {
       const payee = await readStorage(`staking.payee of ${stash}`, async () =>

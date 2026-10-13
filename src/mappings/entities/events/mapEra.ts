@@ -40,11 +40,18 @@ const getOrCreateEra = (eraIndex: number, blockEventId: string): Era => {
 
 export const handleStakersElected = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
-  const eraIndex = await readOrAnomaly(
+  const read = await readOrAnomaly(
     { block, eventIdx, moduleId, eventId },
     'the era this election opened was not recorded',
-    readCurrentEraIndex
+    async () => ({ eraIndex: await readCurrentEraIndex() })
   );
+
+  // already recorded as unreadable
+  if (!read) {
+    return;
+  }
+
+  const { eraIndex } = read;
 
   // The event carries no payload, so the era it opens is only knowable from chain state. Without
   // it there is no row to write — but an era boundary the index skipped is a gap, not a no-op.
@@ -131,7 +138,8 @@ export const recordElection = async (
         blockId,
         blockTime(block),
         blockEventId,
-        block
+        block,
+        eventIdx
       );
       validator.isActive = true;
       validator.updatedEventId = blockEventId;

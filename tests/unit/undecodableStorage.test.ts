@@ -6,7 +6,11 @@ import {
   UndecodableStateError,
 } from '../../src/utils/storageAtParent';
 import { IndexerAnomaly } from '../../src/types';
-import { namedEvent } from './helpers';
+import { handleStakersElected } from '../../src/mappings/entities/events/mapEra';
+import { handleChilled, handleNominated } from '../../src/mappings/entities/events/mapNomination';
+import { handleValidatorPrefsSet } from '../../src/mappings/entities/events/mapValidator';
+import { resolveLegacyRewardDestination } from '../../src/utils/staking';
+import { mockLedgerAccountQuery, mockStore, namedEvent } from './helpers';
 
 const blockAt = (blockNumber: number) =>
   namedEvent({
@@ -97,5 +101,127 @@ describe('readOrAnomaly', () => {
     await expect(
       readOrAnomaly({ block: blockAt(100) }, 'x', () => readStakingLedger(STASH, '0000000100'))
     ).rejects.toThrow('-32000: busy');
+  });
+});
+
+/**
+ * A value that can't be decoded fails identically on every retry, so no handler may let it halt
+ * the block: each records it against the event that read it.
+ */
+describe('handlers reading state that does not decode', () => {
+  const undecodable = () => Promise.reject(new Error('createType(Foo):: Struct: failed on total'));
+  const IDX = 7;
+
+  const anomalies = (db: Record<string, Record<string, any>>) =>
+    Object.values(db['IndexerAnomaly'] ?? {});
+
+  /** `bonded` can't be decoded; everything else on chain reads as absent. */
+  const withUndecodableBonded = () => {
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        bonded: jest.fn().mockImplementation(undecodable),
+        activeEra: jest.fn().mockResolvedValue({ toJSON: () => ({ index: 5 }) }),
+      },
+    };
+  };
+
+  const eventOf = (method: string, fields: Record<string, unknown>) =>
+    namedEvent({ section: 'staking', method, fields, idx: IDX });
+
+  beforeEach(() => {
+    __resetStakingCaches();
+  });
+
+  it('Nominated: records an undecodable controller against the event, and carries on', async () => {
+    const db = mockStore();
+    withUndecodableBonded();
+
+    await handleNominated(eventOf('Nominated', { stash: STASH, targets: [] }));
+
+    expect(db['StakingPosition'][STASH].controllerId).toBe(STASH);
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
+  });
+
+  it('Nominated: records an undecodable activeEra, and leaves the era unrecorded', async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      ...mockLedgerAccountQuery(),
+      staking: {
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+        activeEra: jest.fn().mockImplementation(undecodable),
+      },
+    };
+    const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+
+    await handleNominated(eventOf('Nominated', { stash: STASH, targets: [OTHER] }));
+
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
+    expect(Object.values(db['Nomination'])[0].eraIndex).toBeUndefined();
+  });
+
+  it('Chilled: records an undecodable controller against the event, and carries on', async () => {
+    const db = mockStore();
+    withUndecodableBonded();
+
+    await handleChilled(eventOf('Chilled', { stash: STASH }));
+
+    expect(db['StakingPosition'][STASH].isChilled).toBe(true);
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
+  });
+
+  it('ValidatorPrefsSet: records an undecodable controller against the event, and carries on', async () => {
+    const db = mockStore();
+    withUndecodableBonded();
+    (globalThis as any).api.query.identity.keyRecords = jest
+      .fn()
+      .mockResolvedValue({ isEmpty: true });
+
+    await handleValidatorPrefsSet(
+      eventOf('ValidatorPrefsSet', { stash: STASH, prefs: { commission: 1, blocked: false } })
+    );
+
+    expect(db['StakingPosition'][STASH].isValidator).toBe(true);
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
+  });
+
+  it('StakersElected: records one anomaly for a currentEra that does not decode', async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      staking: { currentEra: jest.fn().mockImplementation(undecodable) },
+    };
+
+    await handleStakersElected(eventOf('StakersElected', {}));
+
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].detail).not.toContain('is not set');
+  });
+
+  it('StakersElected: records one anomaly for a currentEra that is not set', async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      staking: { currentEra: jest.fn().mockResolvedValue({ toJSON: () => null }) },
+    };
+
+    await handleStakersElected(eventOf('StakersElected', {}));
+
+    expect(anomalies(db)).toHaveLength(1);
+    expect(anomalies(db)[0].detail).toContain('is not set');
+  });
+
+  it('files a reward destination that does not decode under the reward event', async () => {
+    const db = mockStore();
+    (globalThis as any).api.query = {
+      staking: { payee: jest.fn().mockImplementation(undecodable) },
+    };
+
+    const result = await resolveLegacyRewardDestination(STASH, '0000001000', blockAt(1000), IDX);
+
+    expect(result).toEqual({ rewardDestination: 'LegacyUnknown' });
+    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
   });
 });
