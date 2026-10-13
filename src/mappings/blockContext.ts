@@ -133,15 +133,34 @@ export const __resetBlockContext = (): void => {
   current = undefined;
 };
 
+/**
+ * The context for a lookup that carries only a block id.
+ *
+ * Only the block being indexed owns the current context, and `ledgerEntries` in it is complete, so
+ * a lookup under another id (the genesis path asks about `0000000000` while block 1 is handled)
+ * must not replace it: it gets a throwaway context instead, which keeps nothing past the lookup.
+ * With no current context yet, the lookup creates and keeps one, as a handler would.
+ */
+const lookupContext = (blockId: string): BlockContext =>
+  current && current.blockId !== blockId
+    ? {
+        blockId,
+        blockWritten: false,
+        handledExtrinsics: new Set(),
+        keyRecords: new Map(),
+        ledgerEntries: new LedgerEntries(),
+      }
+    : contextFor(blockId);
+
 /** The ledger entries written in a block so far, reachable from layers that carry only its id. */
 export const getLedgerEntries = (blockId: string): LedgerEntries =>
-  contextFor(blockId).ledgerEntries;
+  lookupContext(blockId).ledgerEntries;
 
 /**
  * The key record cache for a block, reachable from layers that carry only the block id.
  */
 export const getKeyRecordCache = (blockId: string): Map<string, KeyRecordResolution | undefined> =>
-  contextFor(blockId).keyRecords;
+  lookupContext(blockId).keyRecords;
 
 const eventIndexes = new WeakMap<object, Map<number, number[]>>();
 
