@@ -20,7 +20,7 @@ import { amountOf, stakingStash } from '../identities/ledgerCore';
 const APPLY_ERA_KEYS_FROM = 7_000_000;
 
 /**
- * `staking.Slash` (before v8) / `staking.Slashed` (v8): one stash's stake slashed.
+ * `staking.Slash` (before v7) / `staking.Slashed` (from v7): one stash's stake slashed.
  *
  * The event names only the stash and the amount. Polymesh defers every slash (mainnet and testnet
  * by 14 eras), and applying one takes it out of `staking.unappliedSlashes`, so the slash it came
