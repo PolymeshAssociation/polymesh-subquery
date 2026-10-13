@@ -229,7 +229,10 @@ const slashProceeds = (
   );
   const upToTreasury = treasuryAt === -1 ? records : records.slice(0, treasuryAt);
   const slashed = upToTreasury
-    .filter(({ event }) => event.section === 'staking' && event.method === 'Slash')
+    .filter(
+      ({ event }) =>
+        event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed')
+    )
     .reduce((sum, { event }) => sum + BigInt(event.data[1].toString()), BigInt(0));
 
   return {
@@ -242,10 +245,10 @@ const slashProceeds = (
  * Pays a pre-v8 slash's reporters their share. The chain announces nothing for it.
  *
  * `slashing::apply_slash` takes the slash from the validator and its nominators, each announced
- * by `staking.Slash`, then `pay_reporters` gives the offence's reporters up to the deferred
- * slash's `payout`, split evenly, through `resolve_creating`, which emits nothing. The rest,
- * including any remainder of the split, goes to the treasury as one `TreasuryReimbursement`. So
- * the reporters' share left the validator and arrived nowhere. On testnet that left the one
+ * by `staking.Slash` (`Slashed` from v7), then `pay_reporters` gives the offence's reporters up to
+ * the deferred slash's `payout`, split evenly, through `resolve_creating`, which emits nothing. The
+ * rest, including any remainder of the split, goes to the treasury as one `TreasuryReimbursement`.
+ * So the reporters' share left the validator and arrived nowhere. On testnet that left the one
  * reporter of the era-2159 slash 637.5 POLYX short from block 7,751,343.
  *
  * Done once per deferred slash, on the validator's own `Slash`, which comes first: a nominator's

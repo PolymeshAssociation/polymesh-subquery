@@ -2794,7 +2794,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const getRuntimeVersion = jest.fn();
 
   /** `staking.unappliedSlashes`, as the parent block's state holds it. */
-  const deferredSlashes = (byEra: Record<number, Deferred[]>) => {
+  const deferredSlashes = (byEra: Record<number, Deferred[]>, spec = SPEC) => {
     getKeysPaged.mockReset().mockResolvedValue(Object.keys(byEra).map(Number).map(eraKey));
     getStorage
       .mockReset()
@@ -2817,7 +2817,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     // parent's state is readable without asking the chain which runtime wrote it
     (globalThis as any).api.runtimeVersion = {
       ...registryRuntime,
-      specVersion: { toNumber: () => SPEC },
+      specVersion: { toNumber: () => spec },
     };
     getHeader.mockReset();
     getRuntimeVersion.mockReset();
@@ -2859,10 +2859,11 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const slashEvents = (
     slashes: [stash: string, amount: string][],
     toTreasury: string | null,
-    specVersion = SPEC
+    specVersion = SPEC,
+    method: 'Slash' | 'Slashed' = 'Slash'
   ): SubstrateEvent[] => {
     const records = [
-      ...slashes.map(([stash, amount]) => ['staking', 'Slash', [stash, amount]] as const),
+      ...slashes.map(([stash, amount]) => ['staking', method, [stash, amount]] as const),
       ...(toTreasury === null
         ? []
         : [['treasury', 'TreasuryReimbursement', ['0x' + '00'.repeat(32), toTreasury]] as const]),
@@ -2872,7 +2873,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     }));
 
     return slashes.map(([stash, amount], index) => {
-      const event = tupleEvent('staking', 'Slash', [stash, amount], specVersion);
+      const event = tupleEvent('staking', method, [stash, amount], specVersion);
       const block = (event as any).block;
 
       block.block = {
@@ -2986,6 +2987,30 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
         [NOMINATOR, '400'],
       ],
       '1280'
+    )) {
+      await handleStakingSlash(event);
+    }
+
+    expect(balance(REPORTER)?.free).toBe(BigInt(120));
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('pays the reporters of a v7 slash, which the chain announces as `Slashed`', async () => {
+    const NOMINATOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const V7 = 7_000_000;
+    deferredSlashes(
+      { 2159: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER], payout: '120' }] },
+      V7
+    );
+
+    for (const event of slashEvents(
+      [
+        [OFFENDER, '1000'],
+        [NOMINATOR, '400'],
+      ],
+      '1280',
+      V7,
+      'Slashed'
     )) {
       await handleStakingSlash(event);
     }
