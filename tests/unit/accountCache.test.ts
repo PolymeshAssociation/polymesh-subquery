@@ -1,10 +1,15 @@
 import { Codec } from '@polkadot/types/types';
-import { Account, AccountKeyRole } from '../../src/types';
+import { Account, AccountKeyRole, Identity } from '../../src/types';
 import { getOrCreateAccount, upsertAccount } from '../../src/utils/accounts';
 import { createIdentity } from '../../src/mappings/entities/identities/mapIdentities';
+import { createPortfolio } from '../../src/mappings/entities/identities/mapPortfolio';
 
 jest.mock('../../src/mappings/entities/identities/mapIdentities', () => ({
   createIdentity: jest.fn(),
+}));
+
+jest.mock('../../src/mappings/entities/identities/mapPortfolio', () => ({
+  createPortfolio: jest.fn(),
 }));
 
 const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -146,6 +151,62 @@ describe('getOrCreateAccount for a multisig signer key', () => {
     await expect(getOrCreateAccount(ADDRESS, freshBlockId(), datetime)).resolves.toBeUndefined();
 
     expect(createIdentity).not.toHaveBeenCalled();
+  });
+});
+
+describe('getOrCreateAccount for keys of one unindexed identity resolved concurrently', () => {
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  const keyRecord = (kind: 'primary' | 'secondary') =>
+    ({
+      isEmpty: false,
+      unwrap: () => ({
+        isPrimaryKey: kind === 'primary',
+        isSecondaryKey: kind === 'secondary',
+        asPrimaryKey: { toString: () => DID },
+        asSecondaryKey: { toString: () => DID },
+      }),
+    } as unknown as Codec);
+
+  let identities: Record<string, any>;
+
+  beforeEach(() => {
+    identities = {};
+    (globalThis as any).api.registry = { chainSS58: 12 };
+    (createIdentity as jest.Mock).mockReset();
+    (createPortfolio as jest.Mock).mockReset().mockResolvedValue(undefined);
+
+    (api as any).query = {
+      identity: {
+        keyRecords: jest.fn(async (address: string) =>
+          keyRecord(address === ADDRESS ? 'primary' : 'secondary')
+        ),
+      },
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(undefined);
+    jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
+    jest.spyOn(Identity, 'get').mockImplementation(async id => identities[id]);
+    // the write lands a tick after it is issued, as a store write does
+    (createIdentity as jest.Mock).mockImplementation(async args => {
+      await tick();
+      identities[args.did] = { ...args };
+    });
+  });
+
+  /**
+   * Both keys read no identity if they run side by side, both create it, and whichever write lands
+   * last wins: the secondary key resolved first can leave itself as the primary account.
+   */
+  it('ends with the primary key as primary account and one default portfolio', async () => {
+    const blockId = freshBlockId();
+
+    await Promise.all([
+      getOrCreateAccount(OTHER, blockId, datetime),
+      getOrCreateAccount(ADDRESS, blockId, datetime),
+    ]);
+
+    expect(identities[DID].primaryAccount).toBe(ADDRESS);
+    expect(createPortfolio).toHaveBeenCalledTimes(1);
   });
 });
 

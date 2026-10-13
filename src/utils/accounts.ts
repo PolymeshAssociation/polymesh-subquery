@@ -240,6 +240,36 @@ export const upsertAccount = async (
 };
 
 /**
+ * The identity creations in flight, by DID: the tail of each DID's queue.
+ */
+const identityLocks = new Map<string, Promise<void>>();
+
+/**
+ * Runs `task` once every earlier task for the same `did` has finished.
+ *
+ * Creating an identity from a key is a read-then-write: it reads the identity, creates it when
+ * absent with the address being resolved as its primary account, and a later call for the primary
+ * key repairs that. Run concurrently for two keys of one not-yet-indexed identity, both reads see
+ * nothing, both create, and whichever save lands last decides the primary account - possibly a
+ * secondary key whose repair already ran - and the default portfolio is created twice. Queueing
+ * per DID restores the sequential outcome while keys of different identities still run together.
+ */
+const withIdentityLock = async (did: string, task: () => Promise<void>): Promise<void> => {
+  const run = (identityLocks.get(did) ?? Promise.resolve()).then(task);
+  const tail = run.catch(() => undefined);
+
+  identityLocks.set(did, tail);
+
+  try {
+    await run;
+  } finally {
+    if (identityLocks.get(did) === tail) {
+      identityLocks.delete(did);
+    }
+  }
+};
+
+/**
  * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
  *
  * A primary or secondary key brings its identity with it, and that identity and its default
@@ -290,23 +320,25 @@ export const getOrCreateAccount = async (
 
   const eventId = EventIdEnum.AccountCreated;
 
-  const identity = await Identity.get(did);
+  await withIdentityLock(did, async () => {
+    const identity = await Identity.get(did);
 
-  if (!identity) {
-    await createIdentity(
-      { did, primaryAccount: address, secondaryKeysFrozen: false },
-      createdEventId
-    );
+    if (!identity) {
+      await createIdentity(
+        { did, primaryAccount: address, secondaryKeysFrozen: false },
+        createdEventId
+      );
 
-    // The default portfolio, so a later `identity.DidCreated` for this DID finds it — its handler
-    // only creates portfolio 0 when it creates the identity, and this path got there first.
-    await createPortfolio({ identityId: did, number: 0 }, createdEventId);
-  } else if (kind === 'primaryKey' && identity.primaryAccount !== address) {
-    await createIdentity(
-      { did, primaryAccount: address, secondaryKeysFrozen: false },
-      createdEventId
-    );
-  }
+      // The default portfolio, so a later `identity.DidCreated` for this DID finds it — its handler
+      // only creates portfolio 0 when it creates the identity, and this path got there first.
+      await createPortfolio({ identityId: did, number: 0 }, createdEventId);
+    } else if (kind === 'primaryKey' && identity.primaryAccount !== address) {
+      await createIdentity(
+        { did, primaryAccount: address, secondaryKeysFrozen: false },
+        createdEventId
+      );
+    }
+  });
 
   const account = Account.create({
     id: address,
