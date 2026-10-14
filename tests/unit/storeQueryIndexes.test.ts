@@ -7,7 +7,7 @@
  * the source and checks them against the indexes SubQuery derives from `schema.graphql`, with the
  * node's own rule: a field counts if any index on the model lists it.
  *
- * The same queries also guard the GiST trim in `db/compat.sql`: that file drops indexes by table
+ * The same queries also guard the GiST trim in `db/trimIndexes.ts`: that list drops indexes by table
  * and column list, and a drop must never take the index one of these queries, or one of the
  * SDK's and portal's queries, runs on.
  */
@@ -16,6 +16,7 @@ import { Utils } from '@subql/x-sequelize';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import * as ts from 'typescript';
+import { TRIM_ENTRIES, TrimEntry } from '../../db/trimIndexes';
 
 const ROOT = join(__dirname, '..', '..');
 const QUERIES = new Set(['getAllByFields', 'getByFields', 'getByField', 'getOneByField']);
@@ -227,33 +228,9 @@ const CONSUMER_USED: Array<[string, string]> = [
   ['trusted_claim_issuers', 'issuer_id'],
 ];
 
-interface Trim {
-  table: string;
-  columns: string[];
-  /** replaced by an empty index of the same name, because the schema still declares it */
-  standIn: boolean;
-}
+const trims = (): TrimEntry[] => TRIM_ENTRIES;
 
-/** The entries of one `NAME CONSTANT TEXT := $list$ ... $list$` constant: a table, then its column lists. */
-const listed = (sql: string, name: string, standIn: boolean): Trim[] => {
-  const body = sql.match(new RegExp(`${name} CONSTANT TEXT := \\$list\\$([^$]*)\\$list\\$`))?.[1];
-
-  return (body ?? '')
-    .split('\n')
-    .map(line => line.trim().split(/\s+/))
-    .filter(([table]) => table)
-    .flatMap(([table, ...lists]) =>
-      lists.map(list => ({ table, columns: list.split(','), standIn }))
-    );
-};
-
-const trims = (): Trim[] => {
-  const sql = readFileSync(join(ROOT, 'db', 'compat.sql'), 'utf8');
-
-  return [...listed(sql, 'relations', true), ...listed(sql, 'removed', false)];
-};
-
-describe('GiST trim in db/compat.sql', () => {
+describe('GiST trim in db/trimIndexes.ts', () => {
   const { models } = getAllEntitiesRelations(
     buildSchemaFromString(readFileSync(join(ROOT, 'schema.graphql'), 'utf8'))
   );
