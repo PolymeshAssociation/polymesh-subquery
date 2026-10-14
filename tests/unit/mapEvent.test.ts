@@ -1,5 +1,6 @@
 import { TypeRegistry } from '@polkadot/types';
 import { SubstrateEvent } from '@subql/types';
+import { IndexerAnomaly } from '../../src/types';
 import { handleToolingEvent } from '../../src/mappings/entities/events/mapEvent';
 
 const registry = new TypeRegistry();
@@ -134,5 +135,23 @@ describe('handleToolingEvent', () => {
     );
 
     expect(Object.keys(event.args as object)).toEqual(['0', '1']);
+  });
+
+  it('stores no arguments and records one anomaly when a value is not its declared type', async () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    const event = eventOf('balances', 'Transfer', [['value', 'Option<u32>', 1]]);
+    // a codec that names a type it has none of the members of
+    (event.event.data as unknown[])[0] = { toRawType: () => 'Option<u32>', toString: () => '' };
+
+    const stored = await handleToolingEvent(event);
+
+    expect(stored.args).toBeUndefined();
+    expect(stored.refs ?? []).toEqual([]);
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    expect(anomaly.mock.instances[0]).toMatchObject({
+      kind: 'UnreadableValue',
+      detail: expect.stringContaining('Option<u32> was expected'),
+    });
+    anomaly.mockRestore();
   });
 });

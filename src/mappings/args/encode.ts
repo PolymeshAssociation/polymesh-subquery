@@ -27,8 +27,9 @@ export type CanonicalValue =
  * only express a free-form JSON column as `{ _?: string }`, which no keyed object is assignable to;
  * the column stores whatever JSON it is given.
  */
-export const argumentsJson = (args: Record<string, CanonicalValue>): ArgumentsJson =>
-  args as unknown as ArgumentsJson;
+export const argumentsJson = (
+  args: Record<string, CanonicalValue> | null
+): ArgumentsJson | undefined => (args === null ? undefined : (args as unknown as ArgumentsJson));
 
 export interface RawReference {
   kind: 'identity' | 'account' | 'asset' | 'ticker' | 'portfolio';
@@ -326,6 +327,35 @@ export const encodeArgs = (
   return { args, refs };
 };
 
+export interface EncodedArgs {
+  /** `null` when an argument was not the shape its declared type promised */
+  args: Record<string, CanonicalValue> | null;
+  refs: RawReference[];
+  /** why `args` is null */
+  failure?: string;
+}
+
+/**
+ * `encodeArgs` for the arguments stored on `Event` and `Extrinsic`. A value that is not its
+ * declared type is a fact about the chain, and retrying the block would meet it again, so it is
+ * reported back as `failure` with the arguments left out rather than thrown. Any other error is a
+ * bug in the encoder and still throws.
+ */
+export const tryEncodeArgs = (
+  values: Codec[],
+  names: (string | undefined)[],
+  types: string[]
+): EncodedArgs => {
+  try {
+    return encodeArgs(values, names, types);
+  } catch (error) {
+    if (!(error instanceof UnexpectedShapeError)) {
+      throw error;
+    }
+    return { args: null, refs: [], failure: error.message };
+  }
+};
+
 /**
  * What `callArgs` reads of a call: its arguments and the metadata naming them. Taken structurally
  * because a `Call` and a `GenericCall` are the same object, and the arguments' element type is
@@ -336,10 +366,15 @@ export interface CallSource {
   meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
 }
 
+const callArgsInput = (call: CallSource): Parameters<typeof encodeArgs> => [
+  Array.from(call.args, asCodec),
+  call.meta.args.map(({ name }) => stringCamelCase(name.toString())),
+  call.meta.args.map(({ type }) => type.toString()),
+];
+
 /** A call's arguments in the canonical encoding, keyed by the metadata's argument names. */
 export const callArgs = (call: CallSource): Record<string, CanonicalValue> =>
-  encodeArgs(
-    Array.from(call.args, asCodec),
-    call.meta.args.map(({ name }) => stringCamelCase(name.toString())),
-    call.meta.args.map(({ type }) => type.toString())
-  ).args;
+  encodeArgs(...callArgsInput(call)).args;
+
+/** `callArgs` for the arguments stored on `Extrinsic`; see `tryEncodeArgs`. */
+export const tryCallArgs = (call: CallSource): EncodedArgs => tryEncodeArgs(...callArgsInput(call));

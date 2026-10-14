@@ -2,6 +2,7 @@ import { hexToU8a } from '@polkadot/util';
 import { __resetBlockContext } from '../../src/mappings/blockContext';
 import { SubstrateExtrinsic } from '@subql/types';
 import { createExtrinsic, handleExtrinsic } from '../../src/mappings/entities/block/mapExtrinsic';
+import { IndexerAnomaly } from '../../src/types';
 import { callOf } from './helpers';
 
 /** signed by 0x4c0883a6...2318, whose address is `FROM_ETH` */
@@ -97,6 +98,24 @@ describe('createExtrinsic', () => {
     expect(extrinsic.ethTxHash).toBeUndefined();
     // RLP is not UTF-8, so the payload stays hex
     expect(extrinsic.args).toEqual({ payload: payloads.runtimeCall });
+  });
+
+  it('should store no args and record an anomaly when an argument is not its declared type', () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    const extrinsic = mockExtrinsic({ section: 'balances', method: 'transferWithMemo' });
+    const call = extrinsic.extrinsic.method as unknown as { args: unknown[] };
+    call.args[0] = { toRawType: () => 'Option<u32>', toString: () => '' };
+    call.args.length = 1;
+    (extrinsic.extrinsic.method as unknown as { meta: unknown }).meta = {
+      args: [{ name: 'payload', type: 'Option<u32>' }],
+    };
+
+    const created = createExtrinsic(extrinsic);
+
+    expect(created.args).toBeUndefined();
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    expect(anomaly.mock.instances[0]).toMatchObject({ kind: 'UnreadableValue' });
+    anomaly.mockRestore();
   });
 
   it('should attribute an eth_transact to the signing Ethereum key while staying unsigned', () => {

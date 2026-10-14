@@ -32,7 +32,7 @@ jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
 // the closing events here are hand-made stand-ins, not codecs; their encoding isn't under test
 jest.mock('../../src/mappings/args/encode', () => ({
   ...jest.requireActual('../../src/mappings/args/encode'),
-  encodeArgs: () => ({ args: {}, refs: [] }),
+  tryEncodeArgs: () => ({ args: {}, refs: [] }),
 }));
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 import {

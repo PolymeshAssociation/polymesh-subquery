@@ -1,7 +1,8 @@
 import { SubstrateEvent } from '@subql/types';
 import { argumentNames, metadataTypeNames } from '../../../decode';
-import { Event } from '../../../types';
-import { argumentsJson, encodeArgs } from '../../args/encode';
+import { AnomalyKind, Event } from '../../../types';
+import { argumentsJson, tryEncodeArgs } from '../../args/encode';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { toEventRefs } from '../../args/refs';
 import { extractArgs } from '../common';
 
@@ -19,7 +20,22 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<Event> 
     moduleIdText,
     params,
   } = extractArgs(event);
-  const { args, refs } = encodeArgs(params, argumentNames(event), metadataTypeNames(event));
+  const { args, refs, failure } = tryEncodeArgs(
+    params,
+    argumentNames(event),
+    metadataTypeNames(event)
+  );
+
+  if (failure !== undefined) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${failure}, so the event's args were left empty`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+  }
 
   return Event.create({
     id: blockEventId,

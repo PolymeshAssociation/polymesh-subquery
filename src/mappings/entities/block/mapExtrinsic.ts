@@ -1,5 +1,5 @@
 import { SubstrateExtrinsic } from '@subql/types';
-import { CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
+import { AnomalyKind, CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
 import {
   blockTime,
   camelToSnakeCase,
@@ -10,7 +10,8 @@ import {
   ResolvedEthTransact,
   resolveEthTransact,
 } from '../../../utils';
-import { argumentsJson, callArgs } from '../../args/encode';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { argumentsJson, tryCallArgs } from '../../args/encode';
 import { toEnum } from '../common';
 import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
@@ -21,9 +22,17 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
-  const args = callArgs(extrinsic.extrinsic.method);
+  const { args, failure } = tryCallArgs(extrinsic.extrinsic.method);
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
+
+  if (failure !== undefined) {
+    void recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${failure}, so the extrinsic's args were left empty`,
+      block: extrinsic.block,
+    });
+  }
 
   const created = Extrinsic.create({
     id: extrinsicId,

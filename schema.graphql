@@ -1880,8 +1880,8 @@ type Extrinsic @entity {
   moduleIdText: String!
   callId: CallIdEnum! @index
   callIdText: String!
-  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`. Not indexed: an `args` filter must come with a `moduleId` and `callId` filter, which narrows the scan to that call's rows"
-  args: ArgumentsJson!
+  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`. Not indexed: an `args` filter must come with a `moduleId` and `callId` filter, which narrows the scan to that call's rows. Null when an argument was not the shape its declared type promised; an `IndexerAnomaly` records which"
+  args: ArgumentsJson
   success: Int!
   nonce: Int
   extrinsicHash: String @index(unique: false)
@@ -1982,8 +1982,8 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   moduleIdText: String!
   eventId: EventIdEnum!
   eventIdText: String!
-  "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`. Not indexed: an `args` filter must come with a `moduleId` and `eventId` filter, which narrows the scan to that event's rows; to find events involving an identity, account, asset or portfolio, use `refs`, which is indexed"
-  args: ArgumentsJson!
+  "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`. Not indexed: an `args` filter must come with a `moduleId` and `eventId` filter, which narrows the scan to that event's rows; to find events involving an identity, account, asset or portfolio, use `refs`, which is indexed. Null when an argument was not the shape its declared type promised; an `IndexerAnomaly` records which"
+  args: ArgumentsJson
   "What the event involves, as `kind:value` (`identity:0x…`, `account:5…`, `asset:0x…`, `ticker:ABC`, `portfolio:<did>/<number>`), in any argument and at any depth; a portfolio also files its identity, a ticker is filed as `ticker:<text>` and, before v7, also under the asset id it maps to. `null` when the event involves none of these. Filter with `contains`, for example `{ contains: [\"asset:0x…\"] }`. GIN-indexed in `db/compat.sql`"
   refs: [String!]
   extrinsic: Extrinsic

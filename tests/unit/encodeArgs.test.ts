@@ -277,6 +277,26 @@ describe('encodeValue against a value that is not its declared type', () => {
   // a codec whose type name promises a shape its members do not have
   const impostor = (raw: string) => ({ toRawType: () => raw, toString: () => '' } as never);
 
+  it('reports the mismatch instead of throwing when the arguments are stored', () => {
+    expect(tryEncodeArgs([impostor('Option<u32>')], ['value'], ['Option<u32>'])).toEqual({
+      args: null,
+      refs: [],
+      failure: expect.stringContaining('Option<u32> was expected'),
+    });
+    expect(() => encodeArgs([impostor('Option<u32>')], ['value'], ['Option<u32>'])).toThrow(
+      UnexpectedShapeError
+    );
+  });
+
+  it('still throws what is not a shape mismatch', () => {
+    const broken = {
+      toRawType: () => {
+        throw new Error('registry unavailable');
+      },
+    } as never;
+    expect(() => tryEncodeArgs([broken], ['value'], ['Text'])).toThrow('registry unavailable');
+  });
+
   it.each([
     'Option<u32>',
     'Result<u8, Text>',
