@@ -107,7 +107,7 @@ describe('an asset the index has never seen', () => {
         assets: jest.fn().mockResolvedValue(
           asset
             ? {
-                isNone: false,
+                isSome: true,
                 unwrap: () => ({
                   totalSupply: codec('5000'),
                   ownerDid: codec(OWNER),
@@ -119,13 +119,13 @@ describe('an asset the index has never seen', () => {
                   },
                 }),
               }
-            : { isNone: true }
+            : { isSome: false, unwrap: () => undefined }
         ),
         assetNames: jest.fn().mockResolvedValue(codec('0x4d7920417373657400')),
         fundingRound: jest.fn().mockResolvedValue(codec('')),
         assetIdentifiers: jest.fn().mockResolvedValue(codec([])),
         frozen: jest.fn().mockResolvedValue(codec(false)),
-        assetIdTicker: jest.fn().mockResolvedValue({ isSome: false }),
+        assetIdTicker: jest.fn().mockResolvedValue({ isSome: false, unwrap: () => undefined }),
       },
       complianceManager: {
         assetCompliances: jest.fn().mockResolvedValue(codec({ paused: false })),

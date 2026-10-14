@@ -1,4 +1,3 @@
-import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { AnomalyKind, Asset } from '../../../types';
 import {
@@ -10,17 +9,11 @@ import {
   getTextValue,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { asCodec, flagOf, memberOf, optionOf } from '../../../utils/codec';
 import { hexToString } from '../../../utils/common';
 import { isPartialIndex } from '../../indexOrigin';
 import { extractArgs } from '../common';
 import { resolveIdentity } from '../identities/mapIdentities';
-
-interface ChainAssetDetails {
-  totalSupply: Codec;
-  ownerDid: Codec;
-  divisible: Codec;
-  assetType: Codec;
-}
 
 /**
  * An asset the index has never seen, built from chain storage at the current block.
@@ -51,19 +44,16 @@ export const assetFromChain = async (
       eventId,
     });
 
-  const assets = api.query.asset.assets as unknown as
-    | ((id: string) => Promise<{ isNone: boolean; unwrap(): ChainAssetDetails }>)
-    | undefined;
-  const stored = assets ? await assets(assetId) : undefined;
+  const assets = api.query.asset?.assets;
+  const details = assets ? optionOf(await assets(assetId), 'asset.assets') : undefined;
 
-  if (!stored || stored.isNone) {
+  if (!details) {
     await report(`asset ${assetId} is neither indexed nor readable from chain storage`);
 
     return undefined;
   }
 
-  const details = stored.unwrap();
-  const ownerId = await resolveIdentity(getTextValue(details.ownerDid), {
+  const ownerId = await resolveIdentity(getTextValue(memberOf(details, 'ownerDid')), {
     reason: 'an asset built from chain storage',
     eventIdx,
     block,
@@ -84,26 +74,25 @@ export const assetFromChain = async (
       api.query.complianceManager.assetCompliances(assetId),
     ]);
 
-  const ticker = (rawTicker as unknown as { isSome: boolean; unwrap(): Codec }).isSome
-    ? hexToString((rawTicker as unknown as { unwrap(): Codec }).unwrap().toString())
-    : undefined;
-  const isNftCollection = (details.assetType as unknown as { isNonFungible: boolean })
-    .isNonFungible;
+  const rawTickerValue = optionOf(rawTicker, 'asset.assetIdTicker');
+  const ticker = rawTickerValue ? hexToString(rawTickerValue.toString()) : undefined;
+  const assetType = memberOf(details, 'assetType');
+  const isNftCollection = flagOf(assetType, 'isNonFungible');
 
   const asset = Asset.create({
     id: assetId,
     assetId,
     ticker,
-    name: bytesToString(rawName as unknown as Codec) || undefined,
-    type: await getAssetType(details.assetType, block, eventIdx),
+    name: bytesToString(asCodec(rawName)) || undefined,
+    type: await getAssetType(assetType, block, eventIdx),
     isNftCollection,
-    fundingRound: bytesToString(rawFundingRound as unknown as Codec) || undefined,
-    isDivisible: getBooleanValue(details.divisible),
-    isFrozen: getBooleanValue(rawFrozen as unknown as Codec),
+    fundingRound: bytesToString(asCodec(rawFundingRound)) || undefined,
+    isDivisible: getBooleanValue(memberOf(details, 'divisible')),
+    isFrozen: getBooleanValue(asCodec(rawFrozen)),
     holderCount: 0,
-    identifiers: getSecurityIdentifiers(rawIdentifiers as unknown as Codec),
+    identifiers: getSecurityIdentifiers(asCodec(rawIdentifiers)),
     ownerId,
-    totalSupply: getBigIntValue(details.totalSupply),
+    totalSupply: getBigIntValue(memberOf(details, 'totalSupply')),
     totalTransfers: BigInt(0),
     isCompliancePaused: Boolean((rawCompliance.toJSON() as { paused?: boolean } | null)?.paused),
     createdEventId: blockEventId,
