@@ -48,3 +48,13 @@ registerShape(
   tickerBeforeV7(stable(['callerDid', 'portfolioId', 'assetId']))
 );
 registerShape('portfolio', 'UserPortfolios', stable(['did', 'portfolios']));
+
+/**
+ * `MovedBetweenPortfolios` is the fungible-only movement event up to v5.4.3, with the names of
+ * `FungibleTokensMovedBetweenPortfolios`, which carries the same six parameters.
+ */
+registerShape(
+  'portfolio',
+  'MovedBetweenPortfolios',
+  discontinuedAt(LAST_V5, ['did', 'fromPortfolio', 'toPortfolio', 'ticker', 'amount', 'memo'])
+);

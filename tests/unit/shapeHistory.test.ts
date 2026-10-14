@@ -63,23 +63,14 @@ const POSITIONAL = new Set<string>([
   'asset.IsIssuable',
   'asset.TransferWithData',
   'base.UnexpectedError',
-  'bridge.AdminChanged',
   'bridge.BridgeLimitUpdated',
   'bridge.BridgeTxFailed',
   'bridge.BridgeTxScheduleFailed',
-  'bridge.BridgeTxScheduled',
-  'bridge.Bridged',
   'bridge.ControllerChanged',
   'bridge.ExemptedUpdated',
-  'bridge.FreezeAdminAdded',
   'bridge.FreezeAdminRemoved',
-  'bridge.Frozen',
-  'bridge.FrozenTx',
   'bridge.TimelockChanged',
   'bridge.TxRemoved',
-  'bridge.TxsHandled',
-  'bridge.Unfrozen',
-  'bridge.UnfrozenTx',
   'cddServiceProviders.ActiveLimitChanged',
   'cddServiceProviders.Dummy',
   'cddServiceProviders.MemberAdded',
@@ -99,48 +90,24 @@ const POSITIONAL = new Set<string>([
   'indices.IndexAssigned',
   'indices.IndexFreed',
   'indices.IndexFrozen',
-  'multiSig.ProposalExecutionFailed',
-  'multiSig.ProposalFailedToExecute',
   'multiSig.SchedulingFailed',
   'offences.Offence',
   'polymeshContracts.ApiHashUpdated',
   'polymeshContracts.SCRuntimeCall',
-  'portfolio.MovedBetweenPortfolios',
   'rewards.ItnRewardClaimed',
   'scheduler.Canceled',
   'scheduler.Dispatched',
   'scheduler.Scheduled',
   'session.NewSession',
-  'settlement.InstructionRescheduled',
-  'settlement.InstructionV2Created',
   'settlement.ReceiptUnclaimed',
   'settlement.ReceiptValidityChanged',
-  'settlement.SchedulingFailed',
   'staking.CommissionCapUpdated',
-  'staking.InvalidatedNominators',
-  'staking.MinimumBondThresholdUpdated',
   'staking.OldSlashingReportDiscarded',
   'staking.RewardPaymentSchedulingInterrupted',
-  'staking.SlashingAllowedForChanged',
-  'staking.SolutionStored',
-  'staking.StakingElection',
-  'statistics.ExemptionsAdded',
-  'statistics.ExemptionsRemoved',
-  'statistics.TransferManagerAdded',
-  'statistics.TransferManagerRemoved',
-  'sto.FundraiserClosed',
-  'sto.FundraiserCreated',
-  'sto.FundraiserFrozen',
-  'sto.FundraiserUnfrozen',
-  'sto.FundraiserWindowModified',
-  'sto.Invested',
   'sudo.KeyChanged',
   'sudo.Sudid',
   'sudo.SudoAsDone',
-  'system.ExtrinsicFailed',
-  'system.ExtrinsicSuccess',
   'system.KilledAccount',
-  'system.NewAccount',
   'technicalCommitteeMembership.Dummy',
   'testUtils.CddStatus',
   'testUtils.DidStatus',
@@ -152,6 +119,12 @@ const POSITIONAL = new Set<string>([
   'utility.BatchInterruptedOld',
   'utility.BatchOptimisticFailed',
 ]);
+
+/**
+ * Events whose parameters the chain reordered, not renamed, when it named them: `sto.Invested`
+ * moved the fundraiser id after the offering asset. Their names must be the same set.
+ */
+const REORDERED = new Set<string>(['sto.Invested']);
 
 describe('the shape table against the chains’ runtime history', () => {
   it('has the runtimes of both chains', () => {
@@ -203,7 +176,10 @@ describe('the shape table against the chains’ runtime history', () => {
           return [];
         }
         const shape = accepting(covering(shapesOf(event), before.to), before.types.length);
-        return shape && shape.fields.join() !== range.fields.join()
+        const same = REORDERED.has(event)
+          ? [...(shape?.fields ?? [])].sort().join() === [...range.fields].sort().join()
+          : shape?.fields.join() === range.fields.join();
+        return shape && !same
           ? [`${event} at ${range.from}: ${shape.fields.join()} -> ${range.fields.join()}`]
           : [];
       })

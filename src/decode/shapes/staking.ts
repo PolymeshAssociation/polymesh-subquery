@@ -1,4 +1,4 @@
-import { LAST_V7 } from './consts';
+import { LAST_V6, LAST_V7 } from './consts';
 import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
@@ -86,3 +86,27 @@ registerShape(
  * explicit shape here or `decodeEvent` throws `NoDecoderForSpecVersion`.
  */
 registerShape('staking', 'StakersElected', stable([]));
+
+/**
+ * The pre-7.0.0 events no runtime names. 7.0.0 names `InvalidatedNominators` and
+ * `SlashingAllowedForChanged` with the fields below, spelling and all; `MinimumBondThresholdUpdated`
+ * and the election events were never named. The former carries the council's identity, as
+ * `PermissionedIdentityAdded` does, and the new threshold.
+ */
+registerShape(
+  'staking',
+  'InvalidatedNominators',
+  discontinuedAt(LAST_V6, [
+    'governanceCouncillDid',
+    'governanceCouncillAccount',
+    'expiredNominators',
+  ])
+);
+registerShape(
+  'staking',
+  'MinimumBondThresholdUpdated',
+  discontinuedAt(LAST_V6, ['governanceCouncillDid', 'newValue'])
+);
+registerShape('staking', 'SlashingAllowedForChanged', discontinuedAt(LAST_V6, ['slashingSwitch']));
+registerShape('staking', 'SolutionStored', discontinuedAt(LAST_V6, ['compute']));
+registerShape('staking', 'StakingElection', discontinuedAt(LAST_V6, ['compute']));

@@ -1,4 +1,4 @@
-import { LAST_V7 } from './consts';
+import { LAST_V5, LAST_V6, LAST_V7, V7 } from './consts';
 import { discontinuedAt, registerShape, stable, tickerBeforeV7 } from './registry';
 
 /**
@@ -103,3 +103,34 @@ registerShape(
   'VenuesBlocked',
   tickerBeforeV7(stable(['callerDid', 'assetId', 'venueIds']))
 );
+
+registerShape(
+  'settlement',
+  'InstructionRescheduled',
+  discontinuedAt(LAST_V7, identityAndInstruction)
+);
+
+/**
+ * The v5.3 form of `InstructionCreated`, with its `memo` as an `InstructionMemo`; the same
+ * parameters, so the same names.
+ */
+registerShape(
+  'settlement',
+  'InstructionV2Created',
+  discontinuedAt(LAST_V5, [
+    'callerDid',
+    'venueId',
+    'instructionId',
+    'settlementType',
+    'tradeDate',
+    'valueDate',
+    'legs',
+    'memo',
+  ])
+);
+
+/** Carried only the error until 7.0.0 added the instruction that could not be scheduled */
+registerShape('settlement', 'SchedulingFailed', [
+  { from: 0, to: LAST_V6, fields: ['error'] },
+  { from: V7, to: LAST_V7, fields: ['instructionId', 'error'] },
+]);

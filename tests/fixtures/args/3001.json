@@ -8,7 +8,7 @@
       "method": "ExtrinsicSuccess",
       "recordHex": "0x0000000000000050b27c1200000000020000",
       "args": {
-        "0": {
+        "dispatchInfo": {
           "weight": "310162000",
           "class": "Mandatory",
           "paysFee": "Yes"
@@ -88,7 +88,7 @@
       "method": "ExtrinsicSuccess",
       "recordHex": "0x00010000000000908e276400000000000000",
       "args": {
-        "0": {
+        "dispatchInfo": {
           "weight": "1680314000",
           "class": "Normal",
           "paysFee": "Yes"

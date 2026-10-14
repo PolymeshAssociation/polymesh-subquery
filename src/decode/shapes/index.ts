@@ -14,6 +14,7 @@
  */
 import './asset';
 import './balances';
+import './bridge';
 import './capitalDistribution';
 import './committees';
 import './complianceManager';
@@ -29,6 +30,8 @@ import './relayer';
 import './settlement';
 import './staking';
 import './statistics';
+import './sto';
+import './system';
 import './treasury';
 
 export * from './consts';

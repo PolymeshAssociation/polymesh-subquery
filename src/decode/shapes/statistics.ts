@@ -1,4 +1,5 @@
-import { registerShape, stable } from './registry';
+import { LAST_V4 } from './consts';
+import { discontinuedAt, registerShape, stable } from './registry';
 
 /**
  * `statistics` pallet parameter shapes. None has changed arity; the asset was an `AssetScope`
@@ -25,4 +26,23 @@ registerShape(
   'statistics',
   'TransferConditionExemptionsRemoved',
   stable(['callerDid', 'exemptKey', 'entities'])
+);
+
+/**
+ * The transfer-manager events, replaced by the stat-type events at 5.0.0. Their asset was a
+ * `Ticker`, keyed `ticker`.
+ */
+const transferManager = ['callerDid', 'ticker', 'transferManager'];
+
+registerShape('statistics', 'TransferManagerAdded', discontinuedAt(LAST_V4, transferManager));
+registerShape('statistics', 'TransferManagerRemoved', discontinuedAt(LAST_V4, transferManager));
+registerShape(
+  'statistics',
+  'ExemptionsAdded',
+  discontinuedAt(LAST_V4, [...transferManager, 'scopeIds'])
+);
+registerShape(
+  'statistics',
+  'ExemptionsRemoved',
+  discontinuedAt(LAST_V4, [...transferManager, 'scopeIds'])
 );

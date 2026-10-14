@@ -64,3 +64,15 @@ registerShape(
   'ProposalExecuted',
   discontinuedAt(LAST_V6, ['callerDid', 'multisig', 'proposalId', 'result'])
 );
+
+/**
+ * The same event twice: `ProposalExecutionFailed` carries only the error, and
+ * `ProposalFailedToExecute` (added at 6.3.0, emitted alongside it) the multisig and proposal too.
+ * Neither exists from v7.0.0.
+ */
+registerShape('multiSig', 'ProposalExecutionFailed', discontinuedAt(LAST_V6, ['error']));
+registerShape(
+  'multiSig',
+  'ProposalFailedToExecute',
+  discontinuedAt(LAST_V6, ['callerDid', 'multisig', 'proposalId', 'error'])
+);
