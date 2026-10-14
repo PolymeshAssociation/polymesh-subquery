@@ -2,6 +2,7 @@ import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { AnomalyKind, EventIdEnum, MovementKind, PolyxPool, Subsidy } from '../../../types';
 import { getAllByFields } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { memberOf, optionalMemberOf } from '../../../utils/codec';
 import { closingEventOf, indexClosingEvent } from '../block/closingEvent';
 import { extractArgs, HandlerArgs } from '../common';
 import { resolveFeePayer } from './feePayer';
@@ -69,10 +70,9 @@ const weightToFee = (weight: bigint): bigint => {
  */
 export const exactFee = (extrinsic: SubstrateExtrinsic, closing: SubstrateEvent): bigint => {
   const { method, data } = closing.event;
-  const info = data[method === 'ExtrinsicFailed' ? 1 : 0] as unknown as {
-    weight: { refTime?: { toString(): string }; toString(): string };
-  };
-  const used = BigInt((info.weight.refTime ?? info.weight).toString());
+  const weight = memberOf(data[method === 'ExtrinsicFailed' ? 1 : 0], 'weight');
+  // a `Weight` struct from v6 on, a bare `u64` before it
+  const used = BigInt((optionalMemberOf(weight, 'refTime') ?? weight).toString());
 
   return (
     weightToFee(EXTRINSIC_BASE_WEIGHT) +

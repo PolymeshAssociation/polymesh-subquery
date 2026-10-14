@@ -22,6 +22,7 @@ import {
   scanDoubleMap,
 } from '../../../utils';
 import { CanonicalValue, encodeValue } from '../../args/encode';
+import { memberOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
@@ -218,7 +219,7 @@ export const seedGenesisClaims = async (
         return undefined;
       }
 
-      const target = (key.args[0] as unknown as { target: Codec }).target.toString();
+      const target = memberOf(key.args[0], 'target').toString();
       return writeClaim(target, encodeValue(stored, 'IdentityClaim'), {
         block,
         blockId,

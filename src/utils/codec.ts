@@ -41,6 +41,10 @@ export const flagOf = (value: unknown, key: string): boolean => {
   return flag;
 };
 
+/** A named field of a struct codec that some runtimes lack, or `undefined` when it is absent. */
+export const optionalMemberOf = (value: unknown, key: string): Codec | undefined =>
+  isObject(value) && key in value ? asCodec(value[key]) : undefined;
+
 /** A named field of a struct codec. */
 export const memberOf = (value: unknown, key: string): Codec => {
   if (!isObject(value) || !(key in value)) {
@@ -66,4 +70,19 @@ export const jsonOf = <T>(codec: Codec, check: (json: unknown) => json is T, wha
   }
 
   return json;
+};
+
+const isIterable = (value: unknown): value is Iterable<unknown> =>
+  typeof value === 'object' &&
+  value !== null &&
+  Symbol.iterator in value &&
+  typeof value[Symbol.iterator] === 'function';
+
+/** The members of a `Vec`, tuple or set codec, which all iterate; throws on anything else. */
+export const itemsOf = (value: unknown, what: string): Codec[] => {
+  if (!isIterable(value)) {
+    throw new TypeError(`${what} was expected to be a list, but is ${describe(value)}`);
+  }
+
+  return Array.from(value, asCodec);
 };

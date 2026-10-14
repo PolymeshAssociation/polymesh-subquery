@@ -1,4 +1,3 @@
-import { Codec } from '@polkadot/types/types';
 import { SEED_EVENT_ID } from '../mappings/consts';
 import { AccountBalance } from '../types';
 import { getBigIntValue, is8xSpecVersion } from '../utils';
@@ -12,6 +11,7 @@ import {
   readChainStakingLock,
 } from '../mappings/entities/identities/ledgerCore';
 import { ledgerAccount } from '../utils/accounts';
+import { memberOf } from '../utils/codec';
 import { readStakingLock } from '../utils/staking';
 
 /**
@@ -102,10 +102,10 @@ const seedBalance = async (
 ): Promise<AccountBalance | undefined> => {
   // The balance fields, not the account info around them: `frozen` is `miscFrozen`/`feeFrozen`
   // on older runtimes, so only this inner shape is read spec-agnostically.
-  const data = (accountInfo as unknown as { data: Record<string, Codec> }).data;
+  const data = memberOf(accountInfo, 'data');
 
-  const free = getBigIntValue(data.free);
-  const reserved = getBigIntValue(data.reserved);
+  const free = getBigIntValue(memberOf(data, 'free'));
+  const reserved = getBigIntValue(memberOf(data, 'reserved'));
   const frozen = accountDataFrozen(data);
 
   if (free === BigInt(0) && reserved === BigInt(0) && frozen === BigInt(0)) {

@@ -10,6 +10,7 @@ import {
   padNumericId,
   removeIfIncludes,
 } from '../../../utils';
+import { itemsOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
 
 /**
@@ -82,7 +83,7 @@ export const handleVenueSignersUpdated = async (event: SubstrateEvent): Promise<
   const { blockEventId } = extractArgs(event);
   const { venueId, signers: rawSigners, added: rawUpdateType } = decodeEvent(event);
 
-  const signers = extractVenueSigners(rawSigners as unknown as Iterable<Codec>);
+  const signers = extractVenueSigners(itemsOf(rawSigners, 'the venue signers'));
 
   const venue = await getVenue(processVenueId(venueId));
 

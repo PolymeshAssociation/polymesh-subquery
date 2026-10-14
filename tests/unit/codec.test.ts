@@ -1,5 +1,13 @@
 import { TypeRegistry } from '@polkadot/types';
-import { flagOf, memberOf, optionOf } from '../../src/utils/codec';
+import {
+  flagOf,
+  isRecord,
+  itemsOf,
+  jsonOf,
+  memberOf,
+  optionalMemberOf,
+  optionOf,
+} from '../../src/utils/codec';
 
 const registry = new TypeRegistry();
 registry.register({
@@ -34,5 +42,45 @@ describe('memberOf and flagOf', () => {
     expect(() => memberOf(details, 'ownerDid')).toThrow(/ownerDid was expected on/);
     expect(() => flagOf(memberOf(details, 'kind'), 'isGone')).toThrow(/isGone was expected/);
     expect(() => memberOf(null, 'owner')).toThrow(TypeError);
+  });
+});
+
+describe('optionalMemberOf', () => {
+  it('is undefined for a field the runtime lacks, and the field otherwise', () => {
+    const details = registry.createType('Details' as never, { owner: 3, kind: 'Fungible' });
+
+    expect(optionalMemberOf(details, 'owner')?.toString()).toBe('3');
+    expect(optionalMemberOf(details, 'frozen')).toBeUndefined();
+    expect(optionalMemberOf(undefined, 'owner')).toBeUndefined();
+  });
+});
+
+describe('itemsOf', () => {
+  it('lists a Vec, a tuple and a set', () => {
+    expect(itemsOf(registry.createType('Vec<u32>', [1, 2]), 'x').map(String)).toEqual(['1', '2']);
+    expect(itemsOf(registry.createType('(u32, u8)', [3, 4]), 'x').map(String)).toEqual(['3', '4']);
+    expect(itemsOf(registry.createType('BTreeSet<u32>', [5]), 'x').map(String)).toEqual(['5']);
+  });
+
+  it('refuses a value that is not a list', () => {
+    expect(() => itemsOf(registry.createType('u32', 1), 'the signers')).toThrow(
+      /the signers was expected to be a list/
+    );
+    expect(() => itemsOf(null, 'x')).toThrow(TypeError);
+  });
+});
+
+describe('jsonOf', () => {
+  const isPending = (json: unknown): json is { pending: number[] } =>
+    isRecord(json) && Array.isArray(json.pending);
+
+  it('returns the JSON once the check accepts it, and names the type when it does not', () => {
+    const ok = { toJSON: () => ({ pending: [1] }) } as never;
+    const bad = { toJSON: () => ({ pending: null }) } as never;
+
+    expect(jsonOf(ok, isPending, 'Schedule')).toEqual({ pending: [1] });
+    expect(() => jsonOf(bad, isPending, 'Schedule')).toThrow(
+      'Schedule did not have the expected shape: {"pending":null}'
+    );
   });
 });

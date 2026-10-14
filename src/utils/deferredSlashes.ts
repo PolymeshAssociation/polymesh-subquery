@@ -1,7 +1,7 @@
-import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum } from '../types';
 import { readOrAnomaly } from './anomaly';
+import { itemsOf, memberOf } from './codec';
 import { getBigIntValue, getTextValue } from './common';
 import { readActiveEraIndex } from './staking';
 import { storageEntriesAtParent, UndecodableStateError } from './storageAtParent';
@@ -54,24 +54,21 @@ const readDeferredSlashes = async (block: SubstrateBlock): Promise<DeferredSlash
   }
 
   return entries?.flatMap(({ args: [era], value }) => {
-    const deferred = value as unknown as {
-      validator: Codec;
-      own: Codec;
-      others: [Codec, Codec][];
-      reporters: Codec[];
-      payout: Codec;
-    }[];
-
-    return deferred.map(slash => ({
+    return itemsOf(value, 'the deferred slashes').map(slash => ({
       era: Number(getBigIntValue(era)),
-      validator: getTextValue(slash.validator),
-      own: getBigIntValue(slash.own),
-      others: slash.others.map(([stash, amount]): [string, bigint] => [
-        getTextValue(stash),
-        getBigIntValue(amount),
-      ]),
-      reporters: slash.reporters.map(reporter => getTextValue(reporter)),
-      payout: getBigIntValue(slash.payout),
+      validator: getTextValue(memberOf(slash, 'validator')),
+      own: getBigIntValue(memberOf(slash, 'own')),
+      others: itemsOf(memberOf(slash, 'others'), 'the slash others').map(
+        (other): [string, bigint] => {
+          const [stash, amount] = itemsOf(other, 'a slash other');
+
+          return [getTextValue(stash), getBigIntValue(amount)];
+        }
+      ),
+      reporters: itemsOf(memberOf(slash, 'reporters'), 'the slash reporters').map(reporter =>
+        getTextValue(reporter)
+      ),
+      payout: getBigIntValue(memberOf(slash, 'payout')),
     }));
   });
 };

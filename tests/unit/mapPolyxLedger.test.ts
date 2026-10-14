@@ -377,7 +377,7 @@ const stubChainHolds = (amount: number): jest.Mock => {
   const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(amount, { bitLength: 128, isLe: true })));
   const getStorage = jest
     .fn()
-    .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
+    .mockResolvedValue({ isSome: true, unwrap: () => ({ toU8a: () => raw }) });
   (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
   (globalThis as any).api.rpc = { state: { getStorage } };
   (globalThis as any).api.registry.metadata = {
@@ -3110,7 +3110,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
       .mockReset()
       .mockImplementation((keys: { toU8a: () => Uint8Array }[]) =>
         Promise.resolve(
-          keys.map(key => ({ isNone: false, unwrap: () => ({ toU8a: () => key.toU8a() }) }))
+          keys.map(key => ({ isSome: true, unwrap: () => ({ toU8a: () => key.toU8a() }) }))
         )
       );
 

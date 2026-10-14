@@ -28,7 +28,12 @@ describe('blockAuthor', () => {
     (globalThis as any).api.registry = {
       // the decoded digest carries the authority index the slot was claimed with
       createType: jest.fn((_type: string, data: { authorityIndex: number }) => ({
-        value: { authorityIndex: { toNumber: () => data.authorityIndex } },
+        value: {
+          authorityIndex: {
+            toNumber: () => data.authorityIndex,
+            toString: () => String(data.authorityIndex),
+          },
+        },
       })),
     };
   });

@@ -67,7 +67,7 @@ beforeEach(() => {
 describe('storageAtParent', () => {
   it('reads a map entry at the parent hash and decodes it with the value type', async () => {
     getStorage.mockResolvedValue({
-      isNone: false,
+      isSome: true,
       unwrap: () => ({ toU8a: () => Uint8Array.from([1, 2]) }),
     });
 
@@ -79,7 +79,7 @@ describe('storageAtParent', () => {
 
   it('decodes a plain value with its plain type', async () => {
     getStorage.mockResolvedValue({
-      isNone: false,
+      isSome: true,
       unwrap: () => ({ toU8a: () => Uint8Array.from([9]) }),
     });
 
@@ -90,7 +90,7 @@ describe('storageAtParent', () => {
   });
 
   it('is undefined when nothing is stored', async () => {
-    getStorage.mockResolvedValue({ isNone: true });
+    getStorage.mockResolvedValue({ isSome: false, unwrap: () => undefined });
 
     expect(await storageAtParent(block, 'bridge', 'controller')).toBeUndefined();
   });
@@ -120,7 +120,7 @@ describe('storageAtParent', () => {
   });
 
   it('asks the chain nothing about the parent unless an upgrade came in it', async () => {
-    getStorage.mockResolvedValue({ isNone: true });
+    getStorage.mockResolvedValue({ isSome: false, unwrap: () => undefined });
 
     await storageAtParent(block, 'bridge', 'controller');
 
@@ -130,7 +130,7 @@ describe('storageAtParent', () => {
   });
 
   it('asks which runtime wrote the parent once per block', async () => {
-    getStorage.mockResolvedValue({ isNone: true });
+    getStorage.mockResolvedValue({ isSome: false, unwrap: () => undefined });
 
     upgrades = [{ firstBlockId: '0000466633', specVersionId: 3000 }];
 
@@ -147,7 +147,7 @@ describe('storageAtParent', () => {
       toHex: () => `0x0${byte}`,
     });
     const stored = (byte: number) => ({
-      isNone: false,
+      isSome: true,
       unwrap: () => ({ toU8a: () => Uint8Array.from([byte, byte]) }),
     });
 
@@ -177,7 +177,7 @@ describe('storageAtParent', () => {
       const page = Array.from({ length: 1000 }, (_, i) => key(i % 256));
       getKeysPaged.mockResolvedValueOnce(page).mockResolvedValueOnce([key(7)]);
       queryStorageAt.mockImplementation((keys: unknown[]) =>
-        Promise.resolve(keys.map(() => ({ isNone: true })))
+        Promise.resolve(keys.map(() => ({ isSome: false, unwrap: () => undefined })))
       );
 
       await storageEntriesAtParent(block, 'multiSig', 'multiSigToIdentity');

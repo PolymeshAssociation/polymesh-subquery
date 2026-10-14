@@ -1,17 +1,12 @@
-import { Option, StorageKey } from '@polkadot/types';
-import { StorageEntryMetadataLatest } from '@polkadot/types/interfaces';
+import { QueryableStorageEntry } from '@polkadot/api-base/types';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { ChainUpgrade } from '../types';
+import { asCodec, itemsOf, optionOf } from './codec';
 import { padId } from './common';
+import { findStorage } from './legacyQuery';
 
-interface StorageItem {
-  key: (...keys: unknown[]) => string;
-  keyPrefix: () => string;
-  creator: {
-    meta: { type: { isMap: boolean; asMap?: { value: unknown }; asPlain?: unknown } };
-  };
-}
+type StorageItem = QueryableStorageEntry<'promise'>;
 
 /**
  * Whether this block's registry describes the runtime that wrote its parent's state, decided once
@@ -113,15 +108,13 @@ const decoding = <T>(what: string, run: () => T): T => {
 
 /** `api.query[section][item]`, or `undefined` when this runtime has no such item. */
 const storageItem = (section: string, item: string): StorageItem | undefined =>
-  (api.query as unknown as Record<string, Record<string, StorageItem>>)[section]?.[item];
+  findStorage(section, item);
 
 /** A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is stored */
-const decodeStored = (
-  storage: StorageItem,
-  raw: Option<Codec>,
-  name: string
-): Codec | undefined => {
-  if (raw.isNone) {
+const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec | undefined => {
+  const stored = optionOf(raw, `the stored ${name}`);
+
+  if (!stored) {
     return undefined;
   }
 
@@ -133,7 +126,7 @@ const decodeStored = (
 
     // the host's bytes, for the host's registry
     // eslint-disable-next-line no-restricted-syntax
-    return api.registry.createType(valueType, raw.unwrap().toU8a(true)) as unknown as Codec;
+    return asCodec(api.registry.createType(valueType, stored.toU8a(true)));
   });
 };
 
@@ -146,10 +139,7 @@ const readAtParent = async (
 ): Promise<Codec | undefined> =>
   decodeStored(
     storage,
-    (await api.rpc.state.getStorage(
-      key as string,
-      block.block.header.parentHash
-    )) as unknown as Option<Codec>,
+    await api.rpc.state.getStorage(key as string, block.block.header.parentHash),
     name
   );
 
@@ -196,11 +186,15 @@ const KEYS_PER_PAGE = 1000;
  * bytes arrive proxied, and so does their `.buffer`, which a `DataView` over it rejects. Testnet
  * block 7,737,503 crashed the indexer 69 times reading a deferred slash's era that way.
  */
-const keyArgs = (storage: StorageItem, key: { toHex: () => string }): Codec[] =>
+const keyArgs = (storage: StorageItem, key: { toHex: () => string }): Codec[] => {
   // hex, because `Bytes` reads a `Uint8Array` as length-prefixed, and a hashed key isn't
-  (api.registry.createType('StorageKey', key.toHex()) as unknown as StorageKey).setMeta(
-    storage.creator.meta as unknown as StorageEntryMetadataLatest
-  ).args;
+  const storageKey = api.registry.createType('StorageKey', key.toHex());
+  // the metadata type is declared by two copies of `@polkadot/types`, which the webpack build
+  // treats as different types; the metadata object itself is the same
+  type Meta = Parameters<typeof storageKey.setMeta>[0];
+
+  return storageKey.setMeta(storage.creator.meta as unknown as Meta).args.map(asCodec);
+};
 
 /**
  * Every entry of a storage map as it stood when `block` began, each with the arguments its key was
@@ -239,10 +233,7 @@ export const storageEntriesAtParent = async (
     }
 
     // one round trip for the page, rather than one per key
-    const raws = (await api.rpc.state.queryStorageAt(
-      keys,
-      parentHash
-    )) as unknown as Option<Codec>[];
+    const raws = itemsOf(await api.rpc.state.queryStorageAt(keys, parentHash), 'the stored page');
 
     keys.forEach((key, index) => {
       const value = decodeStored(storage, raws[index], `${section}.${item}`);

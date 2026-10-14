@@ -2,6 +2,7 @@ import type { AnyJson } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { readOrAnomaly } from './anomaly';
 import { is8xChain } from './common';
+import { findStorage } from './legacyQuery';
 import { readStorage, UndecodableStateError } from './storageAtParent';
 
 /**
@@ -257,17 +258,14 @@ const readPayees = async (block: SubstrateBlock, blockId: string): Promise<void>
     ),
   ].filter(stash => !payees.has(stash));
 
-  const payee = api.query.staking?.payee as unknown as
-    | { multi?: (keys: string[]) => Promise<{ toJSON(): AnyJson }[]> }
-    | undefined;
-  const readMulti = payee?.multi;
-  if (stashes.length < 2 || typeof readMulti !== 'function') {
+  const payee = findStorage('staking', 'payee');
+  if (stashes.length < 2 || typeof payee?.multi !== 'function') {
     return;
   }
 
   const raw = (
-    await readStorage('staking.payee of a payout block', () => readMulti.call(payee, stashes))
-  ).map(payee => payee.toJSON());
+    await readStorage('staking.payee of a payout block', () => payee.multi(stashes))
+  ).map(destination => destination.toJSON());
   const destinations = raw.map(payee => readRewardDestination(payee).destination);
 
   // a `Controller` payee is paid to `bonded(stash)`
@@ -568,13 +566,8 @@ export const readEraRewardPoints = async (
 export const readPermissionedIdentity = async (
   identityId: string
 ): Promise<boolean | undefined> => {
-  const query = api.query as unknown as Record<
-    string,
-    { permissionedIdentity?: (id: string) => Promise<{ toJSON: () => unknown }> } | undefined
-  >;
-
   for (const pallet of ['validators', 'staking']) {
-    const read = query[pallet]?.permissionedIdentity;
+    const read = findStorage(pallet, 'permissionedIdentity');
 
     if (read) {
       const prefs = await readStorage(`${pallet}.permissionedIdentity of ${identityId}`, async () =>

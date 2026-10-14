@@ -1,5 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import { getBlockContext } from '../mappings/blockContext';
+import { itemsOf, memberOf } from './codec';
 
 /**
  * The account that authored `block` — the one a fee is paid to.
@@ -34,13 +35,10 @@ export const blockAuthor = async (block: SubstrateBlock): Promise<string | undef
       continue;
     }
 
-    const digest = api.registry.createType('RawBabePreDigest', data) as unknown as {
-      value: { authorityIndex: { toNumber(): number } };
-    };
-    const validators = await api.query.session.validators();
-    const author = (validators as unknown as { toString(): string }[])[
-      digest.value.authorityIndex.toNumber()
-    ];
+    const digest = api.registry.createType('RawBabePreDigest', data);
+    const authorityIndex = Number(memberOf(memberOf(digest, 'value'), 'authorityIndex').toString());
+    const validators = itemsOf(await api.query.session.validators(), 'session.validators');
+    const author = validators[authorityIndex];
 
     context.author = author ? author.toString() : null;
     break;

@@ -10,6 +10,7 @@ import {
   EventIdEnum,
 } from '../../../types';
 import { getNumberValue, getTextValue } from '../../../utils';
+import { itemsOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
 import { memoText } from '../../../utils/text';
 
@@ -35,7 +36,7 @@ export const getLegRef = (item: Codec): LegRefDetails => {
  * chain prunes the leg data at settlement finalization
  */
 export const getEncryptedLegs = (item: Codec): string[] => {
-  return Array.from(item as unknown as Iterable<Codec>).map(leg => leg.toHex());
+  return itemsOf(item, 'the encrypted legs').map(leg => leg.toHex());
 };
 
 export const handleConfidentialSettlementCreated = async (event: SubstrateEvent): Promise<void> => {

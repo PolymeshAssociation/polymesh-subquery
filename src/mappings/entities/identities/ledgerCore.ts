@@ -2,6 +2,8 @@ import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock } from '@subql/types';
 import { namedFields, optionalField } from '../../../decode';
+import { isRecord, memberOf, optionalMemberOf, optionOf } from '../../../utils/codec';
+import { findStorage } from '../../../utils/legacyQuery';
 import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
 import {
   Account,
@@ -167,13 +169,23 @@ const setKindTotals = (balance: AccountBalance, totals: KindTotalValue[]): void 
  * `frozen` from an on-chain `AccountData`: `{ free, reserved, frozen, flags }` on v8,
  * `{ free, reserved, miscFrozen, feeFrozen }` (frozen is the max of the two) on ≤ v7.4.
  */
-export const accountDataFrozen = (data: Record<string, Codec>): bigint => {
-  if (data.frozen !== undefined) {
-    return getBigIntValue(data.frozen);
+export const accountDataFrozen = (data: unknown): bigint => {
+  if (!isRecord(data)) {
+    throw new TypeError(`AccountData was expected, but the value is ${typeof data}`);
   }
 
-  const misc = getBigIntValue(data.miscFrozen);
-  const fee = getBigIntValue(data.feeFrozen);
+  // an absent half reads as zero, as the fixed-point reads of an absent amount always have
+  if (data.frozen !== undefined) {
+    return getBigIntValue(memberOf(data, 'frozen'));
+  }
+
+  const amount = (key: string): bigint => {
+    const raw = optionalMemberOf(data, key);
+
+    return raw === undefined ? BigInt(0) : getBigIntValue(raw);
+  };
+  const misc = amount('miscFrozen');
+  const fee = amount('feeFrozen');
 
   return maxBig(misc, fee);
 };
@@ -325,7 +337,7 @@ export const readChainFrozen = async (address: string): Promise<bigint> => {
     api.query.system.account(address)
   );
 
-  return accountDataFrozen(data as unknown as Record<string, Codec>);
+  return accountDataFrozen(data);
 };
 
 /**
@@ -702,22 +714,22 @@ const rawChainHolds = async (
   address: string,
   block: SubstrateBlock
 ): Promise<Hold[] | undefined> => {
-  const item = api.query.balances?.holds as unknown as { key: (who: string) => string } | undefined;
+  const item = findStorage('balances', 'holds');
 
   if (!item) {
     return undefined;
   }
 
-  const stored = (await api.rpc.state.getStorage(
-    item.key(address),
-    block.block.header.hash.toHex()
-  )) as unknown as { isNone: boolean; unwrap(): Codec };
+  const stored = optionOf(
+    await api.rpc.state.getStorage(item.key(address), block.block.header.hash.toHex()),
+    `balances.holds of ${address}`
+  );
 
-  if (stored.isNone) {
+  if (!stored) {
     return [];
   }
 
-  const bytes = codecBytes(stored.unwrap());
+  const bytes = codecBytes(stored);
   const [offset, length] = compactFromU8a(bytes);
   const count = length.toNumber();
 
