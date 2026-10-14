@@ -193,8 +193,8 @@ const encodeCall = (codec: Codec, at: Walk): CanonicalValue => {
   return { section: call.section, method: call.method, args };
 };
 
-/** An `Option`, `Result`, map, set, `Vec`, tuple or fixed array; `undefined` for anything else. */
-const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
+/** An `Option` or `Result`; `undefined` for anything else. */
+const encodeWrapper = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
   if (raw.startsWith('Option<')) {
     if (!isOption(codec)) {
       throw mismatch(raw, codec);
@@ -212,6 +212,11 @@ const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | 
       ? { ok: walk(result.asOk, okType, at) }
       : { err: walk(result.asErr, errType, at) };
   }
+  return undefined;
+};
+
+/** A map or a set; `undefined` for anything else. */
+const encodeCollection = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
   if (raw.startsWith('BTreeMap<') || raw.startsWith('HashMap<')) {
     const [keyType, valueType] = childTypes(raw);
     if (!(codec instanceof Map)) {
@@ -228,6 +233,20 @@ const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | 
       throw mismatch(raw, codec);
     }
     return [...codec].map(value => walk(value, valueType, at));
+  }
+  return undefined;
+};
+
+/** An `Option`, `Result`, map, set, `Vec`, tuple or fixed array; `undefined` for anything else. */
+const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
+  // a `None` encodes as null, so test for `undefined` rather than for a missing value
+  const wrapped = encodeWrapper(codec, raw, at);
+  if (wrapped !== undefined) {
+    return wrapped;
+  }
+  const collected = encodeCollection(codec, raw, at);
+  if (collected !== undefined) {
+    return collected;
   }
   if (Array.isArray(codec)) {
     const types = childTypes(raw);
