@@ -372,52 +372,42 @@ describe('the migrated consumer queries', () => {
       ]);
     });
 
-    it('accepts the pair inside an and branch', () => {
-      const { filtered } = run(
-        '{ events(filter: {and: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}}, {args: {contains: {a: "1"}}}]}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([]);
+    it.each([
+      [
+        'accepts the pair inside an and branch',
+        '{ events(filter: {and: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}}, {args: {contains: {a: "1"}}}]}) { nodes { id } } }',
+      ],
+      [
+        'accepts in as well as equalTo',
+        '{ events(filter: {moduleId: {in: [asset]}, eventId: {in: [Transfer]}, args: {contains: {a: "1"}}}) { nodes { id } } }',
+      ],
+      [
+        'accepts an or of args filters under a pinned event',
+        '{ events(filter: {moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, or: [{args: {contains: {a: "1"}}}, {args: {contains: {a: "2"}}}]}) { nodes { id } } }',
+      ],
+      [
+        'accepts a nested event filter that pins its own pair',
+        '{ polyxEntries(filter: {createdEvent: {moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, args: {contains: {a: "1"}}}}) { nodes { id } } }',
+      ],
+    ])('%s', (_title, text) => {
+      expect(argsFilterProblems(run(text).filtered)).toEqual([]);
     });
 
-    it('accepts in as well as equalTo', () => {
-      const { filtered } = run(
-        '{ events(filter: {moduleId: {in: [asset]}, eventId: {in: [Transfer]}, args: {contains: {a: "1"}}}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([]);
-    });
-
-    it('accepts an or of args filters under a pinned event', () => {
-      const { filtered } = run(
-        '{ events(filter: {moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, or: [{args: {contains: {a: "1"}}}, {args: {contains: {a: "2"}}}]}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([]);
-    });
-
-    it('rejects a pair that only an or branch supplies', () => {
-      const { filtered } = run(
-        '{ events(filter: {args: {contains: {a: "1"}}, or: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}}]}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([
-        'Event filters on args without moduleId',
-        'Event filters on args without eventId',
-      ]);
-    });
-
-    it('rejects an or branch that filters args without pinning the event itself', () => {
-      const { filtered } = run(
-        '{ events(filter: {or: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, args: {contains: {a: "1"}}}, {args: {contains: {a: "2"}}}]}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([
-        'Event filters on args without moduleId',
-        'Event filters on args without eventId',
-      ]);
-    });
-
-    it('rejects a pair that a not branch or notEqualTo only excludes', () => {
-      const { filtered } = run(
-        '{ events(filter: {moduleId: {notEqualTo: asset}, not: {eventId: {equalTo: Transfer}}, args: {contains: {a: "1"}}}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([
+    it.each([
+      [
+        'rejects a pair that only an or branch supplies',
+        '{ events(filter: {args: {contains: {a: "1"}}, or: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}}]}) { nodes { id } } }',
+      ],
+      [
+        'rejects an or branch that filters args without pinning the event itself',
+        '{ events(filter: {or: [{moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, args: {contains: {a: "1"}}}, {args: {contains: {a: "2"}}}]}) { nodes { id } } }',
+      ],
+      [
+        'rejects a pair that a not branch or notEqualTo only excludes',
+        '{ events(filter: {moduleId: {notEqualTo: asset}, not: {eventId: {equalTo: Transfer}}, args: {contains: {a: "1"}}}) { nodes { id } } }',
+      ],
+    ])('%s', (_title, text) => {
+      expect(argsFilterProblems(run(text).filtered)).toEqual([
         'Event filters on args without moduleId',
         'Event filters on args without eventId',
       ]);
@@ -432,13 +422,6 @@ describe('the migrated consumer queries', () => {
         'Event filters on args without moduleId',
         'Event filters on args without eventId',
       ]);
-    });
-
-    it('accepts a nested event filter that pins its own pair', () => {
-      const { filtered } = run(
-        '{ polyxEntries(filter: {createdEvent: {moduleId: {equalTo: asset}, eventId: {equalTo: Transfer}, args: {contains: {a: "1"}}}}) { nodes { id } } }'
-      );
-      expect(argsFilterProblems(filtered)).toEqual([]);
     });
 
     it('rejects a reverse relation named after the field rather than the column', () => {
