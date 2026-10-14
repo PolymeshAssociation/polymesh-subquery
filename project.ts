@@ -1,4 +1,5 @@
 import {
+  SubstrateCallHandler,
   SubstrateDatasourceKind,
   SubstrateEventHandler,
   SubstrateHandlerKind,
@@ -583,36 +584,20 @@ const project: SubstrateProject = {
             handler: 'handleRebond',
             filter: { module: 'staking', method: 'rebond', success: true },
           },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'batch', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'batchAll', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'batchAtomic', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'batchOptimistic', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'forceBatch', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleBatchedStakingCalls',
-            filter: { module: 'utility', method: 'asDerivative', success: true },
-          },
+          ...[
+            'batch',
+            'batchAll',
+            'batchAtomic',
+            'batchOptimistic',
+            'forceBatch',
+            'asDerivative',
+          ].map(
+            (method): SubstrateCallHandler => ({
+              kind: SubstrateHandlerKind.Call,
+              handler: 'handleBatchedStakingCalls',
+              filter: { module: 'utility', method, success: true },
+            })
+          ),
         ],
       },
     },

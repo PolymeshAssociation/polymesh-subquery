@@ -358,7 +358,11 @@ const setControllerCallers = (call: unknown, origin: string): string[] => {
 
     return setControllerCallers(
       inner,
-      encodeDerivedAddress(origin, Number(String(index)), api.registry.chainSS58)
+      encodeDerivedAddress(
+        origin,
+        Number((index as { toString(): string }).toString()),
+        api.registry.chainSS58
+      )
     );
   }
   return call.args.flatMap(nested => setControllerCallers(nested, origin));
@@ -414,9 +418,11 @@ export const handleBatchedStakingCalls = async (extrinsic: SubstrateExtrinsic): 
   const closing = await indexClosingEvent(extrinsic);
 
   if (closing) {
-    for (const account of accounts) {
-      await refreshPositionOf(account, closing);
-    }
+    // One at a time: a stash and its controller can both be listed, and both re-read one position.
+    await [...accounts].reduce(
+      (previous, account) => previous.then(() => refreshPositionOf(account, closing)),
+      Promise.resolve()
+    );
   }
 };
 
