@@ -1,7 +1,16 @@
 import { Codec } from '@polkadot/types/types';
 import { hexToU8a, stringCamelCase, u8aToHex } from '@polkadot/util';
 import { ArgumentsJson } from '../../types';
-import { asCodec } from '../../utils/codec';
+import {
+  asCodec,
+  flagOf,
+  hasFunction,
+  itemsOf,
+  memberOf,
+  optionOf,
+  textOf,
+  UnexpectedShapeError,
+} from '../../utils/codec';
 import { codecBytes } from '../../utils/bytes';
 import { paddedText, textOrHex } from '../../utils/text';
 import { isType, typeNameOf } from './typeName';
@@ -32,43 +41,14 @@ interface Walk {
 
 // The walk is deliberately duck-typed: a codec is recognised by the members the declared type says it
 // has, not by its class, since the same type is built by different classes (and by a second copy of
-// the codec package in the webpack bundle). These guards are that check, and each one fails loudly
-// rather than reading `undefined` off a value that is not the shape its type name promised.
-const hasMember = (codec: object, key: string, kind: 'function' | 'boolean' | 'string') =>
-  key in codec && typeof (codec as Record<string, unknown>)[key] === kind;
-
+// the codec package in the webpack bundle). The readers in `utils/codec` are that check, and each one
+// throws an `UnexpectedShapeError` rather than reading `undefined` off a value that is not the shape
+// its type name promised.
 const isInteger = (codec: Codec): boolean =>
-  hasMember(codec, 'toBn', 'function') && hasMember(codec, 'bitLength', 'function');
+  hasFunction(codec, 'toBn') && hasFunction(codec, 'bitLength');
 
-interface CallLike {
-  section: string;
-  method: string;
-  args: Codec[];
-  meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
-}
-
-const isCall = (codec: Codec): codec is Codec & CallLike =>
-  hasMember(codec, 'section', 'string') &&
-  hasMember(codec, 'method', 'string') &&
-  'args' in codec &&
-  Array.isArray(codec.args) &&
-  'meta' in codec &&
-  typeof codec.meta === 'object' &&
-  codec.meta !== null &&
-  'args' in codec.meta &&
-  Array.isArray(codec.meta.args);
-
-const isOption = (codec: Codec): codec is Codec & { isSome: boolean; unwrap: () => Codec } =>
-  hasMember(codec, 'isSome', 'boolean') && hasMember(codec, 'unwrap', 'function');
-
-const isResult = (codec: Codec): codec is Codec & { isOk: boolean; asOk: Codec; asErr: Codec } =>
-  hasMember(codec, 'isOk', 'boolean') && 'asOk' in codec && 'asErr' in codec;
-
-const isEnum = (codec: Codec): codec is Codec & { type: string; isBasic: boolean; value: Codec } =>
-  hasMember(codec, 'type', 'string') && hasMember(codec, 'isBasic', 'boolean') && 'value' in codec;
-
-const mismatch = (raw: string, codec: Codec): Error =>
-  new TypeError(`${raw} was expected, but the value is a ${codec.constructor.name}`);
+const mismatch = (raw: string, codec: Codec): UnexpectedShapeError =>
+  new UnexpectedShapeError(`${raw} was expected, but the value is a ${codec.constructor.name}`);
 
 const isFixedBytes = (raw: string): boolean => /^\[u8;\s*\d+\]$/.test(raw);
 
@@ -178,39 +158,28 @@ const encodeBytes = (codec: Codec, raw: string, name: string, at: Walk): Canonic
 };
 
 const encodeCall = (codec: Codec, at: Walk): CanonicalValue => {
-  if (!isCall(codec)) {
-    throw mismatch('Call', codec);
-  }
-  const call = codec;
+  const values = itemsOf(memberOf(codec, 'args'), 'the call arguments');
+  const declared = itemsOf(memberOf(memberOf(codec, 'meta'), 'args'), 'the call metadata');
   const args: Record<string, CanonicalValue> = {};
-  call.args.forEach((arg, i) => {
-    args[stringCamelCase(call.meta.args[i].name.toString())] = walk(
-      arg,
-      call.meta.args[i].type.toString(),
-      at
-    );
+  values.forEach((arg, i) => {
+    const name = memberOf(declared[i], 'name').toString();
+    args[stringCamelCase(name)] = walk(arg, memberOf(declared[i], 'type').toString(), at);
   });
-  return { section: call.section, method: call.method, args };
+  return { section: textOf(codec, 'section'), method: textOf(codec, 'method'), args };
 };
 
 /** An `Option` or `Result`; `undefined` for anything else. */
 const encodeWrapper = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
   if (raw.startsWith('Option<')) {
-    if (!isOption(codec)) {
-      throw mismatch(raw, codec);
-    }
-    const option = codec;
-    return option.isSome ? walk(option.unwrap(), childTypes(raw)[0], at) : null;
+    const inner = optionOf(codec, raw);
+    return inner ? walk(inner, childTypes(raw)[0], at) : null;
   }
   if (raw.startsWith('Result<')) {
-    if (!isResult(codec)) {
-      throw mismatch(raw, codec);
-    }
-    const result = codec;
     const [okType, errType] = childTypes(raw);
-    return result.isOk
-      ? { ok: walk(result.asOk, okType, at) }
-      : { err: walk(result.asErr, errType, at) };
+    // only the side that is set can be read: the other one's getter throws
+    return flagOf(codec, 'isOk')
+      ? { ok: walk(memberOf(codec, 'asOk'), okType, at) }
+      : { err: walk(memberOf(codec, 'asErr'), errType, at) };
   }
   return undefined;
 };
@@ -264,15 +233,16 @@ const encodeShaped = (
   at: Walk
 ): CanonicalValue => {
   if ('_enum' in shape) {
-    if (!isEnum(codec)) {
-      throw mismatch(name, codec);
+    const type = textOf(codec, 'type');
+    if (flagOf(codec, 'isBasic')) {
+      return type;
     }
-    const variant = codec;
-    if (variant.isBasic || variant.value.toRawType() === 'Null') {
-      return variant.type;
+    const value = memberOf(codec, 'value');
+    if (value.toRawType() === 'Null') {
+      return type;
     }
     const types = shape._enum as Record<string, unknown>;
-    return { [variant.type]: walk(variant.value, named(types, variant.type), at) };
+    return { [type]: walk(value, named(types, type), at) };
   }
   const struct: Record<string, CanonicalValue> = {};
   if (!(codec instanceof Map)) {

@@ -1,5 +1,11 @@
 import { TypeRegistry } from '@polkadot/types';
-import { encodeArgs, encodeValue, RawReference } from '../../src/mappings/args/encode';
+import { UnexpectedShapeError } from '../../src/utils/codec';
+import {
+  encodeArgs,
+  encodeValue,
+  RawReference,
+  tryEncodeArgs,
+} from '../../src/mappings/args/encode';
 
 const registry = new TypeRegistry();
 registry.register({
@@ -280,6 +286,6 @@ describe('encodeValue against a value that is not its declared type', () => {
     '{"_enum":["On","Off"]}',
     '{"did":"[u8;32]"}',
   ])('refuses to read %s off an object without its members', raw => {
-    expect(() => encodeValue(impostor(raw))).toThrow(TypeError);
+    expect(() => encodeValue(impostor(raw))).toThrow(UnexpectedShapeError);
   });
 });

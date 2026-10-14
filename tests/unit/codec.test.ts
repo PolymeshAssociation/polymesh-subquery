@@ -1,12 +1,15 @@
 import { TypeRegistry } from '@polkadot/types';
 import {
   flagOf,
+  hasFunction,
   isObject,
   itemsOf,
   jsonOf,
   memberOf,
   optionalMemberOf,
   optionOf,
+  textOf,
+  UnexpectedShapeError,
 } from '../../src/utils/codec';
 
 const registry = new TypeRegistry();
@@ -82,5 +85,34 @@ describe('jsonOf', () => {
     expect(() => jsonOf(bad, isPending, 'Schedule')).toThrow(
       'Schedule did not have the expected shape: {"pending":null}'
     );
+  });
+});
+
+describe('textOf and hasFunction', () => {
+  const call = { section: 'asset', method: 'issue', toBn: () => 1 };
+
+  it('reads a string member and names one that is not a string', () => {
+    expect(textOf(call, 'section')).toBe('asset');
+    expect(() => textOf(call, 'toBn')).toThrow(/toBn was expected on/);
+    expect(() => textOf(undefined, 'section')).toThrow(UnexpectedShapeError);
+  });
+
+  it('tests for a function member without throwing', () => {
+    expect(hasFunction(call, 'toBn')).toBe(true);
+    expect(hasFunction(call, 'section')).toBe(false);
+    expect(hasFunction(null, 'toBn')).toBe(false);
+  });
+
+  it('is the error every reader throws, and still a TypeError', () => {
+    const error = (() => {
+      try {
+        memberOf(null, 'owner');
+      } catch (e) {
+        return e;
+      }
+    })();
+
+    expect(error).toBeInstanceOf(UnexpectedShapeError);
+    expect(error).toBeInstanceOf(TypeError);
   });
 });
