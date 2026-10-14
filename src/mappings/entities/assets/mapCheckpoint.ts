@@ -11,6 +11,7 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getOrAnomaly } from '../common';
+import { blockEvents } from '../../../utils/blockEvents';
 
 interface ParsedSchedule {
   scheduleId: number;
@@ -86,9 +87,7 @@ const momentValue = (moment: Date | string): number =>
  * so comparing them as emitted is exact and needs no asset-id resolution per sibling.
  */
 const earlierScheduledCheckpoints = (event: SubstrateEvent): number => {
-  const records = (event.block.events ?? []) as unknown as {
-    event: { section: string; method: string; data: { toString(): string; isEmpty: boolean }[] };
-  }[];
+  const records = blockEvents(event.block);
 
   const own = records[event.idx]?.event?.data;
 

@@ -1,7 +1,8 @@
 import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
-import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { SubstrateBlock } from '@subql/types';
 import { namedFields, optionalField } from '../../../decode';
+import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
 import {
   Account,
   AccountBalance,
@@ -768,7 +769,7 @@ const HOLD_EVENT_ACCOUNTS: Record<string, string[][]> = {
  * deferring to it would leave the hold list untouched.
  */
 const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: string): boolean =>
-  (block.events ?? []).some((record, idx) => {
+  blockEvents(block).some((record, idx) => {
     if (idx <= eventIdx) {
       return false;
     }
@@ -781,7 +782,7 @@ const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: stri
     }
 
     try {
-      const decoded = namedFields({ event: record.event } as unknown as SubstrateEvent);
+      const decoded = namedFields(substrateEventAt(block, idx));
 
       if (!decoded) {
         return false;

@@ -4,6 +4,7 @@ import { FunctionPropertyNames } from '@subql/types-core';
 import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 import { padId } from '../../utils';
 import { recordAnomaly } from '../../utils/anomaly';
+import { eventParams } from '../../utils/blockEvents';
 import { assetFromChain } from './assets/assetFromChain';
 
 export type Attributes<T> = Omit<
@@ -196,7 +197,7 @@ export const extractArgs = (event: SubstrateEvent): HandlerArgs => {
       eventIdx: event.idx,
     }),
     moduleIdText: moduleId,
-    params: event.event.data as unknown as AnyTuple,
+    params: eventParams(event),
     eventIdx: event.idx,
     block: event.block,
     extrinsic: event.extrinsic,

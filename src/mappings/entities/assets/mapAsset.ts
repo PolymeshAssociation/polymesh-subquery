@@ -45,6 +45,7 @@ import {
   rawAssetHolderToAssetHolder,
   serializeTicker,
 } from '../../../utils';
+import { blockEvents } from '../../../utils/blockEvents';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
@@ -648,9 +649,7 @@ export const transferInstruction = (
   block: SubstrateBlock,
   eventIdx: number
 ): { instructionId?: string; unexplained?: string } => {
-  // the subql-typed records, as elsewhere in this file: the webpack build treats its `EventRecord`
-  // and `@polkadot/types`' as distinct types
-  const records = (block.events ?? []) as unknown as EventRecord[];
+  const records = blockEvents(block);
   const phase = records[eventIdx]?.phase.toString();
   const name = ({ event }: EventRecord) => `${event.section}.${event.method}`;
 
@@ -667,7 +666,7 @@ export const transferInstruction = (
       return { unexplained: 'the end of its phase' };
     }
     if (name(record) === 'settlement.InstructionExecuted') {
-      return { instructionId: processInstructionId(record.event.data[1] as unknown as Codec) };
+      return { instructionId: processInstructionId(record.event.data[1]) };
     }
     if (!['asset.Transfer', 'checkpoint.CheckpointCreated'].includes(name(record))) {
       return { unexplained: name(record) };
@@ -862,13 +861,7 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   const value = getFirstValueFromJson(rawUpdateReason);
 
   const { eventId, fundingRoundName, instructionId, instructionMemo, assetDelta } =
-    processUpdateReason(
-      updateReason,
-      value,
-      transferAmount,
-      eventIdx,
-      block.events as unknown as EventRecord[]
-    );
+    processUpdateReason(updateReason, value, transferAmount, eventIdx, blockEvents(block));
 
   if (assetDelta.totalSupply !== undefined) {
     asset.totalSupply += assetDelta.totalSupply;

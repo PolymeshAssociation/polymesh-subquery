@@ -17,6 +17,7 @@
  */
 import { SubstrateEvent } from '@subql/types';
 import { CallIdEnum, MetadataScope, MultiSigProposal } from '../../../types';
+import { blockEvents } from '../../../utils/blockEvents';
 
 export type MetadataKey = { scope: MetadataScope; keyId: string };
 
@@ -537,14 +538,9 @@ function walk(node: CallNode, state: WalkState, end: number): boolean {
   }
 }
 
-type EventRecordLike = {
-  event: { section: string; method: string; data?: unknown[] };
-  phase: { isApplyExtrinsic: boolean; asApplyExtrinsic: { toNumber: () => number } };
-};
-
 /** The extrinsic's own events, in block order, flattened for the walk. */
 const extrinsicEvents = (event: SubstrateEvent, extrinsicIdx: number): WalkEvent[] => {
-  const records = (event.block.events ?? []) as unknown as EventRecordLike[];
+  const records = blockEvents(event.block);
 
   return records.flatMap((record, idx) =>
     record?.phase?.isApplyExtrinsic && record.phase.asApplyExtrinsic.toNumber() === extrinsicIdx

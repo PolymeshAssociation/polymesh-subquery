@@ -1,4 +1,5 @@
 import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { substrateEventAt } from '../../../utils/blockEvents';
 import { extrinsicEventIndices } from '../../blockContext';
 import { handleToolingEvent } from '../events/mapEvent';
 
@@ -29,7 +30,6 @@ export const indexClosingEvent = async (
 
 /** The closing event as a `SubstrateEvent`, without indexing it — for deciding before writing. */
 export const closingEventOf = (extrinsic: SubstrateExtrinsic): SubstrateEvent | undefined => {
-  const records = (extrinsic.block.events ?? []) as unknown as SubstrateEvent[];
   const own = extrinsicEventIndices(extrinsic.block, extrinsic.idx);
   const closingIdx = own.at(-1);
 
@@ -37,12 +37,5 @@ export const closingEventOf = (extrinsic: SubstrateExtrinsic): SubstrateEvent | 
     return undefined;
   }
 
-  return {
-    phase: records[closingIdx].phase,
-    event: records[closingIdx].event,
-    topics: records[closingIdx].topics,
-    idx: closingIdx,
-    block: extrinsic.block,
-    extrinsic,
-  } as unknown as SubstrateEvent;
+  return substrateEventAt(extrinsic.block, closingIdx, extrinsic);
 };

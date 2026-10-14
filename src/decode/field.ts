@@ -16,6 +16,29 @@ const toCamelCase = (name: string): string =>
     : name;
 
 /**
+ * One parameter of an event's data as a `Codec`. `tsc` accepts the data's own element type, but the
+ * webpack build resolves `Codec` from a second declaration and rejects it, so this is the one place
+ * that bridges the two. Every element of event data is a codec at runtime.
+ */
+export const codecAt = (data: ArrayLike<unknown>, index: number): Codec => data[index] as Codec;
+
+/**
+ * SubQuery types an event as `IEvent`, which lacks the metadata every real event carries. The
+ * check is by shape rather than `instanceof`, since the webpack build can bundle a second copy of
+ * the class.
+ */
+const hasMeta = (candidate: object): candidate is GenericEvent =>
+  'meta' in candidate && typeof candidate.meta === 'object' && candidate.meta !== null;
+
+const eventMeta = (event: SubstrateEvent): GenericEvent['meta'] => {
+  if (!hasMeta(event.event)) {
+    throw new FieldNotFound(event.event.section, event.event.method, '<metadata>', []);
+  }
+
+  return event.event.meta;
+};
+
+/**
  * The field names the block's own metadata gives this event, in parameter order.
  *
  * Since metadata v14 the metadata is self-describing: a struct-style event carries a name per
@@ -29,7 +52,7 @@ const toCamelCase = (name: string): string =>
  * lets the shape table and every handler stay camelCase-only.
  */
 export const metadataFieldNames = (event: SubstrateEvent): (string | undefined)[] =>
-  (event.event as unknown as GenericEvent).meta.fields.map(({ name }) =>
+  eventMeta(event).fields.map(({ name }) =>
     name.isSome ? toCamelCase(name.unwrap().toString()) : undefined
   );
 
@@ -40,7 +63,7 @@ export const metadataFieldNames = (event: SubstrateEvent): (string | undefined)[
  * Both eras are read here so the fallback lives in one place.
  */
 export const metadataTypeNames = (event: SubstrateEvent): string[] => {
-  const meta = (event.event as unknown as GenericEvent).meta;
+  const meta = eventMeta(event);
 
   return meta.fields.map(({ typeName }, index) =>
     typeName.isSome ? typeName.unwrap().toString() : meta.args[index].toString()
@@ -82,7 +105,7 @@ export const field = (event: SubstrateEvent, name: string): Codec => {
     );
   }
 
-  return event.event.data[index] as unknown as Codec;
+  return codecAt(event.event.data, index);
 };
 
 /**
@@ -99,9 +122,7 @@ export const namedFields = (event: SubstrateEvent): DecodedEvent | undefined => 
   const names = metadataFieldNames(event);
 
   return Object.freeze(
-    Object.fromEntries(
-      names.map((name, index) => [name, event.event.data[index] as unknown as Codec])
-    )
+    Object.fromEntries(names.map((name, index) => [name, codecAt(event.event.data, index)]))
   );
 };
 

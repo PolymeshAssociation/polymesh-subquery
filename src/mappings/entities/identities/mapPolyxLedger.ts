@@ -15,6 +15,7 @@ import {
   StakingPosition,
 } from '../../../types';
 import { getBigIntValue, getTextValue, padId } from '../../../utils';
+import { blockEvents } from '../../../utils/blockEvents';
 import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
@@ -984,9 +985,7 @@ const isFeePaidToAuthor = async (
   who: string,
   amount: bigint
 ): Promise<boolean> => {
-  const records = (event.block.events ?? []) as unknown as {
-    event: { section: string; method: string; data: { toString(): string }[] };
-  }[];
+  const records = blockEvents(event.block);
   const amountOf = (record?: { event: { data: { toString(): string }[] } }) =>
     record?.event.data[1] !== undefined ? BigInt(record.event.data[1].toString()) : undefined;
 

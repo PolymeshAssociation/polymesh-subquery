@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
+import { blockEvents } from '../../../utils/blockEvents';
 import {
   bytesToString,
   getAllByFields,
@@ -29,10 +30,7 @@ const processPipId = (rawPipId: Codec): string => padNumericId(getTextValue(rawP
  * expiry, and `ExpirySchedulingFailed` replaces it when the scheduler refuses.
  */
 const scheduledExpiry = (event: SubstrateEvent, pipId: string): number | undefined => {
-  const records = (event.block.events ?? []) as unknown as {
-    phase: { toString: () => string };
-    event: { section: string; method: string; data: Codec[] };
-  }[];
+  const records = blockEvents(event.block);
   const phase = records[event.idx]?.phase.toString();
 
   for (let i = event.idx - 1; i >= 0 && records[i].phase.toString() === phase; i -= 1) {

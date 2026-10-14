@@ -29,6 +29,7 @@ import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction, getHolding } from './mapAsset';
 import { nftApprovalId } from './mapNftApprovals';
 import { memoText } from '../../../utils/text';
+import { blockEvents } from '../../../utils/blockEvents';
 
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
 
@@ -273,9 +274,7 @@ const HOLDINGS_EVENTS = new Set([
  * the worker — no extra chain read.
  */
 const lastHoldingsEvent = (event: SubstrateEvent): boolean => {
-  const records = (event.block.events ?? []) as unknown as {
-    event: { section: string; method: string };
-  }[];
+  const records = blockEvents(event.block);
 
   for (let i = event.idx + 1; i < records.length; i += 1) {
     const emitted = records[i]?.event;
