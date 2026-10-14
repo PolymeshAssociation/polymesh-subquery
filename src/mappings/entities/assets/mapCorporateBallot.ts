@@ -8,6 +8,7 @@ import {
   CorporateBallotVote,
 } from '../../../types';
 import { bytesToString, getBooleanValue, getCaIdValue } from '../../../utils';
+import { isRecord, jsonOf } from '../../../utils/codec';
 import { extractArgs, getOrAnomaly } from '../common';
 import { caId } from './mapCorporateAction';
 
@@ -34,6 +35,29 @@ interface MetaJson {
   motions?: MotionJson[];
 }
 
+const isRange = (json: unknown): json is RangeJson =>
+  isRecord(json) && typeof json.start === 'number' && typeof json.end === 'number';
+
+const isMeta = (json: unknown): json is MetaJson =>
+  isRecord(json) &&
+  typeof json.title === 'string' &&
+  (json.motions === undefined || Array.isArray(json.motions));
+
+/** `power` is a number, or hex text once a balance outgrows what JSON numbers hold exactly. */
+interface VoteJson {
+  power: number | string;
+  fallback: number | null;
+}
+
+const isVotes = (json: unknown): json is VoteJson[] =>
+  Array.isArray(json) &&
+  json.every(
+    vote =>
+      isRecord(vote) &&
+      (typeof vote.power === 'number' || typeof vote.power === 'string') &&
+      (vote.fallback === null || typeof vote.fallback === 'number')
+  );
+
 /** Hex-encoded `Bytes` as text. `toJSON()` gives `0x…` for every `Bytes` field in this structure. */
 const text = (value: string | undefined): string | undefined =>
   value === undefined ? undefined : bytesToString({ toString: () => value } as Codec);
@@ -48,7 +72,7 @@ const text = (value: string | undefined): string | undefined =>
  * The stored shape is unchanged; only the byte fields inside it become text.
  */
 const decodeMeta = (rawMeta: Codec): string => {
-  const { title, motions } = rawMeta.toJSON() as unknown as MetaJson;
+  const { title, motions } = jsonOf(rawMeta, isMeta, 'BallotMeta');
 
   return JSON.stringify({
     title: text(title),
@@ -65,7 +89,7 @@ export const handleBallotCreated = async (event: SubstrateEvent): Promise<void> 
   const { caId: rawCaId, range: rawRange, meta: rawMeta, rcv: rawRcv } = decodeEvent(event);
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
-  const range = rawRange.toJSON() as unknown as RangeJson;
+  const range = jsonOf(rawRange, isRange, 'BallotTimeRange');
   const id = caId(assetId, localId);
   const corporateAction = await getOrAnomaly(
     actionId => CorporateAction.get(actionId),
@@ -126,7 +150,7 @@ export const handleBallotRangeChanged = async (event: SubstrateEvent): Promise<v
     return;
   }
 
-  const range = rawRange.toJSON() as unknown as RangeJson;
+  const range = jsonOf(rawRange, isRange, 'BallotTimeRange');
 
   ballot.startDate = new Date(range.start);
   ballot.endDate = new Date(range.end);
@@ -186,7 +210,7 @@ export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void>
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const voterId = rawDid.toString();
 
-  const votes = (rawVotes.toJSON() as unknown as { power: number; fallback: number | null }[]).map(
+  const votes = jsonOf(rawVotes, isVotes, 'BallotVotes').map(
     (vote): BallotVoteEntry => ({
       power: BigInt(vote.power).toString(),
       fallback: vote.fallback ?? undefined,

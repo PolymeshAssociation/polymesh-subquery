@@ -1,4 +1,3 @@
-import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Compliance, TrustedClaimIssuer } from '../../../types';
 import {
@@ -9,6 +8,7 @@ import {
   getAllByFields,
   getTextValue,
 } from '../../../utils';
+import { memberOf } from '../../../utils/codec';
 import { extractArgs, getAsset } from '../common';
 
 export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promise<void> => {
@@ -118,7 +118,7 @@ export const handleTrustedDefaultClaimIssuerAdded = async (
 
   const [, rawAssetId, rawIssuer] = params;
   const assetId = await getAssetId(rawAssetId, block);
-  const issuer = (rawIssuer as unknown as { issuer: Codec }).issuer.toString();
+  const issuer = memberOf(rawIssuer, 'issuer').toString();
 
   await TrustedClaimIssuer.create({
     id: `${assetId}/${issuer}`,

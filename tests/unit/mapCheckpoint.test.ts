@@ -271,6 +271,19 @@ describe('parseSchedule', () => {
     expect(parsed.start).toBeUndefined();
   });
 
+  it('names a schedule whose JSON lost the pending list, rather than failing on undefined', () => {
+    const malformed = tupleEvent({
+      section: 'checkpoint',
+      method: 'ScheduleCreated',
+      data: [codec(TEST_DID), codec(RAW_ASSET_ID), codec(9), codec({ checkpoints: [3_000] })],
+      specVersion: V6_SPEC,
+    });
+
+    expect(() => parseSchedule(decodeEvent(malformed), V6_SPEC)).toThrow(
+      /ScheduleCheckpoints did not have the expected shape/
+    );
+  });
+
   it('throws ArityMismatch when a v6+ block reports the pre-v6 3-param arity', () => {
     const threeParamAtV6 = tupleEvent({
       section: 'checkpoint',

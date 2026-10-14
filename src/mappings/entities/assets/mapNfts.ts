@@ -29,6 +29,7 @@ import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction, getHolding } from './mapAsset';
 import { nftApprovalId } from './mapNftApprovals';
 import { memoText } from '../../../utils/text';
+import { isRecord } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
 
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
@@ -269,6 +270,25 @@ const HOLDINGS_EVENTS = new Set([
 ]);
 
 /**
+ * The instruction a `transferred` update reason names, from the reason's JSON: the instruction id
+ * as a number (or hex text once it outgrows one) and the memo as hex, either of which may be null.
+ */
+const transferDetails = (value: unknown): { instructionId?: string; instructionMemo?: string } => {
+  if (!isRecord(value)) {
+    throw new TypeError(`a transferred update reason carried ${JSON.stringify(value)}`);
+  }
+  const { instructionId, instructionMemo } = value;
+
+  return {
+    instructionId:
+      typeof instructionId === 'number' || typeof instructionId === 'string'
+        ? String(instructionId).trim() || undefined
+        : undefined,
+    instructionMemo: typeof instructionMemo === 'string' ? instructionMemo : undefined,
+  };
+};
+
+/**
  * Whether this is the last event in its block that can add to the buffer, and so the one that has
  * to write it out. Read from the block's own event list, which is what the runtime already handed
  * the worker — no extra chain read.
@@ -462,7 +482,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
   const asset = await getAsset(assetId, event);
   asset.updatedEventId = blockEventId;
 
-  let instructionId: string;
+  let instructionId: string | undefined;
   let instructionMemo: string | undefined;
   let eventId: EventIdEnum;
   if (reason === 'issued') {
@@ -524,13 +544,9 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
 
     if (reason === 'transferred') {
       eventId = EventIdEnum.Transfer;
-      const details = value as unknown as {
-        readonly instructionId: Codec;
-        readonly instructionMemo: Codec;
-      };
-
       // FK to the padded `Instruction.id` — must carry the same zero-padding
-      instructionId = padNumericId(getTextValue(details.instructionId));
+      const details = transferDetails(value);
+      instructionId = padNumericId(details.instructionId);
       instructionMemo = memoText(details.instructionMemo);
     } else {
       eventId = EventIdEnum.ControllerTransfer;

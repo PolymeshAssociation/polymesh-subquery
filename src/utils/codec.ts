@@ -49,3 +49,21 @@ export const memberOf = (value: unknown, key: string): Codec => {
 
   return asCodec(value[key]);
 };
+
+/** Whether a value is a non-null object, for the shape checks that read a codec's JSON. */
+export const isRecord = isObject;
+
+/**
+ * A codec's `toJSON()` as the shape the caller reads, after `check` has confirmed it. `toJSON()` is
+ * typed as arbitrary JSON, so reading a field off it needs either a cast or a check; the check is
+ * the one that notices a runtime that changed the shape.
+ */
+export const jsonOf = <T>(codec: Codec, check: (json: unknown) => json is T, what: string): T => {
+  const json: unknown = codec.toJSON();
+
+  if (!check(json)) {
+    throw new TypeError(`${what} did not have the expected shape: ${JSON.stringify(json)}`);
+  }
+
+  return json;
+};

@@ -174,6 +174,40 @@ describe('handleBallotVoteCast', () => {
     });
   });
 
+  it('reads a power that outgrew a JSON number, which arrives as hex', async () => {
+    const db = mockStore();
+
+    await handleBallotVoteCast(
+      tupleEvent({
+        section: 'corporateBallot',
+        method: 'VoteCast',
+        data: [codec(DID_A), caIdCodec(0), codec([{ power: '0xde0b6b3a7640000', fallback: 2 }])],
+        blockNumber: '42',
+        idx: 3,
+      })
+    );
+
+    expect((Object.values(db.CorporateBallotVote) as any[])[0].votes).toEqual([
+      { power: '1000000000000000000', fallback: 2 },
+    ]);
+  });
+
+  it('refuses a vote list whose entries lost their power', async () => {
+    mockStore();
+
+    await expect(
+      handleBallotVoteCast(
+        tupleEvent({
+          section: 'corporateBallot',
+          method: 'VoteCast',
+          data: [codec(DID_A), caIdCodec(0), codec([{ weight: 1, fallback: null }])],
+          blockNumber: '42',
+          idx: 3,
+        })
+      )
+    ).rejects.toThrow(/BallotVotes did not have the expected shape/);
+  });
+
   /**
    * The chain keys `Votes` on `(CAId, IdentityId)`, so a second `VoteCast` while the ballot is open
    * replaces the first. Two rows would leave the voter counted twice in any tally.

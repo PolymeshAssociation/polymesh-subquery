@@ -11,6 +11,7 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getOrAnomaly } from '../common';
+import { isRecord, jsonOf } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
 
 interface ParsedSchedule {
@@ -33,6 +34,20 @@ interface ScheduleCheckpointsJson {
   pending: number[];
 }
 
+const isStoredSchedule = (json: unknown): json is StoredScheduleJson =>
+  isRecord(json) &&
+  typeof json.id === 'number' &&
+  typeof json.at === 'number' &&
+  typeof json.remaining === 'number' &&
+  isRecord(json.schedule) &&
+  typeof json.schedule.start === 'number' &&
+  isRecord(json.schedule.period);
+
+const isScheduleCheckpoints = (json: unknown): json is ScheduleCheckpointsJson =>
+  isRecord(json) &&
+  Array.isArray(json.pending) &&
+  json.pending.every(moment => typeof moment === 'number');
+
 /**
  * `ScheduleCreated` / `ScheduleRemoved` are the one real version change in the corporate-actions
  * domain: arity 3 → 4 at v6.0.0, `ScheduleId` inserted at index 2 and the payload type changing
@@ -42,7 +57,7 @@ interface ScheduleCheckpointsJson {
  */
 export const parseSchedule = (decoded: DecodedEvent, specVersion: number): ParsedSchedule => {
   if (specVersion < V6) {
-    const stored = decoded.storedSchedule.toJSON() as unknown as StoredScheduleJson;
+    const stored = jsonOf(decoded.storedSchedule, isStoredSchedule, 'StoredSchedule');
 
     return {
       scheduleId: stored.id,
@@ -53,7 +68,7 @@ export const parseSchedule = (decoded: DecodedEvent, specVersion: number): Parse
     };
   }
 
-  const { pending } = decoded.schedule.toJSON() as unknown as ScheduleCheckpointsJson;
+  const { pending } = jsonOf(decoded.schedule, isScheduleCheckpoints, 'ScheduleCheckpoints');
 
   return {
     scheduleId: getNumberValue(decoded.scheduleId),
