@@ -266,3 +266,20 @@ describe('encodeValue where constructors are hidden, as in the mappings sandbox'
     expect(refs.map(r => r.kind)).toEqual(['ticker', 'identity', 'portfolio', 'identity']);
   });
 });
+
+describe('encodeValue against a value that is not its declared type', () => {
+  // a codec whose type name promises a shape its members do not have
+  const impostor = (raw: string) => ({ toRawType: () => raw, toString: () => '' } as never);
+
+  it.each([
+    'Option<u32>',
+    'Result<u8, Text>',
+    'BTreeMap<u32, u128>',
+    'BTreeSet<u32>',
+    'Call',
+    '{"_enum":["On","Off"]}',
+    '{"did":"[u8;32]"}',
+  ])('refuses to read %s off an object without its members', raw => {
+    expect(() => encodeValue(impostor(raw))).toThrow(TypeError);
+  });
+});

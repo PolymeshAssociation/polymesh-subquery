@@ -21,9 +21,45 @@ interface Walk {
   refs: RawReference[];
 }
 
+// The walk is deliberately duck-typed: a codec is recognised by the members the declared type says it
+// has, not by its class, since the same type is built by different classes (and by a second copy of
+// the codec package in the webpack bundle). These guards are that check, and each one fails loudly
+// rather than reading `undefined` off a value that is not the shape its type name promised.
+const hasMember = (codec: object, key: string, kind: 'function' | 'boolean' | 'string') =>
+  key in codec && typeof (codec as Record<string, unknown>)[key] === kind;
+
 const isInteger = (codec: Codec): boolean =>
-  typeof (codec as unknown as { toBn?: unknown }).toBn === 'function' &&
-  typeof (codec as unknown as { bitLength?: unknown }).bitLength === 'function';
+  hasMember(codec, 'toBn', 'function') && hasMember(codec, 'bitLength', 'function');
+
+interface CallLike {
+  section: string;
+  method: string;
+  args: Codec[];
+  meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
+}
+
+const isCall = (codec: Codec): codec is Codec & CallLike =>
+  hasMember(codec, 'section', 'string') &&
+  hasMember(codec, 'method', 'string') &&
+  'args' in codec &&
+  Array.isArray(codec.args) &&
+  'meta' in codec &&
+  typeof codec.meta === 'object' &&
+  codec.meta !== null &&
+  'args' in codec.meta &&
+  Array.isArray(codec.meta.args);
+
+const isOption = (codec: Codec): codec is Codec & { isSome: boolean; unwrap: () => Codec } =>
+  hasMember(codec, 'isSome', 'boolean') && hasMember(codec, 'unwrap', 'function');
+
+const isResult = (codec: Codec): codec is Codec & { isOk: boolean; asOk: Codec; asErr: Codec } =>
+  hasMember(codec, 'isOk', 'boolean') && 'asOk' in codec && 'asErr' in codec;
+
+const isEnum = (codec: Codec): codec is Codec & { type: string; isBasic: boolean; value: Codec } =>
+  hasMember(codec, 'type', 'string') && hasMember(codec, 'isBasic', 'boolean') && 'value' in codec;
+
+const mismatch = (raw: string, codec: Codec): Error =>
+  new TypeError(`${raw} was expected, but the value is a ${codec.constructor.name}`);
 
 const isFixedBytes = (raw: string): boolean => /^\[u8;\s*\d+\]$/.test(raw);
 
@@ -133,12 +169,10 @@ const encodeBytes = (codec: Codec, raw: string, name: string, at: Walk): Canonic
 };
 
 const encodeCall = (codec: Codec, at: Walk): CanonicalValue => {
-  const call = codec as unknown as {
-    section: string;
-    method: string;
-    args: Codec[];
-    meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
-  };
+  if (!isCall(codec)) {
+    throw mismatch('Call', codec);
+  }
+  const call = codec;
   const args: Record<string, CanonicalValue> = {};
   call.args.forEach((arg, i) => {
     args[stringCamelCase(call.meta.args[i].name.toString())] = walk(
@@ -153,11 +187,17 @@ const encodeCall = (codec: Codec, at: Walk): CanonicalValue => {
 /** An `Option`, `Result`, map, set, `Vec`, tuple or fixed array; `undefined` for anything else. */
 const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | undefined => {
   if (raw.startsWith('Option<')) {
-    const option = codec as unknown as { isSome: boolean; unwrap: () => Codec };
+    if (!isOption(codec)) {
+      throw mismatch(raw, codec);
+    }
+    const option = codec;
     return option.isSome ? walk(option.unwrap(), childTypes(raw)[0], at) : null;
   }
   if (raw.startsWith('Result<')) {
-    const result = codec as unknown as { isOk: boolean; asOk: Codec; asErr: Codec };
+    if (!isResult(codec)) {
+      throw mismatch(raw, codec);
+    }
+    const result = codec;
     const [okType, errType] = childTypes(raw);
     return result.isOk
       ? { ok: walk(result.asOk, okType, at) }
@@ -165,21 +205,25 @@ const encodeContainer = (codec: Codec, raw: string, at: Walk): CanonicalValue | 
   }
   if (raw.startsWith('BTreeMap<') || raw.startsWith('HashMap<')) {
     const [keyType, valueType] = childTypes(raw);
-    return [...(codec as unknown as Map<Codec, Codec>).entries()].map(([key, value]) => [
+    if (!(codec instanceof Map)) {
+      throw mismatch(raw, codec);
+    }
+    return [...codec.entries()].map(([key, value]) => [
       walk(key, keyType, at),
       walk(value, valueType, at),
     ]);
   }
   if (raw.startsWith('BTreeSet<')) {
     const [valueType] = childTypes(raw);
-    return [...(codec as unknown as Set<Codec>)].map(value => walk(value, valueType, at));
+    if (!(codec instanceof Set)) {
+      throw mismatch(raw, codec);
+    }
+    return [...codec].map(value => walk(value, valueType, at));
   }
   if (Array.isArray(codec)) {
     const types = childTypes(raw);
     // a tuple names each member; a Vec or a fixed array names one type for all of them
-    return (codec as unknown as Codec[]).map((value, i) =>
-      walk(value, types.length > 1 ? types[i] : types[0], at)
-    );
+    return codec.map((value, i) => walk(value, types.length > 1 ? types[i] : types[0], at));
   }
   return undefined;
 };
@@ -192,7 +236,10 @@ const encodeShaped = (
   at: Walk
 ): CanonicalValue => {
   if ('_enum' in shape) {
-    const variant = codec as unknown as { type: string; isBasic: boolean; value: Codec };
+    if (!isEnum(codec)) {
+      throw mismatch(name, codec);
+    }
+    const variant = codec;
     if (variant.isBasic || variant.value.toRawType() === 'Null') {
       return variant.type;
     }
@@ -200,7 +247,10 @@ const encodeShaped = (
     return { [variant.type]: walk(variant.value, named(types, variant.type), at) };
   }
   const struct: Record<string, CanonicalValue> = {};
-  for (const [key, value] of (codec as unknown as Map<string, Codec>).entries()) {
+  if (!(codec instanceof Map)) {
+    throw mismatch(name, codec);
+  }
+  for (const [key, value] of codec.entries()) {
     struct[stringCamelCase(key)] = walk(value, named(shape, key), at);
   }
   const portfolio = isType(name, 'PortfolioId') ? portfolioValue(struct) : undefined;
