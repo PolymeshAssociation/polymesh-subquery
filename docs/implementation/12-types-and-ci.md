@@ -112,6 +112,10 @@ polymesh-types augments the **bare specifier** — `declare module '@polkadot/ap
 
 This is worth knowing because it is the shape of failure people expect from polkadot-js dual packaging — and here it is real, present, and *not* what was actually breaking.
 
+**Where it did break: `subql build`.** The build runs ts-loader with `@subql/cli`'s own TypeScript 5.8, not the project's. ts-loader passes each file's implied module format to `resolveModuleName`, and TypeScript 5.x honours a CommonJS resolution mode by following the `require` condition even under `moduleResolution: node`. Declaration files in `node_modules` (`@subql/types`, polymesh-types) are implied CommonJS, so their `@polkadot/*` imports resolved to `cjs/*.d.ts`, while `src/` resolved to the root `.d.ts` files. The build then saw two declarations of the same classes and rejected assignments between them (`Property '#private' is missing`), which `tsc` never reported **[V]**. It is not two versions: everything the project compiles against is one `@polkadot/*` release.
+
+`tsconfig.json` therefore sets `module`/`moduleResolution` to `nodenext`, which puts `src/` in the same CommonJS mode, so the build reads only the `cjs/` declarations. `tsconfig.test.json` and ts-node stay on `node`, which reads only the root declarations: each program is consistent, and they read copies of the same declarations. Augmentation is intact in both (`asset.assetNames` is `Option<Bytes>`), and the emitted bundle is unchanged **[V]**. `bundler` resolution does not help, because `node_modules` declarations stay implied CommonJS under it **[V]**. `node16` resolves identically here; `nodenext` is preferred because it follows the Node release TypeScript models, and `node` itself is deprecated from TypeScript 6.0.
+
 ### 12.3 Nothing type-checks the project **[V]**
 
 | Gate | Command | What it actually checks |
@@ -145,7 +149,7 @@ import '@polymeshassociation/polymesh-types/polkadot/augment-api';
 
 Global ambient augmentation applies program-wide once any file in the program imports it. `src/index.ts` is in the `include` of `tsconfig.json`, `tsconfig.test.json` and the build config, so one import covers every path **[V]** — confirmed by identical results under both configs, under `subql build`, and under ts-jest.
 
-Two flags also need pinning in `tsconfig.json`, each with its reason recorded in a comment beside it: `skipLibCheck: true` (§12.2) and `moduleResolution: "node"` (§12.2c).
+Two flags also need pinning in `tsconfig.json`, each with its reason recorded in a comment beside it: `skipLibCheck: true` (§12.2) and `moduleResolution` (§12.2c).
 
 **Pin the version deliberately.** The augmentation reflects one metadata snapshot; `^7.4.0` will silently move it. Whether that is desirable is a judgement — a floating range means new storage appears without action, and also means a legacy read can start failing to compile on a patch bump. Record the choice in `package.json` with a comment either way; do not leave it accidental.
 
