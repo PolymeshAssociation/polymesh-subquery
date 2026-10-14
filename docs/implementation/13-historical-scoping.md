@@ -4,7 +4,7 @@ What historical mode costs, which of its indexes anything reads, and what the sc
 
 **Depends on:** [09](./09-infrastructure.md). Overlaps [11](./11-throughput.md), which measures slow blocks; this measures the standing cost historical mode imposes on *every* block.
 
-**Status:** implemented, in `schema.graphql` and `db/compat.sql`.
+**Status:** implemented, in `schema.graphql`, `db/compat.sql` and `db/trimIndexes.ts`.
 
 ---
 
@@ -63,16 +63,16 @@ The largest single ones are the relation indexes `account_balances (identity_id)
 ## 13.4 What was done
 
 1. **Scalar `@index` directives and `@compositeIndexes` entries no handler or consumer uses are removed from `schema.graphql`**, so a fresh database never builds them: 23 scalar fields and five composites, among them `Event.eventIdx`, `.extrinsicIdx`, `.specVersionId`, `.eventId`, `PolyxEntry.movementId`, `.blockId`, and the `(account, date)`, `(account, kind)` and `(kind, date)` composites. The `(account, kind)` one is read only by the `reconcile-polyx` validation script, which can afford the scan.
-2. **Relation indexes cannot be removed from the schema** without turning a relation into a plain id and losing its GraphQL navigation, so `db/compat.sql` drops them. A plain drop would not last: **the node runs `CREATE INDEX IF NOT EXISTS` for every declared index on every start**, because it treats each start as a fresh schema migration, so each restart would rebuild what was dropped. The drop therefore leaves an empty index of the same name (`WHERE false`, which no query can choose); the node finds the name taken and skips it.
+2. **Relation indexes cannot be removed from the schema** without turning a relation into a plain id and losing its GraphQL navigation, so `db/trimIndexes.ts` drops them. A plain drop would not last: **the node runs `CREATE INDEX IF NOT EXISTS` for every declared index on every start**, because it treats each start as a fresh schema migration, so each restart would rebuild what was dropped. The drop therefore leaves an empty index of the same name (`WHERE false`, which no query can choose); the node finds the name taken and skips it.
 3. **Indexes the same pass deliberately keeps**, besides what the indexer and the consumers read: the `unique` ones (`Block.hash`, `Account.address`, `Identity.did`, `Era.eraIndex`, ...), which are lookup keys on large tables; the EVM lookup keys (`ethAddress`, `ethTxHash`, `evmAddress`); and anything scanned at least a thousand times in a full sync. Indexes under 1 MB on both chains are left alone: they cost nothing worth a stand-in. The small-table indexes that were trimmed for showing zero scans (`claims.issuer_id`, for one) were unused only because the planner prefers a sequential scan at today's sizes; re-measure them if those tables grow.
 
-The drop matches on table and column list while the index is still a GiST, so it is idempotent and harmless on a database that never had the index, and it runs on every start with the rest of `db/compat.sql`.
+The drop matches on table and column list while the index is still a GiST, so it is idempotent and harmless on a database that never had the index, and it runs on every start after `db/compat.sql`. Each index is dropped in a transaction of its own with a short lock timeout, because a drop holds an exclusive lock on its table until it commits and the node is writing to those tables: an index that loses a lock conflict, or fails for any other reason, is logged and left for the next start, and the trim never stops the node. The required DDL in `db/compat.sql` stays one transaction that retries and is fatal on error.
 
 A test (`tests/unit/storeQueryIndexes.test.ts`) fails if a drop takes the index a store query filters on, or one of the measured consumer indexes, or if a drop and the schema disagree about whether the node would recreate it.
 
 ## 13.5 Effect
 
-At full size, the entries in `db/compat.sql` free about 12 GB of GiST on mainnet and 4.9 GB on testnet, against 21.4 GB and 8.5 GB of GiST at the start, and spare every insert their maintenance. Historical queries still work: `_block_range` is still written, and the queries that filter on a dropped column now scan where they used to probe an index.
+At full size, the entries in `db/trimIndexes.ts` free about 12 GB of GiST on mainnet and 4.9 GB on testnet, against 21.4 GB and 8.5 GB of GiST at the start, and spare every insert their maintenance. Historical queries still work: `_block_range` is still written, and the queries that filter on a dropped column now scan where they used to probe an index.
 
 **Not done:** splitting the append-only entities into a second project with historical off. It would remove the cost entirely, at the price of a second deployment and a second schema, and the trim above takes most of the saving for none of that.
 
