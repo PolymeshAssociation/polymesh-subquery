@@ -1880,7 +1880,7 @@ type Extrinsic @entity {
   moduleIdText: String!
   callId: CallIdEnum! @index
   callIdText: String!
-  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`"
+  "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`. Not indexed: an `args` filter must come with a `moduleId` and `callId` filter, which narrows the scan to that call's rows"
   args: ArgumentsJson!
   success: Int! @index(unique: false)
   nonce: Int
@@ -1982,7 +1982,7 @@ type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   moduleIdText: String!
   eventId: EventIdEnum! @index
   eventIdText: String!
-  "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`; to find events involving an identity, account, asset or portfolio, use `refs`"
+  "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`. Not indexed: an `args` filter must come with a `moduleId` and `eventId` filter, which narrows the scan to that event's rows; to find events involving an identity, account, asset or portfolio, use `refs`, which is indexed"
   args: ArgumentsJson!
   "What the event involves, as `kind:value` (`identity:0x…`, `account:5…`, `asset:0x…`, `ticker:ABC`, `portfolio:<did>/<number>`), in any argument and at any depth; a portfolio also files its identity, a ticker is filed as `ticker:<text>` and, before v7, also under the asset id it maps to. `null` when the event involves none of these. Filter with `contains`, for example `{ contains: [\"asset:0x…\"] }`. GIN-indexed in `db/compat.sql`"
   refs: [String!]
@@ -2053,8 +2053,9 @@ An event's or call's arguments, as a JSON object. Values are encoded as:
 - maps: arrays of `[key, value]` pairs
 - calls: `{ "section", "method", "args" }`
 
-Filter with `contains`. Not indexed: to find events by an identity, account, asset or portfolio,
-use `Event.refs`
+Filter with `contains`. Not indexed, to keep writes cheap: an `args` filter on `Event` must come with
+`moduleId` and `eventId`, and one on `Extrinsic` with `moduleId` and `callId`; without them it scans
+the whole table. To find events by an identity, account, asset or portfolio, use `Event.refs`
 """
 type ArgumentsJson @jsonField(indexed: false) {
   "not a field: a `@jsonField` type must declare one"
@@ -3138,7 +3139,8 @@ type Proposal @entity {
 }
 
 """
-Represents all possible claims that can be made of an identity
+Represents all possible claims that can be made of an identity. `InvestorUniqueness`, `InvestorUniquenessV2`
+and `NoData` claims are not indexed in any era: the v6.0 upgrade deleted them without an event
 """
 enum ClaimTypeEnum {
   Accredited

@@ -63,6 +63,14 @@ Before v7.0 the chain named assets by ticker, so a field that holds an `AssetId`
 
 Each entry in `refs` is `kind:value`, with `kind` one of `identity`, `account`, `asset`, `ticker` or `portfolio`, and `value` the canonical encoding of what is referred to (`did/number` for a portfolio, `number` `0` for the default one): `identity:0x…`, `account:2…`, `asset:0x…`, `ticker:ABC`, `portfolio:0x…/0`. Each appears once per event, in the order found. A portfolio also refers to its identity. A ticker is filed as `ticker:<text>` (its text without the NUL padding, or its hex when the bytes are not text) in every era; before v7.0 it also refers to the asset it maps to, while from v7.0 events name the asset itself. `refs` is `null` when an event refers to none of these. It is GIN-indexed, so a `contains` filter on it is fast without a `(moduleId, eventId)` filter.
 
+## Filtering on `args`
+
+`Event.args` and `Extrinsic.args` have no GIN index, by design: an index would add to the write cost of every event and extrinsic, and `refs` already covers the lookups consumers make. An `args` filter must therefore come with a `moduleId` and `eventId` filter (events) or a `moduleId` and `callId` filter (extrinsics). The pair narrows the scan to the rows of that one event or call and keeps the query fast; on its own, an `args` filter scans the whole table and takes over a second on testnet (1.1 to 1.3 s). `tests/unit/consumerQueries.test.ts` holds the migrated SDK and portal queries and fails if one filters on `args` without that pair.
+
+## Amounts inside JSON columns
+
+An amount inside a JSON column is a plain decimal string, `"123"`. SubQuery would store a `BigInt` there as `"123n"`, which no consumer can parse without knowing the convention, so the schema types these fields `String`. This changes one field consumers read: **breaking**, `Sto.tiers[].price`, `.remaining` and `.total` were `BigInt` (`"123n"` in the JSON column) and are now decimal strings. Parse them with `BigInt(tier.price)`; a client that stripped the trailing `n` needs no stripping. The other JSON columns that carry amounts (`UnlockChunk.amount`, `DidTax.tax`, `BallotVoteEntry.power`, `KindTotal.totalAbs`, `HoldEntry.amount`) are new in the redesign and have never had another shape.
+
 ## SDK
 
 ### `Network.getEventByIndexedArgs` / `getEventsByIndexedArgs` (`src/api/client/Network.ts`, `src/middleware/queries/events.ts`)
@@ -89,7 +97,7 @@ getEvents(opts: {
 }): Promise<ResultSet<EventIdentifier>>
 ```
 
-`involving` becomes `refs: { contains: ["<kind>:<value>"] }`, one entry per subject, all of which must match; `args` becomes `args: { contains: … }`. Keep the `(moduleId, eventId)` filter whenever there is one: `args` is not indexed, so it is applied to the rows that pair narrows down to.
+`involving` becomes `refs: { contains: ["<kind>:<value>"] }`, one entry per subject, all of which must match; `args` becomes `args: { contains: … }`. Always send the `(moduleId, eventId)` filter with `args` (see [Filtering on `args`](#filtering-on-args)): `args` is not indexed, so it is applied to the rows that pair narrows down to.
 
 ### `paramsTxt` (`src/middleware/queries/extrinsics.ts`, read in `Account/index.ts` and `Network.ts`)
 
