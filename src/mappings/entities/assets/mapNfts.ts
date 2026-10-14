@@ -29,7 +29,7 @@ import { extractArgs, getAsset } from './../common';
 import { createAssetTransaction, getHolding } from './mapAsset';
 import { nftApprovalId } from './mapNftApprovals';
 import { memoText } from '../../../utils/text';
-import { isRecord } from '../../../utils/codec';
+import { isObject } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
 
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
@@ -274,7 +274,7 @@ const HOLDINGS_EVENTS = new Set([
  * as a number (or hex text once it outgrows one) and the memo as hex, either of which may be null.
  */
 const transferDetails = (value: unknown): { instructionId?: string; instructionMemo?: string } => {
-  if (!isRecord(value)) {
+  if (!isObject(value)) {
     throw new TypeError(`a transferred update reason carried ${JSON.stringify(value)}`);
   }
   const { instructionId, instructionMemo } = value;

@@ -11,7 +11,7 @@ import {
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getOrAnomaly } from '../common';
-import { isRecord, jsonOf } from '../../../utils/codec';
+import { isObject, jsonOf } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
 
 interface ParsedSchedule {
@@ -35,16 +35,16 @@ interface ScheduleCheckpointsJson {
 }
 
 const isStoredSchedule = (json: unknown): json is StoredScheduleJson =>
-  isRecord(json) &&
+  isObject(json) &&
   typeof json.id === 'number' &&
   typeof json.at === 'number' &&
   typeof json.remaining === 'number' &&
-  isRecord(json.schedule) &&
+  isObject(json.schedule) &&
   typeof json.schedule.start === 'number' &&
-  isRecord(json.schedule.period);
+  isObject(json.schedule.period);
 
 const isScheduleCheckpoints = (json: unknown): json is ScheduleCheckpointsJson =>
-  isRecord(json) &&
+  isObject(json) &&
   Array.isArray(json.pending) &&
   json.pending.every(moment => typeof moment === 'number');
 

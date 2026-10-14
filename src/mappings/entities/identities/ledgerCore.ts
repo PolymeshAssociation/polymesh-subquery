@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock } from '@subql/types';
 import { namedFields, optionalField } from '../../../decode';
-import { isRecord, memberOf, optionalMemberOf, optionOf } from '../../../utils/codec';
+import { isObject, memberOf, optionalMemberOf, optionOf } from '../../../utils/codec';
 import { findStorage } from '../../../utils/legacyQuery';
 import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
 import {
@@ -170,7 +170,7 @@ const setKindTotals = (balance: AccountBalance, totals: KindTotalValue[]): void 
  * `{ free, reserved, miscFrozen, feeFrozen }` (frozen is the max of the two) on ≤ v7.4.
  */
 export const accountDataFrozen = (data: unknown): bigint => {
-  if (!isRecord(data)) {
+  if (!isObject(data)) {
     throw new TypeError(`AccountData was expected, but the value is ${typeof data}`);
   }
 

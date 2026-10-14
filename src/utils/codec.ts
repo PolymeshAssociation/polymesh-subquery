@@ -14,7 +14,8 @@ const describe = (value: unknown): string => {
   return value.constructor?.name ?? typeof value;
 };
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
+/** Whether a value is a non-null object, for the shape checks that read a codec's JSON. */
+export const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 /**
@@ -56,9 +57,6 @@ export const memberOf = (value: unknown, key: string): Codec => {
 
   return asCodec(value[key]);
 };
-
-/** Whether a value is a non-null object, for the shape checks that read a codec's JSON. */
-export const isRecord = isObject;
 
 /**
  * A codec's `toJSON()` as the shape the caller reads, after `check` has confirmed it. `toJSON()` is

@@ -1,7 +1,7 @@
 import { TypeRegistry } from '@polkadot/types';
 import {
   flagOf,
-  isRecord,
+  isObject,
   itemsOf,
   jsonOf,
   memberOf,
@@ -72,7 +72,7 @@ describe('itemsOf', () => {
 
 describe('jsonOf', () => {
   const isPending = (json: unknown): json is { pending: number[] } =>
-    isRecord(json) && Array.isArray(json.pending);
+    isObject(json) && Array.isArray(json.pending);
 
   it('returns the JSON once the check accepts it, and names the type when it does not', () => {
     const ok = { toJSON: () => ({ pending: [1] }) } as never;

@@ -8,7 +8,7 @@ import {
   CorporateBallotVote,
 } from '../../../types';
 import { bytesToString, getBooleanValue, getCaIdValue } from '../../../utils';
-import { isRecord, jsonOf } from '../../../utils/codec';
+import { isObject, jsonOf } from '../../../utils/codec';
 import { extractArgs, getOrAnomaly } from '../common';
 import { caId } from './mapCorporateAction';
 
@@ -36,10 +36,10 @@ interface MetaJson {
 }
 
 const isRange = (json: unknown): json is RangeJson =>
-  isRecord(json) && typeof json.start === 'number' && typeof json.end === 'number';
+  isObject(json) && typeof json.start === 'number' && typeof json.end === 'number';
 
 const isMeta = (json: unknown): json is MetaJson =>
-  isRecord(json) &&
+  isObject(json) &&
   typeof json.title === 'string' &&
   (json.motions === undefined || Array.isArray(json.motions));
 
@@ -53,7 +53,7 @@ const isVotes = (json: unknown): json is VoteJson[] =>
   Array.isArray(json) &&
   json.every(
     vote =>
-      isRecord(vote) &&
+      isObject(vote) &&
       (typeof vote.power === 'number' || typeof vote.power === 'string') &&
       (vote.fallback === null || typeof vote.fallback === 'number')
   );
