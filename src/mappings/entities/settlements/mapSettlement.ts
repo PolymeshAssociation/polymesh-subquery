@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { eventParams } from '../../../utils/blockEvents';
 import { AnomalyKind, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
@@ -425,7 +424,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
         const automaticAffirmationPromise = async () => {
           const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
           const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
-            eventParams(event),
+            event.event.data,
             block,
             blockId,
             eventIndex,

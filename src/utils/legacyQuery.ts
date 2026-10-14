@@ -1,20 +1,16 @@
 import { QueryableStorageEntry } from '@polkadot/api-base/types';
 
 /**
- * A storage entry by name, or `undefined` when this block's metadata has none.
- *
- * `api.query` is indexed through `unknown` rather than directly: `@subql/node` bundles its own
- * copy of `@polkadot/api-base` alongside the top-level one, so under some build tools (e.g.
- * `subql build`'s ts-loader) `QueryableStorage` and this index signature resolve against two
- * structurally-different copies of the same type, and a direct cast between them fails. This is
- * the one place that bridges them, for entries a runtime may or may not carry.
+ * A storage entry by name, or `undefined` when this block's metadata has none. The augmented
+ * `api.query` names only the current metadata's entries, so it is read here as a plain index for
+ * entries a runtime may or may not carry.
  */
 export const findStorage = (
   section: string,
   method: string
 ): QueryableStorageEntry<'promise'> | undefined => {
   const pallet = (
-    api.query as unknown as Record<
+    api.query as Record<
       string,
       Record<string, QueryableStorageEntry<'promise'> | undefined> | undefined
     >

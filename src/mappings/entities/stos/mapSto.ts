@@ -16,15 +16,19 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
-import { asCodec } from '../../../utils/codec';
 
 const getOfferingAsset = (
   block: SubstrateBlock,
   params: Codec[],
   extrinsic?: SubstrateExtrinsic
 ): Promise<string> => {
-  const rawOfferingAsset = is7Dot3Chain(block) ? params[1] : asCodec(extrinsic?.extrinsic.args[0]);
-  return getAssetId(rawOfferingAsset, block);
+  if (is7Dot3Chain(block)) {
+    return getAssetId(params[1], block);
+  }
+  if (!extrinsic) {
+    throw new Error('The fundraiser event names its asset only in its extrinsic, and has none');
+  }
+  return getAssetId(extrinsic.extrinsic.args[0], block);
 };
 
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {

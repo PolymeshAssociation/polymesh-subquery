@@ -1,7 +1,7 @@
 import type { AnyJson } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { readOrAnomaly } from './anomaly';
-import { is8xChain } from './common';
+import { getBigIntValue, is8xChain } from './common';
 import { findStorage } from './legacyQuery';
 import { readStorage, UndecodableStateError } from './storageAtParent';
 
@@ -586,14 +586,8 @@ export const readPermissionedIdentity = async (
  * Throws `UndecodableStateError` when the value doesn't decode.
  */
 export const readEraTotalStake = async (eraIndex: number): Promise<bigint> =>
-  // `.toString()` rather than `getBigIntValue`/`.toJSON()`: a bare top-level `u128` codec here,
-  // not the decoded-struct/event-param `Codec` those take — the value is the same, but plumbing
-  // it through `getBigIntValue`'s `Codec` param trips a `@polkadot/types-codec` duplicate-package
-  // type mismatch under the webpack build that `tsc`/jest don't surface.
-  BigInt(
-    (
-      await readStorage(`staking.erasTotalStake of era ${eraIndex}`, () =>
-        api.query.staking.erasTotalStake(eraIndex)
-      )
-    ).toString()
+  getBigIntValue(
+    await readStorage(`staking.erasTotalStake of era ${eraIndex}`, () =>
+      api.query.staking.erasTotalStake(eraIndex)
+    )
   );

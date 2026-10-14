@@ -2,7 +2,7 @@ import { QueryableStorageEntry } from '@polkadot/api-base/types';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { ChainUpgrade } from '../types';
-import { asCodec, itemsOf, optionOf } from './codec';
+import { itemsOf, optionOf } from './codec';
 import { padId } from './common';
 import { findStorage } from './legacyQuery';
 
@@ -122,7 +122,7 @@ const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec |
 
     // the host's bytes, for the host's registry
     // eslint-disable-next-line no-restricted-syntax
-    return asCodec(api.registry.createType(valueType, stored.toU8a(true)));
+    return api.registry.createType(valueType, stored.toU8a(true));
   });
 };
 
@@ -185,11 +185,7 @@ const KEYS_PER_PAGE = 1000;
 const keyArgs = (storage: StorageItem, key: { toHex: () => string }): Codec[] => {
   // hex, because `Bytes` reads a `Uint8Array` as length-prefixed, and a hashed key isn't
   const storageKey = api.registry.createType('StorageKey', key.toHex());
-  // the metadata type is declared by two copies of `@polkadot/types`, which the webpack build
-  // treats as different types; the metadata object itself is the same
-  type Meta = Parameters<typeof storageKey.setMeta>[0];
-
-  return storageKey.setMeta(storage.creator.meta as unknown as Meta).args.map(asCodec);
+  return storageKey.setMeta(storage.creator.meta).args;
 };
 
 /**

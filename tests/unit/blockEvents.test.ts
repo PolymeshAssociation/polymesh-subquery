@@ -1,4 +1,4 @@
-import { blockEvents, eventParams, substrateEventAt } from '../../src/utils/blockEvents';
+import { blockEvents, substrateEventAt } from '../../src/utils/blockEvents';
 
 const record = (method: string, data: unknown[]) => ({
   phase: { toString: () => 'ApplyExtrinsic' },
@@ -23,11 +23,5 @@ describe('blockEvents helpers', () => {
     expect(event.extrinsic).toBe(extrinsic);
     expect(event.event.method).toBe('Transfer');
     expect(event.phase).toBe(block.events[1].phase);
-  });
-
-  it("returns an event's data untouched", () => {
-    const event = substrateEventAt(block, 1);
-
-    expect(eventParams(event)).toBe(block.events[1].event.data);
   });
 });

@@ -9,7 +9,7 @@ import {
   getTextValue,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { asCodec, flagOf, memberOf, optionOf } from '../../../utils/codec';
+import { flagOf, memberOf, optionOf } from '../../../utils/codec';
 import { hexToString } from '../../../utils/common';
 import { isPartialIndex } from '../../indexOrigin';
 import { extractArgs } from '../common';
@@ -83,14 +83,14 @@ export const assetFromChain = async (
     id: assetId,
     assetId,
     ticker,
-    name: bytesToString(asCodec(rawName)) || undefined,
+    name: bytesToString(rawName) || undefined,
     type: await getAssetType(assetType, block, eventIdx),
     isNftCollection,
-    fundingRound: bytesToString(asCodec(rawFundingRound)) || undefined,
+    fundingRound: bytesToString(rawFundingRound) || undefined,
     isDivisible: getBooleanValue(memberOf(details, 'divisible')),
-    isFrozen: getBooleanValue(asCodec(rawFrozen)),
+    isFrozen: getBooleanValue(rawFrozen),
     holderCount: 0,
-    identifiers: getSecurityIdentifiers(asCodec(rawIdentifiers)),
+    identifiers: getSecurityIdentifiers(rawIdentifiers),
     ownerId,
     totalSupply: getBigIntValue(memberOf(details, 'totalSupply')),
     totalTransfers: BigInt(0),

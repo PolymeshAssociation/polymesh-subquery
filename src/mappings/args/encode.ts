@@ -2,7 +2,6 @@ import { Codec } from '@polkadot/types/types';
 import { hexToU8a, stringCamelCase, u8aToHex } from '@polkadot/util';
 import { ArgumentsJson } from '../../types';
 import {
-  asCodec,
   flagOf,
   hasFunction,
   itemsOf,
@@ -358,16 +357,15 @@ export const tryEncodeArgs = (
 
 /**
  * What `callArgs` reads of a call: its arguments and the metadata naming them. Taken structurally
- * because a `Call` and a `GenericCall` are the same object, and the arguments' element type is
- * declared by two copies of the codec package that the webpack build keeps apart.
+ * because a `Call` and a `GenericCall` are the same object.
  */
 export interface CallSource {
-  args: ArrayLike<unknown>;
+  args: Codec[];
   meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
 }
 
 const callArgsInput = (call: CallSource): Parameters<typeof encodeArgs> => [
-  Array.from(call.args, asCodec),
+  call.args,
   call.meta.args.map(({ name }) => stringCamelCase(name.toString())),
   call.meta.args.map(({ type }) => type.toString()),
 ];

@@ -30,12 +30,8 @@ export const isObject = (value: unknown): value is Record<string, unknown> =>
 export const hasFunction = (value: unknown, key: string): boolean =>
   isObject(value) && typeof value[key] === 'function';
 
-/**
- * A value as the `@polkadot/types` `Codec` the helpers in this codebase take. `tsc` treats the
- * codec packages' two declarations as one type, but the webpack build resolves them separately and
- * rejects an assignment between the two; the objects are the same at runtime.
- */
-export const asCodec = (value: unknown): Codec => value as Codec;
+/** A member the readers below have checked for, as the `Codec` it is at runtime. */
+const asCodec = (value: unknown): Codec => value as Codec;
 
 /** The value inside an `Option`, or `undefined` when it is `None`. */
 export const optionOf = (value: unknown, what: string): Codec | undefined => {

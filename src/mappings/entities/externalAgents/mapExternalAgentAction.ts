@@ -12,7 +12,6 @@ import {
 import { extractArgs } from '../common';
 import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
 import { assetOfCollection } from '../assets/mapNfts';
-import { asCodec } from '../../../utils/codec';
 
 /**
  * Subscribes to the events related to external agents
@@ -355,10 +354,17 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (params, block, extrinsic) =>
-          is7Dot3Chain(block)
-            ? getAssetId(params[1], block)
-            : getAssetId(asCodec(extrinsic?.extrinsic.args[0]), block)
+        async (params, block, extrinsic) => {
+          if (is7Dot3Chain(block)) {
+            return getAssetId(params[1], block);
+          }
+          if (!extrinsic) {
+            throw new Error(
+              'The fundraiser event names its asset only in its extrinsic, and has none'
+            );
+          }
+          return getAssetId(extrinsic.extrinsic.args[0], block);
+        }
       )
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserOffchainFundingEnabled], 1);
 

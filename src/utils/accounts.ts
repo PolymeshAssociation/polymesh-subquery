@@ -16,7 +16,6 @@ import {
 } from '../types';
 import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
-import { asCodec } from './codec';
 import { legacyQuery } from './legacyQuery';
 
 export const serializeAccount = (item: Codec): string | undefined => {
@@ -91,9 +90,7 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
     return { kind: 'multiSigSigner', multiSig: keyRecord.asMultiSigSignerKey.toString() };
   }
 
-  const raw = asCodec(
-    await legacyQuery('identity', 'keyToIdentityIds', [3000, 5_000_002])(address)
-  );
+  const raw = await legacyQuery('identity', 'keyToIdentityIds', [3000, 5_000_002])(address);
 
   if (raw.isEmpty) {
     return undefined;

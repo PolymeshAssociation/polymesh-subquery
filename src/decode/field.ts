@@ -1,7 +1,6 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { asCodec } from '../utils/codec';
 import { FieldNotFound } from './errors';
 
 /** An event's parameters keyed by field name */
@@ -99,7 +98,7 @@ export const field = (event: SubstrateEvent, name: string): Codec => {
     );
   }
 
-  return asCodec(event.event.data[index]);
+  return event.event.data[index];
 };
 
 /**
@@ -116,7 +115,7 @@ export const namedFields = (event: SubstrateEvent): DecodedEvent | undefined => 
   const names = metadataFieldNames(event);
 
   return Object.freeze(
-    Object.fromEntries(names.map((name, index) => [name, asCodec(event.event.data[index])]))
+    Object.fromEntries(names.map((name, index) => [name, event.event.data[index]]))
   );
 };
 
