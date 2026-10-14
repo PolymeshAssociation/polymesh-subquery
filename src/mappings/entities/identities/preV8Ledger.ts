@@ -857,7 +857,9 @@ export const handleProposalRefund = async (event: SubstrateEvent): Promise<void>
     addresses.add(proposal.proposer.value);
   }
 
-  for (const address of addresses) {
-    await syncPipsLock(address, args);
-  }
+  // One at a time, so each account's ledger entries are added in the same order on every run.
+  await [...addresses].reduce(
+    (previous, address) => previous.then(() => syncPipsLock(address, args)),
+    Promise.resolve()
+  );
 };

@@ -343,6 +343,42 @@ beforeEach(() => {
 const entries = (): Row[] => Object.values(db['PolyxEntry'] ?? {});
 const balance = (address: string): Row | undefined => db['AccountBalance']?.[address];
 
+/** Funds ALICE and holds `staking` for `Staking` and 500 for the removed `contracts` pallet. */
+const holdWithUndecodable = async (staking: string): Promise<void> => {
+  await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
+  await handleBalanceHeld(
+    balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: staking })
+  );
+  await handleBalanceHeld(
+    balancesEvent('Held', {
+      reason: { contracts: 'StorageDepositReserve' },
+      who: ALICE,
+      amount: '500',
+    })
+  );
+};
+
+/** The chain's hold list for ALICE: one `Staking` entry (pallet 17) of `amount`. */
+const stubChainHolds = (amount: number): jest.Mock => {
+  const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(amount, { bitLength: 128, isLe: true })));
+  const getStorage = jest
+    .fn()
+    .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
+  (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
+  (globalThis as any).api.rpc = { state: { getStorage } };
+  (globalThis as any).api.registry.metadata = {
+    pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
+  };
+
+  return getStorage;
+};
+
+const clearChainHolds = (): void => {
+  (globalThis as any).api.query = {};
+  delete (globalThis as any).api.rpc;
+  delete (globalThis as any).api.registry.metadata;
+};
+
 describe('Event → pool transition', () => {
   it('Transfer: from/Free → to/Free, one debit + one credit sharing a movementId', async () => {
     await handleBalanceTransfer(
@@ -562,30 +598,10 @@ describe('Event → pool transition', () => {
    * total (1,449,219) as if nothing was held, and rewrote the list with only that.
    */
   it('Held: an account with an undecodable hold takes its holds from the chain', async () => {
-    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
-    await handleBalanceHeld(
-      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1449159' })
-    );
-    await handleBalanceHeld(
-      balancesEvent('Held', {
-        reason: { contracts: 'StorageDepositReserve' },
-        who: ALICE,
-        amount: '500',
-      })
-    );
+    await holdWithUndecodable('1449159');
 
     // the chain after the restake: one `Staking` entry (pallet 17) of 1,449,219
-    const raw = hostBytes(
-      u8aConcat([0x04, 17, 0], bnToU8a(1449219, { bitLength: 128, isLe: true }))
-    );
-    const getStorage = jest
-      .fn()
-      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
-    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
-    (globalThis as any).api.rpc = { state: { getStorage } };
-    (globalThis as any).api.registry.metadata = {
-      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
-    };
+    const getStorage = stubChainHolds(1449219);
 
     const held = balancesEvent('Held', {
       reason: STAKING_HOLD_REASON,
@@ -599,9 +615,7 @@ describe('Event → pool transition', () => {
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1449219' }]);
     // reserved moves as the events say: the chain's `reserved` rose by the whole 1,449,219 too
     expect(balance(ALICE)?.reserved).toBe(BigInt(1449159 + 500 + 1449219));
-    (globalThis as any).api.query = {};
-    delete (globalThis as any).api.rpc;
-    delete (globalThis as any).api.registry.metadata;
+    clearChainHolds();
   });
 
   /**
@@ -610,28 +624,10 @@ describe('Event → pool transition', () => {
    * takes the chain's list.
    */
   it('Held twice in one block: an undecodable hold takes the chain list once, at the last event', async () => {
-    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
-    await handleBalanceHeld(
-      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1000' })
-    );
-    await handleBalanceHeld(
-      balancesEvent('Held', {
-        reason: { contracts: 'StorageDepositReserve' },
-        who: ALICE,
-        amount: '500',
-      })
-    );
+    await holdWithUndecodable('1000');
 
     // the chain after both holds: one `Staking` entry (pallet 17) of 1,150
-    const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(1150, { bitLength: 128, isLe: true })));
-    const getStorage = jest
-      .fn()
-      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
-    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
-    (globalThis as any).api.rpc = { state: { getStorage } };
-    (globalThis as any).api.registry.metadata = {
-      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
-    };
+    const getStorage = stubChainHolds(1150);
 
     const [first, second] = extrinsicEvents(2_000_000, [
       ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '100' }],
@@ -652,9 +648,7 @@ describe('Event → pool transition', () => {
     expect(getStorage).toHaveBeenCalledTimes(1);
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1150' }]);
     expect(balance(ALICE)?.bonded).toBe(BigInt(1150));
-    (globalThis as any).api.query = {};
-    delete (globalThis as any).api.rpc;
-    delete (globalThis as any).api.registry.metadata;
+    clearChainHolds();
   });
 
   /**
@@ -663,27 +657,9 @@ describe('Event → pool transition', () => {
    * itself, rather than wait for an event that never will.
    */
   it('Held then a CurrencyMigrated without a force-withdraw: the Held takes the chain list', async () => {
-    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '3000000' }));
-    await handleBalanceHeld(
-      balancesEvent('Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '1000' })
-    );
-    await handleBalanceHeld(
-      balancesEvent('Held', {
-        reason: { contracts: 'StorageDepositReserve' },
-        who: ALICE,
-        amount: '500',
-      })
-    );
+    await holdWithUndecodable('1000');
 
-    const raw = hostBytes(u8aConcat([0x04, 17, 0], bnToU8a(1150, { bitLength: 128, isLe: true })));
-    const getStorage = jest
-      .fn()
-      .mockResolvedValue({ isNone: false, unwrap: () => ({ toU8a: () => raw }) });
-    (globalThis as any).api.query = { balances: { holds: { key: () => '0xkey' } } };
-    (globalThis as any).api.rpc = { state: { getStorage } };
-    (globalThis as any).api.registry.metadata = {
-      pallets: [{ index: { toNumber: () => 17 }, name: { toString: () => 'Staking' } }],
-    };
+    const getStorage = stubChainHolds(1150);
 
     const [held] = extrinsicEvents(2_100_000, [
       ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '150' }],
@@ -695,9 +671,7 @@ describe('Event → pool transition', () => {
 
     expect(getStorage).toHaveBeenCalledTimes(1);
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1150' }]);
-    (globalThis as any).api.query = {};
-    delete (globalThis as any).api.rpc;
-    delete (globalThis as any).api.registry.metadata;
+    clearChainHolds();
   });
 
   it('Held then a v8 Slashed naming the staker: the Held waits for the slash', async () => {
@@ -3098,6 +3072,24 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     };
   };
 
+  /** The testnet era-2159 slash, waiting to be applied. */
+  const offenderSlashWaiting = () =>
+    deferredSlashes({
+      2159: [
+        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
+      ],
+    });
+
+  /** Applies the slash and expects the reporter unpaid and one anomaly saying `detail`. */
+  const expectUnpaidWithAnomaly = async (detail: string): Promise<void> => {
+    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)).toBeUndefined();
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0].detail).toContain(detail);
+  };
+
   afterEach(() => {
     undecodable = [];
     activeEra = 2159;
@@ -3141,11 +3133,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   const anomalies = (): Row[] => Object.values(db['IndexerAnomaly'] ?? {});
 
   it('credits the reporter the payout the deferred slash names, from the offender', async () => {
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
 
     const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
     await handleStakingSlash(slash);
@@ -3169,11 +3157,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
 
   it('pays the reporters of a slash capped below the deferred figure', async () => {
     // the ledger held 10,000 POLYX of the 12,750 deferred, so the event reports the 10,000
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
 
     const [slash] = slashEvents([[OFFENDER, '10000000000']], '9362500000');
     await handleStakingSlash(slash);
@@ -3197,19 +3181,10 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   });
 
   it("records it, and pays no one, when a deferred slash's era can't be decoded", async () => {
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
     undecodable = [2159];
 
-    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
-    await handleStakingSlash(slash);
-
-    expect(balance(REPORTER)).toBeUndefined();
-    expect(anomalies()).toHaveLength(1);
-    expect(anomalies()[0].detail).toContain('the deferred slashes could not be read');
+    await expectUnpaidWithAnomaly('the deferred slashes could not be read');
   });
 
   it('applies the oldest era when the same validator has more than one slash waiting', async () => {
@@ -3345,11 +3320,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   });
 
   it('records it when the treasury received something other than the rest', async () => {
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
 
     const [slash] = slashEvents([[OFFENDER, '12750000000']], '12750000000');
     await handleStakingSlash(slash);
@@ -3360,11 +3331,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
 
   it("records it, and pays no one, when the parent's state can't be read", async () => {
     // the first block after an upgrade: the parent's state has the old runtime's layout
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
     // ...so the index holds that upgrade's row, and the chain names the runtime that wrote the parent
     db['ChainUpgrade'] = {
       [String(SPEC).padStart(10, '0')]: { specVersionId: SPEC, firstBlockId: '0007751342' },
@@ -3372,20 +3339,11 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     getHeader.mockResolvedValue({ parentHash: '0xgrandparent' });
     getRuntimeVersion.mockResolvedValue({ specVersion: { toNumber: () => 1 } });
 
-    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
-    await handleStakingSlash(slash);
-
-    expect(balance(REPORTER)).toBeUndefined();
-    expect(anomalies()).toHaveLength(1);
-    expect(anomalies()[0].detail).toContain('could not be read');
+    await expectUnpaidWithAnomaly('could not be read');
   });
 
   it('records it, and pays no one, when a deferred slash does not decode', async () => {
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
     const registry = (globalThis as any).api.registry;
     const createType = registry.createType;
     registry.createType = (type: string, input: unknown) => {
@@ -3395,20 +3353,11 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
       throw new Error('Unable to decode Lookup587');
     };
 
-    const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
-    await handleStakingSlash(slash);
-
-    expect(balance(REPORTER)).toBeUndefined();
-    expect(anomalies()).toHaveLength(1);
-    expect(anomalies()[0].detail).toContain('could not be read');
+    await expectUnpaidWithAnomaly('could not be read');
   });
 
   it('fails the block when the deferred slashes cannot be fetched', async () => {
-    deferredSlashes({
-      2159: [
-        { validator: OFFENDER, own: '12750000000', reporters: [REPORTER], payout: '637500000' },
-      ],
-    });
+    offenderSlashWaiting();
     queryStorageAt.mockReset().mockRejectedValue(new Error('WebSocket is not connected'));
 
     const [slash] = slashEvents([[OFFENDER, '12750000000']], '12112500000');
