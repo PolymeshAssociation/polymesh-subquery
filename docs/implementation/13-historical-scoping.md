@@ -1,128 +1,79 @@
 # 13 — Historical scoping
 
-Which entities actually need historical state tracking, and what it costs the ones that do not. Revisits [D3](../README.md) — *"historical state must stay enabled"* — which is currently a blanket decision taken without per-entity measurement.
+What historical mode costs, which of its indexes anything reads, and what the schema does about the ones nothing reads. Historical mode stays on: SubQuery indexes unfinalized blocks only with it, and rewinds a reorg by row version.
 
 **Depends on:** [09](./09-infrastructure.md). Overlaps [11](./11-throughput.md), which measures slow blocks; this measures the standing cost historical mode imposes on *every* block.
 
-**Status:** for review. Nothing here is implemented.
+**Status:** implemented, in `schema.graphql` and `db/compat.sql`.
 
 ---
 
 ## Measurement basis
 
-All figures from a testnet genesis sync on 2026-09-10, captured at block **5.2M of 25.8M (~20%)**, `historical: 'height'`, 16 workers, against a non-rate-limited archive node.
+Full genesis syncs run to the head of each chain, with `historical: 'height'`, then a measurement of every index with `pg_stat_user_indexes`:
 
-Two caveats that bound every conclusion below:
+| | Testnet (26.22M blocks) | Mainnet (25.90M blocks) |
+|---|---|---|
+| Heap / all indexes | 4.5 GB / 10.1 GB | 11 GB / 25.4 GB |
+| GiST indexes | 8.48 GB (402) | 21.43 GB (402) |
+| GiST read by consumer queries | 2.54 GB | 6.22 GB |
+| GiST read only by the indexer | 1.55 GB | 3.99 GB |
+| **GiST read by neither** | **4.39 GB (242)** | **11.21 GB (264)** |
 
-1. **Partial sync.** Ratios are stable across the run so far but the v6/v8 eras are not yet represented. Re-measure before acting.
-2. **The scan counts are the *indexer's* access pattern, not consumers'.** `pg_stat_user_indexes` here reflects what the handlers query during indexing. The SDK and portal (D2) may lean on historical lookups the indexer never makes. **This is the single biggest gap in this analysis** — §13.4 states what would close it.
+The consumer queries are the ones the SDK's and the portal's own query builders generate, run with realistic arguments against a database whose counters had just been reset, and diffed against a five-minute baseline of the indexer alone. Only the indexes those queries touch count as read.
+
+Two things bound the result. The consumer set is those two clients' queries; a third consumer that filters on a field nothing here filters on gets a sequential scan where it had a GiST. And the figures predate the move of an event's references onto `Event.refs`, so the separate reference table in them no longer exists; the list below is built against the current schema.
 
 ---
 
 ## The constraint that shapes every option
 
-**SubQuery's `--historical` is global, not per-entity.** There is no `@entity(historical: false)` directive and no per-model opt-out. Every `@entity` type gets `_block_range` and the GiST indexes that go with it.
+**SubQuery's `--historical` is global, not per-entity.** There is no `@entity(historical: false)` directive and no per-model opt-out. Every `@entity` type gets `_block_range`, and every declared `@index`, every relation and every `@compositeIndexes` entry becomes a composite GiST `(field, _block_range)`. GiST is 86% of the index space and costs far more to maintain on insert than a btree.
 
-So "scope historical to the entities that need it" is **not directly expressible**. The options are narrower than the framing suggests, and §13.3 sets them out honestly.
+So "scope historical to the entities that need it" is **not expressible**. What can be done is to stop building the GiST indexes nothing reads.
 
 ---
 
-## 13.1 Two thirds of the database is append-only **[V]**
+## 13.1 Most of the database is append-only **[V]**
 
-Classifying by whether a table has *ever* taken an `UPDATE`:
-
-| Class | Tables | Total size | Inserts |
-|---|---|---|---|
-| **Append-only** (0 updates) | 24 | **1,067 MB** | 749,536 |
-| Mutable | 31 | 325 MB | 332,547 |
-
-**76% of a 1,406 MB database is data that is written once and never changes.** The largest append-only tables:
-
-| Table | Size | Updates |
-|---|---|---|
-| `events` | 428 MB | 0 |
-| `polyx_entries` | 371 MB | 0 |
-| `staking_events` | 101 MB | 0 |
-| `extrinsics` | 88 MB | 0 |
-| `asset_transactions` | 21 MB | 0 |
-| `blocks` | 20 MB | 0 |
-| `instruction_events` | 14 MB | 0 |
-| `instruction_parties` | 11 MB | 0 |
-
-The genuinely mutable entities, by update rate:
-
-| Table | Updates / inserts | Interpretation |
-|---|---|---|
-| `account_balances` | **79.3%** | running balance — mutates constantly |
-| `asset_holders` | 67.9% | holder totals |
-| `legs` | 51.2% | settlement leg status |
-| `assets` | 41.7% | asset attributes |
-| `instructions` | 36.9% | instruction status |
-| `stat_types` | 21.3% | |
-| `authorizations` | 17.7% | status transitions |
-| `compliances` | 13.2% | |
-| `accounts` | 9.8% | |
-| `identity_keys` | 4.3% | see §13.2 |
-| `claims`, `portfolios`, `identities`, `ticker_reservations`, `instruction_affirmations` | <3% | |
+Classifying by whether a table has *ever* taken an `UPDATE`, most of the data is written once and never changes: `events`, `polyx_entries`, `staking_events`, `extrinsics`, `asset_transactions`, `blocks`, `instruction_events` and `instruction_parties` are the largest. The genuinely mutable entities are few, and `account_balances` and `staking_positions` dominate them.
 
 ## 13.2 The cost is **not** row versioning — it is GiST index maintenance **[V]**
 
-The intuition that historical mode "doubles writes" is **wrong for append-only entities**, and this is the most important correction in this document.
+Historical mode closes a row (`UPDATE _block_range`) and inserts a new version only *when an existing id is saved again*. An append-only entity never saves the same id twice, so there is nothing to close and no write amplification. What it pays for is the `(column, _block_range)` GiST indexes, maintained on every insert.
 
-Historical mode closes a row (`UPDATE _block_range`) and inserts a new version *when an existing id is saved again*. An append-only entity never saves the same id twice — every `save()` is a fresh id, so there is nothing to close. Confirmed: all 24 append-only tables show `n_tup_upd = 0`. **No write amplification occurs there.**
+At full size the unread ones concentrate in a few tables. On mainnet:
 
-What historical mode *does* cost them is the `(column, _block_range)` **GiST indexes**, maintained on every insert. GiST maintenance is materially more expensive than btree.
+| Table | GiST read by nothing |
+|---|---|
+| `staking_positions` | 3.1 GB |
+| `polyx_entries` | 2.5 GB |
+| `account_balances` | 1.6 GB |
+| `events` | 1.56 GB |
+| `staking_events` | 1.28 GB |
 
-| Table | GiST indexes | GiST size | Heap size | GiST scans | btree scans |
-|---|---|---|---|---|---|
-| `polyx_entries` | 10 | **267 MB** | 83 MB | **99,675** | 231,667 |
-| `events` | 8 | **168 MB** | 205 MB | **206** | 295,872 |
-| `staking_events` | 6 | 62 MB | 32 MB | **49** | 98,637 |
-| `extrinsics` | 10 | 27 MB | 23 MB | **209** | 25,484 |
-| `asset_transactions` | 9 | 14 MB | 6 MB | **285** | 12,347 |
-| `blocks` | 3 | 9 MB | 9 MB | **50** | 23,413 |
+The largest single ones are the relation indexes `account_balances (identity_id)` and `(account_id)`, four `staking_positions` relations (`identity`, `stash`, `controller`, `rewardDestinationAccount`), `polyx_entries (account_id, date)`, and six `events` indexes of about 400 MB each: `extrinsic`, `extrinsicIdx`, `specVersion`, `eventId`, `eventIdx` and `block`.
 
-Two distinct findings, and they point opposite ways:
+## 13.3 What reads what
 
-- **`polyx_entries` earns its GiST indexes** — 99,675 scans. The ledger handlers genuinely query by account across block ranges. Leave it alone.
-- **`events`, `staking_events`, `extrinsics`, `asset_transactions`, `blocks` do not.** Roughly **280 MB of GiST indexes serving under 800 scans between them**, while their btree counterparts serve 450,000+. They are maintained on every insert and almost never read *by the indexer*.
+- **The indexer** reads rows by `id`. Every save of a historical entity closes the current row with `WHERE id = $1 AND _block_range @> $2`, which is why `account_balances` and `staking_positions` carry an `(id, _block_range)` GiST (see `db/compat.sql`): for busy ids it took the close-out from 157 ms to 0.8 ms. Everything else it reads goes through `getByFields` / `getAllByFields`, whose fields SubQuery requires to be indexed. Rewind filters on `lower(_block_range)` and `id`, never on one of the dropped indexes.
+- **The SDK and the portal** read a small set: `asset_transactions` by identity, portfolio and asset, `polyx_entries` by account and identity, `staking_events` by stash and identity, `events` by module (and by event within a module), `extrinsics` by address, call and hash, `Event.refs` through its GIN, and the small tables (legs, instructions, multisigs, authorizations, claims, holders, agents, portfolios).
+- **Everything else** is a GiST maintained on every insert for a query nobody sends.
 
-`polyx_entries` also carries 267 MB of index on an 83 MB heap — a **3.2:1 index-to-heap ratio**. Even where the indexes are used, that ratio is worth a look.
+## 13.4 What was done
 
-## 13.3 Options
+1. **Scalar `@index` directives and `@compositeIndexes` entries no handler or consumer uses are removed from `schema.graphql`**, so a fresh database never builds them: 23 scalar fields and five composites, among them `Event.eventIdx`, `.extrinsicIdx`, `.specVersionId`, `.eventId`, `PolyxEntry.movementId`, `.blockId`, and the `(account, date)`, `(account, kind)` and `(kind, date)` composites. The `(account, kind)` one is read only by the `reconcile-polyx` validation script, which can afford the scan.
+2. **Relation indexes cannot be removed from the schema** without turning a relation into a plain id and losing its GraphQL navigation, so `db/compat.sql` drops them. A plain drop would not last: **the node runs `CREATE INDEX IF NOT EXISTS` for every declared index on every start**, because it treats each start as a fresh schema migration, so each restart would rebuild what was dropped. The drop therefore leaves an empty index of the same name (`WHERE false`, which no query can choose); the node finds the name taken and skips it.
+3. **Indexes the same pass deliberately keeps**, besides what the indexer and the consumers read: the `unique` ones (`Block.hash`, `Account.address`, `Identity.did`, `Era.eraIndex`, ...), which are lookup keys on large tables; the EVM lookup keys (`ethAddress`, `ethTxHash`, `evmAddress`); and anything scanned at least a thousand times in a full sync. Indexes under 1 MB on both chains are left alone: they cost nothing worth a stand-in. The small-table indexes that were trimmed for showing zero scans (`claims.issuer_id`, for one) were unused only because the planner prefers a sequential scan at today's sizes; re-measure them if those tables grow.
 
-Given the global-flag constraint, these are the real choices.
+The drop matches on table and column list while the index is still a GiST, so it is idempotent and harmless on a database that never had the index, and it runs on every start with the rest of `db/compat.sql`.
 
-**A. Do nothing.** D3 stands. Cost is ~280 MB of unused GiST indexes and their insert-time maintenance, growing linearly with the chain.
+A test (`tests/unit/storeQueryIndexes.test.ts`) fails if a drop takes the index a store query filters on, or one of the measured consumer indexes, or if a drop and the schema disagree about whether the node would recreate it.
 
-**B. Drop the unused GiST indexes post-schema-creation.** `db/compat.sql` already runs DDL after the node builds the schema ([`docker-entrypoint.sh`](../../docker/docker-entrypoint.sh)), so the mechanism exists. Drop `(col, _block_range)` GiST indexes on append-only entities where a btree serves the same lookups. Keeps historical semantics — `_block_range` is still written, so historical *queries* still work, just without index support on those paths.
-  - **Risk:** a consumer historical query against `events` would go from index scan to sequential scan. Needs §13.4 first.
+## 13.5 Effect
 
-**C. Reduce declared indexes on append-only entities.** Several carry more `@index` directives than the indexer uses. Fewer declared indexes means fewer GiST indexes generated. Narrower than B and expressible directly in `schema.graphql`.
+At full size, the entries in `db/compat.sql` free about 12 GB of GiST on mainnet and 4.9 GB on testnet, against 21.4 GB and 8.5 GB of GiST at the start, and spare every insert their maintenance. Historical queries still work: `_block_range` is still written, and the queries that filter on a dropped column now scan where they used to probe an index.
 
-**D. Split the schema.** Move append-only entities to a second SubQuery project with historical off. Genuinely removes the cost; costs a second deployment, a second database schema, and cross-schema joins. **Not recommended** — the operational cost outweighs 280 MB.
+**Not done:** splitting the append-only entities into a second project with historical off. It would remove the cost entirely, at the price of a second deployment and a second schema, and the trim above takes most of the saving for none of that.
 
-Recommended sequence: **§13.4 → C → B**, measuring at each step.
-
-## 13.4 What must be answered first
-
-**Do consumers issue historical queries, and against which entities?**
-
-This document measures the indexer's access pattern only. Before dropping any index:
-
-1. Grep the SDK and portal connections (D2, `reference/consumer-queries.md`) for `blockHeight:` / historical query arguments.
-2. Determine whether any consumer asks for `events`, `extrinsics`, `blocks` or `staking_events` *as of a past block*. For append-only entities the answer should be no by construction — a row that never changes reads the same at every height — but this needs confirming rather than assuming.
-3. If no consumer queries append-only entities historically, option B is safe and its GiST indexes are dead weight for both indexer and consumer.
-
-**Secondary question:** `IdentityKey` models its own validity window (`validFromBlock` / `validToBlock`, [04](./04-identity-keys.md)) *and* carries `_block_range`. `ticker_external_agent_histories` is likewise an explicit history table. That is two independent temporal models on the same rows. Whether the domain-level window makes the `_block_range` one redundant for these entities is worth deciding explicitly — it is currently accidental rather than chosen.
-
----
-
-## Summary
-
-- 76% of the database is append-only **[V]**
-- Historical mode does **not** amplify writes there — no row-closing occurs **[V]**
-- It does cost ~280 MB of GiST indexes that the indexer reads fewer than 800 times **[V]**
-- `polyx_entries` is the exception: 99,675 GiST scans, genuinely load-bearing **[V]**
-- Per-entity opt-out is not available in SubQuery; index-level pruning is the actionable lever
-- **Consumer query patterns must be established before dropping anything**
+**To re-measure** after consumers' real migrated queries exist: reset `pg_stat_user_indexes`, run them, and compare against `CONSUMER_USED` in the test.
