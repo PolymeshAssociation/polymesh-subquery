@@ -108,14 +108,27 @@ export const recordAnomaly = async ({
  *
  * Without a `block` (a seed run) nothing can be recorded, so the error propagates too.
  */
-export const readOrAnomaly = async <T>(
-  context: Pick<AnomalyInput, 'eventIdx' | 'moduleId' | 'eventId'> & {
-    block: SubstrateBlock | undefined;
-  },
+type ReadContext = Pick<AnomalyInput, 'eventIdx' | 'moduleId' | 'eventId'> & {
+  block: SubstrateBlock | undefined;
+};
+
+export async function readOrAnomaly<T>(
+  context: ReadContext,
+  consequence: string,
+  run: () => Promise<T>,
+  fallback: T
+): Promise<T>;
+export async function readOrAnomaly<T>(
+  context: ReadContext,
+  consequence: string,
+  run: () => Promise<T>
+): Promise<T | undefined>;
+export async function readOrAnomaly<T>(
+  context: ReadContext,
   consequence: string,
   run: () => Promise<T>,
   fallback?: T
-): Promise<T | undefined> => {
+): Promise<T | undefined> {
   try {
     return await run();
   } catch (error) {
@@ -136,4 +149,4 @@ export const readOrAnomaly = async <T>(
 
     return fallback;
   }
-};
+}
