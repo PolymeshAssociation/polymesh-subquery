@@ -8,8 +8,11 @@ import { Codec } from '@polkadot/types/types';
  * as an `undefined` several calls later.
  */
 
-const describe = (value: unknown): string =>
-  value === null || value === undefined ? String(value) : value.constructor?.name ?? typeof value;
+const describe = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  return value.constructor?.name ?? typeof value;
+};
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
