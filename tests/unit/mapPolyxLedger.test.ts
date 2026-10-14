@@ -2247,6 +2247,7 @@ describe('the identity registration grant', () => {
 
   afterEach(() => {
     (globalThis as any).api.consts = undefined;
+    (globalThis as any).api.query = {};
   });
 
   it('pre-v8: credits the grant to a primary key that already existed', async () => {
@@ -2267,7 +2268,7 @@ describe('the identity registration grant', () => {
 
   it('pre-v8: does not credit a child identity, which gets no grant', async () => {
     initialPolyxIs(GRANT);
-    const parentDid = jest.fn().mockResolvedValue({ isSome: true });
+    const parentDid = jest.fn().mockResolvedValue({ isSome: true, unwrap: () => mockCodec(DID) });
     (globalThis as any).api.query = { identity: { parentDid } };
     const [didCreated] = v7ExtrinsicEvents(3_100_150, [
       ['identity', 'DidCreated', [DID, ALICE, '[]']],

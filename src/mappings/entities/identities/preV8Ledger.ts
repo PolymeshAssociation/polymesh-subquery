@@ -28,6 +28,8 @@ import {
   resolveLegacyRewardDestination,
 } from '../../../utils/staking';
 import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
+import { optionOf } from '../../../utils/codec';
+import { findStorage } from '../../../utils/legacyQuery';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import {
@@ -585,9 +587,7 @@ export const burnDisbursedReserveShare = async (
  */
 const initialPolyx = (): bigint | undefined => {
   try {
-    const raw = (
-      api.consts as unknown as Record<string, Record<string, Codec | undefined> | undefined>
-    ).identity?.initialPOLYX;
+    const raw = api.consts.identity?.initialPOLYX;
 
     return raw === undefined || raw === null ? undefined : BigInt(raw.toString());
   } catch {
@@ -663,15 +663,14 @@ export const handleIdentityGrant = async (event: SubstrateEvent): Promise<void> 
 
 /** `identity.parentDid(did)` is set — `false` on a runtime without it (before v6.1). */
 const isChildIdentity = async (did: string): Promise<boolean> => {
-  // Not in the v8 type augmentation (the storage was dropped with child identities there).
-  const identity = (
-    api.query as unknown as Record<
-      string,
-      { parentDid?: (id: string) => Promise<{ isSome?: boolean }> } | undefined
-    >
-  ).identity;
+  // the storage was dropped with child identities, so it is looked up by name
+  const parentDid = findStorage('identity', 'parentDid');
 
-  return (await identity?.parentDid?.(did))?.isSome === true;
+  if (!parentDid) {
+    return false;
+  }
+
+  return optionOf(await parentDid(did), 'identity.parentDid') !== undefined;
 };
 
 /**

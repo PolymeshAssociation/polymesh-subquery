@@ -12,6 +12,7 @@ import {
 import { extractArgs } from '../common';
 import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
 import { assetOfCollection } from '../assets/mapNfts';
+import { asCodec } from '../../../utils/codec';
 
 /**
  * Subscribes to the events related to external agents
@@ -357,7 +358,7 @@ class ExternalAgentEventsManager {
         async (params, block, extrinsic) =>
           is7Dot3Chain(block)
             ? getAssetId(params[1], block)
-            : getAssetId(extrinsic?.extrinsic.args[0] as unknown as Codec, block)
+            : getAssetId(asCodec(extrinsic?.extrinsic.args[0]), block)
       )
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserOffchainFundingEnabled], 1);
 

@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { argumentNames, metadataTypeNames } from '../../../decode';
-import { ArgumentsJson, Event } from '../../../types';
-import { encodeArgs } from '../../args/encode';
+import { Event } from '../../../types';
+import { argumentsJson, encodeArgs } from '../../args/encode';
 import { toEventRefs } from '../../args/refs';
 import { extractArgs } from '../common';
 
@@ -31,7 +31,7 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<Event> 
     moduleId,
     moduleIdText,
     eventIdText,
-    args: args as unknown as ArgumentsJson,
+    args: argumentsJson(args),
     refs: await toEventRefs(refs, block.specVersion),
     extrinsicId,
   });

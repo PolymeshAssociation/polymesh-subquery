@@ -1,4 +1,3 @@
-import { GenericCall } from '@polkadot/types';
 import { ethereumEncode } from '@polkadot/util-crypto';
 import { SubstrateExtrinsic } from '@subql/types';
 import { CanonicalValue, callArgs } from '../mappings/args/encode';
@@ -61,10 +60,7 @@ const resolveDispatchedCall = (
        * The calldata is passed as hex rather than bytes. The registry belongs to the host realm,
        * so a `Uint8Array` built in the sandbox would not pass its own `instanceof` check
        */
-      const call = extrinsic.extrinsic.registry.createType(
-        'Call',
-        tx.data
-      ) as unknown as GenericCall;
+      const call = extrinsic.extrinsic.registry.createType('Call', tx.data);
 
       return {
         callKind: EvmCallKindEnum.substrateCall,

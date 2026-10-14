@@ -574,7 +574,7 @@ export const resolveMetadataKey = async (
   if (walkCache?.id !== id) {
     const events = extrinsicEvents(event, extrinsic.idx);
     const state: WalkState = { events, i: 0, keys: new Map() };
-    const node = await toCallNode(extrinsic.extrinsic.method as unknown as RawCall);
+    const node = await toCallNode(extrinsic.extrinsic.method);
     walkCache = { id, keys: walk(node, state, events.length) ? state.keys : undefined };
   }
 

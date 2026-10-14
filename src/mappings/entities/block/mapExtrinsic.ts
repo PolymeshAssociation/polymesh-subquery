@@ -1,6 +1,5 @@
-import { GenericCall } from '@polkadot/types';
 import { SubstrateExtrinsic } from '@subql/types';
-import { ArgumentsJson, CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
+import { CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
 import {
   blockTime,
   camelToSnakeCase,
@@ -11,7 +10,7 @@ import {
   ResolvedEthTransact,
   resolveEthTransact,
 } from '../../../utils';
-import { callArgs } from '../../args/encode';
+import { argumentsJson, callArgs } from '../../args/encode';
 import { toEnum } from '../common';
 import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
@@ -22,7 +21,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
-  const args = callArgs(extrinsic.extrinsic.method as unknown as GenericCall);
+  const args = callArgs(extrinsic.extrinsic.method);
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
 
@@ -42,7 +41,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
       block: extrinsic.block,
     }),
     callIdText: callId,
-    args: args as unknown as ArgumentsJson,
+    args: argumentsJson(args),
     success: extrinsic.success ? 1 : 0,
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
@@ -72,7 +71,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
       block: extrinsic.block,
     });
     created.callIdText = resolved.callId;
-    created.args = resolved.args as unknown as ArgumentsJson;
+    created.args = argumentsJson(resolved.args);
     created.nonce = Number(resolved.tx.nonce);
     created.success = extrinsic.success && !resolved.reverted ? 1 : 0;
   }

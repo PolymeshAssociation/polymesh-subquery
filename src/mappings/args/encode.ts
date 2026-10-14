@@ -1,6 +1,7 @@
-import { GenericCall } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { hexToU8a, stringCamelCase, u8aToHex } from '@polkadot/util';
+import { ArgumentsJson } from '../../types';
+import { asCodec } from '../../utils/codec';
 import { codecBytes } from '../../utils/bytes';
 import { paddedText, textOrHex } from '../../utils/text';
 import { isType, typeNameOf } from './typeName';
@@ -11,6 +12,14 @@ export type CanonicalValue =
   | null
   | CanonicalValue[]
   | { [key: string]: CanonicalValue };
+
+/**
+ * Arguments in the canonical encoding as the `ArgumentsJson` the models declare. The generator can
+ * only express a free-form JSON column as `{ _?: string }`, which no keyed object is assignable to;
+ * the column stores whatever JSON it is given.
+ */
+export const argumentsJson = (args: Record<string, CanonicalValue>): ArgumentsJson =>
+  args as unknown as ArgumentsJson;
 
 export interface RawReference {
   kind: 'identity' | 'account' | 'asset' | 'ticker' | 'portfolio';
@@ -328,10 +337,20 @@ export const encodeArgs = (
   return { args, refs };
 };
 
+/**
+ * What `callArgs` reads of a call: its arguments and the metadata naming them. Taken structurally
+ * because a `Call` and a `GenericCall` are the same object, and the arguments' element type is
+ * declared by two copies of the codec package that the webpack build keeps apart.
+ */
+export interface CallSource {
+  args: ArrayLike<unknown>;
+  meta: { args: { name: { toString(): string }; type: { toString(): string } }[] };
+}
+
 /** A call's arguments in the canonical encoding, keyed by the metadata's argument names. */
-export const callArgs = (call: GenericCall): Record<string, CanonicalValue> =>
+export const callArgs = (call: CallSource): Record<string, CanonicalValue> =>
   encodeArgs(
-    call.args,
+    Array.from(call.args, asCodec),
     call.meta.args.map(({ name }) => stringCamelCase(name.toString())),
     call.meta.args.map(({ type }) => type.toString())
   ).args;
