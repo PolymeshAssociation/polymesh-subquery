@@ -258,7 +258,7 @@ const rangesOf = (
 const main = async () => {
   const chains = process.argv
     .slice(2)
-    .map(arg => arg.split(/=(.*)/s))
+    .map(arg => arg.split(/=([\s\S]*)/))
     .filter(([name, url]) => name && url);
   if (chains.length === 0) {
     console.error('usage: survey-event-history.ts <chain>=<archive rpc> …');
