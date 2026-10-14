@@ -6,8 +6,13 @@
  * nothing else catches it before a sync does. This reads each call's entity and field names from
  * the source and checks them against the indexes SubQuery derives from `schema.graphql`, with the
  * node's own rule: a field counts if any index on the model lists it.
+ *
+ * The same queries also guard the GiST trim in `db/compat.sql`: that file drops indexes by table
+ * and column list, and a drop must never take the index one of these queries, or one of the
+ * SDK's and portal's queries, runs on.
  */
 import { buildSchemaFromString, getAllEntitiesRelations } from '@subql/utils';
+import { Utils } from '@subql/x-sequelize';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import * as ts from 'typescript';
@@ -164,5 +169,155 @@ describe('store queries', () => {
     );
 
     expect(unindexed).toEqual([]);
+  });
+});
+
+/**
+ * The GiST indexes the SDK's and portal's queries were measured to use, as `[table, columns]`
+ * (columns in the order Postgres lists them, `_block_range` left off). None may be dropped.
+ */
+const CONSUMER_USED: Array<[string, string]> = [
+  ['asset_agent_actions', 'asset_id'],
+  ['asset_agent_histories', 'asset_id'],
+  ['asset_agents', 'asset_id'],
+  ['asset_agents', 'asset_id, identity_id'],
+  ['asset_holders', 'identity_id'],
+  ['asset_transactions', 'asset_id'],
+  ['asset_transactions', 'from_identity_id'],
+  ['asset_transactions', 'from_portfolio_id'],
+  ['asset_transactions', 'to_identity_id'],
+  ['asset_transactions', 'to_portfolio_id'],
+  ['assets', 'funding_round'],
+  ['authorizations', 'to_id'],
+  ['blocks', 'block_id'],
+  ['claims', 'target_id'],
+  ['custom_claim_types', 'identity_id'],
+  ['custom_claim_types', 'updated_event_id'],
+  ['distribution_payments', 'created_event_id'],
+  ['distribution_payments', 'distribution_id'],
+  ['distribution_payments', 'target_id'],
+  ['distributions', 'asset_id'],
+  ['events', 'event_id, module_id'],
+  ['events', 'module_id'],
+  ['extrinsics', 'address'],
+  ['extrinsics', 'call_id'],
+  ['extrinsics', 'extrinsic_hash'],
+  ['instruction_affirmations', 'instruction_id'],
+  ['instruction_events', 'instruction_id'],
+  ['instruction_parties', 'identity'],
+  ['instructions', 'venue_id'],
+  ['investments', 'updated_event_id'],
+  ['legs', 'asset_id'],
+  ['legs', 'from'],
+  ['legs', 'instruction_id'],
+  ['legs', 'to'],
+  ['multi_sig_proposal_votes', 'proposal_id'],
+  ['multi_sig_proposals', 'multisig_id'],
+  ['multi_sig_proposals', 'proposal_id'],
+  ['nft_holders', 'asset_id'],
+  ['nft_holders', 'identity_id'],
+  ['nft_holders', 'updated_event_id'],
+  ['off_chain_receipts', 'updated_event_id'],
+  ['polyx_entries', 'account_id'],
+  ['polyx_entries', 'identity_id'],
+  ['portfolios', 'identity_id'],
+  ['staking_events', 'identity_id'],
+  ['staking_events', 'stash_account'],
+  ['trusted_claim_issuers', 'asset_id'],
+  ['trusted_claim_issuers', 'issuer_id'],
+];
+
+interface Trim {
+  table: string;
+  columns: string[];
+  /** replaced by an empty index of the same name, because the schema still declares it */
+  standIn: boolean;
+}
+
+const trims = (): Trim[] => {
+  const sql = readFileSync(join(ROOT, 'db', 'compat.sql'), 'utf8');
+  const block = sql.slice(sql.indexOf('FROM (VALUES'), sql.indexOf(') AS t(tbl, cols, standin)'));
+
+  return [...block.matchAll(/\('(\w+)', '([\w, ]+)', (true|false)\)/g)].map(match => ({
+    table: match[1],
+    columns: match[2].split(', '),
+    standIn: match[3] === 'true',
+  }));
+};
+
+describe('GiST trim in db/compat.sql', () => {
+  const { models } = getAllEntitiesRelations(
+    buildSchemaFromString(readFileSync(join(ROOT, 'schema.graphql'), 'utf8'))
+  );
+  const column = (field: string): string => Utils.underscoredIf(field, true);
+  const key = (columns: string[]): string => [...columns].sort().join(',');
+
+  /** Each model's declared indexes as column lists, keyed by table name. */
+  const declared = new Map(
+    models.map(model => [
+      Utils.underscoredIf(Utils.pluralize(model.name), true),
+      model.indexes.map(index => index.fields.map(field => column(String(field)))),
+    ])
+  );
+  const trimmed = trims();
+  const dropped = (table: string, columns: string[]): boolean =>
+    trimmed.some(trim => trim.table === table && key(trim.columns) === key(columns));
+
+  const queries = sourceFiles(join(ROOT, 'src'))
+    .filter(path => !FORWARDERS.has(relative(ROOT, path)))
+    .flatMap(queriesIn);
+
+  it('reads the entries it checks', () => {
+    expect(trimmed.length).toBeGreaterThan(50);
+    expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
+  });
+
+  it('keeps an index leading with every field a store query filters on', () => {
+    const lost = queries.flatMap(({ entity, fields, at }) => {
+      if (!entity) {
+        return [];
+      }
+      const table = Utils.underscoredIf(Utils.pluralize(entity), true);
+      return fields
+        .filter(
+          field =>
+            !(declared.get(table) ?? []).some(
+              columns => columns[0] === column(field) && !dropped(table, columns)
+            )
+        )
+        .map(field => `${at}: ${entity}.${field}`);
+    });
+
+    expect(lost).toEqual([]);
+  });
+
+  it('keeps every index the SDK and portal queries use', () => {
+    const lost = CONSUMER_USED.filter(([table, columns]) =>
+      dropped(table, columns.split(', '))
+    ).map(([table, columns]) => `${table} (${columns})`);
+
+    expect(lost).toEqual([]);
+  });
+
+  it('keeps the id index of the entities rewritten many times', () => {
+    expect(trimmed.filter(trim => key(trim.columns) === 'id')).toEqual([]);
+  });
+
+  it('replaces exactly the indexes the schema still declares, and no others', () => {
+    const wrong = trimmed
+      .filter(trim => {
+        const isDeclared = (declared.get(trim.table) ?? []).some(
+          columns => key(columns) === key(trim.columns)
+        );
+        return isDeclared !== trim.standIn;
+      })
+      .map(trim => `${trim.table} (${trim.columns.join(', ')}) standin=${trim.standIn}`);
+
+    expect(wrong).toEqual([]);
+  });
+
+  it('drops the polyx_entries (account_id, kind) index that only the validation script reads', () => {
+    expect(dropped('polyx_entries', ['account_id', 'kind'])).toBe(true);
+    expect(declared.get('polyx_entries')).not.toContainEqual(['account_id', 'kind']);
   });
 });

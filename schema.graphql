@@ -1794,7 +1794,7 @@ type Block @entity {
   blockId: Int! @index(unique: true)
   parentId: Int!
   hash: String! @index(unique: true) # a hash value
-  parentHash: String! @index(unique: false)
+  parentHash: String!
   stateRoot: String!
   extrinsicsRoot: String!
   countExtrinsics: Int!
@@ -1870,19 +1870,19 @@ Usually extrinsics are signed. When the block author includes data, e.g. `timest
 type Extrinsic @entity {
   id: ID!
   block: Block! @index(unique: false)
-  extrinsicIdx: Int! @index(unique: false)
+  extrinsicIdx: Int!
   extrinsicLength: Int!
-  signed: Int! @index(unique: false)
+  signed: Int!
   "`signedbyAddress` is now deprecated in favour of `signed`"
   signedbyAddress: Int! @deprecated(reason: "use `signed` instead.")
   address: String @index(unique: false)
-  moduleId: ModuleIdEnum! @index
+  moduleId: ModuleIdEnum!
   moduleIdText: String!
   callId: CallIdEnum! @index
   callIdText: String!
   "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`. Not indexed: an `args` filter must come with a `moduleId` and `callId` filter, which narrows the scan to that call's rows"
   args: ArgumentsJson!
-  success: Int! @index(unique: false)
+  success: Int!
   nonce: Int
   extrinsicHash: String @index(unique: false)
   """
@@ -1975,12 +1975,12 @@ Information of a chain state transition on. For most use cases a more specific e
 type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
   id: ID!
   block: Block! @index(unique: false)
-  eventIdx: Int! @index(unique: false)
-  extrinsicIdx: Int @index(unique: false)
-  specVersionId: Int! @index(unique: false)
+  eventIdx: Int!
+  extrinsicIdx: Int
+  specVersionId: Int!
   moduleId: ModuleIdEnum! @index
   moduleIdText: String!
-  eventId: EventIdEnum! @index
+  eventId: EventIdEnum!
   eventIdText: String!
   "The event's arguments, keyed by field name, and encoded as described on `ArgumentsJson`. An event whose fields have no known names is keyed by position (`\"0\"`, `\"1\"`, …). Filter with `contains`, for example `{ contains: { amount: \"5\" } }`. Not indexed: an `args` filter must come with a `moduleId` and `eventId` filter, which narrows the scan to that event's rows; to find events involving an identity, account, asset or portfolio, use `refs`, which is indexed"
   args: ArgumentsJson!
@@ -2153,7 +2153,7 @@ type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
   "The address of the identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`"
-  primaryAccount: String! @index(unique: false)
+  primaryAccount: String!
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
   updatedEvent: Event!
@@ -2199,7 +2199,7 @@ Replaces `Identity.primaryAccount`/`secondaryAccounts` as the source of truth fo
 and subsumes `AccountHistory`, which had untyped columns and no validity interval.
 """
 type IdentityKey @entity
-  @compositeIndexes(fields: [["identity", "role"], ["account", "validToBlock"]]) {
+  @compositeIndexes(fields: [["account", "validToBlock"]]) {
   "`identity/address/validFromBlockId/paddedEventIdx` — the event index disambiguates two intervals opened for one identity in the same block"
   id: ID!
   identity: Identity! @index
@@ -2245,7 +2245,7 @@ type StakingEvent @entity {
   nominatedValidators: [String!]
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
-  eraIndex: Int @index
+  eraIndex: Int
   "the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
   validator: Validator @index
   position: StakingPosition
@@ -2297,7 +2297,7 @@ untouched, and rows for newly-added targets are created
 """
 type Nomination
   @entity
-  @compositeIndexes(fields: [["position", "eraIndex"], ["position", "validToEvent"]]) {
+  @compositeIndexes(fields: [["position", "validToEvent"]]) {
   id: ID! # stash/validator/blockEventId — the event that opened this nomination
   position: StakingPosition! @index
   validator: Account! @index
@@ -2404,7 +2404,7 @@ type AssetAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
-  palletName: String! @index(unique: false)
+  palletName: String!
   "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   updatedEvent: Event!
@@ -2503,7 +2503,7 @@ type Authorization @entity {
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
   toId: String @index(unique: false)
-  toKey: String @index(unique: false)
+  toKey: String
   data: String
   "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date @index(unique: false)
@@ -2734,7 +2734,7 @@ type Leg @entity {
   legType: LegTypeEnum!
   "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
   assetId: String! @index(unique: false)
-  ticker: String @index(unique: false)
+  ticker: String
   from: String! @index(unique: false)
   fromAccount: String
   "`fromPortfolio` is null for off chain legs"
@@ -2788,7 +2788,7 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String! @index(unique: false)
+  identity: String!
   account: String
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
@@ -2838,9 +2838,9 @@ Represents events associated with an Instruction
 type InstructionEvent @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
-  "Indexed so an event type can be filtered without joining `events`, which is why the column is kept locally"
-  event: InstructionEventEnum! @index(unique: false)
-  identity: String @index(unique: false)
+  "Kept locally so an event type can be filtered without joining `events`. Not indexed: filter it together with `instruction`"
+  event: InstructionEventEnum!
+  identity: String
   portfolio: Int
   account: String
   offChainReceipt: OffChainReceipt
@@ -3189,7 +3189,7 @@ type Claim @entity {
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
-  filterExpiry: BigInt! @index(unique: false)
+  filterExpiry: BigInt!
   type: ClaimTypeEnum!
   jurisdiction: String
   scope: Scope
@@ -3467,10 +3467,10 @@ type Asset @entity {
   id: ID! # assetId
   "the chain's own asset id — equal to `id`, so look it up by `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
   assetId: String!
-  ticker: String @index(unique: false)
-  name: String @index(unique: false)
+  ticker: String
+  name: String
   isNftCollection: Boolean!
-  type: String @index(unique: false)
+  type: String
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
@@ -3723,14 +3723,14 @@ type HoldEntry @jsonField {
 One row per (account, movement side). Append-only.
 Sibling entries of one on-chain movement share `movementId`.
 """
-type PolyxEntry @entity @compositeIndexes(fields: [["account", "date"], ["account", "kind"], ["kind", "date"]]) {
+type PolyxEntry @entity {
   "padId(block)/padId(eventIdx)/side"
   id: ID!
-  movementId: String! @index
+  movementId: String!
 
   account: Account!
   identity: Identity
-  "indexed in db/compat.sql — the schema is at the platform's 10-index-per-entity cap"
+  "indexed in db/compat.sql as a plain btree; a declared index would be a GiST under historical mode"
   counterpartyAddress: String
   counterpartyIdentity: Identity
 
@@ -3756,16 +3756,16 @@ type PolyxEntry @entity @compositeIndexes(fields: [["account", "date"], ["accoun
   callId: CallIdEnum
   eventId: EventIdEnum!
   specVersionId: Int!
-  "materialised time buckets — no date_trunc grouping exists (§8b). Indexed via the `[kind, date]` / `[account, date]` composites and a standalone index in db/compat.sql"
+  "materialised time buckets — no date_trunc grouping exists. Indexed by the standalone `date` btree in db/compat.sql; a per-account series narrows by `account` first"
   date: Date!
-  "indexed in db/compat.sql — the schema is at the platform's 10-index-per-entity cap"
+  "indexed in db/compat.sql as a plain btree; a declared index would be a GiST under historical mode"
   eraIndex: Int
 
   "relation is `createdEvent` to avoid colliding with the denormalised `eventId` enum column, same as `AssetTransaction`"
   createdEvent: Event!
   extrinsic: Extrinsic
-  "denormalised block id — `findBlockEntries` filters `= blockId` and `getByFields` has no range op"
-  blockId: String! @index
+  "denormalised block id, so the entries of one block can be filtered by equality. Not indexed"
+  blockId: String!
 }
 
 """

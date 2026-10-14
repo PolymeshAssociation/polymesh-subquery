@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { applySql } from '../db/applySql';
 import { dbIsReady, getPostgresDataSource } from '../db/utils';
 
 const main = async (): Promise<void> => {
@@ -7,7 +8,7 @@ const main = async (): Promise<void> => {
   await dbIsReady(postgres);
 
   try {
-    await postgres.query(readFileSync('../db/compat.sql', 'utf-8'));
+    await applySql(sql => postgres.query(sql), readFileSync('../db/compat.sql', 'utf-8'));
     console.log('Applied initial SQL');
   } catch (e) {
     console.error('Error occurred while running genesis migrations', e);
