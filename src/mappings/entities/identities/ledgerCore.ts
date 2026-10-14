@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { compactFromU8a, hexHasPrefix, u8aToBn } from '@polkadot/util';
 import { SubstrateBlock } from '@subql/types';
 import { namedFields, optionalField } from '../../../decode';
-import { isObject, memberOf, optionalMemberOf, optionOf } from '../../../utils/codec';
+import { isObject, optionalMemberOf, optionOf } from '../../../utils/codec';
 import { findStorage } from '../../../utils/legacyQuery';
 import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
 import {
@@ -175,8 +175,10 @@ export const accountDataFrozen = (data: unknown): bigint => {
   }
 
   // an absent half reads as zero, as the fixed-point reads of an absent amount always have
-  if (data.frozen !== undefined) {
-    return getBigIntValue(memberOf(data, 'frozen'));
+  const frozen = optionalMemberOf(data, 'frozen');
+
+  if (frozen !== undefined) {
+    return getBigIntValue(frozen);
   }
 
   const amount = (key: string): bigint => {
