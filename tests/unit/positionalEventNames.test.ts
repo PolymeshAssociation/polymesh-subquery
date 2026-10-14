@@ -11,124 +11,107 @@ import history from '../fixtures/event-history.json';
 import { argumentNames } from '../../src/decode';
 import { encodeArgs } from '../../src/mappings/args/encode';
 
+type Names = { from: number; to: number; names: string[] }[];
+
+/** One range of spec versions, from the first runtime up to `to`, under one list of names */
+const upTo = (to: number, ...names: string[]): Names => [{ from: 0, to, names }];
+
+const CALLER = 'callerDid';
+const AGENT = 'agentDid';
+const FUNDRAISER = [AGENT, 'fundraiserId'];
+const TRANSFER_MANAGER = [CALLER, 'ticker', 'transferManager'];
+const EXEMPTIONS = [...TRANSFER_MANAGER, 'scopeIds'];
+const BRIDGE_TX = [CALLER, 'bridgeTx'];
+const COMPUTE = ['compute'];
+const COUNCIL = 'governanceCouncillDid';
+const INVESTED_BY_ASSET = [
+  'investorDid',
+  'fundraiserId',
+  'offeringAsset',
+  'fundingAsset',
+  'offeringAmount',
+  'raiseAmount',
+];
+
 /** The names each event's arguments are stored under, in parameter order, per spec range */
-const NAMED: Record<string, { from: number; to: number; names: string[] }[]> = {
-  'bridge.AdminChanged': [{ from: 0, to: 6_999_999, names: ['callerDid', 'newAdmin'] }],
-  'bridge.BridgeTxScheduled': [
-    { from: 0, to: 6_999_999, names: ['callerDid', 'bridgeTx', 'executionBlock'] },
-  ],
-  'bridge.Bridged': [{ from: 0, to: 6_999_999, names: ['callerDid', 'bridgeTx'] }],
-  'bridge.FreezeAdminAdded': [{ from: 0, to: 6_999_999, names: ['callerDid', 'freezeAdmin'] }],
-  'bridge.Frozen': [{ from: 0, to: 6_999_999, names: ['callerDid'] }],
-  'bridge.FrozenTx': [{ from: 0, to: 6_999_999, names: ['callerDid', 'bridgeTx'] }],
-  'bridge.TxsHandled': [{ from: 0, to: 6_999_999, names: ['handledTxs'] }],
-  'bridge.Unfrozen': [{ from: 0, to: 6_999_999, names: ['callerDid'] }],
-  'bridge.UnfrozenTx': [{ from: 0, to: 6_999_999, names: ['callerDid', 'bridgeTx'] }],
-  'multiSig.ProposalExecutionFailed': [{ from: 0, to: 6_999_999, names: ['error'] }],
-  'multiSig.ProposalFailedToExecute': [
-    { from: 0, to: 6_999_999, names: ['callerDid', 'multisig', 'proposalId', 'error'] },
-  ],
-  'portfolio.MovedBetweenPortfolios': [
-    {
-      from: 0,
-      to: 5_999_999,
-      names: ['did', 'fromPortfolio', 'toPortfolio', 'ticker', 'amount', 'memo'],
-    },
-  ],
-  'settlement.InstructionRescheduled': [
-    { from: 0, to: 7_999_999, names: ['callerDid', 'instructionId'] },
-  ],
-  'settlement.InstructionV2Created': [
-    {
-      from: 0,
-      to: 5_999_999,
-      names: [
-        'callerDid',
-        'venueId',
-        'instructionId',
-        'settlementType',
-        'tradeDate',
-        'valueDate',
-        'legs',
-        'memo',
-      ],
-    },
-  ],
+const NAMED: Record<string, Names> = {
+  'bridge.AdminChanged': upTo(6_999_999, CALLER, 'newAdmin'),
+  'bridge.BridgeTxScheduled': upTo(6_999_999, CALLER, 'bridgeTx', 'executionBlock'),
+  'bridge.Bridged': upTo(6_999_999, ...BRIDGE_TX),
+  'bridge.FreezeAdminAdded': upTo(6_999_999, CALLER, 'freezeAdmin'),
+  'bridge.Frozen': upTo(6_999_999, CALLER),
+  'bridge.FrozenTx': upTo(6_999_999, ...BRIDGE_TX),
+  'bridge.TxsHandled': upTo(6_999_999, 'handledTxs'),
+  'bridge.Unfrozen': upTo(6_999_999, CALLER),
+  'bridge.UnfrozenTx': upTo(6_999_999, ...BRIDGE_TX),
+  'multiSig.ProposalExecutionFailed': upTo(6_999_999, 'error'),
+  'multiSig.ProposalFailedToExecute': upTo(6_999_999, CALLER, 'multisig', 'proposalId', 'error'),
+  'portfolio.MovedBetweenPortfolios': upTo(
+    5_999_999,
+    'did',
+    'fromPortfolio',
+    'toPortfolio',
+    'ticker',
+    'amount',
+    'memo'
+  ),
+  'settlement.InstructionRescheduled': upTo(7_999_999, CALLER, 'instructionId'),
+  'settlement.InstructionV2Created': upTo(
+    5_999_999,
+    CALLER,
+    'venueId',
+    'instructionId',
+    'settlementType',
+    'tradeDate',
+    'valueDate',
+    'legs',
+    'memo'
+  ),
   'settlement.SchedulingFailed': [
-    { from: 0, to: 6_999_999, names: ['error'] },
+    ...upTo(6_999_999, 'error'),
     { from: 7_000_000, to: 7_999_999, names: ['instructionId', 'error'] },
   ],
-  'staking.InvalidatedNominators': [
-    {
-      from: 0,
-      to: 6_999_999,
-      names: ['governanceCouncillDid', 'governanceCouncillAccount', 'expiredNominators'],
-    },
-  ],
-  'staking.MinimumBondThresholdUpdated': [
-    { from: 0, to: 6_999_999, names: ['governanceCouncillDid', 'newValue'] },
-  ],
-  'staking.SlashingAllowedForChanged': [{ from: 0, to: 6_999_999, names: ['slashingSwitch'] }],
-  'staking.SolutionStored': [{ from: 0, to: 6_999_999, names: ['compute'] }],
-  'staking.StakingElection': [{ from: 0, to: 6_999_999, names: ['compute'] }],
-  'statistics.ExemptionsAdded': [
-    { from: 0, to: 4_999_999, names: ['callerDid', 'ticker', 'transferManager', 'scopeIds'] },
-  ],
-  'statistics.ExemptionsRemoved': [
-    { from: 0, to: 4_999_999, names: ['callerDid', 'ticker', 'transferManager', 'scopeIds'] },
-  ],
-  'statistics.TransferManagerAdded': [
-    { from: 0, to: 4_999_999, names: ['callerDid', 'ticker', 'transferManager'] },
-  ],
-  'statistics.TransferManagerRemoved': [
-    { from: 0, to: 4_999_999, names: ['callerDid', 'ticker', 'transferManager'] },
-  ],
-  'sto.FundraiserClosed': [{ from: 0, to: 7_002_999, names: ['agentDid', 'fundraiserId'] }],
-  'sto.FundraiserCreated': [
-    {
-      from: 0,
-      to: 7_002_999,
-      names: ['agentDid', 'fundraiserId', 'fundraiserName', 'fundraiser'],
-    },
-  ],
-  'sto.FundraiserFrozen': [{ from: 0, to: 7_002_999, names: ['agentDid', 'fundraiserId'] }],
-  'sto.FundraiserUnfrozen': [{ from: 0, to: 7_002_999, names: ['agentDid', 'fundraiserId'] }],
-  'sto.FundraiserWindowModified': [
-    {
-      from: 0,
-      to: 7_002_999,
-      names: ['agentDid', 'fundraiserId', 'oldStart', 'oldEnd', 'newStart', 'newEnd'],
-    },
-  ],
+  'staking.InvalidatedNominators': upTo(
+    6_999_999,
+    COUNCIL,
+    'governanceCouncillAccount',
+    'expiredNominators'
+  ),
+  'staking.MinimumBondThresholdUpdated': upTo(6_999_999, COUNCIL, 'newValue'),
+  'staking.SlashingAllowedForChanged': upTo(6_999_999, 'slashingSwitch'),
+  'staking.SolutionStored': upTo(6_999_999, ...COMPUTE),
+  'staking.StakingElection': upTo(6_999_999, ...COMPUTE),
+  'statistics.ExemptionsAdded': upTo(4_999_999, ...EXEMPTIONS),
+  'statistics.ExemptionsRemoved': upTo(4_999_999, ...EXEMPTIONS),
+  'statistics.TransferManagerAdded': upTo(4_999_999, ...TRANSFER_MANAGER),
+  'statistics.TransferManagerRemoved': upTo(4_999_999, ...TRANSFER_MANAGER),
+  'sto.FundraiserClosed': upTo(7_002_999, ...FUNDRAISER),
+  'sto.FundraiserCreated': upTo(7_002_999, ...FUNDRAISER, 'fundraiserName', 'fundraiser'),
+  'sto.FundraiserFrozen': upTo(7_002_999, ...FUNDRAISER),
+  'sto.FundraiserUnfrozen': upTo(7_002_999, ...FUNDRAISER),
+  'sto.FundraiserWindowModified': upTo(
+    7_002_999,
+    ...FUNDRAISER,
+    'oldStart',
+    'oldEnd',
+    'newStart',
+    'newEnd'
+  ),
   'sto.Invested': [
-    {
-      from: 0,
-      to: 6_999_999,
-      names: [
-        'investorDid',
-        'fundraiserId',
-        'offeringTicker',
-        'fundingTicker',
-        'offeringAmount',
-        'raiseAmount',
-      ],
-    },
-    {
-      from: 7_000_000,
-      to: 7_002_999,
-      names: [
-        'investorDid',
-        'fundraiserId',
-        'offeringAsset',
-        'fundingAsset',
-        'offeringAmount',
-        'raiseAmount',
-      ],
-    },
+    ...upTo(
+      6_999_999,
+      'investorDid',
+      'fundraiserId',
+      'offeringTicker',
+      'fundingTicker',
+      'offeringAmount',
+      'raiseAmount'
+    ),
+    { from: 7_000_000, to: 7_002_999, names: INVESTED_BY_ASSET },
   ],
-  'system.ExtrinsicFailed': [{ from: 0, to: 4_999_999, names: ['dispatchError', 'dispatchInfo'] }],
-  'system.ExtrinsicSuccess': [{ from: 0, to: 4_999_999, names: ['dispatchInfo'] }],
-  'system.NewAccount': [{ from: 0, to: 4_999_999, names: ['account'] }],
+  'system.ExtrinsicFailed': upTo(4_999_999, 'dispatchError', 'dispatchInfo'),
+  'system.ExtrinsicSuccess': upTo(4_999_999, 'dispatchInfo'),
+  'system.NewAccount': upTo(4_999_999, 'account'),
 };
 
 interface Range {
