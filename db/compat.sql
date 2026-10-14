@@ -87,10 +87,11 @@ END $$;
 -- reorg rewind need it. Rewind and the per-save close-out filter on `lower(_block_range)` and `id`,
 -- never on these.
 --
--- Two kinds of entry, told apart by the third column:
---   false  the index is no longer declared in schema.graphql, so SubQuery does not recreate it; it
---          is only there to clean up a database built before it was removed from the schema.
---   true   the index belongs to a relation, which SubQuery always indexes, so it is still declared.
+-- Two lists of entries, told apart by the constant that holds them:
+--   removed    the index is no longer declared in schema.graphql, so SubQuery does not recreate it;
+--              it is only there to clean up a database built before it was removed from the schema.
+--   relations  the index belongs to a relation, which SubQuery always indexes, so it is still
+--              declared.
 --          The node runs `CREATE INDEX IF NOT EXISTS` for every declared index on EVERY start (it
 --          treats each start as a fresh schema migration), so a plain drop is undone, and an
 --          eleven-gigabyte rebuild is paid, at the next restart. It is replaced instead by an
@@ -104,120 +105,63 @@ END $$;
 -- existing database and restart, so the node recreates the real one).
 DO $$
 DECLARE
+  -- one line per table, then its column lists: a list is a single column, or several joined by a
+  -- comma without spaces; the order is the order the index lists them in, `_block_range` left off
+  relations CONSTANT TEXT := $list$
+    account_balances  account_id identity_id updated_event_id
+    accounts  created_event_id identity_id updated_event_id
+    asset_agent_actions  caller_id created_event_id updated_event_id
+    asset_holders  asset_id
+    asset_transactions  created_event_id instruction_id
+    assets  owner_id updated_event_id
+    authorizations  from_id
+    claims  created_event_id issuer_id updated_event_id
+    eras  end_event_id start_event_id
+    events  block_id extrinsic_id
+    holdings  account_id asset_id identity_id portfolio_id
+    identity_keys  created_event_id identity_id updated_event_id valid_from_block_id
+    instruction_affirmations  created_event_id off_chain_receipt_id party_id updated_event_id
+    instruction_events  created_event_id off_chain_receipt_id
+    instruction_parties  created_event_id instruction_id updated_event_id
+    instructions  created_event_id updated_event_id
+    legs  created_event_id updated_event_id
+    multi_sig_proposal_votes  created_event_id signer_id updated_event_id
+    multi_sig_proposals  created_event_id creator_id extrinsic_id updated_event_id
+    nfts  account_id asset_id burned_event_id created_event_id identity_id portfolio_id updated_event_id
+    nominations  valid_from_event_id validator_id
+    polyx_entries  counterparty_identity_id created_event_id extrinsic_id
+    portfolios  created_event_id updated_event_id
+    staking_events  created_event_id position_id validator_id
+    staking_positions  controller_id created_event_id identity_id reward_destination_account_id stash_id updated_event_id
+    ticker_reservations  identity_id
+    validator_eras  created_event_id era_id identity_id updated_event_id validator_id
+    validators  account_id
+  $list$;
+  removed CONSTANT TEXT := $list$
+    asset_agent_actions  pallet_name
+    assets  name ticker type
+    authorizations  to_key
+    blocks  parent_hash
+    claims  filter_expiry
+    events  event_id event_idx extrinsic_idx spec_version_id
+    extrinsics  extrinsic_idx module_id signed success
+    identities  primary_account
+    identity_keys  identity_id,role
+    instruction_affirmations  identity
+    instruction_events  event identity
+    legs  ticker
+    nominations  era_index,position_id
+    polyx_entries  account_id,date account_id,kind block_id date,kind movement_id
+    staking_events  era_index
+  $list$;
   spec RECORD;
   ix RECORD;
 BEGIN
   FOR spec IN
-    SELECT * FROM (VALUES
-      ('account_balances', 'account_id', true),
-      ('account_balances', 'identity_id', true),
-      ('account_balances', 'updated_event_id', true),
-      ('accounts', 'created_event_id', true),
-      ('accounts', 'identity_id', true),
-      ('accounts', 'updated_event_id', true),
-      ('asset_agent_actions', 'caller_id', true),
-      ('asset_agent_actions', 'created_event_id', true),
-      ('asset_agent_actions', 'pallet_name', false),
-      ('asset_agent_actions', 'updated_event_id', true),
-      ('asset_holders', 'asset_id', true),
-      ('asset_transactions', 'created_event_id', true),
-      ('asset_transactions', 'instruction_id', true),
-      ('assets', 'name', false),
-      ('assets', 'owner_id', true),
-      ('assets', 'ticker', false),
-      ('assets', 'type', false),
-      ('assets', 'updated_event_id', true),
-      ('authorizations', 'from_id', true),
-      ('authorizations', 'to_key', false),
-      ('blocks', 'parent_hash', false),
-      ('claims', 'created_event_id', true),
-      ('claims', 'filter_expiry', false),
-      ('claims', 'issuer_id', true),
-      ('claims', 'updated_event_id', true),
-      ('eras', 'end_event_id', true),
-      ('eras', 'start_event_id', true),
-      ('events', 'block_id', true),
-      ('events', 'event_id', false),
-      ('events', 'event_idx', false),
-      ('events', 'extrinsic_id', true),
-      ('events', 'extrinsic_idx', false),
-      ('events', 'spec_version_id', false),
-      ('extrinsics', 'extrinsic_idx', false),
-      ('extrinsics', 'module_id', false),
-      ('extrinsics', 'signed', false),
-      ('extrinsics', 'success', false),
-      ('holdings', 'account_id', true),
-      ('holdings', 'asset_id', true),
-      ('holdings', 'identity_id', true),
-      ('holdings', 'portfolio_id', true),
-      ('identities', 'primary_account', false),
-      ('identity_keys', 'created_event_id', true),
-      ('identity_keys', 'identity_id', true),
-      ('identity_keys', 'identity_id, role', false),
-      ('identity_keys', 'updated_event_id', true),
-      ('identity_keys', 'valid_from_block_id', true),
-      ('instruction_affirmations', 'created_event_id', true),
-      ('instruction_affirmations', 'identity', false),
-      ('instruction_affirmations', 'off_chain_receipt_id', true),
-      ('instruction_affirmations', 'party_id', true),
-      ('instruction_affirmations', 'updated_event_id', true),
-      ('instruction_events', 'created_event_id', true),
-      ('instruction_events', 'event', false),
-      ('instruction_events', 'identity', false),
-      ('instruction_events', 'off_chain_receipt_id', true),
-      ('instruction_parties', 'created_event_id', true),
-      ('instruction_parties', 'instruction_id', true),
-      ('instruction_parties', 'updated_event_id', true),
-      ('instructions', 'created_event_id', true),
-      ('instructions', 'updated_event_id', true),
-      ('legs', 'created_event_id', true),
-      ('legs', 'ticker', false),
-      ('legs', 'updated_event_id', true),
-      ('multi_sig_proposal_votes', 'created_event_id', true),
-      ('multi_sig_proposal_votes', 'signer_id', true),
-      ('multi_sig_proposal_votes', 'updated_event_id', true),
-      ('multi_sig_proposals', 'created_event_id', true),
-      ('multi_sig_proposals', 'creator_id', true),
-      ('multi_sig_proposals', 'extrinsic_id', true),
-      ('multi_sig_proposals', 'updated_event_id', true),
-      ('nfts', 'account_id', true),
-      ('nfts', 'asset_id', true),
-      ('nfts', 'burned_event_id', true),
-      ('nfts', 'created_event_id', true),
-      ('nfts', 'identity_id', true),
-      ('nfts', 'portfolio_id', true),
-      ('nfts', 'updated_event_id', true),
-      ('nominations', 'era_index, position_id', false),
-      ('nominations', 'valid_from_event_id', true),
-      ('nominations', 'validator_id', true),
-      ('polyx_entries', 'account_id, date', false),
-      ('polyx_entries', 'account_id, kind', false),
-      ('polyx_entries', 'block_id', false),
-      ('polyx_entries', 'counterparty_identity_id', true),
-      ('polyx_entries', 'created_event_id', true),
-      ('polyx_entries', 'date, kind', false),
-      ('polyx_entries', 'extrinsic_id', true),
-      ('polyx_entries', 'movement_id', false),
-      ('portfolios', 'created_event_id', true),
-      ('portfolios', 'updated_event_id', true),
-      ('staking_events', 'created_event_id', true),
-      ('staking_events', 'era_index', false),
-      ('staking_events', 'position_id', true),
-      ('staking_events', 'validator_id', true),
-      ('staking_positions', 'controller_id', true),
-      ('staking_positions', 'created_event_id', true),
-      ('staking_positions', 'identity_id', true),
-      ('staking_positions', 'reward_destination_account_id', true),
-      ('staking_positions', 'stash_id', true),
-      ('staking_positions', 'updated_event_id', true),
-      ('ticker_reservations', 'identity_id', true),
-      ('validator_eras', 'created_event_id', true),
-      ('validator_eras', 'era_id', true),
-      ('validator_eras', 'identity_id', true),
-      ('validator_eras', 'updated_event_id', true),
-      ('validator_eras', 'validator_id', true),
-      ('validators', 'account_id', true)
-    ) AS t(tbl, cols, standin)
+    SELECT split_part(entry.line, ' ', 1) AS tbl, replace(cols.list, ',', ', ') AS cols, kind.standin
+    FROM (VALUES (relations, true), (removed, false)) AS kind(list, standin),
+      LATERAL regexp_split_to_table(btrim(kind.list, E' \n'), E'\n *') AS entry(line),
+      LATERAL regexp_split_to_table(regexp_replace(entry.line, '^\S+ +', ''), ' +') AS cols(list)
   LOOP
     FOR ix IN
       SELECT indexname FROM pg_indexes

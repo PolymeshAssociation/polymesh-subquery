@@ -53,10 +53,9 @@ export const applySql = async (
   // SET LOCAL ends with the transaction, so the timeout does not stay on the pooled connection
   const script = `SET LOCAL lock_timeout = ${Math.floor(lockTimeoutMs)};\n${sql}`;
 
-  for (let attempt = 1; ; attempt++) {
+  const run = async (attempt: number): Promise<void> => {
     try {
       await query(script);
-      return;
     } catch (error) {
       if (!isLockConflict(error) || attempt >= attempts) throw error;
       const wait = backoffMs * 2 ** (attempt - 1);
@@ -66,6 +65,9 @@ export const applySql = async (
         )}) applying the SQL, attempt ${attempt} of ${attempts}; retrying in ${wait}ms`
       );
       await sleep(wait);
+      await run(attempt + 1);
     }
-  }
+  };
+
+  await run(1);
 };

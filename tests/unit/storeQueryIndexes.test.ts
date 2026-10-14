@@ -234,15 +234,23 @@ interface Trim {
   standIn: boolean;
 }
 
+/** The entries of one `NAME CONSTANT TEXT := $list$ ... $list$` constant: a table, then its column lists. */
+const listed = (sql: string, name: string, standIn: boolean): Trim[] => {
+  const body = sql.match(new RegExp(`${name} CONSTANT TEXT := \\$list\\$([^$]*)\\$list\\$`))?.[1];
+
+  return (body ?? '')
+    .split('\n')
+    .map(line => line.trim().split(/\s+/))
+    .filter(([table]) => table)
+    .flatMap(([table, ...lists]) =>
+      lists.map(list => ({ table, columns: list.split(','), standIn }))
+    );
+};
+
 const trims = (): Trim[] => {
   const sql = readFileSync(join(ROOT, 'db', 'compat.sql'), 'utf8');
-  const block = sql.slice(sql.indexOf('FROM (VALUES'), sql.indexOf(') AS t(tbl, cols, standin)'));
 
-  return [...block.matchAll(/\('(\w+)', '([\w, ]+)', (true|false)\)/g)].map(match => ({
-    table: match[1],
-    columns: match[2].split(', '),
-    standIn: match[3] === 'true',
-  }));
+  return [...listed(sql, 'relations', true), ...listed(sql, 'removed', false)];
 };
 
 describe('GiST trim in db/compat.sql', () => {
