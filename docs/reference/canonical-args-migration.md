@@ -25,6 +25,40 @@ Pinned by `tests/unit/argsContract.test.ts` against real mainnet blocks from v3 
 
 `args` itself is always an object, keyed by field name: the metadata's when it names every field (Substrate pallets' events, and Polymesh's own once a runtime declares them as structs), else the indexer's registered names for Polymesh's tuple-style events, which are the names the chain gives the same fields. An event the indexer has no names for at that spec version is keyed by position, `"0"`, `"1"`, …. Position keys make a positional filter possible: JSONB containment on an array would match a value at *any* position.
 
+Every event type that has occurred on mainnet or testnet is keyed by name; position keys remain only for event types the metadata leaves unnamed and neither chain has emitted. Thirty-three tuple-style event types are named by the indexer. Where a later runtime names the same event, it takes that runtime's names (`system`, `staking`, `sto`); the rest take them from the pallet's own doc comments and the call that deposits the event, using the names their pallet's other events use (`callerDid` for the identity that acted, `error` for a `DispatchError`, `instructionId`, `ticker` for a pre-v7 `Ticker`). Their keys by event and spec range:
+
+| Event | Spec range | Keys, in parameter order |
+|---|---|---|
+| `bridge.AdminChanged` | up to v6 | `callerDid`, `newAdmin` |
+| `bridge.BridgeTxScheduled` | up to v6 | `callerDid`, `bridgeTx`, `executionBlock` |
+| `bridge.Bridged`, `bridge.FrozenTx`, `bridge.UnfrozenTx` | up to v6 | `callerDid`, `bridgeTx` |
+| `bridge.FreezeAdminAdded` | up to v6 | `callerDid`, `freezeAdmin` |
+| `bridge.Frozen`, `bridge.Unfrozen` | up to v6 | `callerDid` |
+| `bridge.TxsHandled` | up to v6 | `handledTxs` |
+| `multiSig.ProposalExecutionFailed` | all (up to v6) | `error` |
+| `multiSig.ProposalFailedToExecute` | v6.3 | `callerDid`, `multisig`, `proposalId`, `error` |
+| `portfolio.MovedBetweenPortfolios` | up to v5 | `did`, `fromPortfolio`, `toPortfolio`, `ticker`, `amount`, `memo` |
+| `settlement.InstructionRescheduled` | all | `callerDid`, `instructionId` |
+| `settlement.InstructionV2Created` | v5.3 to v5.4 | `callerDid`, `venueId`, `instructionId`, `settlementType`, `tradeDate`, `valueDate`, `legs`, `memo` |
+| `settlement.SchedulingFailed` | up to v6 | `error` |
+| | v7.0 to v7.4 | `instructionId`, `error` |
+| `staking.InvalidatedNominators` | up to v6 | `governanceCouncillDid`, `governanceCouncillAccount`, `expiredNominators` (the chain's own spelling, named from 7.0.0 on) |
+| `staking.MinimumBondThresholdUpdated` | up to v6 | `governanceCouncillDid`, `newValue` |
+| `staking.SlashingAllowedForChanged` | up to v6 | `slashingSwitch` |
+| `staking.SolutionStored`, `staking.StakingElection` | up to v6 | `compute` |
+| `statistics.TransferManagerAdded`, `statistics.TransferManagerRemoved` | up to v4 | `callerDid`, `ticker`, `transferManager` |
+| `statistics.ExemptionsAdded`, `statistics.ExemptionsRemoved` | up to v4 | `callerDid`, `ticker`, `transferManager`, `scopeIds` |
+| `sto.FundraiserClosed`, `sto.FundraiserFrozen`, `sto.FundraiserUnfrozen` | up to v7.2 | `agentDid`, `fundraiserId` |
+| `sto.FundraiserCreated` | up to v7.2 | `agentDid`, `fundraiserId`, `fundraiserName`, `fundraiser` |
+| `sto.FundraiserWindowModified` | up to v7.2 | `agentDid`, `fundraiserId`, `oldStart`, `oldEnd`, `newStart`, `newEnd` |
+| `sto.Invested` | up to v6 | `investorDid`, `fundraiserId`, `offeringTicker`, `fundingTicker`, `offeringAmount`, `raiseAmount` |
+| | v7.0 to v7.2 | `investorDid`, `fundraiserId`, `offeringAsset`, `fundingAsset`, `offeringAmount`, `raiseAmount` |
+| `system.ExtrinsicSuccess` | up to v3 (before v5.0) | `dispatchInfo` |
+| `system.ExtrinsicFailed` | up to v3 (before v5.0) | `dispatchError`, `dispatchInfo` |
+| `system.NewAccount` | up to v3 (before v5.0) | `account` |
+
+From v7.3 the `sto` events are named by the chain and carry `offeringAsset`, so a fundraiser's events are found across the change by `refs`; `sto.Invested` also moves `fundraiserId` after `offeringAsset` there. The bridge pallet was removed at v7.0; its events occur from spec 3000 to 6001031, so every bridge row reads "up to v6".
+
 Before v7.0 the chain named assets by ticker, so a field that holds an `AssetId` from v7 held a `Ticker` before it. Its key says which: `ticker` up to v6, `assetId` from v7 (for example `asset.AssetBalanceUpdated`, `asset.Transfer`, the compliance, checkpoint and external-agent events). To find an asset's events across that change, use `refs`, where a pre-v7 ticker is recorded under the asset id it maps to. To find a ticker's events in any era, including events that name only a ticker such as `asset.TickerRegistered`, use `ticker:<text>`.
 
 Each entry in `refs` is `kind:value`, with `kind` one of `identity`, `account`, `asset`, `ticker` or `portfolio`, and `value` the canonical encoding of what is referred to (`did/number` for a portfolio, `number` `0` for the default one): `identity:0x…`, `account:2…`, `asset:0x…`, `ticker:ABC`, `portfolio:0x…/0`. Each appears once per event, in the order found. A portfolio also refers to its identity. A ticker is filed as `ticker:<text>` (its text without the NUL padding, or its hex when the bytes are not text) in every era; before v7.0 it also refers to the asset it maps to, while from v7.0 events name the asset itself. `refs` is `null` when an event refers to none of these. It is GIN-indexed, so a `contains` filter on it is fast without a `(moduleId, eventId)` filter.
