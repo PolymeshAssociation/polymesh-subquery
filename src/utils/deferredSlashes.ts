@@ -163,12 +163,9 @@ export const appliedDeferredSlash = (
     slash => holds(slash, value => value === amount)
   );
   const nearest = earlier.find(validator => shares.some(slash => slash.validator === validator));
-  const share =
-    nearest === undefined
-      ? shares.length === 1
-        ? shares[0]
-        : undefined
-      : shares.find(slash => slash.validator === nearest);
+  // with no validator before it to follow, a share alone places it only when it is the one fit
+  const alone = shares.length === 1 ? shares[0] : undefined;
+  const share = nearest === undefined ? alone : shares.find(slash => slash.validator === nearest);
 
   return share ? { slash: share, asValidator: false } : undefined;
 };
