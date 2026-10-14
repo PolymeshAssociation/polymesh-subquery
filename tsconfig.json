@@ -10,8 +10,7 @@
     // `nodenext`, so `src/` resolves `@polkadot/*` to the same `cjs/` declarations as the
     // `node_modules` declarations that `subql build`'s ts-loader reads them through. Under `node`
     // the two sides read different copies of the same classes and the build rejects assignments
-    // between them. `tsconfig.test.json` and ts-node below stay on `node`, which reads the root
-    // copies throughout. See docs/implementation/12-types-and-ci.md §12.2c.
+    // between them. See docs/implementation/12-types-and-ci.md §12.2c.
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "outDir": "dist",
@@ -40,8 +39,6 @@
     "skipLibCheck": true
   },
   "ts-node": {
-    // scripts type-check as `tsconfig.test.json` does
-    "compilerOptions": { "module": "commonjs", "moduleResolution": "node" },
     // load the `include` below, so scripts run through ts-node see SubQuery's injected globals
     "files": true
   },

@@ -2,9 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    // the integration tests import `@apollo/client`, whose declarations `nodenext` reads as ESM
-    "module": "commonjs",
-    "moduleResolution": "node"
+    // ts-jest transpiles each file on its own: it supports `nodenext` only this way, and
+    // `yarn typecheck` checks the whole program instead
+    "isolatedModules": true
   },
   "include": [
     "src/**/*",

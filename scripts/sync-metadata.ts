@@ -23,6 +23,7 @@
  *   yarn sync-metadata --metadata ./metadata.json    read a `state_getMetadata` dump instead
  *   yarn sync-metadata --endpoint wss://… --check    exit non-zero when the schema is behind
  */
+import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Metadata, TypeRegistry } from '@polkadot/types';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -174,8 +175,6 @@ const snapshotFromFile = (path: string, specVersion: number): RuntimeSnapshot =>
 };
 
 const snapshotFromEndpoint = async (endpoint: string): Promise<RuntimeSnapshot> => {
-  // Imported lazily so the pure helpers above stay importable without opening a connection
-  const { ApiPromise, WsProvider } = await import('@polkadot/api');
   const api = await ApiPromise.create({ provider: new WsProvider(endpoint), noInitWarn: true });
 
   try {
