@@ -2,8 +2,9 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { EventIdEnum, ModuleIdEnum } from '../types';
 import { recordAnomaly } from '../utils/anomaly';
+import { asCodec } from '../utils/codec';
 import { DecodeError, FieldNotFound, NoDecoderForSpecVersion } from './errors';
-import { codecAt, DecodedEvent, hasNamedFields, metadataFieldNames, namedFields } from './field';
+import { DecodedEvent, hasNamedFields, metadataFieldNames, namedFields } from './field';
 import { resolveShape } from './shapes';
 import { normaliseSpecVersion } from './specVersion';
 
@@ -187,7 +188,7 @@ export const decodeEvent = (event: SubstrateEvent): DecodedEvent => {
      * expect; a name the shape does not declare at all still throws
      */
     const fields: Record<string, Codec> = Object.fromEntries(
-      shape.fields.map((name, index) => [name, codecAt(data, index)])
+      shape.fields.map((name, index) => [name, asCodec(data[index])])
     );
     for (const [alias, field] of Object.entries(shape.aliases ?? {})) {
       fields[alias] = fields[field];

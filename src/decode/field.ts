@@ -1,6 +1,7 @@
 import { GenericEvent } from '@polkadot/types/generic';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
+import { asCodec } from '../utils/codec';
 import { FieldNotFound } from './errors';
 
 /** An event's parameters keyed by field name */
@@ -14,13 +15,6 @@ const toCamelCase = (name: string): string =>
   name.includes('_')
     ? name.replace(/_([a-zA-Z0-9])/g, (_match, c: string) => c.toUpperCase())
     : name;
-
-/**
- * One parameter of an event's data as a `Codec`. `tsc` accepts the data's own element type, but the
- * webpack build resolves `Codec` from a second declaration and rejects it, so this is the one place
- * that bridges the two. Every element of event data is a codec at runtime.
- */
-export const codecAt = (data: ArrayLike<unknown>, index: number): Codec => data[index] as Codec;
 
 /**
  * SubQuery types an event as `IEvent`, which lacks the metadata every real event carries. The
@@ -105,7 +99,7 @@ export const field = (event: SubstrateEvent, name: string): Codec => {
     );
   }
 
-  return codecAt(event.event.data, index);
+  return asCodec(event.event.data[index]);
 };
 
 /**
@@ -122,7 +116,7 @@ export const namedFields = (event: SubstrateEvent): DecodedEvent | undefined => 
   const names = metadataFieldNames(event);
 
   return Object.freeze(
-    Object.fromEntries(names.map((name, index) => [name, codecAt(event.event.data, index)]))
+    Object.fromEntries(names.map((name, index) => [name, asCodec(event.event.data[index])]))
   );
 };
 
