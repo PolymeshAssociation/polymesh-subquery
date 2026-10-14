@@ -106,10 +106,6 @@ const decoding = <T>(what: string, run: () => T): T => {
   }
 };
 
-/** `api.query[section][item]`, or `undefined` when this runtime has no such item. */
-const storageItem = (section: string, item: string): StorageItem | undefined =>
-  findStorage(section, item);
-
 /** A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is stored */
 const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec | undefined => {
   const stored = optionOf(raw, `the stored ${name}`);
@@ -162,7 +158,7 @@ export const storageAtParent = async (
   item: string,
   ...keys: unknown[]
 ): Promise<Codec | undefined> => {
-  const storage = storageItem(section, item);
+  const storage = findStorage(section, item);
 
   if (!storage || !(await parentReadable(block))) {
     return undefined;
@@ -207,7 +203,7 @@ export const storageEntriesAtParent = async (
   section: string,
   item: string
 ): Promise<{ args: Codec[]; value: Codec }[] | undefined> => {
-  const storage = storageItem(section, item);
+  const storage = findStorage(section, item);
 
   if (!storage || !(await parentReadable(block))) {
     return undefined;
