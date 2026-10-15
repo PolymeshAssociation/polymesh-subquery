@@ -33,6 +33,7 @@ import './statistics';
 import './sto';
 import './system';
 import './treasury';
+import './utility';
 
 export * from './consts';
 export * from './registry';

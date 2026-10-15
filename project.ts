@@ -395,6 +395,15 @@ const filters: Record<string, Record<string, string[]>> = {
     CodeUpdated: ['handleMigration'],
     NewAccount: [],
   },
+  // Only the events that tell a batch failed: the extrinsic itself still succeeds, so without
+  // them a partly-failed batch reads as a full success.
+  utility: {
+    BatchCompletedWithErrors: [],
+    BatchInterrupted: [],
+    BatchInterruptedOld: [],
+    BatchOptimisticFailed: [],
+    ItemFailed: [],
+  },
   transactionPayment: {
     TransactionFeePaid: ['handleTransactionFeeCharged'],
   },
@@ -449,11 +458,14 @@ const filters: Record<string, Record<string, string[]>> = {
   electionProviderMultiPhase: {},
 };
 
+/** Modules subscribed event by event, not as a whole: they emit far more than is wanted */
+const listedOnly = new Set(['system', 'utility']);
+
 const handlers: SubstrateEventHandler[] = [];
 const eventSpecificHandlers: SubstrateEventHandler[] = [];
 
 Object.keys(filters).forEach(module => {
-  if (module !== 'system') {
+  if (!listedOnly.has(module)) {
     handlers.push({
       kind: SubstrateHandlerKind.Event,
       handler: 'handleEvent',
@@ -464,7 +476,7 @@ Object.keys(filters).forEach(module => {
   }
 
   Object.keys(filters[module]).forEach(method => {
-    if (module === 'system') {
+    if (listedOnly.has(module)) {
       handlers.push({
         kind: SubstrateHandlerKind.Event,
         handler: 'handleEvent',

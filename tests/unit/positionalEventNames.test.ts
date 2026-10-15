@@ -71,6 +71,9 @@ const NAMED: Record<string, Names> = {
     ...upTo(6_999_999, 'error'),
     { from: 7_000_000, to: 7_999_999, names: ['instructionId', 'error'] },
   ],
+  'utility.BatchInterrupted': upTo(5_999_999, 'eventCounts', 'errorAt'),
+  'utility.BatchInterruptedOld': upTo(6_999_999, 'eventCounts', 'errorAt'),
+  'utility.BatchOptimisticFailed': upTo(6_999_999, 'eventCounts', 'errorsAt'),
   'staking.InvalidatedNominators': upTo(
     6_999_999,
     COUNCIL,
@@ -162,8 +165,8 @@ const unnamedRuntimes = (event: string) =>
   );
 
 describe('tuple-style events that occur on the chains are stored by name', () => {
-  it('covers the 33 types the chains emit', () => {
-    expect(Object.keys(NAMED)).toHaveLength(33);
+  it('covers the 36 types the chains emit', () => {
+    expect(Object.keys(NAMED)).toHaveLength(36);
   });
 
   describe.each(Object.keys(NAMED))('%s', event => {

@@ -115,9 +115,6 @@ const POSITIONAL = new Set<string>([
   'upgradeCommitteeMembership.Dummy',
   'utility.BatchCompleted',
   'utility.BatchCompletedOld',
-  'utility.BatchInterrupted',
-  'utility.BatchInterruptedOld',
-  'utility.BatchOptimisticFailed',
 ]);
 
 /**
@@ -125,6 +122,14 @@ const POSITIONAL = new Set<string>([
  * moved the fundraiser id after the offering asset. Their names must be the same set.
  */
 const REORDERED = new Set<string>(['sto.Invested']);
+
+/**
+ * Events that kept their arity but changed what the parameters are when the chain named them:
+ * `utility.BatchInterrupted` held the event counts and a failing `(index, error)` pair, and now
+ * holds the index and the error directly. Reusing the new names for the old values would mislabel
+ * them.
+ */
+const RETYPED = new Set<string>(['utility.BatchInterrupted']);
 
 describe('the shape table against the chains’ runtime history', () => {
   it('has the runtimes of both chains', () => {
@@ -172,7 +177,12 @@ describe('the shape table against the chains’ runtime history', () => {
     const renamed = Object.entries(events).flatMap(([event, ranges]) =>
       ranges.slice(1).flatMap((range, i) => {
         const before = ranges[i];
-        if (!named(range) || named(before) || range.fields.length !== before.types.length) {
+        if (
+          RETYPED.has(event) ||
+          !named(range) ||
+          named(before) ||
+          range.fields.length !== before.types.length
+        ) {
           return [];
         }
         const shape = accepting(covering(shapesOf(event), before.to), before.types.length);
