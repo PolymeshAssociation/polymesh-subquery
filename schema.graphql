@@ -2130,6 +2130,10 @@ type Account @entity {
   multiSig: MultiSig @derivedFrom(field: "account")
   "One per asset this account has held as a v8 account-level holder"
   holdings: [Holding!] @derivedFrom(field: "account")
+  "Settlement legs sending from this account, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromAccount")
+  "Settlement legs delivering to this account, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toAccount")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2166,6 +2170,8 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
   holdings: [Holding!] @derivedFrom(field: "identity")
+  "Every instruction this identity is a party to, as a party or a mediator"
+  instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
@@ -2630,6 +2636,10 @@ type Portfolio @entity {
   deletedAt: Date
   "One per asset this portfolio has held"
   holdings: [Holding!] @derivedFrom(field: "portfolio")
+  "Settlement legs sending from this portfolio, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromPortfolio")
+  "Settlement legs delivering to this portfolio, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toPortfolio")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2740,17 +2750,22 @@ type Leg @entity {
   instruction: Instruction!
   legIndex: Int!
   legType: LegTypeEnum!
-  "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
-  assetId: String! @index(unique: false)
+  "The asset moved; null for off-chain legs, whose asset is named only by `ticker`"
+  asset: Asset
+  "The asset's ticker when it has one; the only asset identifier of an off-chain leg"
   ticker: String
-  from: String! @index(unique: false)
-  fromAccount: String
-  "`fromPortfolio` is null for off chain legs"
-  fromPortfolio: Int
-  to: String! @index(unique: false)
-  toAccount: String
-  "`toPortfolio` is null for off chain legs"
-  toPortfolio: Int
+  "The sender's identity; null only for an account-level sender the index cannot resolve to one"
+  from: Identity
+  "Set when the sender is an account-level holder"
+  fromAccount: Account
+  "Set when the sender is a portfolio; null for off-chain and account-level legs"
+  fromPortfolio: Portfolio
+  "The receiver's identity; null only for an account-level receiver the index cannot resolve to one"
+  to: Identity
+  "Set when the receiver is an account-level holder"
+  toAccount: Account
+  "Set when the receiver is a portfolio; null for off-chain and account-level legs"
+  toPortfolio: Portfolio
   "`amount` is null for non-fungible legs"
   amount: BigInt
   "`nftIds` is only applicable for non-fungible legs"
@@ -2767,10 +2782,10 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "The DID of the party, or of the account that is the party; null for an account with no identity"
-  identity: String @index(unique: false)
+  "The party's identity, or the identity of the account that is the party. A relation with no row when the DID is not indexed (an off-chain counterparty); null for an account with no identity"
+  identity: Identity
   "Set when the party is an account-level holder; the party is then this account, and `identity` its DID"
-  account: String
+  account: Account
   "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
   portfolios: [Int]
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
@@ -2784,7 +2799,7 @@ Represents an off chain receipt
 type OffChainReceipt @entity {
   id: ID!
   uid: Int! @index(unique: false)
-  signer: String! @index(unique: false)
+  signer: Account!
   leg: Leg
   metadata: String
   createdEvent: Event!
@@ -2798,8 +2813,9 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String!
-  account: String
+  "The affirming identity; null only for an account the index cannot resolve to one"
+  identity: Identity
+  account: Account
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
   isMediator: Boolean!
@@ -2850,9 +2866,9 @@ type InstructionEvent @entity {
   instruction: Instruction! @index(unique: false)
   "Kept locally so an event type can be filtered without joining `events`. Not indexed: filter it together with `instruction`"
   event: InstructionEventEnum!
-  identity: String
-  portfolio: Int
-  account: String
+  identity: Identity
+  portfolio: Portfolio
+  account: Account
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
   createdEvent: Event!
