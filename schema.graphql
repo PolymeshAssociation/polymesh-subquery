@@ -2186,6 +2186,10 @@ type Identity @entity {
   instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
   "Authorizations targeting this identity"
   authorizationsReceived: [Authorization!] @derivedFrom(field: "to")
+  "The confidential accounts this identity registered"
+  confidentialAccounts: [ConfidentialAccount!] @derivedFrom(field: "creator")
+  "The confidential assets this identity created"
+  confidentialAssets: [ConfidentialAsset!] @derivedFrom(field: "creator")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
@@ -4073,11 +4077,27 @@ enum ConfidentialCurveTreeEnum {
 }
 
 """
-A mediator's confidential account public key and encryption key pair
+The part a key plays for a confidential asset
 """
-type MediatorKey @jsonField {
-  accountKey: String!
-  encryptionKey: String!
+enum ConfidentialKeyRole {
+  Auditor
+  Mediator
+}
+
+"""
+One key an asset names as an auditor or a mediator, as the asset last set them. A mediator is a
+confidential account and its encryption key; an auditor is an encryption key alone. An update
+removes the keys the asset drops and adds the ones it gains, so the rows are the asset's current
+keys and each keeps the event that added it.
+"""
+type ConfidentialAssetKey @entity {
+  id: ID! # assetId/Mediator/accountKey or assetId/Auditor/encryptionKey
+  asset: ConfidentialAsset!
+  role: ConfidentialKeyRole!
+  "The mediator's confidential account; null for an auditor"
+  account: ConfidentialAccount
+  encryptionKey: ConfidentialEncryptionKey!
+  createdEvent: Event!
 }
 
 """
@@ -4086,7 +4106,9 @@ Represents a confidential account (account public key)
 type ConfidentialAccount @entity {
   id: ID!
   account: String!
-  encryptionKey: String!
+  encryptionKey: ConfidentialEncryptionKey!
+  "The assets this account mediates"
+  mediatorOf: [ConfidentialAssetKey!]! @derivedFrom(field: "account")
   creator: Identity!
   assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
   updatedEvent: Event!
@@ -4101,6 +4123,10 @@ type ConfidentialEncryptionKey @entity {
   id: ID!
   encryptionKey: String!
   creator: Identity!
+  "The confidential accounts using this key"
+  accounts: [ConfidentialAccount!]! @derivedFrom(field: "encryptionKey")
+  "The assets this key audits or mediates"
+  assetRoles: [ConfidentialAssetKey!]! @derivedFrom(field: "encryptionKey")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -4116,8 +4142,8 @@ type ConfidentialAsset @entity {
   decimals: Int!
   data: String
   creator: Identity!
-  auditors: [String!]!
-  mediators: [MediatorKey!]!
+  "The asset's current auditor and mediator keys"
+  keys: [ConfidentialAssetKey!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
   updatedEvent: Event!

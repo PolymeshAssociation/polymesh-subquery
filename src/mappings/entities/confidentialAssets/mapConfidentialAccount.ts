@@ -30,7 +30,7 @@ export const handleConfidentialAccountRegistered = async (event: SubstrateEvent)
     ConfidentialAccount.create({
       id: account,
       account,
-      encryptionKey,
+      encryptionKeyId: encryptionKey,
       creatorId,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
