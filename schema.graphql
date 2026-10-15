@@ -2767,8 +2767,10 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "`identity` is the DID of the party involved in the instruction. No mapping to Identity is added, since instruction can have leg (e.g. off chain) where DID doesn't exists"
-  identity: String! @index(unique: false)
+  "The DID of the party, or of the account that is the party; null for an account with no identity"
+  identity: String @index(unique: false)
+  "Set when the party is an account-level holder; the party is then this account, and `identity` its DID"
+  account: String
   "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
   portfolios: [Int]
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")

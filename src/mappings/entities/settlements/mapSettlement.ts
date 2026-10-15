@@ -36,7 +36,12 @@ import {
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
-import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
+import {
+  getPortfolioOrAccount,
+  instructionPartiesOf,
+  LegDetails,
+  PartyDetails,
+} from './../../../utils/settlements';
 import { memoText } from '../../../utils/text';
 
 /**
@@ -235,22 +240,23 @@ const getPartyId = (
 const createInstructionParty = async (
   instructionId: string,
   blockEventId: string,
-  parties: Record<string, number[] | undefined>,
+  parties: Map<string, PartyDetails>,
   isMediator: boolean
 ): Promise<void> => {
-  const promises = Object.keys(parties).map(did =>
-    InstructionParty.create({
-      id: getPartyId(instructionId, did, undefined, isMediator),
-      instructionId,
-      isMediator,
-      identity: did,
-      portfolios: parties[did],
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    }).save()
+  await Promise.all(
+    [...parties.values()].map(({ identity, account, portfolios }) =>
+      InstructionParty.create({
+        id: getPartyId(instructionId, identity as string, account, isMediator),
+        instructionId,
+        isMediator,
+        identity,
+        account,
+        portfolios,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
+      }).save()
+    )
   );
-
-  await Promise.all(promises);
 };
 
 /**
@@ -379,27 +385,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     )
   );
 
-  const parties = {};
-  legParams.forEach(leg => {
-    const addParty = (did: string, portfolio?: number): void => {
-      if (portfolio === undefined) {
-        parties[did] = undefined;
-      } else {
-        parties[did] = [...(parties[did] || []), portfolio];
-      }
-    };
-
-    if (leg.fromAccount) {
-      addParty(leg.fromAccount);
-    } else {
-      addParty(leg.from, leg.fromPortfolio);
-    }
-    if (leg.toAccount) {
-      addParty(leg.toAccount);
-    } else {
-      addParty(leg.to, leg.toPortfolio);
-    }
-  });
+  const parties = instructionPartiesOf(legParams);
 
   const instructionCreatedEvent = InstructionEvent.create({
     id: blockEventId,
@@ -811,10 +797,7 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
     }).save();
   });
 
-  const parties = {};
-  identityIds.forEach(did => {
-    parties[did] = undefined;
-  });
+  const parties = new Map<string, PartyDetails>(identityIds.map(did => [did, { identity: did }]));
 
   await Promise.all([
     instruction.save(),
