@@ -26,7 +26,7 @@ const DID_A = '0x0a'.padEnd(66, '0');
 const DID_B = '0x0b'.padEnd(66, '0');
 
 const nftEvent = (
-  reason: 'issued' | 'redeemed' | 'transferred',
+  reason: 'issued' | 'redeemed' | 'transferred' | 'controllerTransfer',
   {
     holderDid,
     from,
@@ -36,6 +36,7 @@ const nftEvent = (
     events = [],
     method = 'NFTHoldingsUpdated',
     specVersion,
+    extrinsic,
   }: {
     holderDid: string;
     from?: unknown;
@@ -45,12 +46,14 @@ const nftEvent = (
     events?: unknown[];
     method?: string;
     specVersion?: number;
+    extrinsic?: unknown;
   }
 ) =>
   tupleEvent({
     section: 'nft',
     method,
     specVersion,
+    extrinsic,
     idx,
     events,
     blockNumber: '500',
@@ -152,6 +155,45 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(0);
     expect(db['Holding'][`${ASSET}/${DID_B}/0`].nftCount).toBe(1);
   });
+
+  it.each([
+    ['controllerTransfer', 'ControllerTransfer', 'ControllerTransfer'],
+    ['controllerTransferTo', 'ControllerTransferTo', 'ControllerTransferTo'],
+    // the ERC-7943 precompile and batches wrap the call, so only the event names it
+    ['batchAll', 'ControllerTransfer', 'ControllerTransfer'],
+    ['call', 'ControllerTransferTo', 'ControllerTransferTo'],
+    // before 8.1.3 neither call emitted an event of its own
+    ['batchAll', undefined, 'ControllerTransfer'],
+  ])(
+    'labels a controller transfer by %s followed by nft.%s as %s',
+    async (call, follower, expected) => {
+      await handleNftHoldingsUpdates(
+        nftEvent('issued', { holderDid: DID_B, to: meshPortfolioHolderCodec(DID_B, 0), ids: [5] })
+      );
+      await flushNftBuffer();
+
+      await handleNftHoldingsUpdates(
+        nftEvent('controllerTransfer', {
+          holderDid: DID_A,
+          from: meshPortfolioHolderCodec(DID_B, 0),
+          to: meshPortfolioHolderCodec(DID_A, 0),
+          ids: [5],
+          idx: 0,
+          extrinsic: { idx: 1, extrinsic: { method: { method: call } } },
+          events: [
+            { event: { section: 'nft', method: 'NFTHoldingsUpdated' } },
+            ...(follower ? [{ event: { section: 'nft', method: follower } }] : []),
+          ],
+        })
+      );
+
+      const [transfer] = Object.values(db['AssetTransaction']).filter(
+        (row: any) => row.fromPortfolioId
+      ) as any[];
+      expect(transfer).toMatchObject({ eventId: expected, fromPortfolioId: `${DID_B}/0` });
+      expect(db['Nft'][`${ASSET}/0000000005`]).toMatchObject({ identityId: DID_A });
+    }
+  );
 
   it('counts identities holding the collection in Asset.holderCount', async () => {
     const holderCount = () => db['Asset'][ASSET].holderCount;
