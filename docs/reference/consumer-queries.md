@@ -263,3 +263,33 @@ Recorded here rather than only in the defect log (B9) because it is the kind of 
 |---|---|
 | `revive.ethTransact` indexed with `address: null`, so nothing attributes to an Ethereum-derived account | **Closed** — PR #342 recovers the H160 from the RLP payload, derives the `0xEE`-padded `AccountId32`, and adds `EvmTransaction` / `EvmAccountMapping`. A backfill covers history. |
 | `authorizations.data` keeps the pre-migration payload, so it names a ticker where the chain names an asset id | **Closed** — PR #343. The migration is deterministic (`AssetId::from(ticker)` = `blake2_128(("legacy_ticker", ticker))` normalised to a v8 UUID) and the ticker is already stored, so the repair needs no chain read. Forward fix plus backfill. Note the failure this avoided: *resolving the stored ticker to the asset it names today* can point at a **different** asset, because a ticker can be unlinked and relinked in between. |
+
+## 10. Reads that scan, because their index is trimmed
+
+Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.
+
+**An extrinsic's events.** Use `events(filter: { blockId: { equalTo: … }, extrinsicIdx: { equalTo: … } })`. It is indexed through the unique `data_event_id` btree on `events (block_id, event_idx)` in `db/compat.sql`: the block narrows it to a few hundred rows and `extrinsicIdx` filters those. The nested `Extrinsic.events` relation and `events(filter: { extrinsicId })` scan all of `events`, because the `events (extrinsic_id)` GiST is trimmed. If a consumer needs that form, add a plain btree on `events (extrinsic_id)` to `db/compat.sql`.
+
+Big tables (every relation index trimmed):
+
+| Entity | Field or relation | Use instead |
+|---|---|---|
+| `Event` | `extrinsic` (and `Extrinsic.events`) | `blockId` + `extrinsicIdx`, above |
+| `PolyxEntry` | `extrinsic`, `createdEvent` | none; filter by `account` or `identity`, which stay indexed |
+| `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
+| `AccountBalance` | `account`, `identity`, `updatedEvent` | none |
+| `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | none |
+| `StakingEvent` | `validator`, `position`, `createdEvent` | `stashAccount` and `identity` filters, which stay indexed |
+
+Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
+
+| Entity | Field or relation |
+|---|---|
+| `createdEvent` / `updatedEvent` on `Account`, `AssetAgentAction`, `AssetTransaction` (created only), `Asset` (updated only), `Claim`, `IdentityKey`, `Instruction`, `InstructionAffirmation`, `InstructionEvent` (created only), `InstructionParty`, `Leg`, `MultiSigProposal`, `MultiSigProposalVote`, `Nft`, `Portfolio`, `ValidatorEra` | reverse relations from `Event`, and filters or ordering on the stamp |
+| `Era` | `startEvent`, `endEvent` |
+| `MultiSigProposal` | `extrinsic` |
+| `Nft` | `burnedEvent` |
+| `Nomination` | `validFromEvent` |
+| `IdentityKey` | `validFromBlock` |
+
+Entity lookups on the small tables (holders of an asset, keys of an identity, holdings of an identity, NFTs, instruction parties) are not trimmed.
