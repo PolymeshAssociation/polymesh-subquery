@@ -715,6 +715,46 @@ describe('Event → pool transition', () => {
     delete (globalThis as any).api.rpc;
   });
 
+  it('Held then a TransferAndHold that names no reason: the Held takes the chain list', async () => {
+    await holdWithUndecodable('1000');
+
+    // the transfer's handler adjusts no hold without a reason, so nothing later takes the list
+    const getStorage = stubChainHolds(1150);
+
+    const [held] = extrinsicEvents(2_300_000, [
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '150' }],
+      ['balances', 'TransferAndHold', { source: BOB, dest: ALICE, transferred: '5' }],
+    ]);
+    (held.block.block.header as any).hash = { toHex: () => '0xblock' };
+
+    await handleBalanceHeld(held);
+
+    expect(getStorage).toHaveBeenCalledTimes(1);
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '1150' }]);
+    clearChainHolds();
+  });
+
+  it('Held then a TransferAndHold that names a reason: the Held waits for it', async () => {
+    await holdWithUndecodable('1000');
+
+    const getStorage = stubChainHolds(1150);
+
+    const [held] = extrinsicEvents(2_400_000, [
+      ['balances', 'Held', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '150' }],
+      [
+        'balances',
+        'TransferAndHold',
+        { reason: STAKING_HOLD_REASON, source: BOB, dest: ALICE, transferred: '5' },
+      ],
+    ]);
+    (held.block.block.header as any).hash = { toHex: () => '0xblock' };
+
+    await handleBalanceHeld(held);
+
+    expect(getStorage).not.toHaveBeenCalled();
+    clearChainHolds();
+  });
+
   it('Held: an unrecognised hold reason still decodes as Unknown', async () => {
     await handleBalanceHeld(
       balancesEvent('Held', { reason: { somethingNew: 'Whatever' }, who: ALICE, amount: '5' })

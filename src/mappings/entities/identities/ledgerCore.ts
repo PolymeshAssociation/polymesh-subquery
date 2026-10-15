@@ -760,7 +760,8 @@ const HOLD_EVENT_ACCOUNTS: Record<string, string[][]> = {
  *
  * A later event is only looked at, not handled, so one that does not decode is left to its own
  * handler to record. Every event here is struct-style, which names its fields without the shape
- * table.
+ * table. A transfer-and-hold adjusts a hold only when its reason resolves, so one that names none
+ * does not count: nothing would take the chain's list after it.
  *
  * A currency migration is not among them: it sets the hold from the ledger rather than by a delta,
  * and usually follows the `Held` that stakes the migrated balance without withdrawing anything, so
@@ -782,7 +783,17 @@ const holdChangesLater = (block: SubstrateBlock, eventIdx: number, address: stri
     try {
       const decoded = namedFields({ event: record.event } as unknown as SubstrateEvent);
 
-      return !!decoded && accounts.some(names => firstText(decoded, names) === address);
+      if (!decoded) {
+        return false;
+      }
+
+      const transfer =
+        record.event.method === 'TransferOnHold' || record.event.method === 'TransferAndHold';
+
+      return (
+        (!transfer || holdReasonOf(decoded) !== undefined) &&
+        accounts.some(names => firstText(decoded, names) === address)
+      );
     } catch {
       return false;
     }
