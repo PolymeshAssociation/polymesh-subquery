@@ -176,6 +176,50 @@ describe('createExtrinsic', () => {
     expect(extrinsic.success).toEqual(0);
   });
 
+  describe('batchFailed', () => {
+    const batch = (...methods: string[]) =>
+      createExtrinsic(
+        mockExtrinsic({
+          section: 'utility',
+          method: 'batch',
+          events: methods.map(method => ({ section: 'utility', method, data: [] })),
+        })
+      );
+
+    it('is true when a batch was interrupted, though the extrinsic succeeded', () => {
+      const extrinsic = batch('BatchInterrupted');
+
+      expect(extrinsic.success).toEqual(1);
+      expect(extrinsic.batchFailed).toBe(true);
+    });
+
+    it.each(['BatchInterruptedOld', 'BatchOptimisticFailed'])('is true on %s', method => {
+      expect(batch(method).batchFailed).toBe(true);
+    });
+
+    it('is true when a force_batch carried on past failing calls', () => {
+      expect(batch('ItemCompleted', 'ItemFailed', 'BatchCompletedWithErrors').batchFailed).toBe(
+        true
+      );
+    });
+
+    it('is false for a batch whose every call succeeded', () => {
+      expect(batch('ItemCompleted', 'ItemCompleted', 'BatchCompleted').batchFailed).toBe(false);
+    });
+
+    it('is false for an extrinsic that is not a batch', () => {
+      expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).batchFailed).toBe(false);
+    });
+
+    it('ignores an event of the same name from another pallet', () => {
+      const extrinsic = createExtrinsic(
+        mockExtrinsic({ events: [{ section: 'scheduler', method: 'ItemFailed', data: [] }] })
+      );
+
+      expect(extrinsic.batchFailed).toBe(false);
+    });
+  });
+
   it('should keep success 1 when nothing reverted', () => {
     expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).success).toEqual(1);
   });

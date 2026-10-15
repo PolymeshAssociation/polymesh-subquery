@@ -16,6 +16,20 @@ import { toEnum } from '../common';
 import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
 
+/** Events a batch deposits when a call in it failed; a batch that fully succeeded deposits none */
+const BATCH_FAILURE_EVENTS = new Set([
+  'BatchInterrupted',
+  'BatchInterruptedOld',
+  'BatchOptimisticFailed',
+  'BatchCompletedWithErrors',
+  'ItemFailed',
+]);
+
+const hasBatchFailure = (extrinsic: SubstrateExtrinsic): boolean =>
+  (extrinsic.events ?? []).some(
+    ({ event }) => event.section === 'utility' && BATCH_FAILURE_EVENTS.has(event.method)
+  );
+
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = padId(extrinsic.block.block.header.number.toString());
   const extrinsicIdx = extrinsic.idx;
@@ -52,6 +66,7 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     callIdText: callId,
     args: argumentsJson(args),
     success: extrinsic.success ? 1 : 0,
+    batchFailed: hasBatchFailure(extrinsic),
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
     nonce: extrinsic.extrinsic.nonce.toNumber(),

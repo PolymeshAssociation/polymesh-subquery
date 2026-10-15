@@ -1882,7 +1882,10 @@ type Extrinsic @entity {
   callIdText: String!
   "The call's arguments, keyed by argument name and encoded as described on `ArgumentsJson`. Not indexed: an `args` filter must come with a `moduleId` and `callId` filter, which narrows the scan to that call's rows. Null when an argument was not the shape its declared type promised; an `IndexerAnomaly` records which"
   args: ArgumentsJson
+  "`1` when the extrinsic itself succeeded. A `utility` batch that stops at a failing call, or a `force_batch` that skips failing calls, still succeeds as an extrinsic, so this says nothing about the calls inside it: use `batchFailed`"
   success: Int!
+  "`true` when a batch inside this extrinsic reported a failed call: `BatchInterrupted`, `BatchInterruptedOld`, `BatchOptimisticFailed`, `BatchCompletedWithErrors` or `ItemFailed` is among its `events`, including a batch nested in a wrapper such as a multisig execution, a relayed call, `as_derivative` or a committee execution. `false` for every other extrinsic, a batch that fully succeeded included, and for an extrinsic that failed as a whole (check `success` first: a `batch_all` that fails reverts everything, so `success` is `0` and this is `false`). A failed `relay_tx` or `dispatch_as` inner call is not flagged. Before v7 a `batch_atomic` that fails reports `BatchInterruptedOld` although its changes were rolled back, so this is `true` there with nothing applied. Not indexed: combine a filter on it with an indexed one"
+  batchFailed: Boolean!
   nonce: Int
   extrinsicHash: String @index(unique: false)
   """
