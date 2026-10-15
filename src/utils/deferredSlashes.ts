@@ -170,6 +170,91 @@ export const appliedDeferredSlash = (
   return share ? { slash: share, asValidator: false } : undefined;
 };
 
+interface Placements {
+  deferred: DeferredSlash[];
+  dueEra: number | undefined;
+  /** what each `Slash` in the block was placed as, by event index */
+  placed: Map<number, ReturnType<typeof appliedDeferredSlash>>;
+  /** the index of the first `Slash` each deferred slash was applied from */
+  first: Map<DeferredSlash, number>;
+}
+
+const placementsByBlock = new WeakMap<SubstrateBlock, Placements>();
+
+const isSlashRecord = ({ event }: { event: { section: string; method: string } }): boolean =>
+  event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed');
+
+/**
+ * Places every `Slash` in `block` in one pass, in order, each against the stashes slashed before
+ * it. Done once per block and kept, whatever the number of slashes it applies: a block that starts
+ * an era can apply hundreds, and placing each from scratch would replay all those before it.
+ */
+const placementsOf = (
+  deferred: DeferredSlash[],
+  block: SubstrateBlock,
+  dueEra: number | undefined
+): Placements => {
+  const known = placementsByBlock.get(block);
+
+  if (known?.deferred === deferred && known.dueEra === dueEra) {
+    return known;
+  }
+
+  const placements: Placements = { deferred, dueEra, placed: new Map(), first: new Map() };
+  // nearest first, as `appliedDeferredSlash` takes it
+  const earlier: string[] = [];
+
+  (block.events ?? []).forEach((record, idx) => {
+    if (!isSlashRecord(record)) {
+      return;
+    }
+
+    const stash = record.event.data[0].toString();
+    const placed = appliedDeferredSlash(
+      deferred,
+      stash,
+      BigInt(record.event.data[1].toString()),
+      earlier,
+      dueEra
+    );
+
+    placements.placed.set(idx, placed);
+    if (placed && !placements.first.has(placed.slash)) {
+      placements.first.set(placed.slash, idx);
+    }
+    earlier.unshift(stash);
+  });
+
+  placementsByBlock.set(block, placements);
+
+  return placements;
+};
+
+/**
+ * The deferred slash the `Slash` at `eventIdx` was applied from (see `appliedDeferredSlash`), with
+ * the stashes slashed before it taken from the block. From v7.0 a slash is only placed against the
+ * active era; without it (`dueEra` undefined, which `activeEraAt` records) it is left unplaced
+ * rather than put to the oldest era, which can be a stale one.
+ */
+export const placeSlash = (
+  deferred: DeferredSlash[],
+  block: SubstrateBlock,
+  eventIdx: number,
+  stash: string,
+  amount: bigint,
+  dueEra?: number
+): ReturnType<typeof appliedDeferredSlash> => {
+  if (dueEra === undefined && block.specVersion >= APPLY_ERA_KEYS_FROM) {
+    return undefined;
+  }
+
+  const { placed } = placementsOf(deferred, block, dueEra);
+
+  return placed.has(eventIdx)
+    ? placed.get(eventIdx)
+    : appliedDeferredSlash(deferred, stash, amount, slashedBefore(block, eventIdx), dueEra);
+};
+
 /**
  * Whether the `Slash` at `eventIdx` is the first one in `block` that `slash` was applied from. That
  * is its validator's own, unless the validator's share was nothing and so announced nothing, when
@@ -181,19 +266,8 @@ export const isFirstSlashOf = (
   block: SubstrateBlock,
   eventIdx: number,
   dueEra?: number
-): boolean =>
-  !(block.events ?? []).slice(0, eventIdx).some(({ event }, idx) => {
-    if (event.section !== 'staking' || (event.method !== 'Slash' && event.method !== 'Slashed')) {
-      return false;
-    }
+): boolean => {
+  const first = placementsOf(deferred, block, dueEra).first.get(slash);
 
-    const placed = appliedDeferredSlash(
-      deferred,
-      event.data[0].toString(),
-      BigInt(event.data[1].toString()),
-      slashedBefore(block, idx),
-      dueEra
-    );
-
-    return placed?.slash === slash;
-  });
+  return first === undefined || first >= eventIdx;
+};

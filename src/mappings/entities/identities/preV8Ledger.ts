@@ -33,9 +33,9 @@ import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import {
   APPLY_ERA_KEYS_FROM,
-  appliedDeferredSlash,
   deferredSlashesBefore,
   isFirstSlashOf,
+  placeSlash,
   slashedBefore,
 } from '../../../utils/deferredSlashes';
 import {
@@ -357,21 +357,37 @@ export const creditSlashReporters = async (
           readActiveEraIndex
         )
       : undefined;
-  const match = appliedDeferredSlash(
-    deferred,
-    stash,
-    amount,
-    slashedBefore(block, eventIdx),
-    dueEra
-  );
-  const applied = match?.slash;
+  // from v7.0 a slash is placed against the active era alone: with it unreadable (recorded above)
+  // it is left unplaced, not put to the oldest era, which can be one that was never applied
+  if (block.specVersion >= APPLY_ERA_KEYS_FROM && dueEra === undefined) {
+    return;
+  }
+
+  const applied = placeSlash(deferred, block, eventIdx, stash, amount, dueEra)?.slash;
 
   if (!applied) {
-    // A nominator's share that fits no slash is recorded when the slash itself is indexed.
-    if (deferred.some(slash => slash.validator === stash)) {
+    // The slashes of the era being applied, not of an older one never applied: a stash that is a
+    // validator in a stale key only is a nominator here. A validator's own share that fits no
+    // slash is recorded here. A nominator's share is paid for by the slash of its validator before
+    // it, unless that validator's own share was nothing and announced none: then nothing in the
+    // block pays the reporters, and nothing else records it.
+    const era = dueEra ?? Math.min(...deferred.map(slash => slash.era));
+    const validators = deferred.filter(slash => slash.era === era).map(slash => slash.validator);
+    const validatorSlashedBefore = slashedBefore(block, eventIdx).some(earlier =>
+      validators.includes(earlier)
+    );
+
+    if (validators.includes(stash)) {
       await recordAnomaly({
         kind: AnomalyKind.UnreadableValue,
         detail: `staking.Slash of ${amount} on ${stash} matches no deferred slash, so its reporters were not paid`,
+        block,
+        eventIdx,
+      });
+    } else if (!validatorSlashedBefore) {
+      await recordAnomaly({
+        kind: AnomalyKind.UnreadableValue,
+        detail: `staking.Slash of ${amount} on ${stash} matches no one deferred slash and no validator was slashed before it, so its reporters were not paid`,
         block,
         eventIdx,
       });

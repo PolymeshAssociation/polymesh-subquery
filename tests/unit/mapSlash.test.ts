@@ -87,6 +87,43 @@ describe('appliedDeferredSlash', () => {
     });
   });
 
+  it('places the slashes of a busy block in one pass, not once per earlier slash', () => {
+    const nominators = Array.from({ length: 200 }, (_, index) => `nominator${index}`);
+    // the validator's own share was nothing, so each event is a nominator's
+    const busy = deferred(
+      2159,
+      BigInt(0),
+      nominators.map((stash): [string, bigint] => [stash, BigInt(10)])
+    );
+    let reads = 0;
+    const block = {
+      events: nominators.map(stash => ({
+        event: {
+          section: 'staking',
+          method: 'Slash',
+          data: [
+            {
+              toString: () => {
+                reads += 1;
+                return stash;
+              },
+            },
+            { toString: () => '10' },
+          ],
+        },
+      })),
+    } as never;
+
+    const waiting = [busy];
+
+    nominators.forEach((_, idx) => {
+      expect(isFirstSlashOf(waiting, busy, block, idx, 2159)).toBe(idx === 0);
+    });
+
+    // each event is read once to place it, not again for every slash after it
+    expect(reads).toBe(nominators.length);
+  });
+
   it("places a nominator's share under the validator it nominated", () => {
     expect(appliedDeferredSlash(waiting, NOMINATOR, BigInt(40))).toEqual({
       slash: waiting[1],
@@ -302,6 +339,43 @@ describe('handleSlash', () => {
         offenceEraIndex: undefined,
       }),
     ]);
+  });
+
+  it('leaves a v8 slash unplaced, not put to the oldest era, when the active era cannot be read', async () => {
+    const db = mockStore();
+    // only a stale key is stored: the oldest era present is not the one being applied
+    jest
+      .mocked(deferredSlashesBefore)
+      .mockResolvedValue([deferred(7020, BigInt(1000), [[NOMINATOR, BigInt(40)]])]);
+    (globalThis as any).api.query = {
+      staking: {
+        activeEra: jest
+          .fn()
+          .mockRejectedValue(new Error('createType(ActiveEraInfo):: Struct: failed on index')),
+      },
+    };
+    (globalThis as any).api.consts = { staking: { slashDeferDuration: { toNumber: () => 14 } } };
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    anomaly.mockClear();
+
+    await handleSlash(
+      namedEvent({
+        section: 'staking',
+        method: 'Slashed',
+        fields: { staker: NOMINATOR, amount: '40' },
+      })
+    );
+
+    expect(Object.values(db.Slash)).toEqual([
+      expect.objectContaining({
+        accountId: NOMINATOR,
+        validatorId: undefined,
+        eraIndex: undefined,
+        offenceEraIndex: undefined,
+      }),
+    ]);
+    // the unreadable era is recorded; the slash is not also reported as matching nothing
+    expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the slash and reports it when the deferred slashes cannot be read', async () => {

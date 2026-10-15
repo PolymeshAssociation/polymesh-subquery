@@ -3095,7 +3095,7 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
   };
   let undecodable: number[] = [];
   // from v7 the slashes applied are the active era's
-  let activeEra = 2159;
+  let activeEra: number | 'undecodable' = 2159;
 
   const getKeysPaged = jest.fn();
   const queryStorageAt = jest.fn();
@@ -3120,7 +3120,13 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
           keyPrefix: () => '0xunappliedSlashes',
           creator: { meta: { type: { isMap: true, asMap: { value: 587 } } } },
         },
-        activeEra: jest.fn().mockResolvedValue({ toJSON: () => ({ index: activeEra }) }),
+        activeEra: jest
+          .fn()
+          .mockImplementation(() =>
+            activeEra === 'undecodable'
+              ? Promise.reject(new Error('createType(ActiveEraInfo):: Struct: failed on index'))
+              : Promise.resolve({ toJSON: () => ({ index: activeEra }) })
+          ),
         // the slashed stash's staking lock is resynced from its ledger
         bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
         ledger: jest.fn().mockResolvedValue({ toJSON: () => null }),
@@ -3406,6 +3412,94 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     expect(balance(REPORTER)?.free).toBe(BigInt(120));
     expect(balance(STALE_REPORTER)).toBeUndefined();
     expect(anomalies()).toHaveLength(0);
+  });
+
+  it("leaves a v7 slash unplaced, and pays no one, when the active era can't be read", async () => {
+    const V7 = 7_000_000;
+    // only a stale key is stored: with no active era to name the due one, it must not be taken
+    deferredSlashes(
+      { 2100: [{ validator: OFFENDER, own: '1000', reporters: [REPORTER], payout: '120' }] },
+      V7
+    );
+    activeEra = 'undecodable';
+
+    const [slash] = slashEvents([[OFFENDER, '1000']], '880', V7, 'Slashed');
+    await handleStakingSlash(slash);
+
+    expect(balance(REPORTER)).toBeUndefined();
+    // the unreadable era, recorded once; the slash is not also reported as matching nothing
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0].detail).toContain('failed on index');
+  });
+
+  describe('a nominator whose slash fits no one deferred slash', () => {
+    const NOMINATOR = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
+    const SECOND = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+    it('records that its reporters were not paid when no validator was slashed before it', async () => {
+      // both validators' own shares were nothing, so neither announced a slash to follow
+      deferredSlashes({
+        2159: [
+          {
+            validator: OFFENDER,
+            own: '0',
+            others: [[NOMINATOR, '40']],
+            reporters: [REPORTER],
+            payout: '5',
+          },
+          {
+            validator: SECOND,
+            own: '0',
+            others: [[NOMINATOR, '40']],
+            reporters: [ALICE],
+            payout: '5',
+          },
+        ],
+      });
+
+      const [slash] = slashEvents([[NOMINATOR, '40']], null);
+      await handleStakingSlash(slash);
+
+      expect(balance(REPORTER)).toBeUndefined();
+      expect(anomalies()).toHaveLength(1);
+      expect(anomalies()[0].detail).toContain('no validator was slashed before it');
+    });
+
+    it('records nothing for a stash that is a validator only under a key that was never applied', async () => {
+      const V7 = 7_000_000;
+      // NOMINATOR has a slash held under a stale key, and is a nominator in the due era
+      deferredSlashes(
+        {
+          2100: [{ validator: NOMINATOR, own: '1000', reporters: [ALICE], payout: '5' }],
+          2159: [
+            {
+              validator: OFFENDER,
+              own: '1000',
+              others: [[NOMINATOR, '40']],
+              reporters: [REPORTER],
+              payout: '120',
+            },
+          ],
+        },
+        V7
+      );
+
+      // its share fits nothing the due era holds; the validator's own slash before it paid
+      for (const event of slashEvents(
+        [
+          [OFFENDER, '1000'],
+          [NOMINATOR, '41'],
+        ],
+        '921',
+        V7,
+        'Slashed'
+      )) {
+        await handleStakingSlash(event);
+      }
+
+      expect(balance(REPORTER)?.free).toBe(BigInt(120));
+      expect(anomalies()).toHaveLength(0);
+    });
   });
 
   it('records it when the treasury received something other than the rest', async () => {

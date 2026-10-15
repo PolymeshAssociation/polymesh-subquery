@@ -6,10 +6,9 @@ import { ledgerAccount } from '../../../utils/accounts';
 import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import {
   APPLY_ERA_KEYS_FROM,
-  appliedDeferredSlash,
   deferredSlashesBefore,
   dueEraAt,
-  slashedBefore,
+  placeSlash,
 } from '../../../utils/deferredSlashes';
 import { readActiveEraIndex } from '../../../utils/staking';
 import { extractArgs } from '../common';
@@ -46,17 +45,15 @@ export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
       readActiveEraIndex
     ),
   ]);
+  const dueEra = dueEraAt(block, activeEra);
+  // from v7.0 a slash is placed against the active era alone, so one whose era is unreadable is
+  // left unplaced, and that was recorded when it was read
+  const eraUnreadable = dueEra === undefined && block.specVersion >= APPLY_ERA_KEYS_FROM;
   const applied = deferred
-    ? appliedDeferredSlash(
-        deferred,
-        stash,
-        amount,
-        slashedBefore(block, eventIdx),
-        dueEraAt(block, activeEra)
-      )
+    ? placeSlash(deferred, block, eventIdx, stash, amount, dueEra)
     : undefined;
 
-  if (!applied) {
+  if (!applied && !eraUnreadable) {
     await recordAnomaly({
       kind: AnomalyKind.UnreadableValue,
       detail: `staking.${eventId} of ${amount} on ${stash} matches no deferred slash${
