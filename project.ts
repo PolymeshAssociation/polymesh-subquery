@@ -185,8 +185,8 @@ const filters: Record<string, Record<string, string[]>> = {
     // It belongs with plan 01 (claims); left unhandled here deliberately.
     CddClaimsInvalidated: [],
     CddRequirementForPrimaryKeyUpdated: [],
-    ChildDidCreated: ['handleChildDidCreated'],
-    ChildDidUnlinked: ['handleChildDidUnlinked'],
+    ChildDidCreated: [],
+    ChildDidUnlinked: [],
     ClaimAdded: ['handleClaimAdded'],
     ClaimRevoked: ['handleClaimRevoked'],
     CustomClaimTypeAdded: ['handleCustomClaimTypeCreated'],

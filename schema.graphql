@@ -2163,7 +2163,6 @@ type Identity @entity {
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
-  children: [ChildIdentity!]! @derivedFrom(field: "parent")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
   """
@@ -3806,17 +3805,6 @@ type AccountBalance @entity {
   "v8 only; SUM = reserved"
   holds: [HoldEntry]
 
-  updatedEvent: Event!
-}
-
-"""
-Represents the parent child mapping for an Identity
-"""
-type ChildIdentity @entity {
-  id: ID!
-  child: Identity!
-  parent: Identity!
-  createdEvent: Event!
   updatedEvent: Event!
 }
 

@@ -1,7 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import mapChainUpgrade from '../../src/mappings/entities/block/mapChainUpgrade';
 import { repairAuthorizationsAfterUpgrade } from '../../src/mappings/entities/identities/repairAuthorizations';
-import { retireChildIdentitiesAtV8 } from '../../src/mappings/entities/identities/retireChildIdentities';
 import { handleMultiSigProposalDeleted } from '../../src/mappings/entities/multiSig/mapMultiSigProposal';
 
 jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
@@ -9,9 +8,6 @@ jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
 }));
 jest.mock('../../src/mappings/entities/identities/repairAuthorizations', () => ({
   repairAuthorizationsAfterUpgrade: jest.fn(),
-}));
-jest.mock('../../src/mappings/entities/identities/retireChildIdentities', () => ({
-  retireChildIdentitiesAtV8: jest.fn(),
 }));
 
 /**
@@ -61,7 +57,6 @@ describe('mapChainUpgrade', () => {
   beforeEach(() => {
     (handleMultiSigProposalDeleted as jest.Mock).mockResolvedValue(undefined);
     (repairAuthorizationsAfterUpgrade as jest.Mock).mockResolvedValue(undefined);
-    (retireChildIdentitiesAtV8 as jest.Mock).mockResolvedValue(undefined);
     (store.set as jest.Mock).mockResolvedValue(undefined);
   });
 
@@ -151,8 +146,6 @@ describe('mapChainUpgrade', () => {
         firstBlockId: '0024730585',
       },
     ]);
-    expect(retireChildIdentitiesAtV8).toHaveBeenCalledWith(
-      expect.objectContaining({ previousSpecVersion: 7_004_001, specVersion: 8_000_000 })
-    );
+    expect(repairAuthorizationsAfterUpgrade).toHaveBeenCalledTimes(1);
   });
 });

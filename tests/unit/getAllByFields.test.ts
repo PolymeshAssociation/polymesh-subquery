@@ -55,9 +55,9 @@ describe('getAllByFields', () => {
   it('accepts an empty filter, which reads the whole table', async () => {
     getByFields.mockResolvedValue([]);
 
-    await getAllByFields('ChildIdentity', []);
+    await getAllByFields('ChainUpgrade', []);
 
-    expect(getByFields).toHaveBeenCalledWith('ChildIdentity', [], expect.anything());
+    expect(getByFields).toHaveBeenCalledWith('ChainUpgrade', [], expect.anything());
   });
 
   /**

@@ -10,7 +10,6 @@ import {
   Account,
   AnomalyKind,
   AssetPermissions,
-  ChildIdentity,
   CustomClaimType,
   EventIdEnum,
   Identity,
@@ -216,25 +215,6 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     { identityId: did, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
     blockEventId
   );
-};
-
-export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = getEventParams(extractArgs(event));
-  const { did: rawParentDid, childDid: rawChildDid } = decodeEvent(event);
-  const parentDid = getTextValue(rawParentDid);
-  const childDid = getTextValue(rawChildDid);
-
-  await ChildIdentity.create({
-    id: childDid,
-    parentId: parentDid,
-    childId: childDid,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  }).save();
-};
-
-export const handleChildDidUnlinked = async (event: SubstrateEvent): Promise<void> => {
-  await ChildIdentity.remove(getTextValue(decodeEvent(event).childDid));
 };
 
 interface PermissionsLike {
