@@ -162,9 +162,11 @@ export const legacyRewardRecipient = async (
  *
  * An `Unlocked` is the fall in what the account's locks freeze (their maximum), so it is the
  * migration's only when it is exactly the fall removing the staking lock causes: the lock's amount
- * when it stood alone, or its excess over the highest other lock. Any other amount is another
- * lock's, and is left to the generic lock. `false` when it is not the migration's, or `who` has no
- * such lock.
+ * when it stood alone, or its excess over the highest other lock. The lock's own amount also
+ * counts: the migration's `Held{Staking}` has already capped the indexed lock at what the chain
+ * freezes, and the `Unlocked` reports that capped amount, which the excess no longer matches. Any
+ * other amount is another lock's, and is left to the generic lock. `false` when it is not the
+ * migration's, or `who` has no such lock.
  */
 export const clearMigratedStakingLock = async (
   who: string | undefined,
@@ -181,8 +183,9 @@ export const clearMigratedStakingLock = async (
   const highest = (list: typeof locks): bigint =>
     list.reduce((max, lock) => (lock.amount > max ? lock.amount : max), BigInt(0));
   const freed = highest(locks) - highest(locks.filter(lock => lock.lockId !== STAKING_LOCK_ID));
+  const stakingLock = locks.find(lock => lock.lockId === STAKING_LOCK_ID)?.amount;
 
-  if (amount !== freed) {
+  if (amount !== freed && amount !== stakingLock) {
     return false;
   }
 

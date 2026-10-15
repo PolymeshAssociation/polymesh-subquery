@@ -75,11 +75,10 @@ import { chargedFor } from './preV54Fees';
 // Locks (Locked / Unlocked / Frozen / Thawed) — a floor on `free`, not a pool. No PolyxEntry.
 // ---------------------------------------------------------------------------------------------
 
-const lockHandler =
+const lockChange =
   (lockId: string, sign: bigint) =>
-  async (event: SubstrateEvent): Promise<void> => {
+  async (event: SubstrateEvent, decoded: Record<string, Codec>): Promise<void> => {
     const { blockId, block, blockEventId } = extractArgs(event);
-    const decoded = decodeEvent(event);
     const who = holder(decoded);
 
     if (!who) {
@@ -94,29 +93,31 @@ const lockHandler =
     await adjustLock(who, lockId, sign * amountOf(decoded), blockEventId);
   };
 
+const lockHandler =
+  (lockId: string, sign: bigint) =>
+  async (event: SubstrateEvent): Promise<void> =>
+    lockChange(lockId, sign)(event, decodeEvent(event));
+
 /**
  * `balances.Locked` / `Unlocked` — the `LockableCurrency` floor on `free`. On v8 an `Unlocked` can
  * also be the migration of a pre-v8 staking lock to a hold (see `clearMigratedStakingLock`).
  */
 export const handleBalanceLocked = lockHandler('balances', BigInt(1));
 
-const unlockGeneric = lockHandler('balances', BigInt(-1));
+const unlockGeneric = lockChange('balances', BigInt(-1));
 
 export const handleBalanceUnlocked = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
+  const decoded = decodeEvent(event);
 
   if (
     is8xChain(args.block) &&
-    (await clearMigratedStakingLock(
-      holder(decodeEvent(event)),
-      args.blockEventId,
-      amountOf(decodeEvent(event))
-    ))
+    (await clearMigratedStakingLock(holder(decoded), args.blockEventId, amountOf(decoded)))
   ) {
     return;
   }
 
-  await unlockGeneric(event);
+  await unlockGeneric(event, decoded);
 };
 
 /** `balances.Frozen` / `Thawed` — the upstream `fungible` freeze, also a floor on `free`. */

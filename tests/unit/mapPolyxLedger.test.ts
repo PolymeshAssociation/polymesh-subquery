@@ -11,6 +11,20 @@ import { bnToU8a, u8aConcat } from '@polkadot/util';
 import { SubstrateEvent } from '@subql/types';
 import { hostBytes } from './helpers';
 
+// counted, not stubbed: how often a handler decoded its event
+const mockDecodeCalls = { count: 0 };
+jest.mock('../../src/decode', () => {
+  const actual = jest.requireActual('../../src/decode');
+
+  return {
+    ...actual,
+    decodeEvent: (...args: unknown[]) => {
+      mockDecodeCalls.count += 1;
+
+      return actual.decodeEvent(...args);
+    },
+  };
+});
 jest.mock('../../src/utils/blockAuthor', () => ({ blockAuthor: jest.fn() }));
 jest.mock('../../src/mappings/entities/identities/feePayer', () => ({
   resolveFeePayer: jest.fn(),
@@ -1179,6 +1193,41 @@ describe('staking — era-dependent, inverted at v8', () => {
       expect(balance(ALICE)?.locks?.map((l: any) => [l.lockId, l.amount])).toEqual([
         ['balances', '1000'],
       ]);
+    });
+
+    it("a v8 Unlocked of the staking lock's amount, capped by the migration's Held, clears it", async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'staking ', BigInt(100), '0000001000000', 'staking');
+      await adjustLock(ALICE, 'balances', BigInt(50), '0000001000001');
+      // the chain froze 50 at the end of the block: the Held{Staking} that came first capped the
+      // indexed staking lock there, so the fall the Unlocked reports is no longer the excess
+      chainStakingLock('100', '50');
+
+      await handleBalanceHeld(
+        balancesEvent('Held', { reason: 'Staking', who: ALICE, amount: '100' })
+      );
+      await handleBalanceUnlocked(
+        balancesEvent('Unlocked', { who: ALICE, amount: '50' }, { specVersion: 8_000_000 })
+      );
+
+      expect(balance(ALICE)?.locks?.map((l: any) => [l.lockId, l.amount])).toEqual([
+        ['balances', '50'],
+      ]);
+    });
+
+    it('decodes a v8 Unlocked once, whichever lock it turns out to lower', async () => {
+      await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '10000' }));
+      await adjustLock(ALICE, 'balances', BigInt(6000), '0000001000001');
+      const event = balancesEvent(
+        'Unlocked',
+        { who: ALICE, amount: '2000' },
+        { specVersion: 8_000_000 }
+      );
+      mockDecodeCalls.count = 0;
+
+      await handleBalanceUnlocked(event);
+
+      expect(mockDecodeCalls.count).toBe(1);
     });
 
     it('a pre-v8 Unlocked leaves the staking lock alone (generic "balances" lock only)', async () => {
