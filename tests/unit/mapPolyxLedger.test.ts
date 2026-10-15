@@ -44,9 +44,11 @@ import {
 } from '../../src/types';
 import {
   handleBalanceBurned,
+  handleBalanceBurnedHeld,
   handleBalanceEndowed,
   handleBalanceFrozen,
   handleBalanceHeld,
+  handleBalanceLocked,
   handleBalanceReleased,
   handleBalanceMinted,
   handleBalanceReserved,
@@ -64,6 +66,7 @@ import {
   handleStakingSlash,
   handleTransactionFeeCharged,
   handleTransferAndHold,
+  handleTransferOnHold,
   handleTreasuryDisbursement,
   handleTreasuryReimbursement,
 } from '../../src/mappings/entities/identities/mapPolyxLedger';
@@ -3563,5 +3566,126 @@ describe("a pre-v8 slash's reporters are paid, unannounced", () => {
     );
 
     expect(getKeysPaged).not.toHaveBeenCalled();
+  });
+});
+
+describe('held balance burned or moved, and a lock raised (v8)', () => {
+  const hold = (who: string, amount: string) =>
+    handleBalanceHeld(balancesEvent('Held', { reason: STAKING_HOLD_REASON, who, amount }));
+
+  it('BurnedHeld: who/Reserved → ∅ as a Slash, shrinking the hold and leaving free alone', async () => {
+    await hold(ALICE, '900');
+    const before = entries().length;
+
+    await handleBalanceBurnedHeld(
+      balancesEvent('BurnedHeld', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '400' })
+    );
+
+    const burned = entries().slice(before);
+    expect(burned).toHaveLength(1);
+    expect(burned[0]).toMatchObject({
+      accountId: ALICE,
+      direction: EntryDirection.Debit,
+      pool: PolyxPool.Reserved,
+      kind: MovementKind.Slash,
+      holdReason: HoldReason.Staking,
+      amount: BigInt(-400),
+      amountAbs: BigInt(400),
+    });
+    expect(balance(ALICE)).toMatchObject({
+      free: BigInt(-900),
+      reserved: BigInt(500),
+      bonded: BigInt(500),
+      totalSlashed: BigInt(400),
+    });
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '500' }]);
+  });
+
+  it('BurnedHeld of the whole hold clears it', async () => {
+    await hold(ALICE, '900');
+    await handleBalanceBurnedHeld(
+      balancesEvent('BurnedHeld', { reason: STAKING_HOLD_REASON, who: ALICE, amount: '900' })
+    );
+
+    expect(balance(ALICE)).toMatchObject({ reserved: BigInt(0), bonded: BigInt(0) });
+    expect(balance(ALICE)?.holds).toEqual([]);
+  });
+
+  it('BurnedHeld naming no account writes nothing', async () => {
+    await handleBalanceBurnedHeld(
+      balancesEvent('BurnedHeld', { reason: STAKING_HOLD_REASON, amount: '400' })
+    );
+
+    expect(entries()).toHaveLength(0);
+  });
+
+  it('TransferOnHold: source/Reserved → dest/Reserved, the hold moving with it', async () => {
+    await hold(ALICE, '900');
+    const before = entries().length;
+
+    await handleTransferOnHold(
+      balancesEvent('TransferOnHold', {
+        reason: STAKING_HOLD_REASON,
+        source: ALICE,
+        dest: BOB,
+        amount: '300',
+      })
+    );
+
+    const moved = entries().slice(before);
+    expect(moved).toHaveLength(2);
+    expect(new Set(moved.map(r => r.movementId)).size).toBe(1);
+    expect(moved.find(r => r.direction === EntryDirection.Debit)).toMatchObject({
+      accountId: ALICE,
+      counterpartyAddress: BOB,
+      pool: PolyxPool.Reserved,
+      kind: MovementKind.ReserveRepatriation,
+      holdReason: HoldReason.Staking,
+      amount: BigInt(-300),
+    });
+    expect(moved.find(r => r.direction === EntryDirection.Credit)).toMatchObject({
+      accountId: BOB,
+      counterpartyAddress: ALICE,
+      pool: PolyxPool.Reserved,
+      amount: BigInt(300),
+    });
+
+    expect(balance(ALICE)).toMatchObject({ free: BigInt(-900), reserved: BigInt(600) });
+    expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '600' }]);
+    expect(balance(BOB)).toMatchObject({ free: BigInt(0), reserved: BigInt(300) });
+    expect(balance(BOB)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '300' }]);
+  });
+
+  it('Locked: raises the floor on free without a PolyxEntry or a pool move', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '1000' }));
+    const before = entries().length;
+
+    await handleBalanceLocked(balancesEvent('Locked', { who: ALICE, amount: '400' }));
+
+    expect(entries()).toHaveLength(before);
+    expect(balance(ALICE)).toMatchObject({
+      free: BigInt(1000),
+      reserved: BigInt(0),
+      frozen: BigInt(400),
+      transferable: BigInt(600),
+    });
+    expect(balance(ALICE)?.locks).toEqual([{ lockId: 'balances', amount: '400' }]);
+  });
+
+  it('Locked: the chain emits the rise in the account frozen amount, so successive events add up', async () => {
+    await handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '1000' }));
+
+    await handleBalanceLocked(balancesEvent('Locked', { who: ALICE, amount: '400' }));
+    await handleBalanceLocked(balancesEvent('Locked', { who: ALICE, amount: '100' }));
+
+    expect(balance(ALICE)?.frozen).toBe(BigInt(500));
+    expect(balance(ALICE)?.locks).toEqual([{ lockId: 'balances', amount: '500' }]);
+  });
+
+  it('Locked for an account the ledger has not seen creates its balance row', async () => {
+    await handleBalanceLocked(balancesEvent('Locked', { who: BOB, amount: '250' }));
+
+    expect(balance(BOB)).toMatchObject({ frozen: BigInt(250) });
+    expect(entries()).toHaveLength(0);
   });
 });
