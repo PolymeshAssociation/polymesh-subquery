@@ -254,6 +254,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
 
   it('reads the entries it checks', () => {
     expect(trimmed.length).toBeGreaterThan(50);
+    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(53);
     expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
   });
 
@@ -282,6 +283,27 @@ describe('GiST trim in db/trimIndexes.ts', () => {
     ).map(([table, columns]) => `${table} (${columns})`);
 
     expect(lost).toEqual([]);
+  });
+
+  it('keeps the lookups from small tables to other entities', () => {
+    const kept: Array<[string, string]> = [
+      ['asset_holders', 'asset_id'],
+      ['identity_keys', 'identity_id'],
+      ['holdings', 'identity_id'],
+      ['nfts', 'asset_id'],
+      ['instruction_parties', 'instruction_id'],
+      ['validator_eras', 'era_id'],
+      ['claims', 'issuer_id'],
+    ];
+
+    expect(kept.filter(([table, columns]) => dropped(table, [columns]))).toEqual([]);
+  });
+
+  it('trims the event stamps of small tables and every relation index of the big ones', () => {
+    expect(dropped('claims', ['created_event_id'])).toBe(true);
+    expect(dropped('identity_keys', ['valid_from_block_id'])).toBe(true);
+    expect(dropped('staking_positions', ['stash_id'])).toBe(true);
+    expect(dropped('account_balances', ['account_id'])).toBe(true);
   });
 
   it('keeps the id index of the entities rewritten many times', () => {

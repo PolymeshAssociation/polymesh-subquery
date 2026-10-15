@@ -5,9 +5,9 @@ import { isLockConflict } from './applySql';
 // and to keep up on insert. About half of those serve no reader: not the indexer (it looks rows up
 // by `id`, through the `(id, _block_range)` index in `compat.sql`, and through the handful of
 // `getByFields` / `getAllByFields` filters, whose fields keep their index), and not the queries the
-// SDK and portal run. Dropping them frees about 4.9 GB on testnet and about 12 GB on mainnet at full
-// size, and spares every insert the maintenance. Historical mode itself must stay on: unfinalized
-// blocks and reorg rewind need it. Rewind and the per-save close-out filter on `lower(_block_range)`
+// SDK and portal run. Dropping them frees about 13 GB on mainnet at full size
+// and spares every insert the maintenance. Historical mode itself must stay on: unfinalized blocks
+// and reorg rewind need it. Rewind and the per-save close-out filter on `lower(_block_range)`
 // and `id`, never on these.
 //
 // Two lists of entries, told apart by the constant that holds them:
@@ -20,6 +20,15 @@ import { isLockConflict } from './applySql';
 //              instead by an empty stand-in under the same name (`WHERE false` indexes nothing and
 //              can never be chosen by a query); the node then finds the name taken and skips it.
 //
+// What is trimmed follows table size. On the five big tables (staking_positions, account_balances,
+// staking_events, polyx_entries, events) every relation index is trimmed: 17 indexes, 8.57 GB on
+// mainnet. On the small tables only the event and extrinsic stamps (`created_event_id`,
+// `updated_event_id` and the like) are trimmed, 36 indexes and 111 MB, because nothing looks a row
+// up by the event that wrote it. The lookups to other entities stay as SubQuery's GiST, 27 indexes
+// and 228 MB: they are the joins an explorer runs (holders of an asset, keys of an identity), they
+// cost little at these sizes, and the replayed SDK and portal queries that sized the list could not
+// speak for every reader. The REMOVED list frees about 4.3 GB more.
+//
 // Entries match on the table and column list, not on a generated name, and only while the index is
 // still a GiST, so this is idempotent and safe on a database that never had them. Only indexes of
 // at least 1 MB on either chain are listed: the rest cost nothing worth a stand-in. To bring one
@@ -31,33 +40,29 @@ import { isLockConflict } from './applySql';
 // alphabetical, not the order the schema declares; `_block_range` is left off.
 export const RELATIONS = `
   account_balances  account_id identity_id updated_event_id
-  accounts  created_event_id identity_id updated_event_id
-  asset_agent_actions  caller_id created_event_id updated_event_id
-  asset_holders  asset_id
-  asset_transactions  created_event_id instruction_id
-  assets  owner_id updated_event_id
-  authorizations  from_id
-  claims  created_event_id issuer_id updated_event_id
+  accounts  created_event_id updated_event_id
+  asset_agent_actions  created_event_id updated_event_id
+  asset_transactions  created_event_id
+  assets  updated_event_id
+  claims  created_event_id updated_event_id
   eras  end_event_id start_event_id
   events  block_id extrinsic_id
-  holdings  account_id asset_id identity_id portfolio_id
-  identity_keys  created_event_id identity_id updated_event_id valid_from_block_id
-  instruction_affirmations  created_event_id off_chain_receipt_id party_id updated_event_id
-  instruction_events  created_event_id off_chain_receipt_id
-  instruction_parties  created_event_id instruction_id updated_event_id
+  holdings  asset_id
+  identity_keys  created_event_id updated_event_id valid_from_block_id
+  instruction_affirmations  created_event_id updated_event_id
+  instruction_events  created_event_id
+  instruction_parties  created_event_id updated_event_id
   instructions  created_event_id updated_event_id
   legs  created_event_id updated_event_id
-  multi_sig_proposal_votes  created_event_id signer_id updated_event_id
-  multi_sig_proposals  created_event_id creator_id extrinsic_id updated_event_id
-  nfts  account_id asset_id burned_event_id created_event_id identity_id portfolio_id updated_event_id
-  nominations  valid_from_event_id validator_id
+  multi_sig_proposal_votes  created_event_id updated_event_id
+  multi_sig_proposals  created_event_id extrinsic_id updated_event_id
+  nfts  burned_event_id created_event_id updated_event_id
+  nominations  valid_from_event_id
   polyx_entries  counterparty_identity_id created_event_id extrinsic_id
   portfolios  created_event_id updated_event_id
   staking_events  created_event_id position_id validator_id
   staking_positions  controller_id created_event_id identity_id reward_destination_account_id stash_id updated_event_id
-  ticker_reservations  identity_id
-  validator_eras  created_event_id era_id identity_id updated_event_id validator_id
-  validators  account_id
+  validator_eras  created_event_id updated_event_id
 `;
 
 export const REMOVED = `

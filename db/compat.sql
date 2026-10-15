@@ -77,9 +77,11 @@ BEGIN
   END LOOP;
 END $$;
 
--- The GiST indexes that no reader uses are dropped by `db/trimIndexes.ts`, one at a time after this
--- script has run: dropping ~100 of them here would hold an exclusive lock on each table until the
--- whole transaction commits, while the node is writing to it.
+-- The GiST indexes that no reader uses (every relation index of the five big tables, and the event
+-- and extrinsic stamps of the small ones; lookups to other entities on small tables stay) are
+-- dropped by `db/trimIndexes.ts`, one at a time after this script has run: dropping ~100 of them
+-- here would hold an exclusive lock on each table until the whole transaction commits, while the
+-- node is writing to it.
 
 -- `events.refs`, for `refs: { contains: [...] }`. Historical mode would make a declared index GiST,
 -- which can't index a jsonb array.
