@@ -3334,7 +3334,8 @@ type TransferComplianceExemption @entity {
   asset: Asset! @index(unique: false)
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
-  exemptedEntityId: String!
+  "The exempted identity"
+  exemptedEntity: Identity!
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3668,7 +3669,8 @@ type Funding @entity {
 type AssetMandatoryMediator @entity {
   id: ID! # /assetId/did
   asset: Asset!
-  identityId: String! # The chain doesn't validate existence of the DID
+  "The mediator. The chain does not check the DID exists, so this can join to no identity"
+  identity: Identity
   addedBy: Identity!
   createdEvent: Event!
   updatedEvent: Event!
