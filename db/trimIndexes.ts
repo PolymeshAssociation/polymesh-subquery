@@ -19,6 +19,8 @@ import { isLockConflict } from './applySql';
 //              undone, and an eleven-gigabyte rebuild is paid, at the next restart. It is replaced
 //              instead by an empty stand-in under the same name (`WHERE false` indexes nothing and
 //              can never be chosen by a query); the node then finds the name taken and skips it.
+//              The stand-in is built first, under another name and without blocking writes, and
+//              only then swapped in for the GiST in a short transaction (see `trimIndexes`).
 //
 // What is trimmed follows table size. On the five big tables (staking_positions, account_balances,
 // staking_events, polyx_entries, events) every relation index is trimmed: 17 indexes, 8.57 GB on
@@ -104,7 +106,11 @@ export const TRIM_ENTRIES: TrimEntry[] = [
   ...parseTrimList(REMOVED, false),
 ];
 
-/** What the runner needs of a database: plain queries, and one transaction at a time. */
+/**
+ * What the runner needs of a database: plain queries, and one transaction at a time. `query` must
+ * run each statement on its own, outside any transaction, because `CREATE INDEX CONCURRENTLY`
+ * cannot run inside a transaction block (a pool's `query` does; a transaction's does not).
+ */
 export interface TrimClient {
   query: (sql: string, params?: unknown[]) => Promise<unknown>;
   transaction: (work: (query: TrimClient['query']) => Promise<void>) => Promise<void>;
@@ -122,17 +128,40 @@ export interface TrimSummary {
 }
 
 interface FoundIndex {
-  index: string;
+  /** the index's name as stored, unquoted */
   name: string;
+  /** the schema it lives in, unquoted */
+  schema: string;
+  /** the table it indexes, unquoted */
   table: string;
 }
 
 const FIND_INDEXES = `
-  SELECT format('%I.%I', schemaname, indexname) AS index, quote_ident(indexname) AS name,
-    format('%I.%I', schemaname, tablename) AS "table"
+  SELECT indexname AS name, schemaname AS schema, tablename AS "table"
   FROM pg_indexes
   WHERE schemaname = current_schema() AND tablename = $1
     AND regexp_replace(indexdef, '^.* USING ', '') = $2`;
+
+// Whether an index of this name exists on this table, and whether it is usable. A build that
+// CONCURRENTLY did not finish leaves the index behind marked invalid.
+const FIND_STAND_IN = `
+  SELECT i.indisvalid AS valid
+  FROM pg_index i
+  WHERE i.indexrelid = to_regclass($1) AND i.indrelid = to_regclass($2)`;
+
+const STAND_IN_SUFFIX = '_standin';
+const MAX_IDENTIFIER_LENGTH = 63;
+
+const quote = (identifier: string): string => `"${identifier.replace(/"/g, '""')}"`;
+const qualified = (schema: string, name: string): string => `${quote(schema)}.${quote(name)}`;
+
+/**
+ * The name the stand-in is built under until it replaces the GiST. Deterministic, so a run that
+ * finds the previous run's leftover can reuse it, and cut to the 63 characters Postgres keeps of
+ * an identifier, from the original's end, so the suffix always survives.
+ */
+export const standInName = (name: string): string =>
+  name.slice(0, MAX_IDENTIFIER_LENGTH - STAND_IN_SUFFIX.length) + STAND_IN_SUFFIX;
 
 const defaults: TrimOptions = { lockTimeoutMs: 5000, log: message => console.log(message) };
 
@@ -153,6 +182,13 @@ const reasonOf = (error: unknown): string => {
  * node waits, and give up on the lot when one conflicted. Here an index that cannot be had now, or
  * fails for any other reason, is logged and left; the next start finds it still a GiST and tries
  * again. Nothing here is fatal: the indexes cost speed, not correctness.
+ *
+ * A relation index is replaced in two steps, so the exclusive lock covers no build. Building even
+ * an empty partial index reads every row (seconds on a table of a gigabyte), so the stand-in is
+ * built first, as `CREATE INDEX CONCURRENTLY` under a temporary name, which lets writes through;
+ * then one short transaction drops the GiST and renames the stand-in into its place. A temporary
+ * index left by an earlier run that stopped between the steps is reused; one left invalid by a
+ * build that failed is dropped, and that entry is skipped until the next start.
  */
 export const trimIndexes = async (
   client: TrimClient,
@@ -161,20 +197,70 @@ export const trimIndexes = async (
   const { lockTimeoutMs, log } = { ...defaults, ...overrides };
   const summary: TrimSummary = { trimmed: 0, skipped: 0 };
 
+  /** Builds the stand-in under its temporary name, unless a valid one is already there. */
+  const buildStandIn = async (found: FoundIndex, temp: string): Promise<boolean> => {
+    const tempIndex = qualified(found.schema, temp);
+    const state = (await client.query(FIND_STAND_IN, [
+      tempIndex,
+      qualified(found.schema, found.table),
+    ])) as Array<{ valid: boolean }>;
+
+    if (state.length === 0) {
+      // Outside any transaction: CONCURRENTLY cannot run inside one
+      await client.query(
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${quote(temp)} ON ${qualified(
+          found.schema,
+          found.table
+        )} USING btree (id) WHERE false`
+      );
+    } else if (!state[0].valid) {
+      await client.query(`DROP INDEX CONCURRENTLY IF EXISTS ${tempIndex}`);
+      log(`Dropped the unfinished stand-in ${tempIndex}; the next start builds it again`);
+      return false;
+    }
+    return true;
+  };
+
   const trim = async (found: FoundIndex, standIn: boolean): Promise<void> => {
+    const index = qualified(found.schema, found.name);
+    const temp = standInName(found.name);
     try {
+      if (standIn && !(await buildStandIn(found, temp))) {
+        summary.skipped += 1;
+        return;
+      }
       await client.transaction(async query => {
         // SET LOCAL ends with the transaction, so the timeout does not stay on the connection
         await query(`SET LOCAL lock_timeout = ${Math.floor(lockTimeoutMs)}`);
-        await query(`DROP INDEX ${found.index}`);
+        await query(`DROP INDEX ${index}`);
         if (standIn) {
-          await query(`CREATE INDEX ${found.name} ON ${found.table} USING btree (id) WHERE false`);
+          await query(
+            `ALTER INDEX ${qualified(found.schema, temp)} RENAME TO ${quote(found.name)}`
+          );
         }
       });
       summary.trimmed += 1;
     } catch (error) {
       summary.skipped += 1;
-      log(`Left index ${found.index} for the next start: ${reasonOf(error)}`);
+      log(`Left index ${index} for the next start: ${reasonOf(error)}`);
+      if (standIn) {
+        await discardIfInvalid(found, temp);
+      }
+    }
+  };
+
+  /** A failed CONCURRENTLY build leaves an invalid index behind: clear it so the next run starts clean. */
+  const discardIfInvalid = async (found: FoundIndex, temp: string): Promise<void> => {
+    try {
+      const state = (await client.query(FIND_STAND_IN, [
+        qualified(found.schema, temp),
+        qualified(found.schema, found.table),
+      ])) as Array<{ valid: boolean }>;
+      if (state.length > 0 && !state[0].valid) {
+        await client.query(`DROP INDEX CONCURRENTLY IF EXISTS ${qualified(found.schema, temp)}`);
+      }
+    } catch (error) {
+      log(`Could not clear the stand-in ${temp}: ${reasonOf(error)}`);
     }
   };
 
