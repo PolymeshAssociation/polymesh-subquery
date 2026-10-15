@@ -56,12 +56,19 @@ Every event type that has occurred on mainnet or testnet is keyed by name; posit
 | `system.ExtrinsicSuccess` | up to v3 (before v5.0) | `dispatchInfo` |
 | `system.ExtrinsicFailed` | up to v3 (before v5.0) | `dispatchError`, `dispatchInfo` |
 | `system.NewAccount` | up to v3 (before v5.0) | `account` |
+| `utility.BatchInterrupted` | up to v5 | `eventCounts`, `errorAt` (the failing call as `[index, error]`); from v6 the chain names it `index`, `error` |
+| `utility.BatchInterruptedOld` | v6 | `eventCounts`, `errorAt` |
+| `utility.BatchOptimisticFailed` | up to v6 | `eventCounts`, `errorsAt` (each failing call as `[index, error]`) |
 
 From v7.3 the `sto` events are named by the chain and carry `offeringAsset`, so a fundraiser's events are found across the change by `refs`; `sto.Invested` also moves `fundraiserId` after `offeringAsset` there. The bridge pallet was removed at v7.0; its events occur from spec 3000 to 6001031, so every bridge row reads "up to v6".
 
 Before v7.0 the chain named assets by ticker, so a field that holds an `AssetId` from v7 held a `Ticker` before it. Its key says which: `ticker` up to v6, `assetId` from v7 (for example `asset.AssetBalanceUpdated`, `asset.Transfer`, the compliance, checkpoint and external-agent events). To find an asset's events across that change, use `refs`, where a pre-v7 ticker is recorded under the asset id it maps to. To find a ticker's events in any era, including events that name only a ticker such as `asset.TickerRegistered`, use `ticker:<text>`.
 
 Each entry in `refs` is `kind:value`, with `kind` one of `identity`, `account`, `asset`, `ticker` or `portfolio`, and `value` the canonical encoding of what is referred to (`did/number` for a portfolio, `number` `0` for the default one): `identity:0x…`, `account:2…`, `asset:0x…`, `ticker:ABC`, `portfolio:0x…/0`. Each appears once per event, in the order found. A portfolio also refers to its identity. A ticker is filed as `ticker:<text>` (its text without the NUL padding, or its hex when the bytes are not text) in every era; before v7.0 it also refers to the asset it maps to, while from v7.0 events name the asset itself. `refs` is `null` when an event refers to none of these. It is GIN-indexed, so a `contains` filter on it is fast without a `(moduleId, eventId)` filter.
+
+## Batch failures
+
+`Extrinsic.success` is `1` for a `utility` batch that stopped at, or carried on past, a failing call, because the extrinsic itself succeeded. `Extrinsic.batchFailed` is new: `true` when the extrinsic emitted one of the batch failure events (`BatchInterrupted`, `BatchInterruptedOld`, `BatchOptimisticFailed`, `BatchCompletedWithErrors`, `ItemFailed`), `false` otherwise. These events are now stored and listed in `Extrinsic.events`; the successful-batch events are not.
 
 ## Filtering on `args`
 

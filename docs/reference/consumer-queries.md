@@ -277,8 +277,8 @@ Big tables (every relation index trimmed):
 | `Event` | `extrinsic` (and `Extrinsic.events`) | `blockId` + `extrinsicIdx`, above |
 | `PolyxEntry` | `extrinsic`, `createdEvent` | none; filter by `account` or `identity`, which stay indexed |
 | `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
-| `AccountBalance` | `account`, `identity`, `updatedEvent` | none |
-| `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | none |
+| `AccountBalance` | `account`, `identity`, `updatedEvent` | look up by `id`, which is the account's address |
+| `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | for `stash`, look up by `id`, which is the stash; none for the rest |
 | `StakingEvent` | `validator`, `position`, `createdEvent` | `stashAccount` and `identity` filters, which stay indexed |
 
 Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
@@ -293,3 +293,15 @@ Small tables (only the event and extrinsic stamps are trimmed; no alternative is
 | `IdentityKey` | `validFromBlock` |
 
 Entity lookups on the small tables (holders of an asset, keys of an identity, holdings of an identity, NFTs, instruction parties) are not trimmed.
+
+## 11. A batch that partly failed is a successful extrinsic
+
+`Extrinsic.success` says the extrinsic succeeded, not that every call in a batch did. A `utility.batch` stops at its first failing call, and `utility.force_batch` carries on past failing calls; either way the extrinsic itself succeeds, so `success` is `1`. Read `Extrinsic.batchFailed` instead: `true` when the extrinsic emitted `BatchInterrupted`, `BatchInterruptedOld`, `BatchOptimisticFailed`, `BatchCompletedWithErrors` or `ItemFailed`, which includes a batch nested inside a multisig execution, a relayed call, `as_derivative` or a committee execution. Those events are stored; `BatchInterrupted` carries the index and error of the failing call, and `ItemFailed` the error of each failing call of a `force_batch`. A batch that fully succeeded stores no batch event.
+
+Read the flag with these limits in mind:
+
+- Check `success` first. A failing `batch_all` reverts the whole extrinsic, so `success` is `0` and `batchFailed` is `false`.
+- Before v7, a failing `batch_atomic` emits `BatchInterruptedOld` even though its storage was rolled back, so `batchFailed` is `true` there although nothing applied.
+- A failed inner call of `relay_tx` or `dispatch_as` is not flagged by `batchFailed`.
+- `batchFailed` is not indexed, so filtering extrinsics on it alone scans the table. Combine it with an indexed filter such as `blockId` or `callId`.
+- To find the failing call, read the batch events with `events(filter: { blockId, extrinsicIdx })`, which is indexed, rather than through `Extrinsic.events`, which scans (see section 10).
