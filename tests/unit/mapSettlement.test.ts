@@ -30,3 +30,24 @@ describe('shouldRescanAutomaticAffirmations', () => {
     expect(shouldRescanAutomaticAffirmations('polymesh_private_dev', 1000000)).toBe(false);
   });
 });
+
+/**
+ * An instruction created by v5.3's `add_instruction_with_memo_v2` announces itself with
+ * `InstructionV2Created`. Unrouted, the instruction never reaches the index, and rejecting or
+ * executing it later stops the indexer at `getInstruction`. `handlerShapeFields.test.ts` checks
+ * the handler's fields against the event's shape once it is routed.
+ */
+describe('instruction creation routing', () => {
+  it('routes both forms of the created event to handleInstructionCreated', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const project = require('../../project').default;
+    const routed = (project.dataSources as Array<{ mapping: { handlers: any[] } }>)
+      .flatMap(source => source.mapping.handlers)
+      .filter(({ handler }) => handler === 'handleInstructionCreated')
+      .map(({ filter }) => `${filter.module}.${filter.method}`);
+
+    expect(routed).toEqual(
+      expect.arrayContaining(['settlement.InstructionCreated', 'settlement.InstructionV2Created'])
+    );
+  });
+});
