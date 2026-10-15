@@ -37,7 +37,7 @@
   },
   {
     "name": "sdk.authorizations(toId)",
-    "query": "query AuthorizationsQuery($size: Int, $start: Int, $toId: String!) {\n  authorizations(\n    filter: {toId: {equalTo: $toId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      id\n      type\n      fromId\n      toId\n      toKey\n      data\n      expiry\n      status\n      createdEventId\n      updatedEventId\n    }\n  }\n}\n"
+    "query": "query AuthorizationsQuery($size: Int, $start: Int, $toId: String!) {\n  authorizations(\n    filter: {toId: {equalTo: $toId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      id\n      type\n      fromId\n      toId\n      toAccountId\n      data\n      expiry\n      status\n      createdEventId\n      updatedEventId\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.claimsGrouping(issuer)",

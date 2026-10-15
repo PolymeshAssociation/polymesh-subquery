@@ -263,6 +263,7 @@ Recorded here rather than only in the defect log (B9) because it is the kind of 
 |---|---|
 | `revive.ethTransact` indexed with `address: null`, so nothing attributes to an Ethereum-derived account | **Closed** — PR #342 recovers the H160 from the RLP payload, derives the `0xEE`-padded `AccountId32`, and adds `EvmTransaction` / `EvmAccountMapping`. A backfill covers history. |
 | `authorizations.data` keeps the pre-migration payload, so it names a ticker where the chain names an asset id | **Closed** — PR #343. The migration is deterministic (`AssetId::from(ticker)` = `blake2_128(("legacy_ticker", ticker))` normalised to a v8 UUID) and the ticker is already stored, so the repair needs no chain read. Forward fix plus backfill. Note the failure this avoided: *resolving the stored ticker to the asset it names today* can point at a **different** asset, because a ticker can be unlinked and relinked in between. |
+| An authorization to a key with no identity is unfindable by DID (§9.1) | **Closed** — `Authorization.toAccount` is an `Account` relation holding the SS58 address, indexed; `to` is an `Identity` relation (`toId` keeps its name). A key's invitations are `Account.authorizationsReceived`, an identity's `Identity.authorizationsReceived`. |
 | A portfolio's contents cannot be read from the index (§9.2) | **Closed** — `Portfolio.holdings`, `Account.holdings` and `Identity.holdings` list `Holding` rows, each with `amount`, `frozen`, `frozenSince`, `nftCount` and `nfts`. |
 
 ### 9.7 Field renames from linking entities (2026-10-15)
@@ -286,6 +287,7 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `BridgeEvent` | `recipient` | `recipientId` (SS58 address) |
 | `EvmTransaction` | `fromAddress` | `fromAccountId` |
 | `StakingEvent` | `stashAccount`, `rewardDestinationAccount` | `stashId`, `rewardDestinationAccountId` |
+| `Authorization` | `toKey` (hex public key, unindexed) | `toAccountId` (SS58 address, indexed) |
 
 ## 10. Reads that scan, because their index is trimmed
 

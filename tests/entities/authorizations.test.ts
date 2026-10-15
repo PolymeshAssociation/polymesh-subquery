@@ -13,7 +13,7 @@ describe('authorizations', () => {
               type
               fromDid: fromId
               toDid: toId
-              toKey
+              toAccountId
               data
               expiry
               status
@@ -45,7 +45,7 @@ describe('authorizations', () => {
               type
               fromDid: fromId
               toDid: toId
-              toKey
+              toAccountId
               data
               expiry
               status
