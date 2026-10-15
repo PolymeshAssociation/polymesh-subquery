@@ -1,8 +1,4 @@
-import {
-  __resetNftBuffer,
-  flushNftBuffer,
-  handleNftHoldingsUpdates,
-} from '../../src/mappings/entities/assets/mapNfts';
+import { handleNftHoldingsUpdates } from '../../src/mappings/entities/assets/mapNfts';
 import {
   handleNftApproval,
   handleNftApprovalForAll,
@@ -139,7 +135,6 @@ describe('the silent clear on a transfer', () => {
     });
 
   const seeded = () => {
-    __resetNftBuffer();
     const db = mockStore({
       Account: accounts,
       Asset: {
@@ -163,7 +158,6 @@ describe('the silent clear on a transfer', () => {
     const db = seeded();
 
     await handleNftHoldingsUpdates(transfer(codec({ account: OWNER })));
-    await flushNftBuffer();
 
     expect(db.NftApproval[TOKEN]).toBeUndefined();
   });
@@ -172,7 +166,6 @@ describe('the silent clear on a transfer', () => {
     seeded();
 
     await handleNftHoldingsUpdates(transfer(meshPortfolioHolderCodec(TEST_DID, 0)));
-    await flushNftBuffer();
 
     expect(storeRemove().mock.calls.filter(([entity]) => entity === 'NftApproval')).toEqual([]);
   });

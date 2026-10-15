@@ -1,5 +1,4 @@
 import {
-  __resetNftBuffer,
   handleLegacyNftIssued,
   handleLegacyNftRedeemed,
 } from '../../src/mappings/entities/assets/mapNfts';
@@ -40,7 +39,6 @@ describe('pre-6.0 NFT issuance and redemption', () => {
   let assetId: string;
 
   beforeEach(async () => {
-    __resetNftBuffer();
     assetId = await getAssetId(TICKER_HEX, { specVersion: SPEC } as never);
   });
 
@@ -78,7 +76,7 @@ describe('pre-6.0 NFT issuance and redemption', () => {
     });
     expect(db.Holding[`${assetId}/${TEST_DID}/2`].nftCount).toBe(1);
     expect(db.Asset[assetId].totalSupply).toBe(BigInt(1));
-    expect(db.NftHolder[`${assetId}/${TEST_DID}`].nftIds).toEqual([BigInt(7)]);
+    expect(db.AssetHolder[`${assetId}/${TEST_DID}`].nftCount).toBe(1);
   });
 
   it('reports and skips an issuance whose collection the chain has no asset for', async () => {

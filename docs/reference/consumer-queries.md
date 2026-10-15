@@ -290,6 +290,9 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `Authorization` | `toKey` (hex public key, unindexed) | `toAccountId` (SS58 address, indexed) |
 | `Investment` | `stoId` (the offering's number, filtered with `offeringAssetId`) | `stoId` is the offering's id, `asset/number`, or `sto { … }` |
 | `Investment` | `raisingAssetId` held the ticker of an off-chain raising asset | `raisingAssetId` is null for it; the ticker is `raiseToken` |
+| `NftHolder` | `nftHolders { identityId nftIds }` | removed: `assetHolders(filter: { nftCount: { greaterThan: 0 } }) { identityId nftCount holdings { nodes { nfts { nodes { nftId } } } } }` |
+| `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
+| `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
 
 ## 10. Reads that scan, because their index is trimmed
 
