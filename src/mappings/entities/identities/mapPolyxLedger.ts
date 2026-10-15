@@ -9,6 +9,7 @@ import {
   EventIdEnum,
   HoldReason,
   Identity,
+  ModuleIdEnum,
   MovementKind,
   PolyxEntry,
   PolyxPool,
@@ -450,6 +451,16 @@ export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<vo
   await adjustHold(who, reason, -amount, args.blockEventId, args.block, args.eventIdx);
 };
 
+/**
+ * `balances.TransferOnHold { reason, source, dest, amount }` — `source/Reserved → dest/Free`.
+ *
+ * The fungible hold implementation moves a held amount out of the source's hold and, for the
+ * `Free` restriction, credits the destination's free balance; it emits only this event, with no
+ * hold on the destination. No Polymesh pallet calls it. The one live caller is pallet-revive's
+ * storage-deposit refund, which uses that restriction, so the destination gains no hold and only
+ * the source's hold shrinks. A reason other than that deposit means a new caller, whose restriction
+ * is unknown, and is reported rather than guessed at.
+ */
 export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const decoded = decodeEvent(event);
@@ -459,9 +470,22 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
   const amount = amountOf(decoded);
   const reason = holdReasonOf(decoded);
 
+  if (!isReviveStorageDeposit(decoded)) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnknownEnumValue,
+      detail: `balances.TransferOnHold of ${amount} moved a hold other than the revive storage deposit (reason ${
+        optionalField(decoded, 'reason')?.toString() ?? 'absent'
+      }); it was booked as source/Reserved to dest/Free, which only that deposit is known to do`,
+      block: args.block,
+      eventIdx: args.eventIdx,
+      moduleId: ModuleIdEnum.balances,
+      eventId: EventIdEnum.TransferOnHold,
+    });
+  }
+
   await postTransition(args, {
     from: { address: from, pool: PolyxPool.Reserved },
-    to: { address: to, pool: PolyxPool.Reserved },
+    to: { address: to, pool: PolyxPool.Free },
     amount,
     kind: MovementKind.ReserveRepatriation,
     holdReason: reason,
@@ -469,8 +493,23 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
 
   if (reason) {
     await adjustHold(from, reason, -amount, args.blockEventId, args.block, args.eventIdx);
-    await adjustHold(to, reason, amount, args.blockEventId, args.block, args.eventIdx);
   }
+};
+
+const isReviveStorageDeposit = (decoded: Record<string, Codec>): boolean => {
+  const json = optionalField(decoded, 'reason')?.toJSON();
+
+  return (
+    !!json &&
+    typeof json === 'object' &&
+    !Array.isArray(json) &&
+    Object.entries(json).some(
+      ([pallet, inner]) =>
+        pallet.toLowerCase() === 'revive' &&
+        typeof inner === 'string' &&
+        inner.toLowerCase() === 'storagedepositreserve'
+    )
+  );
 };
 
 /**

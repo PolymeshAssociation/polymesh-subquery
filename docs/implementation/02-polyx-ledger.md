@@ -142,7 +142,7 @@ Verified emissions **[V]** (`pallets/balances/src/lib.rs` @ v7.4.0, `types-looku
 | `Held{reason,who,amount}` **(v8, new)** | `who/Free` | `who/Reserved` | Hold |
 | `Released{reason,who,amount}` **(v8, new)** | `who/Reserved` | `who/Free` | Release |
 | `BurnedHeld` **(v8, new)** | `who/Reserved` | ∅ | Slash |
-| `TransferOnHold` **(v8, new)** | `source/Reserved` | `dest/Reserved` | ReserveRepatriation |
+| `TransferOnHold` **(v8, new)** | `source/Reserved` | `dest/Free` (pallet-revive's deposit refund; any other reason is reported) | ReserveRepatriation |
 | `TransferAndHold` **(v8, new)** | `source/Free` | `dest/Reserved` | ReserveRepatriation |
 | `Burned`/`Slashed`/`Withdraw`/`Suspended` | `who/Free` | ∅ | Burn/Slash |
 | `Minted`/`Deposit`/`Restored` | ∅ | `who/Free` | Mint |

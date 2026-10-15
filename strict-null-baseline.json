@@ -10,7 +10,7 @@
   "src/mappings/entities/identities/mapAuthorization.ts": 1,
   "src/mappings/entities/identities/mapIdentities.ts": 1,
   "src/mappings/entities/identities/mapIdentityKey.ts": 1,
-  "src/mappings/entities/identities/mapPolyxLedger.ts": 30,
+  "src/mappings/entities/identities/mapPolyxLedger.ts": 29,
   "src/mappings/entities/identities/mapPortfolio.ts": 14,
   "src/mappings/entities/identities/preV8Ledger.ts": 2,
   "src/mappings/entities/identities/repairAuthorizations.ts": 3,

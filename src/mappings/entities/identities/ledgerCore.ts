@@ -756,16 +756,15 @@ const rawChainHolds = async (
 
 /**
  * The events that end in `adjustHold`, and the fields naming the account each one adjusts. A
- * transfer-and-hold only adjusts its destination; its source is moved by no hold.
+ * transfer-and-hold only adjusts its destination, which it gains a hold on; its source is moved
+ * by no hold. A transfer-on-hold is the reverse: the source's hold shrinks and the destination's
+ * free balance grows.
  */
 const HOLD_EVENT_ACCOUNTS: Record<string, string[][]> = {
   'balances.Held': [['who', 'account', 'stash']],
   'balances.Released': [['who', 'account', 'stash']],
   'balances.BurnedHeld': [['who', 'account', 'stash']],
-  'balances.TransferOnHold': [
-    ['source', 'from'],
-    ['dest', 'to'],
-  ],
+  'balances.TransferOnHold': [['source', 'from']],
   'balances.TransferAndHold': [['dest', 'to']],
   'staking.Slashed': [['staker', 'stash', 'who', 'account']],
 };

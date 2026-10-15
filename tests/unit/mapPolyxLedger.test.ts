@@ -188,6 +188,9 @@ const balancesEvent = (
  */
 const STAKING_HOLD_REASON = { staking: 'Staking' };
 
+/** The one hold a `TransferOnHold` is emitted for: pallet-revive refunding a storage deposit. */
+const REVIVE_DEPOSIT_REASON = { revive: 'StorageDepositReserve' };
+
 /**
  * A run of events emitted by one extrinsic, in order, sharing a block — which is what the
  * cross-event pairings key on. Each gets its own event index so their entries do not collide.
@@ -3619,13 +3622,13 @@ describe('held balance burned or moved, and a lock raised (v8)', () => {
     expect(entries()).toHaveLength(0);
   });
 
-  it('TransferOnHold: source/Reserved → dest/Reserved, the hold moving with it', async () => {
+  it('TransferOnHold: a revive storage-deposit refund moves source/Reserved to dest/Free, shrinking only the source hold', async () => {
     await hold(ALICE, '900');
     const before = entries().length;
 
     await handleTransferOnHold(
       balancesEvent('TransferOnHold', {
-        reason: STAKING_HOLD_REASON,
+        reason: REVIVE_DEPOSIT_REASON,
         source: ALICE,
         dest: BOB,
         amount: '300',
@@ -3640,20 +3643,37 @@ describe('held balance burned or moved, and a lock raised (v8)', () => {
       counterpartyAddress: BOB,
       pool: PolyxPool.Reserved,
       kind: MovementKind.ReserveRepatriation,
-      holdReason: HoldReason.Staking,
+      holdReason: HoldReason.Revive,
       amount: BigInt(-300),
     });
     expect(moved.find(r => r.direction === EntryDirection.Credit)).toMatchObject({
       accountId: BOB,
       counterpartyAddress: ALICE,
-      pool: PolyxPool.Reserved,
+      pool: PolyxPool.Free,
       amount: BigInt(300),
     });
 
     expect(balance(ALICE)).toMatchObject({ free: BigInt(-900), reserved: BigInt(600) });
+    expect(balance(BOB)).toMatchObject({ free: BigInt(300), reserved: BigInt(0) });
+    expect(balance(BOB)?.holds ?? []).toEqual([]);
+    expect(Object.values(db['IndexerAnomaly'] ?? {})).toHaveLength(0);
+  });
+
+  it('TransferOnHold: a hold other than the revive storage deposit is booked the same way and reported', async () => {
+    await hold(ALICE, '900');
+
+    await handleTransferOnHold(
+      balancesEvent('TransferOnHold', {
+        reason: STAKING_HOLD_REASON,
+        source: ALICE,
+        dest: BOB,
+        amount: '300',
+      })
+    );
+
+    expect(balance(BOB)).toMatchObject({ free: BigInt(300), reserved: BigInt(0) });
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '600' }]);
-    expect(balance(BOB)).toMatchObject({ free: BigInt(0), reserved: BigInt(300) });
-    expect(balance(BOB)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '300' }]);
+    expect(Object.values(db['IndexerAnomaly'] ?? {})).toHaveLength(1);
   });
 
   it('Locked: raises the floor on free without a PolyxEntry or a pool move', async () => {
