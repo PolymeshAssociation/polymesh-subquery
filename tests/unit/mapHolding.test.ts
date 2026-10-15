@@ -346,7 +346,7 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(holding(DID, 0).nftCount).toBe(0);
     expect(holding(DID, 1).nftCount).toBe(2);
-    expect(db.Nft[`${ASSET_ID}/${padId('2')}`].portfolioId).toBe(`${DID}/1`);
+    expect(db.Nft[`${ASSET_ID}/${padId('2')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
   });
 
   /**
@@ -489,6 +489,6 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(holding(DID, 0).nftCount).toBe(0);
     expect(holding(DID, 1).nftCount).toBe(1);
-    expect(db.Nft[`${ASSET_ID}/${padId('1')}`].portfolioId).toBe(`${DID}/1`);
+    expect(db.Nft[`${ASSET_ID}/${padId('1')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
   });
 });
