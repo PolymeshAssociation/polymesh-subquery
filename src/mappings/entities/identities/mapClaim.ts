@@ -132,6 +132,15 @@ const writeClaim = async (
   // the encoding carries moments as decimal strings; the numeric columns hold bigints
   const moment = (value: string | null | undefined): bigint | undefined =>
     value === null || value === undefined ? undefined : BigInt(value);
+  const requiredMoment = (value: string | null | undefined, name: string): bigint => {
+    const parsed = moment(value);
+
+    if (parsed === undefined) {
+      throw new Error(`IdentityClaim has no ${name}`);
+    }
+
+    return parsed;
+  };
   const expiry = moment(claimExpiry);
   const filterExpiry = expiry ?? END_OF_TIME;
 
@@ -150,8 +159,8 @@ const writeClaim = async (
     targetId: target,
     issuerId: issuer,
     // both are always present on an `IdentityClaim`
-    issuanceDate: moment(issuanceDate) as bigint,
-    lastUpdateDate: moment(lastUpdateDate) as bigint,
+    issuanceDate: requiredMoment(issuanceDate, 'issuanceDate'),
+    lastUpdateDate: requiredMoment(lastUpdateDate, 'lastUpdateDate'),
     expiry,
     type: claimType as ClaimTypeEnum,
     scope,

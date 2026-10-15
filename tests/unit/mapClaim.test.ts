@@ -9,6 +9,7 @@
 import { TypeRegistry } from '@polkadot/types';
 import { typesBundle } from '@polymeshassociation/polymesh-types';
 import { SubstrateEvent } from '@subql/types';
+import * as encoding from '../../src/mappings/args/encode';
 import {
   getId,
   handleClaimAdded,
@@ -232,6 +233,31 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     expect(saved.expiry).toBeUndefined();
     expect(typeof saved.filterExpiry).toBe('bigint');
   });
+
+  it.each(['issuanceDate', 'lastUpdateDate'])(
+    'throws rather than store a claim whose %s the encoding lacks',
+    async name => {
+      const encoded = encoding.encodeValue(
+        identityClaim(ISSUER_A, CDD_1, '1000'),
+        'IdentityClaim'
+      ) as Record<string, unknown>;
+      const { [name]: _missing, ...partial } = encoded;
+      const encode = jest
+        .spyOn(encoding, 'encodeValue')
+        .mockReturnValue(partial as unknown as ReturnType<typeof encoding.encodeValue>);
+
+      try {
+        await expect(
+          handleClaimAdded(
+            mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
+          )
+        ).rejects.toThrow(`IdentityClaim has no ${name}`);
+        expect(Object.values(claims)).toHaveLength(0);
+      } finally {
+        encode.mockRestore();
+      }
+    }
+  );
 
   it('keeps a zero expiry, rather than reading it as no expiry', async () => {
     await handleClaimAdded(claimEvent('ClaimAdded', identityClaim(ISSUER_A, CDD_1, '1000', 0)));
