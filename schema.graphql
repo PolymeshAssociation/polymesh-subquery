@@ -2174,8 +2174,8 @@ type Identity @entity {
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
   updatedEvent: Event!
+  "One rollup per asset the identity holds or has held, fungible or NFT"
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
-  heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
   holdings: [Holding!] @derivedFrom(field: "identity")
   "Asset movements out of any of this identity's portfolios or accounts, redemptions included"
@@ -3364,25 +3364,21 @@ type Compliance @entity {
 }
 
 """
-Represents how much of a given Asset an Identity owns
+How much of one asset an identity holds across its portfolios and accounts: one rollup for both
+asset types, kept in step with its `holdings`. A fungible asset fills `amount`, an NFT collection
+`nftCount`; the token ids are under `holdings`. For identities still holding, filter
+`amount: { greaterThan: "0" }` or `nftCount: { greaterThan: 0 }`
 """
 type AssetHolder @entity {
   id: ID! # assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
+  "Fungible balance across the identity's holdings"
   amount: BigInt!
-  createdEvent: Event!
-  updatedEvent: Event!
-}
-
-"""
-Represents what NFTs of a collection an Identity owns
-"""
-type NftHolder @entity {
-  id: ID! #assetId/did
-  identity: Identity! @index(unique: false)
-  asset: Asset! @index(unique: false)
-  nftIds: [BigInt]
+  "Tokens held across the identity's holdings"
+  nftCount: Int!
+  "The identity's portfolio and account holdings of this asset"
+  holdings: [Holding!] @derivedFrom(field: "assetHolder")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3398,8 +3394,7 @@ enum HolderKind {
 
 """
 One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
-The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
-has it been?") is answered here.
+Provenance ("who owns NFT #42?", "where has it been?") is answered here.
 """
 type Nft @entity {
   id: ID! # assetId/padId(nftId)
@@ -3451,21 +3446,18 @@ type NftOperatorApproval @entity {
 
 """
 One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
-account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
-`NftHolder`, kept as maintained rollups), never stored as primary truth.
+account-level holder. Identity-level holdings are derived from these (see `AssetHolder`, kept as a
+maintained rollup), never stored as primary truth.
 
 A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
 filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
 
-Indexes: `asset`, `portfolio` and `identity` are indexed as relations. The `(asset, identity)`
-composite serves one identity's holdings of one asset across its portfolios and accounts, the
-per-identity total the `AssetHolder` rollup has to agree with. No handler reads it; it is kept for
-that consumer query and has not been measured. There is no `(portfolio, asset)` composite: that pair
-is the id of a portfolio holding, so it is already a point lookup.
+Indexes: `asset`, `portfolio`, `account`, `identity` and `assetHolder` are indexed as relations.
+`assetHolder` serves one identity's holdings of one asset across its portfolios and accounts, the
+per-identity total the rollup has to agree with. There is no `(portfolio, asset)` composite: that
+pair is the id of a portfolio holding, so it is already a point lookup.
 """
-type Holding
-  @entity
-  @compositeIndexes(fields: [["asset", "identity"]]) {
+type Holding @entity {
   id: ID! # assetId/portfolioId  or  assetId/address
   asset: Asset!
   holderKind: HolderKind!
@@ -3475,6 +3467,8 @@ type Holding
   account: Account
   "denormalised — makes the identity rollup a groupBy, not a join. Null when the holder account has no known identity"
   identity: Identity
+  "The identity's rollup for this asset; null for an account with no known identity. Re-stamped with `identity`"
+  assetHolder: AssetHolder
   "fungible balance held"
   amount: BigInt!
   "The part of `amount` the asset's agents have frozen, as the chain last set it. What the holder can move is `amount - frozen`, less any lock, so reading `amount` alone shows a balance the chain may refuse to send. The chain reports the resulting absolute value whichever call changed it, so this is replaced, never accumulated. Not summed into the identity rollup: the chain freezes a holder, never an identity"
@@ -3530,7 +3524,7 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` / `NftHolder` rollup crosses zero, so a key with no identity is not counted"
+  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` rollup starts or stops holding, so a key with no identity is not counted"
   holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!

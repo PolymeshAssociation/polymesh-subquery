@@ -88,6 +88,20 @@ describe('handleFrozenBalanceSet', () => {
       frozen: BigInt(25),
     });
   });
+
+  it('opens the identity rollup the new row links to, holding nothing', async () => {
+    const db = mockStore({ Account: { [ACCOUNT]: { id: ACCOUNT, identityId: TEST_DID } } });
+
+    await handleFrozenBalanceSet(frozenBalanceSet({ account: ACCOUNT }, 25));
+
+    const rollupId = `${ASSET_ID}/${TEST_DID}`;
+    expect(db.Holding[ACCOUNT_HOLDING].assetHolderId).toBe(rollupId);
+    expect(db.AssetHolder[rollupId]).toMatchObject({
+      identityId: TEST_DID,
+      amount: BigInt(0),
+      nftCount: 0,
+    });
+  });
 });
 
 describe('handleSetAccountFreeze', () => {
