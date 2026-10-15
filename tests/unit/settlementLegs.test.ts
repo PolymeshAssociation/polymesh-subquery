@@ -3,7 +3,11 @@ import '@subql/types/dist/global';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { LegTypeEnum } from '../../src/types';
-import { getLegsValue, instructionPartiesOf } from '../../src/utils/settlements';
+import {
+  getLegsValue,
+  instructionPartiesOf,
+  processOffChainLegForTest,
+} from '../../src/utils/settlements';
 import { mockStore } from './helpers';
 
 const DID = `0x${'11'.repeat(32)}`;
@@ -45,10 +49,10 @@ describe('getLegsValue', () => {
     expect(v2).toEqual(legacy);
     expect(v2[0]).toMatchObject({
       legIndex: 0,
-      from: DID,
-      fromPortfolio: 0,
-      to: OTHER,
-      toPortfolio: 2,
+      fromId: DID,
+      fromPortfolioId: `${DID}/0`,
+      toId: OTHER,
+      toPortfolioId: `${OTHER}/2`,
       amount: BigInt(1_000_000),
       legType: LegTypeEnum.Fungible,
     });
@@ -77,20 +81,24 @@ describe('getLegsValue', () => {
 describe('instructionPartiesOf', () => {
   it('keeps an account party’s DID in identity and its address in account', () => {
     const parties = instructionPartiesOf([
-      { from: DID_A, fromAccount: ADDRESS, to: DID_B, toPortfolio: 1 },
+      { fromId: DID_A, fromAccountId: ADDRESS, toId: DID_B, toPortfolioId: `${DID_B}/1` },
     ]);
     expect(parties.get(ADDRESS)).toEqual({
-      identity: DID_A,
-      account: ADDRESS,
+      identityId: DID_A,
+      accountId: ADDRESS,
       portfolios: undefined,
     });
-    expect(parties.get(DID_B)).toEqual({ identity: DID_B, account: undefined, portfolios: [1] });
+    expect(parties.get(DID_B)).toEqual({
+      identityId: DID_B,
+      accountId: undefined,
+      portfolios: [1],
+    });
   });
 
   it('merges one party across legs without dropping portfolios', () => {
     const parties = instructionPartiesOf([
-      { from: DID_A, fromPortfolio: 0, to: DID_B, toPortfolio: 1 },
-      { from: DID_B, fromPortfolio: 2, to: DID_A, toPortfolio: 0 },
+      { fromId: DID_A, fromPortfolioId: `${DID_A}/0`, toId: DID_B, toPortfolioId: `${DID_B}/1` },
+      { fromId: DID_B, fromPortfolioId: `${DID_B}/2`, toId: DID_A, toPortfolioId: `${DID_A}/0` },
     ]);
     expect(parties.get(DID_A)?.portfolios).toEqual([0]);
     expect(parties.get(DID_B)?.portfolios).toEqual([1, 2]);
@@ -98,22 +106,32 @@ describe('instructionPartiesOf', () => {
 
   it('keys an account with no identity by its address alone', () => {
     const parties = instructionPartiesOf([
-      { from: undefined as unknown as string, fromAccount: ADDRESS, to: DID_B, toPortfolio: 0 },
+      { fromAccountId: ADDRESS, toId: DID_B, toPortfolioId: `${DID_B}/0` },
     ]);
     expect(parties.get(ADDRESS)).toEqual({
-      identity: undefined,
-      account: ADDRESS,
+      identityId: undefined,
+      accountId: ADDRESS,
       portfolios: undefined,
     });
     expect([...parties.keys()]).not.toContain('undefined');
   });
 
   it('records an off-chain party with no portfolios', () => {
-    const parties = instructionPartiesOf([{ from: DID_A, to: DID_B }]);
+    const parties = instructionPartiesOf([{ fromId: DID_A, toId: DID_B }]);
     expect(parties.get(DID_A)).toEqual({
-      identity: DID_A,
-      account: undefined,
+      identityId: DID_A,
+      accountId: undefined,
       portfolios: undefined,
     });
+  });
+});
+
+describe('processOffChainLeg', () => {
+  it('gives an off-chain leg no asset, only its ticker', () => {
+    const leg = processOffChainLegForTest(
+      { sender_identity: DID_A, receiver_identity: DID_B, ticker: '0x5449434b4552', amount: '5' },
+      0
+    );
+    expect(leg).toMatchObject({ assetId: undefined, ticker: 'TICKER', fromId: DID_A, toId: DID_B });
   });
 });

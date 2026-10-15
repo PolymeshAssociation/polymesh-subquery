@@ -105,7 +105,7 @@ describe('mediator withdrawals and off-chain receipts', () => {
         id: '0000001000/0000000002',
         instructionId: INSTRUCTION,
         event: InstructionEventEnum.MediatorAffirmationWithdrawn,
-        identity: MEDIATOR,
+        identityId: MEDIATOR,
       })
     );
   });
@@ -144,14 +144,14 @@ describe('mediator withdrawals and off-chain receipts', () => {
     const blockEventId = '0000001000/0000000005';
     expect(db.OffChainReceipt[`${SIGNER}/7`]).toMatchObject({
       uid: 7,
-      signer: SIGNER,
+      signerId: SIGNER,
       legId: `${INSTRUCTION}/3`,
       metadata: '0xabcd',
       createdEventId: blockEventId,
     });
     expect(db.InstructionAffirmation[`${INSTRUCTION}/${CALLER}/false/${SIGNER}/7`]).toMatchObject({
       instructionId: INSTRUCTION,
-      identity: CALLER,
+      identityId: CALLER,
       partyId: `${INSTRUCTION}/${CALLER}/false`,
       status: AffirmStatusEnum.Affirmed,
       isMediator: false,
@@ -161,12 +161,12 @@ describe('mediator withdrawals and off-chain receipts', () => {
     expect(db.InstructionEvent[`${blockEventId}/receipt/3`]).toMatchObject({
       instructionId: INSTRUCTION,
       event: InstructionEventEnum.ReceiptClaimed,
-      identity: CALLER,
+      identityId: CALLER,
       offChainReceiptId: `${SIGNER}/7`,
     });
     expect(db.InstructionParty[`${INSTRUCTION}/${CALLER}/false`]).toMatchObject({
       instructionId: INSTRUCTION,
-      identity: CALLER,
+      identityId: CALLER,
       isMediator: false,
     });
   });

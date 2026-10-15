@@ -265,6 +265,21 @@ Recorded here rather than only in the defect log (B9) because it is the kind of 
 | `authorizations.data` keeps the pre-migration payload, so it names a ticker where the chain names an asset id | **Closed** — PR #343. The migration is deterministic (`AssetId::from(ticker)` = `blake2_128(("legacy_ticker", ticker))` normalised to a v8 UUID) and the ticker is already stored, so the repair needs no chain read. Forward fix plus backfill. Note the failure this avoided: *resolving the stored ticker to the asset it names today* can point at a **different** asset, because a ticker can be unlinked and relinked in between. |
 | A portfolio's contents cannot be read from the index (§9.2) | **Closed** — `Portfolio.holdings`, `Account.holdings` and `Identity.holdings` list `Holding` rows, each with `amount`, `frozen`, `frozenSince`, `nftCount` and `nfts`. |
 
+### 9.7 Field renames from linking entities (2026-10-15)
+
+Columns that named another entity by a bare id are now relations, so each can be read as the id (`<field>Id`) or walked as the entity. SubQuery relations are not enforced foreign keys: a relation whose row is not indexed (an off-chain counterparty's DID, an account with no `Account` row) returns null for the object and keeps its id.
+
+| Entity | Was | Now |
+|---|---|---|
+| `Leg` | `from`, `to` (DID) | `fromId`, `toId`, or `from { … }`, `to { … }` |
+| `Leg` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
+| `Leg` | `fromPortfolio`, `toPortfolio` (number) | `fromPortfolioId`, `toPortfolioId` (`did/number`), or `fromPortfolio { number }` |
+| `Leg` | `assetId` held the ticker of an off-chain leg | `assetId` is null on off-chain legs; the ticker is `ticker` |
+| `InstructionParty`, `InstructionAffirmation`, `InstructionEvent` | `identity`, `account` | `identityId`, `accountId` |
+| `InstructionParty` | an account-level party had its address in `identity` | `identityId` is the DID, `accountId` the address |
+| `InstructionEvent` | `portfolio` (number) | `portfolioId` (`did/number`) |
+| `OffChainReceipt` | `signer` | `signerId` |
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

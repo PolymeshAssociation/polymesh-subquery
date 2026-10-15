@@ -19,10 +19,10 @@ describe('instructions', () => {
                 nodes {
                   legType
                   legIndex
-                  from
-                  fromPortfolio
-                  to
-                  toPortfolio
+                  fromId
+                  fromPortfolioId
+                  toId
+                  toPortfolioId
                   nftIds
                   assetId
                   amount
@@ -47,7 +47,7 @@ describe('instructions', () => {
         query {
           legs(
             filter: {
-              from: {
+              fromId: {
                 equalTo: "${eveDid}"
               }
             }
@@ -60,10 +60,10 @@ describe('instructions', () => {
                 status
                 legs(orderBy: ID_ASC) {
                   nodes {
-                    from
-                    fromPortfolio
-                    to
-                    toPortfolio
+                    fromId
+                    fromPortfolioId
+                    toId
+                    toPortfolioId
                     assetId
                     amount
                     addresses
@@ -94,10 +94,10 @@ describe('instructions', () => {
                 status
                 legs(orderBy: ID_ASC) {
                   nodes {
-                    from
-                    fromPortfolio
-                    to
-                    toPortfolio
+                    fromId
+                    fromPortfolioId
+                    toId
+                    toPortfolioId
                     assetId
                     amount
                     addresses
@@ -133,10 +133,10 @@ describe('instructions', () => {
                 status
                 legs(orderBy: ID_ASC) {
                   nodes {
-                    from
-                    fromPortfolio
-                    to
-                    toPortfolio
+                    fromId
+                    fromPortfolioId
+                    toId
+                    toPortfolioId
                     assetId
                     amount
                     addresses
