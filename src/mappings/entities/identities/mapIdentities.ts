@@ -76,7 +76,7 @@ export const createIdentityIfNotExists = async (
     await createIdentity(
       {
         did,
-        primaryAccount: '',
+        primaryAccountId: undefined,
         secondaryKeysFrozen: false,
       },
       blockEventId
@@ -147,7 +147,7 @@ export const resolveIdentity = async (
   await createIdentity(
     {
       did,
-      primaryAccount: extractString(record.toJSON(), 'primary_key') ?? '',
+      primaryAccountId: extractString(record.toJSON(), 'primary_key'),
       secondaryKeysFrozen: false,
     },
     blockEventId
@@ -171,7 +171,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   let defaultPortfolio;
   const identity = await Identity.get(did);
   if (identity) {
-    identity.primaryAccount = address;
+    identity.primaryAccountId = address;
     identity.updatedEventId = blockEventId;
     await identity.save();
 
@@ -183,7 +183,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     await createIdentity(
       {
         did,
-        primaryAccount: address,
+        primaryAccountId: address,
         secondaryKeysFrozen: false,
       },
       blockEventId
@@ -481,7 +481,9 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
   const identity = await getIdentity(did);
   // An identity created from a key record alone carries no primary key, so the outgoing account
   // can be absent. The rotation itself still stands: the new key is linked either way.
-  const account = identity.primaryAccount ? await Account.get(identity.primaryAccount) : undefined;
+  const account = identity.primaryAccountId
+    ? await Account.get(identity.primaryAccountId)
+    : undefined;
 
   if (!account) {
     await recordAnomaly({
@@ -492,7 +494,7 @@ export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<vo
     });
   }
 
-  identity.primaryAccount = address;
+  identity.primaryAccountId = address;
   identity.updatedEventId = blockEventId;
 
   const retireOldKey = account

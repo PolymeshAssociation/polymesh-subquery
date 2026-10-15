@@ -983,7 +983,7 @@ describe('Event → pool transition', () => {
     const NEW_ACCOUNT = '5HCBK1bGMAcJNYmm1zE1MTkiYD4gFezfLewc3rEjj1FmigyE';
     const RESERVE = getAccountId(systematicIssuers.blockRewardReserve.accountId, 42);
     const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
-    db['Identity'] = { [recipientDid]: { id: recipientDid, primaryAccount: NEW_ACCOUNT } };
+    db['Identity'] = { [recipientDid]: { id: recipientDid, primaryAccountId: NEW_ACCOUNT } };
 
     const events = v7ExtrinsicEvents(
       85_785,
@@ -1439,7 +1439,7 @@ describe('staking — era-dependent, inverted at v8', () => {
       const treasury = getAccountId(systematicIssuers.treasury.accountId, 42);
       await fundReserve('1000');
       // the pre-5.0.0 event names the recipient's identity, paid through its primary key
-      db['Identity'] = { '0xdid': { id: '0xdid', primaryAccount: BOB } };
+      db['Identity'] = { '0xdid': { id: '0xdid', primaryAccountId: BOB } };
 
       await handleTreasuryDisbursement(
         tupleEvent('treasury', 'TreasuryDisbursement', ['0xgc', '0xdid', '400'], 3010)
@@ -2443,7 +2443,6 @@ describe('v8 reward destinations', () => {
  * proposal deposit on chain.
  */
 describe('pre-v8 PIPs deposit locks', () => {
-  const ALICE_KEY = '0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d';
   const PIPS = '0x7069707320202020'; // b"pips    "
   const STAKING = '0x7374616b696e6720'; // b"staking "
 
@@ -2523,7 +2522,7 @@ describe('pre-v8 PIPs deposit locks', () => {
       '0000000007': { id: '0000000007', proposer: { type: 'Community', value: BOB } },
     };
     db['ProposalVote'] = {
-      [`0000000007/${ALICE_KEY}`]: { id: 'v', proposalId: '0000000007', account: ALICE_KEY },
+      [`0000000007/${ALICE}`]: { id: 'v', proposalId: '0000000007', accountId: ALICE },
     };
     chainLocks({
       [ALICE]: [{ id: PIPS, amount: '100' }],

@@ -390,10 +390,14 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     await applyToPosition(position, eventId, details, details.stashAccount, details.amount, event);
   }
 
+  const { stashAccount, rewardDestinationAccount, ...rest } = details;
+
   await StakingEvent.create({
     id: blockEventId,
     eventId,
-    ...details,
+    ...rest,
+    stashId: stashAccount,
+    rewardDestinationAccountId: rewardDestinationAccount,
     transactionId,
     eraIndex: currentPayoutEra(blockId),
     validatorId: rewardEvents.has(eventId) ? currentPayoutValidator(blockId) : undefined,

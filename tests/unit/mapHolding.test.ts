@@ -386,6 +386,12 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(db.Holding[`${ASSET_ID}/${FROM}`].amount).toBe(BigInt(9));
     expect(db.Holding[`${ASSET_ID}/${TO}`].amount).toBe(BigInt(1));
+    expect(Object.values(db.AssetTransaction)).toEqual([
+      expect.objectContaining({
+        fromAccountId: FROM,
+        toAccountId: TO,
+      }),
+    ]);
   });
 
   /**

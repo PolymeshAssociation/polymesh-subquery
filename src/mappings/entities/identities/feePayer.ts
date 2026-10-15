@@ -56,7 +56,7 @@ const primaryKeyOf = async (block: SubstrateBlock, did: string): Promise<string 
 
   return (
     (field(record, 'primarykey') as string | null | undefined) ??
-    (await Identity.get(did))?.primaryAccount
+    (await Identity.get(did))?.primaryAccountId
   );
 };
 

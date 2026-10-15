@@ -223,7 +223,7 @@ const CONSUMER_USED: Array<[string, string]> = [
   ['polyx_entries', 'identity_id'],
   ['portfolios', 'identity_id'],
   ['staking_events', 'identity_id'],
-  ['staking_events', 'stash_account'],
+  ['staking_events', 'stash_id'],
   ['trusted_claim_issuers', 'asset_id'],
   ['trusted_claim_issuers', 'issuer_id'],
 ];
@@ -254,7 +254,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
 
   it('reads the entries it checks', () => {
     expect(trimmed.length).toBeGreaterThan(50);
-    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(53);
+    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(54);
     expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
   });
 
