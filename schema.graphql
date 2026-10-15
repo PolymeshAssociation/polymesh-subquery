@@ -2469,7 +2469,8 @@ type Sto @entity {
   venue: Venue!
   offeringAsset: Asset!
   offeringPortfolio: Portfolio!
-  raisingAssetId: String! # This is not marked as Asset, since the raising asset need not be an registered asset. For example, USD
+  "The asset raised. It can join to no asset: before 7.x it is named by a ticker that need not be registered, such as USD"
+  raisingAsset: Asset
   "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
   raisingTicker: String
   raisingPortfolio: Portfolio!
@@ -2483,6 +2484,8 @@ type Sto @entity {
   minimumInvestment: BigInt!
   offChainFundingEnabled: Boolean!
   offChainFundingToken: String
+  "The investments made in this offering"
+  investments: [Investment!] @derivedFrom(field: "sto")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2552,10 +2555,12 @@ Represents participation in an STO
 type Investment @entity {
   id: ID!
   investor: Identity!
-  stoId: Int! @index(unique: false)
-  offeringAssetId: String! @index(unique: false)
+  "The offering invested in"
+  sto: Sto!
+  offeringAsset: Asset!
   offeringToken: String @index(unique: false)
-  raisingAssetId: String!
+  "The asset paid with; null when it is an off-chain asset, named by `raiseToken`"
+  raisingAsset: Asset
   raiseToken: String
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!

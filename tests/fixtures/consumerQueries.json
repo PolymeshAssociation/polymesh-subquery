@@ -165,7 +165,7 @@
   },
   {
     "name": "sdk.investments",
-    "query": "query InvestmentsQuery($start: Int, $size: Int, $stoId: Int!, $offeringAssetId: String!) {\n  investments(\n    filter: {stoId: {equalTo: $stoId}, offeringAssetId: {equalTo: $offeringAssetId}}\n    first: $size\n    offset: $start\n    orderBy: [ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      investorId\n      offeringAssetId\n      offeringToken\n      raisingAssetId\n      raiseToken\n      raisingAssetType\n      offeringTokenAmount\n      raiseTokenAmount\n    }\n  }\n}\n"
+    "query": "query InvestmentsQuery($start: Int, $size: Int, $stoId: String!) {\n  investments(\n    filter: {stoId: {equalTo: $stoId}}\n    first: $size\n    offset: $start\n    orderBy: [ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      investorId\n      offeringAssetId\n      offeringToken\n      raisingAssetId\n      raiseToken\n      raisingAssetType\n      offeringTokenAmount\n      raiseTokenAmount\n    }\n  }\n}\n"
   },
   {
     "name": "portal.transferEvents(identity)",

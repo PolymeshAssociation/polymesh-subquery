@@ -218,10 +218,10 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
   await Investment.create({
     id: blockEventId,
     investorId: getTextValue(rawInvestor),
-    stoId: getNumberValue(rawStoId),
+    stoId: `${offeringAssetId}/${getNumberValue(rawStoId)}`,
     offeringAssetId,
     offeringToken,
-    raisingAssetId,
+    raisingAssetId: raisingAssetType === RaisingAssetTypeEnum.OnChain ? raisingAssetId : undefined,
     raiseToken,
     raisingAssetType,
     offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
