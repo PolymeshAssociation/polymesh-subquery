@@ -200,7 +200,7 @@ describe('resolveFeePayer', () => {
     // not in the parent's state: the index already holds it, from this block's earlier events
     db['Authorization'] = { '0000000007': { id: '0000000007', fromId: ISSUER_DID } };
     db['Identity'] = {
-      [ISSUER_DID]: { id: ISSUER_DID, did: ISSUER_DID, primaryAccount: ISSUER_PRIMARY },
+      [ISSUER_DID]: { id: ISSUER_DID, did: ISSUER_DID, primaryAccountId: ISSUER_PRIMARY },
     };
 
     expect(await resolveFeePayer(extrinsic('identity', 'joinIdentityAsKey', { auth_id: 7 }))).toBe(

@@ -172,7 +172,7 @@ const handleGenesisDids = async () => {
     createIdentity(
       {
         did,
-        primaryAccount: accountId,
+        primaryAccountId: accountId,
         secondaryKeysFrozen: false,
       },
       SEED_EVENT_ID

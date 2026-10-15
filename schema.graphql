@@ -1931,8 +1931,8 @@ type EvmTransaction @entity {
   callKind: EvmCallKindEnum!
   "Checksummed Ethereum address that signed the transaction"
   fromEthAddress: String! @index(unique: false)
-  "SS58 encoding of the `0xEE` padded account the runtime dispatched the call as"
-  fromAddress: String! @index(unique: false)
+  "The `0xEE` padded account the runtime dispatched the call as"
+  fromAccount: Account!
   "`null` for a contract deployment"
   toEthAddress: String @index(unique: false)
   "Address of the deployed contract, taken from `revive.Instantiated`"
@@ -2134,6 +2134,12 @@ type Account @entity {
   legsOut: [Leg!] @derivedFrom(field: "fromAccount")
   "Settlement legs delivering to this account, including assets it has never held"
   legsIn: [Leg!] @derivedFrom(field: "toAccount")
+  "Transfers out of this account as a v8 account-level holder"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromAccount")
+  "Transfers into this account as a v8 account-level holder"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toAccount")
+  "Staking events whose stash is this account"
+  stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2161,8 +2167,8 @@ An Identity needs a valid CDD claim from at least one KYC/KYB provider to perfor
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
-  "The address of the identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`"
-  primaryAccount: String!
+  "The identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`. Null only for an identity seeded before its key was readable"
+  primaryAccount: Account
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
   updatedEvent: Event!
@@ -2170,6 +2176,10 @@ type Identity @entity {
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
   "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
   holdings: [Holding!] @derivedFrom(field: "identity")
+  "Asset movements out of any of this identity's portfolios or accounts, redemptions included"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromIdentity")
+  "Asset movements into any of this identity's portfolios or accounts, issuances included"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toIdentity")
   "Every instruction this identity is a party to, as a party or a mediator"
   instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
@@ -2236,7 +2246,7 @@ Represents `POLY`, the Ethereum based ERC-20 token, being converted to POLYX, th
 type BridgeEvent @entity {
   id: ID!
   identity: Identity!
-  recipient: String!
+  recipient: Account!
   amount: BigInt!
   txHash: String! @index(unique: false)
   createdEvent: Event!
@@ -2247,13 +2257,13 @@ Represents a change in staking status
 """
 type StakingEvent @entity {
   id: ID!
-  stashAccount: String @index(unique: false)
+  stash: Account
   identity: Identity
   "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   amount: BigInt
   rewardDestination: String
-  rewardDestinationAccount: String
+  rewardDestinationAccount: Account
   nominatedValidators: [String!]
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
@@ -2640,6 +2650,10 @@ type Portfolio @entity {
   legsOut: [Leg!] @derivedFrom(field: "fromPortfolio")
   "Settlement legs delivering to this portfolio, including assets it has never held"
   legsIn: [Leg!] @derivedFrom(field: "toPortfolio")
+  "Asset movements out of this portfolio: transfers, redemptions and moves to another portfolio"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromPortfolio")
+  "Asset movements into this portfolio: transfers, issuances and moves from another portfolio"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toPortfolio")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3099,7 +3113,7 @@ Represents a vote on a governance proposal
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  account: String!
+  account: Account!
   vote: Boolean!
   weight: BigInt!
   createdEvent: Event!
@@ -3531,13 +3545,13 @@ type AssetTransaction @entity {
   "`fromPortfolioId` will be null in transactions where either the Asset was issued or the sender is an account"
   fromPortfolio: Portfolio
   "`fromAccount` will be populated when asset transaction has initiated directly from an account"
-  fromAccount: String
+  fromAccount: Account
   "`fromIdentityId` is the DID of the sender, present for transfers and redemptions. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   fromIdentity: Identity @index(unique: false)
   "`toPortfolioId` will be null in transactions where either the Asset was redeemed or the receiver is an account"
   toPortfolio: Portfolio
   "`toAccount` will be populated when asset transaction has settled directly into an account"
-  toAccount: String
+  toAccount: Account
   "`toIdentityId` is the DID of the receiver, present for issuances and transfers. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   toIdentity: Identity @index(unique: false)
   "`amount` is the number of fungible tokens involved in this transaction"
@@ -3972,7 +3986,7 @@ type MultiSigProposal @entity {
   multisig: MultiSig! @index(unique: false)
   proposalId: Int! @index(unique: false)
   creator: Identity
-  creatorAccount: String
+  creatorAccount: Account
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!

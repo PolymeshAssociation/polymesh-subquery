@@ -44,7 +44,7 @@ filter: { or: [ { identityId: …, address: … }, { toId: …, toAddress: … }
 **Portal, `graphqlQueries.ts:22-39`** — `assetTransactions`, with *three* different OR-pairs depending on grain:
 
 ```js
-or: [ { fromAccount:   {equalTo: …} }, { toAccount:   {equalTo: …} } ]   // account grain
+or: [ { fromAccount:   {equalTo: …} }, { toAccount:   {equalTo: …} } ]   // account grain (now fromAccountId / toAccountId, §9.7)
 or: [ { fromPortfolioId:{equalTo: …} }, { toPortfolioId:{equalTo: …} } ] // portfolio grain
 or: [ { fromIdentityId:{equalTo: …} }, { toIdentityId:{equalTo: …} } ]   // identity grain
 ```
@@ -279,6 +279,13 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `InstructionParty` | an account-level party had its address in `identity` | `identityId` is the DID, `accountId` the address |
 | `InstructionEvent` | `portfolio` (number) | `portfolioId` (`did/number`) |
 | `OffChainReceipt` | `signer` | `signerId` |
+| `AssetTransaction` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
+| `ProposalVote` | `account` (hex public key) | `accountId` (SS58 address) |
+| `MultiSigProposal` | `creatorAccount` | `creatorAccountId` |
+| `Identity` | `primaryAccount` (empty string when unknown) | `primaryAccountId` (null when unknown) |
+| `BridgeEvent` | `recipient` | `recipientId` (SS58 address) |
+| `EvmTransaction` | `fromAddress` | `fromAccountId` |
+| `StakingEvent` | `stashAccount`, `rewardDestinationAccount` | `stashId`, `rewardDestinationAccountId` |
 
 ## 10. Reads that scan, because their index is trimmed
 
@@ -295,7 +302,7 @@ Big tables (every relation index trimmed):
 | `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
 | `AccountBalance` | `account`, `identity`, `updatedEvent` | look up by `id`, which is the account's address |
 | `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | for `stash`, look up by `id`, which is the stash; none for the rest |
-| `StakingEvent` | `validator`, `position`, `createdEvent` | `stashAccount` and `identity` filters, which stay indexed |
+| `StakingEvent` | `validator`, `position`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
 
 Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
 

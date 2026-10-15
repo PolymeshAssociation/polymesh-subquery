@@ -96,7 +96,7 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     multisigId,
     proposalId,
     creatorId,
-    creatorAccount,
+    creatorAccountId: creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
     params: proposalParams,

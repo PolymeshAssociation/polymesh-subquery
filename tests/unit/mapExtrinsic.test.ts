@@ -272,7 +272,7 @@ describe('handleExtrinsic', () => {
       callKind: 'instantiate',
       ethTxType: 2,
       fromEthAddress: FROM_ETH,
-      fromAddress: FROM_SS58,
+      fromAccountId: FROM_SS58,
       toEthAddress: undefined,
       value: '0',
       ethNonce: BigInt(7),

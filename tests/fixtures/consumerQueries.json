@@ -177,7 +177,7 @@
   },
   {
     "name": "portal.transferEvents(account)",
-    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromAccount: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}, {toAccount: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}], amount: {isNull: false}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccount\n      fromAccount\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromAccountId: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}, {toAccountId: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}], amount: {isNull: false}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccountId\n      fromAccountId\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
   },
   {
     "name": "portal.transferEvents(nft)",
@@ -193,11 +193,11 @@
   },
   {
     "name": "portal.stakingRewards(stash)",
-    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, stashAccount: {equalTo: \"2FTmkfcG6qxGWZ3MY5L9ctNyeJ6rauRfMEtknKTjXz1yom4q\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashAccount\n      amount\n    }\n  }\n}\n"
+    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, stashId: {equalTo: \"2FTmkfcG6qxGWZ3MY5L9ctNyeJ6rauRfMEtknKTjXz1yom4q\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashId\n      amount\n    }\n  }\n}\n"
   },
   {
     "name": "portal.stakingRewards(identity)",
-    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, identityId: {equalTo: \"0x0400000000000000000000000000000000000000000000000000000000000000\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashAccount\n      amount\n    }\n  }\n}\n"
+    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, identityId: {equalTo: \"0x0400000000000000000000000000000000000000000000000000000000000000\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashId\n      amount\n    }\n  }\n}\n"
   },
   {
     "name": "portal.multisigProposals",

@@ -25,7 +25,7 @@ describe('handleStakingEvent', () => {
 
     const [row] = Object.values(db.StakingEvent) as any[];
 
-    expect(row).toMatchObject({ stashAccount: ALICE });
+    expect(row).toMatchObject({ stashId: ALICE });
     expect(row.amount).toBeUndefined();
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(1);
   });
@@ -47,7 +47,7 @@ describe('handleStakingEvent', () => {
 
     const [row] = Object.values(db.StakingEvent) as any[];
 
-    expect(row.stashAccount).toBeUndefined();
+    expect(row.stashId).toBeUndefined();
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(1);
   });
 
@@ -67,7 +67,7 @@ describe('handleStakingEvent', () => {
 
     const [row] = Object.values(db.StakingEvent) as any[];
 
-    expect(row).toMatchObject({ stashAccount: ALICE, nominatedValidators: ['0xvalidator1'] });
+    expect(row).toMatchObject({ stashId: ALICE, nominatedValidators: ['0xvalidator1'] });
   });
 
   it('v8 Rewarded decodes the RewardDestination and resolves the recipient account', async () => {
@@ -84,10 +84,10 @@ describe('handleStakingEvent', () => {
     const [row] = Object.values(db.StakingEvent) as any[];
 
     expect(row).toMatchObject({
-      stashAccount: ALICE,
+      stashId: ALICE,
       amount: BigInt(500),
       rewardDestination: 'Account',
-      rewardDestinationAccount: BOB,
+      rewardDestinationAccountId: BOB,
     });
   });
 
@@ -102,7 +102,7 @@ describe('handleStakingEvent', () => {
       })
     );
 
-    expect(Object.values(db.StakingEvent)[0]).toMatchObject({ stashAccount: ALICE });
+    expect(Object.values(db.StakingEvent)[0]).toMatchObject({ stashId: ALICE });
     expect(db.IndexerAnomaly ?? {}).toEqual({});
 
     await handleStakingEvent(
@@ -128,7 +128,7 @@ describe('handleStakingEvent', () => {
 
     const [row] = Object.values(db.StakingEvent) as any[];
 
-    expect(row).toMatchObject({ stashAccount: ALICE, amount: BigInt(4000) });
+    expect(row).toMatchObject({ stashId: ALICE, amount: BigInt(4000) });
   });
 
   describe('the identity of a pre-v8 Unbonded', () => {
@@ -273,7 +273,7 @@ describe('handleStakingEvent', () => {
 
     const [row] = Object.values(db.StakingEvent) as any[];
 
-    expect(row).toMatchObject({ stashAccount: ALICE, eraIndex: 7, positionId: ALICE });
+    expect(row).toMatchObject({ stashId: ALICE, eraIndex: 7, positionId: ALICE });
     expect(db.StakingPosition[ALICE]).toMatchObject({
       totalRewarded: BigInt(500),
       rewardDestination: 'Account',

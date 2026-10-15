@@ -869,10 +869,7 @@ export const handleProposalRefund = async (event: SubstrateEvent): Promise<void>
     getAllByFields<ProposalVote>('ProposalVote', [['proposalId', '=', pipId]]),
   ]);
 
-  // `ProposalVote.account` is the raw public key; balances are keyed by SS58 address.
-  const addresses = new Set<string>(
-    votes.map(vote => getAccountKey(vote.account, api.registry.chainSS58))
-  );
+  const addresses = new Set<string>(votes.map(vote => vote.accountId));
 
   if (proposal?.proposer.type === 'Community') {
     addresses.add(proposal.proposer.value);

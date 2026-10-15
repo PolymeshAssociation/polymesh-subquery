@@ -7,6 +7,7 @@ import {
   handleSnapshotCleared,
   handleSnapshotResultsEnacted,
   handleSnapshotTaken,
+  handleVoted,
 } from '../../src/mappings/entities/pips/mapProposal';
 import { IndexerAnomaly } from '../../src/types';
 import { codec, mockGetByFields, mockStore, tupleEvent } from './helpers';
@@ -136,5 +137,20 @@ describe('the PIP lifecycle beyond creation and votes', () => {
     ).resolves.not.toThrow();
 
     expect(anomaly).toHaveBeenCalled();
+  });
+});
+
+describe('votes', () => {
+  it('records the voter as the SS58 address its Account row is keyed by', async () => {
+    const VOTER = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+    const db = mockStore({
+      Proposal: {
+        [pip(3)]: { id: pip(3), totalAyeWeight: BigInt(0), totalNayWeight: BigInt(0) },
+      },
+    });
+
+    await handleVoted(pipsEvent('Voted', [TEST_DID, VOTER, 3, true, 10]));
+
+    expect(db.ProposalVote[`${pip(3)}/${VOTER}`]).toMatchObject({ accountId: VOTER });
   });
 });

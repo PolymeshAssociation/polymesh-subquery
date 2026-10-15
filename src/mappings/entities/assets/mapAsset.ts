@@ -139,10 +139,10 @@ export const createAssetTransaction = (
     // present, not absent, and must never read as an issuance/redemption
     isInternalTransfer: classifyInternalTransfer(details.fromHolder, details.toHolder),
     fromPortfolioId,
-    fromAccount,
+    fromAccountId: fromAccount,
     fromIdentityId,
     toPortfolioId,
-    toAccount,
+    toAccountId: toAccount,
     toIdentityId,
     createdEventId: blockEventId,
   }).save();
