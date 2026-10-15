@@ -336,7 +336,7 @@ const filters: Record<string, Record<string, string[]>> = {
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
     ForceEra: [],
-    InvalidatedNominators: [],
+    InvalidatedNominators: ['handleInvalidatedNominators'],
     Kicked: ['handleKicked'],
     MinimumBondThresholdUpdated: [],
     // `handleNominated` must run before `handleStakingEvent` for the same reason as `Bonded`.
@@ -405,7 +405,7 @@ const filters: Record<string, Record<string, string[]>> = {
   },
   validators: {
     CommissionCapUpdated: [],
-    InvalidatedNominators: [],
+    InvalidatedNominators: ['handleInvalidatedNominators'],
     Nominated: ['handleNominated', 'handleStakingEvent'],
     PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
     PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],

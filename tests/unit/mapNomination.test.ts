@@ -1,5 +1,6 @@
 import {
   handleChilled,
+  handleInvalidatedNominators,
   handleKicked,
   handleNominated,
 } from '../../src/mappings/entities/events/mapNomination';
@@ -11,6 +12,7 @@ import {
   mockSelfControlled,
   mockStore,
   namedEvent,
+  storeGetByFields,
   tupleEvent,
 } from './helpers';
 
@@ -248,5 +250,129 @@ describe('handleKicked', () => {
     const rows = Object.values(db.Nomination) as any[];
     expect(rows.find(r => r.validatorId === VALIDATOR_A).validToEventId).toBeDefined();
     expect(rows.find(r => r.validatorId === VALIDATOR_B).validToEventId).toBeNull();
+  });
+});
+
+describe('handleInvalidatedNominators', () => {
+  const nominate = (stash: string, targets: string[], idx: number) =>
+    handleNominated(
+      namedEvent({
+        section: 'validators',
+        method: 'Nominated',
+        fields: { nominatorIdentity: TEST_DID, stash, targets },
+        idx,
+      })
+    );
+
+  const OTHER = VALIDATOR_C;
+
+  it('closes the open nominations of each listed stash with the event id (v7 named form)', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    // the shared mock ignores the filter; this test needs two stashes' rows kept apart
+    storeGetByFields().mockImplementation((_name: string, filter: [string, string, unknown][]) => {
+      const stash = filter.find(([field]) => field === 'positionId')?.[2];
+
+      return Promise.resolve(
+        Object.values(db.Nomination ?? {})
+          .filter((row: any) => row.positionId === stash)
+          .map(row => ({ ...row }))
+      );
+    });
+    mockActiveEra(500);
+
+    await nominate(STASH, [VALIDATOR_A, VALIDATOR_B], 0);
+    await nominate(OTHER, [VALIDATOR_A], 1);
+
+    await handleInvalidatedNominators(
+      namedEvent({
+        section: 'staking',
+        method: 'InvalidatedNominators',
+        fields: {
+          governanceCouncillDid: TEST_DID,
+          governanceCouncillAccount: TEST_DID,
+          expiredNominators: [STASH],
+        },
+        specVersion: 7_004_001,
+        idx: 2,
+      })
+    );
+
+    const rows = Object.values(db.Nomination) as any[];
+    const stashRows = rows.filter(r => r.positionId === STASH);
+    expect(stashRows).toHaveLength(2);
+    stashRows.forEach(r => expect(r.validToEventId).toBe(db.StakingPosition[STASH].updatedEventId));
+    expect(db.StakingPosition[STASH].isChilled).toBe(true);
+    expect(rows.find(r => r.positionId === OTHER).validToEventId).toBeNull();
+  });
+
+  it('decodes the v8 form, named under the validators pallet that declares it', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    mockActiveEra(500);
+
+    await nominate(STASH, [VALIDATOR_A], 0);
+
+    await handleInvalidatedNominators(
+      namedEvent({
+        section: 'validators',
+        method: 'InvalidatedNominators',
+        fields: {
+          governanceCouncillDid: TEST_DID,
+          governanceCouncillAccount: TEST_DID,
+          expiredNominators: [STASH],
+        },
+        idx: 1,
+      })
+    );
+
+    const [row] = Object.values(db.Nomination) as any[];
+    expect(row.validToEventId).toBe(db.StakingPosition[STASH].updatedEventId);
+  });
+
+  it('decodes the pre-v7 positional form', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    mockActiveEra(500);
+
+    await nominate(STASH, [VALIDATOR_A], 0);
+
+    await handleInvalidatedNominators(
+      tupleEvent({
+        section: 'staking',
+        method: 'InvalidatedNominators',
+        data: [codec(TEST_DID), codec(TEST_DID), codec([STASH])],
+        specVersion: 6_003_050,
+        idx: 1,
+      })
+    );
+
+    const [row] = Object.values(db.Nomination) as any[];
+    expect(row.validToEventId).toBe(db.StakingPosition[STASH].updatedEventId);
+  });
+
+  it('is a no-op for an empty list', async () => {
+    const db = mockStore();
+    mockGetByFields(db, 'Nomination');
+    mockActiveEra(500);
+
+    await nominate(STASH, [VALIDATOR_A], 0);
+
+    await handleInvalidatedNominators(
+      namedEvent({
+        section: 'validators',
+        method: 'InvalidatedNominators',
+        fields: {
+          governanceCouncillDid: TEST_DID,
+          governanceCouncillAccount: TEST_DID,
+          expiredNominators: [],
+        },
+        idx: 1,
+      })
+    );
+
+    const [row] = Object.values(db.Nomination) as any[];
+    expect(row.validToEventId).toBeNull();
+    expect(db.StakingPosition[STASH].isChilled).toBe(false);
   });
 });

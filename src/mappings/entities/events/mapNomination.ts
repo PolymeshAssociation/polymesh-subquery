@@ -49,6 +49,19 @@ const getOpenNominations = (stash: string): Promise<Nomination[]> =>
     ['validToEventId', '=', EXPLICIT_NULL],
   ]);
 
+/** Closes every open nomination `stash` holds as a nominator, stamping the closing event. */
+const closeOpenNominations = async (stash: string, blockEventId: string): Promise<Nomination[]> => {
+  const open = await getOpenNominations(stash);
+
+  return Promise.all(
+    open.map(nomination => {
+      nomination.validToEventId = blockEventId;
+
+      return nomination.save().then(() => nomination);
+    })
+  );
+};
+
 export const handleNominated = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const { stash: rawStash, targets: rawTargets } = decodeEvent(event);
@@ -127,16 +140,41 @@ export const handleChilled = async (event: SubstrateEvent): Promise<void> => {
   position.isChilled = true;
   position.updatedEventId = blockEventId;
 
-  const open = await getOpenNominations(stash);
+  await Promise.all([position.save(), closeOpenNominations(stash, blockEventId)]);
+};
 
-  await Promise.all([
-    position.save(),
-    ...open.map(nomination => {
-      nomination.validToEventId = blockEventId;
+/**
+ * `InvalidatedNominators` — `validate_cdd_expiry_nominators` removed the listed stashes from the
+ * chain's nominator set because their CDD expired, and unbonded their active balance (which
+ * arrives as its own `Unbonded` event, so the ledger is left to that handler). The stash drops out
+ * of the nominator set exactly as `chill` would drop it, so its open nominations close and the
+ * position is marked chilled. Only stashes that were actually removed are listed.
+ *
+ * Pre-v7 the event is positional `(councilDid, councilAccount, expiredNominators)`; from v7 it is
+ * named. Both decode to `expiredNominators` through the registered shape. v8.0.0 to v8.1.2 declare
+ * it under the `validators` pallet too, but the runtime never deposits it there (only v7 ones do),
+ * so the `Unbonded` is the only trace a v8 CDD expiry leaves.
+ */
+export const handleInvalidatedNominators = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
+  const { expiredNominators } = decodeEvent(event);
 
-      return nomination.save();
-    }),
-  ]);
+  const stashes = (expiredNominators.toJSON() as string[] | null) ?? [];
+
+  for (const stash of stashes) {
+    const position = await getOrCreatePosition(
+      stash,
+      blockId,
+      blockTime(block),
+      blockEventId,
+      block,
+      eventIdx
+    );
+    position.isChilled = true;
+    position.updatedEventId = blockEventId;
+
+    await Promise.all([position.save(), closeOpenNominations(stash, blockEventId)]);
+  }
 };
 
 /** `Kicked(nominator, stash)` — the validator `stash` removed `nominator` from its nominator list. */
