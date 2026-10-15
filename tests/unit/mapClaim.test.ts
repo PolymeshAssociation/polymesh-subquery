@@ -241,7 +241,8 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
         identityClaim(ISSUER_A, CDD_1, '1000'),
         'IdentityClaim'
       ) as Record<string, unknown>;
-      const { [name]: _missing, ...partial } = encoded;
+      const partial = { ...encoded };
+      delete partial[name];
       const encode = jest
         .spyOn(encoding, 'encodeValue')
         .mockReturnValue(partial as unknown as ReturnType<typeof encoding.encodeValue>);
