@@ -131,8 +131,15 @@ const FIND_INDEXES = `
 
 const defaults: TrimOptions = { lockTimeoutMs: 5000, log: message => console.log(message) };
 
-const reasonOf = (error: unknown): string =>
-  isLockConflict(error) ? 'lock conflict' : error instanceof Error ? error.message : String(error);
+const reasonOf = (error: unknown): string => {
+  if (isLockConflict(error)) {
+    return 'lock conflict';
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
+};
 
 /**
  * Drops the GiST indexes in `TRIM_ENTRIES`, each in a transaction of its own that waits for its
@@ -166,7 +173,7 @@ export const trimIndexes = async (
     }
   };
 
-  for (const { table, columns, standIn } of TRIM_ENTRIES) {
+  const trimEntry = async ({ table, columns, standIn }: TrimEntry): Promise<void> => {
     let found: FoundIndex[] = [];
     try {
       found = (await client.query(FIND_INDEXES, [
@@ -177,10 +184,17 @@ export const trimIndexes = async (
       summary.skipped += 1;
       log(`Could not look for the ${table} (${columns.join(', ')}) index: ${reasonOf(error)}`);
     }
-    for (const index of found) {
-      await trim(index, standIn);
-    }
-  }
+    await found.reduce(
+      (previous, index) => previous.then(() => trim(index, standIn)),
+      Promise.resolve()
+    );
+  };
+
+  // One index at a time, so only one table's lock is ever held
+  await TRIM_ENTRIES.reduce(
+    (previous, entry) => previous.then(() => trimEntry(entry)),
+    Promise.resolve()
+  );
 
   return summary;
 };
