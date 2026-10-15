@@ -156,17 +156,64 @@ const get8xStakingEventDetails = async (
   }
 };
 
+const ZERO_DID = /^0x0+$/;
+
+/**
+ * Whether the `Unbonded` at `event` was written by `validate_cdd_expiry_nominators` for `stash`.
+ *
+ * That call unbonds each expired nominator, then emits one `InvalidatedNominators` listing them,
+ * all in the one extrinsic. The `Unbonded` carries the DID of whoever made the call, not the
+ * stash's, so an identity read from it would be the wrong one.
+ */
+const isCddExpiryUnbond = (event: SubstrateEvent, stash: string): boolean => {
+  const records = (event.block.events ?? []) as any[];
+  const extrinsicIdx = event.extrinsic?.idx;
+
+  if (extrinsicIdx === undefined) {
+    return false;
+  }
+
+  for (let index = event.idx + 1; index < records.length; index += 1) {
+    const { event: later, phase } = records[index];
+
+    if (phase?.isApplyExtrinsic && phase.asApplyExtrinsic.toNumber() !== extrinsicIdx) {
+      return false;
+    }
+
+    if (
+      later.section === 'staking' &&
+      later.method === 'InvalidatedNominators' &&
+      ((later.data[2]?.toJSON() as string[] | null) ?? []).includes(stash)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * `Unbonded` and `Bonded` carry the DID of the extrinsic's caller. For a CDD-expiry unbond that is
+ * not the stash's identity: the call is root-only, so from 6.3.0 the DID is the zero DID, and
+ * before that the DID of whoever sent the root call. Both fall back to the stash's own identity.
+ */
 const getLegacyStakingEventDetails = async (
   eventId: EventIdEnum,
   params: Codec[],
+  event: SubstrateEvent,
   block: SubstrateBlock,
   blockId: string,
   eventIdx: number
 ): Promise<StakingEventDetails> => {
   const [rawDid, rawAccount] = params;
   const stashAccount = getTextValue(rawAccount);
+  const did = getTextValue(rawDid);
+  const callersDidIsNotTheStashs =
+    !did ||
+    ZERO_DID.test(did) ||
+    (eventId === EventIdEnum.Unbonded && !!stashAccount && isCddExpiryUnbond(event, stashAccount));
   const details: StakingEventDetails = {
-    identityId: getTextValue(rawDid),
+    identityId: callersDidIsNotTheStashs ? undefined : did,
     stashAccount,
   };
 
@@ -219,7 +266,7 @@ const getStakingEventDetails = async (
     // one on the way to a branch that never uses the result.
     details = await get8xStakingEventDetails(eventId, decodeEvent(event), block, eventIdx, blockId);
   } else {
-    details = await getLegacyStakingEventDetails(eventId, params, block, blockId, eventIdx);
+    details = await getLegacyStakingEventDetails(eventId, params, event, block, blockId, eventIdx);
   }
 
   if (details.stashAccount && !details.identityId) {

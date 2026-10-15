@@ -124,6 +124,76 @@ describe('handleStakingEvent', () => {
     expect(row).toMatchObject({ stashAccount: ALICE, amount: BigInt(4000) });
   });
 
+  describe('the identity of a pre-v8 Unbonded', () => {
+    const STASH_DID = '0x0200000000000000000000000000000000000000000000000000000000000000';
+    const ZERO_DID = `0x${'00'.repeat(32)}`;
+    const SUDO_DID = '0x0300000000000000000000000000000000000000000000000000000000000000';
+
+    const seedStash = () =>
+      mockStore({ Account: { [ALICE]: { id: ALICE, address: ALICE, identityId: STASH_DID } } });
+
+    const phase = (extrinsicIdx: number) => ({
+      isApplyExtrinsic: true,
+      asApplyExtrinsic: { toNumber: () => extrinsicIdx },
+    });
+
+    const record = (method: string, data: unknown[], extrinsicIdx: number) => ({
+      phase: phase(extrinsicIdx),
+      event: { section: 'staking', method, data },
+    });
+
+    const unbonded = (did: string, events: unknown[] = [], extrinsicIdx = 1) =>
+      tupleEvent({
+        section: 'staking',
+        method: 'Unbonded',
+        data: [codec(did), codec(ALICE), codec('500')],
+        specVersion: 6_003_050,
+        idx: 0,
+        extrinsic: { idx: extrinsicIdx, extrinsic: { hash: { toJSON: () => '0xab' } } },
+        events,
+      });
+
+    it('keeps the caller identity of an ordinary unbond', async () => {
+      const db = seedStash();
+
+      await handleStakingEvent(unbonded(STASH_DID));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: STASH_DID });
+    });
+
+    it('falls back to the stash identity when the origin was root (zero DID)', async () => {
+      const db = seedStash();
+
+      await handleStakingEvent(unbonded(ZERO_DID));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: STASH_DID });
+    });
+
+    it('falls back to the stash identity when a CDD expiry run by a signed caller emitted it', async () => {
+      const db = seedStash();
+      const events = [
+        record('Unbonded', [], 1),
+        record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec([ALICE])], 1),
+      ];
+
+      await handleStakingEvent(unbonded(SUDO_DID, events));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: STASH_DID });
+    });
+
+    it('ignores an InvalidatedNominators from a different extrinsic', async () => {
+      const db = seedStash();
+      const events = [
+        record('Unbonded', [], 1),
+        record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec([ALICE])], 2),
+      ];
+
+      await handleStakingEvent(unbonded(SUDO_DID, events));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: SUDO_DID });
+    });
+  });
+
   it('stamps eraIndex from the same PayoutStarted cache PolyxEntry already uses, and links the position', async () => {
     const db = mockStore({
       StakingPosition: {
