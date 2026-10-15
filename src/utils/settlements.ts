@@ -66,6 +66,36 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
   };
 };
 
+export interface PartyDetails {
+  /** undefined only for an account holder with no identity */
+  identity?: string;
+  account?: string;
+  portfolios?: number[];
+}
+
+/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by account, else DID. */
+export const instructionPartiesOf = (
+  legs: Pick<
+    LegDetails,
+    'from' | 'fromAccount' | 'fromPortfolio' | 'to' | 'toAccount' | 'toPortfolio'
+  >[]
+): Map<string, PartyDetails> => {
+  const parties = new Map<string, PartyDetails>();
+  const add = (identity: string | undefined, account?: string, portfolio?: number): void => {
+    const key = (account ?? identity) as string;
+    const party = parties.get(key) ?? { identity, account, portfolios: undefined };
+    if (portfolio !== undefined && !party.portfolios?.includes(portfolio)) {
+      party.portfolios = [...(party.portfolios ?? []), portfolio];
+    }
+    parties.set(key, party);
+  };
+  legs.forEach(leg => {
+    add(leg.from, leg.fromAccount, leg.fromPortfolio);
+    add(leg.to, leg.toAccount, leg.toPortfolio);
+  });
+  return parties;
+};
+
 /**
  * This only extracts legs for spec version < 6000000
  */

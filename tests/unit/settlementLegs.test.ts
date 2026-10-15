@@ -3,13 +3,17 @@ import '@subql/types/dist/global';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { LegTypeEnum } from '../../src/types';
-import { getLegsValue } from '../../src/utils/settlements';
+import { getLegsValue, instructionPartiesOf } from '../../src/utils/settlements';
 import { mockStore } from './helpers';
 
 const DID = `0x${'11'.repeat(32)}`;
 const OTHER = `0x${'22'.repeat(32)}`;
 // `ACME` as a 12-byte `Ticker`
 const TICKER = `0x${Buffer.from('ACME').toString('hex').padEnd(24, '0')}`;
+
+const DID_A = '0x0a'.padEnd(66, '0');
+const DID_B = '0x0b'.padEnd(66, '0');
+const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 
 const block = {
   specVersion: 5_003_001,
@@ -67,5 +71,49 @@ describe('getLegsValue', () => {
       assetId: fungible.assetId,
     });
     expect(leg.amount).toBeUndefined();
+  });
+});
+
+describe('instructionPartiesOf', () => {
+  it('keeps an account party’s DID in identity and its address in account', () => {
+    const parties = instructionPartiesOf([
+      { from: DID_A, fromAccount: ADDRESS, to: DID_B, toPortfolio: 1 },
+    ]);
+    expect(parties.get(ADDRESS)).toEqual({
+      identity: DID_A,
+      account: ADDRESS,
+      portfolios: undefined,
+    });
+    expect(parties.get(DID_B)).toEqual({ identity: DID_B, account: undefined, portfolios: [1] });
+  });
+
+  it('merges one party across legs without dropping portfolios', () => {
+    const parties = instructionPartiesOf([
+      { from: DID_A, fromPortfolio: 0, to: DID_B, toPortfolio: 1 },
+      { from: DID_B, fromPortfolio: 2, to: DID_A, toPortfolio: 0 },
+    ]);
+    expect(parties.get(DID_A)?.portfolios).toEqual([0]);
+    expect(parties.get(DID_B)?.portfolios).toEqual([1, 2]);
+  });
+
+  it('keys an account with no identity by its address alone', () => {
+    const parties = instructionPartiesOf([
+      { from: undefined as unknown as string, fromAccount: ADDRESS, to: DID_B, toPortfolio: 0 },
+    ]);
+    expect(parties.get(ADDRESS)).toEqual({
+      identity: undefined,
+      account: ADDRESS,
+      portfolios: undefined,
+    });
+    expect([...parties.keys()]).not.toContain('undefined');
+  });
+
+  it('records an off-chain party with no portfolios', () => {
+    const parties = instructionPartiesOf([{ from: DID_A, to: DID_B }]);
+    expect(parties.get(DID_A)).toEqual({
+      identity: DID_A,
+      account: undefined,
+      portfolios: undefined,
+    });
   });
 });
