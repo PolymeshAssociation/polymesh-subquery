@@ -12,6 +12,8 @@ jest.mock('../../src/utils/accounts', () => ({
 }));
 
 import { handleSlash } from '../../src/mappings/entities/events/mapSlash';
+import { extractArgs } from '../../src/mappings/entities/common';
+import { creditSlashReporters } from '../../src/mappings/entities/identities/preV8Ledger';
 import { ledgerAccount } from '../../src/utils/accounts';
 import { IndexerAnomaly } from '../../src/types';
 import {
@@ -375,6 +377,33 @@ describe('handleSlash', () => {
       }),
     ]);
     // the unreadable era is recorded; the slash is not also reported as matching nothing
+    expect(anomaly).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a v7 block's active era once for both handlers, recording an undecodable one once", async () => {
+    mockStore();
+    jest
+      .mocked(deferredSlashesBefore)
+      .mockResolvedValue([deferred(7029, BigInt(1000), [[NOMINATOR, BigInt(40)]])]);
+    const activeEra = jest
+      .fn()
+      .mockRejectedValue(new Error('createType(ActiveEraInfo):: Struct: failed on index'));
+    (globalThis as any).api.query = { staking: { activeEra } };
+    (globalThis as any).api.consts = { staking: { slashDeferDuration: { toNumber: () => 14 } } };
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    anomaly.mockClear();
+
+    const event = namedEvent({
+      section: 'staking',
+      method: 'Slashed',
+      fields: { staker: NOMINATOR, amount: '40' },
+      specVersion: 7_000_000,
+    });
+
+    await handleSlash(event);
+    await creditSlashReporters(extractArgs(event), NOMINATOR, BigInt(40));
+
+    expect(activeEra).toHaveBeenCalledTimes(1);
     expect(anomaly).toHaveBeenCalledTimes(1);
   });
 

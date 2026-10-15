@@ -3,14 +3,14 @@ import { decodeEvent } from '../../../decode';
 import { AnomalyKind, Slash } from '../../../types';
 import { blockTime } from '../../../utils';
 import { ledgerAccount } from '../../../utils/accounts';
-import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
+import { recordAnomaly } from '../../../utils/anomaly';
 import {
+  activeEraAt,
   APPLY_ERA_KEYS_FROM,
   deferredSlashesBefore,
   dueEraAt,
   placeSlash,
 } from '../../../utils/deferredSlashes';
-import { readActiveEraIndex } from '../../../utils/staking';
 import { extractArgs } from '../common';
 import { amountOf, stakingStash } from '../identities/ledgerCore';
 
@@ -39,11 +39,7 @@ export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
   const [account, deferred, activeEra] = await Promise.all([
     ledgerAccount(stash, blockId, blockTime(block), blockEventId),
     deferredSlashesBefore(block),
-    readOrAnomaly(
-      { block, eventIdx, moduleId, eventId },
-      `the era of the slash on ${stash} was not recorded`,
-      readActiveEraIndex
-    ),
+    activeEraAt(block, { eventIdx, moduleId, eventId }),
   ]);
   const dueEra = dueEraAt(block, activeEra);
   // from v7.0 a slash is placed against the active era alone, so one whose era is unreadable is

@@ -23,7 +23,6 @@ import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import { is8xChain } from '../../../utils/common';
 import { blockAuthor } from '../../../utils/blockAuthor';
 import {
-  readActiveEraIndex,
   readStakingLedger,
   readStakingLock,
   resolveLegacyRewardDestination,
@@ -32,6 +31,7 @@ import { getAccountKey, ledgerAccount } from '../../../utils/accounts';
 import { extractArgs, HandlerArgs } from '../common';
 import { getAccountId, systematicIssuers } from '../../consts';
 import {
+  activeEraAt,
   APPLY_ERA_KEYS_FROM,
   deferredSlashesBefore,
   isFirstSlashOf,
@@ -351,11 +351,11 @@ export const creditSlashReporters = async (
   // the slash is capped at what the stash's ledger held, so the deferred figure is an upper bound
   const dueEra =
     block.specVersion >= APPLY_ERA_KEYS_FROM
-      ? await readOrAnomaly(
-          { block, eventIdx, moduleId: args.moduleId, eventId: args.eventId },
-          `the deferred slash applied to ${stash} was placed without the active era`,
-          readActiveEraIndex
-        )
+      ? await activeEraAt(block, {
+          eventIdx,
+          moduleId: args.moduleId,
+          eventId: args.eventId,
+        })
       : undefined;
   // from v7.0 a slash is placed against the active era alone: with it unreadable (recorded above)
   // it is left unplaced, not put to the oldest era, which can be one that was never applied

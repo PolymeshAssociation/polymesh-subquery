@@ -1,6 +1,9 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
+import { EventIdEnum, ModuleIdEnum } from '../types';
+import { readOrAnomaly } from './anomaly';
 import { getBigIntValue, getTextValue } from './common';
+import { readActiveEraIndex } from './staking';
 import { storageEntriesAtParent, UndecodableStateError } from './storageAtParent';
 
 /**
@@ -94,6 +97,31 @@ export const deferredSlashesBefore = (
   }
 
   return deferred;
+};
+
+const activeEraByBlock = new WeakMap<SubstrateBlock, Promise<number | undefined>>();
+
+/**
+ * The active era as `block` is indexed, which is the era its slashes are applied in; `undefined`
+ * when it can't be decoded, recorded as an anomaly. Read once per block, however many slashes it
+ * holds and however many handlers place them, so an undecodable era is recorded once, not for each.
+ */
+export const activeEraAt = (
+  block: SubstrateBlock,
+  context: { eventIdx?: number; moduleId?: ModuleIdEnum; eventId?: EventIdEnum }
+): Promise<number | undefined> => {
+  let era = activeEraByBlock.get(block);
+
+  if (!era) {
+    era = readOrAnomaly(
+      { block, ...context },
+      `the era of this block's slashes is unknown, and from v7.0 they are not placed`,
+      readActiveEraIndex
+    );
+    activeEraByBlock.set(block, era);
+  }
+
+  return era;
 };
 
 /**
