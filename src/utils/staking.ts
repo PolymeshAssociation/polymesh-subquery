@@ -135,7 +135,8 @@ export const __resetStakingCaches = (): void => {
  * why it is done now rather than deferred.
  *
  * A payee or controller that doesn't decode with the block's metadata resolves as the same
- * `LegacyUnknown` placeholder as a runtime without the storage, with an anomaly, and is not cached.
+ * `LegacyUnknown` placeholder as a runtime without the storage, with an anomaly, and is cached like
+ * a decoded one, so the anomaly is recorded once per stash and block.
  * Without a `block` to record it against, `UndecodableStateError` propagates.
  */
 export const resolveLegacyRewardDestination = async (

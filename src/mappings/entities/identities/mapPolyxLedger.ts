@@ -1161,7 +1161,7 @@ const rewardRecipient = async (
         stash
       ));
 
-    return { recipient: recipient ?? stash, restaked: false };
+    return { recipient, restaked: false };
   }
 
   return { recipient: stash, restaked: false };

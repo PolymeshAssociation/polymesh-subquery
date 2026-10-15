@@ -222,10 +222,11 @@ export const syncMigratedStakingLock = async (
   const read = await readOrAnomaly(
     { block, eventIdx },
     `the staking lock of ${who} was left as it was`,
-    async () => ({
-      listed: await readChainStakingLock(who),
-      frozen: await readChainFrozen(who),
-    })
+    async () => {
+      const [listed, frozen] = await Promise.all([readChainStakingLock(who), readChainFrozen(who)]);
+
+      return { listed, frozen };
+    }
   );
 
   if (!read) {

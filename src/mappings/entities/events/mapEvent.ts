@@ -29,7 +29,7 @@ export async function handleToolingEvent(event: SubstrateEvent): Promise<Event> 
   if (failure !== undefined) {
     await recordAnomaly({
       kind: AnomalyKind.UnreadableValue,
-      detail: `${failure}, so the event's args were left empty`,
+      detail: `${failure}, so the event's args and refs were left empty`,
       block,
       eventIdx,
       moduleId,

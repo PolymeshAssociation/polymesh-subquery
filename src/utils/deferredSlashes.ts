@@ -121,17 +121,18 @@ export const activeEraAt = (
   return era;
 };
 
+/** A slash record: `staking.Slash` before v7, `staking.Slashed` from v7. */
+const isSlashRecord = ({ event }: { event: { section: string; method: string } }): boolean =>
+  event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed');
+
 /**
- * The stashes slashed before event `eventIdx` in `block`, nearest first: `staking.Slash` before v7,
- * `staking.Slashed` from v7, each naming the stash first.
+ * The stashes slashed before event `eventIdx` in `block`, nearest first, each slash record naming
+ * the stash first.
  */
 export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[] =>
   (block.events ?? [])
     .slice(0, eventIdx)
-    .filter(
-      ({ event }) =>
-        event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed')
-    )
+    .filter(isSlashRecord)
     .map(({ event }) => event.data[0].toString())
     .reverse();
 
@@ -207,9 +208,6 @@ interface Placements {
 }
 
 const placementsByBlock = new WeakMap<SubstrateBlock, Placements>();
-
-const isSlashRecord = ({ event }: { event: { section: string; method: string } }): boolean =>
-  event.section === 'staking' && (event.method === 'Slash' || event.method === 'Slashed');
 
 /**
  * Places every `Slash` in `block` in one pass, in order, each against the stashes slashed before
