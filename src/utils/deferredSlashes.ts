@@ -146,10 +146,12 @@ export const slashedBefore = (block: SubstrateBlock, eventIdx: number): string[]
  *
  * A block applies the slashes of one era (the runtime takes them once, as the era starts), so only
  * that era is matched: `dueEra` when given (from v7.0, see `dueEraAt`), else the oldest still
- * deferred. A key that is already past, such as a late-reported offence's, is never applied and
- * stays in storage, so the oldest era present can be a stale one. A newer era's figure that happens
- * to fit, such as a validator's own slash seen from the same stash acting as a nominator, is not
- * this slash.
+ * deferred. From v7.0 a key that is already past, such as a late-reported offence's, is never
+ * applied and stays in storage, which is why the era is named there. Before v7.0 slashes are keyed
+ * by the era they were reported in and every key up to the active era less the defer duration is
+ * drained, so none is left behind and the oldest present is the one applied. A newer era's figure
+ * that happens to fit, such as a validator's own slash seen from the same stash acting as a
+ * nominator, is not this slash.
  *
  * A nominator's share can match the slashes of two validators it nominated. Applying a slash takes
  * the validator's own share first and then its nominators', so the nominator's is the one whose
@@ -262,7 +264,7 @@ const placementsOf = (
  * The deferred slash the `Slash` at `eventIdx` was applied from (see `appliedDeferredSlash`), with
  * the stashes slashed before it taken from the block. From v7.0 a slash is only placed against the
  * active era; without it (`dueEra` undefined, which `activeEraAt` records) it is left unplaced
- * rather than put to the oldest era, which can be a stale one.
+ * rather than put to the oldest era, which from v7.0 can be a stale one.
  */
 export const placeSlash = (
   deferred: DeferredSlash[],
