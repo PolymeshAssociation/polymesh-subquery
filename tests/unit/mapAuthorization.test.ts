@@ -8,6 +8,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { Authorization, AuthorizationStatusEnum } from '../../src/types';
 import { handleAuthorization } from '../../src/mappings/entities/identities/mapAuthorization';
+import { codec as helperCodec, mockStore, tupleEvent } from './helpers';
 
 const DID = '0x01'.padEnd(66, '0');
 const KEY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -60,5 +61,39 @@ describe('handleAuthorization — AuthorizationRetryLimitReached', () => {
     jest.spyOn(Authorization, 'get').mockResolvedValue(undefined);
 
     await expect(handleAuthorization(retryLimitEvent())).resolves.toBeUndefined();
+  });
+});
+
+describe('handleAuthorization — AuthorizationAdded', () => {
+  const added = (targetDid: string | null, targetKey: string | null) =>
+    tupleEvent({
+      section: 'identity',
+      method: 'AuthorizationAdded',
+      data: [
+        helperCodec(DID),
+        helperCodec(targetDid),
+        helperCodec(targetKey),
+        helperCodec(AUTH_ID),
+        helperCodec({ joinIdentity: { asset: null } }),
+        helperCodec(null),
+      ],
+    });
+
+  it('links an authorization to a key by the SS58 address its Account row is keyed by', async () => {
+    const db = mockStore({ Identity: { [DID]: { id: DID } } });
+
+    await handleAuthorization(added(null, KEY));
+
+    expect(db.Authorization['0000000042']).toMatchObject({ toAccountId: KEY, toId: undefined });
+    expect(db.Authorization['0000000042'].toKey).toBeUndefined();
+  });
+
+  it('links an authorization to an identity', async () => {
+    const TARGET = '0x02'.padEnd(66, '0');
+    const db = mockStore({ Identity: { [DID]: { id: DID } } });
+
+    await handleAuthorization(added(TARGET, null));
+
+    expect(db.Authorization['0000000042']).toMatchObject({ toId: TARGET, toAccountId: undefined });
   });
 });

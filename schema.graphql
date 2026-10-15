@@ -2140,6 +2140,8 @@ type Account @entity {
   transfersIn: [AssetTransaction!] @derivedFrom(field: "toAccount")
   "Staking events whose stash is this account"
   stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
+  "Authorizations targeting this key, including invitations to join an identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "toAccount")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2182,6 +2184,8 @@ type Identity @entity {
   transfersIn: [AssetTransaction!] @derivedFrom(field: "toIdentity")
   "Every instruction this identity is a party to, as a party or a mediator"
   instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
+  "Authorizations targeting this identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "to")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
@@ -2524,8 +2528,10 @@ type Authorization @entity {
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
-  toId: String @index(unique: false)
-  toKey: String
+  "The identity the authorization targets; null for a key with no identity yet, such as a `JoinIdentity` invitation"
+  to: Identity
+  "The key the authorization targets, as an SS58 address (the form `Account.id` uses); null when it targets an identity"
+  toAccount: Account
   data: String
   "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date @index(unique: false)

@@ -8,7 +8,6 @@ import {
   getFirstValueFromJson,
   getTextValue,
   padNumericId,
-  serializeAccount,
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
@@ -47,8 +46,8 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     await Authorization.create({
       id: authId,
       fromId,
-      toId: getTextValue(decoded.targetDid),
-      toKey: serializeAccount(decoded.targetKey),
+      toId: decoded.targetDid.isEmpty ? undefined : getTextValue(decoded.targetDid),
+      toAccountId: decoded.targetKey.isEmpty ? undefined : getTextValue(decoded.targetKey),
       type: capitalizeFirstLetter(getFirstKeyFromJson(decoded.authorizationData)) as AuthTypeEnum,
       data: JSON.stringify(getFirstValueFromJson(decoded.authorizationData)),
       expiry: getDateValue(decoded.expiry),
