@@ -224,4 +224,19 @@ describe('handlers reading state that does not decode', () => {
     expect(result).toEqual({ rewardDestination: 'LegacyUnknown' });
     expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
   });
+
+  it('reads a reward destination that does not decode once for the stash, not for each reward', async () => {
+    const db = mockStore();
+    const payee = jest.fn().mockImplementation(undecodable);
+    (globalThis as any).api.query = { staking: { payee } };
+    const block = blockAt(1000);
+
+    const first = await resolveLegacyRewardDestination(STASH, '0000001000', block, IDX);
+    const second = await resolveLegacyRewardDestination(STASH, '0000001000', block, IDX + 1);
+
+    expect(first).toEqual({ rewardDestination: 'LegacyUnknown' });
+    expect(second).toEqual({ rewardDestination: 'LegacyUnknown' });
+    expect(payee).toHaveBeenCalledTimes(1);
+    expect(anomalies(db)).toHaveLength(1);
+  });
 });

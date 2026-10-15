@@ -176,13 +176,13 @@ export const resolveLegacyRewardDestination = async (
     }
   );
 
-  if (!read) {
-    return { rewardDestination: 'LegacyUnknown' };
-  }
+  // an undecodable payee reads the same for every reward of the stash in the block, so it is
+  // cached too: the anomaly is recorded once, not for each reward
+  const destination = read ?? { rewardDestination: 'LegacyUnknown' as const };
 
-  payees.set(stash, read);
+  payees.set(stash, destination);
 
-  return read;
+  return destination;
 };
 
 const readBonded = (stash: string): Promise<AnyJson> =>
