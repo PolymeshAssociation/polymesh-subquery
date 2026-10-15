@@ -17,7 +17,7 @@ import {
   getFirstValueFromJson,
   getNftId,
   getNumberValue,
-  getPortfolioId,
+  getHoldingId,
   getTextValue,
   padId,
   padNumericId,
@@ -35,11 +35,10 @@ import { blockEvents } from '../../../utils/blockEvents';
 const nftRowId = (assetId: string, nftId: number): string => `${assetId}/${padId(String(nftId))}`;
 
 const locationOf = (
+  assetId: string,
   holder: AssetHolderDetails | undefined
-): Pick<Nft, 'portfolioId' | 'accountId' | 'identityId'> => ({
-  portfolioId: holder?.holderKind === HolderKind.Portfolio ? getPortfolioId(holder) : undefined,
-  accountId: holder?.holderKind === HolderKind.Account ? holder.account : undefined,
-  identityId: holder?.identityId || undefined,
+): Pick<Nft, 'holdingId'> => ({
+  holdingId: holder ? getHoldingId(assetId, holder) : undefined,
 });
 
 /** Builds one token's row; unsaved — callers collect these and `bulkCreateNfts` them in one call. */
@@ -53,7 +52,7 @@ const mintNft = (
     id: nftRowId(assetId, nftId),
     assetId,
     nftId: BigInt(nftId),
-    ...locationOf(holder),
+    ...locationOf(assetId, holder),
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   });
@@ -66,14 +65,14 @@ const mintNft = (
 const moveNft = async (
   assetId: string,
   nftId: number,
-  holder: AssetHolderDetails,
+  holder: AssetHolderDetails | undefined,
   blockEventId: string
 ): Promise<Nft | undefined> => {
   const nft = await Nft.get(nftRowId(assetId, nftId));
   if (!nft) {
     return undefined;
   }
-  Object.assign(nft, locationOf(holder));
+  Object.assign(nft, locationOf(assetId, holder));
   nft.updatedEventId = blockEventId;
   return nft;
 };
@@ -92,6 +91,8 @@ const burnNft = async (
     return undefined;
   }
   nft.burnedEventId = blockEventId;
+  // out of every holding, so a holding's `nfts` are exactly what it holds
+  nft.holdingId = undefined;
   nft.updatedEventId = blockEventId;
   return nft;
 };

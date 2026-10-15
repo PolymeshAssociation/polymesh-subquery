@@ -73,7 +73,9 @@ describe('pre-6.0 NFT issuance and redemption', () => {
 
     await handleLegacyNftIssued(issued(nftCall('issueNft', { user: 2 })));
 
-    expect(db.Nft[`${assetId}/0000000007`]).toMatchObject({ portfolioId: `${TEST_DID}/2` });
+    expect(db.Nft[`${assetId}/0000000007`]).toMatchObject({
+      holdingId: `${assetId}/${TEST_DID}/2`,
+    });
     expect(db.Holding[`${assetId}/${TEST_DID}/2`].nftCount).toBe(1);
     expect(db.Asset[assetId].totalSupply).toBe(BigInt(1));
     expect(db.NftHolder[`${assetId}/${TEST_DID}`].nftIds).toEqual([BigInt(7)]);
@@ -97,7 +99,9 @@ describe('pre-6.0 NFT issuance and redemption', () => {
       issued({ idx: 1, extrinsic: { method: { section: 'utility', method: 'batch', args: [] } } })
     );
 
-    expect(db.Nft[`${assetId}/0000000007`]).toMatchObject({ portfolioId: `${TEST_DID}/0` });
+    expect(db.Nft[`${assetId}/0000000007`]).toMatchObject({
+      holdingId: `${assetId}/${TEST_DID}/0`,
+    });
     expect(anomaly).toHaveBeenCalled();
   });
 

@@ -2128,6 +2128,8 @@ type Account @entity {
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
+  "One per asset this account has held as a v8 account-level holder"
+  holdings: [Holding!] @derivedFrom(field: "account")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2162,6 +2164,8 @@ type Identity @entity {
   updatedEvent: Event!
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
   heldNfts: [NftHolder]! @derivedFrom(field: "identity")
+  "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
+  holdings: [Holding!] @derivedFrom(field: "identity")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
@@ -2624,6 +2628,8 @@ type Portfolio @entity {
   name: String
   custodian: Identity
   deletedAt: Date
+  "One per asset this portfolio has held"
+  holdings: [Holding!] @derivedFrom(field: "portfolio")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3353,10 +3359,8 @@ type Nft @entity {
   asset: Asset!
   "BigInt everywhere — resolves G10"
   nftId: BigInt!
-  "current location; exactly one of portfolio / account is set while the token is in circulation"
-  portfolio: Portfolio
-  account: Account
-  identity: Identity
+  "The holding the token is in, which names its portfolio or account and identity. Null once burned; the redemption's `AssetTransaction` keeps where it was burned from"
+  holding: Holding
   createdEvent: Event!
   "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
   burnedEvent: Event
@@ -3429,8 +3433,10 @@ type Holding
   frozen: BigInt!
   "When the asset's agents froze this whole holder against transfers of the asset; null while it is not frozen. A timestamp rather than a Boolean so it can be filtered on (`frozenSince: { isNull: false }`), and unindexed because this table is already at its index limit"
   frozenSince: Date
-  "count of non-fungible tokens held; the ids live on `Nft`"
+  "count of non-fungible tokens held; the tokens are `nfts`"
   nftCount: Int!
+  "The non-fungible tokens held, excluding any not yet seen by the index"
+  nfts: [Nft!] @derivedFrom(field: "holding")
   createdEvent: Event!
   updatedEvent: Event!
 }

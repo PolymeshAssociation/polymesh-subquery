@@ -103,8 +103,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     ]);
     expect(db['Nft'][`${ASSET}/0000000002`]).toMatchObject({
       nftId: BigInt(2),
-      portfolioId: `${DID_A}/0`,
-      identityId: DID_A,
+      holdingId: `${ASSET}/${DID_A}/0`,
       createdEventId: '0000000500/0000000001',
     });
     expect(db['Nft'][`${ASSET}/0000000002`].burnedEventId).toBeUndefined();
@@ -126,7 +125,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     );
     await flushNftBuffer();
 
-    expect(db['Nft'][`${ASSET}/0000000004`]).toMatchObject({ identityId: DID_A });
+    expect(db['Nft'][`${ASSET}/0000000004`]).toMatchObject({ holdingId: `${ASSET}/${DID_A}/0` });
   });
 
   it('moves the Nft row on transfer and adjusts both Holding.nftCount values', async () => {
@@ -146,8 +145,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     await flushNftBuffer();
 
     expect(db['Nft'][`${ASSET}/0000000007`]).toMatchObject({
-      portfolioId: `${DID_B}/0`,
-      identityId: DID_B,
+      holdingId: `${ASSET}/${DID_B}/0`,
     });
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(0);
     expect(db['Holding'][`${ASSET}/${DID_B}/0`].nftCount).toBe(1);
@@ -201,6 +199,7 @@ describe('handleNftHoldingsUpdates — per-token Nft rows', () => {
     await flushNftBuffer();
 
     expect(db['Nft'][`${ASSET}/0000000009`].burnedEventId).toBeDefined();
+    expect(db['Nft'][`${ASSET}/0000000009`].holdingId).toBeUndefined();
     expect(db['Holding'][`${ASSET}/${DID_A}/0`].nftCount).toBe(0);
     expect(db['Asset'][ASSET].totalSupply).toBe(BigInt(0));
   });

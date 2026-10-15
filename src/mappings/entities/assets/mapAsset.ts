@@ -32,6 +32,7 @@ import {
   getDocValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
+  getHoldingId,
   portfolioHolder,
   getNumberValue,
   getPortfolioId,
@@ -171,17 +172,12 @@ export const getAssetHolder = async (
   return assetHolder;
 };
 
-const holdingId = (assetId: string, holder: AssetHolderDetails): string =>
-  holder.holderKind === HolderKind.Account
-    ? `${assetId}/${holder.account}`
-    : `${assetId}/${getPortfolioId(holder)}`;
-
 export const getHolding = async (
   assetId: string,
   holder: AssetHolderDetails,
   blockEventId: string
 ): Promise<Holding> => {
-  const id = holdingId(assetId, holder);
+  const id = getHoldingId(assetId, holder);
 
   let holding = await Holding.get(id);
 
