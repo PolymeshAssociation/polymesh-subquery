@@ -372,12 +372,14 @@ export const creditSlashReporters = async (
     // it, unless that validator's own share was nothing and announced none: then nothing in the
     // block pays the reporters, and nothing else records it.
     const era = dueEra ?? Math.min(...deferred.map(slash => slash.era));
-    const validators = deferred.filter(slash => slash.era === era).map(slash => slash.validator);
+    const validators = new Set(
+      deferred.filter(slash => slash.era === era).map(slash => slash.validator)
+    );
     const validatorSlashedBefore = slashedBefore(block, eventIdx).some(earlier =>
-      validators.includes(earlier)
+      validators.has(earlier)
     );
 
-    if (validators.includes(stash)) {
+    if (validators.has(stash)) {
       await recordAnomaly({
         kind: AnomalyKind.UnreadableValue,
         detail: `staking.Slash of ${amount} on ${stash} matches no deferred slash, so its reporters were not paid`,
