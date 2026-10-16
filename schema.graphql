@@ -701,6 +701,8 @@ enum EventIdEnum {
   "`NFTPortfolioUpdated` has been renamed as `NFTHoldingsUpdated` from 8.0.0 chain version"
   NFTPortfolioUpdated
   NFTHoldingsUpdated
+  # ControllerTransfer (already defined in asset)
+  # ControllerTransferTo (already defined in asset)
 
   ## confidential assets (events replaced by `confidentialAssets` pallet in 8.0.0) ##
   "`AccountCreated` has been deprecated from 8.0.0 chain version"

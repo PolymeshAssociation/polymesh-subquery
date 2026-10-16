@@ -145,3 +145,28 @@ describe('agent-permissioned asset calls recorded as agent actions', () => {
     });
   });
 });
+
+describe('NFT controller transfers recorded as agent actions', () => {
+  const HOLDER = codec({ account: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY' });
+
+  it.each(['ControllerTransfer', 'ControllerTransferTo'])('%s', async method => {
+    const db = mockStore();
+
+    await mapExternalAgentAction(
+      tupleEvent({
+        section: 'nft',
+        method,
+        data: [codec(DID_A), codec({ assetId: ASSET_ID, ids: [1] }), HOLDER, HOLDER],
+      })
+    );
+
+    const actions = Object.values(db.AssetAgentAction ?? {}) as any[];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      assetId: ASSET_ID,
+      callerId: DID_A,
+      palletName: 'nft',
+      eventId: method,
+    });
+  });
+});

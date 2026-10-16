@@ -549,7 +549,13 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       instructionId = padNumericId(details.instructionId);
       instructionMemo = memoText(details.instructionMemo);
     } else {
-      eventId = EventIdEnum.ControllerTransfer;
+      // From 8.1.3 the chain follows this event with one naming the call, as it does for
+      // fungible assets; before that, `controller_transfer_to` is indistinguishable here.
+      const next = blockEvents(block)[eventIdx + 1]?.event;
+      eventId =
+        next?.section === 'nft' && next.method === 'ControllerTransferTo'
+          ? EventIdEnum.ControllerTransferTo
+          : EventIdEnum.ControllerTransfer;
     }
   }
 

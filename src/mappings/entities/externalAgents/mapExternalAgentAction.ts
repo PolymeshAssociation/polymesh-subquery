@@ -4,6 +4,7 @@ import { AssetAgentAction, EventIdEnum, ModuleIdEnum } from '../../../types';
 import {
   getAssetId,
   getExemptKeyValue,
+  getNftId,
   getOfferingAsset,
   getOrDefault,
   getTextValue,
@@ -315,6 +316,11 @@ class ExternalAgentEventsManager {
        * by parameter position.
        */
       .add(ModuleIdEnum.nft, [EventIdEnum.NftCollectionCreated, EventIdEnum.RedeemedNFT], 1)
+      .add(
+        ModuleIdEnum.nft,
+        [EventIdEnum.ControllerTransfer, EventIdEnum.ControllerTransferTo],
+        async (params, block) => (await getNftId(params[1], block)).assetId
+      )
       .add(
         ModuleIdEnum.nft,
         [EventIdEnum.IssuedNFT],
