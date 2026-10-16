@@ -141,11 +141,11 @@
   },
   {
     "name": "sdk.instructionAffirmations",
-    "query": "query InstructionAffirmationsQuery($start: Int, $size: Int, $instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_DESC, ID_DESC]\n  ) {\n    totalCount\n    nodes {\n      id\n      identityId\n      accountId\n      portfolios\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
+    "query": "query InstructionAffirmationsQuery($start: Int, $size: Int, $instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_DESC, ID_DESC]\n  ) {\n    totalCount\n    nodes {\n      id\n      identityId\n      accountId\n      portfolioId\n      affirmedById\n      signerId\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.offChainAffirmations",
-    "query": "query InstructionAffirmationsQuery($instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}, offChainReceiptExists: true}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      id\n      identityId\n      accountId\n      portfolios\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
+    "query": "query InstructionAffirmationsQuery($instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}, offChainReceiptExists: true}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      id\n      identityId\n      accountId\n      portfolioId\n      affirmedById\n      signerId\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.legs",
