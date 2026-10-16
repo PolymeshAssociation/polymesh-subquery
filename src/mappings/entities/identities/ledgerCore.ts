@@ -77,21 +77,34 @@ export const amountOf = (decoded: Record<string, Codec>): bigint => {
  * Takes JSON rather than a `Codec` so the same decode serves `balances.holds(who)` entries, whose
  * `id` arrives already-JSON from a storage read (see `readChainHolds`).
  */
-export const holdReasonFromJson = (json: unknown): HoldReason => {
+/**
+ * The outer hold reason of `holdReasonFromJson`, plus the pallet's own reason variant nested under
+ * it (`Revive(StorageDepositReserve)` encodes as `{ revive: 'StorageDepositReserve' }`), when the
+ * reason is a composite carrying a plain unit variant. A bare-string reason has none.
+ */
+export const holdReasonVariantOf = (json: unknown): { reason: HoldReason; variant?: string } => {
+  let outer: string | undefined;
   let variant: string | undefined;
 
   if (typeof json === 'string') {
-    variant = json;
+    outer = json;
   } else if (json && typeof json === 'object' && !Array.isArray(json)) {
-    [variant] = Object.keys(json);
+    [outer] = Object.keys(json);
+    const inner = (json as Record<string, unknown>)[outer];
+
+    variant = typeof inner === 'string' ? inner : undefined;
   }
 
-  const key = variant?.toLowerCase();
+  const key = outer?.toLowerCase();
 
-  return (
-    Object.values(HoldReason).find(member => member.toLowerCase() === key) ?? HoldReason.Unknown
-  );
+  return {
+    reason:
+      Object.values(HoldReason).find(member => member.toLowerCase() === key) ?? HoldReason.Unknown,
+    variant,
+  };
 };
+
+export const holdReasonFromJson = (json: unknown): HoldReason => holdReasonVariantOf(json).reason;
 
 export const holdReasonOf = (decoded: Record<string, Codec>): HoldReason | undefined => {
   const raw = optionalField(decoded, 'reason');

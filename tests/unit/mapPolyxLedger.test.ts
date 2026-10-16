@@ -36,6 +36,7 @@ jest.mock('../../src/mappings/args/encode', () => ({
 }));
 import { resolveFeePayer } from '../../src/mappings/entities/identities/feePayer';
 import {
+  AnomalyKind,
   EntryDirection,
   HoldReason,
   IndexerAnomaly,
@@ -3674,6 +3675,9 @@ describe('held balance burned or moved, and a lock raised (v8)', () => {
     expect(balance(BOB)).toMatchObject({ free: BigInt(300), reserved: BigInt(0) });
     expect(balance(ALICE)?.holds).toEqual([{ reason: HoldReason.Staking, amount: '600' }]);
     expect(Object.values(db['IndexerAnomaly'] ?? {})).toHaveLength(1);
+    expect(Object.values(db['IndexerAnomaly'] ?? {})[0]).toMatchObject({
+      kind: AnomalyKind.UnreadableValue,
+    });
   });
 
   it('Locked: raises the floor on free without a PolyxEntry or a pool move', async () => {

@@ -40,6 +40,7 @@ import {
   loadBalance,
   memoOf,
   nearestPreceding,
+  holdReasonVariantOf,
   poolTag,
   postTransition,
   previousEventId,
@@ -458,8 +459,10 @@ export const handleBalanceBurnedHeld = async (event: SubstrateEvent): Promise<vo
  * `Free` restriction, credits the destination's free balance; it emits only this event, with no
  * hold on the destination. No Polymesh pallet calls it. The one live caller is pallet-revive's
  * storage-deposit refund, which uses that restriction, so the destination gains no hold and only
- * the source's hold shrinks. A reason other than that deposit means a new caller, whose restriction
- * is unknown, and is reported rather than guessed at.
+ * the source's hold shrinks. The event does not carry the restriction, so any other reason means a
+ * new caller whose restriction is unknown: it is booked as Free all the same (Free credits the
+ * destination's free balance; OnHold would credit its hold for the same reason) and reported, so a
+ * wrong guess is visible.
  */
 export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
@@ -472,10 +475,10 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
 
   if (!isReviveStorageDeposit(decoded)) {
     await recordAnomaly({
-      kind: AnomalyKind.UnknownEnumValue,
+      kind: AnomalyKind.UnreadableValue,
       detail: `balances.TransferOnHold of ${amount} moved a hold other than the revive storage deposit (reason ${
         optionalField(decoded, 'reason')?.toString() ?? 'absent'
-      }); it was booked as source/Reserved to dest/Free, which only that deposit is known to do`,
+      }); the event does not say whether the transfer is Free or OnHold, so it was booked as source/Reserved to dest/Free, which only that deposit is known to do`,
       block: args.block,
       eventIdx: args.eventIdx,
       moduleId: ModuleIdEnum.balances,
@@ -497,19 +500,9 @@ export const handleTransferOnHold = async (event: SubstrateEvent): Promise<void>
 };
 
 const isReviveStorageDeposit = (decoded: Record<string, Codec>): boolean => {
-  const json = optionalField(decoded, 'reason')?.toJSON();
+  const { reason, variant } = holdReasonVariantOf(optionalField(decoded, 'reason')?.toJSON());
 
-  return (
-    !!json &&
-    typeof json === 'object' &&
-    !Array.isArray(json) &&
-    Object.entries(json).some(
-      ([pallet, inner]) =>
-        pallet.toLowerCase() === 'revive' &&
-        typeof inner === 'string' &&
-        inner.toLowerCase() === 'storagedepositreserve'
-    )
-  );
+  return reason === HoldReason.Revive && variant?.toLowerCase() === 'storagedepositreserve';
 };
 
 /**
