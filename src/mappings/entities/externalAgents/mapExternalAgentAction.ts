@@ -4,7 +4,7 @@ import { AssetAgentAction, EventIdEnum, ModuleIdEnum } from '../../../types';
 import {
   getAssetId,
   getExemptKeyValue,
-  getOfferingAsset,
+  getOfferingAssetId,
   getOrDefault,
   getTextValue,
   is7Dot3Chain,
@@ -344,7 +344,7 @@ class ExternalAgentEventsManager {
       // Special case for the Sto pallet because most events don't contain the Asset,
       // they contain a reference to a previously created fundraiser instead.
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async (params, block) =>
-        is7Dot3Chain(block) ? getAssetId(params[1], block) : getOfferingAsset(params[3])
+        is7Dot3Chain(block) ? getAssetId(params[1], block) : getOfferingAssetId(params[3], block)
       )
       .add(
         ModuleIdEnum.sto,

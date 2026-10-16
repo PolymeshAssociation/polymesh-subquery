@@ -9,7 +9,6 @@ import {
   extractString,
   extractValue,
   getDateValue,
-  hexToString,
   padNumericId,
 } from './common';
 import { getPortfolioId, meshPortfolioToAssetHolder } from './portfolios';
@@ -51,7 +50,7 @@ export const getFundraiserDetails = async (
       })
     ),
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
-    offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
+    offeringAssetId: await getOfferingAssetId(item, block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
     raisingAssetId,
     offChainFundingEnabled: false,
@@ -64,7 +63,6 @@ export const getFundraiserDetails = async (
   };
 };
 
-export const getOfferingAsset = (item: Codec): string => {
-  const fundraiser = JSON.parse(item.toString());
-  return hexToString(extractValue(fundraiser, 'offering_asset'));
-};
+/** The id of the asset a fundraiser offers, which before 7.x the fundraiser names by ticker. */
+export const getOfferingAssetId = (item: Codec, block: SubstrateBlock): Promise<string> =>
+  getAssetId(extractString(JSON.parse(item.toString()), 'offering_asset'), block);
