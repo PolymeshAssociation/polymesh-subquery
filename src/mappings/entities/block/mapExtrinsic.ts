@@ -141,6 +141,9 @@ const createEvmTransaction = (
  */
 const handleEvmAccountMapping = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   const address = getSignerAddress(extrinsic);
+  if (!address) {
+    return;
+  }
   const evmAddress = evmAddressFromSs58(address, extrinsic.extrinsic.registry.chainSS58);
 
   if (!evmAddress) {
