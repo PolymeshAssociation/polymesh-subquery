@@ -239,13 +239,9 @@ export function removeIfIncludes<T>(arr: T[], item: T): void {
   }
 }
 
-export const getSignerAddress = (extrinsic: SubstrateExtrinsic): string => {
-  let signer: string;
-  if (extrinsic) {
-    signer = extrinsic.extrinsic.signer.toString();
-  }
-  return signer;
-};
+/** The account that signed `extrinsic`; undefined for an event with none (a scheduled one). */
+export const getSignerAddress = (extrinsic: SubstrateExtrinsic | undefined): string | undefined =>
+  extrinsic?.extrinsic.signer.toString();
 
 export const logError = (message: string): void => {
   logger.error(message);
