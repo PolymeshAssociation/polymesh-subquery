@@ -275,6 +275,15 @@ describe('GiST trim in db/trimIndexes.ts', () => {
     expect(lost).toEqual([]);
   });
 
+  it('names only indexes the schema declares as ones the SDK and portal queries use', () => {
+    const undeclared = CONSUMER_USED.filter(
+      ([table, columns]) =>
+        !(declared.get(table) ?? []).some(index => key(index) === key(columns.split(', ')))
+    ).map(([table, columns]) => `${table} (${columns})`);
+
+    expect(undeclared).toEqual([]);
+  });
+
   it('keeps every index the SDK and portal queries use', () => {
     const lost = CONSUMER_USED.filter(([table, columns]) =>
       dropped(table, columns.split(', '))
