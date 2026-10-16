@@ -1,6 +1,7 @@
 import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
 import {
+  handleInstructionMediators,
   handleMediatorAffirmationReceived,
   handleMediatorAffirmationWithdrawn,
   handleReceiptClaimed,
@@ -40,59 +41,119 @@ describe('mediator withdrawals and off-chain receipts', () => {
     db = mockStore();
   });
 
-  it('MediatorAffirmationWithdrawn removes the mediator affirmation and records the withdrawal', async () => {
-    await handleMediatorAffirmationReceived(
+  const mediatorRow = (did: string) => `${INSTRUCTION}/mediator/${did}`;
+  const received = (did: string, idx = 1, expiry: unknown = null) =>
+    handleMediatorAffirmationReceived(
       tupleEvent({
         section: 'settlement',
         method: 'MediatorAffirmationReceived',
-        data: [codec(MEDIATOR), codec(42), codec(null)],
-        idx: 1,
+        data: [codec(did), codec(42), codec(expiry)],
+        idx,
+        extrinsic: { idx: 1, extrinsic: { signer: { toString: () => SIGNER } } },
       })
     );
-    expect(db.InstructionAffirmation[`${INSTRUCTION}/${MEDIATOR}/true`]).toMatchObject({
-      status: AffirmStatusEnum.Affirmed,
-      isMediator: true,
-    });
-
-    await handleMediatorAffirmationWithdrawn(
+  const withdrawn = (did: string, idx = 2) =>
+    handleMediatorAffirmationWithdrawn(
       tupleEvent({
         section: 'settlement',
         method: 'MediatorAffirmationWithdrawn',
-        data: [codec(MEDIATOR), codec(42)],
-        idx: 2,
+        data: [codec(did), codec(42)],
+        idx,
       })
     );
+  const announced = (dids: string[], idx = 0) =>
+    handleInstructionMediators(
+      tupleEvent({
+        section: 'settlement',
+        method: 'InstructionMediators',
+        data: [codec(42), codec(dids)],
+        idx,
+        extrinsic: { idx: 1, extrinsic: { signer: { toString: () => SIGNER } } },
+      })
+    );
+  const other = '0x0400000000000000000000000000000000000000000000000000000000000000';
 
-    expect(db.InstructionAffirmation[`${INSTRUCTION}/${MEDIATOR}/true`]).toBeUndefined();
-    expect(Object.values(db.InstructionEvent)).toContainEqual(
-      expect.objectContaining({
-        id: '0000001000/0000000002',
+  it('mediators start pending', async () => {
+    db.Instruction = { [INSTRUCTION]: { id: INSTRUCTION, mediators: [] } };
+
+    await announced([MEDIATOR, other]);
+
+    for (const did of [MEDIATOR, other]) {
+      expect(db.InstructionAffirmation[mediatorRow(did)]).toMatchObject({
         instructionId: INSTRUCTION,
-        event: InstructionEventEnum.MediatorAffirmationWithdrawn,
-        identityId: MEDIATOR,
-      })
-    );
+        identityId: did,
+        isMediator: true,
+        status: 'Pending',
+        partyId: `${INSTRUCTION}/${did}/true`,
+      });
+      expect(db.InstructionAffirmation[mediatorRow(did)].affirmedById).toBeUndefined();
+    }
+    expect(db.InstructionEvent['0000001000/0000000000/0']).toMatchObject({
+      event: InstructionEventEnum.InstructionMediators,
+      identityId: MEDIATOR,
+      signerId: SIGNER,
+    });
   });
 
-  it('MediatorAffirmationWithdrawn leaves another mediator and a party affirmation alone', async () => {
-    const other = '0x0400000000000000000000000000000000000000000000000000000000000000';
+  it('mediator affirms and withdraws', async () => {
+    db.Instruction = { [INSTRUCTION]: { id: INSTRUCTION, mediators: [] } };
+    await announced([MEDIATOR]);
+
+    await received(MEDIATOR, 1, '1767225600000');
+    expect(db.InstructionAffirmation[mediatorRow(MEDIATOR)]).toMatchObject({
+      status: 'Affirmed',
+      expiry: new Date(1767225600000),
+      affirmedById: MEDIATOR,
+      signerId: SIGNER,
+    });
+    expect(db.InstructionEvent['0000001000/0000000001']).toMatchObject({
+      event: InstructionEventEnum.MediatorAffirmationReceived,
+      identityId: MEDIATOR,
+      signerId: SIGNER,
+    });
+
+    await withdrawn(MEDIATOR);
+    const row = db.InstructionAffirmation[mediatorRow(MEDIATOR)];
+    expect(row).toMatchObject({ status: 'Pending', affirmedById: MEDIATOR });
+    expect(row.expiry).toBeUndefined();
+    expect(db.InstructionEvent['0000001000/0000000002']).toMatchObject({
+      event: InstructionEventEnum.MediatorAffirmationWithdrawn,
+      identityId: MEDIATOR,
+    });
+  });
+
+  it('mediator affirms before the mediators are announced', async () => {
+    db.Instruction = { [INSTRUCTION]: { id: INSTRUCTION, mediators: [] } };
+
+    await received(MEDIATOR, 1);
+    expect(db.InstructionAffirmation[mediatorRow(MEDIATOR)].status).toBe('Affirmed');
+    expect(db.InstructionParty[`${INSTRUCTION}/${MEDIATOR}/true`]).toMatchObject({
+      isMediator: true,
+      identityId: MEDIATOR,
+    });
+
+    await announced([MEDIATOR], 2);
+    expect(db.InstructionAffirmation[mediatorRow(MEDIATOR)].status).toBe('Affirmed');
+  });
+
+  it('a mediator withdrawal leaves another mediator and a holder alone', async () => {
     db.InstructionAffirmation = {
-      [`${INSTRUCTION}/${MEDIATOR}/true`]: { id: `${INSTRUCTION}/${MEDIATOR}/true` },
-      [`${INSTRUCTION}/${other}/true`]: { id: `${INSTRUCTION}/${other}/true` },
-      [`${INSTRUCTION}/${MEDIATOR}/false`]: { id: `${INSTRUCTION}/${MEDIATOR}/false` },
+      [mediatorRow(MEDIATOR)]: { id: mediatorRow(MEDIATOR), status: 'Affirmed' },
+      [mediatorRow(other)]: { id: mediatorRow(other), status: 'Affirmed' },
+      [`${INSTRUCTION}/${MEDIATOR}/0`]: { id: `${INSTRUCTION}/${MEDIATOR}/0`, status: 'Affirmed' },
     };
 
-    await handleMediatorAffirmationWithdrawn(
-      tupleEvent({
-        section: 'settlement',
-        method: 'MediatorAffirmationWithdrawn',
-        data: [codec(MEDIATOR), codec(42)],
-      })
-    );
+    await withdrawn(MEDIATOR);
 
-    expect(Object.keys(db.InstructionAffirmation).sort()).toEqual(
-      [`${INSTRUCTION}/${MEDIATOR}/false`, `${INSTRUCTION}/${other}/true`].sort()
-    );
+    expect(db.InstructionAffirmation[mediatorRow(MEDIATOR)].status).toBe('Pending');
+    expect(db.InstructionAffirmation[mediatorRow(other)]).toEqual({
+      id: mediatorRow(other),
+      status: 'Affirmed',
+    });
+    expect(db.InstructionAffirmation[`${INSTRUCTION}/${MEDIATOR}/0`]).toEqual({
+      id: `${INSTRUCTION}/${MEDIATOR}/0`,
+      status: 'Affirmed',
+    });
   });
 
   it('ReceiptClaimed records the receipt, the affirmation it makes, and the event', async () => {

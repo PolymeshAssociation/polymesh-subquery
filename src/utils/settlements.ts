@@ -46,6 +46,10 @@ export interface HolderRef {
 export const holderAffirmationId = (instructionId: string, holder: HolderRef): string =>
   `${instructionId}/${holder.accountId ?? holder.portfolioId}`;
 
+/** The id of a mediator's approval of an instruction. */
+export const mediatorAffirmationId = (instructionId: string, did: string): string =>
+  `${instructionId}/mediator/${did}`;
+
 /**
  * The distinct on-chain holders across both sides of every leg, in first-seen order. An off-chain
  * leg's sides name an identity but no portfolio or account, so they hold nothing on chain.
