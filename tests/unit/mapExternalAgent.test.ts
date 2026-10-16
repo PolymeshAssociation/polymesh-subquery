@@ -9,6 +9,7 @@ import {
   handleGroupChanged,
   handleGroupCreated,
 } from '../../src/mappings/entities/externalAgents/mapExternalAgentHistory';
+import { getAssetIdForLegacyTicker } from '../../src/utils/assets';
 import { codec, mockStore, tupleEvent } from './helpers';
 
 const ASSET_ID = '0xassetagent0000000000000000000000';
@@ -142,6 +143,30 @@ describe('agent-permissioned asset calls recorded as agent actions', () => {
       callerId: DID_A,
       palletName: 'asset',
       eventId: method,
+    });
+  });
+});
+
+describe('FundraiserCreated recorded as an agent action', () => {
+  it('names the asset by its id before 7.3, when the fundraiser names it by ticker', async () => {
+    const db = mockStore();
+    const ticker = '0x464c59000000000000000000';
+    const details = codec({ offering_asset: ticker, raising_asset: ticker, venue_id: 1 });
+
+    await mapExternalAgentAction(
+      tupleEvent({
+        section: 'sto',
+        method: 'FundraiserCreated',
+        specVersion: 5_000_000,
+        data: [codec(DID_A), codec(0), codec('0x6f6666'), details],
+      })
+    );
+
+    const [action] = Object.values(db.AssetAgentAction ?? {}) as any[];
+    expect(action).toMatchObject({
+      assetId: await getAssetIdForLegacyTicker(ticker),
+      callerId: DID_A,
+      eventId: 'FundraiserCreated',
     });
   });
 });
