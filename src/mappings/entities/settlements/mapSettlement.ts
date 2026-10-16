@@ -21,6 +21,7 @@ import {
   specVersionOf,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
 import {
   createPortfolioIfNotExists,
@@ -361,6 +362,8 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    */
   if (specVersionOf(block) >= 6_000_000) {
     legs = await getSettlementLeg(rawLegs, block, blockId, blockEventId);
+  } else if (args.eventId === EventIdEnum.InstructionV2Created) {
+    legs = await getLegV2Values(rawLegs, block);
   } else {
     legs = await getLegsValue(rawLegs, block);
   }

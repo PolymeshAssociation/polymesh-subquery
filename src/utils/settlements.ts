@@ -46,7 +46,7 @@ const holderFields = (
     ? { id: holder.identityId || undefined, accountId: holder.account }
     : { id: holder.identityId, portfolioId: getPortfolioId(holder) };
 
-const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegSides => {
+export const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegSides => {
   const sender = holderFields(from);
   const receiver = holderFields(to);
   return {
@@ -61,14 +61,8 @@ const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegSides =>
 
 /** One pre-v6 leg, as `getLegsValue` reads it. */
 const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promise<LegDetails> => {
-  const { from: rawFromPortfolio, to: rawToPortfolio } = leg;
-  // v5.3's `LegV2` (from `InstructionV2Created`) wraps the asset in a `LegAsset` enum:
-  // `{ fungible: { ticker, amount } }` or `{ nonFungible: { ticker, ids } }`. `Leg` has the
-  // ticker and amount at the top level.
-  const { fungible, nonFungible } = (typeof leg.asset === 'object' && leg.asset) || {};
-  const rawTicker = fungible?.ticker ?? nonFungible?.ticker ?? leg.asset;
-  const { assetId, ticker } = await getAssetIdWithTicker(rawTicker, block);
-  const nftIds: bigint[] | undefined = nonFungible?.ids?.map(BigInt);
+  const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
+  const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
 
   return {
     legIndex,
@@ -78,12 +72,8 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
     ),
     assetId,
     ticker,
-    ...(nonFungible
-      ? { nftIds, legType: LegTypeEnum.NonFungible }
-      : {
-          amount: getBigIntValue(fungible?.amount ?? leg.amount),
-          legType: LegTypeEnum.Fungible,
-        }),
+    amount: getBigIntValue(amount),
+    legType: LegTypeEnum.Fungible,
   };
 };
 

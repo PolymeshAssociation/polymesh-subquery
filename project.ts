@@ -300,7 +300,7 @@ const filters: Record<string, Record<string, string[]>> = {
     InstructionAffirmed: ['handleInstructionUpdate'],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],
     InstructionCreated: ['handleInstructionCreated'],
-    // v5.3's `InstructionCreated`, from `add_instruction_with_memo_v2`: the same fields
+    // v5.3's `InstructionCreated`, from `add_instruction_with_memo_v2`, with `LegV2` legs
     InstructionV2Created: ['handleInstructionCreated'],
     InstructionExecuted: ['handleInstructionFinalizedEvent'],
     InstructionFailed: ['handleInstructionFinalizedEvent'],
