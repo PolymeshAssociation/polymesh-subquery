@@ -103,8 +103,8 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('Controller');
-    expect(row.rewardDestinationAccount).toBe(CONTROLLER);
-    expect(row.stashAccount).toBe(STASH);
+    expect(row.rewardDestinationAccountId).toBe(CONTROLLER);
+    expect(row.stashId).toBe(STASH);
   });
 
   it('resolves an explicit Account payee', async () => {
@@ -116,7 +116,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('Account');
-    expect(row.rewardDestinationAccount).toBe(PAYEE);
+    expect(row.rewardDestinationAccountId).toBe(PAYEE);
   });
 
   it('resolves Staked/Stash to the stash itself', async () => {
@@ -128,7 +128,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     expect(savedStakingEvent()).toMatchObject({
       rewardDestination: 'Staked',
-      rewardDestinationAccount: STASH,
+      rewardDestinationAccountId: STASH,
     });
   });
 
@@ -143,7 +143,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     expect(savedStakingEvent()).toMatchObject({
       rewardDestination: 'Staked',
-      rewardDestinationAccount: STASH,
+      rewardDestinationAccountId: STASH,
     });
   });
 
@@ -155,7 +155,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('LegacyUnknown');
-    expect(row.rewardDestinationAccount).toBeUndefined();
+    expect(row.rewardDestinationAccountId).toBeUndefined();
   });
 
   it('propagates a failed payee read rather than recording LegacyUnknown', async () => {
@@ -186,7 +186,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('Account');
-    expect(row.rewardDestinationAccount).toBe(PAYEE);
+    expect(row.rewardDestinationAccountId).toBe(PAYEE);
   });
 
   it('v8 resolves Staked/Stash to the stash itself', async () => {
@@ -196,7 +196,7 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('Staked');
-    expect(row.rewardDestinationAccount).toBe(STASH);
+    expect(row.rewardDestinationAccountId).toBe(STASH);
   });
 
   it('v8 resolves the object form of a Staked payee to the stash', async () => {
@@ -206,6 +206,6 @@ describe('A15 — pre-v8 reward destination', () => {
 
     const row = savedStakingEvent();
     expect(row.rewardDestination).toBe('Staked');
-    expect(row.rewardDestinationAccount).toBe(STASH);
+    expect(row.rewardDestinationAccountId).toBe(STASH);
   });
 });

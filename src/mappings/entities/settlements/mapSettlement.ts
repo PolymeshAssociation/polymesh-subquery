@@ -21,6 +21,7 @@ import {
   specVersionOf,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
 import {
   createPortfolioIfNotExists,
@@ -36,7 +37,13 @@ import {
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
-import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
+import {
+  getPortfolioOrAccount,
+  instructionPartiesOf,
+  LegDetails,
+  PartyDetails,
+  portfolioNumber,
+} from './../../../utils/settlements';
 import { memoText } from '../../../utils/text';
 
 /**
@@ -109,14 +116,17 @@ const prepareLegCreateParams = async (
   legDetails: LegDetails,
   { eventIdx, eventId, block, blockEventId }: HandlerArgs
 ): Promise<Parameters<typeof Leg.create>[0]> => {
-  const { from, fromPortfolio, to, toPortfolio, legIndex } = legDetails;
+  const { fromId: from, fromPortfolioId, toId: to, toPortfolioId, legIndex } = legDetails;
+  // the default portfolio (number 0) always exists
+  const fromPortfolio = fromPortfolioId ? portfolioNumber(fromPortfolioId) : undefined;
+  const toPortfolio = toPortfolioId ? portfolioNumber(toPortfolioId) : undefined;
   const promises = [];
 
   /**
    * older versions did not ensure the existence of sender and receivers, so entries may need to be added
    */
   if (is7xChain(block)) {
-    if (fromPortfolio) {
+    if (fromPortfolio && from) {
       promises.push(
         createPortfolioIfNotExists(
           { identityId: from, number: fromPortfolio },
@@ -128,7 +138,7 @@ const prepareLegCreateParams = async (
         )
       );
     }
-    if (toPortfolio) {
+    if (toPortfolio && to) {
       promises.push(
         createPortfolioIfNotExists(
           { identityId: to, number: toPortfolio },
@@ -235,22 +245,23 @@ const getPartyId = (
 const createInstructionParty = async (
   instructionId: string,
   blockEventId: string,
-  parties: Record<string, number[] | undefined>,
+  parties: Map<string, PartyDetails>,
   isMediator: boolean
 ): Promise<void> => {
-  const promises = Object.keys(parties).map(did =>
-    InstructionParty.create({
-      id: getPartyId(instructionId, did, undefined, isMediator),
-      instructionId,
-      isMediator,
-      identity: did,
-      portfolios: parties[did],
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    }).save()
+  await Promise.all(
+    [...parties.values()].map(({ identityId, accountId, portfolios }) =>
+      InstructionParty.create({
+        id: getPartyId(instructionId, identityId as string, accountId, isMediator),
+        instructionId,
+        isMediator,
+        identityId,
+        accountId,
+        portfolios,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
+      }).save()
+    )
   );
-
-  await Promise.all(promises);
 };
 
 /**
@@ -270,20 +281,20 @@ const mapAutomaticAffirmation = async (
 ): Promise<[InstructionEvent, InstructionAffirmation]> => {
   const [, rawHolder, rawInstructionId] = params;
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(
-    rawHolder,
-    block,
-    blockId,
-    blockEventId
-  );
+  const {
+    identityId: identity,
+    accountId: account,
+    portfolio,
+    portfolioId,
+  } = await getPortfolioOrAccount(rawHolder, block, blockId, blockEventId);
 
   const automaticAffirmationEvent = InstructionEvent.create({
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionAutomaticallyAffirmed,
-    identity,
-    account,
-    portfolio,
+    identityId: identity,
+    accountId: account,
+    portfolioId,
     createdEventId: blockEventId,
   });
 
@@ -302,8 +313,8 @@ const mapAutomaticAffirmation = async (
     id: partyId,
     instructionId,
     partyId,
-    identity,
-    account,
+    identityId: identity,
+    accountId: account,
     portfolios: [portfolio],
     isMediator: false,
     isAutomaticallyAffirmed: true,
@@ -351,6 +362,8 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    */
   if (specVersionOf(block) >= 6_000_000) {
     legs = await getSettlementLeg(rawLegs, block, blockId, blockEventId);
+  } else if (args.eventId === EventIdEnum.InstructionV2Created) {
+    legs = await getLegV2Values(rawLegs, block);
   } else {
     legs = await getLegsValue(rawLegs, block);
   }
@@ -379,33 +392,13 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     )
   );
 
-  const parties = {};
-  legParams.forEach(leg => {
-    const addParty = (did: string, portfolio?: number): void => {
-      if (portfolio === undefined) {
-        parties[did] = undefined;
-      } else {
-        parties[did] = [...(parties[did] || []), portfolio];
-      }
-    };
-
-    if (leg.fromAccount) {
-      addParty(leg.fromAccount);
-    } else {
-      addParty(leg.from, leg.fromPortfolio);
-    }
-    if (leg.toAccount) {
-      addParty(leg.toAccount);
-    } else {
-      addParty(leg.to, leg.toPortfolio);
-    }
-  });
+  const parties = instructionPartiesOf(legParams);
 
   const instructionCreatedEvent = InstructionEvent.create({
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionCreated,
-    identity: creator,
+    identityId: creator,
     createdEventId: blockEventId,
   });
 
@@ -453,12 +446,12 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
   const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(
-    rawPortfolio,
-    block,
-    blockId,
-    blockEventId
-  );
+  const {
+    identityId: identity,
+    accountId: account,
+    portfolio,
+    portfolioId,
+  } = await getPortfolioOrAccount(rawPortfolio, block, blockId, blockEventId);
 
   const partyId = getPartyId(instructionId, identity, account, false);
 
@@ -472,8 +465,8 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
       id: partyId,
       instructionId,
       partyId,
-      account,
-      identity,
+      accountId: account,
+      identityId: identity,
       portfolios: [portfolio],
       isMediator: false,
       isAutomaticallyAffirmed: false,
@@ -487,9 +480,9 @@ export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<vo
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionAffirmed,
-    identity,
-    portfolio,
-    account,
+    identityId: identity,
+    portfolioId,
+    accountId: account,
     createdEventId: blockEventId,
   });
 
@@ -534,12 +527,12 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
   const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(
-    rawPortfolio,
-    block,
-    blockId,
-    blockEventId
-  );
+  const {
+    identityId: identity,
+    accountId: account,
+    portfolio,
+    portfolioId,
+  } = await getPortfolioOrAccount(rawPortfolio, block, blockId, blockEventId);
 
   const partyId = getPartyId(instructionId, identity, account, false);
   const affirmation = await InstructionAffirmation.get(partyId);
@@ -549,9 +542,9 @@ export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise
       id: blockEventId,
       instructionId,
       event: InstructionEventEnum.AffirmationWithdrawn,
-      identity,
-      account,
-      portfolio,
+      identityId: identity,
+      accountId: account,
+      portfolioId,
       createdEventId: blockEventId,
     }).save(),
   ];
@@ -617,7 +610,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
     id: partyId,
     instructionId,
     partyId: partyId,
-    identity: identityId,
+    identityId: identityId,
     isMediator: isMediator,
     isAutomaticallyAffirmed: false,
     status: AffirmStatusEnum.Rejected,
@@ -629,7 +622,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionRejected,
-    identity: identityId,
+    identityId: identityId,
     createdEventId: blockEventId,
   });
 
@@ -686,7 +679,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
     id: blockEventId,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.SettlementManuallyExecuted,
-    identity: getTextValue(rawIdentityId),
+    identityId: getTextValue(rawIdentityId),
     createdEventId: blockEventId,
   });
 
@@ -745,7 +738,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
     id: partyId,
     instructionId,
     partyId,
-    identity: identityId,
+    identityId: identityId,
     isMediator: true,
     status: AffirmStatusEnum.Affirmed,
     isAutomaticallyAffirmed: false,
@@ -758,7 +751,7 @@ export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): 
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.MediatorAffirmationReceived,
-    identity: identityId,
+    identityId: identityId,
     createdEventId: blockEventId,
   });
 
@@ -776,7 +769,7 @@ export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent):
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.MediatorAffirmationWithdrawn,
-    identity: identityId,
+    identityId: identityId,
     createdEventId: blockEventId,
   });
 
@@ -806,15 +799,12 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
       id: `${blockEventId}/${index}`,
       instructionId,
       event: InstructionEventEnum.InstructionMediators,
-      identity,
+      identityId: identity,
       createdEventId: blockEventId,
     }).save();
   });
 
-  const parties = {};
-  identityIds.forEach(did => {
-    parties[did] = undefined;
-  });
+  const parties = new Map<string, PartyDetails>(identityIds.map(did => [did, { identityId: did }]));
 
   await Promise.all([
     instruction.save(),
@@ -845,7 +835,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   const receipt = OffChainReceipt.create({
     id: `${signer}/${uid}`,
     uid,
-    signer,
+    signerId: signer,
     legId: `${instructionId}/${legId}`,
     metadata: getTextValue(rawMetadata),
     createdEventId: blockEventId,
@@ -859,7 +849,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     isMediator: false,
     isAutomaticallyAffirmed: false,
     instructionId,
-    identity: identityId,
+    identityId: identityId,
     partyId,
     status: AffirmStatusEnum.Affirmed,
     offChainReceiptId: `${signer}/${uid}`,
@@ -871,7 +861,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     id: `${blockEventId}/receipt/${legId}`,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.ReceiptClaimed,
-    identity: identityId,
+    identityId: identityId,
     offChainReceiptId: `${signer}/${uid}`,
     createdEventId: blockEventId,
   });
@@ -888,7 +878,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
         id: partyId,
         instructionId,
         isMediator: false,
-        identity: identityId,
+        identityId: identityId,
         createdEventId: blockEventId,
         updatedEventId: blockEventId,
       }).save(),

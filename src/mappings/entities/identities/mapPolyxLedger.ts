@@ -786,7 +786,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
 // ---------------------------------------------------------------------------------------------
 
 const identityPrimaryAccount = async (did: string | undefined): Promise<string | undefined> =>
-  did ? (await Identity.get(did))?.primaryAccount : undefined;
+  did ? (await Identity.get(did))?.primaryAccountId : undefined;
 
 const treasuryPalletAccount = (): string =>
   getAccountId(systematicIssuers.treasury.accountId, api.registry.chainSS58);

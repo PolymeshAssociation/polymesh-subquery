@@ -14,56 +14,86 @@ import {
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
-import { extractAssetHolder, meshPortfolioToAssetHolder } from './portfolios';
+import {
+  AssetHolderDetails,
+  extractAssetHolder,
+  getPortfolioId,
+  meshPortfolioToAssetHolder,
+} from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
+export interface PartyDetails {
+  /** undefined only for an account holder with no identity */
+  identityId?: string;
+  accountId?: string;
+  portfolios?: number[];
+}
+
+type LegSides = Pick<
+  LegDetails,
+  'fromId' | 'fromAccountId' | 'fromPortfolioId' | 'toId' | 'toAccountId' | 'toPortfolioId'
+>;
+
+/** The number of a portfolio id (`did/number`). */
+export const portfolioNumber = (portfolioId: string): number => Number(portfolioId.split('/')[1]);
+
+/** One side of a leg: its identity, and its account or portfolio. */
+const holderFields = (
+  holder: AssetHolderDetails
+): { id?: string; accountId?: string; portfolioId?: string } =>
+  'account' in holder
+    ? { id: holder.identityId || undefined, accountId: holder.account }
+    : { id: holder.identityId, portfolioId: getPortfolioId(holder) };
+
+export const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegSides => {
+  const sender = holderFields(from);
+  const receiver = holderFields(to);
+  return {
+    fromId: sender.id,
+    fromAccountId: sender.accountId,
+    fromPortfolioId: sender.portfolioId,
+    toId: receiver.id,
+    toAccountId: receiver.accountId,
+    toPortfolioId: receiver.portfolioId,
+  };
+};
+
 /** One pre-v6 leg, as `getLegsValue` reads it. */
 const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promise<LegDetails> => {
-  const { from: rawFromPortfolio, to: rawToPortfolio } = leg;
-  // v5.3's `LegV2` (from `InstructionV2Created`) wraps the asset in a `LegAsset` enum:
-  // `{ fungible: { ticker, amount } }` or `{ nonFungible: { ticker, ids } }`. `Leg` has the
-  // ticker and amount at the top level.
-  const { fungible, nonFungible } = (typeof leg.asset === 'object' && leg.asset) || {};
-  const rawTicker = fungible?.ticker ?? nonFungible?.ticker ?? leg.asset;
-  const { assetId, ticker } = await getAssetIdWithTicker(rawTicker, block);
-  const nftIds: bigint[] | undefined = nonFungible?.ids?.map(BigInt);
-
-  const fromData = meshPortfolioToAssetHolder(rawFromPortfolio);
-  const toData = meshPortfolioToAssetHolder(rawToPortfolio);
-
-  let fromAccount: string | undefined, toAccount: string | undefined; // for accounts
-  let from: string, to: string; // for dids
-
-  let fromPortfolio: number | undefined, toPortfolio: number | undefined;
-  if ('account' in fromData) {
-    ({ account: fromAccount, identityId: from } = fromData);
-  } else {
-    ({ identityId: from, number: fromPortfolio } = fromData);
-  }
-  if ('account' in toData) {
-    ({ account: toAccount, identityId: to } = toData);
-  } else {
-    ({ identityId: to, number: toPortfolio } = toData);
-  }
+  const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
+  const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
 
   return {
     legIndex,
-    from,
-    fromPortfolio,
-    fromAccount,
-    to,
-    toPortfolio,
-    toAccount,
+    ...legSides(
+      meshPortfolioToAssetHolder(rawFromPortfolio),
+      meshPortfolioToAssetHolder(rawToPortfolio)
+    ),
     assetId,
     ticker,
-    ...(nonFungible
-      ? { nftIds, legType: LegTypeEnum.NonFungible }
-      : {
-          amount: getBigIntValue(fungible?.amount ?? leg.amount),
-          legType: LegTypeEnum.Fungible,
-        }),
+    amount: getBigIntValue(amount),
+    legType: LegTypeEnum.Fungible,
   };
+};
+
+/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by account, else DID. */
+export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails> => {
+  const parties = new Map<string, PartyDetails>();
+  const add = (identityId?: string, accountId?: string, portfolioId?: string): void => {
+    const key = (accountId ?? identityId) as string;
+    const party = parties.get(key) ?? { identityId, accountId, portfolios: undefined };
+    const portfolio = portfolioId === undefined ? undefined : portfolioNumber(portfolioId);
+    if (portfolio !== undefined && !party.portfolios?.includes(portfolio)) {
+      party.portfolios = [...(party.portfolios ?? []), portfolio];
+    }
+    parties.set(key, party);
+  };
+  legs.forEach(leg => {
+    add(leg.fromId, leg.fromAccountId, leg.fromPortfolioId);
+    add(leg.toId, leg.toAccountId, leg.toPortfolioId);
+  });
+  return parties;
 };
 
 /**
@@ -76,23 +106,18 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
   return Promise.all(legs.map((leg, legIndex) => readLeg(leg, legIndex, block)));
 };
 
-const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => {
-  const from = extractString(legValue, 'sender_identity');
-  const to = extractString(legValue, 'receiver_identity');
-  const assetId = hexToString(legValue.ticker);
-  const ticker = assetId;
-  const amount = extractBigInt(legValue, 'amount');
+const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => ({
+  fromId: extractString(legValue, 'sender_identity'),
+  toId: extractString(legValue, 'receiver_identity'),
+  amount: extractBigInt(legValue, 'amount'),
+  assetId: undefined,
+  ticker: hexToString(legValue.ticker),
+  legIndex,
+  legType: LegTypeEnum.OffChain,
+});
 
-  return {
-    from,
-    to,
-    amount,
-    assetId,
-    ticker,
-    legIndex,
-    legType: LegTypeEnum.OffChain,
-  };
-};
+/** Test hook. */
+export const processOffChainLegForTest = processOffChainLeg;
 
 const processOnChainLeg = async (
   legValue: any,
@@ -104,21 +129,6 @@ const processOnChainLeg = async (
 ): Promise<LegDetails> => {
   const fromData = await extractAssetHolder(legValue.sender, block, blockId, blockEventId);
   const toData = await extractAssetHolder(legValue.receiver, block, blockId, blockEventId);
-
-  let from: string, to: string;
-  let fromAccount: string | undefined, toAccount: string | undefined;
-  let fromPortfolio: number | undefined, toPortfolio: number | undefined;
-
-  if ('account' in fromData) {
-    ({ account: fromAccount, identityId: from } = fromData);
-  } else {
-    ({ identityId: from, number: fromPortfolio } = fromData);
-  }
-  if ('account' in toData) {
-    ({ account: toAccount, identityId: to } = toData);
-  } else {
-    ({ identityId: to, number: toPortfolio } = toData);
-  }
 
   let assetId: string;
   let ticker: string;
@@ -135,12 +145,7 @@ const processOnChainLeg = async (
     nftIds = legValue.nfts.ids;
   }
   return {
-    from,
-    fromPortfolio,
-    fromAccount,
-    to,
-    toPortfolio,
-    toAccount,
+    ...legSides(fromData, toData),
     assetId,
     ticker,
     amount,
@@ -224,21 +229,16 @@ export const getPortfolioOrAccount = async (
   block: SubstrateBlock,
   blockId: string,
   blockEventId?: string
-): Promise<{ identity: string; account?: string; portfolio?: number }> => {
+): Promise<{
+  identityId: string;
+  accountId?: string;
+  portfolio?: number;
+  portfolioId?: string;
+}> => {
   const item = JSON.parse(rawItem.toString());
   const data = await extractAssetHolder(item, block, blockId, blockEventId);
-  let account: string | undefined;
-  let portfolio: number | undefined;
-  let identityId: string;
   if ('account' in data) {
-    ({ account, identityId } = data);
-  } else {
-    ({ identityId, number: portfolio } = data);
+    return { identityId: data.identityId, accountId: data.account };
   }
-
-  return {
-    account,
-    portfolio,
-    identity: identityId,
-  };
+  return { identityId: data.identityId, portfolio: data.number, portfolioId: getPortfolioId(data) };
 };

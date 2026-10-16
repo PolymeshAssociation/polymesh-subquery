@@ -44,7 +44,7 @@ filter: { or: [ { identityId: …, address: … }, { toId: …, toAddress: … }
 **Portal, `graphqlQueries.ts:22-39`** — `assetTransactions`, with *three* different OR-pairs depending on grain:
 
 ```js
-or: [ { fromAccount:   {equalTo: …} }, { toAccount:   {equalTo: …} } ]   // account grain
+or: [ { fromAccount:   {equalTo: …} }, { toAccount:   {equalTo: …} } ]   // account grain (now fromAccountId / toAccountId, §9.7)
 or: [ { fromPortfolioId:{equalTo: …} }, { toPortfolioId:{equalTo: …} } ] // portfolio grain
 or: [ { fromIdentityId:{equalTo: …} }, { toIdentityId:{equalTo: …} } ]   // identity grain
 ```
@@ -263,6 +263,62 @@ Recorded here rather than only in the defect log (B9) because it is the kind of 
 |---|---|
 | `revive.ethTransact` indexed with `address: null`, so nothing attributes to an Ethereum-derived account | **Closed** — PR #342 recovers the H160 from the RLP payload, derives the `0xEE`-padded `AccountId32`, and adds `EvmTransaction` / `EvmAccountMapping`. A backfill covers history. |
 | `authorizations.data` keeps the pre-migration payload, so it names a ticker where the chain names an asset id | **Closed** — PR #343. The migration is deterministic (`AssetId::from(ticker)` = `blake2_128(("legacy_ticker", ticker))` normalised to a v8 UUID) and the ticker is already stored, so the repair needs no chain read. Forward fix plus backfill. Note the failure this avoided: *resolving the stored ticker to the asset it names today* can point at a **different** asset, because a ticker can be unlinked and relinked in between. |
+| An authorization to a key with no identity is unfindable by DID (§9.1) | **Closed** — `Authorization.toAccount` is an `Account` relation holding the SS58 address, indexed; `to` is an `Identity` relation (`toId` keeps its name). A key's invitations are `Account.authorizationsReceived`, an identity's `Identity.authorizationsReceived`. |
+| A portfolio's contents cannot be read from the index (§9.2) | **Closed** — `Portfolio.holdings`, `Account.holdings` and `Identity.holdings` list `Holding` rows, each with `amount`, `frozen`, `frozenSince`, `nftCount` and `nfts`. |
+
+### 9.7 Field renames from linking entities (2026-10-15)
+
+Columns that named another entity by a bare id are now relations, so each can be read as the id (`<field>Id`) or walked as the entity. SubQuery relations are not enforced foreign keys: a relation whose row is not indexed (an off-chain counterparty's DID, an account with no `Account` row) returns null for the object and keeps its id.
+
+| Entity | Was | Now |
+|---|---|---|
+| `Leg` | `from`, `to` (DID) | `fromId`, `toId`, or `from { … }`, `to { … }` |
+| `Leg` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
+| `Leg` | `fromPortfolio`, `toPortfolio` (number) | `fromPortfolioId`, `toPortfolioId` (`did/number`), or `fromPortfolio { number }` |
+| `Leg` | `assetId` held the ticker of an off-chain leg | `assetId` is null on off-chain legs; the ticker is `ticker` |
+| `InstructionParty`, `InstructionAffirmation`, `InstructionEvent` | `identity`, `account` | `identityId`, `accountId` |
+| `InstructionParty` | an account-level party had its address in `identity` | `identityId` is the DID, `accountId` the address |
+| `InstructionEvent` | `portfolio` (number) | `portfolioId` (`did/number`) |
+| `OffChainReceipt` | `signer` | `signerId` |
+| `AssetTransaction` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
+| `ProposalVote` | `account` (hex public key) | `accountId` (SS58 address) |
+| `MultiSigProposal` | `creatorAccount` | `creatorAccountId` |
+| `Identity` | `primaryAccount` (empty string when unknown) | `primaryAccountId` (null when unknown) |
+| `BridgeEvent` | `recipient` | `recipientId` (SS58 address) |
+| `EvmTransaction` | `fromAddress` | `fromAccountId` |
+| `StakingEvent` | `stashAccount`, `rewardDestinationAccount` | `stashId`, `rewardDestinationAccountId` |
+| `Authorization` | `toKey` (hex public key, unindexed) | `toAccountId` (SS58 address, indexed) |
+| `Investment` | `stoId` (the offering's number, filtered with `offeringAssetId`) | `stoId` is the offering's id, `asset/number`, or `sto { … }` |
+| `Investment` | `raisingAssetId` held the ticker of an off-chain raising asset | `raisingAssetId` is null for it; the ticker is `raiseToken` |
+| `NftHolder` | `nftHolders { identityId nftIds }` | removed: `assetHolders(filter: { nftCount: { greaterThan: 0 } }) { identityId nftCount holdings { nodes { nfts { nodes { nftId } } } } }` |
+| `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
+| `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
+| `ConfidentialAccount` | `account` (the confidential public key) | `publicKey`, the same value as `id` |
+
+### 9.8 Reverse relations renamed by `@derivedFrom` (2026-10-16)
+
+The generated API gives every relation a collection on the entity it points at, named after the child, plus the column when the column is not named after the parent: `Venue.owner` gives `Identity.venuesByOwnerId`, `OffChainReceipt.leg` gives `Leg.offChainReceipts`. Declaring the collection with `@derivedFrom` replaces that name. These collections existed under their generated names and now have declared ones:
+
+| Entity | Was | Now |
+|---|---|---|
+| `Asset` | `assetTransactions` | `transactions` |
+| `Asset` | `stosByOfferingAssetId` | `offerings` |
+| `Asset` | `assetPreApprovals` | `preApprovals` |
+| `Distribution` | `distributionPayments` | `payments` |
+| `Identity` | `assetTransactionsByFromIdentityId`, `assetTransactionsByToIdentityId` | `transfersOut`, `transfersIn` |
+| `Identity` | `assetsByOwnerId` | `assetsOwned` |
+| `Identity` | `claimsByTargetId`, `claimsByIssuerId` | `claims`, `claimsIssued` |
+| `Identity` | `confidentialAccountsByCreatorId`, `confidentialAssetsByCreatorId` | `confidentialAccounts`, `confidentialAssets` |
+| `Identity` | `distributionPaymentsByTargetId` | `distributionPayments` |
+| `Identity` | `investmentsByInvestorId` | `investments` |
+| `Identity` | `portfoliosByCustodianId` | `custodiedPortfolios` |
+| `Identity` | `stosByCreatorId` | `offeringsCreated` |
+| `Identity` | `venuesByOwnerId` | `venues` |
+| `Instruction` | `assetTransactions` | `transfers` |
+| `Portfolio` | `assetTransactionsByFromPortfolioId`, `assetTransactionsByToPortfolioId` | `transfersOut`, `transfersIn` |
+| `Venue` | `stos` | `offerings` |
+
+Collections over relations that are new in this schema (an account's approvals, allowances, subsidies and multisig signers, among others) had no generated name to replace.
 
 ## 10. Reads that scan, because their index is trimmed
 
@@ -279,7 +335,7 @@ Big tables (every relation index trimmed):
 | `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
 | `AccountBalance` | `account`, `identity`, `updatedEvent` | look up by `id`, which is the account's address |
 | `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | for `stash`, look up by `id`, which is the stash; none for the rest |
-| `StakingEvent` | `validator`, `position`, `createdEvent` | `stashAccount` and `identity` filters, which stay indexed |
+| `StakingEvent` | `validator`, `position`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
 
 Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
 

@@ -1931,8 +1931,8 @@ type EvmTransaction @entity {
   callKind: EvmCallKindEnum!
   "Checksummed Ethereum address that signed the transaction"
   fromEthAddress: String! @index(unique: false)
-  "SS58 encoding of the `0xEE` padded account the runtime dispatched the call as"
-  fromAddress: String! @index(unique: false)
+  "The `0xEE` padded account the runtime dispatched the call as"
+  fromAccount: Account!
   "`null` for a contract deployment"
   toEthAddress: String @index(unique: false)
   "Address of the deployed contract, taken from `revive.Instantiated`"
@@ -2128,6 +2128,40 @@ type Account @entity {
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
+  "One per asset this account has held as a v8 account-level holder"
+  holdings: [Holding!] @derivedFrom(field: "account")
+  "Settlement legs sending from this account, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromAccount")
+  "Settlement legs delivering to this account, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toAccount")
+  "Transfers out of this account as a v8 account-level holder"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromAccount")
+  "Transfers into this account as a v8 account-level holder"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toAccount")
+  "Staking events whose stash is this account"
+  stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
+  "Authorizations targeting this key, including invitations to join an identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "toAccount")
+  "This account's POLYX ledger entries"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "account")
+  "Multisigs this account is a signer of"
+  signerOf: [MultiSigSigner!] @derivedFrom(field: "signerAccount")
+  "Subsidies this account pays for"
+  subsidiesPaid: [Subsidy!] @derivedFrom(field: "payingAccount")
+  "Subsidies paying this account's fees"
+  subsidiesReceived: [Subsidy!] @derivedFrom(field: "beneficiaryAccount")
+  "Per-token NFT approvals this account granted"
+  nftApprovalsGranted: [NftApproval!] @derivedFrom(field: "owner")
+  "Per-token NFT approvals granted to this account"
+  nftApprovalsReceived: [NftApproval!] @derivedFrom(field: "spender")
+  "Collection-wide NFT operator approvals this account granted"
+  nftOperatorApprovalsGranted: [NftOperatorApproval!] @derivedFrom(field: "owner")
+  "Collection-wide NFT operator approvals granted to this account"
+  nftOperatorApprovalsReceived: [NftOperatorApproval!] @derivedFrom(field: "operator")
+  "Fungible allowances this account granted"
+  allowancesGranted: [AssetAllowance!] @derivedFrom(field: "owner")
+  "Fungible allowances granted to this account"
+  allowancesReceived: [AssetAllowance!] @derivedFrom(field: "spender")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2155,13 +2189,27 @@ An Identity needs a valid CDD claim from at least one KYC/KYB provider to perfor
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
-  "The address of the identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`"
-  primaryAccount: String!
+  "The identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`. Null only for an identity seeded before its key was readable"
+  primaryAccount: Account
   secondaryKeysFrozen: Boolean!
   createdEvent: Event!
   updatedEvent: Event!
+  "One rollup per asset the identity holds or has held, fungible or NFT"
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
-  heldNfts: [NftHolder]! @derivedFrom(field: "identity")
+  "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
+  holdings: [Holding!] @derivedFrom(field: "identity")
+  "Asset movements out of any of this identity's portfolios or accounts, redemptions included"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromIdentity")
+  "Asset movements into any of this identity's portfolios or accounts, issuances included"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toIdentity")
+  "Every instruction this identity is a party to, as a party or a mediator"
+  instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
+  "Authorizations targeting this identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "to")
+  "The confidential accounts this identity registered"
+  confidentialAccounts: [ConfidentialAccount!] @derivedFrom(field: "creator")
+  "The confidential assets this identity created"
+  confidentialAssets: [ConfidentialAsset!] @derivedFrom(field: "creator")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
@@ -2173,6 +2221,26 @@ type Identity @entity {
   `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
   """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
+  "Claims made about this identity"
+  claims: [Claim!] @derivedFrom(field: "target")
+  "Claims this identity issued about others"
+  claimsIssued: [Claim!] @derivedFrom(field: "issuer")
+  "Assets this identity owns"
+  assetsOwned: [Asset!] @derivedFrom(field: "owner")
+  "Settlement venues this identity owns"
+  venues: [Venue!] @derivedFrom(field: "owner")
+  "Portfolios whose custody was last assigned to this identity, its own included when custody was handed back"
+  custodiedPortfolios: [Portfolio!] @derivedFrom(field: "custodian")
+  "POLYX ledger entries of this identity's accounts"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "identity")
+  "Distributions this identity created"
+  distributions: [Distribution!] @derivedFrom(field: "identity")
+  "Distribution payments this identity claimed or was pushed"
+  distributionPayments: [DistributionPayment!] @derivedFrom(field: "target")
+  "Investments this identity made in offerings"
+  investments: [Investment!] @derivedFrom(field: "investor")
+  "Offerings this identity created"
+  offeringsCreated: [Sto!] @derivedFrom(field: "creator")
 }
 
 """
@@ -2226,7 +2294,7 @@ Represents `POLY`, the Ethereum based ERC-20 token, being converted to POLYX, th
 type BridgeEvent @entity {
   id: ID!
   identity: Identity!
-  recipient: String!
+  recipient: Account!
   amount: BigInt!
   txHash: String! @index(unique: false)
   createdEvent: Event!
@@ -2237,13 +2305,13 @@ Represents a change in staking status
 """
 type StakingEvent @entity {
   id: ID!
-  stashAccount: String @index(unique: false)
+  stash: Account
   identity: Identity
   "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
   amount: BigInt
   rewardDestination: String
-  rewardDestinationAccount: String
+  rewardDestinationAccount: Account
   nominatedValidators: [String!]
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
@@ -2324,6 +2392,10 @@ type Validator @entity {
   isPermissioned: Boolean!
   "queried by StakersElected to clear the prior era's set — needs its own index (PG 18, see subql-schema-constraints)"
   isActive: Boolean! @index
+  "This validator's per-era records"
+  eras: [ValidatorEra!] @derivedFrom(field: "validator")
+  "Slashes for this validator's offences, on it and on its nominators"
+  slashes: [Slash!] @derivedFrom(field: "validator")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2445,7 +2517,8 @@ type Sto @entity {
   venue: Venue!
   offeringAsset: Asset!
   offeringPortfolio: Portfolio!
-  raisingAssetId: String! # This is not marked as Asset, since the raising asset need not be an registered asset. For example, USD
+  "The asset raised. It can join to no asset: before 7.x it is named by a ticker that need not be registered, such as USD"
+  raisingAsset: Asset
   "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
   raisingTicker: String
   raisingPortfolio: Portfolio!
@@ -2459,6 +2532,8 @@ type Sto @entity {
   minimumInvestment: BigInt!
   offChainFundingEnabled: Boolean!
   offChainFundingToken: String
+  "The investments made in this offering"
+  investments: [Investment!] @derivedFrom(field: "sto")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2504,8 +2579,10 @@ type Authorization @entity {
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
-  toId: String @index(unique: false)
-  toKey: String
+  "The identity the authorization targets; null for a key with no identity yet, such as a `JoinIdentity` invitation"
+  to: Identity
+  "The key the authorization targets, as an SS58 address (the form `Account.id` uses); null when it targets an identity"
+  toAccount: Account
   data: String
   "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date @index(unique: false)
@@ -2526,10 +2603,12 @@ Represents participation in an STO
 type Investment @entity {
   id: ID!
   investor: Identity!
-  stoId: Int! @index(unique: false)
-  offeringAssetId: String! @index(unique: false)
+  "The offering invested in"
+  sto: Sto!
+  offeringAsset: Asset!
   offeringToken: String @index(unique: false)
-  raisingAssetId: String!
+  "The asset paid with; null when it is an off-chain asset, named by `raiseToken`"
+  raisingAsset: Asset
   raiseToken: String
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
@@ -2624,6 +2703,16 @@ type Portfolio @entity {
   name: String
   custodian: Identity
   deletedAt: Date
+  "One per asset this portfolio has held"
+  holdings: [Holding!] @derivedFrom(field: "portfolio")
+  "Settlement legs sending from this portfolio, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromPortfolio")
+  "Settlement legs delivering to this portfolio, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toPortfolio")
+  "Asset movements out of this portfolio: transfers, redemptions and moves to another portfolio"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromPortfolio")
+  "Asset movements into this portfolio: transfers, issuances and moves from another portfolio"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toPortfolio")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2640,6 +2729,8 @@ type Venue @entity {
   type: String!
   details: String
   instructions: [Instruction!] @derivedFrom(field: "venue")
+  "Offerings settling through this venue"
+  offerings: [Sto!] @derivedFrom(field: "venue")
   signers: [String!]!
   createdEvent: Event!
   updatedEvent: Event!
@@ -2713,6 +2804,8 @@ type Instruction @entity {
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
+  "What executing this instruction moved"
+  transfers: [AssetTransaction!] @derivedFrom(field: "instruction")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2734,22 +2827,29 @@ type Leg @entity {
   instruction: Instruction!
   legIndex: Int!
   legType: LegTypeEnum!
-  "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
-  assetId: String! @index(unique: false)
+  "The asset moved; null for off-chain legs, whose asset is named only by `ticker`"
+  asset: Asset
+  "The asset's ticker when it has one; the only asset identifier of an off-chain leg"
   ticker: String
-  from: String! @index(unique: false)
-  fromAccount: String
-  "`fromPortfolio` is null for off chain legs"
-  fromPortfolio: Int
-  to: String! @index(unique: false)
-  toAccount: String
-  "`toPortfolio` is null for off chain legs"
-  toPortfolio: Int
+  "The sender's identity; null only for an account-level sender the index cannot resolve to one"
+  from: Identity
+  "Set when the sender is an account-level holder"
+  fromAccount: Account
+  "Set when the sender is a portfolio; null for off-chain and account-level legs"
+  fromPortfolio: Portfolio
+  "The receiver's identity; null only for an account-level receiver the index cannot resolve to one"
+  to: Identity
+  "Set when the receiver is an account-level holder"
+  toAccount: Account
+  "Set when the receiver is a portfolio; null for off-chain and account-level legs"
+  toPortfolio: Portfolio
   "`amount` is null for non-fungible legs"
   amount: BigInt
   "`nftIds` is only applicable for non-fungible legs"
   nftIds: [BigInt]
   addresses: [String!]!
+  "Receipts settling this off-chain leg"
+  offChainReceipts: [OffChainReceipt!] @derivedFrom(field: "leg")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2761,8 +2861,10 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "`identity` is the DID of the party involved in the instruction. No mapping to Identity is added, since instruction can have leg (e.g. off chain) where DID doesn't exists"
-  identity: String! @index(unique: false)
+  "The party's identity, or the identity of the account that is the party. A relation with no row when the DID is not indexed (an off-chain counterparty); null for an account with no identity"
+  identity: Identity
+  "Set when the party is an account-level holder; the party is then this account, and `identity` its DID"
+  account: Account
   "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
   portfolios: [Int]
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
@@ -2776,7 +2878,7 @@ Represents an off chain receipt
 type OffChainReceipt @entity {
   id: ID!
   uid: Int! @index(unique: false)
-  signer: String! @index(unique: false)
+  signer: Account!
   leg: Leg
   metadata: String
   createdEvent: Event!
@@ -2790,8 +2892,9 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String!
-  account: String
+  "The affirming identity; null only for an account the index cannot resolve to one"
+  identity: Identity
+  account: Account
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
   isMediator: Boolean!
@@ -2842,9 +2945,9 @@ type InstructionEvent @entity {
   instruction: Instruction! @index(unique: false)
   "Kept locally so an event type can be filtered without joining `events`. Not indexed: filter it together with `instruction`"
   event: InstructionEventEnum!
-  identity: String
-  portfolio: Int
-  account: String
+  identity: Identity
+  portfolio: Portfolio
+  account: Account
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
   createdEvent: Event!
@@ -2868,6 +2971,8 @@ type Distribution @entity {
   paymentAt: BigInt!
   expiresAt: BigInt
   taxes: BigInt! # withheld tax for CA
+  "Payments made out of this distribution"
+  payments: [DistributionPayment!] @derivedFrom(field: "distribution")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2972,6 +3077,8 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   datetime: Date!
   "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
   schedule: CheckpointSchedule
+  "Corporate actions recorded against this checkpoint"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "checkpoint")
   createdEvent: Event!
 }
 
@@ -3075,7 +3182,7 @@ Represents a vote on a governance proposal
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  account: String!
+  account: Account!
   vote: Boolean!
   weight: BigInt!
   createdEvent: Event!
@@ -3290,7 +3397,8 @@ type TransferComplianceExemption @entity {
   asset: Asset! @index(unique: false)
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
-  exemptedEntityId: String!
+  "The exempted identity"
+  exemptedEntity: Identity!
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3310,25 +3418,21 @@ type Compliance @entity {
 }
 
 """
-Represents how much of a given Asset an Identity owns
+How much of one asset an identity holds across its portfolios and accounts: one rollup for both
+asset types, kept in step with its `holdings`. A fungible asset fills `amount`, an NFT collection
+`nftCount`; the token ids are under `holdings`. For identities still holding, filter
+`amount: { greaterThan: "0" }` or `nftCount: { greaterThan: 0 }`
 """
 type AssetHolder @entity {
   id: ID! # assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
+  "Fungible balance across the identity's holdings"
   amount: BigInt!
-  createdEvent: Event!
-  updatedEvent: Event!
-}
-
-"""
-Represents what NFTs of a collection an Identity owns
-"""
-type NftHolder @entity {
-  id: ID! #assetId/did
-  identity: Identity! @index(unique: false)
-  asset: Asset! @index(unique: false)
-  nftIds: [BigInt]
+  "Tokens held across the identity's holdings"
+  nftCount: Int!
+  "The identity's portfolio and account holdings of this asset"
+  holdings: [Holding!] @derivedFrom(field: "assetHolder")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3344,8 +3448,7 @@ enum HolderKind {
 
 """
 One row per individual non-fungible token — the authoritative per-token record (defects G9, G10).
-The `NftHolder` rollup is kept alongside for the SDK, but provenance ("who owns NFT #42?", "where
-has it been?") is answered here.
+Provenance ("who owns NFT #42?", "where has it been?") is answered here.
 """
 type Nft @entity {
   id: ID! # assetId/padId(nftId)
@@ -3353,10 +3456,10 @@ type Nft @entity {
   asset: Asset!
   "BigInt everywhere — resolves G10"
   nftId: BigInt!
-  "current location; exactly one of portfolio / account is set while the token is in circulation"
-  portfolio: Portfolio
-  account: Account
-  identity: Identity
+  "The holding the token is in, which names its portfolio or account and identity. Null once burned; the redemption's `AssetTransaction` keeps where it was burned from"
+  holding: Holding
+  "Approvals to move this token"
+  approvals: [NftApproval!] @derivedFrom(field: "nft")
   createdEvent: Event!
   "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
   burnedEvent: Event
@@ -3399,21 +3502,18 @@ type NftOperatorApproval @entity {
 
 """
 One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
-account-level holder. Identity-level holdings are derived from these (see `AssetHolder` /
-`NftHolder`, kept as maintained rollups), never stored as primary truth.
+account-level holder. Identity-level holdings are derived from these (see `AssetHolder`, kept as a
+maintained rollup), never stored as primary truth.
 
 A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
 filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
 
-Indexes: `asset`, `portfolio` and `identity` are indexed as relations. The `(asset, identity)`
-composite serves one identity's holdings of one asset across its portfolios and accounts, the
-per-identity total the `AssetHolder` rollup has to agree with. No handler reads it; it is kept for
-that consumer query and has not been measured. There is no `(portfolio, asset)` composite: that pair
-is the id of a portfolio holding, so it is already a point lookup.
+Indexes: `asset`, `portfolio`, `account`, `identity` and `assetHolder` are indexed as relations.
+`assetHolder` serves one identity's holdings of one asset across its portfolios and accounts, the
+per-identity total the rollup has to agree with. There is no `(portfolio, asset)` composite: that
+pair is the id of a portfolio holding, so it is already a point lookup.
 """
-type Holding
-  @entity
-  @compositeIndexes(fields: [["asset", "identity"]]) {
+type Holding @entity {
   id: ID! # assetId/portfolioId  or  assetId/address
   asset: Asset!
   holderKind: HolderKind!
@@ -3423,14 +3523,18 @@ type Holding
   account: Account
   "denormalised — makes the identity rollup a groupBy, not a join. Null when the holder account has no known identity"
   identity: Identity
+  "The identity's rollup for this asset; null for an account with no known identity. Re-stamped with `identity`"
+  assetHolder: AssetHolder
   "fungible balance held"
   amount: BigInt!
   "The part of `amount` the asset's agents have frozen, as the chain last set it. What the holder can move is `amount - frozen`, less any lock, so reading `amount` alone shows a balance the chain may refuse to send. The chain reports the resulting absolute value whichever call changed it, so this is replaced, never accumulated. Not summed into the identity rollup: the chain freezes a holder, never an identity"
   frozen: BigInt!
   "When the asset's agents froze this whole holder against transfers of the asset; null while it is not frozen. A timestamp rather than a Boolean so it can be filtered on (`frozenSince: { isNull: false }`), and unindexed because this table is already at its index limit"
   frozenSince: Date
-  "count of non-fungible tokens held; the ids live on `Nft`"
+  "count of non-fungible tokens held; the tokens are `nfts`"
   nftCount: Int!
+  "The non-fungible tokens held, excluding any not yet seen by the index"
+  nfts: [Nft!] @derivedFrom(field: "holding")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3476,7 +3580,7 @@ type Asset @entity {
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` / `NftHolder` rollup crosses zero, so a key with no identity is not counted"
+  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` rollup starts or stops holding, so a key with no identity is not counted"
   holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!
@@ -3494,6 +3598,42 @@ type Asset @entity {
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   "The identities currently acting as agents for this asset. Past memberships are `AssetAgentHistory`"
   agents: [AssetAgent!]! @derivedFrom(field: "asset")
+  "Every movement of this asset: issuances, redemptions, transfers and portfolio moves"
+  transactions: [AssetTransaction!] @derivedFrom(field: "asset")
+  "Distributions paid to holders of this asset"
+  distributions: [Distribution!] @derivedFrom(field: "asset")
+  "This asset's corporate actions"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "asset")
+  "This asset's checkpoints"
+  checkpoints: [Checkpoint!] @derivedFrom(field: "asset")
+  "This asset's checkpoint schedules"
+  checkpointSchedules: [CheckpointSchedule!] @derivedFrom(field: "asset")
+  "This asset's corporate ballots"
+  ballots: [CorporateBallot!] @derivedFrom(field: "asset")
+  "Offerings selling this asset"
+  offerings: [Sto!] @derivedFrom(field: "offeringAsset")
+  "Statistics this asset tracks"
+  statTypes: [StatType!] @derivedFrom(field: "asset")
+  "This asset's transfer restrictions"
+  transferCompliances: [TransferCompliance!] @derivedFrom(field: "asset")
+  "Exemptions from this asset's transfer restrictions"
+  transferComplianceExemptions: [TransferComplianceExemption!] @derivedFrom(field: "asset")
+  "Actions this asset's agents took"
+  agentActions: [AssetAgentAction!] @derivedFrom(field: "asset")
+  "Every change to this asset's agents and their permissions"
+  agentHistory: [AssetAgentHistory!] @derivedFrom(field: "asset")
+  "This asset's custom agent permission groups"
+  agentGroups: [AgentGroup!] @derivedFrom(field: "asset")
+  "This asset's funding rounds"
+  fundings: [Funding!] @derivedFrom(field: "asset")
+  "Identities that pre-approved receiving this asset"
+  preApprovals: [AssetPreApproval!] @derivedFrom(field: "asset")
+  "Per-token approvals over this collection's NFTs"
+  nftApprovals: [NftApproval!] @derivedFrom(field: "asset")
+  "Operator approvals over this collection"
+  nftOperatorApprovals: [NftOperatorApproval!] @derivedFrom(field: "asset")
+  "Allowances over this asset"
+  allowances: [AssetAllowance!] @derivedFrom(field: "asset")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -3507,13 +3647,13 @@ type AssetTransaction @entity {
   "`fromPortfolioId` will be null in transactions where either the Asset was issued or the sender is an account"
   fromPortfolio: Portfolio
   "`fromAccount` will be populated when asset transaction has initiated directly from an account"
-  fromAccount: String
+  fromAccount: Account
   "`fromIdentityId` is the DID of the sender, present for transfers and redemptions. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   fromIdentity: Identity @index(unique: false)
   "`toPortfolioId` will be null in transactions where either the Asset was redeemed or the receiver is an account"
   toPortfolio: Portfolio
   "`toAccount` will be populated when asset transaction has settled directly into an account"
-  toAccount: String
+  toAccount: Account
   "`toIdentityId` is the DID of the receiver, present for issuances and transfers. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   toIdentity: Identity @index(unique: false)
   "`amount` is the number of fungible tokens involved in this transaction"
@@ -3624,7 +3764,8 @@ type Funding @entity {
 type AssetMandatoryMediator @entity {
   id: ID! # /assetId/did
   asset: Asset!
-  identityId: String! # The chain doesn't validate existence of the DID
+  "The mediator. The chain does not check the DID exists, so this can join to no identity"
+  identity: Identity
   addedBy: Identity!
   createdEvent: Event!
   updatedEvent: Event!
@@ -3948,7 +4089,7 @@ type MultiSigProposal @entity {
   multisig: MultiSig! @index(unique: false)
   proposalId: Int! @index(unique: false)
   creator: Identity
-  creatorAccount: String
+  creatorAccount: Account
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!
@@ -4022,11 +4163,27 @@ enum ConfidentialCurveTreeEnum {
 }
 
 """
-A mediator's confidential account public key and encryption key pair
+The part a key plays for a confidential asset
 """
-type MediatorKey @jsonField {
-  accountKey: String!
-  encryptionKey: String!
+enum ConfidentialKeyRole {
+  Auditor
+  Mediator
+}
+
+"""
+One key an asset names as an auditor or a mediator, as the asset last set them. A mediator is a
+confidential account and its encryption key; an auditor is an encryption key alone. An update
+removes the keys the asset drops and adds the ones it gains, so the rows are the asset's current
+keys and each keeps the event that added it.
+"""
+type ConfidentialAssetKey @entity {
+  id: ID! # assetId/Mediator/accountKey or assetId/Auditor/encryptionKey
+  asset: ConfidentialAsset!
+  role: ConfidentialKeyRole!
+  "The mediator's confidential account; null for an auditor"
+  account: ConfidentialAccount
+  encryptionKey: ConfidentialEncryptionKey!
+  createdEvent: Event!
 }
 
 """
@@ -4034,8 +4191,11 @@ Represents a confidential account (account public key)
 """
 type ConfidentialAccount @entity {
   id: ID!
-  account: String!
-  encryptionKey: String!
+  "The confidential account's public key, which is also its `id`. It is not a signing key, so it names no `Account`"
+  publicKey: String!
+  encryptionKey: ConfidentialEncryptionKey!
+  "The assets this account mediates"
+  mediatorOf: [ConfidentialAssetKey!]! @derivedFrom(field: "account")
   creator: Identity!
   assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
   updatedEvent: Event!
@@ -4050,6 +4210,10 @@ type ConfidentialEncryptionKey @entity {
   id: ID!
   encryptionKey: String!
   creator: Identity!
+  "The confidential accounts using this key"
+  accounts: [ConfidentialAccount!]! @derivedFrom(field: "encryptionKey")
+  "The assets this key audits or mediates"
+  assetRoles: [ConfidentialAssetKey!]! @derivedFrom(field: "encryptionKey")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -4065,8 +4229,8 @@ type ConfidentialAsset @entity {
   decimals: Int!
   data: String
   creator: Identity!
-  auditors: [String!]!
-  mediators: [MediatorKey!]!
+  "The asset's current auditor and mediator keys"
+  keys: [ConfidentialAssetKey!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
   updatedEvent: Event!

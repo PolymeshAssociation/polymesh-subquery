@@ -32,6 +32,7 @@ import {
   getDocValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
+  getHoldingId,
   portfolioHolder,
   getNumberValue,
   getPortfolioId,
@@ -138,10 +139,10 @@ export const createAssetTransaction = (
     // present, not absent, and must never read as an issuance/redemption
     isInternalTransfer: classifyInternalTransfer(details.fromHolder, details.toHolder),
     fromPortfolioId,
-    fromAccount,
+    fromAccountId: fromAccount,
     fromIdentityId,
     toPortfolioId,
-    toAccount,
+    toAccountId: toAccount,
     toIdentityId,
     createdEventId: blockEventId,
   }).save();
@@ -162,6 +163,7 @@ export const getAssetHolder = async (
       identityId: did,
       assetId,
       amount: BigInt(0),
+      nftCount: 0,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     });
@@ -171,17 +173,12 @@ export const getAssetHolder = async (
   return assetHolder;
 };
 
-const holdingId = (assetId: string, holder: AssetHolderDetails): string =>
-  holder.holderKind === HolderKind.Account
-    ? `${assetId}/${holder.account}`
-    : `${assetId}/${getPortfolioId(holder)}`;
-
 export const getHolding = async (
   assetId: string,
   holder: AssetHolderDetails,
   blockEventId: string
 ): Promise<Holding> => {
-  const id = holdingId(assetId, holder);
+  const id = getHoldingId(assetId, holder);
 
   let holding = await Holding.get(id);
 
@@ -208,6 +205,13 @@ export const getHolding = async (
   // the new DID's rollup, breaking SUM(Holding.amount) = AssetHolder.amount for both. Every caller
   // saves the row next, so this costs no extra write.
   holding.identityId = holder.identityId || undefined;
+  const assetHolderId = holder.identityId ? `${assetId}/${holder.identityId}` : undefined;
+
+  // a holding first touched by a freeze has no balance delta to create the rollup it links to
+  if (holder.identityId && holding.assetHolderId !== assetHolderId) {
+    await getAssetHolder(assetId, holder.identityId, blockEventId);
+  }
+  holding.assetHolderId = assetHolderId;
 
   return holding;
 };
@@ -238,17 +242,61 @@ export const applyHoldingDelta = async (
     return;
   }
 
-  const rollup = await getAssetHolder(asset.id, holder.identityId, blockEventId);
-  const before = rollup.amount;
-  rollup.amount += delta;
+  await applyRollupChange(asset, holder.identityId, blockEventId, promises, rollup => {
+    rollup.amount += delta;
+  });
+};
+
+/** Whether an identity holds the asset: a positive balance, or at least one token. */
+const holds = (rollup: AssetHolder): boolean => rollup.amount > BigInt(0) || rollup.nftCount > 0;
+
+/**
+ * Applies `change` to an identity's `AssetHolder` rollup and counts it in `Asset.holderCount` when
+ * the identity starts or stops holding.
+ */
+const applyRollupChange = async (
+  asset: Asset,
+  did: string,
+  blockEventId: string,
+  promises: Promise<void>[],
+  change: (rollup: AssetHolder) => void
+): Promise<void> => {
+  const rollup = await getAssetHolder(asset.id, did, blockEventId);
+  const before = holds(rollup);
+  change(rollup);
   rollup.updatedEventId = blockEventId;
   promises.push(rollup.save());
 
-  if (before <= BigInt(0) && rollup.amount > BigInt(0)) {
+  if (!before && holds(rollup)) {
     asset.holderCount += 1;
-  } else if (before > BigInt(0) && rollup.amount <= BigInt(0)) {
+  } else if (before && !holds(rollup)) {
     asset.holderCount = Math.max(0, asset.holderCount - 1);
   }
+};
+
+/**
+ * The NFT counterpart of `applyHoldingDelta`: `delta` tokens into (or, negative, out of) one
+ * holder's `Holding` and its identity's rollup.
+ */
+export const applyNftCountDelta = async (
+  asset: Asset,
+  holder: AssetHolderDetails,
+  blockEventId: string,
+  delta: number,
+  promises: Promise<void>[]
+): Promise<void> => {
+  const holding = await getHolding(asset.id, holder, blockEventId);
+  holding.nftCount += delta;
+  holding.updatedEventId = blockEventId;
+  promises.push(holding.save());
+
+  if (!holder.identityId) {
+    return;
+  }
+
+  await applyRollupChange(asset, holder.identityId, blockEventId, promises, rollup => {
+    rollup.nftCount += delta;
+  });
 };
 
 /**

@@ -183,6 +183,7 @@ const CONSUMER_USED: Array<[string, string]> = [
   ['asset_agents', 'asset_id'],
   ['asset_agents', 'asset_id, identity_id'],
   ['asset_holders', 'identity_id'],
+  ['asset_holders', 'updated_event_id'],
   ['asset_transactions', 'asset_id'],
   ['asset_transactions', 'from_identity_id'],
   ['asset_transactions', 'from_portfolio_id'],
@@ -205,25 +206,22 @@ const CONSUMER_USED: Array<[string, string]> = [
   ['extrinsics', 'extrinsic_hash'],
   ['instruction_affirmations', 'instruction_id'],
   ['instruction_events', 'instruction_id'],
-  ['instruction_parties', 'identity'],
+  ['instruction_parties', 'identity_id'],
   ['instructions', 'venue_id'],
   ['investments', 'updated_event_id'],
   ['legs', 'asset_id'],
-  ['legs', 'from'],
+  ['legs', 'from_id'],
   ['legs', 'instruction_id'],
-  ['legs', 'to'],
+  ['legs', 'to_id'],
   ['multi_sig_proposal_votes', 'proposal_id'],
   ['multi_sig_proposals', 'multisig_id'],
   ['multi_sig_proposals', 'proposal_id'],
-  ['nft_holders', 'asset_id'],
-  ['nft_holders', 'identity_id'],
-  ['nft_holders', 'updated_event_id'],
   ['off_chain_receipts', 'updated_event_id'],
   ['polyx_entries', 'account_id'],
   ['polyx_entries', 'identity_id'],
   ['portfolios', 'identity_id'],
   ['staking_events', 'identity_id'],
-  ['staking_events', 'stash_account'],
+  ['staking_events', 'stash_id'],
   ['trusted_claim_issuers', 'asset_id'],
   ['trusted_claim_issuers', 'issuer_id'],
 ];
@@ -254,7 +252,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
 
   it('reads the entries it checks', () => {
     expect(trimmed.length).toBeGreaterThan(50);
-    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(53);
+    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(54);
     expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
   });
 
@@ -275,6 +273,15 @@ describe('GiST trim in db/trimIndexes.ts', () => {
     });
 
     expect(lost).toEqual([]);
+  });
+
+  it('names only indexes the schema declares as ones the SDK and portal queries use', () => {
+    const undeclared = CONSUMER_USED.filter(
+      ([table, columns]) =>
+        !(declared.get(table) ?? []).some(index => key(index) === key(columns.split(', ')))
+    ).map(([table, columns]) => `${table} (${columns})`);
+
+    expect(undeclared).toEqual([]);
   });
 
   it('keeps every index the SDK and portal queries use', () => {

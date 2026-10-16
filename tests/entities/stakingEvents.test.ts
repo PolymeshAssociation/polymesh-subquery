@@ -13,7 +13,7 @@ describe('stakingEvents', () => {
               eventId
               datetime
               identityId
-              stashAccount
+              stashId
               amount
               nominatedValidators
             }
@@ -33,9 +33,7 @@ describe('stakingEvents', () => {
       query: gql`
         query {
           stakingEvents(
-            filter: {
-              stashAccount: { equalTo: "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH" }
-            }
+            filter: { stashId: { equalTo: "5D9n9c1fCKa6uLf2aZHHFKk3oSPwuPTGvfnjgRbzptzownBH" } }
             first: 10
             orderBy: ID_ASC
           ) {
@@ -43,7 +41,7 @@ describe('stakingEvents', () => {
               eventId
               datetime
               identityId
-              stashAccount
+              stashId
               amount
               nominatedValidators
             }

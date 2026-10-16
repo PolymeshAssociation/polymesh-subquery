@@ -75,6 +75,7 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
         holderKind: HolderKind.Portfolio,
         portfolioId,
         identityId,
+        assetHolderId: `${assetId}/${identityId}`,
         amount,
         // Nothing is frozen at genesis. A seed taken at a later height has to read the chain's frozen
         // balances instead, since no event before the start block will replay them.
@@ -93,6 +94,7 @@ export const seedHoldings = async ({ blockId }: SeedContext): Promise<{ seeded: 
         identityId,
         assetId,
         amount: BigInt(0),
+        nftCount: 0,
         createdEventId: SEED_EVENT_ID,
         updatedEventId: SEED_EVENT_ID,
       });

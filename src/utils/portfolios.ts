@@ -178,6 +178,12 @@ export const getPortfolioId = ({
   number,
 }: Pick<Portfolio, 'identityId' | 'number'>): string => `${identityId}/${number}`;
 
+/** The id of the `Holding` row for one asset at one holder. */
+export const getHoldingId = (assetId: string, holder: AssetHolderDetails): string =>
+  holder.holderKind === HolderKind.Account
+    ? `${assetId}/${holder.account}`
+    : `${assetId}/${getPortfolioId(holder)}`;
+
 export const getCaIdValue = async (
   item: Codec,
   block: SubstrateBlock

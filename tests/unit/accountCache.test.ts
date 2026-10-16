@@ -211,7 +211,7 @@ describe('getOrCreateAccount for keys of one unindexed identity resolved concurr
       getOrCreateAccount(ADDRESS, blockId, datetime),
     ]);
 
-    expect(identities[DID].primaryAccount).toBe(ADDRESS);
+    expect(identities[DID].primaryAccountId).toBe(ADDRESS);
     expect(createPortfolio).toHaveBeenCalledTimes(1);
   });
 });

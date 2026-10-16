@@ -287,6 +287,16 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
       [`${ASSET_ID}/${DID}/0`]: {
         id: `${ASSET_ID}/${DID}/0`,
         assetId: ASSET_ID,
+        assetHolderId: `${ASSET_ID}/${DID}`,
+        amount: BigInt(1000),
+        nftCount: 0,
+      },
+    };
+    db.AssetHolder = {
+      [`${ASSET_ID}/${DID}`]: {
+        id: `${ASSET_ID}/${DID}`,
+        assetId: ASSET_ID,
+        identityId: DID,
         amount: BigInt(1000),
         nftCount: 0,
       },
@@ -308,7 +318,7 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(holding(DID, 0).amount).toBe(BigInt(600));
     expect(holding(DID, 1).amount).toBe(BigInt(400));
-    expect(db.AssetHolder?.[`${ASSET_ID}/${DID}`]).toBeUndefined();
+    expect(db.AssetHolder[`${ASSET_ID}/${DID}`].amount).toBe(BigInt(1000));
   });
 
   /** Testnet: 9,997 NFTs minted to portfolio 0 and moved to portfolio 1 at 13,619,117. */
@@ -346,7 +356,7 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(holding(DID, 0).nftCount).toBe(0);
     expect(holding(DID, 1).nftCount).toBe(2);
-    expect(db.Nft[`${ASSET_ID}/${padId('2')}`].portfolioId).toBe(`${DID}/1`);
+    expect(db.Nft[`${ASSET_ID}/${padId('2')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
   });
 
   /**
@@ -386,6 +396,13 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(db.Holding[`${ASSET_ID}/${FROM}`].amount).toBe(BigInt(9));
     expect(db.Holding[`${ASSET_ID}/${TO}`].amount).toBe(BigInt(1));
+    expect(db.Holding[`${ASSET_ID}/${TO}`].assetHolderId).toBe(`${ASSET_ID}/${DID}`);
+    expect(Object.values(db.AssetTransaction)).toEqual([
+      expect.objectContaining({
+        fromAccountId: FROM,
+        toAccountId: TO,
+      }),
+    ]);
   });
 
   /**
@@ -489,6 +506,6 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
 
     expect(holding(DID, 0).nftCount).toBe(0);
     expect(holding(DID, 1).nftCount).toBe(1);
-    expect(db.Nft[`${ASSET_ID}/${padId('1')}`].portfolioId).toBe(`${DID}/1`);
+    expect(db.Nft[`${ASSET_ID}/${padId('1')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
   });
 });

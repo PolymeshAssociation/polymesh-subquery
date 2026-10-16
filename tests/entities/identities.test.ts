@@ -82,7 +82,7 @@ describe('accounts', () => {
               datetime
               identity {
                 did
-                primaryAccount
+                primaryAccountId
                 secondaryKeysFrozen
               }
               keyAssignments(orderBy: [VALID_FROM_BLOCK_ID_ASC]) {
@@ -148,7 +148,7 @@ describe('identities', () => {
         ) {
           nodes {
             did
-            primaryAccount
+            primaryAccountId
             secondaryKeysFrozen
             eventId
             createdBlockId
@@ -185,7 +185,7 @@ describe('identities', () => {
     expect(keys.every((k: any) => k.role === 'Secondary')).toBe(true);
     expect(keys.every((k: any) => k.validToBlockId === null)).toBe(true);
     // ...and the primary key is never among them — the G1 regression
-    expect(keys.some((k: any) => k.account.address === identity.primaryAccount)).toBe(false);
+    expect(keys.some((k: any) => k.account.address === identity.primaryAccountId)).toBe(false);
 
     expect(res?.data).toMatchSnapshot();
   });

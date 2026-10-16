@@ -11,7 +11,6 @@ import {
   getProposerValue,
   getTextValue,
   padNumericId,
-  serializeAccount,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
 
@@ -86,7 +85,7 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId } = extractArgs(event);
   const [, rawAccount, rawPipId, rawVote, rawWeight] = params;
 
-  const account = serializeAccount(rawAccount);
+  const account = rawAccount.toString();
   const pipId = processPipId(rawPipId);
   const vote = getBooleanValue(rawVote);
   const weight = getBigIntValue(rawWeight);
@@ -116,7 +115,7 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
     proposalVote = ProposalVote.create({
       id: `${pipId}/${account}`,
       proposalId: pipId,
-      account,
+      accountId: account,
       vote,
       weight,
       createdEventId: blockEventId,

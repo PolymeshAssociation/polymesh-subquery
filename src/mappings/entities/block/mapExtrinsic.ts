@@ -119,7 +119,7 @@ const createEvmTransaction = (
     ethTxType: tx.txType,
     callKind: resolved.callKind,
     fromEthAddress: resolved.fromEthAddress,
-    fromAddress: resolved.fromAddress,
+    fromAccountId: resolved.fromAddress,
     toEthAddress: tx.to,
     contractAddress: resolved.contractAddress,
     value: tx.value.toString(),

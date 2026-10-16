@@ -23,8 +23,10 @@ import { isLockConflict } from './applySql';
 //              only then swapped in for the GiST in a short transaction (see `trimIndexes`).
 //
 // What is trimmed follows table size. On the five big tables (staking_positions, account_balances,
-// staking_events, polyx_entries, events) every relation index is trimmed: 17 indexes, 8.57 GB on
-// mainnet. On the small tables only the event and extrinsic stamps (`created_event_id`,
+// staking_events, polyx_entries, events) every relation index is trimmed but the lookups readers
+// filter those tables by, such as `staking_events (stash_id)` and `(identity_id)`: 18 indexes,
+// 17 of them 8.57 GB on mainnet.
+// On the small tables only the event and extrinsic stamps (`created_event_id`,
 // `updated_event_id` and the like) are trimmed, 36 indexes and 111 MB, because nothing looks a row
 // up by the event that wrote it. The lookups to other entities stay as SubQuery's GiST, 27 indexes
 // and 228 MB: they are the joins an explorer runs (holders of an asset, keys of an identity), they
@@ -62,7 +64,7 @@ export const RELATIONS = `
   nominations  valid_from_event_id
   polyx_entries  counterparty_identity_id created_event_id extrinsic_id
   portfolios  created_event_id updated_event_id
-  staking_events  created_event_id position_id validator_id
+  staking_events  created_event_id position_id reward_destination_account_id validator_id
   staking_positions  controller_id created_event_id identity_id reward_destination_account_id stash_id updated_event_id
   validator_eras  created_event_id updated_event_id
 `;

@@ -133,7 +133,7 @@ describe('handlePrimaryKeyUpdated', () => {
    */
   it('links the new key and records an anomaly when the outgoing account is missing', async () => {
     const identitySave = jest.fn().mockResolvedValue(undefined);
-    const identity: any = { id: DID, primaryAccount: '', save: identitySave };
+    const identity: any = { id: DID, primaryAccountId: '', save: identitySave };
     jest.spyOn(Identity, 'get').mockResolvedValue(identity);
     jest.spyOn(Account, 'get').mockResolvedValue(undefined);
     const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
@@ -142,7 +142,7 @@ describe('handlePrimaryKeyUpdated', () => {
     await handlePrimaryKeyUpdated(primaryKeyUpdatedEvent());
 
     expect(anomaly).toHaveBeenCalled();
-    expect(identity.primaryAccount).toBe(SECONDARY);
+    expect(identity.primaryAccountId).toBe(SECONDARY);
     expect(identitySave).toHaveBeenCalled();
     expect(created).toHaveBeenCalled();
   });
