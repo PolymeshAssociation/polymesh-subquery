@@ -83,8 +83,9 @@ interface Member {
 
 // What the generated API exposes on an entity beyond its declared fields: the id column behind each
 // relation (`claim.issuerId`), the node id, and the collection each relation implies on the entity
-// it points at (`leg.offChainReceiptsByLegId` for `OffChainReceipt.leg`). Collections declared with
-// `@derivedFrom` are ordinary fields of the entity and need no entry here.
+// it points at. That collection is the child's plural when the column is named after the parent
+// (`leg.offChainReceipts` for `OffChainReceipt.leg`), and is qualified by the column otherwise
+// (`identity.claimsByTargetId` for `Claim.target`). A `@derivedFrom` field replaces it.
 const memberCache = new Map<string, Map<string, Member>>();
 const members = (entity: GraphQLObjectType): Map<string, Member> => {
   const cached = memberCache.get(entity.name);
@@ -102,13 +103,28 @@ const members = (entity: GraphQLObjectType): Map<string, Member> => {
     }
   }
   result.set('nodeId', { named: schema.getType('ID') as GraphQLNamedType, collection: false });
+  const declared = new Set(
+    Object.values(entity.getFields()).flatMap(field => {
+      const derived = field.astNode?.directives?.find(d => d.name.value === 'derivedFrom');
+      const column = derived?.arguments?.[0]?.value;
+      return column?.kind === Kind.STRING
+        ? [`${getNamedType(field.type).name}.${column.value}`]
+        : [];
+    })
+  );
   for (const other of entities.values()) {
     for (const [name, field] of Object.entries(other.getFields())) {
       const wrapped = isNonNullType(field.type) ? field.type.ofType : field.type;
-      if (!isListType(wrapped) && getNamedType(field.type).name === entity.name) {
-        // the backward relation of a foreign key is named after the column that holds it
+      if (
+        !isListType(wrapped) &&
+        getNamedType(field.type).name === entity.name &&
+        !declared.has(`${other.name}.${name}`)
+      ) {
+        const collection = plural(lowerFirst(other.name));
         result.set(
-          `${plural(lowerFirst(other.name))}By${name.charAt(0).toUpperCase()}${name.slice(1)}Id`,
+          name === lowerFirst(entity.name)
+            ? collection
+            : `${collection}By${name.charAt(0).toUpperCase()}${name.slice(1)}Id`,
           { named: other, collection: true }
         );
       }
@@ -429,9 +445,25 @@ describe('the migrated consumer queries', () => {
       expect(problems).toEqual(["instructions.nodes: no field 'legByInstruction' on Instruction"]);
     });
 
-    it('accepts the generated backward relation of a foreign key', () => {
-      const { problems } = run('{ legs { nodes { offChainReceiptsByLegId { nodes { uid } } } } }');
+    it('names a generated backward relation after a column not named after its parent', () => {
+      const { problems } = run('{ assets { nodes { stosByRaisingAssetId { nodes { id } } } } }');
       expect(problems).toEqual([]);
+    });
+
+    it('names it plainly when the column is named after its parent', () => {
+      expect(run('{ legs { nodes { offChainReceipts { nodes { id } } } } }').problems).toEqual([]);
+      expect(
+        run('{ legs { nodes { offChainReceiptsByLegId { nodes { id } } } } }').problems
+      ).toEqual(["legs.nodes: no field 'offChainReceiptsByLegId' on Leg"]);
+    });
+
+    it('drops the generated name of a backward relation declared with @derivedFrom', () => {
+      const { problems } = run(
+        '{ accounts { nodes { assetTransactionsByFromAccountId { nodes { id } } } } }'
+      );
+      expect(problems).toEqual([
+        "accounts.nodes: no field 'assetTransactionsByFromAccountId' on Account",
+      ]);
     });
 
     it('reports a field, a filter key, an enum value and an ordering the schema lacks', () => {
