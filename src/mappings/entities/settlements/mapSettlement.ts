@@ -19,7 +19,13 @@ import {
   specVersionOf,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
-import { getPartyId, pendingHolderAffirmation, setHolderAffirmation } from './holderAffirmations';
+import {
+  getPartyId,
+  pendingHolderAffirmation,
+  pendingMediatorAffirmation,
+  setHolderAffirmation,
+  setMediatorAffirmation,
+} from './holderAffirmations';
 import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
 import {
@@ -42,6 +48,7 @@ import {
   holderAffirmationId,
   holdersOfLegs,
   instructionPartiesOf,
+  mediatorAffirmationId,
   LegDetails,
   PartyDetails,
   portfolioNumber,
@@ -615,69 +622,73 @@ export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): P
   await Promise.all(writes);
 };
 
-export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
-  const {
-    mediatorDid: rawIdentityId,
-    instructionId: rawInstructionId,
-    expiry: expiryOpt,
-  } = decodeEvent(event);
+interface MediatorChange {
+  instructionEvent: InstructionEventEnum;
+  status: AffirmStatusEnum;
+  rawMediator: Codec;
+  rawInstructionId: Codec;
+  expiry?: Date;
+}
 
-  const identityId = getTextValue(rawIdentityId);
+/** Records a mediator's affirmation or withdrawal on the mediator's row and in the events. */
+const recordMediatorEvent = async (
+  event: SubstrateEvent,
+  { instructionEvent, status, rawMediator, rawInstructionId, expiry }: MediatorChange
+): Promise<void> => {
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const signerId = getSignerAddress(extrinsic);
+
+  const mediator = getTextValue(rawMediator);
   const instructionId = processInstructionId(rawInstructionId);
-  const expiry = getDateValue(expiryOpt);
 
-  const partyId = getPartyId(instructionId, identityId, undefined, true);
-  const mediatorAffirmation = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId,
-    identityId: identityId,
-    isMediator: true,
-    status: AffirmStatusEnum.Affirmed,
-    isAutomaticallyAffirmed: false,
+  const affirmation = await setMediatorAffirmation(instructionId, mediator, {
+    status,
+    affirmedById: mediator,
+    signerId,
+    blockEventId,
     expiry,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  });
-
-  const mediatorAffirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.MediatorAffirmationReceived,
-    identityId: identityId,
-    createdEventId: blockEventId,
-  });
-
-  await Promise.all([mediatorAffirmation.save(), mediatorAffirmationEvent.save()]);
-};
-
-export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
-  const { mediatorDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
-
-  const identityId = getTextValue(rawIdentityId);
-  const instructionId = processInstructionId(rawInstructionId);
-
-  const affirmationWithdrawnEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.MediatorAffirmationWithdrawn,
-    identityId: identityId,
-    createdEventId: blockEventId,
   });
 
   await Promise.all([
-    InstructionAffirmation.remove(getPartyId(instructionId, identityId, undefined, true)),
-    affirmationWithdrawnEvent.save(),
+    affirmation.save(),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: instructionEvent,
+      identityId: mediator,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
   ]);
+};
+
+export const handleMediatorAffirmationReceived = (event: SubstrateEvent): Promise<void> => {
+  const { mediatorDid, instructionId, expiry } = decodeEvent(event);
+  return recordMediatorEvent(event, {
+    instructionEvent: InstructionEventEnum.MediatorAffirmationReceived,
+    status: AffirmStatusEnum.Affirmed,
+    rawMediator: mediatorDid,
+    rawInstructionId: instructionId,
+    expiry: getDateValue(expiry),
+  });
+};
+
+export const handleMediatorAffirmationWithdrawn = (event: SubstrateEvent): Promise<void> => {
+  const { mediatorDid, instructionId } = decodeEvent(event);
+  return recordMediatorEvent(event, {
+    instructionEvent: InstructionEventEnum.MediatorAffirmationWithdrawn,
+    status: AffirmStatusEnum.Pending,
+    rawMediator: mediatorDid,
+    rawInstructionId: instructionId,
+  });
 };
 
 /**
  * Maps the event - `settlement.InstructionMediators`
  */
 export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const signerId = getSignerAddress(extrinsic);
   const { instructionId: rawInstructionId, mediators: rawIdentityIds } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
@@ -694,15 +705,25 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
       instructionId,
       event: InstructionEventEnum.InstructionMediators,
       identityId: identity,
+      signerId,
       createdEventId: blockEventId,
     }).save();
   });
+
+  // a mediator that has already affirmed keeps its row
+  const existing = await Promise.all(
+    identityIds.map(did => InstructionAffirmation.get(mediatorAffirmationId(instructionId, did)))
+  );
+  const pending = identityIds
+    .filter((_, index) => !existing[index])
+    .map(did => pendingMediatorAffirmation(instructionId, did, blockEventId));
 
   const parties = new Map<string, PartyDetails>(identityIds.map(did => [did, { identityId: did }]));
 
   await Promise.all([
     instruction.save(),
     createInstructionParty(instructionId, blockEventId, parties, true),
+    ...pending.map(row => row.save()),
     ...mediatorEventPromises,
   ]);
 };
