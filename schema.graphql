@@ -2897,6 +2897,8 @@ type InstructionAffirmation @entity {
   account: Account
   "`portfolio` will be null for mediator affirmation and off chain affirmation"
   portfolios: [Int]
+  "The holder, when it is a portfolio"
+  portfolio: Portfolio
   isMediator: Boolean!
   isAutomaticallyAffirmed: Boolean!
   status: AffirmStatusEnum!
@@ -2904,6 +2906,10 @@ type InstructionAffirmation @entity {
   expiry: Date
   "`offChainReceipt` is only applicable when affirmation"
   offChainReceipt: OffChainReceipt
+  "Who last set `status`: the event's caller, which can be a custodian, a spender or a mediator rather than the holder"
+  affirmedBy: Identity
+  "The account that signed the extrinsic that last set `status`; null when there is none"
+  signer: Account
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2950,6 +2956,8 @@ type InstructionEvent @entity {
   account: Account
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
+  "The account that signed the extrinsic that emitted the event; null when there is none"
+  signer: Account
   createdEvent: Event!
 }
 
@@ -4138,6 +4146,7 @@ enum AffirmingPartyEnum {
 }
 
 enum AffirmStatusEnum {
+  Pending
   Affirmed
   Rejected
 }

@@ -30,10 +30,41 @@ export interface PartyDetails {
   accountId?: string;
 }
 
-type LegSides = Pick<
+export type LegSides = Pick<
   LegDetails,
   'fromId' | 'fromAccountId' | 'fromPortfolioId' | 'toId' | 'toAccountId' | 'toPortfolioId'
 >;
+
+/** A holder on an instruction: a portfolio (`did/number`) or an account, with its identity. */
+export interface HolderRef {
+  identityId?: string;
+  portfolioId?: string;
+  accountId?: string;
+}
+
+/** The id of a holder's approval of an instruction: one row per (instruction, holder). */
+export const holderAffirmationId = (instructionId: string, holder: HolderRef): string =>
+  `${instructionId}/${holder.accountId ?? holder.portfolioId}`;
+
+/**
+ * The distinct on-chain holders across both sides of every leg, in first-seen order. An off-chain
+ * leg's sides name an identity but no portfolio or account, so they hold nothing on chain.
+ */
+export const holdersOfLegs = (legs: LegSides[]): HolderRef[] => {
+  const holders = new Map<string, HolderRef>();
+  legs.forEach(leg => {
+    [
+      { identityId: leg.fromId, portfolioId: leg.fromPortfolioId, accountId: leg.fromAccountId },
+      { identityId: leg.toId, portfolioId: leg.toPortfolioId, accountId: leg.toAccountId },
+    ].forEach(holder => {
+      const key = holder.accountId ?? holder.portfolioId;
+      if (key && !holders.has(key)) {
+        holders.set(key, holder);
+      }
+    });
+  });
+  return [...holders.values()];
+};
 
 /** The number of a portfolio id (`did/number`). */
 export const portfolioNumber = (portfolioId: string): number => Number(portfolioId.split('/')[1]);
