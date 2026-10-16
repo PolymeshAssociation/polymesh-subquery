@@ -72,12 +72,8 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
 export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
-  // one leg at a time, in order: each may read the store for its asset
-  return legs.reduce<Promise<LegDetails[]>>(
-    (previous, leg, legIndex) =>
-      previous.then(async data => [...data, await readLeg(leg, legIndex, block)]),
-    Promise.resolve([])
-  );
+  // legs are independent (each only reads the store for its own asset); order is preserved
+  return Promise.all(legs.map((leg, legIndex) => readLeg(leg, legIndex, block)));
 };
 
 const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => {

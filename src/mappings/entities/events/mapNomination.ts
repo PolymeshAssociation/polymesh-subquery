@@ -50,14 +50,14 @@ const getOpenNominations = (stash: string): Promise<Nomination[]> =>
   ]);
 
 /** Closes every open nomination `stash` holds as a nominator, stamping the closing event. */
-const closeOpenNominations = async (stash: string, blockEventId: string): Promise<Nomination[]> => {
+const closeOpenNominations = async (stash: string, blockEventId: string): Promise<void> => {
   const open = await getOpenNominations(stash);
 
-  return Promise.all(
+  await Promise.all(
     open.map(nomination => {
       nomination.validToEventId = blockEventId;
 
-      return nomination.save().then(() => nomination);
+      return nomination.save();
     })
   );
 };
@@ -176,11 +176,8 @@ export const handleInvalidatedNominators = async (event: SubstrateEvent): Promis
     await Promise.all([position.save(), closeOpenNominations(stash, blockEventId)]);
   };
 
-  // one stash at a time, as the runtime removed them
-  await stashes.reduce(
-    (previous, stash) => previous.then(() => removeNominator(stash)),
-    Promise.resolve()
-  );
+  // each stash touches only its own position and nominations
+  await Promise.all(stashes.map(removeNominator));
 };
 
 /** `Kicked(nominator, stash)` — the validator `stash` removed `nominator` from its nominator list. */
