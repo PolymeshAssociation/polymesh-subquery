@@ -14,13 +14,12 @@ import {
   getStringArrayValue,
   getTextValue,
   is7xChain,
-  padId,
   padNumericId,
   rawAssetHolderToAssetHolder,
-  removeIfIncludes,
   specVersionOf,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { getPartyId, pendingHolderAffirmation, setHolderAffirmation } from './holderAffirmations';
 import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
 import {
@@ -39,22 +38,15 @@ import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
 import {
   getPortfolioOrAccount,
+  HolderRef,
+  holderAffirmationId,
+  holdersOfLegs,
   instructionPartiesOf,
   LegDetails,
   PartyDetails,
   portfolioNumber,
 } from './../../../utils/settlements';
 import { memoText } from '../../../utils/text';
-
-/**
- * Until spec 6.3.1, `InstructionAutomaticallyAffirmed` was emitted *before* `InstructionCreated`,
- * so `handleInstructionCreated` re-scans the block for it. That workaround must be scoped to the
- * 6.1.0–6.3.1 window on public chains; a folded `||` previously made it run on every non-private
- * block at any spec version. The private-chain equivalent range is unknown — if one is
- * ever needed, add it as an explicit second clause rather than widening this one.
- */
-export const shouldRescanAutomaticAffirmations = (specName: string, specVersion: number): boolean =>
-  specName !== 'polymesh_private_dev' && specVersion >= 6001000 && specVersion <= 6003001;
 
 /**
  * The `InstructionEvent.event` value for each event that writes one.
@@ -112,7 +104,7 @@ const instructionStatusMap = {
 const prepareLegCreateParams = async (
   blockId: string,
   instructionId: string,
-  address: string,
+  address: string | undefined,
   legDetails: LegDetails,
   { eventIdx, eventId, block, blockEventId }: HandlerArgs
 ): Promise<Parameters<typeof Leg.create>[0]> => {
@@ -158,7 +150,7 @@ const prepareLegCreateParams = async (
     id: `${instructionId}/${legIndex}`,
     ...legDetails,
     instructionId,
-    addresses: [address],
+    addresses: address ? [address] : [],
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   };
@@ -235,14 +227,6 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-/** A party is keyed by its identity, or by its account when the account has no identity. */
-export const getPartyId = (
-  instructionId: string,
-  identityId: string | undefined,
-  accountId: string | undefined,
-  isMediator: boolean
-): string => `${instructionId}/${identityId ?? accountId}/${isMediator}`;
-
 const createInstructionParty = async (
   instructionId: string,
   blockEventId: string,
@@ -262,68 +246,6 @@ const createInstructionParty = async (
       }).save()
     )
   );
-};
-
-/**
- * Reads a `settlement.InstructionAutomaticallyAffirmed` from its raw parameters.
- *
- * Takes parameters rather than the event because the 6.1.0 to 6.3.1 re-scan feeds it sibling
- * `EventRecord`s from the same block, for which there is no `SubstrateEvent` to decode. Its
- * shape is registered as `settlement.InstructionAutomaticallyAffirmed` and is covered by the
- * metadata contract test like any other.
- */
-const mapAutomaticAffirmation = async (
-  params: Codec[],
-  block: SubstrateBlock,
-  blockId: string,
-  eventIndex: number,
-  blockEventId: string
-): Promise<[InstructionEvent, InstructionAffirmation]> => {
-  const [, rawHolder, rawInstructionId] = params;
-  const instructionId = processInstructionId(rawInstructionId);
-  const {
-    identityId: identity,
-    accountId: account,
-    portfolio,
-    portfolioId,
-  } = await getPortfolioOrAccount(rawHolder, block, blockId, blockEventId);
-
-  const automaticAffirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionAutomaticallyAffirmed,
-    identityId: identity,
-    accountId: account,
-    portfolioId,
-    createdEventId: blockEventId,
-  });
-
-  const partyId = getPartyId(instructionId, identity, account, false);
-
-  const affirmation = await InstructionAffirmation.get(partyId);
-
-  if (affirmation) {
-    addIfNotIncludes(affirmation.portfolios, portfolio);
-    affirmation.updatedEventId = blockEventId;
-
-    return [automaticAffirmationEvent, affirmation];
-  }
-
-  const automaticAffirmation = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId,
-    identityId: identity,
-    accountId: account,
-    portfolios: [portfolio],
-    isMediator: false,
-    isAutomaticallyAffirmed: true,
-    status: AffirmStatusEnum.Affirmed,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  });
-
-  return [automaticAffirmationEvent, automaticAffirmation];
 };
 
 /**
@@ -399,99 +321,117 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     instructionId,
     event: InstructionEventEnum.InstructionCreated,
     identityId: creator,
+    signerId: address,
     createdEventId: blockEventId,
   });
 
-  const promises = [
+  // every holder on a leg starts pending, as the chain records it, except one an earlier event
+  // in the block already auto-affirmed (runtimes 6.1.0 to 6.3.0 emit those before this event)
+  const autoAffirmedEarlier = autoAffirmedBefore(block, args.eventIdx, instructionId);
+  const affirmations = await Promise.all(
+    holdersOfLegs(legParams).map(
+      async holder =>
+        (autoAffirmedEarlier &&
+          (await InstructionAffirmation.get(holderAffirmationId(instructionId, holder)))) ||
+        pendingHolderAffirmation(instructionId, holder, blockEventId)
+    )
+  );
+
+  await Promise.all([
     store.bulkCreate('Leg', legParams),
+    store.bulkCreate('InstructionAffirmation', affirmations),
     createInstructionParty(instructionId, blockEventId, parties, false),
     instructionCreatedEvent.save(),
+  ]);
+};
+
+/** Whether an event before `eventIdx` in the block auto-affirmed a holder of `instructionId`. */
+const autoAffirmedBefore = (
+  block: SubstrateBlock,
+  eventIdx: number,
+  instructionId: string
+): boolean =>
+  block.events
+    .slice(0, eventIdx)
+    .some(
+      ({ event }) =>
+        event.section === 'settlement' &&
+        event.method === EventIdEnum.InstructionAutomaticallyAffirmed &&
+        processInstructionId(event.data[2]) === instructionId
+    );
+
+/** The holder an affirm, auto-affirm or withdraw event names. */
+const eventHolder = async (
+  rawHolder: Codec,
+  { block, blockId, blockEventId }: HandlerArgs
+): Promise<HolderRef> => {
+  const { identityId, accountId, portfolioId } = await getPortfolioOrAccount(
+    rawHolder,
+    block,
+    blockId,
+    blockEventId
+  );
+  return { identityId, accountId, portfolioId };
+};
+
+/** Records an affirm, auto-affirm or withdraw event on its holder's row and in the events. */
+const recordHolderEvent = async (
+  event: SubstrateEvent,
+  instructionEvent: InstructionEventEnum,
+  status: AffirmStatusEnum,
+  isAutomaticallyAffirmed: boolean
+): Promise<void> => {
+  const args = extractArgs(event);
+  const { extrinsic, block, blockEventId, eventIdx } = args;
+  const signerId = getSignerAddress(extrinsic);
+  const {
+    callerDid: rawCaller,
+    holder: rawHolder,
+    instructionId: rawInstructionId,
+  } = decodeEvent(event);
+
+  const instructionId = processInstructionId(rawInstructionId);
+  const holder = await eventHolder(rawHolder, args);
+  const callerDid = getTextValue(rawCaller);
+
+  const affirmation = await setHolderAffirmation(instructionId, holder, {
+    status,
+    isAutomaticallyAffirmed,
+    affirmedById: callerDid,
+    signerId,
+    blockEventId,
+  });
+
+  const writes = [
+    affirmation.save(),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: instructionEvent,
+      identityId: callerDid,
+      accountId: holder.accountId,
+      portfolioId: holder.portfolioId,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
   ];
-
-  if (
-    shouldRescanAutomaticAffirmations(api.runtimeVersion.specName.toString(), block.specVersion)
-  ) {
-    const automaticAffirmationPromises = [];
-    block.events.forEach((event, eventIndex) => {
-      if (event.event.method === EventIdEnum.InstructionAutomaticallyAffirmed) {
-        const automaticAffirmationPromise = async () => {
-          const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
-          const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
-            event.event.data,
-            block,
-            blockId,
-            eventIndex,
-            blockEventId
-          );
-          promises.push(automaticAffirmation.save(), automaticAffirmationEvent.save());
-        };
-        automaticAffirmationPromises.push(automaticAffirmationPromise());
-      }
-    });
-
-    await Promise.all(automaticAffirmationPromises);
+  if (status === AffirmStatusEnum.Affirmed && !isAutomaticallyAffirmed) {
+    writes.push(addSignerToLegs({ blockEventId, block, eventIdx }, signerId, instructionId));
   }
 
-  await Promise.all(promises);
+  await Promise.all(writes);
 };
 
 /**
- * Maps the events -
- *   - InstructionAffirmed
+ * Maps the event - `settlement.InstructionAffirmed`
  */
-export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { extrinsic, blockId, block, blockEventId, eventIdx } = extractArgs(event);
-  const address = getSignerAddress(extrinsic);
-
-  const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
-
-  const instructionId = processInstructionId(rawInstructionId);
-  const {
-    identityId: identity,
-    accountId: account,
-    portfolio,
-    portfolioId,
-  } = await getPortfolioOrAccount(rawPortfolio, block, blockId, blockEventId);
-
-  const partyId = getPartyId(instructionId, identity, account, false);
-
-  let affirmation = await InstructionAffirmation.get(partyId);
-
-  if (affirmation) {
-    addIfNotIncludes(affirmation.portfolios, portfolio);
-    affirmation.updatedEventId = blockEventId;
-  } else {
-    affirmation = InstructionAffirmation.create({
-      id: partyId,
-      instructionId,
-      partyId,
-      accountId: account,
-      identityId: identity,
-      portfolios: [portfolio],
-      isMediator: false,
-      isAutomaticallyAffirmed: false,
-      status: AffirmStatusEnum.Affirmed,
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    });
-  }
-
-  const affirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionAffirmed,
-    identityId: identity,
-    portfolioId,
-    accountId: account,
-    createdEventId: blockEventId,
-  });
-
-  await Promise.all([
-    affirmation.save(),
-    affirmationEvent.save(),
-    addSignerToLegs({ blockEventId, block, eventIdx }, address, instructionId),
-  ]);
-};
+export const handleInstructionUpdate = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.InstructionAffirmed,
+    AffirmStatusEnum.Affirmed,
+    false
+  );
 
 /** `updateLegs` for an event that names only the instruction, which is read for its leg count. */
 const addSignerToLegs = async (
@@ -521,71 +461,25 @@ const addSignerToLegs = async (
 /**
  * Maps the event - `settlement.AffirmationWithdrawn`
  */
-export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId } = extractArgs(event);
-
-  const { holder: rawPortfolio, instructionId: rawInstructionId } = decodeEvent(event);
-
-  const instructionId = processInstructionId(rawInstructionId);
-  const {
-    identityId: identity,
-    accountId: account,
-    portfolio,
-    portfolioId,
-  } = await getPortfolioOrAccount(rawPortfolio, block, blockId, blockEventId);
-
-  const partyId = getPartyId(instructionId, identity, account, false);
-  const affirmation = await InstructionAffirmation.get(partyId);
-
-  const promises = [
-    InstructionEvent.create({
-      id: blockEventId,
-      instructionId,
-      event: InstructionEventEnum.AffirmationWithdrawn,
-      identityId: identity,
-      accountId: account,
-      portfolioId,
-      createdEventId: blockEventId,
-    }).save(),
-  ];
-
-  if (affirmation) {
-    if (affirmation.portfolios.length === 1) {
-      // if only single PF is present remove the entire entity value
-      promises.push(InstructionAffirmation.remove(partyId));
-    } else {
-      // else remove the withdrawn portfolio from affirmed portfolio list
-      removeIfIncludes(affirmation.portfolios, portfolio);
-      affirmation.updatedEventId = blockEventId;
-
-      promises.push(affirmation.save());
-    }
-  }
-
-  await Promise.all(promises);
-};
+export const handleAffirmationWithdrawn = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.AffirmationWithdrawn,
+    AffirmStatusEnum.Pending,
+    false
+  );
 
 /**
- * Maps the event - `settlement.InstructionAutomaticallyAffirmed
+ * Maps the event - `settlement.InstructionAutomaticallyAffirmed`, which runtimes 6.1.0 to 6.3.0
+ * emit before the instruction's creation; the creation keeps the row it writes.
  */
-export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockId, eventIdx, blockEventId } = extractArgs(event);
-
-  /**
-   * Till spec version 6.3.1, InstructionAutomaticallyAffirmed was emitted before InstructionCreated event
-   * The below logic handles the case after 6.3.1 when ordering was correct and we can safely assume instruction exists here
-   */
-  if (specVersionOf(block) >= 6_003_001) {
-    const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
-      params,
-      block,
-      blockId,
-      eventIdx,
-      blockEventId
-    );
-    await Promise.all([instructionEvent.save(), instructionAffirmation.save()]);
-  }
-};
+export const handleAutomaticAffirmation = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.InstructionAutomaticallyAffirmed,
+    AffirmStatusEnum.Affirmed,
+    true
+  );
 
 /**
  * Maps the event - `settlement.InstructionRejected`
