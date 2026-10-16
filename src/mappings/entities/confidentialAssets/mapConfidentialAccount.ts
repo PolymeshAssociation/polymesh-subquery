@@ -29,7 +29,7 @@ export const handleConfidentialAccountRegistered = async (event: SubstrateEvent)
   await Promise.all([
     ConfidentialAccount.create({
       id: account,
-      account,
+      publicKey: account,
       encryptionKeyId: encryptionKey,
       creatorId,
       createdEventId: blockEventId,

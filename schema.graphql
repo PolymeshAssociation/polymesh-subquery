@@ -4191,7 +4191,8 @@ Represents a confidential account (account public key)
 """
 type ConfidentialAccount @entity {
   id: ID!
-  account: String!
+  "The confidential account's public key, which is also its `id`. It is not a signing key, so it names no `Account`"
+  publicKey: String!
   encryptionKey: ConfidentialEncryptionKey!
   "The assets this account mediates"
   mediatorOf: [ConfidentialAssetKey!]! @derivedFrom(field: "account")
