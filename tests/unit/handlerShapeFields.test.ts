@@ -39,8 +39,10 @@ const BRANCHED: Record<string, Record<string, string[]>> = {
     scheduleId: ['checkpoint.ScheduleRemoved@6000000'],
     schedule: ['checkpoint.ScheduleRemoved@6000000'],
   },
-  // before v8 it reads by position; by name only `SlashReported`, and every event from v8
+  // before v8 it reads by position; by name only `SlashReported`, and every event from v8.
+  // `expiredNominators` is read off the block's own `InvalidatedNominators` record, not the event.
   handleStakingEvent: {
+    expiredNominators: ['staking.InvalidatedNominators'],
     validator: ['staking.SlashReported'],
     amount: [
       'staking.Bonded',

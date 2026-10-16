@@ -149,7 +149,7 @@ export const mockBulkWrites = (db: MockDb, entityName: string): void => {
 };
 
 /** Field metadata for a Polymesh tuple event — unnamed, so decode falls to the shape table. */
-const unnamedMeta = (length: number) => ({
+export const unnamedMeta = (length: number) => ({
   fields: Array.from({ length }, () => ({
     name: { isSome: false },
     typeName: { isSome: true, unwrap: () => codec('Dummy') },

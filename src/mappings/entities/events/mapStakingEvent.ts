@@ -1,4 +1,5 @@
 import { hexAddPrefix } from '@polkadot/util';
+import { EventRecord } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, DecodedEvent, optionalField } from '../../../decode';
@@ -12,6 +13,7 @@ import {
 } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
 import { is8xChain } from '../../../utils/common';
 import {
   readRewardDestination,
@@ -158,39 +160,46 @@ const get8xStakingEventDetails = async (
 
 const ZERO_DID = /^0x0+$/;
 
+/** `ApplyExtrinsic(n)` keyed by its index; `Initialization` and `Finalization` by name. */
+const phaseKey = (phase: any): string | undefined =>
+  phase?.isApplyExtrinsic ? `extrinsic ${phase.asApplyExtrinsic.toNumber()}` : phase?.type;
+
 /**
  * Whether the `Unbonded` at `event` was written by `validate_cdd_expiry_nominators` for `stash`.
  *
  * That call unbonds each expired nominator, then emits one `InvalidatedNominators` listing them,
- * all in the one extrinsic. The `Unbonded` carries the DID of whoever made the call, not the
- * stash's, so an identity read from it would be the wrong one.
+ * all within one phase of the block. The `Unbonded` carries the DID of whoever made the call, not
+ * the stash's, so an identity read from it would be the wrong one. The scan is bounded by the
+ * phase rather than an extrinsic index because before 6.3.0 the call can run outside one (a
+ * scheduled enactment runs in `Initialization`), and it stops at the first record of another phase.
  */
 const isCddExpiryUnbond = (event: SubstrateEvent, stash: string): boolean => {
-  const records = (event.block.events ?? []) as any[];
-  const extrinsicIdx = event.extrinsic?.idx;
+  const records = blockEvents(event.block);
+  const ownPhase = phaseKey(records[event.idx]?.phase);
 
-  if (extrinsicIdx === undefined) {
+  if (ownPhase === undefined) {
     return false;
   }
 
   for (let index = event.idx + 1; index < records.length; index += 1) {
-    const { event: later, phase } = records[index];
-
-    if (phase?.isApplyExtrinsic && phase.asApplyExtrinsic.toNumber() !== extrinsicIdx) {
+    if (phaseKey(records[index].phase) !== ownPhase) {
       return false;
     }
 
-    if (
-      later.section === 'staking' &&
-      later.method === 'InvalidatedNominators' &&
-      ((later.data[2]?.toJSON() as string[] | null) ?? []).includes(stash)
-    ) {
-      return true;
+    if (isInvalidatedNominators(records[index])) {
+      const { expiredNominators } = decodeEvent(substrateEventAt(event.block, index));
+
+      if (((expiredNominators?.toJSON() as string[] | null) ?? []).includes(stash)) {
+        return true;
+      }
     }
   }
 
   return false;
 };
+
+const isInvalidatedNominators = ({ event }: EventRecord): boolean =>
+  event.section === 'staking' && event.method === 'InvalidatedNominators';
 
 /**
  * `Unbonded` and `Bonded` carry the DID of the extrinsic's caller. For a CDD-expiry unbond that is

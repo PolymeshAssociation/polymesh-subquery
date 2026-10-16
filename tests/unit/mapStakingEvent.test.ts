@@ -1,7 +1,14 @@
 import { handlePositionBonded } from '../../src/mappings/entities/events/mapStakingPosition';
 import { handleStakingEvent } from '../../src/mappings/entities/events/mapStakingEvent';
 import { handlePayoutStarted } from '../../src/mappings/entities/identities/mapPolyxLedger';
-import { codec, mockLedgerAccountQuery, mockStore, namedEvent, tupleEvent } from './helpers';
+import {
+  codec,
+  mockLedgerAccountQuery,
+  mockStore,
+  namedEvent,
+  tupleEvent,
+  unnamedMeta,
+} from './helpers';
 
 const ALICE = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const BOB = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -132,14 +139,16 @@ describe('handleStakingEvent', () => {
     const seedStash = () =>
       mockStore({ Account: { [ALICE]: { id: ALICE, address: ALICE, identityId: STASH_DID } } });
 
-    const phase = (extrinsicIdx: number) => ({
+    const extrinsicPhase = (extrinsicIdx: number) => ({
+      type: 'ApplyExtrinsic',
       isApplyExtrinsic: true,
       asApplyExtrinsic: { toNumber: () => extrinsicIdx },
     });
+    const namedPhase = (type: string) => ({ type, isApplyExtrinsic: false });
 
-    const record = (method: string, data: unknown[], extrinsicIdx: number) => ({
-      phase: phase(extrinsicIdx),
-      event: { section: 'staking', method, data },
+    const record = (method: string, data: unknown[], phase: unknown = extrinsicPhase(1)) => ({
+      phase,
+      event: { section: 'staking', method, data, meta: unnamedMeta(data.length) },
     });
 
     const unbonded = (did: string, events: unknown[] = [], extrinsicIdx = 1) =>
@@ -172,8 +181,8 @@ describe('handleStakingEvent', () => {
     it('falls back to the stash identity when a CDD expiry run by a signed caller emitted it', async () => {
       const db = seedStash();
       const events = [
-        record('Unbonded', [], 1),
-        record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec([ALICE])], 1),
+        record('Unbonded', []),
+        record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec([ALICE])]),
       ];
 
       await handleStakingEvent(unbonded(SUDO_DID, events));
@@ -184,9 +193,44 @@ describe('handleStakingEvent', () => {
     it('ignores an InvalidatedNominators from a different extrinsic', async () => {
       const db = seedStash();
       const events = [
-        record('Unbonded', [], 1),
-        record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec([ALICE])], 2),
+        record('Unbonded', []),
+        record(
+          'InvalidatedNominators',
+          [codec(SUDO_DID), codec(BOB), codec([ALICE])],
+          extrinsicPhase(2)
+        ),
       ];
+
+      await handleStakingEvent(unbonded(SUDO_DID, events));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: SUDO_DID });
+    });
+
+    const invalidated = (phase: unknown, nominators = [ALICE]) =>
+      record('InvalidatedNominators', [codec(SUDO_DID), codec(BOB), codec(nominators)], phase);
+
+    it('recognises a CDD expiry that ran outside any extrinsic, in the Initialization phase', async () => {
+      const db = seedStash();
+      const initialization = namedPhase('Initialization');
+      const events = [record('Unbonded', [], initialization), invalidated(initialization)];
+
+      await handleStakingEvent({ ...unbonded(SUDO_DID, events), extrinsic: undefined } as any);
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: STASH_DID });
+    });
+
+    it('stops scanning at a change of phase', async () => {
+      const db = seedStash();
+      const events = [record('Unbonded', []), invalidated(namedPhase('Finalization'))];
+
+      await handleStakingEvent(unbonded(SUDO_DID, events));
+
+      expect(Object.values(db.StakingEvent)[0]).toMatchObject({ identityId: SUDO_DID });
+    });
+
+    it('does not take another stash being expired for this one', async () => {
+      const db = seedStash();
+      const events = [record('Unbonded', []), invalidated(extrinsicPhase(1), [BOB])];
 
       await handleStakingEvent(unbonded(SUDO_DID, events));
 
