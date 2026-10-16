@@ -23,11 +23,11 @@ import {
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
+/** One party to an instruction: an identity, or an account holder with no identity. */
 export interface PartyDetails {
-  /** undefined only for an account holder with no identity */
   identityId?: string;
+  /** set only when there is no identity */
   accountId?: string;
-  portfolios?: number[];
 }
 
 type LegSides = Pick<
@@ -77,21 +77,18 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
   };
 };
 
-/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by account, else DID. */
+/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by DID, else account. */
 export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails> => {
   const parties = new Map<string, PartyDetails>();
-  const add = (identityId?: string, accountId?: string, portfolioId?: string): void => {
-    const key = (accountId ?? identityId) as string;
-    const party = parties.get(key) ?? { identityId, accountId, portfolios: undefined };
-    const portfolio = portfolioId === undefined ? undefined : portfolioNumber(portfolioId);
-    if (portfolio !== undefined && !party.portfolios?.includes(portfolio)) {
-      party.portfolios = [...(party.portfolios ?? []), portfolio];
+  const add = (identityId?: string, accountId?: string): void => {
+    const key = identityId ?? accountId;
+    if (key && !parties.has(key)) {
+      parties.set(key, { identityId, accountId: identityId ? undefined : accountId });
     }
-    parties.set(key, party);
   };
   legs.forEach(leg => {
-    add(leg.fromId, leg.fromAccountId, leg.fromPortfolioId);
-    add(leg.toId, leg.toAccountId, leg.toPortfolioId);
+    add(leg.fromId, leg.fromAccountId);
+    add(leg.toId, leg.toAccountId);
   });
   return parties;
 };
