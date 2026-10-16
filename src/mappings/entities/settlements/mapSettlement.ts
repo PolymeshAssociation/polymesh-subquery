@@ -492,42 +492,31 @@ export const handleAutomaticAffirmation = (event: SubstrateEvent): Promise<void>
  * Maps the event - `settlement.InstructionRejected`
  */
 export const handleInstructionRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { eventId, blockEventId } = extractArgs(event);
-  const { callerDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const { callerDid: rawCaller, instructionId: rawInstructionId } = decodeEvent(event);
 
-  const identityId = getTextValue(rawIdentityId);
+  const callerDid = getTextValue(rawCaller);
+  const signerId = getSignerAddress(extrinsic);
   const instructionId = processInstructionId(rawInstructionId);
 
+  // rejecting is a fact about the instruction, not any holder's approval, which keeps its state
   const instruction = await getInstruction(instructionId);
-
-  instruction.status = instructionStatusMap[eventId];
+  instruction.status = InstructionStatusEnum.Rejected;
+  instruction.rejectedById = callerDid;
+  instruction.rejectedBySignerId = signerId;
   instruction.updatedEventId = blockEventId;
 
-  const isMediator = instruction.mediators.includes(identityId);
-
-  const partyId = getPartyId(instructionId, identityId, undefined, isMediator);
-
-  const rejection = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId: partyId,
-    identityId: identityId,
-    isMediator: isMediator,
-    isAutomaticallyAffirmed: false,
-    status: AffirmStatusEnum.Rejected,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  });
-
-  const rejectionEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionRejected,
-    identityId: identityId,
-    createdEventId: blockEventId,
-  });
-
-  await Promise.all([instruction.save(), rejection.save(), rejectionEvent.save()]);
+  await Promise.all([
+    instruction.save(),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: InstructionEventEnum.InstructionRejected,
+      identityId: callerDid,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
+  ]);
 };
 
 /**
@@ -539,7 +528,7 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
   const { extrinsic, eventId, blockEventId, block, eventIdx } = extractArgs(event);
-  const { instructionId: rawInstructionId } = decodeEvent(event);
+  const { callerDid: rawCaller, instructionId: rawInstructionId } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
   const instructionId = processInstructionId(rawInstructionId);
@@ -561,6 +550,8 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
         id: blockEventId,
         instructionId,
         event: instructionEvent,
+        identityId: getTextValue(rawCaller),
+        signerId: address,
         createdEventId: blockEventId,
       }).save()
     );
@@ -573,7 +564,7 @@ export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Pr
  * Maps the event - `settlement.SettlementManuallyExecuted`
  */
 export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { extrinsic, blockEventId } = extractArgs(event);
   const { callerDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const manuallyExecutedEvent = InstructionEvent.create({
@@ -581,6 +572,7 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.SettlementManuallyExecuted,
     identityId: getTextValue(rawIdentityId),
+    signerId: getSignerAddress(extrinsic),
     createdEventId: blockEventId,
   });
 
@@ -732,7 +724,7 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.ReceiptClaimed`
  */
 export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { extrinsic, blockEventId } = extractArgs(event);
   const {
     callerDid: rawIdentityId,
     instructionId: rawInstructionId,
@@ -777,6 +769,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.ReceiptClaimed,
     identityId: identityId,
+    signerId: getSignerAddress(extrinsic),
     offChainReceiptId: `${signer}/${uid}`,
     createdEventId: blockEventId,
   });

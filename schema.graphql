@@ -2806,6 +2806,10 @@ type Instruction @entity {
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
   "What executing this instruction moved"
   transfers: [AssetTransaction!] @derivedFrom(field: "instruction")
+  "Who rejected the instruction: the rejection's caller, who need not be a party"
+  rejectedBy: Identity
+  "The account that signed the rejection; null when there is none"
+  rejectedBySigner: Account
   updatedEvent: Event!
   createdEvent: Event!
 }
