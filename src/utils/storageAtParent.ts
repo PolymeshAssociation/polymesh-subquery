@@ -54,6 +54,14 @@ const parentReadable = (block: SubstrateBlock): Promise<boolean> => {
 };
 
 /**
+ * Whether the state `block` began from can be read with this block's registry. `storageAtParent`
+ * returns `undefined` both for "nothing stored" and for "could not read"; a caller for whom absence
+ * means something checks this first.
+ */
+export const parentStateReadable = (block: SubstrateBlock): Promise<boolean> =>
+  parentReadable(block);
+
+/**
  * A storage key or value this block's registry cannot encode or decode. Unlike a failed read, it
  * fails the same way on every retry, so callers handle it rather than fail the block.
  */

@@ -26,6 +26,7 @@ import {
   setHolderAffirmation,
   setMediatorAffirmation,
 } from './holderAffirmations';
+import { applySilentPreApprovals, preApprovesSilently } from './silentPreApprovals';
 import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
 import {
@@ -343,6 +344,18 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
         pendingHolderAffirmation(instructionId, holder, blockEventId)
     )
   );
+
+  if (preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
+    await applySilentPreApprovals(affirmations, {
+      block,
+      eventIdx: args.eventIdx,
+      instructionId,
+      legs: legParams,
+      creatorDid: creator,
+      signerId: address,
+      blockEventId,
+    });
+  }
 
   await Promise.all([
     store.bulkCreate('Leg', legParams),
