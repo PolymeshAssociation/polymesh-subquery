@@ -161,7 +161,7 @@ export const handleInvalidatedNominators = async (event: SubstrateEvent): Promis
 
   const stashes = (expiredNominators.toJSON() as string[] | null) ?? [];
 
-  for (const stash of stashes) {
+  const removeNominator = async (stash: string): Promise<void> => {
     const position = await getOrCreatePosition(
       stash,
       blockId,
@@ -174,7 +174,13 @@ export const handleInvalidatedNominators = async (event: SubstrateEvent): Promis
     position.updatedEventId = blockEventId;
 
     await Promise.all([position.save(), closeOpenNominations(stash, blockEventId)]);
-  }
+  };
+
+  // one stash at a time, as the runtime removed them
+  await stashes.reduce(
+    (previous, stash) => previous.then(() => removeNominator(stash)),
+    Promise.resolve()
+  );
 };
 
 /** `Kicked(nominator, stash)` — the validator `stash` removed `nominator` from its nominator list. */

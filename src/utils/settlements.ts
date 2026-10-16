@@ -18,63 +18,66 @@ import { extractAssetHolder, meshPortfolioToAssetHolder } from './portfolios';
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
+/** One pre-v6 leg, as `getLegsValue` reads it. */
+const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promise<LegDetails> => {
+  const { from: rawFromPortfolio, to: rawToPortfolio } = leg;
+  // v5.3's `LegV2` (from `InstructionV2Created`) wraps the asset in a `LegAsset` enum:
+  // `{ fungible: { ticker, amount } }` or `{ nonFungible: { ticker, ids } }`. `Leg` has the
+  // ticker and amount at the top level.
+  const { fungible, nonFungible } = (typeof leg.asset === 'object' && leg.asset) || {};
+  const rawTicker = fungible?.ticker ?? nonFungible?.ticker ?? leg.asset;
+  const { assetId, ticker } = await getAssetIdWithTicker(rawTicker, block);
+  const nftIds: bigint[] | undefined = nonFungible?.ids?.map(BigInt);
+
+  const fromData = meshPortfolioToAssetHolder(rawFromPortfolio);
+  const toData = meshPortfolioToAssetHolder(rawToPortfolio);
+
+  let fromAccount: string | undefined, toAccount: string | undefined; // for accounts
+  let from: string, to: string; // for dids
+
+  let fromPortfolio: number | undefined, toPortfolio: number | undefined;
+  if ('account' in fromData) {
+    ({ account: fromAccount, identityId: from } = fromData);
+  } else {
+    ({ identityId: from, number: fromPortfolio } = fromData);
+  }
+  if ('account' in toData) {
+    ({ account: toAccount, identityId: to } = toData);
+  } else {
+    ({ identityId: to, number: toPortfolio } = toData);
+  }
+
+  return {
+    legIndex,
+    from,
+    fromPortfolio,
+    fromAccount,
+    to,
+    toPortfolio,
+    toAccount,
+    assetId,
+    ticker,
+    ...(nonFungible
+      ? { nftIds, legType: LegTypeEnum.NonFungible }
+      : {
+          amount: getBigIntValue(fungible?.amount ?? leg.amount),
+          legType: LegTypeEnum.Fungible,
+        }),
+  };
+};
+
 /**
  * This only extracts legs for spec version < 6000000
  */
 export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
-  let legIndex = 0;
-  const data: LegDetails[] = [];
-  for (const leg of legs) {
-    const { from: rawFromPortfolio, to: rawToPortfolio } = leg;
-    // v5.3's `LegV2` (from `InstructionV2Created`) wraps the asset in a `LegAsset` enum:
-    // `{ fungible: { ticker, amount } }` or `{ nonFungible: { ticker, ids } }`. `Leg` has the
-    // ticker and amount at the top level.
-    const { fungible, nonFungible } = (typeof leg.asset === 'object' && leg.asset) || {};
-    const rawTicker = fungible?.ticker ?? nonFungible?.ticker ?? leg.asset;
-    const { assetId, ticker } = await getAssetIdWithTicker(rawTicker, block);
-    const nftIds: bigint[] | undefined = nonFungible?.ids?.map((id: number | string) => BigInt(id));
-
-    const fromData = meshPortfolioToAssetHolder(rawFromPortfolio);
-    const toData = meshPortfolioToAssetHolder(rawToPortfolio);
-
-    let fromAccount: string | undefined, toAccount: string | undefined; // for accounts
-    let from: string, to: string; // for dids
-
-    let fromPortfolio: number | undefined, toPortfolio: number | undefined;
-    if ('account' in fromData) {
-      ({ account: fromAccount, identityId: from } = fromData);
-    } else {
-      ({ identityId: from, number: fromPortfolio } = fromData);
-    }
-    if ('account' in toData) {
-      ({ account: toAccount, identityId: to } = toData);
-    } else {
-      ({ identityId: to, number: toPortfolio } = toData);
-    }
-
-    data.push({
-      legIndex,
-      from,
-      fromPortfolio,
-      fromAccount,
-      to,
-      toPortfolio,
-      toAccount,
-      assetId,
-      ticker,
-      ...(nonFungible
-        ? { nftIds, legType: LegTypeEnum.NonFungible }
-        : {
-            amount: getBigIntValue(fungible?.amount ?? leg.amount),
-            legType: LegTypeEnum.Fungible,
-          }),
-    });
-
-    legIndex++;
-  }
-  return data;
+  // one leg at a time, in order: each may read the store for its asset
+  return legs.reduce<Promise<LegDetails[]>>(
+    (previous, leg, legIndex) =>
+      previous.then(async data => [...data, await readLeg(leg, legIndex, block)]),
+    Promise.resolve([])
+  );
 };
 
 const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => {
