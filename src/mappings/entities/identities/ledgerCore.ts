@@ -64,7 +64,9 @@ export const amountOf = (decoded: Record<string, Codec>): bigint => {
 };
 
 /**
- * A `HoldReason` from a decoded `RuntimeHoldReason`'s **JSON** form.
+ * A `HoldReason` from a decoded `RuntimeHoldReason`'s **JSON** form, plus the pallet's own reason
+ * variant nested under it when that is a plain unit variant (`Revive(StorageDepositReserve)`
+ * encodes as `{ revive: 'StorageDepositReserve' }`). A bare-string reason has no variant.
  *
  * v8's `RuntimeHoldReason` is a *composite* enum — each pallet's own reason enum nested under that
  * pallet's name — so the staking hold is `Staking(pallet_staking::HoldReason::Staking)` and encodes
@@ -76,11 +78,6 @@ export const amountOf = (decoded: Record<string, Codec>): bigint => {
  *
  * Takes JSON rather than a `Codec` so the same decode serves `balances.holds(who)` entries, whose
  * `id` arrives already-JSON from a storage read (see `readChainHolds`).
- */
-/**
- * The outer hold reason of `holdReasonFromJson`, plus the pallet's own reason variant nested under
- * it (`Revive(StorageDepositReserve)` encodes as `{ revive: 'StorageDepositReserve' }`), when the
- * reason is a composite carrying a plain unit variant. A bare-string reason has none.
  */
 export const holdReasonVariantOf = (json: unknown): { reason: HoldReason; variant?: string } => {
   let outer: string | undefined;
@@ -104,6 +101,7 @@ export const holdReasonVariantOf = (json: unknown): { reason: HoldReason; varian
   };
 };
 
+/** Just the outer `HoldReason` of `holdReasonVariantOf`. */
 export const holdReasonFromJson = (json: unknown): HoldReason => holdReasonVariantOf(json).reason;
 
 export const holdReasonOf = (decoded: Record<string, Codec>): HoldReason | undefined => {
