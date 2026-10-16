@@ -51,50 +51,27 @@ describe('getLegsValue', () => {
 });
 
 describe('instructionPartiesOf', () => {
-  it('keeps an account party’s DID in identity and its address in account', () => {
+  it('keeps one party per DID across its accounts and portfolios', () => {
     const parties = instructionPartiesOf([
       { fromId: DID_A, fromAccountId: ADDRESS, toId: DID_B, toPortfolioId: `${DID_B}/1` },
+      { fromId: DID_A, fromPortfolioId: `${DID_A}/1`, toId: DID_B, toPortfolioId: `${DID_B}/2` },
     ]);
-    expect(parties.get(ADDRESS)).toEqual({
-      identityId: DID_A,
-      accountId: ADDRESS,
-      portfolios: undefined,
-    });
-    expect(parties.get(DID_B)).toEqual({
-      identityId: DID_B,
-      accountId: undefined,
-      portfolios: [1],
-    });
+    expect([...parties.keys()]).toEqual([DID_A, DID_B]);
+    expect(parties.get(DID_A)).toEqual({ identityId: DID_A, accountId: undefined });
+    expect(parties.get(DID_B)).toEqual({ identityId: DID_B, accountId: undefined });
   });
 
-  it('merges one party across legs without dropping portfolios', () => {
-    const parties = instructionPartiesOf([
-      { fromId: DID_A, fromPortfolioId: `${DID_A}/0`, toId: DID_B, toPortfolioId: `${DID_B}/1` },
-      { fromId: DID_B, fromPortfolioId: `${DID_B}/2`, toId: DID_A, toPortfolioId: `${DID_A}/0` },
-    ]);
-    expect(parties.get(DID_A)?.portfolios).toEqual([0]);
-    expect(parties.get(DID_B)?.portfolios).toEqual([1, 2]);
-  });
-
-  it('keys an account with no identity by its address alone', () => {
+  it('keys an account with no identity by its address', () => {
     const parties = instructionPartiesOf([
       { fromAccountId: ADDRESS, toId: DID_B, toPortfolioId: `${DID_B}/0` },
     ]);
-    expect(parties.get(ADDRESS)).toEqual({
-      identityId: undefined,
-      accountId: ADDRESS,
-      portfolios: undefined,
-    });
-    expect([...parties.keys()]).not.toContain('undefined');
+    expect(parties.get(ADDRESS)).toEqual({ identityId: undefined, accountId: ADDRESS });
+    expect([...parties.keys()]).toEqual([ADDRESS, DID_B]);
   });
 
-  it('records an off-chain party with no portfolios', () => {
+  it('records an off-chain party', () => {
     const parties = instructionPartiesOf([{ fromId: DID_A, toId: DID_B }]);
-    expect(parties.get(DID_A)).toEqual({
-      identityId: DID_A,
-      accountId: undefined,
-      portfolios: undefined,
-    });
+    expect(parties.get(DID_A)).toEqual({ identityId: DID_A, accountId: undefined });
   });
 });
 

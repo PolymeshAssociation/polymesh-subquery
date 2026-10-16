@@ -235,12 +235,13 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const getPartyId = (
+/** A party is keyed by its identity, or by its account when the account has no identity. */
+export const getPartyId = (
   instructionId: string,
-  did: string,
-  account: string | undefined,
+  identityId: string | undefined,
+  accountId: string | undefined,
   isMediator: boolean
-) => `${instructionId}/${account ?? did}/${isMediator}`;
+): string => `${instructionId}/${identityId ?? accountId}/${isMediator}`;
 
 const createInstructionParty = async (
   instructionId: string,
@@ -249,14 +250,13 @@ const createInstructionParty = async (
   isMediator: boolean
 ): Promise<void> => {
   await Promise.all(
-    [...parties.values()].map(({ identityId, accountId, portfolios }) =>
+    [...parties.values()].map(({ identityId, accountId }) =>
       InstructionParty.create({
-        id: getPartyId(instructionId, identityId as string, accountId, isMediator),
+        id: getPartyId(instructionId, identityId, accountId, isMediator),
         instructionId,
         isMediator,
         identityId,
         accountId,
-        portfolios,
         createdEventId: blockEventId,
         updatedEventId: blockEventId,
       }).save()
