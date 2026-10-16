@@ -27,8 +27,14 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
   let legIndex = 0;
   const data: LegDetails[] = [];
   for (const leg of legs) {
-    const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
-    const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
+    const { from: rawFromPortfolio, to: rawToPortfolio } = leg;
+    // v5.3's `LegV2` (from `InstructionV2Created`) wraps the asset in a `LegAsset` enum:
+    // `{ fungible: { ticker, amount } }` or `{ nonFungible: { ticker, ids } }`. `Leg` has the
+    // ticker and amount at the top level.
+    const { fungible, nonFungible } = (typeof leg.asset === 'object' && leg.asset) || {};
+    const rawTicker = fungible?.ticker ?? nonFungible?.ticker ?? leg.asset;
+    const { assetId, ticker } = await getAssetIdWithTicker(rawTicker, block);
+    const nftIds: bigint[] | undefined = nonFungible?.ids?.map((id: number | string) => BigInt(id));
 
     const fromData = meshPortfolioToAssetHolder(rawFromPortfolio);
     const toData = meshPortfolioToAssetHolder(rawToPortfolio);
@@ -58,8 +64,12 @@ export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<
       toAccount,
       assetId,
       ticker,
-      amount: getBigIntValue(amount),
-      legType: LegTypeEnum.Fungible,
+      ...(nonFungible
+        ? { nftIds, legType: LegTypeEnum.NonFungible }
+        : {
+            amount: getBigIntValue(fungible?.amount ?? leg.amount),
+            legType: LegTypeEnum.Fungible,
+          }),
     });
 
     legIndex++;
