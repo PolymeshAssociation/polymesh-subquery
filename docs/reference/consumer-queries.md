@@ -293,6 +293,7 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `NftHolder` | `nftHolders { identityId nftIds }` | removed: `assetHolders(filter: { nftCount: { greaterThan: 0 } }) { identityId nftCount holdings { nodes { nfts { nodes { nftId } } } } }` |
 | `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
 | `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
+| `ConfidentialAccount` | `account` (the confidential public key) | `publicKey`, the same value as `id` |
 
 ### 9.8 Reverse relations renamed by `@derivedFrom` (2026-10-16)
 

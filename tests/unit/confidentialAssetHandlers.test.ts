@@ -76,7 +76,7 @@ describe('confidential account handlers', () => {
       ACCOUNT_KEY,
       expect.objectContaining({
         id: ACCOUNT_KEY,
-        account: ACCOUNT_KEY,
+        publicKey: ACCOUNT_KEY,
         encryptionKeyId: ENCRYPTION_KEY,
         creatorId: TEST_DID,
         updatedEventId: blockEventId,
