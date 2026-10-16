@@ -8,6 +8,7 @@ import {
   GraphQLSchema,
   Kind,
   ObjectFieldNode,
+  TypeNode,
   ValueNode,
   buildASTSchema,
   getNamedType,
@@ -139,6 +140,54 @@ interface FilterRoot {
   fields: readonly ObjectFieldNode[];
 }
 
+/** each variable an operation declares, by name, as the type it names without `!` or `[]` */
+type Variables = ReadonlyMap<string, string>;
+
+// What a filter operator takes, as the engine types it: PostGraphile maps BigInt (numeric) to
+// BigFloat and Date to Datetime, and a list or @jsonField column is a JSON column, filtered with JSON.
+const SCALAR_OPERAND: Record<string, string> = {
+  BigInt: 'BigFloat',
+  Date: 'Datetime',
+  ID: 'String',
+};
+const KEY_OPERATORS = new Set(['containsKey', 'containsAnyKeys', 'containsAllKeys']);
+
+const isJson = ({ named, collection }: Member): boolean =>
+  (named instanceof GraphQLObjectType && !resolveEntity(named)) ||
+  (collection && !resolveEntity(named)) ||
+  named.name === 'JSON';
+
+const operandType = (column: Member, operator: string): string => {
+  if (operator === 'isNull') return 'Boolean';
+  if (isJson(column)) return KEY_OPERATORS.has(operator) ? 'String' : 'JSON';
+  return SCALAR_OPERAND[column.named.name] ?? column.named.name;
+};
+
+/** checks the variables an operator's value uses against the type the operator takes */
+const checkOperands = (
+  field: ObjectFieldNode,
+  column: Member,
+  variables: Variables,
+  problems: string[],
+  path: string
+): void => {
+  for (const op of objectFields(field.value)) {
+    const expected = operandType(column, keyOf(op));
+    const values = op.value.kind === Kind.LIST ? op.value.values : [op.value];
+    for (const value of values) {
+      if (value.kind !== Kind.VARIABLE) continue;
+      const declared = variables.get(value.name.value);
+      if (declared && declared !== expected) {
+        problems.push(
+          `${path}.${keyOf(field)}.${keyOf(op)}: $${
+            value.name.value
+          } is ${declared}, where ${expected} is expected`
+        );
+      }
+    }
+  }
+};
+
 const branchesOf = (field: ObjectFieldNode): readonly ValueNode[] =>
   field.value.kind === Kind.LIST ? field.value.values : [field.value];
 
@@ -153,6 +202,7 @@ const validateFilter = (
   problems: string[],
   path: string,
   roots: FilterRoot[],
+  variables: Variables,
   isRoot = true
 ): void => {
   const fields = objectFields(node);
@@ -161,7 +211,7 @@ const validateFilter = (
     const key = keyOf(field);
     if (LOGICAL.has(key)) {
       for (const branch of branchesOf(field)) {
-        validateFilter(branch, entity, problems, `${path}.${key}`, roots, false);
+        validateFilter(branch, entity, problems, `${path}.${key}`, roots, variables, false);
       }
       continue;
     }
@@ -191,15 +241,29 @@ const validateFilter = (
       // a relation filter nests the related entity's own filter; a collection nests it under some/every/none
       for (const inner of objectFields(field.value)) {
         if (['some', 'every', 'none'].includes(keyOf(inner))) {
-          validateFilter(inner.value, related, problems, `${path}.${key}.${keyOf(inner)}`, roots);
+          validateFilter(
+            inner.value,
+            related,
+            problems,
+            `${path}.${key}.${keyOf(inner)}`,
+            roots,
+            variables
+          );
         }
       }
       if (!column.collection) {
-        validateFilter(field.value, related, problems, `${path}.${key}`, roots);
+        validateFilter(field.value, related, problems, `${path}.${key}`, roots, variables);
       }
+    } else if (!related) {
+      checkOperands(field, column, variables, problems, path);
     }
   }
 };
+
+const getNamedTypeName = (type: TypeNode): string =>
+  type.kind === Kind.NAMED_TYPE ? type.name.value : getNamedTypeName(type.type);
+
+const article = (name: string): string => `${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name}`;
 
 const argument = (field: FieldNode, name: string): ArgumentNode | undefined =>
   field.arguments?.find(a => a.name.value === name);
@@ -208,11 +272,20 @@ const argument = (field: FieldNode, name: string): ArgumentNode | undefined =>
 const check = (document: DocumentNode): { problems: string[]; filtered: FilterRoot[] } => {
   const problems: string[] = [];
   const filtered: FilterRoot[] = [];
+  const variables: Variables = new Map(
+    document.definitions.flatMap(definition =>
+      definition.kind === Kind.OPERATION_DEFINITION
+        ? (definition.variableDefinitions ?? []).map(
+            v => [v.variable.name.value, getNamedTypeName(v.type)] as const
+          )
+        : []
+    )
+  );
 
   const visitConnection = (field: FieldNode, entity: GraphQLObjectType, path: string) => {
     const filter = argument(field, 'filter');
     if (filter) {
-      validateFilter(filter.value, entity, problems, `${path}(filter)`, filtered);
+      validateFilter(filter.value, entity, problems, `${path}(filter)`, filtered, variables);
     }
     const orderBy = argument(field, 'orderBy');
     if (orderBy) {
@@ -251,10 +324,15 @@ const check = (document: DocumentNode): { problems: string[]; filtered: FilterRo
       const { named } = column;
       const related = resolveEntity(named);
       if (related) {
-        if (column.collection) visitConnection(selection, related, `${path}.${name}`);
+        if (!selection.selectionSet) {
+          problems.push(`${path}: '${name}' is ${article(related.name)}, so it needs a selection`);
+        } else if (column.collection) visitConnection(selection, related, `${path}.${name}`);
         else visitNode(selection, related, `${path}.${name}`);
-      } else if (selection.selectionSet && named instanceof GraphQLObjectType) {
-        visitNode(selection, named, `${path}.${name}`);
+      } else if (selection.selectionSet) {
+        // the engine serves a list or @jsonField column as the JSON scalar, which has no fields
+        problems.push(
+          `${path}: '${name}' is ${isJson(column) ? 'JSON' : named.name}, so it takes no selection`
+        );
       }
     }
   };
@@ -464,6 +542,34 @@ describe('the migrated consumer queries', () => {
       expect(problems).toEqual([
         "accounts.nodes: no field 'assetTransactionsByFromAccountId' on Account",
       ]);
+    });
+
+    it('rejects a relation selected without fields, and a JSON field selected with them', () => {
+      expect(run('{ legs { nodes { fromAccount fromAccountId } } }').problems).toEqual([
+        "legs.nodes: 'fromAccount' is an Account, so it needs a selection",
+      ]);
+      expect(run('{ stos { nodes { tiers { price } } } }').problems).toEqual([
+        "stos.nodes: 'tiers' is JSON, so it takes no selection",
+      ]);
+      expect(run('{ legs { nodes { fromAccount { id } nftIds } } }').problems).toEqual([]);
+    });
+
+    it('types each filter variable as the engine does', () => {
+      const typed = (declared: string, filter: string) =>
+        run(`query Q($v: ${declared}) { assetTransactions(filter: ${filter}) { nodes { id } } }`)
+          .problems;
+
+      expect(typed('BigFloat', '{amount: {greaterThan: $v}}')).toEqual([]);
+      expect(typed('BigInt', '{amount: {greaterThan: $v}}')).toEqual([
+        'assetTransactions(filter).amount.greaterThan: $v is BigInt, where BigFloat is expected',
+      ]);
+      expect(typed('[String!]', '{fromPortfolioId: {in: $v}}')).toEqual([]);
+      expect(typed('EventIdEnum!', '{eventId: {equalTo: $v}}')).toEqual([]);
+      expect(typed('String!', '{nftIds: {contains: [$v]}}')).toEqual([
+        'assetTransactions(filter).nftIds.contains: $v is String, where JSON is expected',
+      ]);
+      expect(typed('JSON!', '{nftIds: {contains: [$v]}}')).toEqual([]);
+      expect(typed('String!', '{fromIdentity: {did: {equalTo: $v}}}')).toEqual([]);
     });
 
     it('reports a field, a filter key, an enum value and an ordering the schema lacks', () => {
