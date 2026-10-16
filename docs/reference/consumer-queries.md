@@ -294,6 +294,31 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
 | `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
 
+### 9.8 Reverse relations renamed by `@derivedFrom` (2026-10-16)
+
+The generated API gives every relation a collection on the entity it points at, named after the child, plus the column when the column is not named after the parent: `Venue.owner` gives `Identity.venuesByOwnerId`, `OffChainReceipt.leg` gives `Leg.offChainReceipts`. Declaring the collection with `@derivedFrom` replaces that name. These collections existed under their generated names and now have declared ones:
+
+| Entity | Was | Now |
+|---|---|---|
+| `Asset` | `assetTransactions` | `transactions` |
+| `Asset` | `stosByOfferingAssetId` | `offerings` |
+| `Asset` | `assetPreApprovals` | `preApprovals` |
+| `Distribution` | `distributionPayments` | `payments` |
+| `Identity` | `assetTransactionsByFromIdentityId`, `assetTransactionsByToIdentityId` | `transfersOut`, `transfersIn` |
+| `Identity` | `assetsByOwnerId` | `assetsOwned` |
+| `Identity` | `claimsByTargetId`, `claimsByIssuerId` | `claims`, `claimsIssued` |
+| `Identity` | `confidentialAccountsByCreatorId`, `confidentialAssetsByCreatorId` | `confidentialAccounts`, `confidentialAssets` |
+| `Identity` | `distributionPaymentsByTargetId` | `distributionPayments` |
+| `Identity` | `investmentsByInvestorId` | `investments` |
+| `Identity` | `portfoliosByCustodianId` | `custodiedPortfolios` |
+| `Identity` | `stosByCreatorId` | `offeringsCreated` |
+| `Identity` | `venuesByOwnerId` | `venues` |
+| `Instruction` | `assetTransactions` | `transfers` |
+| `Portfolio` | `assetTransactionsByFromPortfolioId`, `assetTransactionsByToPortfolioId` | `transfersOut`, `transfersIn` |
+| `Venue` | `stos` | `offerings` |
+
+Collections over relations that are new in this schema (an account's approvals, allowances, subsidies and multisig signers, among others) had no generated name to replace.
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

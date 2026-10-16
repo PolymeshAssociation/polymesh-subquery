@@ -2142,6 +2142,26 @@ type Account @entity {
   stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
   "Authorizations targeting this key, including invitations to join an identity"
   authorizationsReceived: [Authorization!] @derivedFrom(field: "toAccount")
+  "This account's POLYX ledger entries"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "account")
+  "Multisigs this account is a signer of"
+  signerOf: [MultiSigSigner!] @derivedFrom(field: "signerAccount")
+  "Subsidies this account pays for"
+  subsidiesPaid: [Subsidy!] @derivedFrom(field: "payingAccount")
+  "Subsidies paying this account's fees"
+  subsidiesReceived: [Subsidy!] @derivedFrom(field: "beneficiaryAccount")
+  "Per-token NFT approvals this account granted"
+  nftApprovalsGranted: [NftApproval!] @derivedFrom(field: "owner")
+  "Per-token NFT approvals granted to this account"
+  nftApprovalsReceived: [NftApproval!] @derivedFrom(field: "spender")
+  "Collection-wide NFT operator approvals this account granted"
+  nftOperatorApprovalsGranted: [NftOperatorApproval!] @derivedFrom(field: "owner")
+  "Collection-wide NFT operator approvals granted to this account"
+  nftOperatorApprovalsReceived: [NftOperatorApproval!] @derivedFrom(field: "operator")
+  "Fungible allowances this account granted"
+  allowancesGranted: [AssetAllowance!] @derivedFrom(field: "owner")
+  "Fungible allowances granted to this account"
+  allowancesReceived: [AssetAllowance!] @derivedFrom(field: "spender")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2201,6 +2221,26 @@ type Identity @entity {
   `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
   """
   keys: [IdentityKey!]! @derivedFrom(field: "identity")
+  "Claims made about this identity"
+  claims: [Claim!] @derivedFrom(field: "target")
+  "Claims this identity issued about others"
+  claimsIssued: [Claim!] @derivedFrom(field: "issuer")
+  "Assets this identity owns"
+  assetsOwned: [Asset!] @derivedFrom(field: "owner")
+  "Settlement venues this identity owns"
+  venues: [Venue!] @derivedFrom(field: "owner")
+  "Portfolios whose custody was last assigned to this identity, its own included when custody was handed back"
+  custodiedPortfolios: [Portfolio!] @derivedFrom(field: "custodian")
+  "POLYX ledger entries of this identity's accounts"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "identity")
+  "Distributions this identity created"
+  distributions: [Distribution!] @derivedFrom(field: "identity")
+  "Distribution payments this identity claimed or was pushed"
+  distributionPayments: [DistributionPayment!] @derivedFrom(field: "target")
+  "Investments this identity made in offerings"
+  investments: [Investment!] @derivedFrom(field: "investor")
+  "Offerings this identity created"
+  offeringsCreated: [Sto!] @derivedFrom(field: "creator")
 }
 
 """
@@ -2352,6 +2392,10 @@ type Validator @entity {
   isPermissioned: Boolean!
   "queried by StakersElected to clear the prior era's set — needs its own index (PG 18, see subql-schema-constraints)"
   isActive: Boolean! @index
+  "This validator's per-era records"
+  eras: [ValidatorEra!] @derivedFrom(field: "validator")
+  "Slashes for this validator's offences, on it and on its nominators"
+  slashes: [Slash!] @derivedFrom(field: "validator")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2685,6 +2729,8 @@ type Venue @entity {
   type: String!
   details: String
   instructions: [Instruction!] @derivedFrom(field: "venue")
+  "Offerings settling through this venue"
+  offerings: [Sto!] @derivedFrom(field: "venue")
   signers: [String!]!
   createdEvent: Event!
   updatedEvent: Event!
@@ -2758,6 +2804,8 @@ type Instruction @entity {
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
+  "What executing this instruction moved"
+  transfers: [AssetTransaction!] @derivedFrom(field: "instruction")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2800,6 +2848,8 @@ type Leg @entity {
   "`nftIds` is only applicable for non-fungible legs"
   nftIds: [BigInt]
   addresses: [String!]!
+  "Receipts settling this off-chain leg"
+  offChainReceipts: [OffChainReceipt!] @derivedFrom(field: "leg")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2921,6 +2971,8 @@ type Distribution @entity {
   paymentAt: BigInt!
   expiresAt: BigInt
   taxes: BigInt! # withheld tax for CA
+  "Payments made out of this distribution"
+  payments: [DistributionPayment!] @derivedFrom(field: "distribution")
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -3025,6 +3077,8 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   datetime: Date!
   "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
   schedule: CheckpointSchedule
+  "Corporate actions recorded against this checkpoint"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "checkpoint")
   createdEvent: Event!
 }
 
@@ -3404,6 +3458,8 @@ type Nft @entity {
   nftId: BigInt!
   "The holding the token is in, which names its portfolio or account and identity. Null once burned; the redemption's `AssetTransaction` keeps where it was burned from"
   holding: Holding
+  "Approvals to move this token"
+  approvals: [NftApproval!] @derivedFrom(field: "nft")
   createdEvent: Event!
   "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
   burnedEvent: Event
@@ -3542,6 +3598,42 @@ type Asset @entity {
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
   "The identities currently acting as agents for this asset. Past memberships are `AssetAgentHistory`"
   agents: [AssetAgent!]! @derivedFrom(field: "asset")
+  "Every movement of this asset: issuances, redemptions, transfers and portfolio moves"
+  transactions: [AssetTransaction!] @derivedFrom(field: "asset")
+  "Distributions paid to holders of this asset"
+  distributions: [Distribution!] @derivedFrom(field: "asset")
+  "This asset's corporate actions"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "asset")
+  "This asset's checkpoints"
+  checkpoints: [Checkpoint!] @derivedFrom(field: "asset")
+  "This asset's checkpoint schedules"
+  checkpointSchedules: [CheckpointSchedule!] @derivedFrom(field: "asset")
+  "This asset's corporate ballots"
+  ballots: [CorporateBallot!] @derivedFrom(field: "asset")
+  "Offerings selling this asset"
+  offerings: [Sto!] @derivedFrom(field: "offeringAsset")
+  "Statistics this asset tracks"
+  statTypes: [StatType!] @derivedFrom(field: "asset")
+  "This asset's transfer restrictions"
+  transferCompliances: [TransferCompliance!] @derivedFrom(field: "asset")
+  "Exemptions from this asset's transfer restrictions"
+  transferComplianceExemptions: [TransferComplianceExemption!] @derivedFrom(field: "asset")
+  "Actions this asset's agents took"
+  agentActions: [AssetAgentAction!] @derivedFrom(field: "asset")
+  "Every change to this asset's agents and their permissions"
+  agentHistory: [AssetAgentHistory!] @derivedFrom(field: "asset")
+  "This asset's custom agent permission groups"
+  agentGroups: [AgentGroup!] @derivedFrom(field: "asset")
+  "This asset's funding rounds"
+  fundings: [Funding!] @derivedFrom(field: "asset")
+  "Identities that pre-approved receiving this asset"
+  preApprovals: [AssetPreApproval!] @derivedFrom(field: "asset")
+  "Per-token approvals over this collection's NFTs"
+  nftApprovals: [NftApproval!] @derivedFrom(field: "asset")
+  "Operator approvals over this collection"
+  nftOperatorApprovals: [NftOperatorApproval!] @derivedFrom(field: "asset")
+  "Allowances over this asset"
+  allowances: [AssetAllowance!] @derivedFrom(field: "asset")
   updatedEvent: Event!
   createdEvent: Event!
 }
