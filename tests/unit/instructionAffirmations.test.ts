@@ -3,7 +3,10 @@ import {
   handleAutomaticAffirmation,
   handleInstructionCreated,
   handleInstructionFinalizedEvent,
+  handleInstructionRejected,
   handleInstructionUpdate,
+  handleReceiptClaimed,
+  handleSettlementManuallyExecuted,
 } from '../../src/mappings/entities/settlements/mapSettlement';
 import {
   codec,
@@ -356,5 +359,114 @@ describe('signers on creation', () => {
 
     expect(db.Leg[`${I}/0`].addresses).toStrictEqual([]);
     expect(db.InstructionEvent['0000001000/0000000001'].signerId).toBeUndefined();
+  });
+});
+
+describe('rejection and callers', () => {
+  const ISSUER = '0x0d'.padEnd(66, '0');
+  const VENUE_OWNER = '0x0e'.padEnd(66, '0');
+  const MEDIATOR = '0x0f'.padEnd(66, '0');
+  const seeded = () => ({
+    [`${I}/${DID_A}/0`]: { id: `${I}/${DID_A}/0`, status: 'Affirmed', affirmedById: DID_A },
+    [`${I}/${DID_B}/0`]: { id: `${I}/${DID_B}/0`, status: 'Pending' },
+  });
+  let db: MockDb;
+
+  beforeEach(() => {
+    db = mockStore({
+      Instruction: { [I]: { id: I, status: 'Created', legCount: 0, mediators: [MEDIATOR] } },
+      InstructionAffirmation: seeded(),
+    });
+  });
+
+  const callerEvent = (method: string, caller: string, extra: Record<string, unknown> = {}) =>
+    tupleEvent({
+      section: 'settlement',
+      method,
+      data: [codec(caller), codec(42)],
+      idx: 3,
+      extrinsic: signed,
+      ...extra,
+    });
+
+  it('rejection by a holder records who rejected', async () => {
+    await handleInstructionRejected(callerEvent('InstructionRejected', DID_A));
+
+    expect(db.Instruction[I]).toMatchObject({
+      status: 'Rejected',
+      rejectedById: DID_A,
+      rejectedBySignerId: SIGNER,
+      updatedEventId: '0000001000/0000000003',
+    });
+    expect(db.InstructionEvent['0000001000/0000000003']).toMatchObject({
+      event: 'InstructionRejected',
+      identityId: DID_A,
+      signerId: SIGNER,
+    });
+    expect(db.InstructionAffirmation).toEqual(seeded());
+  });
+
+  it.each([
+    ['a caller that is no party', ISSUER],
+    ['a custodian', CUSTODIAN],
+    ["the venue's creator", VENUE_OWNER],
+    ['a mediator', MEDIATOR],
+  ])('rejection by %s changes no affirmation', async (_who, caller) => {
+    await handleInstructionRejected(callerEvent('InstructionRejected', caller));
+
+    expect(db.InstructionAffirmation).toEqual(seeded());
+    expect(db.Instruction[I]).toMatchObject({ status: 'Rejected', rejectedById: caller });
+  });
+
+  it.each([
+    ['InstructionExecuted', 'Executed'],
+    ['InstructionLocked', 'Locked'],
+    ['InstructionUnlocked', 'Created'],
+  ])('%s records its caller and signer', async (method, status) => {
+    await handleInstructionFinalizedEvent(callerEvent(method, VENUE_OWNER));
+
+    expect(db.Instruction[I].status).toBe(status);
+    expect(db.InstructionEvent['0000001000/0000000003']).toMatchObject({
+      event: method,
+      identityId: VENUE_OWNER,
+      signerId: SIGNER,
+    });
+  });
+
+  it('a scheduled execution has no signer', async () => {
+    await handleInstructionFinalizedEvent(
+      callerEvent('InstructionExecuted', VENUE_OWNER, { extrinsic: undefined })
+    );
+
+    const event = db.InstructionEvent['0000001000/0000000003'];
+    expect(event.identityId).toBe(VENUE_OWNER);
+    expect(event.signerId).toBeUndefined();
+  });
+
+  it('a manual execution records its signer', async () => {
+    await handleSettlementManuallyExecuted(callerEvent('SettlementManuallyExecuted', DID_A));
+
+    expect(db.InstructionEvent['0000001000/0000000003']).toMatchObject({
+      event: 'SettlementManuallyExecuted',
+      identityId: DID_A,
+      signerId: SIGNER,
+    });
+  });
+
+  it('a receipt claim records its signer', async () => {
+    await handleReceiptClaimed(
+      tupleEvent({
+        section: 'settlement',
+        method: 'ReceiptClaimed',
+        data: [codec(DID_A), codec(42), codec(0), codec(7), codec(ACCOUNT_X), codec('')],
+        idx: 3,
+        extrinsic: signed,
+      })
+    );
+
+    expect(db.InstructionEvent['0000001000/0000000003/receipt/0']).toMatchObject({
+      identityId: DID_A,
+      signerId: SIGNER,
+    });
   });
 });
