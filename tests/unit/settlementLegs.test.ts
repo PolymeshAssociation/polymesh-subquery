@@ -57,21 +57,20 @@ describe('instructionPartiesOf', () => {
       { fromId: DID_A, fromPortfolioId: `${DID_A}/1`, toId: DID_B, toPortfolioId: `${DID_B}/2` },
     ]);
     expect([...parties.keys()]).toEqual([DID_A, DID_B]);
-    expect(parties.get(DID_A)).toEqual({ identityId: DID_A, accountId: undefined });
-    expect(parties.get(DID_B)).toEqual({ identityId: DID_B, accountId: undefined });
+    expect(parties.get(DID_A)).toStrictEqual({ identityId: DID_A });
+    expect(parties.get(DID_B)).toStrictEqual({ identityId: DID_B });
   });
 
-  it('keys an account with no identity by its address', () => {
+  it('leaves out an account with no identity, which no party can be', () => {
     const parties = instructionPartiesOf([
       { fromAccountId: ADDRESS, toId: DID_B, toPortfolioId: `${DID_B}/0` },
     ]);
-    expect(parties.get(ADDRESS)).toEqual({ identityId: undefined, accountId: ADDRESS });
-    expect([...parties.keys()]).toEqual([ADDRESS, DID_B]);
+    expect([...parties.keys()]).toEqual([DID_B]);
   });
 
   it('records an off-chain party', () => {
     const parties = instructionPartiesOf([{ fromId: DID_A, toId: DID_B }]);
-    expect(parties.get(DID_A)).toEqual({ identityId: DID_A, accountId: undefined });
+    expect(parties.get(DID_A)).toStrictEqual({ identityId: DID_A });
   });
 });
 

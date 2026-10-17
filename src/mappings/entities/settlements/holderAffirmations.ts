@@ -3,24 +3,28 @@ import { InstructionAffirmation } from '../../../types/models/InstructionAffirma
 import { InstructionParty } from '../../../types/models/InstructionParty';
 import { HolderRef, holderAffirmationId, mediatorAffirmationId } from '../../../utils/settlements';
 
-/** A party is keyed by its identity, or by its account when the account has no identity. */
+/** A party is an identity: as a holder through its portfolios and accounts, or as a mediator. */
 export const getPartyId = (
   instructionId: string,
-  identityId: string | undefined,
-  accountId: string | undefined,
+  identityId: string,
   isMediator: boolean
-): string => `${instructionId}/${identityId ?? accountId}/${isMediator}`;
+): string => `${instructionId}/${identityId}/${isMediator}`;
+
+/** A holder whose identity the index knows, as every holder's must be */
+export type ResolvedHolder = HolderRef & { identityId: string };
+
+export const isResolved = (holder: HolderRef): holder is ResolvedHolder => !!holder.identityId;
 
 /** A holder's approval row as the chain starts it: pending, with nobody having acted on it. */
 export const pendingHolderAffirmation = (
   instructionId: string,
-  holder: HolderRef,
+  holder: ResolvedHolder,
   blockEventId: string
 ): InstructionAffirmation =>
   InstructionAffirmation.create({
     id: holderAffirmationId(instructionId, holder),
     instructionId,
-    partyId: getPartyId(instructionId, holder.identityId, holder.accountId, false),
+    partyId: getPartyId(instructionId, holder.identityId, false),
     identityId: holder.identityId,
     accountId: holder.accountId,
     portfolioId: holder.portfolioId,
@@ -63,7 +67,7 @@ export const pendingMediatorAffirmation = (
   InstructionAffirmation.create({
     id: mediatorAffirmationId(instructionId, did),
     instructionId,
-    partyId: getPartyId(instructionId, did, undefined, true),
+    partyId: getPartyId(instructionId, did, true),
     identityId: did,
     isMediator: true,
     isAutomaticallyAffirmed: false,
@@ -72,28 +76,17 @@ export const pendingMediatorAffirmation = (
     updatedEventId: blockEventId,
   });
 
-/**
- * The row with `id`, read or, when no earlier event wrote one, made by `pending` and given its
- * party, so that `partyId` never points at nothing. Unsaved.
- */
-const existingOrNew = async (
-  id: string,
-  pending: () => InstructionAffirmation,
+/** A new row, with its party created if no earlier event created it, so `partyId` never dangles. */
+const withParty = async (
+  row: InstructionAffirmation,
   blockEventId: string
 ): Promise<InstructionAffirmation> => {
-  const existing = await InstructionAffirmation.get(id);
-  if (existing) {
-    return existing;
-  }
-
-  const row = pending();
   if (!(await InstructionParty.get(row.partyId))) {
     await InstructionParty.create({
       id: row.partyId,
       instructionId: row.instructionId,
       isMediator: row.isMediator,
       identityId: row.identityId,
-      accountId: row.identityId ? undefined : row.accountId,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     }).save();
@@ -101,20 +94,25 @@ const existingOrNew = async (
   return row;
 };
 
-/** Sets a holder's approval from an affirm, auto-affirm or withdraw event. Unsaved. */
+/**
+ * Sets a holder's approval from an affirm, auto-affirm or withdraw event. Unsaved. `undefined` when
+ * the holder has no row and no identity in the index, so no party to record it under.
+ */
 export const setHolderAffirmation = async (
   instructionId: string,
   holder: HolderRef,
   change: HolderAffirmationChange
-): Promise<InstructionAffirmation> =>
-  applyHolderAffirmation(
-    await existingOrNew(
-      holderAffirmationId(instructionId, holder),
-      () => pendingHolderAffirmation(instructionId, holder, change.blockEventId),
-      change.blockEventId
-    ),
-    change
-  );
+): Promise<InstructionAffirmation | undefined> => {
+  const row =
+    (await InstructionAffirmation.get(holderAffirmationId(instructionId, holder))) ??
+    (isResolved(holder)
+      ? await withParty(
+          pendingHolderAffirmation(instructionId, holder, change.blockEventId),
+          change.blockEventId
+        )
+      : undefined);
+  return row && applyHolderAffirmation(row, change);
+};
 
 /**
  * Sets a mediator's approval from its affirmation (`Affirmed`, with its expiry) or withdrawal
@@ -126,11 +124,11 @@ export const setMediatorAffirmation = async (
   change: Omit<HolderAffirmationChange, 'isAutomaticallyAffirmed'> & { expiry?: Date }
 ): Promise<InstructionAffirmation> => {
   const row = applyHolderAffirmation(
-    await existingOrNew(
-      mediatorAffirmationId(instructionId, did),
-      () => pendingMediatorAffirmation(instructionId, did, change.blockEventId),
-      change.blockEventId
-    ),
+    (await InstructionAffirmation.get(mediatorAffirmationId(instructionId, did))) ??
+      (await withParty(
+        pendingMediatorAffirmation(instructionId, did, change.blockEventId),
+        change.blockEventId
+      )),
     { ...change, isAutomaticallyAffirmed: false }
   );
   row.expiry = change.expiry;

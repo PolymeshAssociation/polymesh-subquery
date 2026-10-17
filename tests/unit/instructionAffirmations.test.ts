@@ -218,19 +218,55 @@ describe('holder affirmations', () => {
     });
   });
 
-  it('account with no identity', async () => {
+  const anomalies = () =>
+    Object.values(db.IndexerAnomaly ?? {}) as { kind: string; detail: string }[];
+
+  it('records an anomaly, not a row, for an affirmed account whose identity the index lacks', async () => {
     db.Instruction = { [I]: { id: I, legCount: 0, mediators: [] } };
 
     await handleInstructionUpdate(holderEvent('InstructionAffirmed', DID_A, account(ACCOUNT_X)));
 
-    const row = db.InstructionAffirmation[`${I}/${ACCOUNT_X}`];
-    expect(row).toMatchObject({
-      status: 'Affirmed',
+    expect(db.InstructionAffirmation?.[`${I}/${ACCOUNT_X}`]).toBeUndefined();
+    expect(db.InstructionParty).toBeUndefined();
+    expect(anomalies()).toEqual([
+      expect.objectContaining({
+        kind: 'MissingReferencedEntity',
+        detail: expect.stringContaining(ACCOUNT_X),
+      }),
+    ]);
+    // the event is still recorded, with who acted and the holder
+    expect(db.InstructionEvent['0000001000/0000000002']).toMatchObject({
+      identityId: DID_A,
       accountId: ACCOUNT_X,
-      partyId: `${I}/${ACCOUNT_X}/false`,
     });
-    expect(row.identityId).toBeUndefined();
-    expect(db.InstructionParty[`${I}/${ACCOUNT_X}/false`]).toMatchObject({ accountId: ACCOUNT_X });
+  });
+
+  it('records an anomaly, not a party, for an account on the legs whose identity the index lacks', async () => {
+    await handleInstructionCreated(created([leg(portfolio(DID_A), account(ACCOUNT_X))]));
+
+    expect(Object.keys(db.InstructionAffirmation)).toEqual([`${I}/${DID_A}/0`]);
+    expect(Object.keys(db.InstructionParty)).toEqual([`${I}/${DID_A}/false`]);
+    expect(anomalies()).toEqual([
+      expect.objectContaining({
+        kind: 'MissingReferencedEntity',
+        detail: expect.stringContaining(ACCOUNT_X),
+      }),
+    ]);
+  });
+
+  it('still updates the row of an account whose identity is no longer known', async () => {
+    await handleInstructionCreated(created([leg(portfolio(DID_A), account(ACCOUNT_C))]));
+    // the key is unlinked after the instruction is created
+    db.Account[ACCOUNT_C] = { id: ACCOUNT_C, address: ACCOUNT_C };
+
+    await handleInstructionUpdate(holderEvent('InstructionAffirmed', DID_A, account(ACCOUNT_C)));
+
+    expect(db.InstructionAffirmation[`${I}/${ACCOUNT_C}`]).toMatchObject({
+      status: 'Affirmed',
+      identityId: DID_B,
+      partyId: `${I}/${DID_B}/false`,
+    });
+    expect(anomalies().filter(({ detail }) => detail.includes(ACCOUNT_C))).toEqual([]);
   });
 
   it('created and executed in one extrinsic', async () => {

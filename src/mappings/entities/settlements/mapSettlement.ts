@@ -21,6 +21,7 @@ import {
 import { recordAnomaly } from '../../../utils/anomaly';
 import {
   getPartyId,
+  isResolved,
   pendingHolderAffirmation,
   pendingMediatorAffirmation,
   setHolderAffirmation,
@@ -242,13 +243,12 @@ const createInstructionParty = async (
   isMediator: boolean
 ): Promise<void> => {
   await Promise.all(
-    [...parties.values()].map(({ identityId, accountId }) =>
+    [...parties.values()].map(({ identityId }) =>
       InstructionParty.create({
-        id: getPartyId(instructionId, identityId, accountId, isMediator),
+        id: getPartyId(instructionId, identityId, isMediator),
         instructionId,
         isMediator,
         identityId,
-        accountId,
         createdEventId: blockEventId,
         updatedEventId: blockEventId,
       }).save()
@@ -336,13 +336,23 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   // every holder on a leg starts pending, as the chain records it, except one an earlier event
   // in the block already auto-affirmed (runtimes 6.1.0 to 6.3.0 emit those before this event)
   const autoAffirmedEarlier = autoAffirmedBefore(block, args.eventIdx, instructionId);
+  const holders = holdersOfLegs(legParams);
+  await Promise.all(
+    holders
+      .filter(holder => !isResolved(holder))
+      .map(({ accountId }) =>
+        recordUnresolvedHolder(args, instructionId, accountId, 'its approval is not recorded')
+      )
+  );
   const affirmations = await Promise.all(
-    holdersOfLegs(legParams).map(
-      async holder =>
-        (autoAffirmedEarlier &&
-          (await InstructionAffirmation.get(holderAffirmationId(instructionId, holder)))) ||
-        pendingHolderAffirmation(instructionId, holder, blockEventId)
-    )
+    holders
+      .filter(isResolved)
+      .map(
+        async holder =>
+          (autoAffirmedEarlier &&
+            (await InstructionAffirmation.get(holderAffirmationId(instructionId, holder)))) ||
+          pendingHolderAffirmation(instructionId, holder, blockEventId)
+      )
   );
 
   if (preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
@@ -379,6 +389,23 @@ const autoAffirmedBefore = (
         event.method === EventIdEnum.InstructionAutomaticallyAffirmed &&
         processInstructionId(event.data[2]) === instructionId
     );
+
+/**
+ * Reports an account holder the index has no identity for, which the chain requires of every
+ * holder, so no party or approval can be recorded for it.
+ */
+const recordUnresolvedHolder = (
+  { block, eventIdx }: HandlerArgs,
+  instructionId: string,
+  accountId: string | undefined,
+  consequence: string
+): Promise<void> =>
+  recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `instruction ${instructionId}'s holder ${accountId} has no identity in the index, though the chain requires one, so ${consequence}`,
+    block,
+    eventIdx,
+  });
 
 /** The holder an affirm, auto-affirm or withdraw event names. */
 const eventHolder = async (
@@ -423,7 +450,14 @@ const recordHolderEvent = async (
   });
 
   const writes = [
-    affirmation.save(),
+    affirmation
+      ? affirmation.save()
+      : recordUnresolvedHolder(
+          args,
+          instructionId,
+          holder.accountId,
+          `its ${instructionEvent} is not recorded on an approval`
+        ),
     InstructionEvent.create({
       id: blockEventId,
       instructionId,
@@ -762,7 +796,7 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
     updatedEventId: blockEventId,
   });
 
-  const partyId = getPartyId(instructionId, identityId, undefined, false);
+  const partyId = getPartyId(instructionId, identityId, false);
 
   const affirmation = InstructionAffirmation.create({
     id: `${partyId}/${signer}/${uid}`,
