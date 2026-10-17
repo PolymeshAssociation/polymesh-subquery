@@ -2806,6 +2806,10 @@ type Instruction @entity {
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
   "What executing this instruction moved"
   transfers: [AssetTransaction!] @derivedFrom(field: "instruction")
+  "Who rejected the instruction: the rejection's caller, who need not be a party"
+  rejectedBy: Identity
+  "The account that signed the rejection; null when there is none"
+  rejectedBySigner: Account
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -2861,12 +2865,9 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "The party's identity, or the identity of the account that is the party. A relation with no row when the DID is not indexed (an off-chain counterparty); null for an account with no identity"
-  identity: Identity
-  "Set when the party is an account-level holder; the party is then this account, and `identity` its DID"
-  account: Account
-  "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
-  portfolios: [Int]
+  "The party: an identity, whatever portfolios and accounts it holds through. A relation with no row when the DID is not indexed (an off-chain counterparty)"
+  identity: Identity!
+  "The party's approval rows: one per holder (portfolio or account) it has on the legs, or its mediator row. It is fully approved when none is `Pending`"
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
   createdEvent: Event!
   updatedEvent: Event!
@@ -2886,17 +2887,19 @@ type OffChainReceipt @entity {
 }
 
 """
-Represents affirmations received on an Instruction
+One approval of an Instruction: a holder's (portfolio or account), one row per holder on the
+legs, or a mediator's. Each starts `Pending` and records who last acted on it
 """
 type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  "The affirming identity; null only for an account the index cannot resolve to one"
-  identity: Identity
+  "The holder's identity (the portfolio's owner, or the account's identity), or the mediator"
+  identity: Identity!
+  "The holder, when it is an account"
   account: Account
-  "`portfolio` will be null for mediator affirmation and off chain affirmation"
-  portfolios: [Int]
+  "The holder, when it is a portfolio"
+  portfolio: Portfolio
   isMediator: Boolean!
   isAutomaticallyAffirmed: Boolean!
   status: AffirmStatusEnum!
@@ -2904,6 +2907,10 @@ type InstructionAffirmation @entity {
   expiry: Date
   "`offChainReceipt` is only applicable when affirmation"
   offChainReceipt: OffChainReceipt
+  "Who last set `status`: the event's caller, which can be a custodian, a spender or a mediator rather than the holder"
+  affirmedBy: Identity
+  "The account that signed the extrinsic that last set `status`; null when there is none"
+  signer: Account
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -2945,11 +2952,14 @@ type InstructionEvent @entity {
   instruction: Instruction! @index(unique: false)
   "Kept locally so an event type can be filtered without joining `events`. Not indexed: filter it together with `instruction`"
   event: InstructionEventEnum!
+  "Who acted: the event's caller, or the mediator for a mediator event. The holder it acted for is `portfolio` or `account`"
   identity: Identity
   portfolio: Portfolio
   account: Account
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
+  "The account that signed the extrinsic that emitted the event; null when there is none"
+  signer: Account
   createdEvent: Event!
 }
 
@@ -4138,8 +4148,8 @@ enum AffirmingPartyEnum {
 }
 
 enum AffirmStatusEnum {
+  Pending
   Affirmed
-  Rejected
 }
 
 enum ConfidentialSettlementStatusEnum {

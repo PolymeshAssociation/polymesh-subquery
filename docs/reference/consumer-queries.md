@@ -276,8 +276,9 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `Leg` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
 | `Leg` | `fromPortfolio`, `toPortfolio` (number) | `fromPortfolioId`, `toPortfolioId` (`did/number`), or `fromPortfolio { number }` |
 | `Leg` | `assetId` held the ticker of an off-chain leg | `assetId` is null on off-chain legs; the ticker is `ticker` |
-| `InstructionParty`, `InstructionAffirmation`, `InstructionEvent` | `identity`, `account` | `identityId`, `accountId` |
-| `InstructionParty` | an account-level party had its address in `identity` | `identityId` is the DID, `accountId` the address |
+| `InstructionAffirmation`, `InstructionEvent` | `identity`, `account` | `identityId`, `accountId` |
+| `InstructionParty` | `identity` | `identityId` |
+| `InstructionParty` | an account-level party had its address in `identity` | `identityId` is always the DID; the account is a holder under the party (§9.9) |
 | `InstructionEvent` | `portfolio` (number) | `portfolioId` (`did/number`) |
 | `OffChainReceipt` | `signer` | `signerId` |
 | `AssetTransaction` | `fromAccount`, `toAccount` | `fromAccountId`, `toAccountId` |
@@ -319,6 +320,23 @@ The generated API gives every relation a collection on the entity it points at, 
 | `Venue` | `stos` | `offerings` |
 
 Collections over relations that are new in this schema (an account's approvals, allowances, subsidies and multisig signers, among others) had no generated name to replace.
+
+### 9.9 Settlement approvals per holder (2026-10-16)
+
+The chain keeps an instruction's approvals per holder, a portfolio or an account, and starts each one pending when the instruction is created. A rejection prunes the whole instruction and names only the caller, who need not be a party. The index now records both the same way:
+
+| Entity | Was | Now |
+|---|---|---|
+| `InstructionAffirmation` | one row per identity (or per account), with the affirmed portfolio numbers in `portfolios` | one row per holder on the legs, id `instructionId/did/number` or `instructionId/address`, with `portfolioId` or `accountId`; a mediator's row is `instructionId/mediator/did` |
+| `InstructionAffirmation` | a row only once someone affirmed | every holder's row exists from the instruction's creation, `status: Pending` until it affirms; a receiver that pre-approved the asset is `Affirmed` with `isAutomaticallyAffirmed` from the start, as the chain records it (from 6.1 an event says so, and on 6.0 the index applies the chain's own rule) |
+| `InstructionAffirmation` | a withdrawal removed the row, or the portfolio from `portfolios` | a withdrawal sets the row back to `Pending` |
+| `InstructionAffirmation` | no record of who acted | `affirmedBy`, the event's caller (the holder, a custodian, a spender or a mediator), and `signer`, the extrinsic's signing account |
+| `AffirmStatusEnum` | `Affirmed`, `Rejected` | `Pending`, `Affirmed` |
+| `InstructionAffirmation` | a rejection was written as the caller's affirmation with `status: Rejected` | a rejection writes no affirmation; read `Instruction.rejectedBy` and `rejectedBySigner` |
+| `InstructionParty` | one row per identity, or per account for an account holder, with `portfolios` | one row per identity, always set; its holders are `InstructionParty.affirmations`. The chain requires every holder to have an identity, so a holder the index can't resolve one for gets no party or approval row and is reported as a `MissingReferencedEntity` anomaly |
+| `InstructionEvent` | `identity` was the holder's owner for affirm, withdraw and auto-affirm events, and missing for execute, lock and unlock | `identity` is always the caller; the holder is `portfolio` or `account`; `signer` is the extrinsic's signing account |
+
+What was "the identity's affirmation" is its holder rows: `instructionAffirmations(filter: { instructionId: { equalTo: $id }, identityId: { equalTo: $did }, isMediator: { equalTo: false } })`. The identity has fully approved when none of them is `Pending`, and partly approved when some are. Who is still pending on an instruction is `instructionAffirmations(filter: { instructionId: { equalTo: $id }, status: { equalTo: Pending } })`.
 
 ## 10. Reads that scan, because their index is trimmed
 

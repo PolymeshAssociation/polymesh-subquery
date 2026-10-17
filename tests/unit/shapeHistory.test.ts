@@ -96,7 +96,6 @@ const POSITIONAL = new Set<string>([
   'polymeshContracts.SCRuntimeCall',
   'rewards.ItnRewardClaimed',
   'scheduler.Canceled',
-  'scheduler.Dispatched',
   'scheduler.Scheduled',
   'session.NewSession',
   'settlement.ReceiptUnclaimed',

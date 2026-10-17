@@ -23,17 +23,50 @@ import {
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
+/** One party to an instruction: an identity, whatever portfolios and accounts it holds through. */
 export interface PartyDetails {
-  /** undefined only for an account holder with no identity */
-  identityId?: string;
-  accountId?: string;
-  portfolios?: number[];
+  identityId: string;
 }
 
-type LegSides = Pick<
+export type LegSides = Pick<
   LegDetails,
   'fromId' | 'fromAccountId' | 'fromPortfolioId' | 'toId' | 'toAccountId' | 'toPortfolioId'
 >;
+
+/** A holder on an instruction: a portfolio (`did/number`) or an account, with its identity. */
+export interface HolderRef {
+  identityId?: string;
+  portfolioId?: string;
+  accountId?: string;
+}
+
+/** The id of a holder's approval of an instruction: one row per (instruction, holder). */
+export const holderAffirmationId = (instructionId: string, holder: HolderRef): string =>
+  `${instructionId}/${holder.accountId ?? holder.portfolioId}`;
+
+/** The id of a mediator's approval of an instruction. */
+export const mediatorAffirmationId = (instructionId: string, did: string): string =>
+  `${instructionId}/mediator/${did}`;
+
+/**
+ * The distinct on-chain holders across both sides of every leg, in first-seen order. An off-chain
+ * leg's sides name an identity but no portfolio or account, so they hold nothing on chain.
+ */
+export const holdersOfLegs = (legs: LegSides[]): HolderRef[] => {
+  const holders = new Map<string, HolderRef>();
+  legs.forEach(leg => {
+    [
+      { identityId: leg.fromId, portfolioId: leg.fromPortfolioId, accountId: leg.fromAccountId },
+      { identityId: leg.toId, portfolioId: leg.toPortfolioId, accountId: leg.toAccountId },
+    ].forEach(holder => {
+      const key = holder.accountId ?? holder.portfolioId;
+      if (key && !holders.has(key)) {
+        holders.set(key, holder);
+      }
+    });
+  });
+  return [...holders.values()];
+};
 
 /** The number of a portfolio id (`did/number`). */
 export const portfolioNumber = (portfolioId: string): number => Number(portfolioId.split('/')[1]);
@@ -77,21 +110,18 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
   };
 };
 
-/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by account, else DID. */
+/**
+ * The parties of an instruction's legs, by identity. A side whose account has no identity in the
+ * index is no party: the chain requires one, so its creation reports it (`holdersOfLegs`).
+ */
 export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails> => {
   const parties = new Map<string, PartyDetails>();
-  const add = (identityId?: string, accountId?: string, portfolioId?: string): void => {
-    const key = (accountId ?? identityId) as string;
-    const party = parties.get(key) ?? { identityId, accountId, portfolios: undefined };
-    const portfolio = portfolioId === undefined ? undefined : portfolioNumber(portfolioId);
-    if (portfolio !== undefined && !party.portfolios?.includes(portfolio)) {
-      party.portfolios = [...(party.portfolios ?? []), portfolio];
-    }
-    parties.set(key, party);
-  };
   legs.forEach(leg => {
-    add(leg.fromId, leg.fromAccountId, leg.fromPortfolioId);
-    add(leg.toId, leg.toAccountId, leg.toPortfolioId);
+    [leg.fromId, leg.toId].forEach(identityId => {
+      if (identityId && !parties.has(identityId)) {
+        parties.set(identityId, { identityId });
+      }
+    });
   });
   return parties;
 };

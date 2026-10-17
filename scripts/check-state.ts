@@ -30,6 +30,12 @@
  *      equals `asset.balanceOf`; and `holderCount` equals the identities with a balance, or for a
  *      collection with any of its NFTs.
  *
+ * Settlement, for every instruction still open on chain (created, locked or failed):
+ *   9. the instruction is still open on chain; each holder's approval row is `Affirmed` exactly
+ *      when `settlement.affirmsReceived` holds it as affirmed, and each mediator's when
+ *      `settlement.instructionMediatorsAffirmations` does; and every holder the chain holds as
+ *      affirmed has a row.
+ *
  * The index is read as it stood after `--block` (its historical rows), and the chain at that block,
  * so it can be run against a database still syncing. The block defaults to the last one the index
  * processed.
@@ -49,6 +55,7 @@ import { DataSource } from 'typeorm';
 import { getPostgresDataSource } from '../db/utils';
 import chainTypes from '../src/chainTypes';
 import { chainHolds, chainLocks } from './lib/balanceParts';
+import { chainApprovals, compareApprovals } from './lib/approvals';
 import { assetIdOf, chainSupplies, identitiesOf } from './lib/chainAssets';
 
 const SEED_EVENT_ID = '0000000000/0000000000';
@@ -631,6 +638,41 @@ const checkAssets = async (
   return { out, assets: indexed.assets.size };
 };
 
+/** Each open instruction's approval rows, in the index as of `block`, against the chain's. */
+const checkApprovals = async (db: DataSource, at: ApiDecoration<'promise'>, block: number) => {
+  const instructions: { id: string; status: string }[] = await db.query(
+    `SELECT id, status FROM instructions
+     WHERE _block_range @> $1::int8 AND status IN ('Created', 'Locked', 'Failed')`,
+    [block]
+  );
+  const rows: { instruction_id: string; holder: string; is_mediator: boolean; status: string }[] =
+    await db.query(
+      `SELECT a.instruction_id, coalesce(a.account_id, a.portfolio_id, a.identity_id) AS holder,
+              a.is_mediator, a.status
+       FROM instruction_affirmations a
+       JOIN instructions i ON i.id = a.instruction_id AND i._block_range @> $1::int8
+       WHERE a._block_range @> $1::int8 AND a.off_chain_receipt_id IS NULL
+         AND i.status IN ('Created', 'Locked', 'Failed')`,
+      [block]
+    );
+  const chain = await chainApprovals(
+    at,
+    instructions.map(({ id }) => id)
+  );
+  const out: Difference[] = compareApprovals(
+    instructions,
+    rows.map(row => ({
+      instructionId: row.instruction_id,
+      holder: row.holder,
+      isMediator: row.is_mediator,
+      status: row.status,
+    })),
+    chain
+  );
+
+  return { out, instructions: instructions.length };
+};
+
 const main = async (): Promise<void> => {
   const rpc = argOf('rpc');
   if (!rpc) {
@@ -662,11 +704,20 @@ const main = async (): Promise<void> => {
   const staking = await checkStaking(db, at, block);
   const parts = await checkBalanceParts(db, api, at, hash, block, polyx.chain);
   const assets = await checkAssets(db, at, block, staging, holdings.chain);
-  const differences = [...polyx.out, ...holdings.out, ...staking.out, ...parts.out, ...assets.out];
+  const approvals = await checkApprovals(db, at, block);
+  const differences = [
+    ...polyx.out,
+    ...holdings.out,
+    ...staking.out,
+    ...parts.out,
+    ...assets.out,
+    ...approvals.out,
+  ];
 
   console.log(
     `${polyx.accounts} balances with their locks and holds, ${holdings.holdings} holdings, ` +
-      `${staking.positions} staking positions and ${assets.assets} assets checked`
+      `${staking.positions} staking positions, ${assets.assets} assets and ` +
+      `${approvals.instructions} open instructions checked`
   );
 
   const byCheck = new Map<string, Difference[]>();
