@@ -27,6 +27,7 @@ import './pips';
 import './portfolio';
 import './protocolFee';
 import './relayer';
+import './scheduler';
 import './settlement';
 import './staking';
 import './statistics';

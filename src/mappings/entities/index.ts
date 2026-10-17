@@ -28,6 +28,7 @@ export * from './identities/preV8Ledger';
 export * from './identities/mapPortfolio';
 export * from './pips/mapProposal';
 export * from './settlements/mapSettlement';
+export * from './settlements/silentExecutionFailures';
 export * from './settlements/mapVenue';
 export * from './events/mapEra';
 export * from './events/mapSlash';

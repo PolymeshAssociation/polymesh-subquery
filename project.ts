@@ -307,7 +307,7 @@ const filters: Record<string, Record<string, string[]>> = {
     InstructionLocked: ['handleInstructionFinalizedEvent'],
     InstructionMediators: ['handleInstructionMediators'],
     InstructionRejected: ['handleInstructionRejected'],
-    InstructionRescheduled: [],
+    InstructionRescheduled: ['handleInstructionRescheduled'],
     InstructionUnlocked: ['handleInstructionFinalizedEvent'],
     LegFailedExecution: [],
     MediatorAffirmationReceived: ['handleMediatorAffirmationReceived'],
@@ -504,6 +504,35 @@ Object.keys(filters).forEach(module => {
   });
 });
 
+/**
+ * Runtimes before 6.0 could fail an instruction without a settlement event, which only these
+ * report: see `silentExecutionFailures`. The events are bounded by spec, so no later block is
+ * handed to them. The call can't be: the dictionary has no spec to query a call by, so its
+ * handler checks the spec itself.
+ */
+const BEFORE_V6: [number, number] = [0, 5_999_999];
+
+handlers.push({
+  kind: SubstrateHandlerKind.Event,
+  handler: 'handleEvent',
+  filter: { module: 'scheduler', method: 'Dispatched', specVersion: BEFORE_V6 },
+});
+eventSpecificHandlers.push({
+  kind: SubstrateHandlerKind.Event,
+  handler: 'handleScheduledExecutionResult',
+  filter: { module: 'scheduler', method: 'Dispatched', specVersion: BEFORE_V6 },
+});
+
+const manualExecutionFailure: SubstrateCallHandler = {
+  kind: SubstrateHandlerKind.Call,
+  handler: 'handleManualExecutionAttempt',
+  filter: {
+    module: 'settlement',
+    method: 'executeManualInstruction',
+    success: false,
+  },
+};
+
 const project: SubstrateProject = {
   specVersion: '1.0.0',
   version: '0.0.1',
@@ -585,6 +614,7 @@ const project: SubstrateProject = {
         file: './dist/index.js',
         handlers: [
           ...eventSpecificHandlers,
+          manualExecutionFailure,
           // Changes that arrive with no event of their own, caught by the call that makes them.
           // Filtered to the one call each, which the dictionary indexes like an event, so empty
           // blocks are still skipped.
