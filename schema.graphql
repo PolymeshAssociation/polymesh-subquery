@@ -2865,10 +2865,8 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "The party: an identity, whatever portfolios and accounts it holds through. A relation with no row when the DID is not indexed (an off-chain counterparty); null for an account with no identity"
-  identity: Identity
-  "Set only when the party is an account with no identity"
-  account: Account
+  "The party: an identity, whatever portfolios and accounts it holds through. A relation with no row when the DID is not indexed (an off-chain counterparty)"
+  identity: Identity!
   "The party's approval rows: one per holder (portfolio or account) it has on the legs, or its mediator row. It is fully approved when none is `Pending`"
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
   createdEvent: Event!
@@ -2896,8 +2894,8 @@ type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  "The holder's identity (the portfolio's owner, or the account's identity), or the mediator; null only for an account with no identity"
-  identity: Identity
+  "The holder's identity (the portfolio's owner, or the account's identity), or the mediator"
+  identity: Identity!
   "The holder, when it is an account"
   account: Account
   "The holder, when it is a portfolio"

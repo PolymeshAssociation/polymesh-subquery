@@ -23,11 +23,9 @@ import {
 
 export type LegDetails = Omit<Attributes<Leg>, 'instructionId' | 'addresses'>;
 
-/** One party to an instruction: an identity, or an account holder with no identity. */
+/** One party to an instruction: an identity, whatever portfolios and accounts it holds through. */
 export interface PartyDetails {
-  identityId?: string;
-  /** set only when there is no identity */
-  accountId?: string;
+  identityId: string;
 }
 
 export type LegSides = Pick<
@@ -112,18 +110,18 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
   };
 };
 
-/** The parties of an instruction's legs, keyed as `getPartyId` keys them: by DID, else account. */
+/**
+ * The parties of an instruction's legs, by identity. A side whose account has no identity in the
+ * index is no party: the chain requires one, so its creation reports it (`holdersOfLegs`).
+ */
 export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails> => {
   const parties = new Map<string, PartyDetails>();
-  const add = (identityId?: string, accountId?: string): void => {
-    const key = identityId ?? accountId;
-    if (key && !parties.has(key)) {
-      parties.set(key, { identityId, accountId: identityId ? undefined : accountId });
-    }
-  };
   legs.forEach(leg => {
-    add(leg.fromId, leg.fromAccountId);
-    add(leg.toId, leg.toAccountId);
+    [leg.fromId, leg.toId].forEach(identityId => {
+      if (identityId && !parties.has(identityId)) {
+        parties.set(identityId, { identityId });
+      }
+    });
   });
   return parties;
 };
