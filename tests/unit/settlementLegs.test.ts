@@ -8,6 +8,7 @@ import {
   instructionPartiesOf,
   processOffChainLegForTest,
 } from '../../src/utils/settlements';
+import { getAssetIdForLegacyTicker } from '../../src/utils/assets';
 import { mockStore } from './helpers';
 
 const DID = `0x${'11'.repeat(32)}`;
@@ -30,8 +31,9 @@ const from = { did: DID, kind: { default: null } };
 const to = { did: OTHER, kind: { user: 2 } };
 
 describe('getLegsValue', () => {
-  beforeEach(() => {
-    mockStore();
+  beforeEach(async () => {
+    const assetId = await getAssetIdForLegacyTicker(TICKER);
+    mockStore({ Asset: { [assetId]: { id: assetId } } });
   });
 
   it('reads a v5 Leg, its ticker and amount beside its portfolios', async () => {
@@ -47,6 +49,25 @@ describe('getLegsValue', () => {
       amount: BigInt(1_000_000),
       legType: LegTypeEnum.Fungible,
     });
+  });
+
+  /**
+   * Before 6.0 a leg of a ticker that is no asset moved nothing on chain, and was settled with a
+   * receipt; 6.0's migration made each one an off-chain leg, which is what the chain holds since.
+   */
+  it('reads a v5 Leg of a ticker that is no asset as off-chain, as 6.0 migrated it', async () => {
+    const other = `0x${Buffer.from('NOPE').toString('hex').padEnd(24, '0')}`;
+    const [leg] = await getLegsValue(raw([{ from, to, asset: other, amount: 5 }]), block);
+
+    expect(leg).toMatchObject({
+      fromId: DID,
+      fromPortfolioId: `${DID}/0`,
+      toId: OTHER,
+      ticker: 'NOPE',
+      amount: BigInt(5),
+      legType: LegTypeEnum.OffChain,
+    });
+    expect(leg.assetId).toBeUndefined();
   });
 });
 
