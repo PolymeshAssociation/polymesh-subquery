@@ -13,6 +13,7 @@ import {
   IdentityKey,
   IdentityKeyRole,
   StakingPosition,
+  AccountBalance,
 } from '../types';
 import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
@@ -182,30 +183,34 @@ export const identityOfKey = async (
 };
 
 /**
- * Carries an account's identity onto the staking position it is the stash of, when there is one.
+ * Carries an account's identity onto its balance and the staking position it is the stash of.
  *
- * `StakingPosition.identity` is copied from the stash's `Account` so positions can be listed by
- * identity without a join, which makes the account the source of truth and the position's field a
- * copy that has to follow it. A stash can leave its identity and join another while it stays bonded,
- * so the copy is updated here, where the account's identity changes, rather than re-read on every
- * staking event: identity changes are rare, and staking events — a reward per nominator per era —
- * are not.
+ * `AccountBalance.identity` and `StakingPosition.identity` are copied from the `Account` so both
+ * can be listed by identity without a join, which makes the account the source of truth and each
+ * field a copy that has to follow it. They are updated here, where the account's identity changes,
+ * rather than re-read on every balance or staking event: identity changes are rare, and those
+ * events are not.
  */
-export const restampPositionIdentity = async (
+export const restampIdentityCopies = async (
   address: string,
   identityId: string | undefined,
   blockEventId: string
 ): Promise<void> => {
-  const position = await StakingPosition.get(address);
+  const [position, balance] = await Promise.all([
+    StakingPosition.get(address),
+    AccountBalance.get(address),
+  ]);
 
-  if (!position || position.identityId === identityId) {
-    return;
-  }
+  const copies: (StakingPosition | AccountBalance)[] = [];
+  [position, balance].forEach(row => row && row.identityId !== identityId && copies.push(row));
 
-  position.identityId = identityId;
-  position.updatedEventId = blockEventId;
-
-  await position.save();
+  await Promise.all(
+    copies.map(row => {
+      row.identityId = identityId;
+      row.updatedEventId = blockEventId;
+      return row.save();
+    })
+  );
 };
 
 /**
@@ -232,7 +237,7 @@ export const upsertAccount = async (
     await existing.save();
 
     if (identityChanged) {
-      await restampPositionIdentity(args.address, args.identityId, blockEventId);
+      await restampIdentityCopies(args.address, args.identityId, blockEventId);
     }
 
     return;

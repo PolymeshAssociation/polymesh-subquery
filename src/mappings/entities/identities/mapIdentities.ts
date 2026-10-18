@@ -27,7 +27,7 @@ import {
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
-import { restampPositionIdentity, upsertAccount } from '../../../utils/accounts';
+import { restampIdentityCopies, upsertAccount } from '../../../utils/accounts';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
@@ -350,7 +350,7 @@ const unlinkAccount = async (
   account.updatedEventId = blockEventId;
 
   await account.save();
-  await restampPositionIdentity(address, undefined, blockEventId);
+  await restampIdentityCopies(address, undefined, blockEventId);
 };
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
