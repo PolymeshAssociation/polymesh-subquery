@@ -19,19 +19,13 @@ import { stringCamelCase } from '@polkadot/util';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import eventHistory from '../tests/fixtures/event-history.json';
+import { shapeOfItem, StorageShape } from '../src/seed/shapes';
 import { byCodeUnit } from '../src/utils/order';
 import { chainArgs, metadataAt, Runtime, rpc, SURVEYED_SECTIONS } from './lib/runtimeSurvey';
 
 const OUT = join(__dirname, '..', 'tests', 'fixtures', 'storage-history.json');
 
 /** The pallets whose storage a resolver or a start-block seed reads */
-
-export interface StorageShape {
-  /** each key's type, in order; empty for a plain value */
-  keys: string[];
-  value: string;
-  hashers: string[];
-}
 
 export interface StorageRange extends StorageShape {
   from: number;
@@ -54,12 +48,6 @@ const shapesOf = (hex: string): Map<string, StorageShape> => {
   const registry = new TypeRegistry();
   const metadata = new Metadata(registry, hex as `0x${string}`);
   registry.setMetadata(metadata);
-  // a runtime-level type is named after its runtime crate, which differs between chains
-  const typeOf = (id: Parameters<typeof registry.lookup.getTypeDef>[0]): string =>
-    registry.lookup
-      .getTypeDef(id)
-      .type.toString()
-      .replace(/PolymeshRuntime(?:Mainnet|Testnet|Develop)Runtime/g, 'PolymeshRuntimeRuntime');
   const shapes = new Map<string, StorageShape>();
 
   for (const pallet of metadata.asLatest.pallets) {
@@ -69,18 +57,7 @@ const shapesOf = (hex: string): Map<string, StorageShape> => {
     }
     for (const item of pallet.storage.unwrap().items) {
       const name = `${section}.${stringCamelCase(item.name.toString())}`;
-      if (item.type.isPlain) {
-        shapes.set(name, { keys: [], value: typeOf(item.type.asPlain), hashers: [] });
-        continue;
-      }
-      const { hashers, key, value } = item.type.asMap;
-      const keyIds =
-        hashers.length > 1 ? registry.lookup.getSiType(key).def.asTuple.toArray() : [key];
-      shapes.set(name, {
-        keys: keyIds.map(typeOf),
-        value: typeOf(value),
-        hashers: hashers.map(hasher => hasher.type.toString()),
-      });
+      shapes.set(name, shapeOfItem(registry, item.type as never));
     }
   }
 
