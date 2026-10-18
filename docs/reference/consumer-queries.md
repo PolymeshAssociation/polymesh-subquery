@@ -421,3 +421,23 @@ Read the flag with these limits in mind:
 - A failed inner call of `relay_tx` or `dispatch_as` is not flagged by `batchFailed`.
 - `batchFailed` is not indexed, so filtering extrinsics on it alone scans the table. Combine it with an indexed filter such as `blockId` or `callId`.
 - To find the failing call, read the batch events with `events(filter: { blockId, extrinsicIdx })`, which is indexed, rather than through `Extrinsic.events`, which scans (see section 10).
+
+## 12. An index that started after genesis (2026-10-18)
+
+An index can now start at any block, and seeds every entity from chain storage at its start (see
+[10-partial-index](../implementation/10-partial-index.md)). What a consumer sees differently:
+
+- **Seeded rows** have `createdEvent` = the `Seeded` event of the start block (`moduleId: seeding`).
+- **`IndexOrigin.relativeFields`** lists the `Entity.field`s that depend on history before the
+  start: lifetime totals (`AccountBalance.totalReceived`, `Asset.totalTransfers`, …) count from
+  the start, and facts the chain doesn't keep are empty on a seeded row: who created a multisig or
+  proposal, who affirmed an instruction leg and whether automatically, a leg's signer
+  `addresses`, which way a 7.0+ signer voted, a failed instruction's `failureReason`, a committee
+  PIP's owner. Read that list before comparing two indexes or reading a total.
+- **Nullable now:** `AssetMandatoryMediator.addedBy`, `Proposal.owner` (a committee PIP seeded
+  from the chain), `ConfidentialSettlement.assetRootBlock`.
+- **Upgrades:** rows a runtime migration rewrote are brought to what it left as the chain crosses
+  into its runtime, with `updatedEvent` the upgrade's `system.CodeUpdated`. Before this,
+  rows from before 7.0 kept tickers where later rows hold asset ids (compliance conditions,
+  claim scopes, key permissions), and an empty permission set as `[]` where later rows hold `{}`.
+- `IndexOrigin.seededDomains` and `unseededDomains` are replaced by `relativeFields`.

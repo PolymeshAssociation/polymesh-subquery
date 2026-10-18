@@ -1,210 +1,89 @@
-# 10 — Partial index (arbitrary start block)
+# 10 — Starting an index at any block
 
-Makes `START_BLOCK > 1` a **supported deployment mode** rather than a broken flag: the indexer seeds entity state from chain storage at the start block, and every handler write is safe against an entity it has never seen.
+An index can start at any block, genesis included, and holds the same rows from there as an index
+that ran from genesis, except for the fields only history can give. There is one start path.
+Genesis is its case where the start block is block 1.
 
-**Entities:** no new consumer-facing entities. One operational entity (`IndexOrigin`) and a new `src/seed/` module.
+**Entities:** `IndexOrigin` (operational).
 
-**Depends on:** [09](./09-infrastructure.md) (`IndexerAnomaly`, `ChainUpgrade`).
-
-**Completed by:** [15](./15-entity-seeding.md). This plan built `IndexOrigin`, the start-block datasource and the first seeders; plan 15 extends resolution to every entity a handler reads.
+**Code:** `src/seed/` (start, snapshot, shapes, seeders), `scripts/verify-seed.ts`.
 
 ---
 
-## Problem
+## The start
 
-`START_BLOCK` exists in [`project.ts:8`](../../project.ts#L8) and does not work. Two independent failures:
+`START_BLOCK` picks the first block. Its block handler (`handleGenesis` for block 1, `handleSeed`
+otherwise) calls `startIndex` (`src/seed/start.ts`), which:
 
-### 1. The genesis datasource leaves an uncoverable gap **[V]**
+1. refuses the first block after a runtime upgrade, whose parent state the previous runtime wrote
+   (start at the next block instead);
+2. writes the start block (the genesis block for block 1) and the `Seeded` event every seeded
+   row's `createdEvent` points at;
+3. runs every seeder over the state the start block began from;
+4. writes `IndexOrigin`.
 
-```ts
-dataSources: [
-  { kind: Runtime, startBlock: 1, endBlock: 1, handlers: [handleGenesis] },
-  { kind: Runtime, startBlock, ... },
-]
-```
+The block's own events are then handled as any block's. The node commits the block whole or not
+at all, and the seeders only upsert, so a seed that fails part-way and is retried ends as a clean
+start does.
 
-With `startBlock = 24_928_521` the manifest declares two disjoint ranges — `[1,1]` and `[24928521,∞)` — and the node will not begin at block 1 and then jump. `handleGenesis` is also **not idempotent**: it unconditionally creates the genesis `Block`, so it cannot simply be widened.
+## Seeders
 
-The fix is one conditional, and it already exists as a local patch that has been used in anger to start a testnet index at block 24,928,521:
+A seeder (`src/seed/seeder.ts`) builds one entity's rows from a `ChainSnapshot` and nothing else:
+no store reads, no RPC, so its rows don't depend on which seeders ran before it. All of them are
+listed in `src/seed/seeders/index.ts`.
 
-```ts
-dataSources: [
-  // handleGenesis is not idempotent (it unconditionally creates the genesis Block entity), so it
-  // can only ever run once at block 1. Skip it entirely when starting from a later block,
-  // otherwise this dataSource leaves an uncovered gap between block 1 and `startBlock` that the
-  // indexer refuses to cross.
-  ...(startBlock <= 1
-    ? [
-        {
-          kind: SubstrateDatasourceKind.Runtime,
-          startBlock: 1,
-          endBlock: 1,
-          mapping: {
-            file: './dist/index.js',
-            handlers: [{ kind: SubstrateHandlerKind.Block, handler: 'handleGenesis' }],
-          },
-        },
-      ]
-    : []),
-  { kind: SubstrateDatasourceKind.Runtime, startBlock, ... },
-]
-```
-
-**Take this patch as-is.** It is small, it is proven, and it is independent of everything else in this plan — it should land on its own rather than waiting for the seeding work, because it is what unblocks day-to-day development against a recent block.
-
-That gets the indexer *running*. It does not make its output correct, which is the second failure.
-
-### 2. State is initialised empty, so the first mutation stalls **[V]**
-
-Handlers across the codebase assume the entity they are about to modify exists, because on a genesis replay it always does. Representative:
-
-| Site | Assumption |
+| Field | Meaning |
 |---|---|
-| [`mapNfts.ts:44`](../../src/mappings/entities/assets/mapNfts.ts#L44) `handleNftCollectionCreated` | `getAsset(assetId)` resolves |
-| [`mapNfts.ts:78`](../../src/mappings/entities/assets/mapNfts.ts#L78) | `asset.totalSupply += …` — starts at `0`, so supply becomes a delta |
-| [`mapSettlement.ts:110`](../../src/mappings/entities/settlements/mapSettlement.ts#L110) | `getPaginatedData('Leg', 'instructionId', …)` returns the instruction's legs |
-| [`mapExternalAgentHistory.ts:36`](../../src/mappings/entities/externalAgents/mapExternalAgentHistory.ts#L36) | the `AgentGroupMembership` rows exist |
-| [`mapStatistics.ts:241`](../../src/mappings/entities/assets/mapStatistics.ts#L241) | the existing `TransferCompliance` set is complete |
+| `entity`, `rows(snap, ctx)` | the rows, a page at a time |
+| `reads` | the storage items it reads. The snapshot refuses any other |
+| `oldShapes` | for an item read before 6.0, the survey ranges whose shape it handles |
+| `relative` | fields whose value depends on history before the start: totals counted from it, and facts the chain doesn't keep (who created a row, who affirmed) |
+| `accounts` | fields naming an `Account`, for the account closure |
+| `terminal` | a finished row the chain prunes, which an index keeps and a seed can't write |
+| `parent` | the row this one belongs to, pruned with it once that is finished |
+| `key` | a natural key, for an interval whose id names the event that opened it |
 
-Starting at an arbitrary block breaks all of them at once, in two different ways:
+The snapshot (`src/seed/snapshot.ts`) reads storage in bulk at the parent hash: pages of 1,000
+keys, one `queryStorageAt` per page, a few requests in flight, and a page halved when its
+response is too big. It checks every item's shape (keys, value, hashers) against
+`src/seed/knownShapes.json`, which `yarn seed:shapes` generates from the storage survey. A shape
+no seeder was written for stops the seed rather than misreading it. A value its type reads only
+part of is kept raw, and decoders that need the raw bytes read them.
 
-- **Hard stall** — `getAsset` (and friends) throw on a missing row, the promise rejects, and the block is retried forever.
-- **Silent wrongness** — `asset.totalSupply += BigInt(ids.length)` on a freshly created `Asset` produces a supply that is the *net change since the start block*, presented as a total. This is the worse of the two, because nothing surfaces it.
+After the seeders, every address a seeded row names that no seeded `Account` covers gets one.
 
-The second class is why "just make every write an upsert" is not on its own a solution. An upsert removes the stall and keeps the wrong number.
+## What a seeded row can't know
 
-**One handler already does the right thing, and is the template.** [`getOrCreateAccount`](../../src/utils/accounts.ts#L38) reads `identity.keyRecords` from chain storage when the `Account` row is absent and constructs it from what the chain says. Generalising that pattern is this plan.
+`IndexOrigin.relativeFields` lists every `Entity.field` a seeder declares `relative`. On a row
+seeded at the start those fields are empty or count from zero. Consumers comparing two indexes, or
+reading a lifetime total, read it there. A few fields are nullable for the same reason:
+`AssetMandatoryMediator.addedBy`, a committee PIP's `Proposal.owner`, and
+`ConfidentialSettlement.assetRootBlock`.
 
----
+## Upgrades
 
-## Design
+A runtime upgrade's migration runs as the first block of the new code begins and emits nothing.
+The handlers apply each one by rule as the chain crosses into its runtime (`onUpgradeCrossed` in
+`src/mappings/entities/block/mapChainUpgrade.ts`, the rules in `src/mappings/migrations/`), with no
+chain read, so an index started before an upgrade holds what one started after it would.
+`verify-seed` at the first block after an upgrade proves its rule.
 
-Three parts, in dependency order.
+## Proving it
 
-### 10.1 `IndexOrigin` — record what kind of index this is
+`yarn verify-seed --endpoint <ws> --gql <url> --height <h>` seeds at `h` into memory, reads every
+seeded entity from an index's GraphQL as of `h - 1` (historical queries), and reports per entity
+the rows only one side holds and the fields they disagree on. It matches intervals by `key`, skips
+provenance and `relative` fields, and allows `terminal` rows and their children. An index that
+equals its own seed at a height is one a start there would have produced. Run it after any change
+to a handler or a seeder.
 
-```graphql
-"""
-Records the block this index was seeded from, and how. Absent on a genesis replay.
+## Extending it
 
-Any consumer computing a total from this index must check this entity first: values
-derived by accumulation (supply, holder counts, balances) are only absolute if the
-index starts at genesis or the domain was seeded.
-"""
-type IndexOrigin @entity {
-  id: ID!
-  "The first block this index processed"
-  startBlock: Int!
-  "Hash of that block, so a reseed against a forked chain is detectable"
-  startBlockHash: String!
-  "Spec version at the start block"
-  specVersion: Int!
-  "Domains successfully seeded from chain storage at startBlock"
-  seededDomains: [String!]!
-  "Domains that could not be seeded, with the reason"
-  unseededDomains: [String!]!
-  datetime: Date!
-  createdBlock: Block!
-}
-```
-
-One row, written by the seeding handler. A genesis replay writes `startBlock: 1` with every domain listed as seeded — which is true, since a genesis replay derives everything.
-
-This entity is the honesty mechanism. Without it a partial index is indistinguishable from a complete one at the GraphQL surface, and every accumulated number is a trap.
-
-### 10.2 Seeding from chain storage at the start block
-
-A block handler bound to `[startBlock, startBlock]`, mirroring the existing genesis datasource:
-
-```ts
-dataSources: [
-  ...(startBlock <= 1
-    ? [{ kind: Runtime, startBlock: 1, endBlock: 1, handlers: [handleGenesis] }]
-    : [{ kind: Runtime, startBlock, endBlock: startBlock, handlers: [handleSeed] }]),
-  { kind: Runtime, startBlock, ... },
-]
-```
-
-**This works because `api.query` inside a handler targets the block being indexed [V].** `getPatchedApi` builds `api.at(currentBlockHash)` and injects the block hash into historic RPC params, so a handler running at the start block reads storage *as of that block* with no `.at` call of its own — which is fortunate, since `.at`/`.entriesAt`/`.keysAt`/`.range` are unsupported inside handlers **[V]** (`architecture-review.md` §8b). The seeding handler is the one place in the design where that is exactly the semantics wanted.
-
-**Seed order matters** — later domains reference earlier ones:
-
-| # | Domain | Chain storage | Notes |
-|---|---|---|---|
-| 1 | Identities & keys | `identity.didRecords`, `identity.keyRecords` | `.entries()` — the largest scan |
-| 2 | Accounts | derived from 1, plus `revive.originalAccount` | reuses `getAccountKeyType` |
-| 3 | Permissions | `identity.keyAssetPermissions`, `keyPortfolioPermissions`, `keyExtrinsicPermissions` | |
-| 4 | MultiSigs | `multiSig.adminDid`, `multiSigSigners`, `multiSigSignsRequired` | `genesisHandler` already does this |
-| 5 | Portfolios | `portfolio.portfolios`, `portfolio.portfolioCustodian` | |
-| 6 | Assets | `asset.assets`, `assetNames`, `fundingRound`, `nft.collectionAsset` | supplies `totalSupply`, the number §10.3 protects |
-| 7 | Holdings | `asset.balanceOf` / v8 account-level layer, `portfolio.portfolioAssetBalances`, `nft.numberedPortfolio` | the big one — see plan [03](./03-holdings-nfts.md) |
-| 8 | POLYX balances | `system.account` | seeds `AccountBalance` — see plan [02](./02-polyx-ledger.md) |
-| 9 | Settlement in flight | `settlement.instructionDetails`, `instructionLegs`, `venueInfo` | only *pending* instructions matter |
-| 10 | Compliance & statistics | `complianceManager.assetCompliances`, `statistics.activeAssetStats` | |
-
-`genesisHandler` already implements the shape for domains 1–4 and 8 (accounts, identities, portfolios, multisigs, permissions, EVM mappings) **[V]**. **Refactor rather than duplicate**: extract the per-domain seeders into `src/seed/`, and let `handleGenesis` and `handleSeed` both call them. That also removes the current `genesisHandler` limitation noted in `README.md` — it creates accounts and identities but **no balances**, which plan [02](./02-polyx-ledger.md) needs fixed regardless of this plan.
-
-**Cost.** Domains 1, 2 and 7 are full-map `.entries()` scans. On mainnet that is tens of thousands of keys for identities and materially more for holdings — minutes, once, at start. Acceptable for a one-off; it must be **paged** (`entriesPaged`) rather than a single `.entries()` on the large maps, or the node will hold the whole map in memory. Not every domain need be seeded: `seededDomains` exists so an operator can seed the three that matter to them and have the index say so.
-
-### 10.3 Accumulation is only valid over a seeded domain
-
-Two rules, enforced in code rather than by convention:
-
-**Rule 1 — no bare `+=` on a value that represents a total.** Every accumulating field gets a helper that refuses to run against an unseeded domain:
-
-```ts
-// throws + writes an IndexerAnomaly if `assets` is not in IndexOrigin.seededDomains
-accumulate(asset, 'totalSupply', BigInt(ids.length), 'assets');
-```
-
-The alternative — letting it accumulate from zero — is the silent-wrongness case, which the whole review is against (§8 principle 2: *unknown is recorded, never guessed*).
-
-**Rule 2 — a missing entity is created from chain state, or recorded.** Generalise `getOrCreateAccount` into one path:
-
-```ts
-// resolve from DB; on miss, read the chain at the current block; on a second miss,
-// write an IndexerAnomaly and return undefined. Never a bare throw, never a zero-filled row.
-const asset = await resolveAsset(assetId, ctx);
-```
-
-This is worth doing **independently of partial indexing**. It closes the same class of failure on a full resync when a handler reaches an entity a coverage gap left unwritten — which is how several defect-log entries present.
-
----
-
-## Handler changes
-
-| Change | Sites | Note |
-|---|---|---|
-| `getAsset` → `resolveAsset` | [`common.ts`](../../src/mappings/entities/common.ts) + callers | chain fallback |
-| `getNftHolder` → chain fallback on miss | [`mapNfts.ts:18`](../../src/mappings/entities/assets/mapNfts.ts#L18) | currently creates an empty holder unconditionally |
-| `asset.totalSupply +=` / `-=` | [`mapNfts.ts`](../../src/mappings/entities/assets/mapNfts.ts), [`mapAsset.ts`](../../src/mappings/entities/assets/mapAsset.ts) | `accumulate()` |
-| `asset.totalTransfers +=` | as above | `accumulate()` |
-| `getPaginatedData('Leg', …)` | [`mapSettlement.ts:110`](../../src/mappings/entities/settlements/mapSettlement.ts#L110) | empty result on a partial index is legitimate — record, do not throw |
-| `getOrCreateAccount` | [`accounts.ts:38`](../../src/utils/accounts.ts#L38) | already correct; add negative caching (plan [11](./11-throughput.md)) |
-
----
-
-## project.ts
-
-```ts
-const startBlock = Number(process.env.START_BLOCK) || 1;
-```
-
-Add the conditional genesis/seed datasource described in §10.2. No handler filter changes.
-
----
-
-## Tests
-
-1. **Unit** — `accumulate()` throws and records an anomaly for an unseeded domain; passes through for a seeded one.
-2. **Unit** — `resolveAsset` returns the DB row, then the chain-derived row, then `undefined` + anomaly.
-3. **Unit** — `project.ts` emits one datasource when `startBlock > 1` and two when it is `1`. Cheap, and it pins the defect that motivated this plan.
-4. **Integration** — start against a local chain at block N > 1; assert `IndexOrigin` exists, that a subsequent transfer of a pre-existing asset does not stall, and that `Asset.totalSupply` matches chain storage rather than the delta.
-
----
-
-## Consumer impact
-
-Additive. `IndexOrigin` is a new entity; nothing existing changes shape.
-
-The **semantic** impact is real and should be stated to consumers explicitly: against a partial index, any accumulated total is only meaningful if its domain is in `IndexOrigin.seededDomains`. A consumer that never queries a partial index is unaffected. Publishing this entity is what lets one that does tell the difference.
+- **A new entity:** a seeder in `src/seed/seeders/`, listed in `index.ts`. `seeders.test.ts`
+  fails until its reads are surveyed, `knownShapes.json` is regenerated, and every `Account`
+  relation is listed in `accounts`.
+- **New or changed storage:** run the storage survey and `yarn seed:shapes`. A changed shape fails
+  the seed until a seeder handles it.
+- **An upgrade whose migration rewrites storage:** a rule in `src/mappings/migrations/`, called from
+  `onUpgradeCrossed`, then `verify-seed` at the first block after the upgrade.
+- **A field history alone can give:** add it to the seeder's `relative`.
