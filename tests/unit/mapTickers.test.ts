@@ -2,8 +2,12 @@
  * `handleTickerTransferred` (src/mappings/entities/assets/mapTickers.ts): before 6.0.0 the
  * transfer of a classic ticker came before its `ClassicTickerClaimed`, so the transfer reserves it.
  */
-import { stringToU8a } from '@polkadot/util';
-import { handleTickerTransferred } from '../../src/mappings/entities/assets/mapTickers';
+import { stringToHex, stringToU8a } from '@polkadot/util';
+import {
+  handleTickerLinkedToAsset,
+  handleTickerTransferred,
+  handleTickerUnlinkedFromAsset,
+} from '../../src/mappings/entities/assets/mapTickers';
 import { codec, MockDb, mockStore, tupleEvent } from './helpers';
 
 const OLD_OWNER = '0x0a'.padEnd(66, '0');
@@ -48,5 +52,46 @@ describe('handleTickerTransferred', () => {
       identityId: NEW_OWNER,
       updatedEventId: '0000000200/0000000003',
     });
+  });
+});
+
+describe('linking and unlinking a ticker, as the chain records it', () => {
+  const ASSET = '0x1234567890abcdef1234567890abcdef';
+  let db: MockDb;
+
+  beforeEach(() => {
+    db = mockStore({
+      Asset: { [ASSET]: { id: ASSET, assetId: ASSET } },
+      TickerReservation: {
+        ACME: { id: 'ACME', ticker: 'ACME', identityId: OLD_OWNER, expiry: new Date(5) },
+      },
+    });
+  });
+
+  const linkEvent = (method: string) =>
+    tupleEvent({
+      section: 'asset',
+      method,
+      specVersion: 7_000_003,
+      blockNumber: '500',
+      idx: 2,
+      data: [codec(OLD_OWNER), codec(stringToHex('ACME'.padEnd(12, '\0'))), codec(ASSET)],
+    });
+
+  it('clears the expiry when the ticker is linked, as the chain does', async () => {
+    await handleTickerLinkedToAsset(linkEvent('TickerLinkedToAsset'));
+
+    expect(db.TickerReservation.ACME).toMatchObject({ assetId: ASSET, expiry: null });
+    expect(db.Asset[ASSET]).toMatchObject({ ticker: 'ACME' });
+  });
+
+  it('removes the reservation when the ticker is unlinked, as the chain removes the registration', async () => {
+    db.TickerReservation.ACME.assetId = ASSET;
+    db.Asset[ASSET].ticker = 'ACME';
+
+    await handleTickerUnlinkedFromAsset(linkEvent('TickerUnlinkedFromAsset'));
+
+    expect(db.TickerReservation.ACME).toBeUndefined();
+    expect(db.Asset[ASSET].ticker).toBeUndefined();
   });
 });

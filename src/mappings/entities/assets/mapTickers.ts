@@ -1,7 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { TickerReservation } from '../../../types';
-import { getDateValue, getTextValue, serializeTicker } from '../../../utils';
+import { EXPLICIT_NULL, getDateValue, getTextValue, serializeTicker } from '../../../utils';
 import { extractArgs, getAsset } from '../common';
 
 const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
@@ -78,6 +78,8 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
   asset.updatedEventId = blockEventId;
   reservation.updatedEventId = blockEventId;
   reservation.assetId = asset.id;
+  // a linked ticker no longer expires: the chain clears the registration's expiry
+  reservation.expiry = EXPLICIT_NULL;
 
   await Promise.all([asset.save(), reservation.save()]);
 };
@@ -87,21 +89,15 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
   const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
   const ticker = serializeTicker(rawTicker);
-  const assetId = getTextValue(rawAssetId);
-  const [asset, reservation] = await Promise.all([
-    getAsset(assetId, event),
-    getTickerReservation(ticker),
-  ]);
+  const asset = await getAsset(getTextValue(rawAssetId), event);
 
   if (asset.ticker === ticker) {
     asset.ticker = undefined;
     asset.updatedEventId = blockEventId;
   }
 
-  reservation.assetId = null;
-  reservation.updatedEventId = blockEventId;
-
-  await Promise.all([asset.save(), reservation.save()]);
+  // the chain removes the registration with the link, so the ticker is free to register again
+  await Promise.all([asset.save(), TickerReservation.remove(ticker)]);
 };
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {

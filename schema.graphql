@@ -4341,14 +4341,15 @@ type AssetPreApproval @entity {
 }
 
 """
-Represents a ticker reservation. If linked to an Asset `asset` will be set
+A ticker registered to an identity. Once linked to an asset, `asset` is set and the reservation
+no longer expires; unlinking it frees the ticker, and the reservation goes.
 """
 type TickerReservation @entity {
   id: ID!
   ticker: String!
   asset: Asset
   identity: Identity! @index(unique: false)
-  "When the ticker reservation lapses. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
+  "When the ticker reservation lapses; null once it is linked to an asset. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdEvent: Event!
   updatedEvent: Event!
