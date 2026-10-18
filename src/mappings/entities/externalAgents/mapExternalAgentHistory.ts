@@ -8,6 +8,7 @@ import {
 import { decodeEvent } from '../../../decode';
 import { getAllByFields, getAssetId } from '../../../utils';
 import { extractArgs } from '../common';
+import { writeAssetAgent } from './mapExternalAgent';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
@@ -58,14 +59,46 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 };
 
 export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { block } = extractArgs(event);
   const { agentDid: rawDid, assetId: rawAssetId, group: agentGroup } = decodeEvent(event);
 
-  const did = rawDid.toString();
+  await recordAgentAdded(
+    await getAssetId(rawAssetId, block),
+    rawDid.toString(),
+    agentGroup.toJSON() as AgentGroup,
+    event
+  );
+};
+
+/** The first runtime whose asset creation emits `AgentAdded` for the creator */
+const CREATOR_AGENT_EVENT_FROM = 3_002;
+
+/**
+ * Before 3.2 creating an asset made its creator a Full agent with no `AgentAdded` (testnet's 3.0
+ * and 3.1; mainnet went from 3.1 to 3.3), so the agent is recorded from the `AssetCreated`.
+ */
+export const handleCreatorAgent = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  if (block.specVersion >= CREATOR_AGENT_EVENT_FROM) {
+    return;
+  }
+  const { callerDid, assetId: rawAssetId } = decodeEvent(event);
+  const did = callerDid.toString();
   const assetId = await getAssetId(rawAssetId, block);
 
-  const group = agentGroup.toJSON() as AgentGroup;
+  await Promise.all([
+    writeAssetAgent(assetId, did, blockEventId),
+    recordAgentAdded(assetId, did, { full: null }, event),
+  ]);
+};
 
+const recordAgentAdded = async (
+  assetId: string,
+  did: string,
+  group: AgentGroup,
+  event: SubstrateEvent
+): Promise<void> => {
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const promises = [
     addExternalAgentHistory(
       assetId,

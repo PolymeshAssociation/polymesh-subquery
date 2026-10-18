@@ -17,7 +17,7 @@ const filters: Record<string, Record<string, string[]>> = {
     Approval: ['handleApproval'],
     AssetAffirmationExemption: [],
     AssetBalanceUpdated: ['handleAssetBalanceUpdated'],
-    AssetCreated: ['handleAssetCreated'],
+    AssetCreated: ['handleAssetCreated', 'handleCreatorAgent'],
     AssetFrozen: ['handleFrozen'],
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],

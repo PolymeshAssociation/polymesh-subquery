@@ -6,6 +6,7 @@ import {
 import {
   handleAgentAdded,
   handleAgentRemoved,
+  handleCreatorAgent,
   handleGroupChanged,
   handleGroupCreated,
 } from '../../src/mappings/entities/externalAgents/mapExternalAgentHistory';
@@ -168,5 +169,47 @@ describe('FundraiserCreated recorded as an agent action', () => {
       callerId: DID_A,
       eventId: 'FundraiserCreated',
     });
+  });
+});
+
+describe('the creator of an asset made before 3.2', () => {
+  const ticker = '0x555553440000000000000000';
+  const created = (specVersion: number) =>
+    tupleEvent({
+      section: 'asset',
+      method: 'AssetCreated',
+      specVersion,
+      data: [
+        codec(DID_A),
+        codec(ticker),
+        codec(true),
+        codec('StableCoin'),
+        codec(DID_A),
+        codec(false),
+      ],
+    });
+
+  it('is made a Full agent, as the chain made it without an AgentAdded', async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleCreatorAgent(created(3_001));
+
+    const assetId = await getAssetIdForLegacyTicker(ticker);
+    expect(Object.values(db.AssetAgent ?? {})).toEqual([
+      expect.objectContaining({ id: `${assetId}/${DID_A}`, assetId, identityId: DID_A }),
+    ]);
+    expect(Object.values(db.AssetAgentHistory ?? {})).toEqual([
+      expect.objectContaining({ assetId, identityId: DID_A, type: 'AgentAdded' }),
+    ]);
+  });
+
+  it('is left to its AgentAdded from 3.2, which emits one', async () => {
+    const db = mockStore();
+
+    await handleCreatorAgent(created(3_002));
+
+    expect(db.AssetAgent ?? {}).toEqual({});
+    expect(db.AssetAgentHistory ?? {}).toEqual({});
   });
 });
