@@ -20,14 +20,48 @@ const seedAccounts = () => ({
   },
 });
 
-/** `relayer.subsidies` holding no entry for the user key. */
-const noSubsidyEntry = () => ({
-  relayer: { subsidies: jest.fn().mockResolvedValue({ toJSON: () => null }) },
+type ChainSubsidies = {
+  /** `relayer.subsidies(user)`: the subsidy the user has, if any */
+  live?: { payingKey: string; remaining: number };
+  /** `relayer.pendingSubsidies(user, payer)` (8.0): the limit of the offer pending, if any */
+  pending?: number;
+  /** paying-key authorizations pending for the user: `[authId, payingKey, limit]` */
+  offers?: [number, string, number][];
+};
+
+/** The end-of-block subsidy state a handler reads. */
+const chainSubsidies = ({ live, pending, offers = [] }: ChainSubsidies = {}) => ({
+  relayer: {
+    subsidies: jest.fn().mockResolvedValue({ toJSON: () => live ?? null }),
+    pendingSubsidies: jest.fn().mockResolvedValue({ toJSON: () => pending ?? null }),
+  },
+  identity: {
+    authorizations: {
+      entries: jest
+        .fn()
+        .mockResolvedValue(
+          offers.map(([authId, payingKey, limit]) => [
+            { args: [codec({ Account: USER_KEY }), codec(authId)] },
+            codec({ authorizationData: { addRelayerPayingKey: [USER_KEY, payingKey, limit] } }),
+          ])
+        ),
+    },
+  },
 });
+
+/** `relayer.subsidies` holding no entry for the user key, and no offer pending. */
+const noSubsidyEntry = () => chainSubsidies();
+
+/** `mockStore`, over a chain holding no subsidy and no offer for the user key */
+const mockStoreAndChain: typeof mockStore = db => {
+  const stored = mockStore(db);
+  (globalThis as any).api.query = noSubsidyEntry();
+  return stored;
+};
 
 describe('v8 subsidy lifecycle', () => {
   it('approve → accept → debit → remove produces one row through the full lifecycle', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
 
     await handleSubsidyApproved(
       tupleEvent({
@@ -89,7 +123,7 @@ describe('pre-v8 paying-key lifecycle', () => {
   const PRE_V8_SPEC = 6_000_000;
 
   it('authorize → accept → remove produces the equivalent row, reading initialPolyxLimit from params[3]', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
 
     await handleSubsidyApproved(
       tupleEvent({
@@ -138,10 +172,14 @@ describe('pre-v8 paying-key lifecycle', () => {
    * debited the user for fees the chain had taken from the paying key.
    */
   it('keeps a subsidy live through a re-offer and its acceptance', async () => {
-    const db = mockStore(seedAccounts());
-    (globalThis as any).api.query = {
-      relayer: { subsidies: jest.fn().mockResolvedValue({ toJSON: () => ({ remaining: 700 }) }) },
-    };
+    const db = mockStoreAndChain(seedAccounts());
+    // the chain's subsidy after the first acceptance, then after the second
+    (globalThis as any).api.query = chainSubsidies({
+      live: { payingKey: PAYING_KEY, remaining: 700 },
+    });
+    (globalThis as any).api.query.relayer.subsidies.mockResolvedValueOnce({
+      toJSON: () => ({ payingKey: PAYING_KEY, remaining: 500 }),
+    });
     const pairEvent = (method: string, idx: number, extra: unknown[] = []) =>
       tupleEvent({
         section: 'relayer',
@@ -182,7 +220,7 @@ describe('pre-v8 paying-key lifecycle', () => {
    * allowance that was ever live — so it must not be written over one.
    */
   it('leaves the allowance alone when a pending subsidy is withdrawn', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
     db.Subsidy = { [SUBSIDY_ID]: { id: SUBSIDY_ID, allowance: BigInt(500), isRemoved: false } };
 
     await handleSubsidyRemoved(
@@ -199,7 +237,7 @@ describe('pre-v8 paying-key lifecycle', () => {
 
 describe('UpdatedPolyxLimit', () => {
   it('decodes 5 params pre-v8 and 4 params at v8+ with no arity error, setting allowance either way', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
     db.Subsidy = { [SUBSIDY_ID]: { id: SUBSIDY_ID, allowance: BigInt(0) } };
 
     const preV8Event = tupleEvent({
@@ -236,7 +274,7 @@ describe('UpdatedPolyxLimit', () => {
  */
 describe('an acceptance with no preceding relayer approval', () => {
   it('creates the Subsidy rather than reporting it missing', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
 
     (globalThis as any).api.query = {
       relayer: {
@@ -267,7 +305,7 @@ describe('an acceptance with no preceding relayer approval', () => {
   });
 
   it('starts at a zero allowance when the chain holds no subsidy entry', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
     (globalThis as any).api.query = noSubsidyEntry();
 
     await handleSubsidyAccepted(
@@ -283,7 +321,7 @@ describe('an acceptance with no preceding relayer approval', () => {
   });
 
   it('fails the block when the subsidy read fails', async () => {
-    mockStore(seedAccounts());
+    mockStoreAndChain(seedAccounts());
     (globalThis as any).api.query = {
       relayer: { subsidies: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')) },
     };
@@ -301,7 +339,7 @@ describe('an acceptance with no preceding relayer approval', () => {
   });
 
   it('a later removal then finds the row instead of anomalying', async () => {
-    const db = mockStore(seedAccounts());
+    const db = mockStoreAndChain(seedAccounts());
     (globalThis as any).api.query = noSubsidyEntry();
 
     await handleSubsidyAccepted(
@@ -324,5 +362,126 @@ describe('an acceptance with no preceding relayer approval', () => {
 
     expect(db.Subsidy[SUBSIDY_ID].isRemoved).toBe(true);
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(0);
+  });
+});
+
+/**
+ * The chain keeps an offer apart from the subsidy it would replace: before 8.0 each offer is a
+ * paying-key authorization, from 8.0 a `relayer.pendingSubsidies` entry. One row holds the pair,
+ * so when the subsidy or an offer ends, the row shows an offer still pending rather than nothing.
+ */
+describe('an offer still pending when a subsidy ends', () => {
+  const PRE_V8_SPEC = 6_000_000;
+  const OTHER_KEY = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+  const live = (allowance: number) => ({
+    id: SUBSIDY_ID,
+    beneficiaryAccountId: USER_KEY,
+    payingAccountId: PAYING_KEY,
+    allowance: BigInt(allowance),
+    totalDebited: BigInt(40),
+    isAccepted: true,
+    isRemoved: false,
+  });
+  const preV8 = (method: string, extra: unknown[] = []) =>
+    tupleEvent({
+      section: 'relayer',
+      method,
+      data: [codec(TEST_DID), codec(USER_KEY), codec(PAYING_KEY), ...extra.map(v => codec(v))],
+      specVersion: PRE_V8_SPEC,
+    });
+  const v8 = (method: string, amount: number) =>
+    tupleEvent({
+      section: 'relayer',
+      method,
+      data: [codec(USER_KEY), codec(PAYING_KEY), codec(amount)],
+    });
+
+  it('before 8.0, a removed subsidy shows the offer its paying key made while it was live', async () => {
+    const db = mockStoreAndChain({ ...seedAccounts(), Subsidy: { [SUBSIDY_ID]: live(500) } });
+    (globalThis as any).api.query = chainSubsidies({ offers: [[15429, PAYING_KEY, 100]] });
+
+    await handleSubsidyRemoved(preV8('RemovedPayingKey'));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      isAccepted: false,
+      isRemoved: false,
+      allowance: BigInt(100),
+    });
+    expect(db.Subsidy[SUBSIDY_ID].totalDebited).toBeUndefined();
+  });
+
+  it('shows the latest of several pending offers, and only offers from its paying key', async () => {
+    const db = mockStoreAndChain({ ...seedAccounts(), Subsidy: { [SUBSIDY_ID]: live(500) } });
+    (globalThis as any).api.query = chainSubsidies({
+      offers: [
+        [10, PAYING_KEY, 300],
+        [12, PAYING_KEY, 200],
+        [13, OTHER_KEY, 999],
+      ],
+    });
+
+    await handleSubsidyRemoved(preV8('RemovedPayingKey'));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isAccepted: false, allowance: BigInt(200) });
+  });
+
+  it('from 8.0, a removed subsidy shows the pending subsidy from the same paying key', async () => {
+    const db = mockStoreAndChain({ ...seedAccounts(), Subsidy: { [SUBSIDY_ID]: live(500) } });
+    (globalThis as any).api.query = chainSubsidies({ pending: 900 });
+
+    await handleSubsidyRemoved(v8('RemovedSubsidy', 450));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      isAccepted: false,
+      isRemoved: false,
+      allowance: BigInt(900),
+      totalDebited: BigInt(0),
+    });
+  });
+
+  it('is removed, with what it had left, when no offer is pending', async () => {
+    const db = mockStoreAndChain({ ...seedAccounts(), Subsidy: { [SUBSIDY_ID]: live(500) } });
+
+    await handleSubsidyRemoved(v8('RemovedSubsidy', 450));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(450) });
+  });
+
+  it('a withdrawn pending subsidy leaves the live subsidy it would have replaced', async () => {
+    const db = mockStoreAndChain({ ...seedAccounts(), Subsidy: { [SUBSIDY_ID]: live(500) } });
+
+    await handleSubsidyRemoved(v8('RemovedPendingSubsidy', 900));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({
+      isAccepted: true,
+      isRemoved: false,
+      allowance: BigInt(500),
+    });
+  });
+
+  it('before 8.0, an acceptance takes the allowance of the offer accepted, from the chain', async () => {
+    // two offers were pending, and the earlier one was accepted (testnet block 13,259,435)
+    const db = mockStoreAndChain(seedAccounts());
+    await handleSubsidyApproved(preV8('AuthorizedPayingKey', [100, 57751]));
+    await handleSubsidyApproved(preV8('AuthorizedPayingKey', [20, 57914]));
+    (globalThis as any).api.query = chainSubsidies({
+      live: { payingKey: PAYING_KEY, remaining: 100 },
+    });
+
+    await handleSubsidyAccepted(preV8('AcceptedPayingKey'));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isAccepted: true, allowance: BigInt(100) });
+  });
+
+  it("ignores the chain's subsidy when it is from another paying key", async () => {
+    const db = mockStoreAndChain(seedAccounts());
+    await handleSubsidyApproved(preV8('AuthorizedPayingKey', [20, 57914]));
+    (globalThis as any).api.query = chainSubsidies({
+      live: { payingKey: OTHER_KEY, remaining: 5 },
+    });
+
+    await handleSubsidyAccepted(preV8('AcceptedPayingKey'));
+
+    expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isAccepted: true, allowance: BigInt(20) });
   });
 });

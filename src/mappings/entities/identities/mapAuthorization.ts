@@ -1,6 +1,14 @@
-import { SubstrateEvent } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Authorization, AuthorizationStatusEnum, AuthTypeEnum, EventIdEnum } from '../../../types';
+import {
+  Authorization,
+  AuthorizationStatusEnum,
+  AuthTypeEnum,
+  EventIdEnum,
+  MultiSigSigner,
+  MultiSigSignerStatusEnum,
+  SignerTypeEnum,
+} from '../../../types';
 import {
   capitalizeFirstLetter,
   getDateValue,
@@ -10,6 +18,7 @@ import {
   padNumericId,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { endSubsidyOffer } from '../relayer/mapSubsidy';
 import { createIdentityIfNotExists } from './mapIdentities';
 
 const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatusEnum>([
@@ -36,7 +45,12 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     auth.status = authorizationEventStatusMapping.get(eventId);
     auth.updatedEventId = blockEventId;
 
-    await auth.save();
+    await Promise.all([
+      auth.save(),
+      auth.status === AuthorizationStatusEnum.Consumed
+        ? undefined
+        : endOffer(auth, block, eventIdx, blockEventId),
+    ]);
   } else {
     const fromId = getTextValue(decoded.authorizedBy);
 
@@ -57,3 +71,35 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     }).save();
   }
 }
+
+const PAYING_KEY_TYPES = new Set(['AddRelayerPayingKey', 'OldAddRelayerPayingKey']);
+
+/**
+ * An authorization that ended unaccepted ends the offer it made, which no other event does: a
+ * multisig signer that never joined, a subsidy that never started.
+ */
+const endOffer = async (
+  auth: Authorization,
+  block: SubstrateBlock,
+  eventIdx: number,
+  blockEventId: string
+): Promise<void> => {
+  const data: unknown = auth.data ? JSON.parse(auth.data) : undefined;
+
+  if (auth.type === AuthTypeEnum.AddMultiSigSigner && typeof data === 'string') {
+    const [signerType, signerValue] = auth.toAccountId
+      ? [SignerTypeEnum.Account, auth.toAccountId]
+      : [SignerTypeEnum.Identity, auth.toId];
+    const signer = await MultiSigSigner.get(`${data}/${signerType}/${signerValue}`);
+    if (signer?.status === MultiSigSignerStatusEnum.Authorized) {
+      signer.status = MultiSigSignerStatusEnum.Removed;
+      signer.updatedEventId = blockEventId;
+      await signer.save();
+    }
+  }
+
+  if (PAYING_KEY_TYPES.has(auth.type) && Array.isArray(data)) {
+    const [user, payer] = data as string[];
+    await endSubsidyOffer(user, payer, block, eventIdx, blockEventId);
+  }
+};
