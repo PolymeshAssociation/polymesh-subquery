@@ -204,6 +204,45 @@
   "revive.originalAccount": [
     "[[\"H160\"],\"AccountId32\",[\"Identity\"]]"
   ],
+  "settlement.affirmsReceived": [
+    "[[\"u64\",\"{\\\"_enum\\\":{\\\"Portfolio\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u64\",\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "settlement.details": [
+    "[[\"u64\"],\"Bytes\",[\"Twox64Concat\"]]"
+  ],
+  "settlement.instructionDetails": [
+    "[[\"u64\"],\"{\\\"instructionId\\\":\\\"u64\\\",\\\"venueId\\\":\\\"Option<u64>\\\",\\\"settlementType\\\":\\\"PolymeshPrimitivesSettlementSettlementType\\\",\\\"createdAt\\\":\\\"Option<u64>\\\",\\\"tradeDate\\\":\\\"Option<u64>\\\",\\\"valueDate\\\":\\\"Option<u64>\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"u64\"],\"{\\\"instructionId\\\":\\\"u64\\\",\\\"venueId\\\":\\\"u64\\\",\\\"settlementType\\\":\\\"PolymeshPrimitivesSettlementSettlementType\\\",\\\"createdAt\\\":\\\"Option<u64>\\\",\\\"tradeDate\\\":\\\"Option<u64>\\\",\\\"valueDate\\\":\\\"Option<u64>\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"u64\"],\"{\\\"instructionId\\\":\\\"u64\\\",\\\"venueId\\\":\\\"u64\\\",\\\"status\\\":\\\"PalletSettlementInstructionStatus\\\",\\\"settlementType\\\":\\\"PalletSettlementSettlementType\\\",\\\"createdAt\\\":\\\"Option<u64>\\\",\\\"tradeDate\\\":\\\"Option<u64>\\\",\\\"valueDate\\\":\\\"Option<u64>\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "settlement.instructionLegs": [
+    "[[\"u64\",\"u64\"],\"{\\\"_enum\\\":{\\\"Fungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetHolder\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetHolder\\\\\\\",\\\\\\\"assetId\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetId\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\",\\\"NonFungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetHolder\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetHolder\\\\\\\",\\\\\\\"nfts\\\\\\\":\\\\\\\"PolymeshPrimitivesNftNfTs\\\\\\\"}\\\",\\\"OffChain\\\":\\\"{\\\\\\\"senderIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"receiverIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"ticker\\\\\\\":\\\\\\\"PolymeshPrimitivesTicker\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\"}}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u64\",\"u64\"],\"{\\\"_enum\\\":{\\\"Fungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"assetId\\\\\\\":\\\\\\\"PolymeshPrimitivesAssetAssetId\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\",\\\"NonFungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"nfts\\\\\\\":\\\\\\\"PolymeshPrimitivesNftNfTs\\\\\\\"}\\\",\\\"OffChain\\\":\\\"{\\\\\\\"senderIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"receiverIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"ticker\\\\\\\":\\\\\\\"PolymeshPrimitivesTicker\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\"}}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u64\",\"u64\"],\"{\\\"_enum\\\":{\\\"Fungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"ticker\\\\\\\":\\\\\\\"PolymeshPrimitivesTicker\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\",\\\"NonFungible\\\":\\\"{\\\\\\\"sender\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"receiver\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\\\\\",\\\\\\\"nfts\\\\\\\":\\\\\\\"PolymeshPrimitivesNftNfTs\\\\\\\"}\\\",\\\"OffChain\\\":\\\"{\\\\\\\"senderIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"receiverIdentity\\\\\\\":\\\\\\\"PolymeshPrimitivesIdentityId\\\\\\\",\\\\\\\"ticker\\\\\\\":\\\\\\\"PolymeshPrimitivesTicker\\\\\\\",\\\\\\\"amount\\\\\\\":\\\\\\\"u128\\\\\\\"}\\\"}}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u64\",\"u64\"],\"{\\\"from\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"to\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"asset\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"amount\\\":\\\"u128\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "settlement.instructionMediatorsAffirmations": [
+    "[[\"u64\",\"[u8;32]\"],\"{\\\"_enum\\\":{\\\"Unknown\\\":\\\"Null\\\",\\\"Pending\\\":\\\"Null\\\",\\\"Affirmed\\\":\\\"{\\\\\\\"expiry\\\\\\\":\\\\\\\"Option<u64>\\\\\\\"}\\\"}}\",[\"Twox64Concat\",\"Identity\"]]"
+  ],
+  "settlement.instructionMemos": [
+    "[[\"u64\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "settlement.instructionStatuses": [
+    "[[\"u64\"],\"{\\\"_enum\\\":{\\\"Unknown\\\":\\\"Null\\\",\\\"Pending\\\":\\\"Null\\\",\\\"Failed\\\":\\\"Null\\\",\\\"Success\\\":\\\"u32\\\",\\\"Rejected\\\":\\\"u32\\\",\\\"LockedForExecution\\\":\\\"Null\\\"}}\",[\"Twox64Concat\"]]",
+    "[[\"u64\"],\"{\\\"_enum\\\":{\\\"Unknown\\\":\\\"Null\\\",\\\"Pending\\\":\\\"Null\\\",\\\"Failed\\\":\\\"Null\\\",\\\"Success\\\":\\\"u32\\\",\\\"Rejected\\\":\\\"u32\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "settlement.userAffirmations": [
+    "[[\"{\\\"_enum\\\":{\\\"Portfolio\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",\"u64\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"u64\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "settlement.venueInfo": [
+    "[[\"u64\"],\"{\\\"creator\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"venueType\\\":\\\"PalletSettlementVenueType\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"u64\"],\"{\\\"creator\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"venueType\\\":\\\"PolymeshPrimitivesSettlementVenueType\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "settlement.venueSigners": [
+    "[[\"u64\",\"AccountId32\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
   "staking.bonded": [
     "[[\"AccountId\"],\"AccountId\",[\"Twox64Concat\"]]",
     "[[\"AccountId32\"],\"AccountId32\",[\"Twox64Concat\"]]"

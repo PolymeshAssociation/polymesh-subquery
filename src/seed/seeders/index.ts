@@ -32,6 +32,13 @@ import {
   nftOperatorApprovalSeeder,
   nftSeeder,
 } from './holdings';
+import {
+  instructionAffirmationSeeder,
+  instructionPartySeeder,
+  instructionSeeder,
+  legSeeder,
+  venueSeeder,
+} from './settlement';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
 /**
@@ -72,4 +79,9 @@ export const SEEDERS: Seeder[] = [
   assetAllowanceSeeder,
   nftApprovalSeeder,
   nftOperatorApprovalSeeder,
+  venueSeeder,
+  instructionSeeder,
+  legSeeder,
+  instructionPartySeeder,
+  instructionAffirmationSeeder,
 ] as Seeder[];
