@@ -114,7 +114,10 @@ const decoding = <T>(what: string, run: () => T): T => {
   }
 };
 
-/** A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is stored */
+/**
+ * A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is
+ * stored. Throws `UndecodableStateError` when the type doesn't read exactly the bytes stored.
+ */
 const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec | undefined => {
   const stored = optionOf(raw, `the stored ${name}`);
 
@@ -130,7 +133,13 @@ const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec |
 
     // the host's bytes, for the host's registry
     // eslint-disable-next-line no-restricted-syntax
-    return api.registry.createType(valueType, stored.toU8a(true));
+    const bytes = stored.toU8a(true);
+    const value = api.registry.createType(valueType, bytes);
+    // a type that reads fewer bytes than are stored has misread them, as `api.query` would say
+    if (typeof value.encodedLength === 'number' && value.encodedLength !== bytes.length) {
+      throw new Error(`read ${value.encodedLength} of the ${bytes.length} bytes stored`);
+    }
+    return value;
   });
 };
 
