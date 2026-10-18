@@ -232,6 +232,7 @@ export const corporateBallotSeeder: Seeder<CorporateBallot> = {
 
 export const corporateBallotVoteSeeder: Seeder<CorporateBallotVote> = {
   entity: 'CorporateBallotVote',
+  parent: { entity: 'CorporateBallot', field: 'ballotId' },
   reads: ['corporateBallot.votes'],
   rows: (snap, ctx) =>
     byCa(snap, 'corporateBallot.votes', ({ args, value }, assetId, localId) => [

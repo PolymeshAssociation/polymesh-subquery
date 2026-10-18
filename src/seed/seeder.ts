@@ -33,6 +33,8 @@ export interface Seeder<T extends SeedRow = SeedRow> {
   accounts?: string[];
   /** a finished row the chain prunes, which an index keeps and a seed can't write */
   terminal?(row: T): boolean;
+  /** the row this one belongs to, which the chain prunes it with once that row is finished */
+  parent?: { entity: string; field: string };
 }
 
 export interface SeedOptions {

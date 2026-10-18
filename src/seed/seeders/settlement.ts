@@ -401,13 +401,15 @@ export const instructionSeeder = bundleSeeder<Instruction>(
 );
 export const legSeeder = bundleSeeder<Leg>('Leg', ({ legs }) => legs, {
   accounts: ['fromAccountId', 'toAccountId'],
+  parent: { entity: 'Instruction', field: 'instructionId' },
 });
 export const instructionPartySeeder = bundleSeeder<InstructionParty>(
   'InstructionParty',
-  ({ parties }) => parties
+  ({ parties }) => parties,
+  { parent: { entity: 'Instruction', field: 'instructionId' } }
 );
 export const instructionAffirmationSeeder = bundleSeeder<InstructionAffirmation>(
   'InstructionAffirmation',
   ({ affirmations }) => affirmations,
-  { accounts: ['accountId', 'signerId'] }
+  { accounts: ['accountId', 'signerId'], parent: { entity: 'Instruction', field: 'instructionId' } }
 );

@@ -252,3 +252,24 @@ describe('from 8.0', () => {
     expect(rows('Subsidy')[`${PROPOSER}/${PAYER}`].allowance).toBe('100');
   });
 });
+
+describe('what the chain prunes', () => {
+  const seeder = (entity: string) => {
+    const found = SEEDERS.find(each => each.entity === entity);
+    if (!found) {
+      throw new Error(`no seeder writes ${entity}`);
+    }
+    return found;
+  };
+
+  it('counts a removed signer or admin finished, which the chain no longer holds', () => {
+    expect(seeder('MultiSigSigner').terminal?.({ id: '', status: 'Removed' } as never)).toBe(true);
+    expect(seeder('MultiSigSigner').terminal?.({ id: '', status: 'Approved' } as never)).toBe(
+      false
+    );
+    expect(seeder('MultiSigAdmin').terminal?.({ id: '', status: 'Removed' } as never)).toBe(true);
+    expect(seeder('MultiSigAdmin').terminal?.({ id: '', status: 'Authorized' } as never)).toBe(
+      false
+    );
+  });
+});

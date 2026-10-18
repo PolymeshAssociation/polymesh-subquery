@@ -85,6 +85,7 @@ export const multiSigSignerSeeder: Seeder<MultiSigSigner> = {
     'multiSig.multiSigSignsRequired': [3000],
   },
   accounts: ['signerAccountId'],
+  terminal: ({ status }) => status === MultiSigSignerStatusEnum.Removed,
   async *rows(snap, ctx) {
     // an offer is of a seat on a multisig the chain holds; one naming another account can't be taken
     const multisigs = await snap.map('multiSig.multiSigSignsRequired');
@@ -157,6 +158,7 @@ export const multiSigAdminSeeder: Seeder<MultiSigAdmin> = {
   entity: 'MultiSigAdmin',
   reads: ['multiSig.adminDid', 'multiSig.multiSigToIdentity'],
   oldShapes: { 'multiSig.multiSigToIdentity': [3000] },
+  terminal: ({ status }) => status === MultiSigAdminStatusEnum.Removed,
   async *rows(snap, ctx) {
     const item = snap.has('multiSig.adminDid')
       ? 'multiSig.adminDid'
@@ -271,6 +273,7 @@ export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
 export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
   entity: 'MultiSigProposalVote',
   reads: ['multiSig.votes', 'multiSig.proposals'],
+  parent: { entity: 'MultiSigProposal', field: 'proposalId' },
   async *rows(snap, ctx) {
     const held = await heldProposals(snap);
     for await (const page of snap.pages('multiSig.votes')) {
@@ -313,6 +316,9 @@ export const proposalSeeder: Seeder<Proposal> = {
     'pips.snapshotMeta',
     'identity.keyRecords',
   ],
+  // pruned once finished, when the chain prunes historical PIPs
+  terminal: ({ state }) =>
+    state !== ProposalStateEnum.Pending && state !== ProposalStateEnum.Scheduled,
   async *rows(snap, ctx) {
     const [deposits, metadata, states, results, skips, schedules, queue, meta, keys] =
       await Promise.all([
@@ -382,6 +388,7 @@ export const proposalSeeder: Seeder<Proposal> = {
 export const proposalVoteSeeder: Seeder<ProposalVote> = {
   entity: 'ProposalVote',
   reads: ['pips.proposalVotes'],
+  parent: { entity: 'Proposal', field: 'proposalId' },
   accounts: ['accountId'],
   async *rows(snap, ctx) {
     for await (const page of snap.pages('pips.proposalVotes')) {

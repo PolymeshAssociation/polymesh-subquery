@@ -203,6 +203,7 @@ export const confidentialSettlementSeeder: Seeder<ConfidentialSettlement> = {
 
 export const confidentialLegSeeder: Seeder<ConfidentialLeg> = {
   entity: 'ConfidentialLeg',
+  parent: { entity: 'ConfidentialSettlement', field: 'settlementId' },
   reads: ['confidentialAssets.settlementLegs'],
   rows: (snap, ctx) =>
     rowsOf(snap, 'confidentialAssets.settlementLegs', ({ args, value }) => [
@@ -235,6 +236,7 @@ const PARTY: Record<string, AffirmingPartyEnum> = {
  */
 export const confidentialLegAffirmationSeeder: Seeder<ConfidentialLegAffirmation> = {
   entity: 'ConfidentialLegAffirmation',
+  parent: { entity: 'ConfidentialSettlement', field: 'settlementId' },
   reads: ['confidentialAssets.legAffirmationStatus', 'confidentialAssets.settlementState'],
   async *rows(snap, ctx) {
     const states = await snap.map('confidentialAssets.settlementState');
