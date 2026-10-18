@@ -24,6 +24,14 @@ import {
   trustedClaimIssuerSeeder,
 } from './compliance';
 import { evmAccountMappingSeeder } from './evm';
+import {
+  assetAllowanceSeeder,
+  assetHolderSeeder,
+  holdingSeeder,
+  nftApprovalSeeder,
+  nftOperatorApprovalSeeder,
+  nftSeeder,
+} from './holdings';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
 /**
@@ -58,4 +66,10 @@ export const SEEDERS: Seeder[] = [
   transferComplianceExemptionSeeder,
   complianceSeeder,
   trustedClaimIssuerSeeder,
+  holdingSeeder,
+  assetHolderSeeder,
+  nftSeeder,
+  assetAllowanceSeeder,
+  nftApprovalSeeder,
+  nftOperatorApprovalSeeder,
 ] as Seeder[];

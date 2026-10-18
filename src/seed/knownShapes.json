@@ -1,4 +1,10 @@
 {
+  "asset.allowances": [
+    "[[\"AccountId32\",\"AccountId32\",\"[u8;16]\"],\"u128\",[\"Blake2_128Concat\",\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "asset.assetBalance": [
+    "[[\"AccountId32\",\"[u8;16]\"],\"u128\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
   "asset.assetDocuments": [
     "[[\"[u8;12]\",\"u32\"],\"{\\\"uri\\\":\\\"Bytes\\\",\\\"contentHash\\\":\\\"PolymeshPrimitivesDocumentHash\\\",\\\"name\\\":\\\"Bytes\\\",\\\"docType\\\":\\\"Option<Bytes>\\\",\\\"filingDate\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"u32\"],\"{\\\"uri\\\":\\\"Bytes\\\",\\\"contentHash\\\":\\\"PolymeshPrimitivesDocumentHash\\\",\\\"name\\\":\\\"Bytes\\\",\\\"docType\\\":\\\"Option<Bytes>\\\",\\\"filingDate\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
@@ -44,6 +50,12 @@
   "asset.frozen": [
     "[[\"[u8;12]\"],\"bool\",[\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\"],\"bool\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.frozenAccounts": [
+    "[[\"AccountId32\",\"[u8;16]\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "asset.frozenBalance": [
+    "[[\"AccountId32\",\"[u8;16]\"],\"u128\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
   ],
   "asset.fundingRound": [
     "[[\"[u8;12]\"],\"Bytes\",[\"Blake2_128Concat\"]]",
@@ -151,12 +163,40 @@
   "identity.keyToIdentityIds": [
     "[[\"AccountId\"],\"IdentityId\",[\"Twox64Concat\"]]"
   ],
+  "nft.nftOwner": [
+    "[[\"[u8;12]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
   "nft.numberOfNFTs": [
     "[[\"[u8;12]\",\"[u8;32]\"],\"u64\",[\"Blake2_128Concat\",\"Identity\"]]",
     "[[\"[u8;16]\",\"[u8;32]\"],\"u64\",[\"Blake2_128Concat\",\"Identity\"]]"
   ],
+  "nft.operatorApproval": [
+    "[[\"AccountId32\",\"AccountId32\",\"[u8;16]\"],\"bool\",[\"Blake2_128Concat\",\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "nft.owner": [
+    "[[\"[u8;16]\",\"u64\"],\"{\\\"_enum\\\":{\\\"Portfolio\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "nft.tokenApproval": [
+    "[[\"[u8;16]\",\"u64\"],\"AccountId32\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "portfolio.frozenPortfolios": [
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;16]\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "portfolio.portfolioAssetBalances": [
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;12]\"],\"u128\",[\"Twox64Concat\",\"Blake2_128Concat\"]]",
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;16]\"],\"u128\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
   "portfolio.portfolioCustodian": [
     "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "portfolio.portfolioFrozenAssets": [
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;16]\"],\"u128\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "portfolio.portfolioNFT": [
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"(PolymeshPrimitivesAssetAssetId,u64)\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\"]]",
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"(PolymeshPrimitivesTicker,u64)\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\"]]",
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;16]\",\"u64\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
   ],
   "portfolio.portfolios": [
     "[[\"[u8;32]\",\"u64\"],\"Bytes\",[\"Identity\",\"Twox64Concat\"]]"

@@ -56,6 +56,16 @@ export const pageRows = async <E, T>(
   build: (entry: E) => Promise<T[]>
 ): Promise<T[]> => (await Promise.all(page.map(build))).flat();
 
+/** How many rows a seeder writes at once */
+export const SEED_PAGE = 1000;
+
+/** Rows a seeder builds whole, in pages of `SEED_PAGE` */
+export function* pagesOf<T>(rows: readonly T[]): Generator<T[]> {
+  for (let i = 0; i < rows.length; i += SEED_PAGE) {
+    yield rows.slice(i, i + SEED_PAGE);
+  }
+}
+
 /** `Entity.field` for every field a seeder counts from the start block, sorted */
 export const relativeFields = (seeders: Seeder[]): string[] =>
   seeders
