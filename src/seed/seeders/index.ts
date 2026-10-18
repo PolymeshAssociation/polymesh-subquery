@@ -39,6 +39,14 @@ import {
   legSeeder,
   venueSeeder,
 } from './settlement';
+import {
+  corporateActionDefaultConfigSeeder,
+  corporateActionSeeder,
+  corporateBallotSeeder,
+  corporateBallotVoteSeeder,
+  distributionSeeder,
+  stoSeeder,
+} from './corporateActions';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
 /**
@@ -84,4 +92,10 @@ export const SEEDERS: Seeder[] = [
   legSeeder,
   instructionPartySeeder,
   instructionAffirmationSeeder,
+  corporateActionSeeder,
+  corporateActionDefaultConfigSeeder,
+  distributionSeeder,
+  corporateBallotSeeder,
+  corporateBallotVoteSeeder,
+  stoSeeder,
 ] as Seeder[];

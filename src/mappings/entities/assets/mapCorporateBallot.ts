@@ -88,12 +88,43 @@ const decodeMeta = (rawMeta: Codec): string => {
   });
 };
 
+/** The ballot of corporate action `id`, from its range, meta and RCV flag; unsaved */
+export const ballotRow = (
+  assetId: string,
+  id: string,
+  { range, meta, rcv }: { range: Codec; meta: Codec; rcv: Codec },
+  corporateActionId: string | undefined,
+  blockEventId: string
+): CorporateBallot => {
+  const { start, end } = jsonOf(range, isRange, 'BallotTimeRange');
+  return CorporateBallot.create({
+    id,
+    assetId,
+    corporateActionId,
+    startDate: new Date(start),
+    endDate: new Date(end),
+    meta: decodeMeta(meta),
+    rcv: getBooleanValue(rcv),
+    isRemoved: false,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  });
+};
+
+/** A voter's votes, one entry per motion choice, as the chain's `Vec<BallotVote>` gives them */
+export const ballotVotesOf = (rawVotes: Codec): BallotVoteEntry[] =>
+  jsonOf(rawVotes, isVotes, 'BallotVotes').map(
+    (vote): BallotVoteEntry => ({
+      power: BigInt(vote.power).toString(),
+      fallback: vote.fallback ?? undefined,
+    })
+  );
+
 export const handleBallotCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  const { caId: rawCaId, range: rawRange, meta: rawMeta, rcv: rawRcv } = decodeEvent(event);
+  const { caId: rawCaId, range, meta, rcv } = decodeEvent(event);
 
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
-  const range = jsonOf(rawRange, isRange, 'BallotTimeRange');
   const id = caId(assetId, localId);
   const corporateAction = await getOrAnomaly(
     actionId => CorporateAction.get(actionId),
@@ -102,18 +133,7 @@ export const handleBallotCreated = async (event: SubstrateEvent): Promise<void> 
     event
   );
 
-  await CorporateBallot.create({
-    id,
-    assetId,
-    corporateActionId: corporateAction?.id,
-    startDate: new Date(range.start),
-    endDate: new Date(range.end),
-    meta: decodeMeta(rawMeta),
-    rcv: getBooleanValue(rawRcv),
-    isRemoved: false,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  }).save();
+  await ballotRow(assetId, id, { range, meta, rcv }, corporateAction?.id, blockEventId).save();
 };
 
 export const handleBallotMetaChanged = async (event: SubstrateEvent): Promise<void> => {
@@ -214,12 +234,7 @@ export const handleBallotVoteCast = async (event: SubstrateEvent): Promise<void>
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const voterId = rawDid.toString();
 
-  const votes = jsonOf(rawVotes, isVotes, 'BallotVotes').map(
-    (vote): BallotVoteEntry => ({
-      power: BigInt(vote.power).toString(),
-      fallback: vote.fallback ?? undefined,
-    })
-  );
+  const votes = ballotVotesOf(rawVotes);
 
   const id = `${caId(assetId, localId)}/${voterId}`;
 

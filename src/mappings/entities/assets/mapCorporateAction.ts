@@ -1,4 +1,5 @@
-import { SubstrateEvent } from '@subql/types';
+import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
   CorporateAction,
@@ -79,14 +80,25 @@ const existingCheckpointId = (
   return id === undefined ? undefined : `${assetId}/${id}`;
 };
 
-export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId, eventIdx } = extractArgs(event);
-  const { caId: rawCaId, ca: rawCorporateAction, details: rawDetails } = decodeEvent(event);
-
-  const { localId, assetId } = await getCaIdValue(rawCaId, block);
+/**
+ * The corporate action `rawCorporateAction` (the chain's `CorporateAction`) describes, with its
+ * details and linked documents; unsaved.
+ */
+export const corporateActionRow = (
+  assetId: string,
+  localId: number,
+  rawCorporateAction: Codec,
+  details: string | undefined,
+  documents: string[],
+  {
+    block,
+    eventIdx,
+    blockEventId,
+  }: { block: SubstrateBlock; eventIdx: number; blockEventId: string }
+): CorporateAction => {
   const ca = decodeCorporateAction(rawCorporateAction.toJSON());
 
-  await CorporateAction.create({
+  return CorporateAction.create({
     id: caId(assetId, localId),
     assetId,
     localId,
@@ -98,7 +110,7 @@ export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> =>
     declarationDate: new Date(ca.declDate),
     recordDate: ca.recordDate ? new Date(ca.recordDate.date) : undefined,
     checkpointId: existingCheckpointId(assetId, ca.recordDate),
-    details: storedText(rawDetails),
+    details,
     targetIdentities: ca.targets.identities,
     // No catch-all fallback: `Include` and `Exclude` are opposites, so guessing one would invert
     // who the action applies to. `toEnum` records the unknown value; the column stays null.
@@ -111,10 +123,24 @@ export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> =>
     didWithholdingTax: ca.withholdingTax.map(
       ([did, tax]): DidTax => ({ did, tax: BigInt(tax).toString() })
     ),
-    documents: [],
+    documents,
     isRemoved: false,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
+  });
+};
+
+export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId, eventIdx } = extractArgs(event);
+  const { caId: rawCaId, ca: rawCorporateAction, details: rawDetails } = decodeEvent(event);
+
+  const { localId, assetId } = await getCaIdValue(rawCaId, block);
+
+  // documents are linked later, by `CALinkedToDoc`
+  await corporateActionRow(assetId, localId, rawCorporateAction, storedText(rawDetails), [], {
+    block,
+    eventIdx,
+    blockEventId,
   }).save();
 };
 
