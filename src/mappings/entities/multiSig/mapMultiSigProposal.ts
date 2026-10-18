@@ -1,5 +1,5 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
   CallIdEnum,
@@ -21,7 +21,6 @@ import {
   getAllByFields,
   getTextValue,
   is7xChain,
-  legacyQuery,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
 
@@ -245,40 +244,21 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
   await handleMultiSigProposalVoteAction(event, MultiSigProposalVoteActionEnum.Rejected);
 };
 
-// triggered on major chain upgrades only
-export const handleMultiSigProposalDeleted = async (
-  block: SubstrateBlock,
-  blockEventId: string
-): Promise<void> => {
-  const activeProposals = await getAllByFields<MultiSigProposal>('MultiSigProposal', [
+/**
+ * Marks deleted every pending proposal. Multisig's `on_runtime_upgrade` clears every proposal, its
+ * votes and its state, with no event, when the upgrade raises the transaction version above the one
+ * it stored (v3.0.0 to v8.1.2); the caller decides that.
+ */
+export const deletePendingProposals = async (blockEventId: string): Promise<void> => {
+  const pending = await getAllByFields<MultiSigProposal>('MultiSigProposal', [
     ['status', '=', MultiSigProposalStatusEnum.Active],
   ]);
 
-  const is7 = is7xChain(block);
-  // `multiSig.proposalDetail` was renamed to `proposalStates` at spec 7.0.0
-  const query = is7
-    ? api.query.multiSig.proposalStates
-    : legacyQuery('multiSig', 'proposalDetail', [0, 6_999_999]);
-
-  const queryMultiParams = activeProposals.map(proposal => [
-    query,
-    [proposal.multisigId, proposal.proposalId],
-  ]);
-
-  const proposalDetails = await api.queryMulti(queryMultiParams as any);
-
-  const deletedProposals = [];
-  proposalDetails.forEach((proposal, index) => {
-    if (proposal.isEmpty) {
-      deletedProposals.push(activeProposals[index]);
-    }
-  });
-
-  if (deletedProposals.length) {
-    deletedProposals.forEach(proposal => {
+  if (pending.length) {
+    pending.forEach(proposal => {
       proposal.status = MultiSigProposalStatusEnum.Deleted;
       proposal.updatedEventId = blockEventId;
     });
-    await store.bulkUpdate('MultiSigProposal', deletedProposals);
+    await store.bulkUpdate('MultiSigProposal', pending);
   }
 };

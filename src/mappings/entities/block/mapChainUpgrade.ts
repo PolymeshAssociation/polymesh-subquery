@@ -2,7 +2,8 @@ import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { ChainUpgrade } from '../../../types';
 import { padId } from '../../../utils';
 import { repairAuthorizationsAfterUpgrade } from '../identities/repairAuthorizations';
-import { handleMultiSigProposalDeleted } from '../multiSig/mapMultiSigProposal';
+import { removeIdentitySigners } from '../multiSig/mapMultiSig';
+import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
 
 /** Zero padded so `orderBy: id` on the table is numeric order over spec versions */
 export const chainUpgradeId = (specVersion: number): string => padId(specVersion.toString());
@@ -42,12 +43,16 @@ const runtimeVersionBefore = async (block: SubstrateBlock) => {
 export interface ChainUpgradeCrossing {
   previousSpecVersion: number;
   specVersion: number;
-  previousTransactionVersion: number;
+  /** The transaction version of the last upgrade, which multisig stores; 0 before the first */
+  storedTransactionVersion: number;
   transactionVersion: number;
   block: SubstrateBlock;
   /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites. */
   blockEventId: string;
 }
+
+/** The first runtime whose multisigs have only account signers */
+const ACCOUNT_SIGNERS_ONLY_FROM = 7_000_000;
 
 /**
  * Work that only makes sense to run once, at the boundary the chain crossed.
@@ -55,20 +60,23 @@ export interface ChainUpgradeCrossing {
  * Kept as a list so a later phase adds to it without touching the detection above.
  */
 const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> => {
-  const { previousTransactionVersion, transactionVersion, block, blockEventId } = crossing;
+  const {
+    previousSpecVersion,
+    specVersion,
+    storedTransactionVersion,
+    transactionVersion,
+    block,
+    blockEventId,
+  } = crossing;
 
-  if (transactionVersion === previousTransactionVersion) {
-    logger.info('Transaction version was not changed for the chain upgrade');
-
-    return;
+  if (previousSpecVersion < ACCOUNT_SIGNERS_ONLY_FROM && specVersion >= ACCOUNT_SIGNERS_ONLY_FROM) {
+    await removeIdentitySigners(blockEventId);
   }
 
-  logger.info(
-    `Major chain upgrade found: transaction version ${previousTransactionVersion} -> ${transactionVersion}`
-  );
-
-  await handleMultiSigProposalDeleted(block, blockEventId);
-  await repairAuthorizationsAfterUpgrade(block, blockEventId);
+  if (transactionVersion > storedTransactionVersion) {
+    await deletePendingProposals(blockEventId);
+    await repairAuthorizationsAfterUpgrade(block, blockEventId);
+  }
 };
 
 /**
@@ -127,7 +135,7 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
   await onUpgradeCrossed({
     previousSpecVersion: previous.specVersion,
     specVersion,
-    previousTransactionVersion: previous.transactionVersion,
+    storedTransactionVersion: latest?.transactionVersion ?? 0,
     transactionVersion,
     block,
     blockEventId,

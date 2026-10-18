@@ -11,6 +11,7 @@ import {
   SignerTypeEnum,
 } from '../../../types';
 import {
+  getAllByFields,
   getMultiSigSigner,
   getMultiSigSigners,
   getNumberValue,
@@ -398,6 +399,28 @@ export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promi
   });
 
   await Promise.all(existingSigners.map(existingSigner => existingSigner.save()));
+};
+
+/**
+ * 7.0 keeps only account signers: its migration dropped every identity signer, with no event, so
+ * they are removed when the chain crosses into it.
+ */
+export const removeIdentitySigners = async (blockEventId: string): Promise<void> => {
+  // read whole, once: no index covers `signerType`
+  const signers = await getAllByFields<MultiSigSigner>('MultiSigSigner', []);
+
+  await Promise.all(
+    signers
+      .filter(
+        ({ signerType, status }) =>
+          signerType === SignerTypeEnum.Identity && status !== MultiSigSignerStatusEnum.Removed
+      )
+      .map(signer => {
+        signer.status = MultiSigSignerStatusEnum.Removed;
+        signer.updatedEventId = blockEventId;
+        return signer.save();
+      })
+  );
 };
 
 export const handleMultiSigSignaturesRequiredChanged = async (
