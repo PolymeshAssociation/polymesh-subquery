@@ -20,7 +20,6 @@ import {
 } from '../../../types';
 import {
   MeshPortfolio,
-  extractString,
   getEventParams,
   getNumberValue,
   getTextValue,
@@ -103,60 +102,33 @@ export interface ResolveIdentityArgs {
 }
 
 /**
- * The identity a DID names, created from chain state when the index has never seen it.
+ * The identity a DID names, when the index holds it.
  *
- * A relation cannot point at a row that is not there. Historical tracking emits no foreign keys,
- * so a dangling reference is accepted on write and only fails at query time — where a non-null
- * relation resolves to nothing and errors the field and everything selecting it. The index does
- * not necessarily hold every identity: the genesis scan seeds a fixed handful, and an index
- * started from a later block seeds none, so a handler can legitimately meet a DID registered
- * before its coverage begins.
- *
- * The chain is the fallback rather than a zero-filled placeholder row, which would put a
- * permanently wrong primary key in the index and never be corrected. A DID the chain does not
- * know either is recorded and dropped.
+ * A relation cannot point at a row that is not there: with no foreign keys a dangling reference is
+ * accepted on write and fails at query time. The seed writes every identity the chain holds at the
+ * start and `DidCreated` every later one, so a DID the index lacks is recorded and dropped.
  */
 export const resolveIdentity = async (
   did: string,
-  { reason, eventIdx, block, blockEventId }: ResolveIdentityArgs
+  { reason, eventIdx, block }: ResolveIdentityArgs
 ): Promise<string | undefined> => {
   if (await Identity.get(did)) {
     return did;
   }
 
-  const record = await api.query.identity.didRecords(did);
-
-  const detail = `${reason} referenced identity ${did}, which is neither indexed nor on chain`;
-
-  if (record.isEmpty) {
-    if (block) {
-      await recordAnomaly({
-        kind: AnomalyKind.MissingReferencedEntity,
-        detail,
-        block,
-        eventIdx,
-      });
-    } else {
-      // The genesis scan reads the DIDs it resolves out of chain storage itself, so it cannot
-      // normally get here, and it has no block to attribute a row to.
-      logger.warn(detail);
-    }
-
-    return undefined;
+  const detail = `${reason} referenced identity ${did}, which is not indexed`;
+  if (block) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail,
+      block,
+      eventIdx,
+    });
+  } else {
+    logger.warn(detail);
   }
 
-  await createIdentity(
-    {
-      did,
-      primaryAccountId: extractString(record.toJSON(), 'primary_key'),
-      secondaryKeysFrozen: false,
-    },
-    blockEventId
-  );
-
-  await createPortfolio({ identityId: did, number: 0 }, blockEventId);
-
-  return did;
+  return undefined;
 };
 
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
