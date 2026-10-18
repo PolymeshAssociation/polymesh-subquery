@@ -628,6 +628,13 @@ const project: SubstrateProject = {
             handler: 'handleRebond',
             filter: { module: 'staking', method: 'rebond', success: true },
           },
+          ...['preApproveTicker', 'removeTickerPreApproval'].map(
+            (method): SubstrateCallHandler => ({
+              kind: SubstrateHandlerKind.Call,
+              handler: 'handleSilentAssetPreApproval',
+              filter: { module: 'asset', method, success: true },
+            })
+          ),
           ...[
             'batch',
             'batchAll',

@@ -172,6 +172,15 @@ const resolveKeyRecord = async (
 export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
 
+/** The identity `address` is a primary or secondary key of, read at most once per block */
+export const identityOfKey = async (
+  address: string,
+  blockId: string
+): Promise<string | undefined> => {
+  const resolution = await resolveKeyRecord(address, blockId);
+  return resolution && resolution.kind !== 'multiSigSigner' ? resolution.did : undefined;
+};
+
 /**
  * Carries an account's identity onto the staking position it is the stash of, when there is one.
  *
