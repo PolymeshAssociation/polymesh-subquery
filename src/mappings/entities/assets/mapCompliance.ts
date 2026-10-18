@@ -37,11 +37,19 @@ export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promi
   await asset.save();
 };
 
+/** A reset removes the asset's compliance entry, the paused flag with it */
 export const handleComplianceReset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
+
+  const asset = await getAsset(assetId, event);
+  if (asset.isCompliancePaused) {
+    asset.isCompliancePaused = false;
+    asset.updatedEventId = blockEventId;
+    await asset.save();
+  }
 
   const compliances = await getAllByFields<Compliance>('Compliance', [['assetId', '=', assetId]]);
 
