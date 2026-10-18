@@ -13,7 +13,7 @@ export interface SeedContext {
 }
 
 /** A row as a seeder builds it: a model's attributes, written with `store.bulkCreate` */
-export type SeedRow = { id: string } & Record<string, unknown>;
+export type SeedRow = { id: string };
 
 /**
  * One entity's seed: its rows built from the chain state the start block began from, and nothing
@@ -91,7 +91,7 @@ export const seed = async (
       }
       seeder.accounts?.forEach(field =>
         page.forEach(row => {
-          const address = row[field];
+          const address = (row as unknown as Record<string, unknown>)[field];
           if (typeof address === 'string' && address) {
             named.add(address);
           }

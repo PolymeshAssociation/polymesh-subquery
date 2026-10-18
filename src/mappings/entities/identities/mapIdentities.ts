@@ -218,7 +218,7 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   );
 };
 
-interface PermissionsLike {
+export interface PermissionsLike {
   assets: AssetPermissions | undefined;
   portfolios: PortfolioPermissions | undefined;
   transactions: TransactionPermissions | undefined;

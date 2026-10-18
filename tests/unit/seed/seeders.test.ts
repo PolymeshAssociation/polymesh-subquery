@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import history from '../../fixtures/storage-history.json';
-import shapes from '../../../src/seed/shapes.json';
+import shapes from '../../../src/seed/knownShapes.json';
 import { SEEDERS } from '../../../src/seed/seeders';
 import { seedShapes, StorageHistory } from '../../../scripts/lib/seedShapes';
 
@@ -42,7 +42,7 @@ describe('the seeders', () => {
     expect(unknown).toEqual([]);
   });
 
-  it('have their shapes in src/seed/shapes.json, as yarn seed:shapes writes them', () => {
+  it('have their shapes in src/seed/knownShapes.json, as yarn seed:shapes writes them', () => {
     expect(shapes).toEqual(seedShapes(SEEDERS, surveyed));
   });
 

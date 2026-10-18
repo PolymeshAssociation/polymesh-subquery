@@ -9,8 +9,8 @@ export type StorageHistory = Record<string, { ranges: Range[] }>;
 export const SHAPES_FROM = 6_000_000;
 
 /**
- * The shapes the seeders read, per item: each surveyed range from 6.0 on, and each older range a
- * seeder names in `oldShapes`. `src/seed/shapes.json` is this, written by `yarn seed:shapes`.
+ * The shapes the seeders read, per item: each surveyed range that reaches 6.0, and each older
+ * range a seeder names in `oldShapes`. `src/seed/knownShapes.json` is this, written by `yarn seed:shapes`.
  */
 export const seedShapes = (
   seeders: Seeder[],
@@ -22,7 +22,7 @@ export const seedShapes = (
       const older = oldShapes[item] ?? [];
       const known = (shapes[item] ??= new Set());
       (history[item]?.ranges ?? [])
-        .filter(({ from }) => from >= SHAPES_FROM || older.includes(from))
+        .filter(({ from, to }) => to === null || to >= SHAPES_FROM || older.includes(from))
         .forEach(range => known.add(shapeKey(range)));
     }
   }

@@ -16,14 +16,19 @@ import { byCodeUnit } from '../../../src/utils/order';
 
 const FIXTURES = join(__dirname, '..', '..', 'fixtures');
 
-const registryOf = (specName: string, specVersion: number, metadata: Uint8Array | string) => {
+const registryOf = (
+  specName: string,
+  specVersion: number,
+  metadata: Uint8Array | string,
+  ss58Format: number
+) => {
   const registry = new TypeRegistry();
   registry.setKnownTypes({ typesBundle: chainTypes.typesBundle as never });
   registry.register(chainTypes.types as never);
   registry.register(getSpecTypes(registry, 'Polymesh', specName, specVersion));
   const decoded = new Metadata(registry, metadata as never);
   registry.setMetadata(decoded);
-  registry.setChainProperties(registry.createType('ChainProperties', { ss58Format: 42 }));
+  registry.setChainProperties(registry.createType('ChainProperties', { ss58Format }));
   // each entry as `api.query` decorates it: the raw entry as `creator`, its keys as hex
   const query: Record<string, Record<string, unknown>> = {};
   Object.entries(expandMetadata(registry, decoded).query).forEach(([section, items]) => {
@@ -44,6 +49,8 @@ export interface FakeChain {
   registry: TypeRegistry;
   /** stores `value` (JSON a codec takes) under `item`'s key built from `args` */
   put(item: string, args: unknown[], value: unknown): void;
+  /** stores raw SCALE bytes, such as a value this runtime's types can't decode */
+  putRaw(item: string, args: unknown[], hex: string): void;
   /** the block a seed starts at: its parent is the stored state */
   block: SubstrateBlock;
   /** what the seed wrote */
@@ -71,9 +78,10 @@ const fake = (
   specName: string,
   specVersion: number,
   metadata: Uint8Array | string,
-  raw: [string, string][] = []
+  raw: [string, string][] = [],
+  ss58Format = 42
 ): FakeChain => {
-  const { registry, query } = registryOf(specName, specVersion, metadata);
+  const { registry, query } = registryOf(specName, specVersion, metadata, ss58Format);
   const storage = new Map<string, string>(raw);
   const hexOf = (key: unknown) =>
     typeof key === 'string' ? key : (key as { toHex(): string }).toHex();
@@ -121,7 +129,12 @@ const fake = (
       }
       const { type } = entry.creator.meta;
       const valueType = registry.createLookupType(type.isMap ? type.asMap.value : type.asPlain);
-      storage.set(entry.key(...args), registry.createType(valueType, value).toHex());
+      // the stored SCALE bytes: a `Bytes` value's `toHex` leaves out its length prefix
+      storage.set(entry.key(...args), u8aToHex(registry.createType(valueType, value).toU8a()));
+    },
+    putRaw(item, args, hex) {
+      const [section, name] = item.split('.');
+      storage.set(query[section][name].key(...args), hex);
     },
     block: {
       block: {
@@ -155,6 +168,7 @@ export const genesisChain = (chain: 'testnet' | 'mainnet'): FakeChain => {
     `polymesh_${chain}`,
     fixture.specVersion,
     fixture.metadata,
-    Object.values(fixture.storage).flat()
+    Object.values(fixture.storage).flat(),
+    chain === 'mainnet' ? 12 : 42
   );
 };

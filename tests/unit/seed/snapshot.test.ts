@@ -83,4 +83,17 @@ describe('ChainSnapshot', () => {
 
     await expect(snap.map('staking.payee')).rejects.toThrow(/staking\.payee/);
   });
+
+  it('builds a derived view once, whichever seeders ask for it', async () => {
+    const snap = snapshotAtParent(chain.block, declared);
+    const build = jest.fn(async () => (await snap.map('staking.ledger')).size);
+
+    const [first, second] = await Promise.all([
+      snap.derive('ledgers', build),
+      snap.derive('ledgers', build),
+    ]);
+
+    expect([first, second]).toEqual([2, 2]);
+    expect(build).toHaveBeenCalledTimes(1);
+  });
 });

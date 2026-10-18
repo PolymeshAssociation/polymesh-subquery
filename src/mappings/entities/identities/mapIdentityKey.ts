@@ -21,7 +21,7 @@ import { recordAnomaly } from '../../../utils/anomaly';
  * `validToBlockId` is null — the composite index `[account, validToBlock]` covers that lookup.
  */
 
-const identityKeyId = (
+export const identityKeyId = (
   identityId: string,
   address: string,
   fromBlockId: string,

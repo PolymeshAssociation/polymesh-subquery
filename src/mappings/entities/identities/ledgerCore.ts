@@ -296,11 +296,16 @@ export const readChainHolds = async (address: string): Promise<Hold[] | undefine
         | null
   );
 
+  return holdsFromJson(raw);
+};
+
+/** A `balances.holds` value's JSON as holds; `undefined` when it isn't a list */
+export const holdsFromJson = (raw: unknown): Hold[] | undefined => {
   if (!Array.isArray(raw)) {
     return undefined;
   }
 
-  return raw.map(entry => ({
+  return (raw as { id?: unknown; amount?: string | number }[]).map(entry => ({
     reason: holdReasonFromJson(entry.id),
     amount: BigInt(entry.amount ?? 0),
   }));
@@ -323,11 +328,16 @@ export const readChainLock = async (
         | null
   );
 
+  return lockAmountFromJson(raw, lockId);
+};
+
+/** The amount of lock `lockId` in a `balances.locks` value's JSON: `0` without one, `undefined` when it isn't a list */
+export const lockAmountFromJson = (raw: unknown, lockId: string): bigint | undefined => {
   if (!Array.isArray(raw)) {
     return undefined;
   }
 
-  const lock = raw.find(entry => {
+  const lock = (raw as { id?: string; amount?: string | number }[]).find(entry => {
     const id = entry.id ?? '';
     return (hexHasPrefix(id) ? hexToString(id) : id) === lockId;
   });
@@ -747,7 +757,15 @@ const rawChainHolds = async (
     return [];
   }
 
-  const bytes = codecBytes(stored);
+  return holdsFromBytes(codecBytes(stored));
+};
+
+/**
+ * A `balances.holds` value from its raw bytes: a compact count, then per entry the pallet's index,
+ * its fieldless `HoldReason` and a `u128`, each pallet named from the block's metadata.
+ * `undefined` when the bytes don't fit that layout.
+ */
+export const holdsFromBytes = (bytes: Uint8Array): Hold[] | undefined => {
   const [offset, length] = compactFromU8a(bytes);
   const count = length.toNumber();
 

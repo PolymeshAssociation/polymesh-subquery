@@ -1,0 +1,55 @@
+{
+  "balances.holds": [
+    "[[\"AccountId32\"],\"Vec<{\\\"id\\\":\\\"PolymeshRuntimeRuntimeRuntimeHoldReason\\\",\\\"amount\\\":\\\"u128\\\"}>\",[\"Blake2_128Concat\"]]"
+  ],
+  "balances.locks": [
+    "[[\"AccountId\"],\"Vec<BalanceLock>\",[\"Blake2_128Concat\"]]",
+    "[[\"AccountId32\"],\"Vec<PalletBalancesBalanceLock>\",[\"Blake2_128Concat\"]]"
+  ],
+  "identity.didRecords": [
+    "[[\"IdentityId\"],\"DidRecord\",[\"Identity\"]]",
+    "[[\"[u8;32]\"],\"{\\\"primaryKey\\\":\\\"Option<AccountId32>\\\"}\",[\"Identity\"]]"
+  ],
+  "identity.isDidFrozen": [
+    "[[\"[u8;32]\"],\"bool\",[\"Identity\"]]"
+  ],
+  "identity.keyAssetPermissions": [
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeSet<PolymeshPrimitivesAssetAssetId>\\\",\\\"Except\\\":\\\"BTreeSet<PolymeshPrimitivesAssetAssetId>\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "identity.keyExtrinsicPermissions": [
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\",\\\"Except\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "identity.keyPortfolioPermissions": [
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeSet<PolymeshPrimitivesIdentityIdPortfolioId>\\\",\\\"Except\\\":\\\"BTreeSet<PolymeshPrimitivesIdentityIdPortfolioId>\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "identity.keyRecords": [
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"PrimaryKey\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"SecondaryKey\\\":\\\"(PolymeshPrimitivesIdentityId,PolymeshPrimitivesSecondaryKeyPermissions)\\\",\\\"MultiSigSignerKey\\\":\\\"AccountId32\\\"}}\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"PrimaryKey\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"SecondaryKey\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"MultiSigSignerKey\\\":\\\"AccountId32\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "identity.keyToIdentityIds": [
+    "[[\"AccountId\"],\"IdentityId\",[\"Twox64Concat\"]]"
+  ],
+  "portfolio.portfolioCustodian": [
+    "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "portfolio.portfolios": [
+    "[[\"[u8;32]\",\"u64\"],\"Bytes\",[\"Identity\",\"Twox64Concat\"]]"
+  ],
+  "revive.originalAccount": [
+    "[[\"H160\"],\"AccountId32\",[\"Identity\"]]"
+  ],
+  "staking.bonded": [
+    "[[\"AccountId\"],\"AccountId\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\"],\"AccountId32\",[\"Twox64Concat\"]]"
+  ],
+  "staking.ledger": [
+    "[[\"AccountId\"],\"StakingLedger\",[\"Blake2_128Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "system.account": [
+    "[[\"AccountId\"],\"AccountInfo\",[\"Blake2_128Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PalletBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PolymeshCommonUtilitiesBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]"
+  ]
+}

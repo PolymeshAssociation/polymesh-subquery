@@ -4,7 +4,7 @@ import { findStorage } from '../utils/legacyQuery';
 import { storageAtParent } from '../utils/storageAtParent';
 import { entryKey, readManyAtParent, ScannedEntry, scanAtParent } from './bulk';
 import { shapeOf } from './shapes';
-import SHAPES from './shapes.json';
+import SHAPES from './knownShapes.json';
 
 /** A storage item as `section.item`, such as `staking.ledger` */
 export type StorageRef = `${string}.${string}`;
@@ -14,7 +14,7 @@ export type Entry = ScannedEntry;
 /**
  * The chain state a seed reads: storage as it stood when the start block began. Each item is
  * fetched at most once, whichever seeders ask for it, and checked first against the shapes the
- * seeders declare (`shapes.json`), so a runtime that changed an item's shape stops the seed instead
+ * seeders declare (`knownShapes.json`), so a runtime that changed an item's shape stops the seed instead
  * of being misread.
  */
 export interface ChainSnapshot {
@@ -29,6 +29,8 @@ export interface ChainSnapshot {
   many(item: StorageRef, keys: unknown[][]): Promise<(Codec | undefined)[]>;
   /** a plain item's value */
   value(item: StorageRef): Promise<Codec | undefined>;
+  /** a view several seeders share, such as items joined by key, built once per seed */
+  derive<T>(name: string, build: () => Promise<T>): Promise<T>;
 }
 
 export class UnsupportedShapeError extends Error {
@@ -50,6 +52,7 @@ export const snapshotAtParent = (
 ): ChainSnapshot => {
   const checked = new Map<string, Promise<void>>();
   const maps = new Map<string, Promise<ReadonlyMap<string, Entry>>>();
+  const derived = new Map<string, Promise<unknown>>();
 
   /** Whether the item holds any entry: its first page, the scan closed after it */
   const isPopulated = async (item: StorageRef): Promise<boolean> => {
@@ -119,6 +122,14 @@ export const snapshotAtParent = (
     value: async item => {
       await check(item);
       return storageAtParent(block, ...split(item));
+    },
+    derive: <T>(name: string, build: () => Promise<T>): Promise<T> => {
+      let view = derived.get(name) as Promise<T> | undefined;
+      if (!view) {
+        view = build();
+        derived.set(name, view);
+      }
+      return view;
     },
   };
 };
