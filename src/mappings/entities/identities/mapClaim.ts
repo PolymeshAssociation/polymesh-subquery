@@ -37,8 +37,9 @@ const encodedClaim = (event: SubstrateEvent): CanonicalValue =>
   encodeValue(extractArgs(event).params[1], metadataTypeNames(event)[1]);
 
 /**
- * Claim id: `(target, issuer, claimType, …)` — current-state semantics, one row per
- * issuer per claim. `issuer` is deliberately part of the id: without it, two trusted
+ * Claim id: `(target, issuer, claimType, scope)`, the key the chain stores a claim under, so a
+ * re-issue replaces the claim as it does on chain: a CDD claim's id or a jurisdiction claim's
+ * country is a value of the claim, not part of its key. One row per issuer per claim. `issuer` is deliberately part of the id: without it, two trusted
  * issuers attesting the same target/type/scope collide on the same row, and the SDK's
  * `issuerId: { in: $trustedClaimIssuers }` filter silently loses whichever claim was
  * written first. Block/eventIdx are deliberately NOT part of the id — the
@@ -51,8 +52,6 @@ export const getId = (
   issuer: string,
   claimType: string | undefined,
   scope: Scope | undefined,
-  jurisdiction: string | undefined,
-  cddId: string | undefined,
   customClaimTypeId: string | undefined
 ): string => {
   const idAttributes = [target, issuer, claimType];
@@ -66,15 +65,6 @@ export const getId = (
     idAttributes.push(scope.type);
     idAttributes.push(scope.assetId ?? scope.value);
   }
-  if (jurisdiction) {
-    // Only applicable in case of Jurisdiction claim type
-    idAttributes.push(jurisdiction);
-  }
-  if (cddId) {
-    // Only applicable in case of CustomerDueDiligence claim type
-    idAttributes.push(cddId);
-  }
-
   return idAttributes.join('/');
 };
 
@@ -156,7 +146,7 @@ const writeClaim = async (
   );
 
   await Claim.create({
-    id: getId(target, issuer, claimType, scope, jurisdiction, cddId, customClaimTypeId),
+    id: getId(target, issuer, claimType, scope, customClaimTypeId),
     targetId: target,
     issuerId: issuer,
     // both are always present on an `IdentityClaim`
@@ -232,8 +222,9 @@ export const seedGenesisClaims = async (
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {
   const { block, eventIdx, blockEventId } = extractArgs(event);
-  const { claimIssuer, claimScope, claimType, cddId, jurisdiction, customClaimTypeId } =
-    extractClaimInfo(encodedClaim(event));
+  const { claimIssuer, claimScope, claimType, customClaimTypeId } = extractClaimInfo(
+    encodedClaim(event)
+  );
 
   if (claimType && RETIRED_CLAIM_TYPES.has(claimType)) {
     return;
@@ -252,7 +243,7 @@ export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> =
     return;
   }
 
-  const id = getId(target, claimIssuer, claimType, scope, jurisdiction, cddId, customClaimTypeId);
+  const id = getId(target, claimIssuer, claimType, scope, customClaimTypeId);
 
   const claim = await Claim.get(id);
 
