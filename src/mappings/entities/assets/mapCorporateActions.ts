@@ -73,6 +73,8 @@ export const handleBenefitClaimed = async (event: SubstrateEvent): Promise<void>
 
   const taxAmount = BigInt((amount * tax) / BigInt(1000000));
   distribution.taxes += taxAmount;
+  // the chain lowers what remains by the whole benefit; the tax withheld stays with the payer
+  distribution.remaining -= amount;
   distribution.updatedEventId = blockEventId;
 
   const distributionPayment = DistributionPayment.create({
@@ -97,14 +99,30 @@ export const handleReclaimed = async (event: SubstrateEvent): Promise<void> => {
   const { localId, assetId } = await getCaIdValue(rawCaId, block);
   const amount = getBigIntValue(rawAmount);
 
-  await DistributionPayment.create({
-    id: blockEventId,
-    distributionId: `${assetId}/${localId}`,
-    targetId,
-    amount,
-    tax: BigInt(0),
-    amountAfterTax: amount,
-    reclaimed: true,
-    createdEventId: blockEventId,
-  }).save();
+  const distribution = await getOrAnomaly(
+    id => Distribution.get(id),
+    `${assetId}/${localId}`,
+    'Distribution',
+    event
+  );
+  const promises = [
+    DistributionPayment.create({
+      id: blockEventId,
+      distributionId: `${assetId}/${localId}`,
+      targetId,
+      amount,
+      tax: BigInt(0),
+      amountAfterTax: amount,
+      reclaimed: true,
+      createdEventId: blockEventId,
+    }).save(),
+  ];
+  if (distribution) {
+    // a reclaim takes back all that remains
+    distribution.remaining = BigInt(0);
+    distribution.updatedEventId = blockEventId;
+    promises.push(distribution.save());
+  }
+
+  await Promise.all(promises);
 };
