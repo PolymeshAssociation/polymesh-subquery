@@ -56,6 +56,7 @@ import { identityOfKey } from '../../../utils/accounts';
 import { indexClosingEvent } from '../block/closingEvent';
 import { preApprovesSilently } from '../settlements/silentPreApprovals';
 import { ensureTrueSpecVersion } from '../../trueSpec';
+import { moveTickerWithAsset } from './mapTickers';
 
 export const createFunding = (
   blockId: string,
@@ -670,7 +671,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
   asset.ownerId = getTextValue(rawNewOwnerDid);
   asset.updatedEventId = blockEventId;
 
-  await asset.save();
+  await Promise.all([asset.save(), moveTickerWithAsset(asset.ticker, asset.ownerId, blockEventId)]);
 };
 
 /**
