@@ -4,6 +4,7 @@ import { EventIdEnum, Subsidy } from '../../../types';
 import {
   blockTime,
   findStorage,
+  getAllByFields,
   getBigIntValue,
   getOrCreateAccount,
   getTextValue,
@@ -387,4 +388,47 @@ export const handlePolyxLimitUpdated = async (event: SubstrateEvent): Promise<vo
   subsidy.updatedEventId = blockEventId;
 
   await subsidy.save();
+};
+
+/**
+ * Before 8.0 a subsidised fee came out of the subsidy's allowance with no event (`debit_subsidy`
+ * emitted `SubsidyDebited` only from 8.0), so after a fee that `feeAccount` paid for someone else,
+ * that subsidy's allowance is read back from the chain. `users` are who the fee may have been for:
+ * the subsidy of one of them, or failing that every live subsidy `feeAccount` pays, since the
+ * runtime's payer is not always the signer. A fee its payer paid itself reads nothing.
+ */
+export const refreshDrawnAllowances = async (
+  block: SubstrateBlock,
+  eventIdx: number,
+  blockEventId: string,
+  feeAccount: string,
+  users: (string | undefined)[]
+): Promise<void> => {
+  const subsidised = users.filter(user => user && user !== feeAccount);
+
+  if (is8xChain(block) || !subsidised.length) {
+    return;
+  }
+
+  const paid = (
+    await getAllByFields<Subsidy>('Subsidy', [['payingAccountId', '=', feeAccount]])
+  ).filter(subsidy => subsidy.isAccepted && !subsidy.isRemoved);
+  const drawn = paid.filter(subsidy => subsidised.includes(subsidy.beneficiaryAccountId));
+
+  await Promise.all(
+    (drawn.length ? drawn : paid).map(async subsidy => {
+      const remaining = await readChainAllowance(
+        subsidy.beneficiaryAccountId,
+        feeAccount,
+        block,
+        eventIdx
+      );
+
+      if (remaining !== undefined && remaining !== subsidy.allowance) {
+        subsidy.allowance = remaining;
+        subsidy.updatedEventId = blockEventId;
+        await subsidy.save();
+      }
+    })
+  );
 };
