@@ -328,7 +328,7 @@ const filters: Record<string, Record<string, string[]>> = {
     // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
     // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
     Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
-    Chilled: ['handleChilled'],
+    Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
     CurrencyMigrated: ['handleCurrencyMigrated', 'handlePositionCurrencyMigrated'],
@@ -336,11 +336,10 @@ const filters: Record<string, Record<string, string[]>> = {
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
     ForceEra: [],
-    InvalidatedNominators: ['handleInvalidatedNominators'],
-    Kicked: ['handleKicked'],
+    InvalidatedNominators: [],
+    Kicked: [],
     MinimumBondThresholdUpdated: [],
-    // `handleNominated` must run before `handleStakingEvent` for the same reason as `Bonded`.
-    Nominated: ['handleNominated', 'handleStakingEvent'],
+    Nominated: ['handleStakingEvent'],
     OldSlashingReportDiscarded: [],
     // supplies the `eraIndex` that `Rewarded` lacks; consumed by the POLYX ledger's handleReward
     PayoutStarted: ['handlePayoutStarted'],
@@ -414,8 +413,8 @@ const filters: Record<string, Record<string, string[]>> = {
   },
   validators: {
     CommissionCapUpdated: [],
-    InvalidatedNominators: ['handleInvalidatedNominators'],
-    Nominated: ['handleNominated', 'handleStakingEvent'],
+    InvalidatedNominators: [],
+    Nominated: ['handleStakingEvent'],
     PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
     PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
     RewardPaymentSchedulingInterrupted: [],

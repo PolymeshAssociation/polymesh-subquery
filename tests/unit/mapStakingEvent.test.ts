@@ -246,8 +246,6 @@ describe('handleStakingEvent', () => {
           stashId: ALICE,
           bonded: BigInt(0),
           unbonding: BigInt(0),
-          isValidator: false,
-          isChilled: false,
           totalRewarded: BigInt(0),
           totalSlashed: BigInt(0),
         },

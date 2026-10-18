@@ -1,6 +1,6 @@
 import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
-import { Leg, Nomination } from '../../src/types';
+import { Leg, Validator } from '../../src/types';
 import { getAllByFields } from '../../src/utils/common';
 
 /**
@@ -63,16 +63,16 @@ describe('getAllByFields', () => {
   /**
    * `store.getByFields` hands back plain objects, so a returned row used to carry every field but
    * no methods — `row.save()` was a TypeError that surfaced only when that exact row was reached.
-   * It crashed a genesis resync at block 555,566 in `handleNominated`, with the same latent call
-   * sitting in `mapValidator` and `mapEra`.
+   * It crashed a genesis resync at block 555,566, with the same latent call sitting in `mapValidator`
+   * and `mapEra`.
    */
   it('returns saveable entity instances, not plain rows', async () => {
-    getByFields.mockResolvedValueOnce([{ id: 'nom-1', positionId: 'stash', validatorId: 'v1' }]);
+    getByFields.mockResolvedValueOnce([{ id: 'v1', accountId: 'v1', identityId: 'did' }]);
 
-    const [row] = await getAllByFields<Nomination>('Nomination', [['positionId', '=', 'stash']]);
+    const [row] = await getAllByFields<Validator>('Validator', [['identityId', '=', 'did']]);
 
     expect(typeof row.save).toBe('function');
-    expect(row).toMatchObject({ id: 'nom-1', positionId: 'stash', validatorId: 'v1' });
+    expect(row).toMatchObject({ id: 'v1', accountId: 'v1', identityId: 'did' });
   });
 
   it('passes through an entity name with no generated model rather than dropping rows', async () => {

@@ -2312,6 +2312,7 @@ type StakingEvent @entity {
   amount: BigInt
   rewardDestination: String
   rewardDestinationAccount: Account
+  "the targets of a `Nominated` event; none from 8.0, which nominates without an event"
   nominatedValidators: [String!]
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
@@ -2332,7 +2333,8 @@ type UnlockChunk @jsonField {
 }
 
 """
-Current staking position for a stash — how much is bonded/unbonding, and with whom. `bonded`
+Current staking position for a stash — how much is bonded/unbonding. Who it nominates is not
+indexed: from 8.0 nominating emits no event, so read `staking.nominators` instead. `bonded`
 mirrors the same `staking.ledger`/hold read `AccountBalance.bonded`/`.locks`/`.holds` already
 track (`readStakingLock` in `src/utils/staking.ts`) — this is a second view onto the same number,
 not an independently accumulated one, so the two cannot drift apart
@@ -2350,32 +2352,10 @@ type StakingPosition @entity {
   unlocking: [UnlockChunk]
   rewardDestination: String
   rewardDestinationAccount: Account
-  isValidator: Boolean!
-  isChilled: Boolean!
-  nominations: [Nomination!]! @derivedFrom(field: "position")
   totalRewarded: BigInt!
   totalSlashed: BigInt!
   createdEvent: Event!
   updatedEvent: Event!
-}
-
-"""
-One identity's nomination of one validator, from `staking.Nominated` (pre-v8) /
-`validators.Nominated` (v8+). A `nominate` call replaces the whole target set — the previous
-open rows for targets no longer nominated are closed, rows for targets already nominated are left
-untouched, and rows for newly-added targets are created
-"""
-type Nomination
-  @entity
-  @compositeIndexes(fields: [["position", "validToEvent"]]) {
-  id: ID! # stash/validator/blockEventId — the event that opened this nomination
-  position: StakingPosition! @index
-  validator: Account! @index
-  "the era active when the nomination was submitted — nominations apply going forward, not to a specific past era"
-  eraIndex: Int
-  validFromEvent: Event!
-  "null = still nominated"
-  validToEvent: Event
 }
 
 """

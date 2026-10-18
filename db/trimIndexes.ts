@@ -64,7 +64,6 @@ export const RELATIONS = `
   multi_sig_proposal_votes  created_event_id updated_event_id
   multi_sig_proposals  created_event_id extrinsic_id updated_event_id
   nfts  burned_event_id created_event_id updated_event_id
-  nominations  valid_from_event_id
   polyx_entries  counterparty_identity_id created_event_id extrinsic_id
   portfolios  created_event_id updated_event_id
   staking_events  created_event_id position_id reward_destination_account_id validator_id
@@ -85,7 +84,6 @@ export const REMOVED = `
   instruction_affirmations  identity
   instruction_events  event identity
   legs  ticker
-  nominations  era_index,position_id
   polyx_entries  account_id,date account_id,kind block_id date,kind movement_id
   staking_events  era_index
 `;

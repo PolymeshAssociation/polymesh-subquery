@@ -24,8 +24,7 @@ import { extractArgs } from '../common';
  * `mapStakingEvent.ts` calls `refreshPositionFromLedger` for those. `rewardDestination`/`rewardDestinationAccount`
  * and `totalRewarded`/`totalSlashed` are stamped from `mapStakingEvent.ts`'s `handleStakingEvent`,
  * which already resolves this same `StakingPosition` row to stamp `StakingEvent.position`.
- * `isValidator` is stamped from `mapValidator.ts`. `controller` is resolved here, from the same
- * cached lookup `readStakingLedger` uses internally.
+ * `controller` is resolved here, from the same cached lookup `readStakingLedger` uses internally.
  */
 
 /**
@@ -63,8 +62,6 @@ export const getOrCreatePosition = async (
       identityId: account.identityId,
       bonded: BigInt(0),
       unbonding: BigInt(0),
-      isValidator: false,
-      isChilled: false,
       totalRewarded: BigInt(0),
       totalSlashed: BigInt(0),
       createdEventId: blockEventId,

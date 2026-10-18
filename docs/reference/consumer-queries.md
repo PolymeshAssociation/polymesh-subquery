@@ -374,7 +374,6 @@ Small tables (only the event and extrinsic stamps are trimmed; no alternative is
 | `Era` | `startEvent`, `endEvent` |
 | `MultiSigProposal` | `extrinsic` |
 | `Nft` | `burnedEvent` |
-| `Nomination` | `validFromEvent` |
 | `IdentityKey` | `validFromBlock` |
 
 Entity lookups on the small tables (holders of an asset, keys of an identity, holdings of an identity, NFTs, instruction parties) are not trimmed.

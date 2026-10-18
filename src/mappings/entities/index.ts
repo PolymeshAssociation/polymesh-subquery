@@ -32,7 +32,6 @@ export * from './settlements/silentExecutionFailures';
 export * from './settlements/mapVenue';
 export * from './events/mapEra';
 export * from './events/mapSlash';
-export * from './events/mapNomination';
 export * from './events/mapStakingEvent';
 export * from './events/mapStakingPosition';
 export * from './events/mapValidator';
