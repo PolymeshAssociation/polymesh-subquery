@@ -3385,7 +3385,7 @@ Represents restriction that will ensure the composition of ownership remains a c
 e.g. No more than 2000 individual investors to avoid additional reporting requirements
 """
 type TransferCompliance @entity {
-  id: ID! # assetId/op/type/claimIssuer
+  id: ID! # its stat type id, then its value, or its claim value, min and max
   asset: Asset! @index(unique: false)
   type: TransferComplianceTypeEnum!
   statType: StatType!

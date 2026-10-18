@@ -192,6 +192,21 @@ const getStatTypeId = (
   return statTypeId;
 };
 
+/**
+ * A condition's id: its statistic and its own terms. An asset can set several conditions over one
+ * statistic, such as two investor counts, so the statistic alone doesn't name one.
+ */
+export const conditionId = ({
+  statTypeId,
+  value,
+  claimValue,
+  min,
+  max,
+}: Attributes<TransferCompliance>): string =>
+  value === null || value === undefined
+    ? `${statTypeId}/${claimValue}/${min ?? ''}/${max ?? ''}`
+    : `${statTypeId}/${value}`;
+
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId, block } = extractArgs(event);
 
@@ -241,19 +256,17 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
     [['assetId', '=', assetId]]
   );
 
+  const ids = new Set(transferConditions.map(conditionId));
   const removedConditions = existingTransferCompliances
-    .filter(
-      ({ statTypeId: existingStatTypeId }) =>
-        !transferConditions.some(({ statTypeId }) => statTypeId === existingStatTypeId)
-    )
+    .filter(({ id }) => !ids.has(id))
     .map(({ id }) => TransferCompliance.remove(id));
 
   const newConditions = [];
 
   transferConditions.forEach(condition => {
     const upsert = async () => {
-      const { statTypeId } = condition;
-      let transferCompliance = await TransferCompliance.get(statTypeId);
+      const id = conditionId(condition);
+      let transferCompliance = await TransferCompliance.get(id);
       if (transferCompliance) {
         Object.assign(transferCompliance, {
           ...condition,
@@ -261,7 +274,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
         } satisfies Partial<TransferComplianceProps>);
       } else {
         transferCompliance = TransferCompliance.create({
-          id: statTypeId,
+          id,
           ...condition,
           createdEventId: blockEventId,
           updatedEventId: blockEventId,
