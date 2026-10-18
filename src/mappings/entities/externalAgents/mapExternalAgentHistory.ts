@@ -3,6 +3,7 @@ import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
   AgentHistoryType,
+  AssetAgent,
   AssetAgentHistory,
 } from '../../../types';
 import { decodeEvent } from '../../../decode';
@@ -304,3 +305,36 @@ type These<T> = { these: T[] };
 type Except<T> = { except: T[] };
 type DispatchableNames = Whole | These<string> | Except<string>;
 type ExtrinsicPermissions = Whole | These<PalletPermissions> | Except<PalletPermissions>;
+
+/** The first runtime whose ownership transfer takes the previous owner out of the agents */
+const OWNER_LEAVES_AGENTS_FROM = 7_004_000;
+
+/**
+ * From 7.4, accepting an asset's ownership removes the previous owner from its agents, which the
+ * chain does with no event (the new owner's `AgentAdded` comes with it).
+ */
+export async function handleOwnerReplacedAsAgent(event: SubstrateEvent): Promise<void> {
+  const { block, blockEventId } = extractArgs(event);
+  if (block.specVersion < OWNER_LEAVES_AGENTS_FROM) {
+    return;
+  }
+  const { assetId: rawAssetId, oldOwnerDid } = decodeEvent(event);
+  const did = oldOwnerDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
+  const agentId = `${assetId}/${did}`;
+  if (!(await AssetAgent.get(agentId))) {
+    return;
+  }
+
+  await Promise.all([
+    AssetAgent.remove(agentId),
+    removeMember(did, assetId),
+    AssetAgentHistory.create({
+      id: `${blockEventId}/${did}`,
+      assetId,
+      identityId: did,
+      type: AgentHistoryType.AgentRemoved,
+      createdEventId: blockEventId,
+    }).save(),
+  ]);
+}

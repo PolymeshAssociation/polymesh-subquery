@@ -21,7 +21,7 @@ const filters: Record<string, Record<string, string[]>> = {
     AssetFrozen: ['handleFrozen'],
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
-    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred'],
+    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred', 'handleOwnerReplacedAsAgent'],
     AssetRenamed: ['handleAssetRenamed'],
     AssetTypeChanged: ['handleAssetTypeChanged'],
     AssetUnfrozen: ['handleUnfrozen'],
