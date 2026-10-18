@@ -4260,7 +4260,7 @@ type ConfidentialSettlement @entity {
   """
   The block number of the asset curve tree root the settlement proof was built against
   """
-  assetRootBlock: Int!
+  assetRootBlock: Int
   legCount: Int!
   status: ConfidentialSettlementStatusEnum!
   legs: [ConfidentialLeg!]! @derivedFrom(field: "settlement")

@@ -63,6 +63,17 @@ import {
   validatorEraSeeder,
   validatorSeeder,
 } from './staking';
+import {
+  confidentialAccountAssetSeeder,
+  confidentialAccountSeeder,
+  confidentialAssetKeySeeder,
+  confidentialAssetSeeder,
+  confidentialCurveTreeLeafSeeder,
+  confidentialEncryptionKeySeeder,
+  confidentialLegAffirmationSeeder,
+  confidentialLegSeeder,
+  confidentialSettlementSeeder,
+} from './confidential';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
 /**
@@ -126,4 +137,13 @@ export const SEEDERS: Seeder[] = [
   validatorSeeder,
   eraSeeder,
   validatorEraSeeder,
+  confidentialEncryptionKeySeeder,
+  confidentialAccountSeeder,
+  confidentialAssetSeeder,
+  confidentialAssetKeySeeder,
+  confidentialAccountAssetSeeder,
+  confidentialSettlementSeeder,
+  confidentialLegSeeder,
+  confidentialLegAffirmationSeeder,
+  confidentialCurveTreeLeafSeeder,
 ] as Seeder[];

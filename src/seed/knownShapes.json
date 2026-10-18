@@ -126,6 +126,57 @@
     "[[\"[u8;12]\"],\"Vec<PolymeshPrimitivesConditionTrustedIssuer>\",[\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\"],\"Vec<PolymeshPrimitivesConditionTrustedIssuer>\",[\"Blake2_128Concat\"]]"
   ],
+  "confidentialAssets.accountAssetRegistrations": [
+    "[[\"[u8;32]\",\"u32\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.accountDid": [
+    "[[\"[u8;32]\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.accountEncryptionKey": [
+    "[[\"[u8;32]\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.accountLeaves": [
+    "[[\"u64\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.assetLeaves": [
+    "[[\"u64\"],\"{\\\"point\\\":\\\"PolymeshDartBpEncodeCompressedAffine\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.decimals": [
+    "[[\"u32\"],\"u8\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.details": [
+    "[[\"u32\"],\"{\\\"totalSupply\\\":\\\"u128\\\",\\\"ownerDid\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"data\\\":\\\"Bytes\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.encryptionKeyDid": [
+    "[[\"[u8;32]\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.feeAccountLeaves": [
+    "[[\"u64\"],\"[u8;32]\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.keys": [
+    "[[\"u32\"],\"{\\\"encKeys\\\":\\\"BTreeSet<PolymeshDartBpKeysEncryptionPublicKey>\\\",\\\"mediators\\\":\\\"BTreeMap<PolymeshDartBpKeysAccountPublicKey, u8>\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.legAffirmationStatus": [
+    "[[\"[u8;32]\",\"u8\",\"{\\\"_enum\\\":{\\\"Sender\\\":\\\"Null\\\",\\\"Receiver\\\":\\\"Null\\\",\\\"Mediator\\\":\\\"u8\\\"}}\"],\"{\\\"_enum\\\":[\\\"Pending\\\",\\\"Affirmed\\\",\\\"Rejected\\\",\\\"Finalized\\\"]}\",[\"Identity\",\"Identity\",\"Identity\"]]"
+  ],
+  "confidentialAssets.names": [
+    "[[\"u32\"],\"Text\",[\"Twox64Concat\"]]"
+  ],
+  "confidentialAssets.settlementLegCount": [
+    "[[\"[u8;32]\"],\"Compact<u32>\",[\"Identity\"]]"
+  ],
+  "confidentialAssets.settlementLegs": [
+    "[[\"[u8;32]\",\"u8\"],\"Bytes\",[\"Identity\",\"Identity\"]]"
+  ],
+  "confidentialAssets.settlementMemo": [
+    "[[\"[u8;32]\"],\"Bytes\",[\"Identity\"]]"
+  ],
+  "confidentialAssets.settlementState": [
+    "[[\"[u8;32]\"],\"{\\\"_enum\\\":[\\\"Pending\\\",\\\"Executed\\\",\\\"Rejected\\\",\\\"Finalized\\\"]}\",[\"Identity\"]]"
+  ],
+  "confidentialAssets.symbols": [
+    "[[\"u32\"],\"Text\",[\"Twox64Concat\"]]"
+  ],
   "corporateAction.caDocLink": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Vec<u32>\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"ticker\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Vec<u32>\",[\"Blake2_128Concat\"]]"
