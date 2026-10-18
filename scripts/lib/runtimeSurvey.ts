@@ -126,3 +126,31 @@ export const chainArgs = (args: string[]): [string, string][] =>
     .map(arg => arg.split(/=([\s\S]*)/))
     .filter(([name, url]) => name && url)
     .map(([name, url]) => [name, url]);
+
+/** The pallets the seed reads, which the storage survey and the genesis recording cover */
+export const SURVEYED_SECTIONS = [
+  'asset',
+  'balances',
+  'capitalDistribution',
+  'checkpoint',
+  'complianceManager',
+  'confidentialAsset',
+  'confidentialAssets',
+  'corporateAction',
+  'corporateBallot',
+  'externalAgents',
+  'identity',
+  'multiSig',
+  'nft',
+  'pips',
+  'portfolio',
+  'relayer',
+  'revive',
+  'session',
+  'settlement',
+  'staking',
+  'statistics',
+  'sto',
+  'system',
+  'validators',
+];

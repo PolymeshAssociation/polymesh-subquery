@@ -20,37 +20,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import eventHistory from '../tests/fixtures/event-history.json';
 import { byCodeUnit } from '../src/utils/order';
-import { chainArgs, metadataAt, Runtime, rpc } from './lib/runtimeSurvey';
+import { chainArgs, metadataAt, Runtime, rpc, SURVEYED_SECTIONS } from './lib/runtimeSurvey';
 
 const OUT = join(__dirname, '..', 'tests', 'fixtures', 'storage-history.json');
 
 /** The pallets whose storage a resolver or a start-block seed reads */
-const SURVEYED_SECTIONS = [
-  'asset',
-  'balances',
-  'capitalDistribution',
-  'checkpoint',
-  'complianceManager',
-  'confidentialAsset',
-  'confidentialAssets',
-  'corporateAction',
-  'corporateBallot',
-  'externalAgents',
-  'identity',
-  'multiSig',
-  'nft',
-  'pips',
-  'portfolio',
-  'relayer',
-  'revive',
-  'session',
-  'settlement',
-  'staking',
-  'statistics',
-  'sto',
-  'system',
-  'validators',
-];
 
 export interface StorageShape {
   /** each key's type, in order; empty for a plain value */
