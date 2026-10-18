@@ -227,6 +227,19 @@ export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<v
   });
 };
 
+/**
+ * `ProposalRefund(did, pipId, amount)`: the PIP's deposits are returned, the proposer's with them.
+ * Until 8.0 all at once; from 8.0 128 a block, so a PIP with more deposits reads empty a block or
+ * so before the proposer's own is returned.
+ */
+export const handleProposalRefunded = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.balance = BigInt(0);
+  });
+};
+
 /** `PipClosed(did, pipId, pruned)` — the PIP is closed; whether the chain pruned it does not change the history here. */
 export const handlePipClosed = async (event: SubstrateEvent): Promise<void> => {
   const [, rawPipId] = extractArgs(event).params;

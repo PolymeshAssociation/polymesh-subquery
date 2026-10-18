@@ -8,7 +8,11 @@ export const getProposerValue = (item: Codec): Proposer => {
   let type, value;
   if ('committee' in proposer) {
     type = 'Committee';
-    value = capitalizeFirstLetter(Object.keys(proposer.committee)[0]);
+    // an event renders a fieldless variant as `{ technical: null }`, storage as `'technical'`
+    const { committee } = proposer;
+    value = capitalizeFirstLetter(
+      typeof committee === 'string' ? committee : Object.keys(committee)[0]
+    );
   }
   if ('community' in proposer) {
     type = 'Community';
