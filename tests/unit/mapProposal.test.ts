@@ -154,3 +154,46 @@ describe('votes', () => {
     expect(db.ProposalVote[`${pip(3)}/${VOTER}`]).toMatchObject({ accountId: VOTER });
   });
 });
+
+/**
+ * A community PIP's deposit is its proposer's aye: `propose` records it as the proposer's vote,
+ * weighed by the deposit, and emits no `Voted` for it.
+ */
+describe('a community PIP proposed', () => {
+  const PROPOSER = '5Hovv5FiQZC9DQb76Egkg5vkkbXamgfuiF72AVLDwLA1h6Nm';
+  const proposed = (proposer: unknown) =>
+    tupleEvent({
+      section: 'pips',
+      method: 'ProposalCreated',
+      data: [
+        codec(TEST_DID),
+        { ...codec(proposer), registry: { chainSS58: 42 } },
+        codec(93),
+        codec(2_000_000_000),
+        codec('https://example.com'),
+        codec('A proposal'),
+      ],
+    });
+
+  it("counts the deposit as the proposer's aye", async () => {
+    const db = mockStore();
+
+    await handleProposalCreated(proposed({ community: PROPOSER }));
+
+    expect(db.ProposalVote[`${pip(93)}/${PROPOSER}`]).toMatchObject({
+      proposalId: pip(93),
+      accountId: PROPOSER,
+      vote: true,
+      weight: BigInt(2_000_000_000),
+    });
+    expect(db.Proposal[pip(93)].totalAyeWeight).toBe(BigInt(2_000_000_000));
+  });
+
+  it('records no vote for a committee PIP, which has no deposit', async () => {
+    const db = mockStore();
+
+    await handleProposalCreated(proposed({ committee: { technical: null } }));
+
+    expect(db.ProposalVote ?? {}).toEqual({});
+  });
+});

@@ -47,22 +47,38 @@ export const handleProposalCreated = async (event: SubstrateEvent): Promise<void
   const { params, blockEventId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
   const id = processPipId(rawPipId);
+  const proposer = getProposerValue(rawProposer);
+  const deposit = getBigIntValue(rawBalance);
+  // a community PIP's deposit is its proposer's aye, which `propose` records with no `Voted`
+  const depositVote =
+    proposer.type === 'Community'
+      ? ProposalVote.create({
+          id: `${id}/${proposer.value}`,
+          proposalId: id,
+          accountId: proposer.value,
+          vote: true,
+          weight: deposit,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
+        })
+      : undefined;
 
   await Proposal.create({
     id,
-    proposer: getProposerValue(rawProposer),
+    proposer,
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
-    balance: getBigIntValue(rawBalance),
+    balance: deposit,
     url: bytesToString(rawUrl),
     description: bytesToString(rawDescription),
     snapshotted: false,
     expiresAt: scheduledExpiry(event, id),
-    totalAyeWeight: BigInt(0),
+    totalAyeWeight: depositVote ? deposit : BigInt(0),
     totalNayWeight: BigInt(0),
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
+  await depositVote?.save();
 };
 
 export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise<void> => {
