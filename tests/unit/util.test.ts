@@ -5,6 +5,7 @@ import {
   capitalizeFirstLetter,
   findTopLevelCommas,
   fromEntries,
+  hexToString,
   removeNullChars,
 } from '../../src/utils';
 
@@ -49,4 +50,25 @@ test('findTopLevelCommas', () => {
   ).toStrictEqual([22, 116]);
 
   expect(() => findTopLevelCommas('Vec<i8>')).toThrowError();
+});
+
+/**
+ * Bytes the chain stores are UTF-8 text more often than not, and an event codec renders them as
+ * that text, so hex read from storage decodes the same way; bytes that are no UTF-8 keep a
+ * character per byte.
+ */
+describe('hexToString', () => {
+  it('decodes UTF-8, as an event codec renders the same bytes', () => {
+    expect(hexToString(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
+      'Café — 株式'
+    );
+  });
+
+  it('keeps a character per byte for bytes that are no UTF-8', () => {
+    expect(hexToString('0xff41')).toBe('ÿA');
+  });
+
+  it('drops the padding of a fixed-width value', () => {
+    expect(hexToString('0x4143000000')).toBe('AC');
+  });
 });

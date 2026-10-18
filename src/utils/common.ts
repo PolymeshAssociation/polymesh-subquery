@@ -1,6 +1,16 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/util';
+import {
+  BN,
+  hexAddPrefix,
+  hexHasPrefix,
+  hexStripPrefix,
+  hexToU8a,
+  isHex,
+  isUtf8,
+  u8aToHex,
+  u8aToString,
+} from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
@@ -181,12 +191,16 @@ export const getBooleanValue = (item: Codec): boolean => {
   return JSON.parse(getTextValue(item) || 'false');
 };
 
+/**
+ * Text from hex bytes: as UTF-8, which is how an event codec renders the same bytes, or a character
+ * per byte for bytes that are no UTF-8.
+ */
 export const hexToString = (input: string): string => {
-  const hex = hexStripPrefix(input);
-  let str = '';
-  for (let i = 0; i < hex.length; i += 2)
-    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-  return removeNullChars(str);
+  const bytes = hexToU8a(hexAddPrefix(hexStripPrefix(input)));
+  const text = isUtf8(bytes)
+    ? u8aToString(bytes)
+    : Array.from(bytes, byte => String.fromCodePoint(byte)).join('');
+  return removeNullChars(text);
 };
 
 /**
