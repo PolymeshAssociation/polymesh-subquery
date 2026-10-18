@@ -228,6 +228,13 @@ export const handleMetadataValueDeleted = async (event: SubstrateEvent): Promise
     return;
   }
 
+  // a global key isn't the asset's, so once its value goes the asset holds nothing of it; a
+  // local key stays registered to the asset without a value
+  if (key.scope === MetadataScope.Global) {
+    await AssetMetadata.remove(metadataId(assetId, key));
+    return;
+  }
+
   const row = await AssetMetadata.get(metadataId(assetId, key));
   if (row) {
     row.value = undefined;
