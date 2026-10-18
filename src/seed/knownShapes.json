@@ -106,6 +106,10 @@
     "[[\"[u8;12]\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"Vec<PolymeshPrimitivesComplianceManagerComplianceRequirement>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"Vec<PolymeshPrimitivesComplianceManagerComplianceRequirement>\\\"}\",[\"Blake2_128Concat\"]]"
   ],
+  "complianceManager.trustedClaimIssuer": [
+    "[[\"[u8;12]\"],\"Vec<PolymeshPrimitivesConditionTrustedIssuer>\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"Vec<PolymeshPrimitivesConditionTrustedIssuer>\",[\"Blake2_128Concat\"]]"
+  ],
   "externalAgents.groupOfAgent": [
     "[[\"[u8;12]\",\"[u8;32]\"],\"{\\\"_enum\\\":{\\\"Full\\\":\\\"Null\\\",\\\"Custom\\\":\\\"u32\\\",\\\"ExceptMeta\\\":\\\"Null\\\",\\\"PolymeshV1CAA\\\":\\\"Null\\\",\\\"PolymeshV1PIA\\\":\\\"Null\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"[u8;32]\"],\"{\\\"_enum\\\":{\\\"Full\\\":\\\"Null\\\",\\\"Custom\\\":\\\"u32\\\",\\\"ExceptMeta\\\":\\\"Null\\\",\\\"PolymeshV1CAA\\\":\\\"Null\\\",\\\"PolymeshV1PIA\\\":\\\"Null\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
@@ -113,6 +117,16 @@
   "externalAgents.groupPermissions": [
     "[[\"[u8;12]\",\"u32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeSet<PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\",\\\"Except\\\":\\\"BTreeSet<PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"u32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\",\\\"Except\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "identity.authorizations": [
+    "[[\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",\"u64\"],\"{\\\"authorizationData\\\":\\\"PolymeshPrimitivesAuthorizationAuthorizationData\\\",\\\"authorizedBy\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"authId\\\":\\\"u64\\\",\\\"count\\\":\\\"u32\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "identity.claims": [
+    "[[\"Claim1stKey\",\"Claim2ndKey\"],\"IdentityClaim\",[\"Twox64Concat\",\"Blake2_128Concat\"]]",
+    "[[\"{\\\"target\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"claimType\\\":\\\"PolymeshPrimitivesIdentityClaimClaimType\\\"}\",\"{\\\"issuer\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"scope\\\":\\\"Option<PolymeshPrimitivesIdentityClaimScope>\\\"}\"],\"{\\\"claimIssuer\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"issuanceDate\\\":\\\"u64\\\",\\\"lastUpdateDate\\\":\\\"u64\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"claim\\\":\\\"PolymeshPrimitivesIdentityClaimClaim\\\"}\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "identity.customClaims": [
+    "[[\"u32\"],\"Bytes\",[\"Twox64Concat\"]]"
   ],
   "identity.didRecords": [
     "[[\"IdentityId\"],\"DidRecord\",[\"Identity\"]]",
@@ -158,6 +172,18 @@
     "[[\"AccountId\"],\"StakingLedger\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "statistics.activeAssetStats": [
+    "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]",
+    "[[\"{\\\"_enum\\\":{\\\"Ticker\\\":\\\"PolymeshPrimitivesTicker\\\"}}\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]"
+  ],
+  "statistics.assetTransferCompliances": [
+    "[[\"[u8;16]\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"BTreeSet<PolymeshPrimitivesTransferComplianceTransferCondition>\\\"}\",[\"Blake2_128Concat\"]]",
+    "[[\"{\\\"_enum\\\":{\\\"Ticker\\\":\\\"PolymeshPrimitivesTicker\\\"}}\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"BTreeSet<PolymeshPrimitivesTransferComplianceTransferCondition>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "statistics.transferConditionExemptEntities": [
+    "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"op\\\":\\\"PolymeshPrimitivesStatisticsStatOpType\\\",\\\"claimType\\\":\\\"Option<PolymeshPrimitivesIdentityClaimClaimType>\\\"}\",\"[u8;32]\"],\"bool\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]",
+    "[[\"{\\\"asset\\\":\\\"PolymeshPrimitivesStatisticsAssetScope\\\",\\\"op\\\":\\\"PolymeshPrimitivesStatisticsStatOpType\\\",\\\"claimType\\\":\\\"Option<PolymeshPrimitivesIdentityClaimClaimType>\\\"}\",\"[u8;32]\"],\"bool\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
   ],
   "system.account": [
     "[[\"AccountId\"],\"AccountInfo\",[\"Blake2_128Concat\"]]",

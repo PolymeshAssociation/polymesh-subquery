@@ -1,7 +1,13 @@
 import { Codec } from '@polkadot/types/types';
-import { getAssetIdForLegacyTicker } from '../../utils/assets';
+import { SubstrateBlock } from '@subql/types';
+import {
+  AssetIdWithTicker,
+  getAssetIdForLegacyTicker,
+  isMigratedAssetId,
+} from '../../utils/assets';
 import { isObject } from '../../utils/codec';
-import { ChainSnapshot } from '../snapshot';
+import { coerceHexToString, hexToString, is7xChain } from '../../utils/common';
+import { ChainSnapshot, Entry } from '../snapshot';
 
 /**
  * The index's asset id for a storage key's asset argument: an asset id from 7.0, and before it a
@@ -61,3 +67,21 @@ export const assetIds = (snap: ChainSnapshot): Promise<ReadonlySet<string>> =>
     }
     return ids;
   });
+
+/**
+ * An asset as the handlers name it (`getAssetIdWithTicker`), from the chain state rather than the
+ * store: from 7.0 an asset id, with the ticker `asset.assetIdTicker` links to it; before it a ticker,
+ * as text (the canonical encoding's) or hex, and the asset id derived from it.
+ */
+export const assetWithTicker =
+  (tickers: ReadonlyMap<string, Entry>, block: SubstrateBlock) =>
+  async (assetIdOrTicker: string): Promise<AssetIdWithTicker> => {
+    if (isMigratedAssetId(assetIdOrTicker) || is7xChain(block)) {
+      const ticker = tickers.get(assetIdOrTicker)?.value?.toString();
+      return { assetId: assetIdOrTicker, ticker: ticker ? hexToString(ticker) : undefined };
+    }
+    return {
+      assetId: await getAssetIdForLegacyTicker(assetIdOrTicker),
+      ticker: coerceHexToString(assetIdOrTicker),
+    };
+  };

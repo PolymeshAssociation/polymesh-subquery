@@ -15,6 +15,14 @@ import {
   tickerReservationSeeder,
 } from './assets';
 import { accountBalanceSeeder } from './balances';
+import { authorizationSeeder, claimSeeder, customClaimTypeSeeder } from './claims';
+import {
+  complianceSeeder,
+  statTypeSeeder,
+  transferComplianceExemptionSeeder,
+  transferComplianceSeeder,
+  trustedClaimIssuerSeeder,
+} from './compliance';
 import { evmAccountMappingSeeder } from './evm';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
@@ -42,4 +50,12 @@ export const SEEDERS: Seeder[] = [
   checkpointScheduleSeeder,
   assetMandatoryMediatorSeeder,
   assetPreApprovalSeeder,
+  customClaimTypeSeeder,
+  claimSeeder,
+  authorizationSeeder,
+  statTypeSeeder,
+  transferComplianceSeeder,
+  transferComplianceExemptionSeeder,
+  complianceSeeder,
+  trustedClaimIssuerSeeder,
 ] as Seeder[];

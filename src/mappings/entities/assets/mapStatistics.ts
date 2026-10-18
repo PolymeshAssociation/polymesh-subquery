@@ -38,7 +38,7 @@ export const getAssetIdForStatisticsEvent = (
 const transferRestrictionSpecVersion = 5000000;
 const statTypeAsEnumSpecVersion = 5001000;
 
-const getStatTypes = (
+export const getStatTypes = (
   item: Codec,
   block: SubstrateBlock
 ): Omit<Attributes<StatType>, 'assetId'>[] => {
