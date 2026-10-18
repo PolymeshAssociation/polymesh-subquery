@@ -1,10 +1,14 @@
 /**
  * The difference between a seed and the index it should equal, entity by entity: the rows only one
- * side holds and the fields they disagree on. Provenance (`*EventId`) and a seeder's `relative`
- * fields are not compared, and an indexed row the seed lacks is allowed when its seeder calls it
- * `terminal` or it belongs to an allowed `parent` row: finished, and pruned from the chain.
+ * side holds and the fields they disagree on, matched by id or a seeder's natural `key`. Provenance
+ * (`*EventId`, `*BlockId`) and a seeder's `relative` fields are not compared, and an indexed row the
+ * seed lacks is allowed when its seeder calls it `terminal` or it belongs to an allowed `parent`
+ * row: finished, and pruned from the chain.
  */
+import { sameValue } from '../../src/seed/sameValue';
 import { Seeder } from '../../src/seed/seeder';
+
+export { sameValue };
 
 type Row = Record<string, unknown>;
 
@@ -31,46 +35,6 @@ export interface EntityDiff {
 /** GraphQL's fields that no seeder writes */
 const NOT_COMPARED = new Set(['id', 'nodeId', '__typename', '_id', '_blockRange']);
 
-const ISO_DATE = /^\d{4}-\d\d-\d\dT\d\d:\d\d/;
-
-/** A value as GraphQL renders it: big numbers as strings, times in UTC, keys sorted */
-const canonical = (value: unknown): unknown => {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (typeof value === 'bigint') {
-    return value.toString();
-  }
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  if (typeof value === 'string' && ISO_DATE.test(value)) {
-    const zoned = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`;
-    const time = new Date(zoned);
-    return Number.isNaN(time.getTime()) ? value : time.toISOString();
-  }
-  if (Array.isArray(value)) {
-    return value.map(canonical);
-  }
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.keys(value as Row)
-        .sort()
-        .map(key => [key, canonical((value as Row)[key])])
-    );
-  }
-  return value;
-};
-
-/** Whether a seeded value and an indexed one, as GraphQL returned it, are the same */
-export const sameValue = (seeded: unknown, indexed: unknown): boolean => {
-  const [a, b] = [canonical(seeded), canonical(indexed)];
-  if (typeof a === 'number' || typeof b === 'number') {
-    return a !== null && b !== null && String(a) === String(b);
-  }
-  return JSON.stringify(a) === JSON.stringify(b);
-};
-
 /** Seeders in an order where each `parent` comes before the seeders naming it */
 const parentsFirst = (seeders: Seeder[]): Seeder[] => {
   const ordered: Seeder[] = [];
@@ -88,56 +52,77 @@ const parentsFirst = (seeders: Seeder[]): Seeder[] => {
   return ordered;
 };
 
+/** Whether `field` of an index's row is compared: not provenance, nor counted from the start */
+const isCompared = (field: string, relative: string[]): boolean =>
+  !NOT_COMPARED.has(field) &&
+  !field.endsWith('EventId') &&
+  !field.endsWith('BlockId') &&
+  !relative.includes(field);
+
+/** The compared fields a seeded row and the index's disagree on */
+const fieldDiffs = (id: string, ours: Row, theirs: Row, relative: string[]): FieldDiff[] =>
+  Object.keys(theirs)
+    .filter(field => isCompared(field, relative) && !sameValue(ours[field], theirs[field]))
+    .map(field => ({ id, field, seeded: ours[field], indexed: theirs[field] }));
+
+/** One entity's diff; `allowedIds` holds each parent entity's rows the chain pruned */
+const diffEntity = (
+  seeder: Seeder,
+  seededRows: Row[],
+  indexedRows: Row[],
+  allowedIds: Map<string, Set<string>>
+): EntityDiff => {
+  const { entity, relative = [], terminal, parent, key } = seeder;
+  const keyOf = (row: Row): string => (key ? key(row as never) : (row.id as string));
+  const ours = new Map(seededRows.map(row => [keyOf(row), row]));
+  const matched = new Set<string>();
+  const allowed = new Set<string>();
+  const extra: string[] = [];
+  const differing: FieldDiff[] = [];
+  // a finished row the chain prunes, or one whose parent it pruned
+  const isPruned = (row: Row, isTerminal: boolean): boolean =>
+    isTerminal ||
+    Boolean(parent && allowedIds.get(parent.entity)?.has(row[parent.field] as string));
+
+  for (const row of indexedRows) {
+    const id = row.id as string;
+    const isTerminal = Boolean(terminal?.(row as never));
+    // a finished interval shares its natural key with the one open now
+    const ourRow = key && isTerminal ? undefined : ours.get(keyOf(row));
+    if (ourRow) {
+      matched.add(keyOf(row));
+      // the index's columns: a field its schema lacks isn't compared
+      differing.push(...fieldDiffs(id, ourRow, row, relative));
+    } else if (isPruned(row, isTerminal)) {
+      allowed.add(id);
+    } else {
+      extra.push(id);
+    }
+  }
+  allowedIds.set(entity, allowed);
+
+  return {
+    entity,
+    seeded: ours.size,
+    indexed: indexedRows.length,
+    missing: [...ours.entries()]
+      .filter(([k]) => !matched.has(k))
+      .map(([, row]) => row.id as string),
+    extra,
+    allowed: allowed.size,
+    differing,
+  };
+};
+
 export const diffSeed = (
   seeded: Record<string, Row[]>,
   indexed: Record<string, Row[]>,
   seeders: Seeder[]
 ): EntityDiff[] => {
   const allowedIds = new Map<string, Set<string>>();
-
-  return parentsFirst(seeders).map(seeder => {
-    const { entity, relative = [], terminal, parent } = seeder;
-    const ours = new Map((seeded[entity] ?? []).map(row => [row.id as string, row]));
-    const theirs = new Map((indexed[entity] ?? []).map(row => [row.id as string, row]));
-    const allowed = new Set<string>();
-    const extra: string[] = [];
-    const differing: FieldDiff[] = [];
-
-    for (const [id, row] of theirs) {
-      const ourRow = ours.get(id);
-      if (!ourRow) {
-        const pruned =
-          terminal?.(row as never) ||
-          (parent && allowedIds.get(parent.entity)?.has(row[parent.field] as string));
-        if (pruned) {
-          allowed.add(id);
-        } else {
-          extra.push(id);
-        }
-        continue;
-      }
-      const fields = new Set([...Object.keys(ourRow), ...Object.keys(row)]);
-      for (const field of fields) {
-        if (NOT_COMPARED.has(field) || field.endsWith('EventId') || relative.includes(field)) {
-          continue;
-        }
-        if (!sameValue(ourRow[field], row[field])) {
-          differing.push({ id, field, seeded: ourRow[field], indexed: row[field] });
-        }
-      }
-    }
-    allowedIds.set(entity, allowed);
-
-    return {
-      entity,
-      seeded: ours.size,
-      indexed: theirs.size,
-      missing: [...ours.keys()].filter(id => !theirs.has(id)),
-      extra,
-      allowed: allowed.size,
-      differing,
-    };
-  });
+  return parentsFirst(seeders).map(seeder =>
+    diffEntity(seeder, seeded[seeder.entity] ?? [], indexed[seeder.entity] ?? [], allowedIds)
+  );
 };
 
 interface TypeRef {

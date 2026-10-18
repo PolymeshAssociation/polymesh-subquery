@@ -9,6 +9,7 @@ import { Seeder } from '../seeder';
  */
 export const evmAccountMappingSeeder: Seeder<EvmAccountMapping> = {
   entity: 'EvmAccountMapping',
+  relative: ['datetime'],
   reads: ['revive.originalAccount'],
   accounts: ['accountId'],
   async *rows(snap, ctx) {

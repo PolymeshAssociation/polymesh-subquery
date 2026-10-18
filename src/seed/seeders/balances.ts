@@ -87,6 +87,8 @@ const chainFreezes = (
  */
 export const accountBalanceSeeder: Seeder<AccountBalance> = {
   entity: 'AccountBalance',
+  // a reaped account's row stays indexed
+  terminal: ({ total }) => BigInt(total) === BigInt(0),
   reads: [
     'system.account',
     'balances.holds',

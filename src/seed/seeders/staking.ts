@@ -31,6 +31,9 @@ const KEY_SHAPES = { 'identity.keyToIdentityIds': [3000], 'identity.didRecords':
  */
 export const stakingPositionSeeder: Seeder<StakingPosition> = {
   entity: 'StakingPosition',
+  // a fully unbonded stash stays indexed
+  terminal: ({ bonded, unbonding }) =>
+    BigInt(bonded) === BigInt(0) && BigInt(unbonding) === BigInt(0),
   reads: ['staking.ledger', 'staking.payee', ...KEYS],
   oldShapes: {
     'staking.ledger': [3000],
@@ -173,6 +176,8 @@ const ERA_SHAPES = {
 /** Each elected era, as far as the index knows started at the start, with how many it elected */
 export const eraSeeder: Seeder<Era> = {
   entity: 'Era',
+  // a past era stays indexed; the chain keeps only the latest
+  terminal: ({ endEventId }) => Boolean(endEventId),
   reads: ERA_READS,
   oldShapes: ERA_SHAPES,
   async *rows(snap, ctx) {
@@ -206,6 +211,7 @@ const eraPrefs = async (
 /** Each elected era's set, each validator's stake and prefs as the election stored them */
 export const validatorEraSeeder: Seeder<ValidatorEra> = {
   entity: 'ValidatorEra',
+  parent: { entity: 'Era', field: 'eraId' },
   reads: [...ERA_READS, 'staking.erasValidatorPrefs', ...KEYS],
   oldShapes: { ...ERA_SHAPES, 'staking.erasValidatorPrefs': [3000], ...KEY_SHAPES },
   async *rows(snap, ctx) {
@@ -249,6 +255,8 @@ export const validatorEraSeeder: Seeder<ValidatorEra> = {
  */
 export const validatorSeeder: Seeder<Validator> = {
   entity: 'Validator',
+  // a validator that stopped validating stays indexed
+  terminal: ({ isActive }) => !isActive,
   reads: [
     'staking.validators',
     'validators.permissionedIdentity',

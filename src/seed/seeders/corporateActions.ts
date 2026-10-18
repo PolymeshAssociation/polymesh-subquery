@@ -249,6 +249,8 @@ export const corporateBallotVoteSeeder: Seeder<CorporateBallotVote> = {
 /** An offering, with its name, tiers, window and off-chain funding, its raising asset by ticker */
 export const stoSeeder: Seeder<Sto> = {
   entity: 'Sto',
+  // the chain keeps a raising ticker only as the asset id it became at 7.0
+  relative: ['raisingTicker'],
   reads: [
     'sto.fundraisers',
     'sto.fundraiserNames',

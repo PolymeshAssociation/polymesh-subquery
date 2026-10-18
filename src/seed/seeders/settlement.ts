@@ -395,12 +395,15 @@ export const instructionSeeder = bundleSeeder<Instruction>(
   'Instruction',
   ({ instruction }) => [instruction],
   {
+    relative: ['failureReason'],
     terminal: ({ status }) =>
       status === InstructionStatusEnum.Executed || status === InstructionStatusEnum.Rejected,
   }
 );
 export const legSeeder = bundleSeeder<Leg>('Leg', ({ legs }) => legs, {
   accounts: ['fromAccountId', 'toAccountId'],
+  // the keys that created and affirmed it
+  relative: ['addresses'],
   parent: { entity: 'Instruction', field: 'instructionId' },
 });
 export const instructionPartySeeder = bundleSeeder<InstructionParty>(
@@ -411,5 +414,9 @@ export const instructionPartySeeder = bundleSeeder<InstructionParty>(
 export const instructionAffirmationSeeder = bundleSeeder<InstructionAffirmation>(
   'InstructionAffirmation',
   ({ affirmations }) => affirmations,
-  { accounts: ['accountId', 'signerId'], parent: { entity: 'Instruction', field: 'instructionId' } }
+  {
+    accounts: ['accountId', 'signerId'],
+    relative: ['affirmedById', 'signerId', 'isAutomaticallyAffirmed'],
+    parent: { entity: 'Instruction', field: 'instructionId' },
+  }
 );

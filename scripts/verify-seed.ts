@@ -3,13 +3,15 @@
  * every seeded entity from the index's GraphQL as of `height - 1`, and reports what differs. An
  * index that equals its own seed at any height is one the seed could have started.
  *
- *   yarn verify-seed --endpoint wss://… --gql http://… --height 26326409 [--entities A,B] [--out diff.json]
+ *   yarn verify-seed --endpoint wss://… --gql http://… --height 26326409 [--entities A,B]
+ *     [--out diff.json] [--dump rows.json]
  *
  * Needs the index's historical queries (`blockHeight`). Exits non-zero on any difference.
  */
 import { writeFileSync } from 'node:fs';
 import { connectionNames, ConnectionSchema, diffSeed, EntityDiff } from './lib/seedDiff';
 import { connect, seedLive } from './lib/liveSeed';
+import { concurrencyLimit } from '../src/seed/bulk';
 
 type Row = Record<string, unknown>;
 
@@ -19,6 +21,7 @@ const arg = (name: string): string | undefined => {
 };
 
 const PAGE = 1000;
+const GQL_IN_FLIGHT = 4;
 
 const gql = async <T>(url: string, query: string): Promise<T> => {
   const response = await fetch(url, {
@@ -119,16 +122,32 @@ const main = async () => {
     ({ entity }) => !entities || entities.includes(entity)
   );
   const indexed: Record<string, Row[]> = {};
-  for (const { entity } of seeders) {
-    const connection = connections[entity];
-    if (!connection) {
-      throw new Error(`the index has no connection for ${entity}`);
-    }
-    indexed[entity] = await indexedRows(url, connection, columns(schema, entity), height - 1);
+  const unknown = seeders.filter(({ entity }) => !connections[entity]).map(({ entity }) => entity);
+  if (unknown.length) {
+    console.log(`not in the index's schema, so not compared: ${unknown.join(', ')}`);
   }
+  const compared = seeders.filter(({ entity }) => connections[entity]);
+  // a few entities at a time, each paged in order, so the index's GraphQL isn't swamped
+  const reads = concurrencyLimit(GQL_IN_FLIGHT);
+  await Promise.all(
+    compared.map(async ({ entity }) => {
+      indexed[entity] = await reads.run(() =>
+        indexedRows(url, connections[entity], columns(schema, entity), height - 1)
+      );
+    })
+  );
 
-  const diffs = diffSeed(live.rows, indexed, seeders as never);
+  const diffs = diffSeed(live.rows, indexed, compared as never);
   diffs.forEach(diff => console.log(summary(diff)));
+  const dump = arg('dump');
+  if (dump) {
+    writeFileSync(
+      dump,
+      JSON.stringify({ seeded: live.rows, indexed }, (_key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      )
+    );
+  }
   const out = arg('out');
   if (out) {
     writeFileSync(

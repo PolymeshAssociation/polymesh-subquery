@@ -209,6 +209,8 @@ const openKeys = async (snap: ChainSnapshot): Promise<OpenKey[]> => {
 /** Each key's open membership interval, from the start block */
 export const identityKeySeeder: Seeder<IdentityKey> = {
   entity: 'IdentityKey',
+  key: ({ identityId, accountId }) => `${identityId}/${accountId}`,
+  terminal: ({ validToBlockId }) => Boolean(validToBlockId),
   reads: [
     'identity.keyRecords',
     'identity.keyToIdentityIds',
@@ -250,6 +252,7 @@ const portfolioIdOf = (json: unknown): string => {
 /** Every identity's default portfolio, and the user portfolios `portfolio.portfolios` names */
 export const portfolioSeeder: Seeder<Portfolio> = {
   entity: 'Portfolio',
+  terminal: ({ deletedAt }) => Boolean(deletedAt),
   reads: ['identity.didRecords', 'portfolio.portfolios', 'portfolio.portfolioCustodian'],
   oldShapes: { 'identity.didRecords': [3000] },
   async *rows(snap, ctx) {

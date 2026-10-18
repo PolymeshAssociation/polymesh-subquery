@@ -27,8 +27,13 @@ export interface Seeder<T extends SeedRow = SeedRow> {
   /** for an item it reads before 6.0, the `from` of each survey range whose shape it handles */
   oldShapes?: Partial<Record<StorageRef, number[]>>;
   rows(snap: ChainSnapshot, ctx: SeedContext): AsyncIterable<T[]>;
-  /** fields the index counts from the start block, such as lifetime totals */
+  /**
+   * fields whose value depends on history before the start block: totals the index counts from
+   * there, and facts the chain doesn't keep, such as who created a row
+   */
   relative?: string[];
+  /** a row's natural key, when its id names the event that opened it (an interval) */
+  key?(row: T): string;
   /** the fields naming an `Account`, for the account closure */
   accounts?: string[];
   /** a finished row the chain prunes, which an index keeps and a seed can't write */

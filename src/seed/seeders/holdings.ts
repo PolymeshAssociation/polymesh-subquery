@@ -215,6 +215,8 @@ const POSITION_READS: StorageRef[] = [
 
 export const holdingSeeder: Seeder<Holding> = {
   entity: 'Holding',
+  // an emptied holding stays indexed; the chain drops it
+  terminal: ({ amount, nftCount }) => BigInt(amount) === BigInt(0) && !nftCount,
   reads: POSITION_READS,
   oldShapes: { 'identity.keyToIdentityIds': [3000], 'identity.didRecords': [3000] },
   accounts: ['accountId'],

@@ -50,6 +50,7 @@ const variantOf = (json: unknown): string =>
 
 export const multiSigSeeder: Seeder<MultiSig> = {
   entity: 'MultiSig',
+  relative: ['creatorId', 'creatorAccountId'],
   reads: ['multiSig.multiSigSignsRequired'],
   oldShapes: { 'multiSig.multiSigSignsRequired': [3000] },
   // who created it isn't kept, so the creator stays empty
@@ -206,6 +207,7 @@ const heldProposals = (snap: ChainSnapshot): Promise<ReadonlySet<string>> =>
  */
 export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
   entity: 'MultiSigProposal',
+  relative: ['creatorId', 'creatorAccountId', 'extrinsicId'],
   reads: [
     'multiSig.proposals',
     'multiSig.proposalStates',
@@ -272,6 +274,8 @@ export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
  */
 export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
   entity: 'MultiSigProposalVote',
+  // from 7.0 the chain keeps that a signer voted, not which way
+  relative: ['action'],
   reads: ['multiSig.votes', 'multiSig.proposals'],
   parent: { entity: 'MultiSigProposal', field: 'proposalId' },
   async *rows(snap, ctx) {
@@ -304,6 +308,8 @@ export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
  */
 export const proposalSeeder: Seeder<Proposal> = {
   entity: 'Proposal',
+  // who proposed a committee's PIP, and when a finished one was scheduled
+  relative: ['ownerId', 'executionScheduledAt'],
   reads: [
     'pips.proposals',
     'pips.deposits',
@@ -423,6 +429,7 @@ const PAYING_KEY_OFFERS = new Set(['addRelayerPayingKey', 'oldAddRelayerPayingKe
  */
 export const subsidySeeder: Seeder<Subsidy> = {
   entity: 'Subsidy',
+  relative: ['totalDebited'],
   reads: ['relayer.subsidies', 'relayer.pendingSubsidies', 'identity.authorizations'],
   accounts: ['beneficiaryAccountId', 'payingAccountId'],
   terminal: ({ isRemoved }) => isRemoved,

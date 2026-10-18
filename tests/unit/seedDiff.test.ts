@@ -51,6 +51,48 @@ describe('diffSeed', () => {
     expect(diff.differing).toEqual([]);
   });
 
+  it("compares only the index's columns, so an older schema's missing field isn't a difference", () => {
+    const [diff] = diffSeed(
+      { Venue: [{ id: '1', details: 'a', signers: ['x'] }] },
+      { Venue: [{ id: '1', details: 'a' }] },
+      [seeder('Venue')]
+    );
+
+    expect(diff.differing).toEqual([]);
+  });
+
+  it('matches by natural key a row whose id names the block that opened it', () => {
+    const [diff] = diffSeed(
+      {
+        IdentityKey: [{ id: 'd/a/0000001000/0', identityId: 'd', accountId: 'a', role: 'Primary' }],
+      },
+      {
+        IdentityKey: [
+          { id: 'd/a/0000000007/0', identityId: 'd', accountId: 'a', role: 'Primary' },
+          { id: 'd/b/0000000005/0', identityId: 'd', accountId: 'b', validToBlockId: '0000000009' },
+        ],
+      },
+      [
+        seeder('IdentityKey', {
+          key: ({ identityId, accountId }: any) => `${identityId}/${accountId}`,
+          terminal: ({ validToBlockId }: any) => Boolean(validToBlockId),
+        }),
+      ]
+    );
+
+    expect(diff).toMatchObject({ missing: [], extra: [], allowed: 1, differing: [] });
+  });
+
+  it('skips block provenance, and an absent key inside a value reads as null', () => {
+    const [diff] = diffSeed(
+      { Proposal: [{ id: '1', createdBlockId: '9', params: { a: 1 } }] },
+      { Proposal: [{ id: '1', createdBlockId: '2', params: { a: 1, expiry: null } }] },
+      [seeder('Proposal')]
+    );
+
+    expect(diff.differing).toEqual([]);
+  });
+
   it('allows a finished row the chain pruned, and the rows that belong to it', () => {
     const diffs = diffSeed(
       { Instruction: [{ id: '1', status: 'Pending' }], Leg: [{ id: '1/0', instructionId: '1' }] },

@@ -294,6 +294,12 @@
     "[[\"(AccountId32,u64)\",\"AccountId32\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]",
     "[[\"(AccountId32,u64)\",\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]"
   ],
+  "nft.collectionAsset": [
+    "[[\"[u8;16]\"],\"u64\",[\"Blake2_128Concat\"]]"
+  ],
+  "nft.collectionTicker": [
+    "[[\"[u8;12]\"],\"u64\",[\"Blake2_128Concat\"]]"
+  ],
   "nft.nftOwner": [
     "[[\"[u8;12]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"

@@ -30,7 +30,7 @@ import {
   getDocValue,
   getSecurityIdentifiers,
 } from '../../utils/assets';
-import { flagOf, jsonOf, memberOf } from '../../utils/codec';
+import { jsonOf, memberOf } from '../../utils/codec';
 import {
   bytesToString,
   getBigIntValue,
@@ -38,7 +38,7 @@ import {
   getTextValue,
   hexToString,
 } from '../../utils/common';
-import { SeedContext, Seeder } from '../seeder';
+import { pageRows, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 import { assetIdOf, assetIds, identityHoldings } from './assetKeys';
 
@@ -58,15 +58,11 @@ async function* byAsset<T>(
   assetArg = 0
 ): AsyncGenerator<T[]> {
   for await (const page of snap.pages(item)) {
-    const rows: T[] = [];
-    for (const entry of page) {
-      if (entry.value) {
-        rows.push(
-          ...build(entry as Entry & { value: Codec }, await assetIdOf(entry.args[assetArg]))
-        );
-      }
-    }
-    yield rows;
+    yield await pageRows(page, async entry =>
+      entry.value
+        ? build(entry as Entry & { value: Codec }, await assetIdOf(entry.args[assetArg]))
+        : []
+    );
   }
 }
 
@@ -90,6 +86,105 @@ export const customAssetTypeSeeder: Seeder<CustomAssetType> = {
   },
 };
 
+/** The items an asset's row is read from, each whole, by the asset's storage key */
+interface AssetViews {
+  names: ReadonlyMap<string, Entry>;
+  fundingRounds: ReadonlyMap<string, Entry>;
+  identifiers: ReadonlyMap<string, Entry>;
+  frozen: ReadonlyMap<string, Entry>;
+  compliances: ReadonlyMap<string, Entry>;
+  tickers: ReadonlyMap<string, Entry>;
+  customTypes: ReadonlyMap<string, Entry>;
+  collections: ReadonlyMap<string, Entry>;
+  holdings: Awaited<ReturnType<typeof identityHoldings>>;
+}
+
+const assetViews = async (snap: ChainSnapshot, byAssetId: boolean): Promise<AssetViews> => {
+  const [
+    names,
+    fundingRounds,
+    identifiers,
+    frozen,
+    compliances,
+    tickers,
+    customTypes,
+    holdings,
+    collections,
+  ] = await Promise.all([
+    snap.map('asset.assetNames'),
+    snap.map('asset.fundingRound'),
+    snap.map(byAssetId ? 'asset.assetIdentifiers' : 'asset.identifiers'),
+    snap.map('asset.frozen'),
+    snap.map('complianceManager.assetCompliances'),
+    snap.map('asset.assetIdTicker'),
+    snap.map('asset.customTypes'),
+    identityHoldings(snap),
+    // a collection by asset from 7.0, by ticker before
+    snap.map(byAssetId ? 'nft.collectionAsset' : 'nft.collectionTicker'),
+  ]);
+  return {
+    names,
+    fundingRounds,
+    identifiers,
+    frozen,
+    compliances,
+    tickers,
+    customTypes,
+    collections,
+    holdings,
+  };
+};
+
+/** An asset type's name; an unregistered custom type stays unknown, as the creation handler leaves it */
+const assetType = ({ customTypes }: AssetViews, raw: Codec): string | undefined => {
+  const custom = customTypeIdOf(raw);
+  if (!custom) {
+    return builtInAssetType(raw);
+  }
+  const name = customTypes.get(custom.toString())?.value;
+  return name ? bytesToString(name) : undefined;
+};
+
+/** Text the chain may hold empty, unset when empty or absent, as the creation handler leaves it */
+const optionalText = (value: Codec | undefined): string | undefined =>
+  (value && bytesToString(value)) || undefined;
+
+const assetRow = (
+  views: AssetViews,
+  {
+    key,
+    assetId,
+    details,
+    byAssetId,
+  }: { key: string; assetId: string; details: Codec; byAssetId: boolean },
+  ctx: SeedContext
+): Asset => {
+  const held = [...(views.holdings.get(assetId)?.values() ?? [])];
+  const rawTicker = byAssetId ? views.tickers.get(key)?.value?.toString() : key;
+  const ids = views.identifiers.get(key)?.value;
+  const compliance = views.compliances.get(key)?.value?.toJSON() as { paused?: boolean } | null;
+  // the chain keeps no supply for a collection, and the handlers count the tokens issued
+  const tokens = held.reduce((sum, { nftCount }) => sum + BigInt(nftCount), BigInt(0));
+  return Asset.create({
+    id: assetId,
+    assetId,
+    ticker: rawTicker ? hexToString(rawTicker) : undefined,
+    name: optionalText(views.names.get(key)?.value),
+    type: assetType(views, memberOf(details, 'assetType')),
+    isNftCollection: views.collections.has(key),
+    fundingRound: optionalText(views.fundingRounds.get(key)?.value),
+    isDivisible: getBooleanValue(memberOf(details, 'divisible')),
+    isFrozen: views.frozen.get(key)?.value?.toJSON() === true,
+    holderCount: held.filter(({ amount, nftCount }) => amount > BigInt(0) || nftCount > 0).length,
+    identifiers: ids ? getSecurityIdentifiers(ids) : [],
+    ownerId: getTextValue(memberOf(details, 'ownerDid')),
+    totalSupply: getBigIntValue(memberOf(details, 'totalSupply')) + tokens,
+    totalTransfers: BigInt(0),
+    isCompliancePaused: Boolean(compliance?.paused),
+    ...created(ctx),
+  });
+};
+
 /**
  * An asset as its creation and configuration left it: supply, owner, divisibility, type, name,
  * funding round, identifiers, freeze and compliance pause, and how many identities hold it. From
@@ -110,71 +205,22 @@ export const assetSeeder: Seeder<Asset> = {
     'complianceManager.assetCompliances',
     'asset.balanceOf',
     'nft.numberOfNFTs',
+    'nft.collectionAsset',
+    'nft.collectionTicker',
   ],
   relative: ['totalTransfers'],
   async *rows(snap, ctx) {
     const byAssetId = snap.has('asset.assets');
-    const [names, fundingRounds, identifiers, frozen, compliances, tickers, customTypes, holdings] =
-      await Promise.all([
-        snap.map('asset.assetNames'),
-        snap.map('asset.fundingRound'),
-        snap.map(byAssetId ? 'asset.assetIdentifiers' : 'asset.identifiers'),
-        snap.map('asset.frozen'),
-        snap.map('complianceManager.assetCompliances'),
-        snap.map('asset.assetIdTicker'),
-        snap.map('asset.customTypes'),
-        identityHoldings(snap),
-      ]);
-    const typeOf = (assetType: Codec): string | undefined => {
-      const custom = customTypeIdOf(assetType);
-      if (!custom) {
-        return builtInAssetType(assetType);
-      }
-      const name = customTypes.get(custom.toString())?.value;
-      // an unregistered custom type stays unknown, as the creation handler leaves it
-      return name ? bytesToString(name) : undefined;
-    };
-    const holderCount = (assetId: string): number =>
-      [...(holdings.get(assetId)?.values() ?? [])].filter(
-        ({ amount, nftCount }) => amount > BigInt(0) || nftCount > 0
-      ).length;
-    const text = (value: Codec | undefined) => (value && bytesToString(value)) || undefined;
-
+    const views = await assetViews(snap, byAssetId);
     for await (const page of snap.pages(byAssetId ? 'asset.assets' : 'asset.tokens')) {
-      const rows: Asset[] = [];
-      for (const { args, value: details } of page) {
+      yield await pageRows(page, async ({ args, value: details }) => {
         if (!details) {
-          continue;
+          return [];
         }
         const key = args[0].toString();
         const assetId = byAssetId ? key : await getAssetIdForLegacyTicker(key);
-        const rawTicker = byAssetId ? tickers.get(key)?.value?.toString() : key;
-        const assetType = memberOf(details, 'assetType');
-        const ids = identifiers.get(key)?.value;
-        rows.push(
-          Asset.create({
-            id: assetId,
-            assetId,
-            ticker: rawTicker ? hexToString(rawTicker) : undefined,
-            name: text(names.get(key)?.value),
-            type: typeOf(assetType),
-            isNftCollection: flagOf(assetType, 'isNonFungible'),
-            fundingRound: text(fundingRounds.get(key)?.value),
-            isDivisible: getBooleanValue(memberOf(details, 'divisible')),
-            isFrozen: frozen.get(key)?.value?.toJSON() === true,
-            holderCount: holderCount(assetId),
-            identifiers: ids ? getSecurityIdentifiers(ids) : [],
-            ownerId: getTextValue(memberOf(details, 'ownerDid')),
-            totalSupply: getBigIntValue(memberOf(details, 'totalSupply')),
-            totalTransfers: BigInt(0),
-            isCompliancePaused: Boolean(
-              (compliances.get(key)?.value?.toJSON() as { paused?: boolean } | null)?.paused
-            ),
-            ...created(ctx),
-          })
-        );
-      }
-      yield rows;
+        return [assetRow(views, { key, assetId, details, byAssetId }, ctx)];
+      });
     }
   },
 };
@@ -197,34 +243,35 @@ export const tickerReservationSeeder: Seeder<TickerReservation> = {
   async *rows(snap, ctx) {
     const byAssetId = snap.has('asset.uniqueTickerRegistration');
     const [linked, assets] = await Promise.all([snap.map('asset.tickerAssetId'), assetIds(snap)]);
+    /** The asset a ticker is linked to: by `tickerAssetId` from 7.0, before it the one created under it */
+    const reservedAsset = async (key: string): Promise<string | undefined> => {
+      if (byAssetId) {
+        return linked.get(key)?.value?.toString();
+      }
+      const legacy = await getAssetIdForLegacyTicker(key);
+      return assets.has(legacy) ? legacy : undefined;
+    };
     for await (const page of snap.pages(
       byAssetId ? 'asset.uniqueTickerRegistration' : 'asset.tickers'
     )) {
-      const rows: TickerReservation[] = [];
-      for (const { args, value } of page) {
+      yield await pageRows(page, async ({ args, value }) => {
         if (!value) {
-          continue;
+          return [];
         }
         const key = args[0].toString();
         const ticker = hexToString(key);
         const { owner, expiry } = value.toJSON() as { owner: string; expiry: number | null };
-        const legacy = byAssetId ? undefined : await getAssetIdForLegacyTicker(key);
-        rows.push(
+        return [
           TickerReservation.create({
             id: ticker,
             ticker,
             identityId: owner,
             expiry: expiry === null || expiry === undefined ? undefined : new Date(Number(expiry)),
-            assetId: byAssetId
-              ? linked.get(key)?.value?.toString()
-              : legacy && assets.has(legacy)
-              ? legacy
-              : undefined,
+            assetId: await reservedAsset(key),
             ...created(ctx),
-          })
-        );
-      }
-      yield rows;
+          }),
+        ];
+      });
     }
   },
 };
@@ -326,14 +373,12 @@ export const assetMetadataSeeder: Seeder<AssetMetadata> = {
       ];
     });
 
-    const unset: AssetMetadata[] = [];
-    for (const { args, value } of localNames.values()) {
+    yield await pageRows([...localNames.values()], async ({ args, value }) => {
       const keyId = args[1].toString();
-      if (value && !valued.has(`${args[0].toString()}/${MetadataScope.Local}/${keyId}`)) {
-        unset.push(row(await assetIdOf(args[0]), { scope: MetadataScope.Local, keyId }, value));
-      }
-    }
-    yield unset;
+      return value && !valued.has(`${args[0].toString()}/${MetadataScope.Local}/${keyId}`)
+        ? [row(await assetIdOf(args[0]), { scope: MetadataScope.Local, keyId }, value)]
+        : [];
+    });
   },
 };
 
@@ -392,6 +437,7 @@ export const agentGroupMembershipSeeder: Seeder<AgentGroupMembership> = {
  */
 export const checkpointSeeder: Seeder<Checkpoint> = {
   entity: 'Checkpoint',
+  relative: ['scheduleId'],
   reads: [
     'checkpoint.timestamps',
     'checkpoint.totalSupply',
@@ -473,6 +519,7 @@ export const checkpointScheduleSeeder: Seeder<CheckpointSchedule> = {
 /** A mediator every instruction moving the asset needs; who added it the chain doesn't keep */
 export const assetMandatoryMediatorSeeder: Seeder<AssetMandatoryMediator> = {
   entity: 'AssetMandatoryMediator',
+  relative: ['addedById'],
   reads: ['asset.mandatoryMediators'],
   rows: (snap, ctx) =>
     byAsset(snap, 'asset.mandatoryMediators', ({ value }, assetId) =>

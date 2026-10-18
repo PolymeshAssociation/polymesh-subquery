@@ -15,6 +15,7 @@ import { byId } from './goldens';
 
 const ASSET = '0x1234567890abcdef1234567890abcdef';
 const NFTS = '0xfedcba0987654321fedcba0987654321';
+const UNCOLLECTED = '0x0badc0de0badc0de0badc0de0badc0de';
 const OWNER = `0x${'01'.repeat(32)}`;
 const HOLDER = `0x${'02'.repeat(32)}`;
 const AGENT = `0x${'03'.repeat(32)}`;
@@ -63,8 +64,9 @@ describe('from 7.0', () => {
       divisible: true,
       assetType: { Custom: 7 },
     });
+    // the chain keeps no supply for a collection; the handlers count the tokens issued
     chain.put('asset.assets', [NFTS], {
-      totalSupply: 2,
+      totalSupply: 0,
       ownerDid: OWNER,
       divisible: false,
       // 6.1 took a custom type no one had registered
@@ -80,6 +82,14 @@ describe('from 7.0', () => {
     chain.put('asset.balanceOf', [ASSET, HOLDER], 400);
     chain.put('asset.balanceOf', [ASSET, AGENT], 0);
     chain.put('nft.numberOfNFTs', [NFTS, HOLDER], 2);
+    chain.put('nft.collectionAsset', [NFTS], 5);
+    // an asset of an NFT type, whose collection no one has created yet
+    chain.put('asset.assets', [UNCOLLECTED], {
+      totalSupply: 0,
+      ownerDid: OWNER,
+      divisible: false,
+      assetType: { NonFungible: 'Derivative' },
+    });
 
     chain.put('asset.uniqueTickerRegistration', [ticker('ACME')], { owner: OWNER, expiry: null });
     chain.put('asset.tickerAssetId', [ticker('ACME')], ASSET);
@@ -163,6 +173,22 @@ describe('from 7.0', () => {
   it('leaves the type of a collection naming an unregistered custom type unknown, as the handler does', () => {
     expect(rows('Asset')[NFTS]).toMatchObject({ isNftCollection: true, isDivisible: false });
     expect(rows('Asset')[NFTS].type).toBeUndefined();
+  });
+
+  it("counts a collection's supply as the tokens held, as the handlers do", () => {
+    expect(rows('Asset')[NFTS].totalSupply).toBe('2');
+  });
+
+  it('marks a collection once it is created, not for its asset type', () => {
+    expect(rows('Asset')[UNCOLLECTED]).toMatchObject({
+      isNftCollection: false,
+      type: 'Derivative',
+    });
+  });
+
+  it('leaves an absent name and funding round unset, as the creation handler does', () => {
+    expect(rows('Asset')[NFTS].name).toBeUndefined();
+    expect(rows('Asset')[NFTS].fundingRound).toBeUndefined();
   });
 
   it('seeds each ticker reservation, with its asset and expiry', () => {

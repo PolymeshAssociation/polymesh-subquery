@@ -171,6 +171,7 @@ const SETTLEMENT_STATUS: Record<string, ConfidentialSettlementStatusEnum> = {
 
 export const confidentialSettlementSeeder: Seeder<ConfidentialSettlement> = {
   entity: 'ConfidentialSettlement',
+  relative: ['assetRootBlock'],
   reads: [
     'confidentialAssets.settlementLegCount',
     'confidentialAssets.settlementState',

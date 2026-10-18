@@ -22,6 +22,7 @@ import { assetWithTicker } from './assetKeys';
 
 export const customClaimTypeSeeder: Seeder<CustomClaimType> = {
   entity: 'CustomClaimType',
+  relative: ['identityId'],
   reads: ['identity.customClaims'],
   async *rows(snap, ctx) {
     for await (const page of snap.pages('identity.customClaims')) {
