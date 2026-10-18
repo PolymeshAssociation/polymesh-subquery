@@ -84,7 +84,10 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
     }
 
     if (keyRecord.isSecondaryKey) {
-      return { kind: 'secondaryKey', did: keyRecord.asSecondaryKey.toString() };
+      // until 7.0 the record is `SecondaryKey(IdentityId, Permissions)`, a pair
+      const secondary: unknown = keyRecord.asSecondaryKey;
+      const did = Array.isArray(secondary) ? secondary[0] : secondary;
+      return { kind: 'secondaryKey', did: String(did) };
     }
 
     return { kind: 'multiSigSigner', multiSig: keyRecord.asMultiSigSignerKey.toString() };
