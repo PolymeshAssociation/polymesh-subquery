@@ -1,10 +1,118 @@
 {
+  "asset.assetDocuments": [
+    "[[\"[u8;12]\",\"u32\"],\"{\\\"uri\\\":\\\"Bytes\\\",\\\"contentHash\\\":\\\"PolymeshPrimitivesDocumentHash\\\",\\\"name\\\":\\\"Bytes\\\",\\\"docType\\\":\\\"Option<Bytes>\\\",\\\"filingDate\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u32\"],\"{\\\"uri\\\":\\\"Bytes\\\",\\\"contentHash\\\":\\\"PolymeshPrimitivesDocumentHash\\\",\\\"name\\\":\\\"Bytes\\\",\\\"docType\\\":\\\"Option<Bytes>\\\",\\\"filingDate\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "asset.assetIdTicker": [
+    "[[\"[u8;16]\"],\"[u8;12]\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.assetIdentifiers": [
+    "[[\"[u8;16]\"],\"Vec<PolymeshPrimitivesAssetIdentifier>\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.assetMetadataGlobalKeyToName": [
+    "[[\"u64\"],\"Bytes\",[\"Twox64Concat\"]]"
+  ],
+  "asset.assetMetadataGlobalSpecs": [
+    "[[\"u64\"],\"{\\\"url\\\":\\\"Option<Bytes>\\\",\\\"description\\\":\\\"Option<Bytes>\\\",\\\"typeDef\\\":\\\"Option<Bytes>\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "asset.assetMetadataLocalKeyToName": [
+    "[[\"[u8;12]\",\"u64\"],\"Bytes\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"Bytes\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "asset.assetMetadataValueDetails": [
+    "[[\"[u8;12]\",\"{\\\"_enum\\\":{\\\"Global\\\":\\\"u64\\\",\\\"Local\\\":\\\"u64\\\"}}\"],\"{\\\"expire\\\":\\\"Option<u64>\\\",\\\"lockStatus\\\":\\\"PolymeshPrimitivesAssetMetadataAssetMetadataLockStatus\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"{\\\"_enum\\\":{\\\"Global\\\":\\\"u64\\\",\\\"Local\\\":\\\"u64\\\"}}\"],\"{\\\"expire\\\":\\\"Option<u64>\\\",\\\"lockStatus\\\":\\\"PolymeshPrimitivesAssetMetadataAssetMetadataLockStatus\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "asset.assetMetadataValues": [
+    "[[\"[u8;12]\",\"{\\\"_enum\\\":{\\\"Global\\\":\\\"u64\\\",\\\"Local\\\":\\\"u64\\\"}}\"],\"Bytes\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"{\\\"_enum\\\":{\\\"Global\\\":\\\"u64\\\",\\\"Local\\\":\\\"u64\\\"}}\"],\"Bytes\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "asset.assetNames": [
+    "[[\"[u8;12]\"],\"Bytes\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"Bytes\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.assets": [
+    "[[\"[u8;16]\"],\"{\\\"totalSupply\\\":\\\"u128\\\",\\\"ownerDid\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"divisible\\\":\\\"bool\\\",\\\"assetType\\\":\\\"PolymeshPrimitivesAssetAssetType\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.balanceOf": [
+    "[[\"[u8;12]\",\"[u8;32]\"],\"u128\",[\"Blake2_128Concat\",\"Identity\"]]",
+    "[[\"[u8;16]\",\"[u8;32]\"],\"u128\",[\"Blake2_128Concat\",\"Identity\"]]"
+  ],
+  "asset.customTypes": [
+    "[[\"u32\"],\"Bytes\",[\"Twox64Concat\"]]"
+  ],
+  "asset.frozen": [
+    "[[\"[u8;12]\"],\"bool\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"bool\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.fundingRound": [
+    "[[\"[u8;12]\"],\"Bytes\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"Bytes\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.identifiers": [
+    "[[\"[u8;12]\"],\"Vec<PolymeshPrimitivesAssetIdentifier>\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.mandatoryMediators": [
+    "[[\"[u8;12]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.preApprovedAsset": [
+    "[[\"[u8;32]\",\"[u8;16]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
+  ],
+  "asset.preApprovedTicker": [
+    "[[\"[u8;32]\",\"[u8;12]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
+  ],
+  "asset.tickerAssetId": [
+    "[[\"[u8;12]\"],\"[u8;16]\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.tickers": [
+    "[[\"Ticker\"],\"TickerRegistration\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;12]\"],\"{\\\"owner\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"expiry\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.tokens": [
+    "[[\"[u8;12]\"],\"{\\\"totalSupply\\\":\\\"u128\\\",\\\"ownerDid\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"divisible\\\":\\\"bool\\\",\\\"assetType\\\":\\\"PolymeshPrimitivesAssetAssetType\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "asset.uniqueTickerRegistration": [
+    "[[\"[u8;12]\"],\"{\\\"owner\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"expiry\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
   "balances.holds": [
     "[[\"AccountId32\"],\"Vec<{\\\"id\\\":\\\"PolymeshRuntimeRuntimeRuntimeHoldReason\\\",\\\"amount\\\":\\\"u128\\\"}>\",[\"Blake2_128Concat\"]]"
   ],
   "balances.locks": [
     "[[\"AccountId\"],\"Vec<BalanceLock>\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"Vec<PalletBalancesBalanceLock>\",[\"Blake2_128Concat\"]]"
+  ],
+  "checkpoint.schedulePoints": [
+    "[[\"[u8;12]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "checkpoint.scheduledCheckpoints": [
+    "[[\"[u8;12]\",\"u64\"],\"{\\\"pending\\\":\\\"BTreeSet<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"{\\\"pending\\\":\\\"BTreeSet<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "checkpoint.schedules": [
+    "[[\"Ticker\"],\"Vec<StoredSchedule>\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;12]\"],\"Vec<PolymeshCommonUtilitiesCheckpointStoredSchedule>\",[\"Blake2_128Concat\"]]"
+  ],
+  "checkpoint.timestamps": [
+    "[[\"[u8;12]\",\"u64\"],\"u64\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"u64\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "checkpoint.totalSupply": [
+    "[[\"[u8;12]\",\"u64\"],\"u128\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u64\"],\"u128\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "complianceManager.assetCompliances": [
+    "[[\"[u8;12]\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"Vec<PolymeshPrimitivesComplianceManagerComplianceRequirement>\\\"}\",[\"Blake2_128Concat\"]]",
+    "[[\"[u8;16]\"],\"{\\\"paused\\\":\\\"bool\\\",\\\"requirements\\\":\\\"Vec<PolymeshPrimitivesComplianceManagerComplianceRequirement>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "externalAgents.groupOfAgent": [
+    "[[\"[u8;12]\",\"[u8;32]\"],\"{\\\"_enum\\\":{\\\"Full\\\":\\\"Null\\\",\\\"Custom\\\":\\\"u32\\\",\\\"ExceptMeta\\\":\\\"Null\\\",\\\"PolymeshV1CAA\\\":\\\"Null\\\",\\\"PolymeshV1PIA\\\":\\\"Null\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"[u8;32]\"],\"{\\\"_enum\\\":{\\\"Full\\\":\\\"Null\\\",\\\"Custom\\\":\\\"u32\\\",\\\"ExceptMeta\\\":\\\"Null\\\",\\\"PolymeshV1CAA\\\":\\\"Null\\\",\\\"PolymeshV1PIA\\\":\\\"Null\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
+  ],
+  "externalAgents.groupPermissions": [
+    "[[\"[u8;12]\",\"u32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeSet<PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\",\\\"Except\\\":\\\"BTreeSet<PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
+    "[[\"[u8;16]\",\"u32\"],\"{\\\"_enum\\\":{\\\"Whole\\\":\\\"Null\\\",\\\"These\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\",\\\"Except\\\":\\\"BTreeMap<Text, PolymeshPrimitivesSecondaryKeyPalletPermissions>\\\"}}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
   ],
   "identity.didRecords": [
     "[[\"IdentityId\"],\"DidRecord\",[\"Identity\"]]",
@@ -28,6 +136,10 @@
   ],
   "identity.keyToIdentityIds": [
     "[[\"AccountId\"],\"IdentityId\",[\"Twox64Concat\"]]"
+  ],
+  "nft.numberOfNFTs": [
+    "[[\"[u8;12]\",\"[u8;32]\"],\"u64\",[\"Blake2_128Concat\",\"Identity\"]]",
+    "[[\"[u8;16]\",\"[u8;32]\"],\"u64\",[\"Blake2_128Concat\",\"Identity\"]]"
   ],
   "portfolio.portfolioCustodian": [
     "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"[u8;32]\",[\"Twox64Concat\"]]"

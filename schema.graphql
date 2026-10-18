@@ -3766,7 +3766,8 @@ type AssetMandatoryMediator @entity {
   asset: Asset!
   "The mediator. The chain does not check the DID exists, so this can join to no identity"
   identity: Identity
-  addedBy: Identity!
+  "Who added the mediator; null for one seeded from the chain, which doesn't record it"
+  addedBy: Identity
   createdEvent: Event!
   updatedEvent: Event!
 }

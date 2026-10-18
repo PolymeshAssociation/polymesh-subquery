@@ -28,7 +28,7 @@ interface ValueDetail {
  * moment is kept: the chain emits nothing when that lock ends, so without it `isLocked` stayed
  * true for good and nothing said when the value became editable again.
  */
-const detailFrom = (rawDetail: unknown): ValueDetail => {
+export const detailFrom = (rawDetail: unknown): ValueDetail => {
   const detail = rawDetail as { expire?: number | null; lockStatus?: unknown } | null;
   if (!detail) {
     return { isLocked: false, lockedUntil: undefined, expiry: undefined };

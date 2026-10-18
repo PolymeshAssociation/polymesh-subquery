@@ -69,27 +69,29 @@ export const getCustomType = async (
   return name || undefined;
 };
 
+/** The custom type an `AssetType` names, its own or its NFT type's; `undefined` for a built-in one */
+export const customTypeIdOf = (item: Codec): Codec | undefined => {
+  const anyItem: any = item;
+  if (anyItem.isNonFungible) {
+    const nftType = anyItem.asNonFungible;
+    return nftType.type === 'Custom' ? nftType.asCustom : undefined;
+  }
+  return anyItem.isCustom ? anyItem.asCustom : undefined;
+};
+
+/** A built-in `AssetType`'s name, or its NFT type's */
+export const builtInAssetType = (item: Codec): string => {
+  const anyItem: any = item;
+  return anyItem.isNonFungible ? anyItem.asNonFungible.type : getTextValue(item);
+};
+
 export const getAssetType = async (
   item: Codec,
   block: SubstrateBlock,
   eventIdx?: number
 ): Promise<string | undefined> => {
-  const anyItem: any = item;
-
-  if (anyItem.isNonFungible) {
-    const nftType = anyItem.asNonFungible;
-    if (nftType.type === 'Custom') {
-      return getCustomType(nftType.asCustom, block, eventIdx);
-    }
-
-    return nftType.type;
-  } else {
-    if (anyItem.isCustom) {
-      return getCustomType(anyItem.asCustom, block, eventIdx);
-    }
-
-    return getTextValue(item);
-  }
+  const custom = customTypeIdOf(item);
+  return custom ? getCustomType(custom, block, eventIdx) : builtInAssetType(item);
 };
 
 /**
