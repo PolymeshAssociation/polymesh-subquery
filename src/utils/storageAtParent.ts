@@ -118,7 +118,11 @@ const decoding = <T>(what: string, run: () => T): T => {
  * A stored value's raw bytes decoded with this block's registry; `undefined` when nothing is
  * stored. Throws `UndecodableStateError` when the type doesn't read exactly the bytes stored.
  */
-const decodeStored = (storage: StorageItem, raw: unknown, name: string): Codec | undefined => {
+export const decodeStored = (
+  storage: StorageItem,
+  raw: unknown,
+  name: string
+): Codec | undefined => {
   const stored = optionOf(raw, `the stored ${name}`);
 
   if (!stored) {
@@ -199,7 +203,7 @@ const KEYS_PER_PAGE = 1000;
  * bytes arrive proxied, and so does their `.buffer`, which a `DataView` over it rejects. Testnet
  * block 7,737,503 crashed the indexer 69 times reading a deferred slash's era that way.
  */
-const keyArgs = (storage: StorageItem, key: { toHex: () => string }): Codec[] => {
+export const keyArgs = (storage: StorageItem, key: { toHex: () => string }): Codec[] => {
   // hex, because `Bytes` reads a `Uint8Array` as length-prefixed, and a hashed key isn't
   const storageKey = api.registry.createType('StorageKey', key.toHex());
   return storageKey.setMeta(storage.creator.meta).args;
