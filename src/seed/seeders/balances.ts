@@ -87,6 +87,8 @@ const chainFreezes = (
  */
 export const accountBalanceSeeder: Seeder<AccountBalance> = {
   entity: 'AccountBalance',
+  // the runtime's types misread some holds (testnet 8.1), which are read from their bytes
+  raw: ['balances.holds'],
   // a reaped account's row stays indexed
   terminal: ({ total }) => BigInt(total) === BigInt(0),
   reads: [

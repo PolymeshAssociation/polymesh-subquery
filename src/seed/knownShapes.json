@@ -276,6 +276,7 @@
     "[[\"AccountId32\"],\"[u8;32]\",[\"Identity\"]]"
   ],
   "multiSig.proposalDetail": [
+    "[[\"(AccountId32,u64)\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\",\\\"status\\\":\\\"PalletMultisigProposalStatus\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"autoClose\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]",
     "[[\"(AccountId32,u64)\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\",\\\"status\\\":\\\"PolymeshPrimitivesMultisigProposalStatus\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"autoClose\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]",
     "[[\"AccountId32\",\"u64\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\",\\\"status\\\":\\\"PolymeshPrimitivesMultisigProposalStatus\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"autoClose\\\":\\\"bool\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
   ],
@@ -340,7 +341,8 @@
     "[[\"u32\",\"AccountId32\"],\"(bool,u128)\",[\"Twox64Concat\",\"Twox64Concat\"]]"
   ],
   "pips.proposals": [
-    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"proposal\\\":\\\"Call\\\",\\\"proposer\\\":\\\"PalletPipsProposer\\\"}\",[\"Twox64Concat\"]]"
+    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"proposal\\\":\\\"Call\\\",\\\"proposer\\\":\\\"PalletPipsProposer\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"proposal\\\":\\\"Call\\\",\\\"state\\\":\\\"PalletPipsProposalState\\\",\\\"proposer\\\":\\\"PalletPipsProposer\\\"}\",[\"Twox64Concat\"]]"
   ],
   "pips.snapshotMeta": [
     "[[],\"{\\\"createdAt\\\":\\\"u32\\\",\\\"madeBy\\\":\\\"AccountId32\\\",\\\"id\\\":\\\"u32\\\"}\",[]]"

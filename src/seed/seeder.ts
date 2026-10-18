@@ -24,6 +24,8 @@ export interface Seeder<T extends SeedRow = SeedRow> {
   entity: string;
   /** the storage it reads, which the snapshot holds it to and the storage survey must know */
   reads: StorageRef[];
+  /** items whose values it reads from their raw bytes when the block's types can't decode them */
+  raw?: StorageRef[];
   /** for an item it reads before 6.0, the `from` of each survey range whose shape it handles */
   oldShapes?: Partial<Record<StorageRef, number[]>>;
   rows(snap: ChainSnapshot, ctx: SeedContext): AsyncIterable<T[]>;
@@ -115,6 +117,17 @@ export const seed = async (
         })
       );
     }
+    // a value it skipped would be a row left out
+    seeder.reads
+      .filter(item => !seeder.raw?.includes(item) && snap.undecodable(item))
+      .forEach(item => {
+        const count = snap.undecodable(item);
+        throw new Error(
+          `${count} value${count === 1 ? '' : 's'} of ${item} doesn't decode with spec ${
+            ctx.specVersion
+          }'s types, so ${seeder.entity} can't be seeded`
+        );
+      });
     const ms = Date.now() - started;
     logger.info(`Seeded ${rows} ${seeder.entity} rows in ${ms} ms`);
     report.push({ entity: seeder.entity, rows, ms });

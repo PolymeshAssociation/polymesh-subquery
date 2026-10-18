@@ -144,6 +144,17 @@ describe('from 8.0', () => {
     expect(balanceOf(chain, A)).toMatchObject({ bonded: '500', otherReserved: '0' });
   });
 
+  // testnet 26,326,408: the runtime's types read this reason as one byte, and would take the
+  // amount from one byte early, as 53,760,001
+  it('reads a hold the runtime types misread from its raw bytes, a two-byte reason and its amount', async () => {
+    const chain = fakeChain(8_001_020);
+    chain.put('system.account', [A], account(0, 210_000, 0));
+    chain.putRaw('balances.holds', [A], '0x042e0150340300000000000000000000000000');
+    await seedBalances(chain);
+
+    expect(balanceOf(chain, A).holds).toEqual([expect.objectContaining({ amount: '210000' })]);
+  });
+
   it('reads nothing reserved as no holds at all', async () => {
     const chain = fakeChain(8_000_020);
     chain.put('system.account', [A], account(1_000, 0, 0));

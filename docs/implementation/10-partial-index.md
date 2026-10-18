@@ -42,13 +42,15 @@ listed in `src/seed/seeders/index.ts`.
 | `terminal` | a finished row the chain prunes, which an index keeps and a seed can't write |
 | `parent` | the row this one belongs to, pruned with it once that is finished |
 | `key` | a natural key, for an interval whose id names the event that opened it |
+| `raw` | items whose values it reads from their raw bytes when the types can't decode them |
 
 The snapshot (`src/seed/snapshot.ts`) reads storage in bulk at the parent hash: pages of 1,000
 keys, one `queryStorageAt` per page, a few requests in flight, and a page halved when its
 response is too big. It checks every item's shape (keys, value, hashers) against
 `src/seed/knownShapes.json`, which `yarn seed:shapes` generates from the storage survey. A shape
-no seeder was written for stops the seed rather than misreading it. A value its type reads only
-part of is kept raw, and decoders that need the raw bytes read them.
+no seeder was written for stops the seed rather than misreading it. A value the block's types
+can't read (or read only part of) stops the seed too, unless the seeder declares it reads that
+item's raw bytes (`raw`): skipping it would leave a row out.
 
 After the seeders, every address a seeded row names that no seeded `Account` covers gets one.
 

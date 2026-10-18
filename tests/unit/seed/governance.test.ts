@@ -1,6 +1,7 @@
 /**
  * Multisigs with their signers, admins, proposals and votes; PIPs and their votes; and subsidies.
  */
+import { decodeAddress } from '@polkadot/util-crypto';
 import { SEED_EVENT_ID } from '../../../src/mappings/consts';
 import { seed } from '../../../src/seed/seeder';
 import { SEEDERS } from '../../../src/seed/seeders';
@@ -271,5 +272,77 @@ describe('what the chain prunes', () => {
     expect(seeder('MultiSigAdmin').terminal?.({ id: '', status: 'Authorized' } as never)).toBe(
       false
     );
+  });
+});
+
+// mainnet 23,000,000: 43 PIPs hold a call this runtime's types can't read
+describe("a PIP whose call this runtime can't decode", () => {
+  const seedPips = async (raw: string) => {
+    const chain = fakeChain(8_001_020);
+    chain.putRaw('pips.proposals', [5], raw);
+    await seedGovernance(chain);
+    return byId(chain.rows('Proposal'))['0000000005'];
+  };
+  // the PIP's id, then a call no pallet of this runtime has
+  const head = `0x05000000ffff${'00'.repeat(8)}`;
+
+  it("names a committee's PIP from the proposer at the end of its bytes", async () => {
+    expect(await seedPips(`${head}0100`)).toMatchObject({
+      proposer: { type: 'Committee', value: 'Technical' },
+    });
+  });
+
+  it("names a community member's PIP likewise", async () => {
+    const account = '5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y';
+    const hex = Buffer.from(decodeAddress(account)).toString('hex');
+    expect(await seedPips(`${head}00${hex}`)).toMatchObject({
+      proposer: { type: 'Community', value: account },
+    });
+  });
+});
+
+/**
+ * Before 6.0.4 a multisig proposal is keyed by one `(multisig, number)` tuple, and before 5.1 a PIP
+ * carries its own state.
+ */
+describe('on 5.0', () => {
+  let chain: FakeChain;
+  const rows = (entity: string) => byId(chain.rows(entity));
+
+  beforeAll(async () => {
+    chain = fakeChain(5_000_003);
+    const remark = chain.call('system', 'remark', '0x01');
+    chain.put('identity.keyRecords', [PROPOSER], { PrimaryKey: OWNER });
+    chain.put('multiSig.multiSigSignsRequired', [MS], 1);
+    chain.put('multiSig.multiSigSigners', [MS, { Account: SIGNER }], true);
+    chain.put('multiSig.proposals', [[MS, 2]], remark);
+    chain.put('multiSig.proposalDetail', [[MS, 2]], {
+      approvals: 1,
+      rejections: 0,
+      status: 'ActiveOrExpired',
+      expiry: null,
+      autoClose: true,
+    });
+    chain.put('multiSig.votes', [[MS, { Account: SIGNER }, 2]], true);
+    chain.put('pips.proposals', [5], {
+      id: 5,
+      proposal: remark,
+      state: 'Scheduled',
+      proposer: { Community: PROPOSER },
+    });
+    await seedGovernance(chain);
+  });
+
+  it('seeds a proposal keyed by its tuple, with its vote', () => {
+    expect(rows('MultiSigProposal')[`${MS}/2`]).toMatchObject({
+      multisigId: MS,
+      proposalId: 2,
+      approvalCount: 1,
+    });
+    expect(Object.keys(rows('MultiSigProposalVote'))).toEqual([`${MS}/2/${SIGNER}`]);
+  });
+
+  it('seeds a PIP with the state it carries', () => {
+    expect(rows('Proposal')['0000000005'].state).toBe('Scheduled');
   });
 });

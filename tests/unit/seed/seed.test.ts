@@ -78,3 +78,48 @@ describe('seed', () => {
     ).toEqual(['Asset.totalTransfers', 'StakingPosition.totalRewarded']);
   });
 });
+
+/**
+ * A value its type can't read is not a value the chain lacks: a seeder that skipped it would leave
+ * a row out. The seed stops, unless the seeder reads that item's raw bytes itself.
+ */
+describe('a stored value that does not decode', () => {
+  const DID = `0x${'01'.repeat(32)}`;
+  const ctx = (chain: FakeChain): SeedContext => ({
+    block: chain.block,
+    blockId: '0000001000',
+    eventId: SEED_EVENT_ID,
+    datetime: new Date(0),
+    specVersion: chain.specVersion,
+  });
+  const reader = (raw?: string[]): Seeder => ({
+    entity: 'Identity',
+    reads: ['identity.didRecords'],
+    raw: raw as never,
+    async *rows(snap) {
+      for await (const page of snap.pages('identity.didRecords')) {
+        yield page.flatMap(({ args, value }) => (value ? [{ id: args[0].toString() }] : []));
+      }
+    },
+  });
+
+  it('stops the seed, naming the item and how many', async () => {
+    const chain = fakeChain(8_001_020);
+    chain.putRaw('identity.didRecords', [DID], '0x07');
+
+    await expect(
+      seed(snapshotAtParent(chain.block), ctx(chain), { seeders: [reader()] })
+    ).rejects.toThrow(/1 value of identity.didRecords doesn't decode/);
+  });
+
+  it('carries on for a seeder that reads those raw bytes itself', async () => {
+    const chain = fakeChain(8_001_020);
+    chain.putRaw('identity.didRecords', [DID], '0x07');
+
+    await expect(
+      seed(snapshotAtParent(chain.block), ctx(chain), {
+        seeders: [reader(['identity.didRecords'])],
+      })
+    ).resolves.toBeDefined();
+  });
+});

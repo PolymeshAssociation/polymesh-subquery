@@ -31,6 +31,8 @@ export interface ChainSnapshot {
   value(item: StorageRef): Promise<Codec | undefined>;
   /** a view several seeders share, such as items joined by key, built once per seed */
   derive<T>(name: string, build: () => Promise<T>): Promise<T>;
+  /** how many of the item's values read so far don't decode with the block's registry */
+  undecodable(item: StorageRef): number;
 }
 
 export class UnsupportedShapeError extends Error {
@@ -53,6 +55,15 @@ export const snapshotAtParent = (
   const checked = new Map<string, Promise<void>>();
   const maps = new Map<string, Promise<ReadonlyMap<string, Entry>>>();
   const derived = new Map<string, Promise<unknown>>();
+  const undecodable = new Map<StorageRef, number>();
+  // the scan returns only keys that exist, so an entry with no value is one that doesn't decode
+  const counted = (item: StorageRef, page: Entry[]): Entry[] => {
+    const failed = page.filter(({ value }) => !value).length;
+    if (failed) {
+      undecodable.set(item, (undecodable.get(item) ?? 0) + failed);
+    }
+    return page;
+  };
 
   /** Whether the item holds any entry: its first page, the scan closed after it */
   const isPopulated = async (item: StorageRef): Promise<boolean> => {
@@ -90,7 +101,7 @@ export const snapshotAtParent = (
         await check(item);
         const entries = new Map<string, Entry>();
         for await (const page of scanAtParent(block, ...split(item))) {
-          page.forEach(entry => entries.set(entryKey(entry.args), entry));
+          counted(item, page).forEach(entry => entries.set(entryKey(entry.args), entry));
         }
         return entries;
       })();
@@ -107,7 +118,9 @@ export const snapshotAtParent = (
       await check(item);
       const whole = prefix.length === 0 ? maps.get(item) : undefined;
       if (whole === undefined) {
-        yield* scanAtParent(block, ...split(item), ...prefix);
+        for await (const page of scanAtParent(block, ...split(item), ...prefix)) {
+          yield counted(item, page);
+        }
         return;
       }
       const entries = [...(await whole).values()];
@@ -123,6 +136,7 @@ export const snapshotAtParent = (
       await check(item);
       return storageAtParent(block, ...split(item));
     },
+    undecodable: item => undecodable.get(item) ?? 0,
     derive: <T>(name: string, build: () => Promise<T>): Promise<T> => {
       let view = derived.get(name) as Promise<T> | undefined;
       if (!view) {

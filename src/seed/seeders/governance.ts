@@ -12,10 +12,13 @@ import {
   Proposal,
   ProposalStateEnum,
   ProposalVote,
+  Proposer,
   SignerTypeEnum,
   Subsidy,
 } from '../../types';
-import { isObject, memberOf } from '../../utils/codec';
+import { encodeAddress } from '@polkadot/util-crypto';
+import { codecBytes } from '../../utils/bytes';
+import { isObject, memberOf, optionOf, variantOf } from '../../utils/codec';
 import {
   bytesToString,
   getFirstKeyFromJson,
@@ -39,14 +42,6 @@ const created = (ctx: SeedContext) => ({
   createdEventId: ctx.eventId,
   updatedEventId: ctx.eventId,
 });
-
-const variantOf = (json: unknown): string =>
-  (typeof json === 'string'
-    ? json
-    : isObject(json)
-    ? Object.keys(json)[0] ?? ''
-    : ''
-  ).toLowerCase();
 
 export const multiSigSeeder: Seeder<MultiSig> = {
   entity: 'MultiSig',
@@ -192,11 +187,33 @@ const PROPOSAL_STATUS: Record<string, MultiSigProposalStatusEnum> = {
 };
 
 /** Every multisig proposal the chain holds, as `multisig/proposalId` */
+/** A proposal's multisig and number: two key arguments from 6.0.4, one `(multisig, number)` before */
+const proposalKeyOf = (args: Codec[]): { multisigId: string; proposalId: number } => {
+  const [multisigId, proposalId] = (
+    args.length === 1 ? args[0].toJSON() : args.map(arg => arg.toJSON())
+  ) as [string, number];
+  return { multisigId, proposalId: Number(proposalId) };
+};
+
+/** A vote's proposal and signer: `((multisig, number), signer)` from 6.0.4, `(multisig, signer, number)` before */
+const voteKeyOf = (args: Codec[]): { multisigId: string; index: number; signerKey: Codec } => {
+  if (args.length === 1) {
+    const [multisig, signer, index] = args[0] as unknown as [Codec, Codec, Codec];
+    return { multisigId: multisig.toString(), index: Number(index.toString()), signerKey: signer };
+  }
+  const [multisigId, index] = args[0].toJSON() as [string, number];
+  return { multisigId, index: Number(index), signerKey: args[1] };
+};
+
+/** Every proposal the chain holds, as `multisig/number` */
 const heldProposals = (snap: ChainSnapshot): Promise<ReadonlySet<string>> =>
   snap.derive('heldProposals', async () => {
     const held = new Set<string>();
     for await (const page of snap.pages('multiSig.proposals')) {
-      page.forEach(({ args }) => held.add(args.map(String).join('/')));
+      page.forEach(({ args }) => {
+        const { multisigId, proposalId } = proposalKeyOf(args);
+        held.add(`${multisigId}/${proposalId}`);
+      });
     }
     return held;
   });
@@ -214,6 +231,8 @@ export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
     'multiSig.proposalVoteCounts',
     'multiSig.proposalDetail',
   ],
+  // 5.x's detail is the same record under its pallet's type names
+  oldShapes: { 'multiSig.proposalDetail': [5000002] },
   accounts: ['creatorAccountId'],
   terminal: ({ status }) =>
     status !== MultiSigProposalStatusEnum.Active && status !== MultiSigProposalStatusEnum.Approved,
@@ -228,7 +247,9 @@ export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
         if (!call) {
           return [];
         }
+        // the items a proposal is read from share its key, in either form
         const key = args.map(String).join('/');
+        const { multisigId, proposalId } = proposalKeyOf(args);
         const stateJson: unknown = states.get(key)?.value?.toJSON();
         const detail = details.get(key)?.value?.toJSON() as
           | {
@@ -242,14 +263,14 @@ export const multiSigProposalSeeder: Seeder<MultiSigProposal> = {
         const count = (counts.get(key)?.value?.toJSON() ?? detail) as
           | { approvals: number; rejections: number }
           | undefined;
-        const until =
-          isObject(stateJson) && isObject(stateJson.active) ? stateJson.active.until : undefined;
-        const expiry = until ?? detail?.expiry;
+        // an active proposal's expiry, a moment, from 7.0; before it the proposal's detail holds it
+        const active = isObject(stateJson) && isObject(stateJson.active) ? stateJson.active : {};
+        const expiry = (active.until as number | null | undefined) ?? detail?.expiry;
         return [
           MultiSigProposal.create({
-            id: key,
-            multisigId: args[0].toString(),
-            proposalId: Number(args[1].toString()),
+            id: `${multisigId}/${proposalId}`,
+            multisigId,
+            proposalId,
             status:
               PROPOSAL_STATUS[variantOf(stateJson ?? detail?.status)] ??
               MultiSigProposalStatusEnum.Active,
@@ -282,12 +303,12 @@ export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
     const held = await heldProposals(snap);
     for await (const page of snap.pages('multiSig.votes')) {
       yield page.flatMap(({ args, value }) => {
-        const [multisigId, index] = args[0].toJSON() as [string, number];
+        const { multisigId, index, signerKey } = voteKeyOf(args);
         const proposalId = `${multisigId}/${index}`;
         if (value?.toJSON() !== true || !held.has(proposalId)) {
           return [];
         }
-        const { signerType, signerValue } = getMultiSigSigner(args[1], ctx.block);
+        const { signerType, signerValue } = getMultiSigSigner(signerKey, ctx.block);
         return [
           MultiSigProposalVote.create({
             id: `${proposalId}/${signerValue}`,
@@ -301,6 +322,30 @@ export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
   },
 };
 
+const COMMITTEES = ['Technical', 'Upgrade'];
+
+/**
+ * A stored PIP's proposer from its raw bytes, for a PIP whose call this runtime's types can't read:
+ * the proposer is the value's last field, a community member as `0x00` and an account, a committee
+ * as `0x01` and its variant. A deposit under the account settles which, as a committee's ends could
+ * read as a community's.
+ */
+const proposerOfBytes = (
+  bytes: Uint8Array,
+  hasDeposit: (account: string) => boolean
+): Proposer | undefined => {
+  const account =
+    bytes.length >= 33 && bytes.at(-33) === 0
+      ? encodeAddress(bytes.subarray(-32), api.registry.chainSS58)
+      : undefined;
+  const variant = bytes.at(-1);
+  const committee = bytes.at(-2) === 1 && variant !== undefined ? COMMITTEES[variant] : undefined;
+  if (account && (hasDeposit(account) || !committee)) {
+    return { type: 'Community', value: account };
+  }
+  return committee ? { type: 'Committee', value: committee } : undefined;
+};
+
 /**
  * A PIP still on chain: its proposer and owner, deposit, metadata, state, result and place in the
  * snapshot queue. A finished PIP is there only while the chain doesn't prune them. A committee's
@@ -308,6 +353,10 @@ export const multiSigProposalVoteSeeder: Seeder<MultiSigProposalVote> = {
  */
 export const proposalSeeder: Seeder<Proposal> = {
   entity: 'Proposal',
+  // a PIP's call can be one this runtime's types can't read
+  raw: ['pips.proposals'],
+  // 5.0's PIP carries its own state, which 5.1 moved to `proposalStates`
+  oldShapes: { 'pips.proposals': [5000002] },
   // who proposed a committee's PIP, and when a finished one was scheduled
   relative: ['ownerId', 'executionScheduledAt'],
   reads: [
@@ -343,12 +392,16 @@ export const proposalSeeder: Seeder<Proposal> = {
     );
     const snapshotId = (meta?.toJSON() as { id?: number } | null)?.id;
     for await (const page of snap.pages('pips.proposals')) {
-      yield page.flatMap(({ args, value }) => {
-        if (!value) {
+      yield page.flatMap(({ args, value, raw }) => {
+        const id = args[0].toString();
+        const stored = value ? undefined : optionOf(raw, 'the stored PIP');
+        const proposer = value
+          ? getProposerValue(memberOf(value, 'proposer'))
+          : stored &&
+            proposerOfBytes(codecBytes(stored), account => deposits.has(`${id}/${account}`));
+        if (!proposer) {
           return [];
         }
-        const id = args[0].toString();
-        const proposer = getProposerValue(memberOf(value, 'proposer'));
         const community = proposer.type === 'Community';
         const deposit = community ? deposits.get(`${id}/${proposer.value}`)?.value : undefined;
         const pipMeta = metadata.get(id)?.value as unknown as Record<string, Codec> | undefined;
@@ -356,7 +409,7 @@ export const proposalSeeder: Seeder<Proposal> = {
         const totals = results.get(id)?.value?.toJSON() as
           | { ayesStake?: number | string; naysStake?: number | string }
           | undefined;
-        const state = states.get(id)?.value;
+        const state = states.get(id)?.value ?? (value && memberOf(value, 'state'));
         const snapshotted = queued.has(id);
         const text = (bytes?: Codec) =>
           bytes && !bytes.isEmpty ? bytesToString(bytes) : undefined;
