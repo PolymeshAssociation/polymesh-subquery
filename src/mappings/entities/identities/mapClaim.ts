@@ -19,11 +19,9 @@ import {
   getAssetIdWithTicker,
   getTextValue,
   recordAnomaly,
-  scanDoubleMap,
 } from '../../../utils';
 import { AssetIdWithTicker } from '../../../utils/assets';
 import { CanonicalValue, encodeValue } from '../../args/encode';
-import { memberOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
@@ -207,38 +205,6 @@ export const storedClaim = (value: Codec): Codec | undefined => {
   }
 
   return optional.isNone ? undefined : optional.unwrap();
-};
-
-/**
- * The claims in the chain's genesis config, which no `ClaimAdded` announces: CDD claims for genesis
- * and system identities, issued by the governance committee and the CDD system identity. Read from
- * `identity.claims` at the genesis block and written as if added there, so a later `ClaimRevoked`
- * finds them.
- */
-export const seedGenesisClaims = async (
-  block: SubstrateBlock,
-  blockId: string,
-  blockEventId: string
-): Promise<void> => {
-  const entries = await scanDoubleMap(api.query.identity.claims);
-
-  await Promise.all(
-    entries.map(([key, value], eventIdx) => {
-      const stored = storedClaim(value);
-
-      if (!stored) {
-        return undefined;
-      }
-
-      const target = memberOf(key.args[0], 'target').toString();
-      return writeClaim(target, encodeValue(stored, 'IdentityClaim'), {
-        block,
-        blockId,
-        eventIdx,
-        blockEventId,
-      });
-    })
-  );
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {

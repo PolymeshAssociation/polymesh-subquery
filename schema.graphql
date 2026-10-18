@@ -1834,10 +1834,8 @@ type IndexOrigin @entity {
   startBlockHash: String!
   "The runtime that executed the start block"
   specVersion: Int!
-  "Domains seeded from chain storage at the start block, or derived from genesis"
-  seededDomains: [String!]!
-  "Domains the index could not seed, each with the reason"
-  unseededDomains: [String!]!
+  "The fields counted from the start block, as `Entity.field`, such as lifetime totals: relative to it rather than absolute"
+  relativeFields: [String!]!
   "When the start block was produced. UTC, serialised with no timezone marker — parse as UTC"
   datetime: Date!
 }

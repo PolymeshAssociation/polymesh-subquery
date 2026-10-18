@@ -55,6 +55,8 @@ export interface FakeChain {
   putRaw(item: string, args: unknown[], hex: string): void;
   /** the block a seed starts at: its parent is the stored state */
   block: SubstrateBlock;
+  /** the block at `number`, its parent likewise the stored state */
+  blockAt(number: number, timestamp?: Date): SubstrateBlock;
   /** what the seed wrote */
   rows(entity: string): Record<string, unknown>[];
 }
@@ -75,6 +77,28 @@ const option = (registry: TypeRegistry, hex: string | undefined) =>
         isEmpty: false,
         unwrap: () => registry.createType('Raw', hexToU8a(hex)),
       };
+
+/** A block at `number`, whose parent's state is the fake node's */
+const blockAt = (
+  specVersion: number,
+  number: number,
+  timestamp = new Date('2026-01-01T00:00:00Z')
+): SubstrateBlock =>
+  ({
+    block: {
+      header: {
+        number: { toString: () => String(number), toNumber: () => number },
+        parentHash: { toHex: () => '0xparent', toString: () => '0xparent' },
+        hash: { toHex: () => `0xblock${number}` },
+        stateRoot: { toHex: () => '0xstate' },
+        extrinsicsRoot: { toHex: () => '0xextrinsics' },
+      },
+      extrinsics: [],
+    },
+    events: [],
+    specVersion,
+    timestamp,
+  } as unknown as SubstrateBlock);
 
 const fake = (
   specName: string,
@@ -141,17 +165,8 @@ const fake = (
       const [section, name] = item.split('.');
       storage.set(query[section][name].key(...args), hex);
     },
-    block: {
-      block: {
-        header: {
-          number: { toString: () => '1000', toNumber: () => 1000 },
-          parentHash: '0xparent',
-          hash: { toHex: () => '0xblock' },
-        },
-      },
-      specVersion,
-      timestamp: new Date('2026-01-01T00:00:00Z'),
-    } as unknown as SubstrateBlock,
+    block: blockAt(specVersion, 1000),
+    blockAt: (number, timestamp) => blockAt(specVersion, number, timestamp),
     rows,
   };
 };
