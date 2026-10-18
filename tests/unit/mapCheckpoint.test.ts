@@ -372,3 +372,99 @@ describe('handleScheduleCreated / handleScheduleRemoved', () => {
     expect(db.CheckpointSchedule[`${assetId}/9`].removedEventId).toBeDefined();
   });
 });
+
+/**
+ * The chain drops a schedule once its last checkpoint fires, with no event to say so. From v6 a
+ * schedule declares its moments, so the last is known; before v6 the asset's schedules are read
+ * back after a scheduled checkpoint fires.
+ */
+describe('a schedule its last checkpoint completes', () => {
+  const M1 = 1_700_000_000_000;
+  const M2 = 1_700_000_600_000;
+
+  const scheduled = (checkpointId: number, moment: number, specVersion: number) =>
+    tupleEvent({
+      section: 'checkpoint',
+      method: 'CheckpointCreated',
+      specVersion,
+      blockNumber: '900',
+      idx: 2,
+      data: [
+        codec(undefined),
+        codec(RAW_ASSET_ID),
+        codec(checkpointId),
+        codec(1_000),
+        codec(moment),
+      ],
+    });
+
+  const withSchedule = (assetId: string, schedule: object, checkpoints: object = {}) => {
+    const db = mockStore({
+      CheckpointSchedule: {
+        [`${assetId}/1`]: { id: `${assetId}/1`, assetId, scheduleId: 1, ...schedule },
+      },
+      Checkpoint: checkpoints,
+    });
+    mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
+    return db;
+  };
+
+  it('is completed by the checkpoint at the last moment it declared', async () => {
+    const assetId = await assetIdAt(8_000_000);
+    const db = withSchedule(
+      assetId,
+      { scheduledCheckpoints: [new Date(M1), new Date(M2)] },
+      { [`${assetId}/4`]: { id: `${assetId}/4`, assetId, scheduleId: `${assetId}/1` } }
+    );
+
+    await handleCheckpointCreated(scheduled(5, M2, 8_000_000));
+
+    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBe('0000000900/0000000002');
+  });
+
+  it('is still active while it has moments to come', async () => {
+    const assetId = await assetIdAt(8_000_000);
+    const db = withSchedule(assetId, { scheduledCheckpoints: [new Date(M1), new Date(M2)] });
+
+    await handleCheckpointCreated(scheduled(4, M1, 8_000_000));
+
+    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBeUndefined();
+  });
+
+  it('is completed before v6 when the chain no longer holds it', async () => {
+    const assetId = await assetIdAt(PRE_V6_SPEC);
+    const db = withSchedule(assetId, { period: '{"unit":"Week","amount":1}', remaining: 1 });
+    (globalThis as any).api.query = { checkpoint: { schedules: jest.fn(async () => codec([])) } };
+
+    await handleCheckpointCreated(scheduled(5, M1, PRE_V6_SPEC));
+
+    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBe('0000000900/0000000002');
+  });
+
+  it('takes its next moment and count from the chain before v6 while it runs on', async () => {
+    const assetId = await assetIdAt(PRE_V6_SPEC);
+    const db = withSchedule(assetId, { period: '{"unit":"Week","amount":1}', remaining: 3 });
+    (globalThis as any).api.query = {
+      checkpoint: {
+        schedules: jest.fn(async () =>
+          codec([
+            {
+              schedule: { start: M1, period: { unit: 'Week', amount: 1 } },
+              id: 1,
+              at: M2,
+              remaining: 2,
+            },
+          ])
+        ),
+      },
+    };
+
+    await handleCheckpointCreated(scheduled(5, M1, PRE_V6_SPEC));
+
+    expect(db.CheckpointSchedule[`${assetId}/1`]).toMatchObject({
+      remaining: 2,
+      nextCheckpointAt: new Date(M2),
+    });
+    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBeUndefined();
+  });
+});

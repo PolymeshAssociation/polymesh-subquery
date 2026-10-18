@@ -3112,8 +3112,10 @@ type CheckpointSchedule @entity {
   nextCheckpointAt: Date
   "The checkpoints this schedule has actually created"
   checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
-  "null while active"
+  "Set when an agent removes the schedule; null otherwise"
   removedEvent: Event
+  "The scheduled checkpoint after which the chain dropped the schedule, its last; null while checkpoints are still to come. The chain emits nothing when a schedule runs out"
+  completedEvent: Event
   createdEvent: Event!
 }
 
