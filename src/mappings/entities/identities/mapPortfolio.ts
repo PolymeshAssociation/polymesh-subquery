@@ -4,6 +4,7 @@ import { EventIdEnum, Portfolio } from '../../../types';
 import {
   AssetHolderDetails,
   bytesToString,
+  EXPLICIT_NULL,
   getAssetId,
   getBigIntValue,
   getFirstKeyFromJson,
@@ -145,7 +146,8 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
   const custodian = getTextValue(rawCustodian);
 
   const portfolio = await getPortfolio(portfolioValue);
-  portfolio.custodianId = custodian;
+  // custody returned to the owner removes the custodian on chain
+  portfolio.custodianId = custodian === portfolio.identityId ? EXPLICIT_NULL : custodian;
   portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
