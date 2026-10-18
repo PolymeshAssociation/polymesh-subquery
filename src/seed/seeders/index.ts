@@ -47,6 +47,22 @@ import {
   distributionSeeder,
   stoSeeder,
 } from './corporateActions';
+import {
+  multiSigAdminSeeder,
+  multiSigProposalSeeder,
+  multiSigProposalVoteSeeder,
+  multiSigSeeder,
+  multiSigSignerSeeder,
+  proposalSeeder,
+  proposalVoteSeeder,
+  subsidySeeder,
+} from './governance';
+import {
+  eraSeeder,
+  stakingPositionSeeder,
+  validatorEraSeeder,
+  validatorSeeder,
+} from './staking';
 import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
 
 /**
@@ -98,4 +114,16 @@ export const SEEDERS: Seeder[] = [
   corporateBallotSeeder,
   corporateBallotVoteSeeder,
   stoSeeder,
+  multiSigSeeder,
+  multiSigSignerSeeder,
+  multiSigAdminSeeder,
+  multiSigProposalSeeder,
+  multiSigProposalVoteSeeder,
+  proposalSeeder,
+  proposalVoteSeeder,
+  subsidySeeder,
+  stakingPositionSeeder,
+  validatorSeeder,
+  eraSeeder,
+  validatorEraSeeder,
 ] as Seeder[];

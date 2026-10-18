@@ -24,6 +24,22 @@ import {
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
 
+/** One call a proposal dispatches, from its `toHuman()` form */
+const callToProposalParam = (call: any): SingleProposal => ({
+  module: call.section.toLowerCase() as ModuleIdEnum,
+  call: camelToSnakeCase(call.method) as CallIdEnum,
+  args: JSON.stringify(call.args),
+});
+
+/** The calls a proposal dispatches, from its call's `toHuman()` form: a batch's calls, or the one */
+export const proposalParamsOf = (
+  call: any
+): Pick<MultiSigProposalParams, 'isBatch' | 'isBridge' | 'proposals'> =>
+  call?.method?.startsWith('batch')
+    ? // batch, batch_atomic, batch_all, batch_optimistic
+      { isBatch: true, isBridge: false, proposals: call?.args?.calls?.map(callToProposalParam) }
+    : { isBatch: false, isBridge: false, proposals: [callToProposalParam(call)] };
+
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
   const { extrinsic, blockEventId, extrinsicId } = extractArgs(event);
 
@@ -44,14 +60,6 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
   };
 
   const args = (extrinsic?.extrinsic?.toHuman() as any).method.args;
-
-  const callToProposalParam = (call: any): SingleProposal => {
-    return {
-      module: call.section.toLowerCase() as ModuleIdEnum,
-      call: camelToSnakeCase(call.method) as CallIdEnum,
-      args: JSON.stringify(call.args),
-    };
-  };
 
   const underlyingCall = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
 
@@ -76,16 +84,8 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     // for extrinsic bridge.propose_bridge_tx
     proposalParams.bridge = [args.bridge_tx];
     proposalParams.isBridge = true;
-  } else if (args?.proposal?.method?.startsWith('batch')) {
-    // for batch, batch_atomic, batch_all, batch_optimistic
-    proposalParams.isBatch = true;
-    proposalParams.proposals = args?.proposal?.args?.calls?.map(callToProposalParam);
-    proposalParams.expiry = args.expiry;
-    proposalParams.autoClose = args.auto_close;
   } else {
-    const proposal: SingleProposal = callToProposalParam(args.proposal);
-
-    proposalParams.proposals = [proposal];
+    Object.assign(proposalParams, proposalParamsOf(args.proposal));
     proposalParams.expiry = args.expiry;
     proposalParams.autoClose = args.auto_close;
   }

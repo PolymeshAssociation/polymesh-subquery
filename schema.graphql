@@ -3222,7 +3222,8 @@ type Proposal @entity {
   id: ID!
   proposer: Proposer!
   state: ProposalStateEnum!
-  owner: Identity!
+  "The proposer's identity; null for a PIP seeded from the chain that a committee proposed, as the chain doesn't keep which member"
+  owner: Identity
   balance: BigInt!
   url: String
   description: String

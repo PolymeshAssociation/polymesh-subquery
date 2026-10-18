@@ -44,7 +44,7 @@ type StakingEventDetails = {
   rewardDestinationAccount?: string;
 };
 
-const getRewardDestinationAccount = (
+export const getRewardDestinationAccount = (
   destination: RewardDestinationName,
   account?: string,
   stashAccount?: string

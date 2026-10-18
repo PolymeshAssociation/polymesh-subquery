@@ -207,6 +207,42 @@
   "identity.keyToIdentityIds": [
     "[[\"AccountId\"],\"IdentityId\",[\"Twox64Concat\"]]"
   ],
+  "multiSig.adminDid": [
+    "[[\"AccountId32\"],\"[u8;32]\",[\"Identity\"]]"
+  ],
+  "multiSig.multiSigSigners": [
+    "[[\"AccountId\",\"Signatory\"],\"Signatory\",[\"Identity\",\"Twox64Concat\"]]",
+    "[[\"AccountId32\",\"AccountId32\"],\"bool\",[\"Identity\",\"Twox64Concat\"]]",
+    "[[\"AccountId32\",\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"bool\",[\"Identity\",\"Twox64Concat\"]]",
+    "[[\"AccountId32\",\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",[\"Identity\",\"Twox64Concat\"]]"
+  ],
+  "multiSig.multiSigSignsRequired": [
+    "[[\"AccountId\"],\"u64\",[\"Identity\"]]",
+    "[[\"AccountId32\"],\"u64\",[\"Identity\"]]"
+  ],
+  "multiSig.multiSigToIdentity": [
+    "[[\"AccountId\"],\"IdentityId\",[\"Identity\"]]",
+    "[[\"AccountId32\"],\"[u8;32]\",[\"Identity\"]]"
+  ],
+  "multiSig.proposalDetail": [
+    "[[\"(AccountId32,u64)\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\",\\\"status\\\":\\\"PolymeshPrimitivesMultisigProposalStatus\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"autoClose\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\",\"u64\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\",\\\"status\\\":\\\"PolymeshPrimitivesMultisigProposalStatus\\\",\\\"expiry\\\":\\\"Option<u64>\\\",\\\"autoClose\\\":\\\"bool\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "multiSig.proposalStates": [
+    "[[\"AccountId32\",\"u64\"],\"{\\\"_enum\\\":{\\\"Active\\\":\\\"{\\\\\\\"until\\\\\\\":\\\\\\\"Option<u64>\\\\\\\"}\\\",\\\"ExecutionSuccessful\\\":\\\"Null\\\",\\\"ExecutionFailed\\\":\\\"Null\\\",\\\"Rejected\\\":\\\"Null\\\"}}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "multiSig.proposalVoteCounts": [
+    "[[\"AccountId32\",\"u64\"],\"{\\\"approvals\\\":\\\"u64\\\",\\\"rejections\\\":\\\"u64\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "multiSig.proposals": [
+    "[[\"(AccountId32,u64)\"],\"Call\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\",\"u64\"],\"Call\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "multiSig.votes": [
+    "[[\"(AccountId32,PolymeshPrimitivesSecondaryKeySignatory,u64)\"],\"bool\",[\"Twox64Concat\"]]",
+    "[[\"(AccountId32,u64)\",\"AccountId32\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"(AccountId32,u64)\",\"{\\\"_enum\\\":{\\\"Identity\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
   "nft.nftOwner": [
     "[[\"[u8;12]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\",\"u64\"],\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
@@ -223,6 +259,37 @@
   ],
   "nft.tokenApproval": [
     "[[\"[u8;16]\",\"u64\"],\"AccountId32\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "pips.deposits": [
+    "[[\"u32\",\"AccountId32\"],\"{\\\"owner\\\":\\\"AccountId32\\\",\\\"amount\\\":\\\"u128\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "pips.pipSkipCount": [
+    "[[\"u32\"],\"u8\",[\"Twox64Concat\"]]"
+  ],
+  "pips.pipToSchedule": [
+    "[[\"u32\"],\"u32\",[\"Twox64Concat\"]]"
+  ],
+  "pips.proposalMetadata": [
+    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"url\\\":\\\"Option<Bytes>\\\",\\\"description\\\":\\\"Option<Bytes>\\\",\\\"createdAt\\\":\\\"u32\\\",\\\"transactionVersion\\\":\\\"u32\\\",\\\"expiry\\\":\\\"PolymeshCommonUtilitiesMaybeBlock\\\"}\",[\"Twox64Concat\"]]",
+    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"url\\\":\\\"Option<Bytes>\\\",\\\"description\\\":\\\"Option<Bytes>\\\",\\\"createdAt\\\":\\\"u32\\\",\\\"transactionVersion\\\":\\\"u32\\\",\\\"expiry\\\":\\\"PolymeshPrimitivesMaybeBlock\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "pips.proposalResult": [
+    "[[\"u32\"],\"{\\\"ayesCount\\\":\\\"u32\\\",\\\"ayesStake\\\":\\\"u128\\\",\\\"naysCount\\\":\\\"u32\\\",\\\"naysStake\\\":\\\"u128\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "pips.proposalStates": [
+    "[[\"u32\"],\"{\\\"_enum\\\":[\\\"Pending\\\",\\\"Rejected\\\",\\\"Scheduled\\\",\\\"Failed\\\",\\\"Executed\\\",\\\"Expired\\\"]}\",[\"Twox64Concat\"]]"
+  ],
+  "pips.proposalVotes": [
+    "[[\"u32\",\"AccountId32\"],\"(bool,u128)\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "pips.proposals": [
+    "[[\"u32\"],\"{\\\"id\\\":\\\"u32\\\",\\\"proposal\\\":\\\"Call\\\",\\\"proposer\\\":\\\"PalletPipsProposer\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "pips.snapshotMeta": [
+    "[[],\"{\\\"createdAt\\\":\\\"u32\\\",\\\"madeBy\\\":\\\"AccountId32\\\",\\\"id\\\":\\\"u32\\\"}\",[]]"
+  ],
+  "pips.snapshotQueue": [
+    "[[],\"Vec<PalletPipsSnapshottedPip>\",[]]"
   ],
   "portfolio.frozenPortfolios": [
     "[[\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\",\"[u8;16]\"],\"bool\",[\"Twox64Concat\",\"Blake2_128Concat\"]]"
@@ -244,6 +311,12 @@
   ],
   "portfolio.portfolios": [
     "[[\"[u8;32]\",\"u64\"],\"Bytes\",[\"Identity\",\"Twox64Concat\"]]"
+  ],
+  "relayer.pendingSubsidies": [
+    "[[\"AccountId32\",\"AccountId32\"],\"u128\",[\"Blake2_128Concat\",\"Blake2_128Concat\"]]"
+  ],
+  "relayer.subsidies": [
+    "[[\"AccountId32\"],\"{\\\"payingKey\\\":\\\"AccountId32\\\",\\\"remaining\\\":\\\"u128\\\"}\",[\"Blake2_128Concat\"]]"
   ],
   "revive.originalAccount": [
     "[[\"H160\"],\"AccountId32\",[\"Identity\"]]"
@@ -287,14 +360,51 @@
   "settlement.venueSigners": [
     "[[\"u64\",\"AccountId32\"],\"bool\",[\"Twox64Concat\",\"Twox64Concat\"]]"
   ],
+  "staking.activeEra": [
+    "[[],\"ActiveEraInfo\",[]]",
+    "[[],\"{\\\"index\\\":\\\"u32\\\",\\\"start\\\":\\\"Option<u64>\\\"}\",[]]"
+  ],
   "staking.bonded": [
     "[[\"AccountId\"],\"AccountId\",[\"Twox64Concat\"]]",
     "[[\"AccountId32\"],\"AccountId32\",[\"Twox64Concat\"]]"
+  ],
+  "staking.currentEra": [
+    "[[],\"EraIndex\",[]]",
+    "[[],\"u32\",[]]"
+  ],
+  "staking.erasStakers": [
+    "[[\"EraIndex\",\"AccountId\"],\"Exposure\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u32\",\"AccountId32\"],\"{\\\"total\\\":\\\"Compact<u128>\\\",\\\"own\\\":\\\"Compact<u128>\\\",\\\"others\\\":\\\"Vec<PalletStakingIndividualExposure>\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u32\",\"AccountId32\"],\"{\\\"total\\\":\\\"Compact<u128>\\\",\\\"own\\\":\\\"Compact<u128>\\\",\\\"others\\\":\\\"Vec<SpStakingIndividualExposure>\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "staking.erasStakersOverview": [
+    "[[\"u32\",\"AccountId32\"],\"{\\\"total\\\":\\\"Compact<u128>\\\",\\\"own\\\":\\\"Compact<u128>\\\",\\\"nominatorCount\\\":\\\"u32\\\",\\\"pageCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
+  ],
+  "staking.erasStartSessionIndex": [
+    "[[\"EraIndex\"],\"SessionIndex\",[\"Twox64Concat\"]]",
+    "[[\"u32\"],\"u32\",[\"Twox64Concat\"]]"
+  ],
+  "staking.erasValidatorPrefs": [
+    "[[\"EraIndex\",\"AccountId\"],\"ValidatorPrefs\",[\"Twox64Concat\",\"Twox64Concat\"]]",
+    "[[\"u32\",\"AccountId32\"],\"{\\\"commission\\\":\\\"Compact<Perbill>\\\",\\\"blocked\\\":\\\"bool\\\"}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
   ],
   "staking.ledger": [
     "[[\"AccountId\"],\"StakingLedger\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "staking.payee": [
+    "[[\"AccountId\"],\"RewardDestination\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\",\\\"None\\\":\\\"Null\\\"}}\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",[\"Twox64Concat\"]]"
+  ],
+  "staking.permissionedIdentity": [
+    "[[\"IdentityId\"],\"PermissionedIdentityPrefs\",[\"Twox64Concat\"]]",
+    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
+  ],
+  "staking.validators": [
+    "[[\"AccountId\"],\"ValidatorPrefs\",[\"Twox64Concat\"]]",
+    "[[\"AccountId32\"],\"{\\\"commission\\\":\\\"Compact<Perbill>\\\",\\\"blocked\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]"
   ],
   "statistics.activeAssetStats": [
     "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]",
@@ -323,5 +433,8 @@
     "[[\"AccountId\"],\"AccountInfo\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PalletBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PolymeshCommonUtilitiesBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]"
+  ],
+  "validators.permissionedIdentity": [
+    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
   ]
 }

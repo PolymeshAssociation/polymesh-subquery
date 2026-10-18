@@ -41,7 +41,7 @@ const registryOf = (
       });
     });
   });
-  return { registry, query: query as any };
+  return { registry, query: query as any, tx: expandMetadata(registry, decoded).tx as any };
 };
 
 export interface FakeChain {
@@ -49,6 +49,8 @@ export interface FakeChain {
   registry: TypeRegistry;
   /** stores `value` (JSON a codec takes) under `item`'s key built from `args` */
   put(item: string, args: unknown[], value: unknown): void;
+  /** a call of this runtime, as JSON a `Call` value takes, such as `system.remark` */
+  call(section: string, method: string, ...args: unknown[]): unknown;
   /** stores raw SCALE bytes, such as a value this runtime's types can't decode */
   putRaw(item: string, args: unknown[], hex: string): void;
   /** the block a seed starts at: its parent is the stored state */
@@ -81,7 +83,7 @@ const fake = (
   raw: [string, string][] = [],
   ss58Format = 42
 ): FakeChain => {
-  const { registry, query } = registryOf(specName, specVersion, metadata, ss58Format);
+  const { registry, query, tx } = registryOf(specName, specVersion, metadata, ss58Format);
   const storage = new Map<string, string>(raw);
   const hexOf = (key: unknown) =>
     typeof key === 'string' ? key : (key as { toHex(): string }).toHex();
@@ -131,6 +133,9 @@ const fake = (
       const valueType = registry.createLookupType(type.isMap ? type.asMap.value : type.asPlain);
       // the stored SCALE bytes: a `Bytes` value's `toHex` leaves out its length prefix
       storage.set(entry.key(...args), u8aToHex(registry.createType(valueType, value).toU8a()));
+    },
+    call(section, method, ...args) {
+      return tx[section][method](...args).toHex();
     },
     putRaw(item, args, hex) {
       const [section, name] = item.split('.');
