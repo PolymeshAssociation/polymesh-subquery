@@ -67,8 +67,8 @@ export type KeyRecordResolution =
  * `identity.keyRecords` is a 5.x rename of `identity.keyToIdentityIds`; a genesis resync sees the
  * older name on early blocks. The legacy storage is `Option<IdentityId>` on both public chains
  * (Polymesh launched at v3, so there is no `LinkedKeyInfo` enum to unwrap), and primary vs
- * secondary is read from `identity.didRecords`. It predates multisig signer keys, so that variant
- * only arises on the current path.
+ * secondary is read from `identity.didRecords`. A multisig signer key was kept apart then, in
+ * `multiSig.keyToMultiSig`, which 5.0 migrated into `keyRecords`.
  */
 const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution | undefined> => {
   if (typeof api.query.identity.keyRecords === 'function') {
@@ -97,7 +97,9 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
   const raw = await legacyQuery('identity', 'keyToIdentityIds', [3000, 5_000_002])(address);
 
   if (raw.isEmpty) {
-    return undefined;
+    const multiSig = await legacyQuery('multiSig', 'keyToMultiSig', [3000, 5_000_002])(address);
+
+    return multiSig.isEmpty ? undefined : { kind: 'multiSigSigner', multiSig: multiSig.toString() };
   }
 
   const did = getTextValue(raw);
