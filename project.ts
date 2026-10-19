@@ -54,7 +54,7 @@ const filters: Record<string, Record<string, string[]>> = {
     RegisterAssetMetadataLocalType: ['handleRegisterAssetMetadataLocalType'],
     RemoveAssetAffirmationExemption: [],
     RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
-    Redeemed: ['handleRedeemed', 'handleAssetRedeemedStatistics'],
+    Redeemed: ['handleRedeemed'],
     SetAccountFreeze: ['handleSetAccountFreeze'],
     SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
     SetAssetMetadataValueDetails: ['handleSetAssetMetadataValueDetails'],

@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
-  Asset,
   ClaimTypeEnum,
   StatOpTypeEnum,
   StatType,
@@ -76,7 +75,7 @@ const getStatTypes = (
   });
 };
 
-const upsertStatType = async (
+export const upsertStatType = async (
   { assetId, opType, claimType, claimIssuerId, customClaimTypeId }: Attributes<StatType>,
   blockEventId: string
 ) => {
@@ -174,7 +173,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
   );
 };
 
-const getStatTypeId = (
+export const getStatTypeId = (
   assetId: string,
   opType: string,
   claimType?: string,
@@ -349,21 +348,5 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
       { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
       blockEventId
     );
-  }
-};
-
-export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-
-  const [, rawAssetId] = params;
-  const assetId = await getAssetId(rawAssetId, block);
-
-  const specVersion = block.specVersion;
-  const specName = api.runtimeVersion.specName.toString();
-  if (specVersion < transferRestrictionSpecVersion && specName !== 'polymesh_private_dev') {
-    const asset = await Asset.get(assetId);
-    if (asset.totalSupply === BigInt(0)) {
-      await StatType.remove(`${assetId}/Count`);
-    }
   }
 };

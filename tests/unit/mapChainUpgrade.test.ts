@@ -1,6 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import mapChainUpgrade from '../../src/mappings/entities/block/mapChainUpgrade';
 import { migrateToAssetIds } from '../../src/mappings/migrations/assetIdMigration';
+import { migrateTransferManagers } from '../../src/mappings/migrations/statisticsMigration';
 import { removeIdentitySigners } from '../../src/mappings/entities/multiSig/mapMultiSig';
 import { deletePendingProposals } from '../../src/mappings/entities/multiSig/mapMultiSigProposal';
 
@@ -13,6 +14,9 @@ jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
 }));
 jest.mock('../../src/mappings/migrations/assetIdMigration', () => ({
   migrateToAssetIds: jest.fn(),
+}));
+jest.mock('../../src/mappings/migrations/statisticsMigration', () => ({
+  migrateTransferManagers: jest.fn(),
 }));
 
 /**
@@ -63,6 +67,7 @@ describe('mapChainUpgrade', () => {
     (deletePendingProposals as jest.Mock).mockResolvedValue(undefined);
     (removeIdentitySigners as jest.Mock).mockResolvedValue(undefined);
     (migrateToAssetIds as jest.Mock).mockResolvedValue(undefined);
+    (migrateTransferManagers as jest.Mock).mockResolvedValue(undefined);
     (store.set as jest.Mock).mockResolvedValue(undefined);
   });
 
@@ -191,6 +196,18 @@ describe('mapChainUpgrade', () => {
     expect(removeIdentitySigners).toHaveBeenCalledTimes(1);
   });
 
+  it('writes the transfer conditions 5.0 made of transfer managers as the chain crosses into it', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0000003010', specVersionId: 3_010, transactionVersion: 2 },
+    ]);
+    stubRuntimeVersions({ spec: 5_000_002, tx: 3 }, { spec: 3_010, tx: 2 });
+
+    await mapChainUpgrade(upgradeEvent(4_397_818, 3_010));
+
+    expect(migrateTransferManagers).toHaveBeenCalledTimes(1);
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+  });
+
   it('rewrites what 7.0 migrated to asset ids as the chain crosses into it', async () => {
     (store.getByFields as jest.Mock).mockResolvedValue([
       { id: '0006003050', specVersionId: 6_003_050, transactionVersion: 4 },
@@ -212,5 +229,6 @@ describe('mapChainUpgrade', () => {
 
     expect(removeIdentitySigners).not.toHaveBeenCalled();
     expect(migrateToAssetIds).not.toHaveBeenCalled();
+    expect(migrateTransferManagers).not.toHaveBeenCalled();
   });
 });

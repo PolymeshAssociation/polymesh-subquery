@@ -4,6 +4,7 @@ import { padId } from '../../../utils';
 import { removeIdentitySigners } from '../multiSig/mapMultiSig';
 import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
 import { migrateToAssetIds } from '../../migrations/assetIdMigration';
+import { migrateTransferManagers } from '../../migrations/statisticsMigration';
 
 /** Zero padded so `orderBy: id` on the table is numeric order over spec versions */
 export const chainUpgradeId = (specVersion: number): string => padId(specVersion.toString());
@@ -50,6 +51,9 @@ export interface ChainUpgradeCrossing {
   blockEventId: string;
 }
 
+/** The first runtime whose transfer restrictions are statistics, not transfer managers */
+const STATISTICS_FROM = 5_000_000;
+
 /** The first runtime that names assets by id, and whose multisigs have only account signers */
 const ASSET_IDS_FROM = 7_000_000;
 
@@ -69,6 +73,10 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
 
   /** Whether this upgrade moved the chain onto `release` or later from a runtime before it */
   const crossed = (release: number) => previousSpecVersion < release && specVersion >= release;
+
+  if (crossed(STATISTICS_FROM)) {
+    await migrateTransferManagers(blockEventId);
+  }
 
   if (crossed(ASSET_IDS_FROM)) {
     await removeIdentitySigners(blockEventId);
