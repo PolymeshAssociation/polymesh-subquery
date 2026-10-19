@@ -137,7 +137,7 @@ const filters: Record<string, Record<string, string[]>> = {
     AssetComplianceReplaced: ['handleComplianceReplaced'],
     AssetComplianceReset: ['handleComplianceReset'],
     AssetComplianceResumed: ['handleAssetComplianceResumed'],
-    ComplianceRequirementChanged: [],
+    ComplianceRequirementChanged: ['handleComplianceChanged'],
     ComplianceRequirementCreated: ['handleComplianceCreated'],
     ComplianceRequirementRemoved: ['handleComplianceRemoved'],
     TrustedDefaultClaimIssuerAdded: ['handleTrustedDefaultClaimIssuerAdded'],

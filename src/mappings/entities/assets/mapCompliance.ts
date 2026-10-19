@@ -79,6 +79,25 @@ export const handleComplianceCreated = async (event: SubstrateEvent): Promise<vo
   await createCompliance(assetId, complianceId, data, blockEventId);
 };
 
+/** `change_compliance_requirement` replaces one requirement in place, under its id */
+export const handleComplianceChanged = async (event: SubstrateEvent): Promise<void> => {
+  const { params, block, blockEventId } = extractArgs(event);
+  const [, rawAssetId, rawCompliance] = params;
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const { complianceId, data } = getComplianceValue(rawCompliance);
+  const compliance = await Compliance.get(`${assetId}/${complianceId}`);
+
+  if (!compliance) {
+    await createCompliance(assetId, complianceId, data, blockEventId);
+    return;
+  }
+
+  compliance.data = data;
+  compliance.updatedEventId = blockEventId;
+  await compliance.save();
+};
+
 export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<void> => {
   const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawCompliances] = params;
