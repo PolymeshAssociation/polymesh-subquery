@@ -10,6 +10,7 @@ import {
   getNumberValue,
   getProposerValue,
   getTextValue,
+  is8xChain,
   padNumericId,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
@@ -229,15 +230,28 @@ export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<v
 
 /**
  * `ProposalRefund(did, pipId, amount)`: the PIP's deposits are returned, the proposer's with them.
- * Until 8.0 all at once; from 8.0 128 a block, so a PIP with more deposits reads empty a block or
- * so before the proposer's own is returned.
+ * Until 8.0 all at once. From 8.0 128 a block, each batch with its own event and in storage order,
+ * so the proposer's deposit is gone once the chain no longer holds it.
  */
 export const handleProposalRefunded = async (event: SubstrateEvent): Promise<void> => {
   const [, rawPipId] = extractArgs(event).params;
+  const proposal = await getProposal(rawPipId, event);
 
-  await updateProposal(rawPipId, event, proposal => {
-    proposal.balance = BigInt(0);
-  });
+  if (!proposal) {
+    return;
+  }
+
+  const { type, value: proposer } = proposal.proposer;
+  if (is8xChain(event.block) && type === 'Community' && proposal.balance > BigInt(0)) {
+    const deposit = await api.query.pips.deposits(getNumberValue(rawPipId), proposer);
+    if (deposit.isSome) {
+      return;
+    }
+  }
+
+  proposal.balance = BigInt(0);
+  proposal.updatedEventId = extractArgs(event).blockEventId;
+  await proposal.save();
 };
 
 /** `PipClosed(did, pipId, pruned)` — the PIP is closed; whether the chain pruned it does not change the history here. */
