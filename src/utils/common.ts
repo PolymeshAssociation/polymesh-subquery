@@ -1,16 +1,6 @@
 import { decodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
-import {
-  BN,
-  hexAddPrefix,
-  hexHasPrefix,
-  hexStripPrefix,
-  hexToU8a,
-  isHex,
-  isUtf8,
-  u8aToHex,
-  u8aToString,
-} from '@polkadot/util';
+import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
@@ -194,11 +184,16 @@ export const getBooleanValue = (item: Codec): boolean => {
 /**
  * Text from hex bytes: as UTF-8, which is how an event codec renders the same bytes, or a character
  * per byte for bytes that are no UTF-8.
+ *
+ * Decoded through a `Buffer`, as `text.ts` does, since the host's `TextDecoder` rejects the
+ * sandbox's typed arrays. A `Buffer` replaces each invalid sequence, so the bytes are UTF-8 exactly
+ * when the text encodes back to them.
  */
 export const hexToString = (input: string): string => {
-  const bytes = hexToU8a(hexAddPrefix(hexStripPrefix(input)));
-  const text = isUtf8(bytes)
-    ? u8aToString(bytes)
+  const bytes = Buffer.from(hexStripPrefix(input), 'hex');
+  const utf8 = bytes.toString('utf8');
+  const text = Buffer.from(utf8, 'utf8').equals(bytes)
+    ? utf8
     : Array.from(bytes, byte => String.fromCodePoint(byte)).join('');
   return removeNullChars(text);
 };

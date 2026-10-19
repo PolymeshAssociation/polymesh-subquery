@@ -72,3 +72,47 @@ describe('hexToString', () => {
     expect(hexToString('0x4143000000')).toBe('AC');
   });
 });
+
+/**
+ * Mappings run in SubQuery's vm2 sandbox, where the host's `TextDecoder` rejects the sandbox's typed
+ * arrays (both dev-server resyncs failed at block 1, decoding a genesis lock id). The utils are
+ * loaded afresh here with a `TextDecoder`, global and from `util`, that does the same.
+ */
+describe('hexToString inside the mappings sandbox', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const util = require('util') as { TextDecoder: typeof TextDecoder };
+  const realm = globalThis as unknown as { TextDecoder: typeof TextDecoder };
+  const host = util.TextDecoder;
+  let sandboxed: typeof hexToString;
+
+  beforeAll(() => {
+    class HostOnlyDecoder extends host {
+      decode(input?: Parameters<TextDecoder['decode']>[0]): string {
+        if (!Buffer.isBuffer(input)) {
+          throw new TypeError('The "list" argument must be an instance of ArrayBufferView');
+        }
+        return super.decode(input);
+      }
+    }
+    util.TextDecoder = HostOnlyDecoder;
+    realm.TextDecoder = HostOnlyDecoder;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      sandboxed = require('../../src/utils').hexToString;
+    });
+  });
+
+  afterAll(() => {
+    util.TextDecoder = host;
+    realm.TextDecoder = host;
+  });
+
+  it('decodes without the host TextDecoder', () => {
+    expect(sandboxed('0x7374616b696e6720')).toBe('staking ');
+    expect(sandboxed(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
+      'Café — 株式'
+    );
+    expect(sandboxed('0xff41')).toBe('ÿA');
+    expect(sandboxed('0x4143000000')).toBe('AC');
+  });
+});
