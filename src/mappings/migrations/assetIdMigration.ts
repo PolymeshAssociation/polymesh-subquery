@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { EXPLICIT_NULL, getAllByFields } from '../../utils';
 import { getAssetIdForLegacyTicker } from '../../utils/assets';
+import { currentComplianceForm } from '../../utils/compliance';
 import {
   legacyTickerOf,
   needsAssetIdRepair,
@@ -89,10 +90,7 @@ export const assetPermissionsToV7 = async (permissions: Subset): Promise<Subset>
     )
   );
 
-/**
- * A JSON value with every claim scope on a ticker scoped to its asset id, and field names as
- * 7.0's metadata gives them (camelCase; metadata before v14 gave snake_case).
- */
+/** A JSON value with every claim scope on a ticker scoped to its asset id */
 const scopesToV7 = async (value: unknown): Promise<unknown> => {
   if (Array.isArray(value)) {
     return Promise.all(value.map(scopesToV7));
@@ -107,18 +105,13 @@ const scopesToV7 = async (value: unknown): Promise<unknown> => {
   }
 
   return Object.fromEntries(
-    await Promise.all(
-      entries.map(async ([key, member]) => [
-        key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
-        await scopesToV7(member),
-      ])
-    )
+    await Promise.all(entries.map(async ([key, member]) => [key, await scopesToV7(member)]))
   );
 };
 
-/** A compliance requirement's stored JSON as 7.0 holds it */
+/** A compliance requirement's stored JSON as 7.0 holds it, in the current form */
 export const complianceToV7 = async (data: string): Promise<string> =>
-  JSON.stringify(await scopesToV7(JSON.parse(data)));
+  JSON.stringify(await scopesToV7(currentComplianceForm(JSON.parse(data))));
 
 /** A key's `PermissionsJson` as 7.0 holds it */
 const keyPermissionsToV7 = async (permissions: Subset): Promise<Subset> => {
