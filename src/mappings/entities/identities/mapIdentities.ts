@@ -224,7 +224,7 @@ interface PermissionsLike {
   transactionGroups: string[];
 }
 
-const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
+export const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
   let assets: AssetPermissions | undefined = undefined,
     portfolios: PortfolioPermissions | undefined = undefined,
     transactions: TransactionPermissions | undefined = undefined,
