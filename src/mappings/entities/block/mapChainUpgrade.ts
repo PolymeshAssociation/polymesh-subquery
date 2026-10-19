@@ -1,9 +1,9 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { ChainUpgrade } from '../../../types';
 import { padId } from '../../../utils';
-import { repairAuthorizationsAfterUpgrade } from '../identities/repairAuthorizations';
 import { removeIdentitySigners } from '../multiSig/mapMultiSig';
 import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
+import { migrateToAssetIds } from '../../migrations/assetIdMigration';
 
 /** Zero padded so `orderBy: id` on the table is numeric order over spec versions */
 export const chainUpgradeId = (specVersion: number): string => padId(specVersion.toString());
@@ -46,13 +46,12 @@ export interface ChainUpgradeCrossing {
   /** The transaction version of the last upgrade, which multisig stores; 0 before the first */
   storedTransactionVersion: number;
   transactionVersion: number;
-  block: SubstrateBlock;
   /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites. */
   blockEventId: string;
 }
 
-/** The first runtime whose multisigs have only account signers */
-const ACCOUNT_SIGNERS_ONLY_FROM = 7_000_000;
+/** The first runtime that names assets by id, and whose multisigs have only account signers */
+const ASSET_IDS_FROM = 7_000_000;
 
 /**
  * Work that only makes sense to run once, at the boundary the chain crossed.
@@ -65,17 +64,19 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
     specVersion,
     storedTransactionVersion,
     transactionVersion,
-    block,
     blockEventId,
   } = crossing;
 
-  if (previousSpecVersion < ACCOUNT_SIGNERS_ONLY_FROM && specVersion >= ACCOUNT_SIGNERS_ONLY_FROM) {
+  /** Whether this upgrade moved the chain onto `release` or later from a runtime before it */
+  const crossed = (release: number) => previousSpecVersion < release && specVersion >= release;
+
+  if (crossed(ASSET_IDS_FROM)) {
     await removeIdentitySigners(blockEventId);
+    await migrateToAssetIds(blockEventId);
   }
 
   if (transactionVersion > storedTransactionVersion) {
     await deletePendingProposals(blockEventId);
-    await repairAuthorizationsAfterUpgrade(block, blockEventId);
   }
 };
 
@@ -137,7 +138,6 @@ export default async (substrateEvent: SubstrateEvent): Promise<void> => {
     specVersion,
     storedTransactionVersion: latest?.transactionVersion ?? 0,
     transactionVersion,
-    block,
     blockEventId,
   });
 };
