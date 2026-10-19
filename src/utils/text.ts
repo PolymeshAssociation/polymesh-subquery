@@ -1,27 +1,17 @@
 import { Codec } from '@polkadot/types/types';
-import { hexStripPrefix, hexToU8a, isHex, u8aToHex } from '@polkadot/util';
+import { hexToU8a, isHex, u8aToHex } from '@polkadot/util';
+import { utf8Text } from './bytes';
 import { getTextValue, removeNullChars } from './common';
 
 /**
  * UTF-8 text, keeping a leading byte-order mark, or `undefined` when it is invalid or holds a NUL,
  * which Postgres text rejects.
- *
- * Decoded through a `Buffer`, which the host provides: mappings run in SubQuery's vm2 sandbox,
- * where the host's `TextDecoder` rejects the sandbox's typed arrays. A `Buffer` replaces each
- * invalid sequence, so the text is valid exactly when it encodes back to the same bytes.
  */
-const utf8Text = (bytes: Uint8Array): string | undefined => {
-  if (bytes.includes(0)) {
-    return undefined;
-  }
-  const buffer = Buffer.from(hexStripPrefix(u8aToHex(bytes)), 'hex');
-  const text = buffer.toString('utf8');
-
-  return Buffer.from(text, 'utf8').equals(buffer) ? text : undefined;
-};
+const nulFreeText = (bytes: Uint8Array): string | undefined =>
+  bytes.includes(0) ? undefined : utf8Text(bytes);
 
 /** UTF-8 text when it is valid and NUL-free; otherwise hex. */
-export const textOrHex = (bytes: Uint8Array): string => utf8Text(bytes) ?? u8aToHex(bytes);
+export const textOrHex = (bytes: Uint8Array): string => nulFreeText(bytes) ?? u8aToHex(bytes);
 
 /**
  * A fixed-width value padded with trailing NULs, such as a ticker or a memo: its text without the
@@ -32,7 +22,7 @@ export const paddedText = (bytes: Uint8Array): string => {
   while (end > 0 && bytes[end - 1] === 0) {
     end -= 1;
   }
-  return utf8Text(bytes.subarray(0, end)) ?? u8aToHex(bytes);
+  return nulFreeText(bytes.subarray(0, end)) ?? u8aToHex(bytes);
 };
 
 /** Whether `text` holds a control character other than tab, line feed and carriage return. */

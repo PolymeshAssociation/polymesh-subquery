@@ -8,6 +8,7 @@ import {
   hexToString,
   removeNullChars,
 } from '../../src/utils';
+import { inSandbox } from './sandbox';
 
 test('fromEntries', () => {
   expect(
@@ -73,46 +74,35 @@ describe('hexToString', () => {
   });
 });
 
-/**
- * Mappings run in SubQuery's vm2 sandbox, where the host's `TextDecoder` rejects the sandbox's typed
- * arrays (both dev-server resyncs failed at block 1, decoding a genesis lock id). The utils are
- * loaded afresh here with a `TextDecoder`, global and from `util`, that does the same.
- */
+/** Both dev-server resyncs of 2026-10-19 failed at block 1, decoding a genesis lock id. */
 describe('hexToString inside the mappings sandbox', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const util = require('util') as { TextDecoder: typeof TextDecoder };
-  const realm = globalThis as unknown as { TextDecoder: typeof TextDecoder };
-  const host = util.TextDecoder;
-  let sandboxed: typeof hexToString;
+  const sandboxed = inSandbox(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('../../src/utils') as typeof import('../../src/utils')
+  );
 
-  beforeAll(() => {
-    class HostOnlyDecoder extends host {
-      decode(input?: Parameters<TextDecoder['decode']>[0]): string {
-        if (!Buffer.isBuffer(input)) {
-          throw new TypeError('The "list" argument must be an instance of ArrayBufferView');
-        }
-        return super.decode(input);
-      }
-    }
-    util.TextDecoder = HostOnlyDecoder;
-    realm.TextDecoder = HostOnlyDecoder;
-    jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      sandboxed = require('../../src/utils').hexToString;
-    });
-  });
-
-  afterAll(() => {
-    util.TextDecoder = host;
-    realm.TextDecoder = host;
-  });
-
-  it('decodes without the host TextDecoder', () => {
-    expect(sandboxed('0x7374616b696e6720')).toBe('staking ');
-    expect(sandboxed(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
+  it('decodes hex text without the host TextDecoder', () => {
+    const { hexToString } = sandboxed();
+    expect(hexToString('0x7374616b696e6720')).toBe('staking ');
+    expect(hexToString(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
       'Café — 株式'
     );
-    expect(sandboxed('0xff41')).toBe('ÿA');
-    expect(sandboxed('0x4143000000')).toBe('AC');
+    expect(hexToString('0xff41')).toBe('ÿA');
+    expect(hexToString('0x4143000000')).toBe('AC');
+  });
+});
+
+describe('utf8Text inside the mappings sandbox', () => {
+  const sandboxed = inSandbox(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('../../src/utils/bytes') as typeof import('../../src/utils/bytes')
+  );
+
+  it('decodes bytes and hex, and rejects what is no UTF-8', () => {
+    const { utf8Text } = sandboxed();
+    expect(utf8Text(new Uint8Array([0xe2, 0x82, 0xac]))).toBe('€');
+    expect(utf8Text('0xf09f9880')).toBe('😀');
+    expect(utf8Text('0xc328')).toBeUndefined();
+    expect(utf8Text('0xeda080')).toBeUndefined();
   });
 });

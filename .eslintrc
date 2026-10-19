@@ -1,7 +1,9 @@
 {
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
+  "plugins": [
+    "@typescript-eslint"
+  ],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/eslint-recommended",
@@ -16,7 +18,7 @@
         "paths": [
           {
             "name": "@polkadot/api-augment",
-            "message": "Reintroducing @polkadot/api-augment (the generic Substrate kitchensink augmentation) alongside polymesh-types silently decides which chain ~161 shared members describe, by import order. Use `import '@polkadot/types-augment'` for the runtime type registry instead — see docs/implementation/12-types-and-ci.md §12.2."
+            "message": "Reintroducing @polkadot/api-augment (the generic Substrate kitchensink augmentation) alongside polymesh-types silently decides which chain ~161 shared members describe, by import order. Use `import '@polkadot/types-augment'` for the runtime type registry instead \u2014 see docs/implementation/12-types-and-ci.md \u00a712.2."
           }
         ]
       }
@@ -24,13 +26,42 @@
   },
   "overrides": [
     {
-      "files": ["src/**/*.ts"],
+      "files": [
+        "src/**/*.ts"
+      ],
       "rules": {
         "no-restricted-syntax": [
           "error",
           {
             "selector": "CallExpression[callee.property.name='toU8a']",
             "message": "Inside SubQuery's sandbox, @polkadot/util misreads the host's Uint8Array as text. Use codecBytes (src/utils/bytes.ts), or disable this with a comment where the bytes go straight back to the host's API."
+          },
+          {
+            "selector": "NewExpression[callee.name='TextDecoder']",
+            "message": "Inside SubQuery's sandbox, the host's TextDecoder rejects the sandbox's typed arrays. Decode with utf8Text (src/utils/bytes.ts)."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@polkadot/api-augment",
+                "message": "Reintroducing @polkadot/api-augment (the generic Substrate kitchensink augmentation) alongside polymesh-types silently decides which chain ~161 shared members describe, by import order. Use `import '@polkadot/types-augment'` for the runtime type registry instead \u2014 see docs/implementation/12-types-and-ci.md \u00a712.2."
+              },
+              {
+                "name": "@polkadot/util",
+                "importNames": [
+                  "u8aToString",
+                  "hexToString"
+                ],
+                "message": "Inside SubQuery's sandbox, this decodes with the host's TextDecoder, which rejects the sandbox's typed arrays. Decode with utf8Text (src/utils/bytes.ts), or the codec's own toUtf8()."
+              },
+              {
+                "name": "@polkadot/x-textdecoder",
+                "message": "Inside SubQuery's sandbox, this decodes with the host's TextDecoder, which rejects the sandbox's typed arrays. Decode with utf8Text (src/utils/bytes.ts), or the codec's own toUtf8()."
+              }
+            ]
           }
         ]
       }
