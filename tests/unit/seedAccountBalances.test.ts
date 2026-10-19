@@ -131,8 +131,8 @@ describe('seedAccountBalances', () => {
       });
 
       expect(db['AccountBalance'][A].locks).toEqual([
-        { lockId: 'staking ', amount: '300', reasons: 'staking' },
         { lockId: 'residual', amount: '400' },
+        { lockId: 'staking ', amount: '300', reasons: 'staking' },
       ]);
       // the bond is now visible as bonded, and frozen is still the MAX
       expect(db['AccountBalance'][A]).toMatchObject({
@@ -164,8 +164,8 @@ describe('seedAccountBalances', () => {
         otherReserved: BigInt(50),
       });
       expect(db['AccountBalance'][A].holds).toEqual([
-        { reason: 'Staking', amount: '200' },
         { reason: 'Preimage', amount: '50' },
+        { reason: 'Staking', amount: '200' },
       ]);
       expect(db['AccountBalance'][A].locks).toEqual([{ lockId: 'residual', amount: '400' }]);
     });

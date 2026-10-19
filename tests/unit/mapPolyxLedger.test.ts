@@ -2623,8 +2623,8 @@ describe('pre-v8 PIPs deposit locks', () => {
     });
 
     expect(row.locks).toEqual([
-      { lockId: 'staking ', amount: '3', reasons: 'staking' },
       { lockId: 'pips    ', amount: '2000', reasons: 'pips' },
+      { lockId: 'staking ', amount: '3', reasons: 'staking' },
     ]);
     expect(row.frozen).toBe(BigInt(2000));
     expect(row.bonded).toBe(BigInt(3));
