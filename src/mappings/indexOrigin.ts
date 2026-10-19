@@ -16,6 +16,7 @@ export const DOMAINS = {
   evmAccountMappings: 'EVM account mappings, from revive.originalAccount',
   identities: 'identities and their keys',
   assets: 'assets',
+  tickerReservations: 'ticker reservations, linked or not',
   assetCounts: "each asset's holder and transfer counts",
   accountHoldings: 'v8 account-level holdings',
   nfts: 'NFT tokens and holders',
@@ -35,6 +36,7 @@ export const UNSEEDED_FROM_START_BLOCK: Record<Exclude<Domain, SeededDomain>, st
     'resolved from chain storage one identity at a time, the first time one is referenced',
   assets:
     'resolved from chain storage one asset at a time, the first time one is referenced (from v7)',
+  tickerReservations: 'no seeder yet: a reservation is only visible as it next changes',
   assetCounts:
     'derived by the index from the start block on, so relative to it rather than absolute',
   accountHoldings: 'no seeder yet: account-level holders are only visible as they next move',
