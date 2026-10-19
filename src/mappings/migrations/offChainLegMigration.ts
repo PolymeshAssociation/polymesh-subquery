@@ -10,7 +10,7 @@ import { getAssetIdForLegacyTicker } from '../../utils/assets';
  * was pending or failed, which a reschedule could retry, and pruned it once settled.
  */
 
-const HELD = [InstructionStatusEnum.Created, InstructionStatusEnum.Failed];
+const HELD = new Set([InstructionStatusEnum.Created, InstructionStatusEnum.Failed]);
 
 /** `leg` as 6.0 holds it, fungible; `undefined` when it stays off-chain */
 const fungibleAt6 = async (leg: Leg, blockEventId: string): Promise<Leg | undefined> => {
@@ -30,11 +30,10 @@ const fungibleAt6 = async (leg: Leg, blockEventId: string): Promise<Leg | undefi
 };
 
 export const migrateOffChainLegs = async (blockEventId: string): Promise<void> => {
-  const held = (
-    await Promise.all(
-      HELD.map(status => getAllByFields<Instruction>('Instruction', [['status', '=', status]]))
-    )
-  ).flat();
+  // read whole, once: no index covers `status`
+  const held = (await getAllByFields<Instruction>('Instruction', [])).filter(({ status }) =>
+    HELD.has(status)
+  );
   const legs = (
     await Promise.all(
       held.map(({ id }) => getAllByFields<Leg>('Leg', [['instructionId', '=', id]]))
