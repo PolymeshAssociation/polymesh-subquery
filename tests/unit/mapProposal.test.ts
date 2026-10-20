@@ -153,6 +153,39 @@ describe('votes', () => {
 
     expect(db.ProposalVote[`${pip(3)}/${VOTER}`]).toMatchObject({ accountId: VOTER });
   });
+
+  /** A vote sets the voter's deposit to its own, so the proposer's vote on its PIP sets the balance */
+  it("sets a PIP's balance to the deposit its proposer votes with", async () => {
+    const PROPOSER = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+    const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+    const db = mockStore({
+      Proposal: {
+        [pip(3)]: {
+          id: pip(3),
+          proposer: { type: 'Community', value: PROPOSER },
+          balance: BigInt(10_000),
+          totalAyeWeight: BigInt(10_000),
+          totalNayWeight: BigInt(0),
+        },
+      },
+      ProposalVote: {
+        [`${pip(3)}/${PROPOSER}`]: {
+          id: `${pip(3)}/${PROPOSER}`,
+          vote: true,
+          weight: BigInt(10_000),
+        },
+      },
+    });
+
+    await handleVoted(pipsEvent('Voted', [TEST_DID, OTHER, 3, true, 500]));
+    expect(db.Proposal[pip(3)].balance).toBe(BigInt(10_000));
+
+    await handleVoted(pipsEvent('Voted', [TEST_DID, PROPOSER, 3, true, 2_000]));
+    expect(db.Proposal[pip(3)]).toMatchObject({
+      balance: BigInt(2_000),
+      totalAyeWeight: BigInt(2_500),
+    });
+  });
 });
 
 /**

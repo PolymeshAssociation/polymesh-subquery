@@ -145,6 +145,10 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
   } else {
     proposal.totalNayWeight += weight;
   }
+  // a vote sets the voter's deposit to the one it's weighed by, the proposer's included
+  if (proposal.proposer?.type === 'Community' && proposal.proposer.value === account) {
+    proposal.balance = weight;
+  }
   proposal.updatedEventId = blockEventId;
 
   await Promise.all([proposal.save(), proposalVote.save()]);
