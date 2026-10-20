@@ -10,6 +10,7 @@ import {
   SignerTypeEnum,
 } from '../../../types';
 import {
+  blockTime,
   capitalizeFirstLetter,
   getDateValue,
   getFirstKeyFromJson,
@@ -18,6 +19,7 @@ import {
   padNumericId,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { offerStands } from '../multiSig/mapMultiSig';
 import { endSubsidyOffer, offerSubsidy } from '../relayer/mapSubsidy';
 import { createIdentityIfNotExists } from './mapIdentities';
 
@@ -105,7 +107,10 @@ const endOffer = async (
       ? [SignerTypeEnum.Account, auth.toAccountId]
       : [SignerTypeEnum.Identity, auth.toId];
     const signer = await MultiSigSigner.get(`${data}/${signerType}/${signerValue}`);
-    if (signer?.status === MultiSigSignerStatusEnum.Authorized) {
+    if (
+      signer?.status === MultiSigSignerStatusEnum.Authorized &&
+      !(await offerStands(signer, blockTime(block), auth.id))
+    ) {
       signer.status = MultiSigSignerStatusEnum.Removed;
       signer.updatedEventId = blockEventId;
       await signer.save();

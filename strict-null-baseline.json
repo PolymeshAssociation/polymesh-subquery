@@ -14,7 +14,7 @@
   "src/mappings/entities/identities/mapPortfolio.ts": 11,
   "src/mappings/entities/identities/preV8Ledger.ts": 2,
   "src/mappings/entities/identities/repairAuthorizations.ts": 1,
-  "src/mappings/entities/multiSig/mapMultiSig.ts": 10,
+  "src/mappings/entities/multiSig/mapMultiSig.ts": 7,
   "src/mappings/entities/multiSig/mapMultiSigProposal.ts": 3,
   "src/mappings/entities/settlements/mapSettlement.ts": 3,
   "src/mappings/entities/stos/mapSto.ts": 4,
