@@ -8,6 +8,7 @@
 import { SubstrateEvent } from '@subql/types';
 import { Authorization, AuthorizationStatusEnum } from '../../src/types';
 import { handleAuthorization } from '../../src/mappings/entities/identities/mapAuthorization';
+import { offerSubsidy } from '../../src/mappings/entities/relayer/mapSubsidy';
 import { codec as helperCodec, mockStore, tupleEvent } from './helpers';
 
 const DID = '0x01'.padEnd(66, '0');
@@ -95,5 +96,50 @@ describe('handleAuthorization — AuthorizationAdded', () => {
     await handleAuthorization(added(TARGET, null));
 
     expect(db.Authorization['0000000042']).toMatchObject({ toId: TARGET, toAccountId: undefined });
+  });
+
+  /**
+   * A paying-key authorization raised through `identity.add_authorization` emits no relayer event,
+   * and is addressed to the paying key, which accepts it (testnet authorization 51504).
+   */
+  it('records the subsidy a paying-key authorization offers', async () => {
+    const USER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+    const db = mockStore({
+      Identity: { [DID]: { id: DID } },
+      Account: { [USER]: { id: USER }, [KEY]: { id: KEY } },
+    });
+    const offered = tupleEvent({
+      section: 'identity',
+      method: 'AuthorizationAdded',
+      data: [
+        helperCodec(DID),
+        helperCodec(null),
+        helperCodec(KEY),
+        helperCodec(AUTH_ID),
+        helperCodec({ addRelayerPayingKey: [USER, KEY, 10_000_000] }),
+        helperCodec(null),
+      ],
+    });
+
+    await handleAuthorization(offered);
+
+    expect(db.Subsidy[`${USER}/${KEY}`]).toMatchObject({
+      beneficiaryAccountId: USER,
+      payingAccountId: KEY,
+      allowance: BigInt(10_000_000),
+      isAccepted: false,
+      isRemoved: false,
+    });
+
+    // `set_paying_key` raises the same offer as a relayer event too, which keeps the row it made
+    await offerSubsidy(
+      { userKey: USER, payingKey: KEY, limit: BigInt(20_000_000) },
+      { block: offered.block, blockId: '0000001000', blockEventId: '0000001000/0000000001' }
+    );
+    expect(db.Subsidy[`${USER}/${KEY}`]).toMatchObject({
+      allowance: BigInt(20_000_000),
+      createdEventId: '0000001000/0000000000',
+      updatedEventId: '0000001000/0000000001',
+    });
   });
 });

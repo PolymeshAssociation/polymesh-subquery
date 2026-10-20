@@ -18,7 +18,7 @@ import {
   padNumericId,
 } from '../../../utils';
 import { extractArgs } from '../common';
-import { endSubsidyOffer } from '../relayer/mapSubsidy';
+import { endSubsidyOffer, offerSubsidy } from '../relayer/mapSubsidy';
 import { createIdentityIfNotExists } from './mapIdentities';
 
 const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatusEnum>([
@@ -57,18 +57,32 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     // For `identity.cdd_register_did` extrinsic with params including `SecondaryKey` along with `TargetAccount`, `AuthorizationAdded` event is triggered before `DidCreated` event.
     await createIdentityIfNotExists(fromId, blockId, eventId, eventIdx, block, blockEventId);
     const authId = padNumericId(getTextValue(decoded.authId));
+    const type = capitalizeFirstLetter(
+      getFirstKeyFromJson(decoded.authorizationData)
+    ) as AuthTypeEnum;
+    const data: unknown = getFirstValueFromJson(decoded.authorizationData);
     await Authorization.create({
       id: authId,
       fromId,
       toId: decoded.targetDid.isEmpty ? undefined : getTextValue(decoded.targetDid),
       toAccountId: decoded.targetKey.isEmpty ? undefined : getTextValue(decoded.targetKey),
-      type: capitalizeFirstLetter(getFirstKeyFromJson(decoded.authorizationData)) as AuthTypeEnum,
-      data: JSON.stringify(getFirstValueFromJson(decoded.authorizationData)),
+      type,
+      data: JSON.stringify(data),
       expiry: getDateValue(decoded.expiry),
       status: AuthorizationStatusEnum.Pending,
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     }).save();
+
+    // the offer a paying-key authorization makes, which `identity.add_authorization` raises with
+    // no relayer event; the paying key, its target, accepts it
+    if (PAYING_KEY_TYPES.has(type) && Array.isArray(data)) {
+      const [userKey, payingKey, limit] = data as [string, string, string | number];
+      await offerSubsidy(
+        { userKey, payingKey, limit: BigInt(limit) },
+        { block, blockId, blockEventId }
+      );
+    }
   }
 }
 

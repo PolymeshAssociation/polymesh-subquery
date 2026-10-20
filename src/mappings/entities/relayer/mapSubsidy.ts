@@ -46,19 +46,21 @@ const ensureAccounts = async (
  * it here marked a live subsidy as merely offered, and every fee the paying key covered in between
  * was charged to the user instead.
  */
-export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockId, blockEventId } = extractArgs(event);
-  const {
-    userKey: rawUserKey,
-    payingKey: rawPayingKey,
-    initialPolyxLimit: rawLimit,
-  } = decodeEvent(event);
-
-  const userKey = getTextValue(rawUserKey);
-  const payingKey = getTextValue(rawPayingKey);
+export const offerSubsidy = async (
+  { userKey, payingKey, limit }: { userKey: string; payingKey: string; limit: bigint },
+  { block, blockId, blockEventId }: { block: SubstrateBlock; blockId: string; blockEventId: string }
+): Promise<void> => {
   const existing = await Subsidy.get(subsidyId(userKey, payingKey));
 
   if (existing?.isAccepted && !existing.isRemoved) {
+    return;
+  }
+
+  // the latest offer takes over one still pending, which keeps the row it made
+  if (existing && !existing.isRemoved) {
+    existing.allowance = limit;
+    existing.updatedEventId = blockEventId;
+    await existing.save();
     return;
   }
 
@@ -68,7 +70,7 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
     id: subsidyId(userKey, payingKey),
     beneficiaryAccountId: userKey,
     payingAccountId: payingKey,
-    allowance: getBigIntValue(rawLimit),
+    allowance: limit,
     // Only countable from v8, which is when the chain started emitting `SubsidyDebited`. Left null
     // across the earlier range so "nothing was drawn" and "not knowable" stay different answers.
     totalDebited: is8xChain(block) ? BigInt(0) : undefined,
@@ -77,6 +79,24 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
+};
+
+/** `relayer.set_paying_key`'s offer: `AuthorizedPayingKey`, from 8.0 `ApprovedSubsidy` */
+export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void> => {
+  const {
+    userKey: rawUserKey,
+    payingKey: rawPayingKey,
+    initialPolyxLimit: rawLimit,
+  } = decodeEvent(event);
+
+  await offerSubsidy(
+    {
+      userKey: getTextValue(rawUserKey),
+      payingKey: getTextValue(rawPayingKey),
+      limit: getBigIntValue(rawLimit),
+    },
+    extractArgs(event)
+  );
 };
 
 /**
