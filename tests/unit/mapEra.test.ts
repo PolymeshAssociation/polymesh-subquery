@@ -138,6 +138,35 @@ describe('handleStakersElected', () => {
     });
   });
 
+  /**
+   * Before 7.0 `staking.validate` set a validator's preferences with no event; the election stores
+   * them as they stand, so the validator takes them from it (mainnet: 35 validators had none).
+   */
+  it('gives each elected validator the preferences the election stored for it', async () => {
+    const db = mockStore({
+      Validator: {
+        [VAL_OLD]: {
+          id: VAL_OLD,
+          accountId: VAL_OLD,
+          isActive: true,
+          commission: BigInt(10_000_000),
+          blocked: true,
+          isPermissioned: false,
+        },
+      },
+    });
+    mockGetByFields(db, 'Validator');
+    mockElection(5, [VAL_OLD, VAL_NEW]);
+
+    await handleStakersElected(
+      namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
+    );
+
+    for (const stash of [VAL_OLD, VAL_NEW]) {
+      expect(db.Validator[stash]).toMatchObject({ commission: BigInt(50_000_000), blocked: false });
+    }
+  });
+
   /** v8 writes only `erasStakersOverview`, so reading `erasStakers` found nobody elected. */
   it('reads a v8 election from erasStakersOverview', async () => {
     const db = mockStore({
