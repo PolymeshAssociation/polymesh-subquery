@@ -1,6 +1,6 @@
 /**
- * `StakingPosition.identity` and `AccountBalance.identity` copy the account's identity, so they
- * follow it when the account joins or leaves one.
+ * `StakingPosition.identity`, `AccountBalance.identity` and `Validator.identity` copy the account's
+ * identity, so they follow it when the account joins or leaves one.
  */
 import { restampIdentityCopies } from '../../src/utils/accounts';
 import { mockStore } from './helpers';
@@ -28,4 +28,35 @@ it('clears them when the account leaves its identity', async () => {
   await restampIdentityCopies(ADDRESS, undefined, '0000000500/0000000001');
 
   expect(db.AccountBalance[ADDRESS].identityId).toBeUndefined();
+});
+
+/** Mainnet stash 2EoZ98… moved identity at 8,974,035–8,974,083; its validator kept the old one */
+it("moves a stash's validator to its new identity, permissioned as that identity is", async () => {
+  const db = mockStore({
+    Validator: {
+      [ADDRESS]: { id: ADDRESS, identityId: `0x${'b5'.repeat(32)}`, isPermissioned: false },
+    },
+  });
+  (globalThis as any).api.query = {
+    staking: {
+      permissionedIdentity: jest.fn((did: string) =>
+        Promise.resolve({
+          toJSON: () => (did === DID ? { intendedCount: 1, runningCount: 0 } : null),
+        })
+      ),
+    },
+  };
+
+  await restampIdentityCopies(ADDRESS, DID, '0008974083/0000000001');
+
+  expect(db.Validator[ADDRESS]).toMatchObject({
+    identityId: DID,
+    isPermissioned: true,
+    updatedEventId: '0008974083/0000000001',
+  });
+
+  await restampIdentityCopies(ADDRESS, undefined, '0009000000/0000000001');
+
+  expect(db.Validator[ADDRESS].identityId).toBeUndefined();
+  expect(db.Validator[ADDRESS].isPermissioned).toBe(false);
 });
