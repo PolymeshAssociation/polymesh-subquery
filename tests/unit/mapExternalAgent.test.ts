@@ -172,28 +172,54 @@ describe('FundraiserCreated recorded as an agent action', () => {
   });
 });
 
-describe('the creator of an asset made before 3.2', () => {
+/**
+ * Before external agents had an event of their own at creation, creating an asset made its
+ * creator a Full agent with nothing to say so. Which 3.x did is not one spec on both chains:
+ * testnet's 3.2 emits `AgentAdded`, mainnet's 3.3 (WORLDCAPITAL, block 1,947,849) does not.
+ */
+describe('the creator of a new asset', () => {
   const ticker = '0x555553440000000000000000';
-  const created = (specVersion: number) =>
+  const PHASE = { toString: () => '{"applyExtrinsic":1}' };
+  const record = (section: string, method: string, data: unknown[], phase = PHASE) => ({
+    phase,
+    event: { section, method, data },
+  });
+  const assetCreated = [
+    codec(DID_A),
+    codec(ticker),
+    codec(true),
+    codec('StableCoin'),
+    codec(DID_A),
+    codec(false),
+  ];
+  const created = (siblings: unknown[]) =>
     tupleEvent({
       section: 'asset',
       method: 'AssetCreated',
-      specVersion,
-      data: [
-        codec(DID_A),
-        codec(ticker),
-        codec(true),
-        codec('StableCoin'),
-        codec(DID_A),
-        codec(false),
-      ],
+      specVersion: 3_003,
+      idx: 1,
+      data: assetCreated,
+      events: [siblings[0], record('asset', 'AssetCreated', assetCreated), ...siblings.slice(1)],
     });
 
-  it('is made a Full agent, as the chain made it without an AgentAdded', async () => {
+  it('is made a Full agent when its extrinsic emits no AgentAdded for the asset', async () => {
     const db = mockStore();
     getByFields().mockResolvedValue([]);
 
-    await handleCreatorAgent(created(3_001));
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        // another extrinsic's agent, for the same asset, is no announcement of this one
+        record(
+          'externalAgents',
+          'AgentAdded',
+          [codec(DID_A), codec(ticker), codec({ full: null })],
+          {
+            toString: () => '{"applyExtrinsic":2}',
+          }
+        ),
+      ])
+    );
 
     const assetId = await getAssetIdForLegacyTicker(ticker);
     expect(Object.values(db.AssetAgent ?? {})).toEqual([
@@ -204,10 +230,19 @@ describe('the creator of an asset made before 3.2', () => {
     ]);
   });
 
-  it('is left to its AgentAdded from 3.2, which emits one', async () => {
+  it('is left to the AgentAdded its extrinsic emits', async () => {
     const db = mockStore();
 
-    await handleCreatorAgent(created(3_002));
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        record('externalAgents', 'AgentAdded', [
+          codec(DID_A),
+          codec(ticker),
+          codec({ full: null }),
+        ]),
+      ])
+    );
 
     expect(db.AssetAgent ?? {}).toEqual({});
     expect(db.AssetAgentHistory ?? {}).toEqual({});

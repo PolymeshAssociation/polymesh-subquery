@@ -1,3 +1,4 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
@@ -8,6 +9,7 @@ import {
 } from '../../../types';
 import { decodeEvent } from '../../../decode';
 import { getAllByFields, getAssetId } from '../../../utils';
+import { blockEvents } from '../../../utils/blockEvents';
 import { extractArgs } from '../common';
 import { writeAssetAgent } from './mapExternalAgent';
 
@@ -71,19 +73,32 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
   );
 };
 
-/** The first runtime whose asset creation emits `AgentAdded` for the creator */
-const CREATOR_AGENT_EVENT_FROM = 3_002;
+/** Whether the extrinsic that emitted `event` also emits an `AgentAdded` for the asset `rawAssetId` */
+const announcesAgent = (event: SubstrateEvent, rawAssetId: Codec): boolean => {
+  const records = blockEvents(event.block);
+  const phase = records[event.idx]?.phase.toString();
+  const asset = rawAssetId.toString();
+
+  return records.some(
+    ({ phase: other, event: { section, method, data } }) =>
+      section === 'externalAgents' &&
+      method === 'AgentAdded' &&
+      other.toString() === phase &&
+      data.some(arg => arg.toString() === asset)
+  );
+};
 
 /**
- * Before 3.2 creating an asset made its creator a Full agent with no `AgentAdded` (testnet's 3.0
- * and 3.1; mainnet went from 3.1 to 3.3), so the agent is recorded from the `AssetCreated`.
+ * Early 3.x made an asset's creator a Full agent with no `AgentAdded`, so the agent is recorded from
+ * the `AssetCreated`, unless its extrinsic announces one. Which 3.x stopped is not one spec version
+ * on both chains: testnet's 3.2 emits it, mainnet's 3.3 does not.
  */
 export const handleCreatorAgent = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
-  if (block.specVersion >= CREATOR_AGENT_EVENT_FROM) {
+  const { callerDid, assetId: rawAssetId } = decodeEvent(event);
+  if (announcesAgent(event, rawAssetId)) {
     return;
   }
-  const { callerDid, assetId: rawAssetId } = decodeEvent(event);
   const did = callerDid.toString();
   const assetId = await getAssetId(rawAssetId, block);
 
