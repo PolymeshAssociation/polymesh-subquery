@@ -216,6 +216,12 @@ describe('migrateToAssetIds', () => {
       extrinsic: { these: { Asset: { extrinsics: { whole: null } } } },
       portfolio: { whole: null },
     });
+    // in the field order 7.0's events give, which the stored text keeps
+    expect(Object.keys(JSON.parse(db.Authorization.join.data))).toEqual([
+      'asset',
+      'extrinsic',
+      'portfolio',
+    ]);
     expect(JSON.parse(db.Authorization.owner.data)).toBe(CSB0313_ID);
     expect(JSON.parse(db.Authorization.agent.data)).toEqual([CSB0313_ID, { full: null }]);
     expect(JSON.parse(db.Authorization.consumed.data)).toEqual(permissions);
@@ -243,25 +249,51 @@ describe('migrateToAssetIds', () => {
     });
   });
 
-  it('scopes a claim still held by its asset id, not its ticker', async () => {
+  /**
+   * From 7.0 a claim's scope is an asset id, and the handlers name it by the asset's ticker beside the
+   * id, as a ticker's claims before it already are: so only a held claim of a ticker that is no
+   * asset changes, its value becoming the id, as a 7.x event names it.
+   */
+  it("names a held claim's scope as a 7.x event would: by the asset's ticker, or its id", async () => {
     const scope = { type: 'Asset', value: 'MTICKER03', assetId: MTICKER03_ID };
+    const orphan = { type: 'Asset', value: 'NOASSET', assetId: '0x' + 'ab'.repeat(16) };
     const db = mockStore({
+      Asset: { [MTICKER03_ID]: { id: MTICKER03_ID, ticker: 'MTICKER03' } },
       Claim: {
         held: { id: 'held', scope },
-        revoked: { id: 'revoked', scope, revokeDate: BigInt(1) },
+        orphan: { id: 'orphan', scope: orphan },
+        revoked: { id: 'revoked', scope: orphan, revokeDate: BigInt(1) },
         identity: { id: 'identity', scope: { type: 'Identity', value: '0x01' } },
       },
     });
 
     await migrateToAssetIds(EVENT);
 
-    expect(db.Claim.held.scope).toEqual({
-      type: 'Asset',
-      value: MTICKER03_ID,
-      assetId: MTICKER03_ID,
-    });
-    expect(db.Claim.revoked.scope).toEqual(scope);
+    expect(db.Claim.held.scope).toEqual(scope);
+    expect(db.Claim.orphan.scope).toEqual({ ...orphan, value: orphan.assetId });
+    expect(db.Claim.revoked.scope).toEqual(orphan);
     expect(db.Claim.identity.scope).toEqual({ type: 'Identity', value: '0x01' });
+  });
+
+  /**
+   * 7.0 linked every ticker it held a registration of to `AssetId::from(ticker)`, whether or not an
+   * asset was created under it (`migrate_to_v5`, `TickerAssetId`), as the chain has held it since.
+   */
+  it('links every ticker registration to its asset id, an asset created under it or not', async () => {
+    const db = mockStore({
+      TickerReservation: {
+        MTICKER03: { id: 'MTICKER03', ticker: 'MTICKER03' },
+        LINKED: { id: 'LINKED', ticker: 'LINKED', assetId: MTICKER03_ID },
+      },
+    });
+
+    await migrateToAssetIds(EVENT);
+
+    expect(db.TickerReservation.MTICKER03).toMatchObject({
+      assetId: MTICKER03_ID,
+      updatedEventId: EVENT,
+    });
+    expect(db.TickerReservation.LINKED.updatedEventId).toBeUndefined();
   });
 
   it('writes nothing when every row is already in the 7.0 form', async () => {

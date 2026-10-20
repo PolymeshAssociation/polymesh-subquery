@@ -1,11 +1,13 @@
 import {
   AgentGroup,
+  Asset,
   Authorization,
   AuthorizationStatusEnum,
   Claim,
   ClaimScopeTypeEnum,
   Compliance,
   IdentityKey,
+  TickerReservation,
 } from '../../types';
 import { EXPLICIT_NULL, getAllByFields } from '../../utils';
 import { getAssetIdForLegacyTicker } from '../../utils/assets';
@@ -22,7 +24,8 @@ import {
  * external agents' and statistics' `migrate_to_v1`), and extrinsic permissions, a list of pallets,
  * became a map by pallet name with names as text (`primitives::v6`). Rows written before it are
  * rewritten into the form 7.0's own events give; the chain rewrote only what it still held, so
- * closed and spent rows are left as they were.
+ * closed and spent rows are left as they were. 7.0 also linked every ticker it held a registration
+ * of to its asset id (`TickerAssetId`), an asset created under it or not.
  */
 
 type Subset = Record<string, unknown>;
@@ -150,13 +153,20 @@ const authorizationToV7 = async (row: Authorization): Promise<string | undefined
     return undefined;
   }
 
-  const { asset, extrinsic, ...rest } = JSON.parse(row.data) as Record<string, Subset>;
-
-  return JSON.stringify({
-    ...rest,
-    ...(asset && { asset: await assetPermissionsToV7(asset) }),
-    ...(extrinsic && { extrinsic: extrinsicPermissionsToV7(extrinsic) }),
-  });
+  // each member converted in place, so the text keeps its fields in the order the chain gives them
+  const permissions = JSON.parse(row.data) as Record<string, Subset>;
+  const converted = await Promise.all(
+    Object.entries(permissions).map(async ([field, value]) => {
+      if (field === 'asset' && value) {
+        return [field, await assetPermissionsToV7(value)] as const;
+      }
+      if (field === 'extrinsic' && value) {
+        return [field, extrinsicPermissionsToV7(value)] as const;
+      }
+      return [field, value] as const;
+    })
+  );
+  return JSON.stringify(Object.fromEntries(converted));
 };
 
 /** Saves `row` with `next` when it differs from `current`, stamping the upgrade */
@@ -176,7 +186,7 @@ const rewrite = async <T extends { save(): Promise<void>; updatedEventId: string
 };
 
 export const migrateToAssetIds = async (blockEventId: string): Promise<void> => {
-  const [keys, groups, authorizations, compliances, claims] = await Promise.all([
+  const [keys, groups, authorizations, compliances, claims, reservations] = await Promise.all([
     getAllByFields<IdentityKey>('IdentityKey', [['validToBlockId', '=', EXPLICIT_NULL]]),
     getAllByFields<AgentGroup>('AgentGroup', []),
     getAllByFields<Authorization>('Authorization', [
@@ -184,6 +194,7 @@ export const migrateToAssetIds = async (blockEventId: string): Promise<void> => 
     ]),
     getAllByFields<Compliance>('Compliance', []),
     getAllByFields<Claim>('Claim', []),
+    getAllByFields<TickerReservation>('TickerReservation', []),
   ]);
 
   await Promise.all([
@@ -219,11 +230,25 @@ export const migrateToAssetIds = async (blockEventId: string): Promise<void> => 
       const next = await complianceToV7(compliance.data);
       await rewrite(compliance, compliance.data, next, row => (row.data = next), blockEventId);
     }),
+    // a scope is named by its asset's ticker beside the id, as before 7.0; a ticker that is no
+    // asset has only the id from 7.0, as its events name it
     ...claims.map(async claim => {
       const { scope } = claim;
-      if (!claim.revokeDate && scope?.type === ClaimScopeTypeEnum.Asset && scope.assetId) {
+      if (
+        !claim.revokeDate &&
+        scope?.type === ClaimScopeTypeEnum.Asset &&
+        scope.assetId &&
+        !(await Asset.get(scope.assetId))
+      ) {
         const next = { ...scope, value: scope.assetId };
         await rewrite(claim, scope, next, row => (row.scope = next), blockEventId);
+      }
+    }),
+    // every registration is linked to its ticker's asset id, an asset created under it or not
+    ...reservations.map(async reservation => {
+      if (!reservation.assetId) {
+        const next = await getAssetIdForLegacyTicker(reservation.ticker);
+        await rewrite(reservation, undefined, next, row => (row.assetId = next), blockEventId);
       }
     }),
   ]);
