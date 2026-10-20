@@ -1,3 +1,5 @@
+import { VM } from 'vm2';
+
 /**
  * Mappings run in SubQuery's vm2 sandbox, where the host's `TextDecoder` rejects the sandbox's typed
  * arrays but accepts a `Buffer` (testnet block 90,237 failed on its first ticker; both dev-server
@@ -34,3 +36,10 @@ export const inSandbox = <T>(load: () => T): (() => T) => {
 
   return () => loaded;
 };
+
+/**
+ * A `Date` as the mappings see one the store returns: an object from the other side of vm2's
+ * bridge. `new Date()` of it reads its `toString()`, which has no milliseconds; `getTime()` keeps
+ * them.
+ */
+export const sandboxDate = (ms: number): Date => new VM().run(`new Date(${ms})`) as Date;

@@ -1,6 +1,7 @@
 import { SubstrateEvent } from '@subql/types';
 import mapChainUpgrade from '../../src/mappings/entities/block/mapChainUpgrade';
 import { migrateToAssetIds } from '../../src/mappings/migrations/assetIdMigration';
+import { migrateStoredSchedules } from '../../src/mappings/migrations/checkpointScheduleMigration';
 import { migrateOffChainLegs } from '../../src/mappings/migrations/offChainLegMigration';
 import { migrateTransferManagers } from '../../src/mappings/migrations/statisticsMigration';
 import { removeIdentitySigners } from '../../src/mappings/entities/multiSig/mapMultiSig';
@@ -15,6 +16,9 @@ jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
 }));
 jest.mock('../../src/mappings/migrations/assetIdMigration', () => ({
   migrateToAssetIds: jest.fn(),
+}));
+jest.mock('../../src/mappings/migrations/checkpointScheduleMigration', () => ({
+  migrateStoredSchedules: jest.fn(),
 }));
 jest.mock('../../src/mappings/migrations/offChainLegMigration', () => ({
   migrateOffChainLegs: jest.fn(),
@@ -73,6 +77,7 @@ describe('mapChainUpgrade', () => {
     (migrateToAssetIds as jest.Mock).mockResolvedValue(undefined);
     (migrateTransferManagers as jest.Mock).mockResolvedValue(undefined);
     (migrateOffChainLegs as jest.Mock).mockResolvedValue(undefined);
+    (migrateStoredSchedules as jest.Mock).mockResolvedValue(undefined);
     (store.set as jest.Mock).mockResolvedValue(undefined);
   });
 
@@ -213,7 +218,7 @@ describe('mapChainUpgrade', () => {
     expect(migrateToAssetIds).not.toHaveBeenCalled();
   });
 
-  it('settles the leg types 6.0 migrated as the chain crosses into it', async () => {
+  it('settles the leg types and checkpoint schedules 6.0 migrated as the chain crosses into it', async () => {
     (store.getByFields as jest.Mock).mockResolvedValue([
       { id: '0005004001', specVersionId: 5_004_001, transactionVersion: 3 },
     ]);
@@ -222,6 +227,7 @@ describe('mapChainUpgrade', () => {
     await mapChainUpgrade(upgradeEvent(10_036_147, 5_004_001));
 
     expect(migrateOffChainLegs).toHaveBeenCalledTimes(1);
+    expect(migrateStoredSchedules).toHaveBeenCalledTimes(1);
     expect(migrateTransferManagers).not.toHaveBeenCalled();
     expect(migrateToAssetIds).not.toHaveBeenCalled();
   });
@@ -249,5 +255,6 @@ describe('mapChainUpgrade', () => {
     expect(migrateToAssetIds).not.toHaveBeenCalled();
     expect(migrateTransferManagers).not.toHaveBeenCalled();
     expect(migrateOffChainLegs).not.toHaveBeenCalled();
+    expect(migrateStoredSchedules).not.toHaveBeenCalled();
   });
 });

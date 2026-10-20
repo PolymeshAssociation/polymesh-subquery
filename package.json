@@ -96,7 +96,8 @@
     "semantic-release": "^22.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "vm2": "3.9.19"
   },
   "resolutions": {
     "ipfs-unixfs": "6.0.6"
