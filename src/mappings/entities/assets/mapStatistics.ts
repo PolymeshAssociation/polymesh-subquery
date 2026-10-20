@@ -98,11 +98,8 @@ export const upsertStatType = async (
   return statType.save();
 };
 
-interface MeshStatClaim {
-  Accredited?: boolean;
-  Affiliate?: boolean;
-  Jurisdiction?: string;
-}
+/** `{ accredited: bool }`, `{ affiliate: bool }` or `{ jurisdiction: CountryCode | null }` */
+type MeshStatClaim = Record<string, boolean | string | null>;
 
 interface MeshTransferCondition {
   maxInvestorCount: bigint;
@@ -111,12 +108,19 @@ interface MeshTransferCondition {
   claimCount: [MeshStatClaim, string, bigint, bigint];
 }
 
+/** A stat claim's type, and its value as text, as `claimValue` holds it: a boolean or a country code */
 const getStatClaim = (statClaim: MeshStatClaim) => {
-  const type = Object.keys(statClaim)[0];
-  return { type: capitalizeFirstLetter(type) as ClaimTypeEnum, value: statClaim[type] };
+  const [[type, value]] = Object.entries(statClaim);
+  return {
+    type: capitalizeFirstLetter(type) as ClaimTypeEnum,
+    value: value === null ? undefined : String(value),
+  };
 };
 
-const getTransferConditions = (item: Codec, assetId: string): Attributes<TransferCompliance>[] => {
+export const getTransferConditions = (
+  item: Codec,
+  assetId: string
+): Attributes<TransferCompliance>[] => {
   const transferConditions = JSON.parse(item.toString()) as MeshTransferCondition[];
 
   const optBigInt = (x?: bigint) => {
@@ -203,7 +207,7 @@ export const conditionId = ({
   max,
 }: Attributes<TransferCompliance>): string =>
   value === null || value === undefined
-    ? `${statTypeId}/${claimValue}/${min ?? ''}/${max ?? ''}`
+    ? `${statTypeId}/${claimValue ?? ''}/${min ?? ''}/${max ?? ''}`
     : `${statTypeId}/${value}`;
 
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
