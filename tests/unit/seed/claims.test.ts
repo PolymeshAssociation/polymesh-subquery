@@ -202,3 +202,40 @@ describe('from 7.0', () => {
     expect(Object.keys(rows('TrustedClaimIssuer'))).toEqual([`${ASSET}/${ISSUER}`]);
   });
 });
+
+describe('before 7.0', () => {
+  it("seeds a key authorization's extrinsic permissions in the form the index stores them", async () => {
+    const chain = fakeChain(6_002_010);
+    chain.put('identity.authorizations', [{ Identity: TARGET }, 7], {
+      authorizationData: {
+        JoinIdentity: {
+          asset: { Whole: null },
+          // a list of pallets before 7.0, which this runtime's metadata decodes with names in hex
+          extrinsic: { These: [{ palletName: 'Asset', dispatchableNames: { Whole: null } }] },
+          portfolio: { Whole: null },
+        },
+      },
+      authorizedBy: ISSUER,
+      expiry: null,
+      authId: 7,
+      count: 50,
+    });
+    await seed(
+      snapshotAtParent(chain.block),
+      {
+        block: chain.block,
+        blockId: '0000001000',
+        eventId: SEED_EVENT_ID,
+        datetime: new Date('2026-01-01T00:00:00Z'),
+        specVersion: 6_002_010,
+      },
+      { seeders: SEEDERS.filter(({ entity }) => entity === 'Authorization'), accountRows }
+    );
+
+    expect(JSON.parse(byId(chain.rows('Authorization'))['0000000007'].data as string)).toEqual({
+      asset: { whole: null },
+      extrinsic: { these: { Asset: { extrinsics: { whole: null } } } },
+      portfolio: { whole: null },
+    });
+  });
+});
