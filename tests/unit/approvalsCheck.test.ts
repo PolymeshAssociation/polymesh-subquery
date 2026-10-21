@@ -1,4 +1,10 @@
-import { chainApprovals, compareApprovals, holderKeyOf } from '../../scripts/lib/approvals';
+import {
+  chainApprovals,
+  chainStatuses,
+  compareApprovals,
+  compareClosed,
+  holderKeyOf,
+} from '../../scripts/lib/approvals';
 
 const DID_A = '0x0a'.padEnd(66, '0');
 const DID_B = '0x0b'.padEnd(66, '0');
@@ -200,5 +206,109 @@ describe('chainApprovals', () => {
       affirmed: new Set([`${DID_B}/0`]),
       mediators: new Map(),
     });
+  });
+});
+
+describe('compareClosed', () => {
+  it('reports an instruction the index closed that the chain still holds open', () => {
+    expect(
+      compareClosed(
+        [
+          { id: '0000000042', status: 'Rejected' },
+          { id: '0000000043', status: 'Executed' },
+          { id: '0000000044', status: 'Executed' },
+          { id: '0000000045', status: 'Rejected' },
+        ],
+        new Map([
+          ['0000000042', 'Pending'],
+          ['0000000043', 'LockedForExecution'],
+          ['0000000044', 'Success'],
+          ['0000000045', 'Unknown'],
+        ])
+      )
+    ).toEqual([
+      {
+        check: '9 closed instruction open on chain',
+        id: '0000000042',
+        index: 'Rejected',
+        chain: 'Pending',
+      },
+      {
+        check: '9 closed instruction open on chain',
+        id: '0000000043',
+        index: 'Executed',
+        chain: 'LockedForExecution',
+      },
+    ]);
+  });
+});
+
+/** A storage read that records how many calls are in flight at once */
+const tracked = (value: unknown) => {
+  let inFlight = 0;
+  let peak = 0;
+  const read = Object.assign(
+    jest.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setImmediate(resolve));
+      inFlight -= 1;
+      return value;
+    }),
+    { entries: jest.fn(async () => []) }
+  );
+  return { read, peak: () => peak };
+};
+
+const ids = (count: number) =>
+  Array.from({ length: count }, (_, n) => String(n + 1).padStart(10, '0'));
+
+describe('chainStatuses', () => {
+  it('reads each status, from instructionStatuses or before 6.0 the details', async () => {
+    const statuses = tracked({ type: 'Success' });
+    const details = tracked({ status: { type: 'Unknown' } });
+
+    const from6 = await chainStatuses(
+      { query: { settlement: { instructionStatuses: statuses.read } } } as never,
+      ['0000000042']
+    );
+    const before6 = await chainStatuses(
+      { query: { settlement: { instructionDetails: details.read } } } as never,
+      ['0000000042']
+    );
+
+    expect(from6).toEqual(new Map([['0000000042', 'Success']]));
+    expect(before6).toEqual(new Map([['0000000042', 'Unknown']]));
+  });
+
+  it('reads 50 instructions at a time', async () => {
+    const statuses = tracked({ type: 'Success' });
+
+    const result = await chainStatuses(
+      { query: { settlement: { instructionStatuses: statuses.read } } } as never,
+      ids(120)
+    );
+
+    expect(result.size).toBe(120);
+    expect(statuses.peak()).toBe(50);
+  });
+});
+
+describe('chainApprovals in batches', () => {
+  it('reads 50 instructions at a time', async () => {
+    const statuses = tracked({ type: 'Pending' });
+    const affirms = tracked(undefined);
+
+    const result = await chainApprovals(
+      {
+        query: {
+          settlement: { instructionStatuses: statuses.read, affirmsReceived: affirms.read },
+        },
+      } as never,
+      ids(120)
+    );
+
+    expect(result.size).toBe(120);
+    expect(statuses.peak()).toBe(50);
   });
 });

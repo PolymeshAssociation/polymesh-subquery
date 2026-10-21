@@ -34,7 +34,8 @@
  *   9. the instruction is still open on chain; each holder's approval row is `Affirmed` exactly
  *      when `settlement.affirmsReceived` holds it as affirmed, and each mediator's when
  *      `settlement.instructionMediatorsAffirmations` does; and every holder the chain holds as
- *      affirmed has a row.
+ *      affirmed has a row. And every instruction the index holds as executed or rejected is closed
+ *      on chain too.
  *
  * The index is read as it stood after `--block` (its historical rows), and the chain at that block,
  * so it can be run against a database still syncing. The block defaults to the last one the index
@@ -55,7 +56,7 @@ import { DataSource } from 'typeorm';
 import { getPostgresDataSource } from '../db/utils';
 import chainTypes from '../src/chainTypes';
 import { chainHolds, chainLocks } from './lib/balanceParts';
-import { chainApprovals, compareApprovals } from './lib/approvals';
+import { chainApprovals, chainStatuses, compareApprovals, compareClosed } from './lib/approvals';
 import { assetIdOf, chainSupplies, identitiesOf } from './lib/chainAssets';
 
 const SEED_EVENT_ID = '0000000000/0000000000';
@@ -638,7 +639,10 @@ const checkAssets = async (
   return { out, assets: indexed.assets.size };
 };
 
-/** Each open instruction's approval rows, in the index as of `block`, against the chain's. */
+/**
+ * Each open instruction's approval rows, and each closed one's status, in the index as of `block`,
+ * against the chain's.
+ */
 const checkApprovals = async (db: DataSource, at: ApiDecoration<'promise'>, block: number) => {
   const instructions: { id: string; status: string }[] = await db.query(
     `SELECT id, status FROM instructions
@@ -670,7 +674,22 @@ const checkApprovals = async (db: DataSource, at: ApiDecoration<'promise'>, bloc
     chain
   );
 
-  return { out, instructions: instructions.length };
+  const closed: { id: string; status: string }[] = await db.query(
+    `SELECT id, status FROM instructions
+     WHERE _block_range @> $1::int8 AND status IN ('Executed', 'Rejected')`,
+    [block]
+  );
+  out.push(
+    ...compareClosed(
+      closed,
+      await chainStatuses(
+        at,
+        closed.map(({ id }) => id)
+      )
+    )
+  );
+
+  return { out, instructions: instructions.length, closed: closed.length };
 };
 
 const main = async (): Promise<void> => {
@@ -717,7 +736,7 @@ const main = async (): Promise<void> => {
   console.log(
     `${polyx.accounts} balances with their locks and holds, ${holdings.holdings} holdings, ` +
       `${staking.positions} staking positions, ${assets.assets} assets and ` +
-      `${approvals.instructions} open instructions checked`
+      `${approvals.instructions} open and ${approvals.closed} closed instructions checked`
   );
 
   const byCheck = new Map<string, Difference[]>();

@@ -117,38 +117,90 @@ export const compareApprovals = (
   return out;
 };
 
+/**
+ * Reports each instruction the index holds as closed (`Executed` or `Rejected`) that the chain still
+ * holds open.
+ */
+export const compareClosed = (
+  instructions: IndexedInstruction[],
+  statuses: Map<string, string>
+): ApprovalDifference[] =>
+  instructions.flatMap(({ id, status }) => {
+    const chain = statuses.get(id) ?? 'none';
+    return chain in OPEN
+      ? [{ check: '9 closed instruction open on chain', id, index: status, chain }]
+      : [];
+  });
+
 /** The variant of an enum codec, such as `InstructionStatus` or `MediatorAffirmationStatus`. */
 const variantOf = (value: Codec): string => (value as unknown as { type: string }).type;
 
+/** Instructions read at once: open ones on mainnet run to thousands, one round trip each */
+const BATCH = 50;
+
+/** `read` for each id, `BATCH` at a time */
+const inBatches = async <T>(
+  ids: string[],
+  read: (id: string) => Promise<T>
+): Promise<Map<string, T>> => {
+  const result = new Map<string, T>();
+  for (let start = 0; start < ids.length; start += BATCH) {
+    const batch = ids.slice(start, start + BATCH);
+    // eslint-disable-next-line no-await-in-loop -- one batch at a time bounds the requests in flight
+    const values = await Promise.all(batch.map(read));
+    batch.forEach((id, n) => result.set(id, values[n]));
+  }
+  return result;
+};
+
+type DoubleMap = ((id: number) => Promise<Codec>) & {
+  entries: (id: number) => Promise<[{ args: Codec[] }, Codec][]>;
+};
+
+interface SettlementStorage {
+  /** from 6.0; before it, the status is part of the instruction's details */
+  instructionStatuses?: DoubleMap;
+  instructionDetails: (id: number) => Promise<{ status: Codec }>;
+  affirmsReceived: DoubleMap;
+  /** absent on runtimes without mediators */
+  instructionMediatorsAffirmations?: DoubleMap;
+}
+
+const settlementAt = (at: ApiDecoration<'promise'>): SettlementStorage =>
+  at.query.settlement as unknown as SettlementStorage;
+
+/** An instruction's `InstructionStatus` variant; `Unknown` once the chain has pruned it */
+const statusOf = (settlement: SettlementStorage, id: number): Promise<string> =>
+  (settlement.instructionStatuses
+    ? settlement.instructionStatuses(id)
+    : settlement.instructionDetails(id).then(({ status }) => status)
+  ).then(variantOf);
+
+/** Each instruction's status on chain, at `at`. */
+export const chainStatuses = (
+  at: ApiDecoration<'promise'>,
+  instructionIds: string[]
+): Promise<Map<string, string>> => {
+  const settlement = settlementAt(at);
+  return inBatches(instructionIds, id => statusOf(settlement, Number(id)));
+};
+
 /** What the chain holds for each instruction, at `at`. */
-export const chainApprovals = async (
+export const chainApprovals = (
   at: ApiDecoration<'promise'>,
   instructionIds: string[]
 ): Promise<Map<string, ChainApprovals>> => {
-  type DoubleMap = ((id: number) => Promise<Codec>) & {
-    entries: (id: number) => Promise<[{ args: Codec[] }, Codec][]>;
-  };
-  const settlement = at.query.settlement as unknown as {
-    /** from 6.0; before it, the status is part of the instruction's details */
-    instructionStatuses?: DoubleMap;
-    instructionDetails: (id: number) => Promise<{ status: Codec }>;
-    affirmsReceived: DoubleMap;
-    /** absent on runtimes without mediators */
-    instructionMediatorsAffirmations?: DoubleMap;
-  };
-  const result = new Map<string, ChainApprovals>();
+  const settlement = settlementAt(at);
 
-  for (const id of instructionIds) {
+  return inBatches(instructionIds, async id => {
     const number = Number(id);
     const [status, affirms, mediators] = await Promise.all([
-      settlement.instructionStatuses
-        ? settlement.instructionStatuses(number)
-        : settlement.instructionDetails(number).then(({ status }) => status),
+      statusOf(settlement, number),
       settlement.affirmsReceived.entries(number),
       settlement.instructionMediatorsAffirmations?.entries(number) ?? Promise.resolve([]),
     ]);
-    result.set(id, {
-      status: variantOf(status),
+    return {
+      status,
       affirmed: new Set(
         affirms
           .filter(([, value]) => variantOf(value) === 'Affirmed')
@@ -157,8 +209,6 @@ export const chainApprovals = async (
       mediators: new Map(
         mediators.map(([key, value]) => [key.args[1].toString(), variantOf(value)])
       ),
-    });
-  }
-
-  return result;
+    };
+  });
 };
