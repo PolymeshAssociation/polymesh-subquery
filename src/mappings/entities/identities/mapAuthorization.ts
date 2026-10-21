@@ -22,6 +22,11 @@ import { extractArgs } from '../common';
 import { offerStands } from '../multiSig/mapMultiSig';
 import { endSubsidyOffer, offerSubsidy } from '../relayer/mapSubsidy';
 import { createIdentityIfNotExists } from './mapIdentities';
+import {
+  canonicalPermissions,
+  PERMISSION_AUTHORIZATIONS,
+  Subset,
+} from '../../../utils/permissions';
 
 const authorizationEventStatusMapping = new Map<EventIdEnum, AuthorizationStatusEnum>([
   [EventIdEnum.AuthorizationConsumed, AuthorizationStatusEnum.Consumed],
@@ -62,7 +67,11 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
     const type = capitalizeFirstLetter(
       getFirstKeyFromJson(decoded.authorizationData)
     ) as AuthTypeEnum;
-    const data: unknown = getFirstValueFromJson(decoded.authorizationData);
+    const payload: unknown = getFirstValueFromJson(decoded.authorizationData);
+    const data =
+      PERMISSION_AUTHORIZATIONS.has(type) && payload && typeof payload === 'object'
+        ? canonicalPermissions(payload as Subset)
+        : payload;
     await Authorization.create({
       id: authId,
       fromId,

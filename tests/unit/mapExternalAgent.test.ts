@@ -68,6 +68,56 @@ describe('AgentGroup', () => {
 
     expect(group.assetId).toBe(ASSET_ID);
   });
+
+  it("stores its permissions in the index's form, a map by pallet with names as text", async () => {
+    const db = mockStore();
+
+    await handleGroupCreated(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'GroupCreated',
+        data: [
+          codec(DID_A),
+          codec(ASSET_ID),
+          codec(1),
+          // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
+          codec({
+            these: [{ palletName: '0x4173736574', dispatchableNames: { these: ['0x6973737565'] } }],
+          }),
+        ],
+      })
+    );
+
+    const [group] = Object.values(db.AgentGroup) as any[];
+
+    expect(JSON.parse(group.permissions)).toEqual({
+      these: { Asset: { extrinsics: { these: ['issue'] } } },
+    });
+  });
+});
+
+describe("an agent's history", () => {
+  it("records a built-in group's permissions in the index's form", async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleAgentAdded(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentAdded',
+        data: [codec(DID_A), codec(ASSET_ID), codec({ polymeshV1PIA: null })],
+      })
+    );
+
+    const [history] = Object.values(db.AssetAgentHistory) as any[];
+
+    expect(JSON.parse(history.permissions)).toEqual({
+      these: {
+        Asset: { extrinsics: { these: ['controller_transfer', 'issue', 'redeem'] } },
+        Sto: { extrinsics: { except: ['invest'] } },
+      },
+    });
+  });
 });
 
 describe('membership lifecycle', () => {

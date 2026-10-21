@@ -349,6 +349,24 @@ What was "the identity's affirmation" is its holder rows: `instructionAffirmatio
 
 An off-chain leg has no `Pending` approval row. The chain keeps its approval per leg, pending from the instruction's creation (from 6.0) until a receipt is claimed for it, so an instruction is fully approved only when no row is `Pending` and every `OffChain` leg has an entry in `offChainReceipts`.
 
+### 9.10 Extrinsic permissions in one form (2026-10-21)
+
+The chain matches a call against a key's or an agent group's extrinsic permissions by its pallet and extrinsic names, exactly. Master stored those permissions as polkadot-js decoded them at the event, so their shape depended on the runtime: before metadata v14 a list of `{ pallet_name, dispatchable_names }` with names as text, from v14 to 7.0 a list of `{ palletName, dispatchableNames }` with names in hex, from 7.0 a map by pallet name. A row kept the shape of the event that last wrote it, so before 7.0 one field held two. Every row now holds 7.0's shape, whichever runtime set it:
+
+```json
+{ "these": { "Asset": { "extrinsics": { "these": ["add_documents", "issue"] } },
+             "Identity": { "extrinsics": { "whole": null } } } }
+```
+
+| Entity | Was | Now |
+|---|---|---|
+| `IdentityKey` (master's `Permissions`) | `transactions.values` before 7.0: the list, in the decoding of the event that set it | a map by pallet name, names as text, in byte order |
+| `AgentGroup` | `permissions` before 7.0: the list, as decoded | the map |
+| `AssetAgentHistory` (master's `TickerExternalAgentHistory`) | a built-in group's `permissions` (`Full`, `ExceptMeta`, `PolymeshV1CAA`, `PolymeshV1PIA`): always a snake_case list | the map, like a custom group's |
+| `Authorization` | `data.extrinsic` of `JoinIdentity` and `RotatePrimaryKeyToSecondary` before 7.0: the list, as decoded | the map |
+
+Names are kept as the chain stores them: padded, misspelt and retired names stay, and grant nothing, as on chain. Asset and portfolio permissions are unchanged; before 7.0 an asset permission still names a ticker.
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

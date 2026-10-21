@@ -12,13 +12,20 @@ import { getAllByFields, getAssetId } from '../../../utils';
 import { blockEvents } from '../../../utils/blockEvents';
 import { extractArgs } from '../common';
 import { writeAssetAgent } from './mapExternalAgent';
+import {
+  canonicalExtrinsicPermissions,
+  ExtrinsicPermissionsJson,
+  Subset,
+} from '../../../utils/permissions';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);
   const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
   const group = agId.toJSON();
-  const permissions = JSON.stringify(rawPermissions.toJSON());
+  const permissions = JSON.stringify(
+    canonicalExtrinsicPermissions(rawPermissions.toJSON() as Subset)
+  );
   const assetId = await getAssetId(rawAssetId, block);
 
   await AgentGroupEntity.create({
@@ -35,7 +42,9 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
   const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
   const group = agId.toJSON();
-  const permissions = JSON.stringify(rawPermissions.toJSON());
+  const permissions = JSON.stringify(
+    canonicalExtrinsicPermissions(rawPermissions.toJSON() as Subset)
+  );
   const assetId = await getAssetId(rawAssetId, block);
 
   const ag = await AgentGroupEntity.get(`${assetId}/${group}`);
@@ -254,11 +263,8 @@ const isCAA = (ag: AgentGroup): ag is PolymeshV1CAAAG =>
 const isPIA = (ag: AgentGroup): ag is PolymeshV1PIAAG =>
   (ag as PolymeshV1PIAAG).polymeshV1PIA === null;
 
-const wholePallets = (...pallets: string[]): ExtrinsicPermissions => ({
-  these: pallets.map(pallet_name => ({
-    pallet_name,
-    dispatchable_names: { whole: null },
-  })),
+const wholePallets = (...pallets: string[]): ExtrinsicPermissionsJson => ({
+  these: Object.fromEntries(pallets.map(pallet => [pallet, { extrinsics: { whole: null } }])),
 });
 
 /**
@@ -272,29 +278,25 @@ const permissionsFromAgentGroup = async (
   ag: AgentGroup,
   customPermissions: GetCustomGroupPermissions
 ): Promise<string> => {
+  // the built-in groups' permissions, written as the index stores any: by pallet, in byte order
   if (isFull(ag)) {
-    const p: ExtrinsicPermissions = { whole: null };
+    const p: ExtrinsicPermissionsJson = { whole: null };
     return JSON.stringify(p);
   } else if (isExceptMeta(ag)) {
-    const p: ExtrinsicPermissions = {
-      except: [{ pallet_name: 'ExternalAgents', dispatchable_names: { whole: null } }],
+    const p: ExtrinsicPermissionsJson = {
+      except: { ExternalAgents: { extrinsics: { whole: null } } },
     };
     return JSON.stringify(p);
   } else if (isCAA(ag)) {
     return JSON.stringify(
-      wholePallets('CorporateAction', 'CorporateBallot', 'CapitalDistribution')
+      wholePallets('CapitalDistribution', 'CorporateAction', 'CorporateBallot')
     );
   } else if (isPIA(ag)) {
-    const p: ExtrinsicPermissions = {
-      these: [
-        { pallet_name: 'Sto', dispatchable_names: { except: ['invest'] } },
-        {
-          pallet_name: 'Asset',
-          dispatchable_names: {
-            these: ['issue', 'redeem', 'controller_transfer'],
-          },
-        },
-      ],
+    const p: ExtrinsicPermissionsJson = {
+      these: {
+        Asset: { extrinsics: { these: ['controller_transfer', 'issue', 'redeem'] } },
+        Sto: { extrinsics: { except: ['invest'] } },
+      },
     };
     return JSON.stringify(p);
   } else if (isCustom(ag)) {
@@ -310,16 +312,6 @@ const permissionsFromAgentGroup = async (
 };
 
 type GetCustomGroupPermissions = (gn: number) => Promise<string>;
-
-type PalletPermissions = {
-  pallet_name: string;
-  dispatchable_names: DispatchableNames;
-};
-type Whole = { whole: null };
-type These<T> = { these: T[] };
-type Except<T> = { except: T[] };
-type DispatchableNames = Whole | These<string> | Except<string>;
-type ExtrinsicPermissions = Whole | These<PalletPermissions> | Except<PalletPermissions>;
 
 /** The first runtime whose ownership transfer takes the previous owner out of the agents */
 const OWNER_LEAVES_AGENTS_FROM = 7_004_000;

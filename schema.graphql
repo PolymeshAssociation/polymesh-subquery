@@ -2074,7 +2074,10 @@ type AssetPermissions @jsonField {
 }
 
 """
-Represents which extrinsics an Account may sign for an Identity
+Represents which extrinsics an Account may sign for an Identity. For `these` or `except`, `values`
+is a map by pallet name of `{ extrinsics }`, itself `whole` or `these`/`except` a list of extrinsic
+names: 7.0's form, whichever runtime set them. Names are as the chain stores them and matches them,
+exactly, so a misspelt or retired one grants nothing
 """
 type TransactionPermissions @jsonField {
   type: String!
@@ -2634,7 +2637,7 @@ type AssetAgentHistory @entity {
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
   type: AgentHistoryType!
-  "The permissions as at this history row, JSON-in-a-string. An `AgentGroup`'s `ExtrinsicPermissions` is a richer structure (`Whole | These | Except`, nesting per-pallet dispatchable names) than the `PermissionsJson` jsonField's flat shape, so typing it properly is a separate exercise rather than a lossy flattening"
+  "The agent's extrinsic permissions as at this history row, JSON text in `AgentGroup.permissions`'s form; a built-in group's are written out the same way"
   permissions: String
   createdEvent: Event!
 }
@@ -2645,6 +2648,7 @@ Represents a set of agents authorized to perform actions for a given Asset
 type AgentGroup @entity {
   id: ID! #assetId/group_id
   asset: Asset! @index
+  "The group's extrinsic permissions as JSON text: `{\"whole\":null}`, or `these`/`except` a map by pallet name as in `TransactionPermissions`"
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
   createdEvent: Event!

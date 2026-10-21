@@ -32,6 +32,7 @@ import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
+import { canonicalExtrinsicPermissions, Subset } from '../../../utils/permissions';
 
 /**
  * Returns Identity for a given DID
@@ -261,11 +262,13 @@ export const getPermissions = (accountPermissions: Record<string, unknown>): Per
         break;
       }
       case 'extrinsic': {
-        const transactionPermissions = accountPermissions.extrinsic as Record<string, string[]>;
+        const transactionPermissions = canonicalExtrinsicPermissions(
+          accountPermissions.extrinsic as Subset
+        );
         type = Object.keys(transactionPermissions)[0];
         transactions = {
           type,
-          values: transactionPermissions[type],
+          values: transactionPermissions[type] as TransactionPermissions['values'],
         };
         break;
       }

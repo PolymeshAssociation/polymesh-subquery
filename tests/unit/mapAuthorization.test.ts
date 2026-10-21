@@ -66,7 +66,11 @@ describe('handleAuthorization — AuthorizationRetryLimitReached', () => {
 });
 
 describe('handleAuthorization — AuthorizationAdded', () => {
-  const added = (targetDid: string | null, targetKey: string | null) =>
+  const added = (
+    targetDid: string | null,
+    targetKey: string | null,
+    authorizationData: unknown = { joinIdentity: { asset: null } }
+  ) =>
     tupleEvent({
       section: 'identity',
       method: 'AuthorizationAdded',
@@ -75,10 +79,30 @@ describe('handleAuthorization — AuthorizationAdded', () => {
         helperCodec(targetDid),
         helperCodec(targetKey),
         helperCodec(AUTH_ID),
-        helperCodec({ joinIdentity: { asset: null } }),
+        helperCodec(authorizationData),
         helperCodec(null),
       ],
     });
+
+  it("stores a key's permissions with its extrinsic permissions in the index's form", async () => {
+    const db = mockStore({ Identity: { [DID]: { id: DID } } });
+    const permissions = {
+      asset: { whole: null },
+      // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
+      extrinsic: {
+        these: [{ palletName: '0x4173736574', dispatchableNames: { these: ['0x6973737565'] } }],
+      },
+      portfolio: { whole: null },
+    };
+
+    await handleAuthorization(added(null, KEY, { joinIdentity: permissions }));
+
+    expect(JSON.parse(db.Authorization['0000000042'].data)).toEqual({
+      asset: { whole: null },
+      extrinsic: { these: { Asset: { extrinsics: { these: ['issue'] } } } },
+      portfolio: { whole: null },
+    });
+  });
 
   it('links an authorization to a key by the SS58 address its Account row is keyed by', async () => {
     const db = mockStore({ Identity: { [DID]: { id: DID } } });

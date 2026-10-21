@@ -7,7 +7,6 @@
 import {
   assetPermissionsToV7,
   complianceToV7,
-  extrinsicPermissionsToV7,
   migrateToAssetIds,
   unlinkTickersOfMissingAssets,
 } from '../../src/mappings/migrations/assetIdMigration';
@@ -19,47 +18,6 @@ const MTICKER03 = '0x4d5449434b45523033000000';
 const MTICKER03_ID = '0x006ff39477cf86a794d1be1fe233f68a';
 const CSB0313 = '0x435342303331330000000000';
 const CSB0313_ID = '0x00cfa7188fed818e8d33c667c3ff44e6';
-
-const ASSET = '0x4173736574';
-const ADD_DOCUMENTS = '0x6164645f646f63756d656e7473';
-const FREEZE = '0x667265657a65';
-
-describe('extrinsicPermissionsToV7', () => {
-  it('turns the list of pallets into a map by pallet name, names as text', () => {
-    expect(
-      extrinsicPermissionsToV7({
-        these: [
-          { palletName: ASSET, dispatchableNames: { these: [FREEZE, ADD_DOCUMENTS] } },
-          { palletName: '0x5574696c697479', dispatchableNames: { whole: null } },
-        ],
-      })
-    ).toEqual({
-      these: {
-        Asset: { extrinsics: { these: ['add_documents', 'freeze'] } },
-        Utility: { extrinsics: { whole: null } },
-      },
-    });
-  });
-
-  it('reads the snake_cased, already decoded list older metadata gave', () => {
-    expect(
-      extrinsicPermissionsToV7({
-        except: [{ pallet_name: 'Asset', dispatchable_names: { except: ['issue'] } }],
-      })
-    ).toEqual({ except: { Asset: { extrinsics: { except: ['issue'] } } } });
-  });
-
-  it('leaves whole permissions, and permissions already in the 7.0 form', () => {
-    expect(extrinsicPermissionsToV7({ whole: null })).toEqual({ whole: null });
-
-    const v7 = { these: { Asset: { extrinsics: { whole: null } } } };
-    expect(extrinsicPermissionsToV7(v7)).toEqual(v7);
-  });
-
-  it('turns an empty list into an empty map', () => {
-    expect(extrinsicPermissionsToV7({ these: [] })).toEqual({ these: {} });
-  });
-});
 
 describe('assetPermissionsToV7', () => {
   it('names each asset by the id 7.0 gave its ticker', async () => {
@@ -129,10 +87,8 @@ describe('migrateToAssetIds', () => {
   const KEY_PERMISSIONS = {
     assets: { type: 'these', values: [MTICKER03] },
     portfolios: { type: 'whole', values: null },
-    transactions: {
-      type: 'these',
-      values: [{ palletName: ASSET, dispatchableNames: { these: [FREEZE] } }],
-    },
+    // a key's extrinsic permissions are stored in 7.0's form whatever runtime wrote them
+    transactions: { type: 'these', values: { Asset: { extrinsics: { these: ['freeze'] } } } },
     transactionGroups: [],
   };
 
@@ -156,29 +112,21 @@ describe('migrateToAssetIds', () => {
     expect(db.IdentityKey.closed.permissions).toEqual(KEY_PERMISSIONS);
   });
 
-  it("rewrites an agent group's permissions", async () => {
+  it("leaves an agent group's permissions, which name no asset and are stored in 7.0's form", async () => {
+    const permissions = JSON.stringify({ these: { Asset: { extrinsics: { whole: null } } } });
     const db = mockStore({
-      AgentGroup: {
-        g: {
-          id: 'g',
-          permissions: JSON.stringify({
-            these: [{ palletName: ASSET, dispatchableNames: { whole: null } }],
-          }),
-        },
-      },
+      AgentGroup: { g: { id: 'g', permissions, updatedEventId: 'before' } },
     });
 
     await migrateToAssetIds(EVENT);
 
-    expect(JSON.parse(db.AgentGroup.g.permissions)).toEqual({
-      these: { Asset: { extrinsics: { whole: null } } },
-    });
+    expect(db.AgentGroup.g).toMatchObject({ permissions, updatedEventId: 'before' });
   });
 
-  it("rewrites a pending authorization's permissions and its ticker, and no other", async () => {
+  it("rewrites a pending authorization's asset permissions and its ticker, and no other", async () => {
     const permissions = {
       asset: { these: [MTICKER03] },
-      extrinsic: { these: [{ palletName: ASSET, dispatchableNames: { whole: null } }] },
+      extrinsic: { these: { Asset: { extrinsics: { whole: null } } } },
       portfolio: { whole: null },
     };
     const db = mockStore({

@@ -1,5 +1,4 @@
 import {
-  AgentGroup,
   Asset,
   Authorization,
   AuthorizationStatusEnum,
@@ -10,6 +9,7 @@ import {
   TickerReservation,
 } from '../../types';
 import { EXPLICIT_NULL, getAllByFields } from '../../utils';
+import { PERMISSION_AUTHORIZATIONS, Subset } from '../../utils/permissions';
 import { getAssetIdForLegacyTicker } from '../../utils/assets';
 import { currentComplianceForm } from '../../utils/compliance';
 import {
@@ -21,24 +21,15 @@ import {
 /**
  * What 7.0's migration did to state the index holds, with no event: every ticker became the asset
  * id `AssetId::from(ticker)` gives it (`identity::ticker_migrations`, and the compliance manager's,
- * external agents' and statistics' `migrate_to_v1`), and extrinsic permissions, a list of pallets,
- * became a map by pallet name with names as text (`primitives::v6`). Rows written before it are
- * rewritten into the form 7.0's own events give; the chain rewrote only what it still held, so
- * closed and spent rows are left as they were. 7.0 also linked every ticker it held a registration
- * of to its asset id (`TickerAssetId`), an asset created under it or not.
+ * external agents' and statistics' `migrate_to_v1`). Rows written before it are rewritten into the
+ * form 7.0's own events give; the chain rewrote only what it still held, so closed and spent rows
+ * are left as they were. 7.0 also linked every ticker it held a registration of to its asset id
+ * (`TickerAssetId`), an asset created under it or not. Its change to extrinsic permissions, a list
+ * of pallets made a map, needs nothing here: the index stores them in 7.0's form from the start
+ * (`utils/permissions`).
  */
 
-type Subset = Record<string, unknown>;
-
 const ASSET_ID = /^0x[0-9a-fA-F]{32}$/;
-
-/** A field by name, whatever casing the runtime's metadata gave it */
-const field = (record: Subset, name: string): unknown =>
-  Object.entries(record).find(([key]) => key.replace(/_/g, '').toLowerCase() === name)?.[1];
-
-/** A pallet or extrinsic name as text, as `String::from_utf8_lossy` reads its bytes */
-const nameText = (name: string): string =>
-  name.startsWith('0x') ? Buffer.from(name.slice(2), 'hex').toString('utf8') : name;
 
 /** In byte order, as a `BTreeSet` or `BTreeMap` holds its keys */
 const byteOrder = (a: string, b: string): number => {
@@ -47,35 +38,6 @@ const byteOrder = (a: string, b: string): number => {
   }
   return a < b ? -1 : 1;
 };
-
-/** A `SubsetRestriction` with `convert` applied to its members; `Whole` stays */
-const mapSubset = (subset: Subset, convert: (members: unknown[]) => unknown): Subset =>
-  Object.fromEntries(
-    Object.entries(subset).map(([kind, members]) => [
-      kind,
-      Array.isArray(members) ? convert(members) : members,
-    ])
-  );
-
-/** `ExtrinsicPermissions` as 7.0 holds it: a map by pallet name; already a map, it is unchanged */
-export const extrinsicPermissionsToV7 = (permissions: Subset): Subset =>
-  mapSubset(permissions, pallets =>
-    Object.fromEntries(
-      (pallets as Subset[])
-        .map(pallet => {
-          const names = (field(pallet, 'dispatchablenames') ?? {}) as Subset;
-          return [
-            nameText(field(pallet, 'palletname') as string),
-            {
-              extrinsics: mapSubset(names, members =>
-                [...new Set((members as string[]).map(nameText))].sort(byteOrder)
-              ),
-            },
-          ] as [string, unknown];
-        })
-        .sort(([a], [b]) => byteOrder(a, b))
-    )
-  );
 
 const assetIdOf = (value: string): Promise<string> =>
   ASSET_ID.test(value) ? Promise.resolve(value) : getAssetIdForLegacyTicker(value);
@@ -118,7 +80,7 @@ export const complianceToV7 = async (data: string): Promise<string> =>
 
 /** A key's `PermissionsJson` as 7.0 holds it */
 const keyPermissionsToV7 = async (permissions: Subset): Promise<Subset> => {
-  const { assets, transactions } = permissions as Record<string, { type: string; values: unknown }>;
+  const { assets } = permissions as Record<string, { type: string; values: unknown }>;
   const subset = async (
     restriction: { type: string; values: unknown } | undefined,
     convert: (subset: Subset) => Subset | Promise<Subset>
@@ -133,12 +95,8 @@ const keyPermissionsToV7 = async (permissions: Subset): Promise<Subset> => {
   return {
     ...permissions,
     ...(assets && { assets: await subset(assets, assetPermissionsToV7) }),
-    ...(transactions && { transactions: await subset(transactions, extrinsicPermissionsToV7) }),
   };
 };
-
-/** The authorizations 7.0 rewrote whose payload is a key's `Permissions` */
-const PERMISSION_AUTHORIZATIONS = new Set(['JoinIdentity', 'RotatePrimaryKeyToSecondary']);
 
 /** A pending authorization's payload as 7.0 holds it; `undefined` for one it didn't rewrite */
 const authorizationToV7 = async (row: Authorization): Promise<string | undefined> => {
@@ -159,9 +117,6 @@ const authorizationToV7 = async (row: Authorization): Promise<string | undefined
     Object.entries(permissions).map(async ([field, value]) => {
       if (field === 'asset' && value) {
         return [field, await assetPermissionsToV7(value)] as const;
-      }
-      if (field === 'extrinsic' && value) {
-        return [field, extrinsicPermissionsToV7(value)] as const;
       }
       return [field, value] as const;
     })
@@ -186,9 +141,8 @@ const rewrite = async <T extends { save(): Promise<void>; updatedEventId: string
 };
 
 export const migrateToAssetIds = async (blockEventId: string): Promise<void> => {
-  const [keys, groups, authorizations, compliances, claims, reservations] = await Promise.all([
+  const [keys, authorizations, compliances, claims, reservations] = await Promise.all([
     getAllByFields<IdentityKey>('IdentityKey', [['validToBlockId', '=', EXPLICIT_NULL]]),
-    getAllByFields<AgentGroup>('AgentGroup', []),
     getAllByFields<Authorization>('Authorization', [
       ['status', '=', AuthorizationStatusEnum.Pending],
     ]),
@@ -209,10 +163,6 @@ export const migrateToAssetIds = async (blockEventId: string): Promise<void> => 
           blockEventId
         );
       }
-    }),
-    ...groups.map(group => {
-      const next = JSON.stringify(extrinsicPermissionsToV7(JSON.parse(group.permissions)));
-      return rewrite(group, group.permissions, next, row => (row.permissions = next), blockEventId);
     }),
     ...authorizations.map(async authorization => {
       const next = await authorizationToV7(authorization);
