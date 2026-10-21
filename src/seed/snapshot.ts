@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { findStorage } from '../utils/legacyQuery';
 import { storageAtParent } from '../utils/storageAtParent';
-import { entryKey, readManyAtParent, ScannedEntry, scanAtParent } from './bulk';
+import { entryKey, ScannedEntry, scanAtParent } from './bulk';
 import { shapeOf } from './shapes';
 import SHAPES from './knownShapes.json';
 
@@ -25,8 +25,6 @@ export interface ChainSnapshot {
   map(item: StorageRef): Promise<ReadonlyMap<string, Entry>>;
   /** the item's entries a page at a time, or those under leading key arguments `prefix` */
   pages(item: StorageRef, ...prefix: unknown[]): AsyncIterable<Entry[]>;
-  /** the values of known keys */
-  many(item: StorageRef, keys: unknown[][]): Promise<(Codec | undefined)[]>;
   /** a plain item's value */
   value(item: StorageRef): Promise<Codec | undefined>;
   /** a view several seeders share, such as items joined by key, built once per seed */
@@ -139,10 +137,6 @@ export const snapshotAtParent = (
       for (let i = 0; i < entries.length; i += PAGE) {
         yield entries.slice(i, i + PAGE);
       }
-    },
-    many: async (item, keys) => {
-      await check(item);
-      return readManyAtParent(block, ...split(item), keys);
     },
     value: async item => {
       await check(item);
