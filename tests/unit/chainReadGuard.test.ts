@@ -11,8 +11,10 @@ const ROOT = join(__dirname, '..', '..');
 /** The chain-read helpers themselves */
 const HELPERS = ['src/utils/storageAtParent.ts', 'src/utils/legacyQuery.ts'];
 
+// the seed's readers (`src/seed/bulk.ts`, `snapshot.ts`) read the chain too, should a handler
+// import one
 const READ =
-  /api\.query\.|api\.rpc\.|legacyQuery\(|findStorage\(|storageAtParent\(|storageEntriesAtParent\(|parentStateReadable\(/g;
+  /api\.query\.|api\.rpc\.|legacyQuery\(|findStorage\(|storageAtParent\(|storageEntriesAtParent\(|parentStateReadable\(|scanAtParent\(|snapshotAtParent\(/g;
 
 /** Reads per file, each with the gap in the event data they fill */
 const READS: Record<string, [number, string]> = {
