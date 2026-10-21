@@ -12,13 +12,14 @@ import {
   Sto,
   TargetTreatment,
 } from '../../types';
-import { bytesToString, coerceHexToString, getTextValue } from '../../utils/common';
+import { coerceHexToString, getTextValue } from '../../utils/common';
 import { getDistributionValue } from '../../utils/distributions';
 import { getCaIdValue } from '../../utils/portfolios';
 import { getFundraiserDetails } from '../../utils/stos';
 import { pageRows, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 import { assetIdOf, assetWithTicker } from './assetKeys';
+import { storedText } from '../../utils/text';
 
 /**
  * Corporate actions, their assets' defaults, distributions, ballots and their votes, and
@@ -93,7 +94,7 @@ export const corporateActionSeeder: Seeder<CorporateAction> = {
             await assetIdOf(args[0]),
             localId,
             value,
-            description ? bytesToString(description) : undefined,
+            storedText(description),
             ((docs.get(key)?.toJSON() as number[] | null) ?? []).map(String),
             { block: ctx.block, eventIdx: 0, blockEventId: ctx.eventId }
           ),
@@ -278,7 +279,7 @@ export const stoSeeder: Seeder<Sto> = {
           Sto.create({
             id: `${details.offeringAssetId}/${args[1].toString()}`,
             stoId: Number(args[1].toString()),
-            name: name ? coerceHexToString(getTextValue(name)) : '',
+            name: storedText(name) ?? '',
             ...details,
             offChainFundingEnabled: Boolean(offChainToken),
             offChainFundingToken: offChainToken || undefined,
