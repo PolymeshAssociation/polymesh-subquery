@@ -35,7 +35,7 @@ listed in `src/seed/seeders/index.ts`.
 | Field | Meaning |
 |---|---|
 | `entity`, `rows(snap, ctx)` | the rows, a page at a time |
-| `reads` | the storage items it reads. The snapshot refuses any other |
+| `reads` | the storage items it reads. The snapshot refuses an item no seeder declares |
 | `oldShapes` | for an item read before 6.0, the survey ranges whose shape it handles |
 | `relative` | fields whose value depends on history before the start: totals counted from it, and facts the chain doesn't keep (who created a row, who affirmed) |
 | `accounts` | fields naming an `Account`, for the account closure |
