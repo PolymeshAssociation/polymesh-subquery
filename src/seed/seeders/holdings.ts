@@ -154,16 +154,28 @@ const flaggedInPortfolios = async (snap: ChainSnapshot): Promise<Owned[]> => {
   return owned;
 };
 
+/**
+ * Every token and who holds it, from the one item that lists them all: `nft.owner` wherever it
+ * exists (7.4 kept `nft.nftOwner` beside it, with the same portfolio-held tokens in both), then
+ * `nft.nftOwner`, then before 6.1 the portfolios' flags.
+ */
+const ownedTokens = (snap: ChainSnapshot): Promise<Owned[]> => {
+  if (snap.has('nft.owner')) {
+    return ownedBy(snap, 'nft.owner');
+  }
+  if (snap.has('nft.nftOwner')) {
+    return ownedBy(snap, 'nft.nftOwner');
+  }
+  return flaggedInPortfolios(snap);
+};
+
 /** Every token, in the holding it is in, which counts it */
 const tokensOf = async (
   snap: ChainSnapshot,
   holdingOf: HoldingOf,
   ctx: SeedContext
 ): Promise<Nft[]> => {
-  const owned =
-    snap.has('nft.owner') || snap.has('nft.nftOwner')
-      ? (await Promise.all([ownedBy(snap, 'nft.owner'), ownedBy(snap, 'nft.nftOwner')])).flat()
-      : await flaggedInPortfolios(snap);
+  const owned = await ownedTokens(snap);
   return owned.map(({ assetId, nftId, holder }) => {
     const holding = holdingOf(assetId, holder);
     holding.nftCount += 1;

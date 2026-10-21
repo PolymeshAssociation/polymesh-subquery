@@ -132,6 +132,30 @@ describe('from 8.1', () => {
   });
 });
 
+describe('on 7.4', () => {
+  // 7.4 copied every `nft.nftOwner` entry into `nft.owner` and kept writing both; testnet
+  // 24,000,000 had 219 holdings whose tokens are in both
+  it('counts a token both items name once', async () => {
+    const chain = fakeChain(7_004_001);
+    chain.put('nft.owner', [NFTS, 5], { Portfolio: user(1) });
+    chain.put('nft.nftOwner', [NFTS, 5], user(1));
+    await seed(
+      snapshotAtParent(chain.block),
+      {
+        block: chain.block,
+        blockId: '0000001000',
+        eventId: SEED_EVENT_ID,
+        datetime: START,
+        specVersion: 7_004_001,
+      },
+      { seeders: SEEDERS.filter(({ entity }) => ['Holding', 'Nft'].includes(entity)), accountRows }
+    );
+
+    expect(chain.rows('Nft')).toHaveLength(1);
+    expect(byId(chain.rows('Holding'))[`${NFTS}/${DID}/1`]).toMatchObject({ nftCount: 1 });
+  });
+});
+
 describe('before 7.4', () => {
   it('finds a token in the portfolio `nft.nftOwner` names', async () => {
     const chain = fakeChain(7_002_000);
