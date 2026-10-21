@@ -347,6 +347,8 @@ The chain keeps an instruction's approvals per holder, a portfolio or an account
 
 What was "the identity's affirmation" is its holder rows: `instructionAffirmations(filter: { instructionId: { equalTo: $id }, identityId: { equalTo: $did }, isMediator: { equalTo: false } })`. The identity has fully approved when none of them is `Pending`, and partly approved when some are. Who is still pending on an instruction is `instructionAffirmations(filter: { instructionId: { equalTo: $id }, status: { equalTo: Pending } })`.
 
+An off-chain leg has no `Pending` approval row. The chain keeps its approval per leg, pending from the instruction's creation (from 6.0) until a receipt is claimed for it, so an instruction is fully approved only when no row is `Pending` and every `OffChain` leg has an entry in `offChainReceipts`.
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

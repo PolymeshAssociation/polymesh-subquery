@@ -2852,7 +2852,7 @@ type Leg @entity {
   "`nftIds` is only applicable for non-fungible legs"
   nftIds: [BigInt]
   addresses: [String!]!
-  "Receipts settling this off-chain leg"
+  "Receipts settling this off-chain leg. From 6.0 the chain starts an off-chain leg's approval pending when the instruction is created; the leg is approved once a receipt is here"
   offChainReceipts: [OffChainReceipt!] @derivedFrom(field: "leg")
   createdEvent: Event!
   updatedEvent: Event!
@@ -2867,7 +2867,7 @@ type InstructionParty @entity {
   isMediator: Boolean!
   "The party: an identity, whatever portfolios and accounts it holds through. A relation with no row when the DID is not indexed (an off-chain counterparty)"
   identity: Identity!
-  "The party's approval rows: one per holder (portfolio or account) it has on the legs, or its mediator row. It is fully approved when none is `Pending`"
+  "The party's approval rows: one per holder (portfolio or account) it has on the legs, or its mediator row. It is fully approved when none is `Pending`. An off-chain leg's approval is the leg's (`Leg.offChainReceipts`), so a party only on off-chain legs has no rows"
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
   createdEvent: Event!
   updatedEvent: Event!
@@ -2888,7 +2888,9 @@ type OffChainReceipt @entity {
 
 """
 One approval of an Instruction: a holder's (portfolio or account), one row per holder on the
-legs, or a mediator's. Each starts `Pending` and records who last acted on it
+legs, or a mediator's. Each starts `Pending` and records who last acted on it. An off-chain leg's
+approval is the leg's, not a holder's: it has no `Pending` row here, and is pending while
+`Leg.offChainReceipts` is empty. Claiming a receipt writes an `Affirmed` row for the caller
 """
 type InstructionAffirmation @entity {
   id: ID!
