@@ -9,7 +9,6 @@ import {
 } from '../../types';
 import { memberOf } from '../../utils/codec';
 import {
-  bytesToString,
   capitalizeFirstLetter,
   getDateValue,
   getFirstKeyFromJson,
@@ -20,6 +19,7 @@ import {
 import { pageRows, Seeder } from '../seeder';
 import { assetWithTicker } from './assetKeys';
 import { canonicalPermissions, PERMISSION_AUTHORIZATIONS, Subset } from '../../utils/permissions';
+import { requiredText } from '../../utils/text';
 
 export const customClaimTypeSeeder: Seeder<CustomClaimType> = {
   entity: 'CustomClaimType',
@@ -32,7 +32,7 @@ export const customClaimTypeSeeder: Seeder<CustomClaimType> = {
           ? [
               CustomClaimType.create({
                 id: args[0].toString(),
-                name: bytesToString(value),
+                name: requiredText(value, 'a custom claim type name'),
                 createdEventId: ctx.eventId,
                 updatedEventId: ctx.eventId,
               }),
