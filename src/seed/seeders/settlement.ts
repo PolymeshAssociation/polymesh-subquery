@@ -16,7 +16,7 @@ import {
   Venue,
 } from '../../types';
 import { isObject, memberOf, variantOf } from '../../utils/codec';
-import { bytesToString, getDateValue, padNumericId } from '../../utils/common';
+import { getDateValue, padNumericId } from '../../utils/common';
 import { accountHolder, meshPortfolioToAssetHolder, portfolioHolder } from '../../utils/portfolios';
 import {
   getLegsValue,
@@ -28,7 +28,7 @@ import {
   LegDetails,
   LegLookups,
 } from '../../utils/settlements';
-import { memoText } from '../../utils/text';
+import { memoText, storedText } from '../../utils/text';
 import { pageRows, pagesOf, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 import { StoredKey, storedKeys } from './keys';
@@ -76,7 +76,7 @@ export const venueSeeder: Seeder<Venue> = {
           Venue.create({
             id: padNumericId(id),
             ownerId: creator,
-            details: description ? bytesToString(description) : undefined,
+            details: storedText(description),
             type: venueType,
             signers: signersOf.get(id) ?? [],
             ...created(ctx),
@@ -180,18 +180,27 @@ const legLookups = (
 });
 
 const settlementViews = async (snap: ChainSnapshot): Promise<SettlementViews> => {
-  const [statuses, memos, legEntries, mediatorEntries, received, userEntries, tickers, keys, assets] =
-    await Promise.all([
-      snap.map('settlement.instructionStatuses'),
-      snap.map('settlement.instructionMemos'),
-      snap.map('settlement.instructionLegs'),
-      snap.map('settlement.instructionMediatorsAffirmations'),
-      snap.map('settlement.affirmsReceived'),
-      snap.map('settlement.userAffirmations'),
-      snap.map('asset.assetIdTicker'),
-      storedKeys(snap),
-      assetIds(snap),
-    ]);
+  const [
+    statuses,
+    memos,
+    legEntries,
+    mediatorEntries,
+    received,
+    userEntries,
+    tickers,
+    keys,
+    assets,
+  ] = await Promise.all([
+    snap.map('settlement.instructionStatuses'),
+    snap.map('settlement.instructionMemos'),
+    snap.map('settlement.instructionLegs'),
+    snap.map('settlement.instructionMediatorsAffirmations'),
+    snap.map('settlement.affirmsReceived'),
+    snap.map('settlement.userAffirmations'),
+    snap.map('asset.assetIdTicker'),
+    storedKeys(snap),
+    assetIds(snap),
+  ]);
   return {
     statuses,
     memos,
@@ -361,9 +370,7 @@ const bundles = (snap: ChainSnapshot, ctx: SeedContext): Promise<Bundle[]> =>
       const built = await pageRows(page, async ({ args, value }) => {
         const id = args[0].toString();
         // before 6.0 the status is a field of the details
-        const stored = views.beforeV6
-          ? memberOf(value, 'status')
-          : views.statuses.get(id)?.value;
+        const stored = views.beforeV6 ? memberOf(value, 'status') : views.statuses.get(id)?.value;
         const status = STATUS[variantOf(stored?.toJSON())];
         // no status: finished under a runtime that never pruned it
         return value && status ? [await bundleOf(views, ctx, { id, value, status })] : [];
