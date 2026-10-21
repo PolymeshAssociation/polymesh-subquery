@@ -12,10 +12,11 @@ import {
   Portfolio,
 } from '../../types';
 import { getAccountKeyType } from '../../utils/accounts';
-import { bytesToString, EXPLICIT_NULL, extractValue, getTextValue } from '../../utils/common';
+import { EXPLICIT_NULL, extractValue, getTextValue } from '../../utils/common';
 import { pagesOf, SeedContext, Seeder, SeedRow } from '../seeder';
 import { ChainSnapshot } from '../snapshot';
 import { primaryKeyOf, StoredKey, storedKeys } from './keys';
+import { storedText } from '../../utils/text';
 
 /** The identities the chain's constants give the systematic issuers, which no record lists at genesis */
 const systematic = (): { did: string; primaryAccountId: string }[] =>
@@ -283,7 +284,7 @@ export const portfolioSeeder: Seeder<Portfolio> = {
     yield* pagesOf((await identityDids(snap)).map(did => row(`${did}/0`)));
     for await (const page of snap.pages('portfolio.portfolios')) {
       yield page.map(({ args, value }) =>
-        row(`${args[0].toString()}/${args[1].toString()}`, value ? bytesToString(value) : undefined)
+        row(`${args[0].toString()}/${args[1].toString()}`, storedText(value))
       );
     }
   },
