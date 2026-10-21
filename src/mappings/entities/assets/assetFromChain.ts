@@ -1,7 +1,6 @@
 import { SubstrateEvent } from '@subql/types';
 import { AnomalyKind, Asset } from '../../../types';
 import {
-  bytesToString,
   getAssetType,
   getBigIntValue,
   getBooleanValue,
@@ -14,6 +13,7 @@ import { hexToString } from '../../../utils/common';
 import { isPartialIndex } from '../../indexOrigin';
 import { extractArgs } from '../common';
 import { resolveIdentity } from '../identities/mapIdentities';
+import { storedText } from '../../../utils/text';
 
 /**
  * An asset the index has never seen, built from chain storage at the current block.
@@ -83,10 +83,10 @@ export const assetFromChain = async (
     id: assetId,
     assetId,
     ticker,
-    name: bytesToString(rawName) || undefined,
+    name: storedText(rawName),
     type: await getAssetType(assetType, block, eventIdx),
     isNftCollection,
-    fundingRound: bytesToString(rawFundingRound) || undefined,
+    fundingRound: storedText(rawFundingRound),
     isDivisible: getBooleanValue(memberOf(details, 'divisible')),
     isFrozen: getBooleanValue(rawFrozen),
     holderCount: 0,

@@ -16,6 +16,7 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
+import { requiredText, storedText } from '../../../utils/text';
 
 const getOfferingAsset = (
   block: SubstrateBlock,
@@ -50,7 +51,7 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
   }
 
   const stoId = getNumberValue(rawStoId);
-  const name = coerceHexToString(getTextValue(rawStoName));
+  const name = requiredText(rawStoName, 'the fundraiser name');
 
   await Sto.create({
     id: `${fundraiserDetails.offeringAssetId}/${stoId}`,

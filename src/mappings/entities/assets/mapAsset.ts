@@ -20,7 +20,6 @@ import {
 } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
   camelToSnakeCase,
   classifyInternalTransfer,
   coerceHexToString,
@@ -51,7 +50,7 @@ import { blockEvents } from '../../../utils/blockEvents';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
-import { memoText } from '../../../utils/text';
+import { memoText, storedText } from '../../../utils/text';
 import { identityOfKey } from '../../../utils/accounts';
 import { indexClosingEvent } from '../block/closingEvent';
 import { preApprovesSilently } from '../settlements/silentPreApprovals';
@@ -384,16 +383,13 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     rawFundingRoundName ?? api.query.asset.fundingRound(assetKey),
   ]);
 
-  const name = bytesToString(rawName as Codec);
+  const name = storedText(rawName as Codec);
   /**
    * FundingRound isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
    */
-  let fundingRound: string = null;
-
-  if (!rawFundingRound.isEmpty) {
-    fundingRound = bytesToString(rawFundingRound as Codec);
-  }
+  // an event's `Option`: `None` is no round; before 5.1 the chain stored one at creation, empty by default
+  const fundingRound = storedText(rawFundingRound as Codec);
 
   /**
    * Events from chain >= 5.1.0 has identifiers emitted as well
@@ -435,7 +431,7 @@ export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> =
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId, event);
-  asset.name = bytesToString(rawName);
+  asset.name = storedText(rawName);
   asset.updatedEventId = blockEventId;
 
   await asset.save();
@@ -449,7 +445,7 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
 
   const asset = await getAsset(assetId, event);
 
-  asset.fundingRound = bytesToString(rawFundingRound);
+  asset.fundingRound = storedText(rawFundingRound);
   asset.updatedEventId = blockEventId;
 
   await asset.save();
@@ -524,7 +520,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   const issuerDid = getTextValue(rawBeneficiaryDid);
   const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
-  const fundingRound = bytesToString(rawFundingRound);
+  const fundingRound = storedText(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
   const asset = await getAsset(assetId, event);

@@ -4,7 +4,6 @@ import { decodeEvent } from '../../../decode';
 import { Venue } from '../../../types';
 import {
   addIfNotIncludes,
-  bytesToString,
   getBooleanValue,
   getTextValue,
   padNumericId,
@@ -13,6 +12,7 @@ import {
 import { itemsOf } from '../../../utils/codec';
 import { findStorage } from '../../../utils/legacyQuery';
 import { extractArgs } from '../common';
+import { storedText } from '../../../utils/text';
 
 /**
  * Extracts venue signer addresses from the raw `VenueSignersUpdated` event param.
@@ -55,7 +55,7 @@ export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> =
   await Venue.create({
     id: processVenueId(venueId),
     ownerId: getTextValue(did),
-    details: bytesToString(details),
+    details: storedText(details),
     type: getTextValue(venueType),
     signers,
     createdEventId: blockEventId,
@@ -69,7 +69,7 @@ export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<
 
   const venue = await getVenue(processVenueId(venueId));
 
-  venue.details = bytesToString(details);
+  venue.details = storedText(details);
   venue.updatedEventId = blockEventId;
 
   await venue.save();

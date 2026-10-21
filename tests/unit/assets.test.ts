@@ -35,7 +35,9 @@ describe('getCustomType', () => {
     const db = mockStore();
     (globalThis as any).api.query = {
       asset: {
-        customTypes: jest.fn().mockResolvedValue({ toString: () => '0x4c6567616379' }),
+        customTypes: jest
+          .fn()
+          .mockResolvedValue({ toString: () => '0x4c6567616379', toHex: () => '0x4c6567616379' }),
       },
     };
 
@@ -55,7 +57,9 @@ describe('getCustomType', () => {
   it('leaves the type unknown, not blank, when the chain has not registered it either', async () => {
     const db = mockStore();
     (globalThis as any).api.query = {
-      asset: { customTypes: jest.fn().mockResolvedValue({ toString: () => '0x' }) },
+      asset: {
+        customTypes: jest.fn().mockResolvedValue({ toString: () => '0x', toHex: () => '0x' }),
+      },
     };
 
     const name = await getCustomType(codec(0) as unknown as Codec, blockAt(12_029_979));

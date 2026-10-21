@@ -3,7 +3,6 @@ import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
 import { blockEvents } from '../../../utils/blockEvents';
 import {
-  bytesToString,
   getAllByFields,
   getBigIntValue,
   getBooleanValue,
@@ -14,6 +13,7 @@ import {
   padNumericId,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
+import { storedText } from '../../../utils/text';
 
 /**
  * A PIP id is a bare numeric sequence. Zero-pad it (D12 / A14) so `Proposal.id` and
@@ -70,8 +70,8 @@ export const handleProposalCreated = async (event: SubstrateEvent): Promise<void
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
     balance: deposit,
-    url: bytesToString(rawUrl),
-    description: bytesToString(rawDescription),
+    url: storedText(rawUrl),
+    description: storedText(rawDescription),
     snapshotted: false,
     expiresAt: scheduledExpiry(event, id),
     totalAyeWeight: depositVote ? deposit : BigInt(0),

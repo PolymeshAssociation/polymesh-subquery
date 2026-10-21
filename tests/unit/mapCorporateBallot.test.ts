@@ -7,11 +7,20 @@ import {
   handleBallotVoteCast,
 } from '../../src/mappings/entities/assets/mapCorporateBallot';
 import { IndexerAnomaly } from '../../src/types';
+import { TypeRegistry } from '@polkadot/types';
 import { codec, mockStore, tupleEvent } from './helpers';
 
 const ASSET_ID = '0xassetballot00000000000000000000';
 const DID_A = TEST_DID;
 const caIdCodec = (localId = 0) => codec({ assetId: ASSET_ID, local_id: localId });
+
+/** A `BallotMeta` as the chain encodes it: every text a `Bytes` */
+const registry = new TypeRegistry();
+registry.register({
+  Motion: { title: 'Bytes', info_link: 'Bytes', choices: 'Vec<Bytes>' },
+  BallotMeta: { title: 'Bytes', motions: 'Vec<Motion>' },
+});
+const ballotMeta = (meta: Record<string, unknown>) => registry.createType('BallotMeta', meta);
 const ballotId = `${ASSET_ID}/0`;
 
 const seedBallot = () =>
@@ -38,7 +47,7 @@ describe('handleBallotCreated', () => {
         codec(DID_A),
         caIdCodec(0),
         codec({ start: 1_000, end: 2_000 }),
-        codec({ title: 'Annual Meeting', motions: [] }),
+        ballotMeta({ title: 'Annual Meeting', motions: [] }),
         codec(true),
       ],
     });
@@ -82,7 +91,7 @@ describe('handleBallotMetaChanged', () => {
       tupleEvent({
         section: 'corporateBallot',
         method: 'MetaChanged',
-        data: [codec(DID_A), caIdCodec(0), codec({ title: 'Updated', motions: [] })],
+        data: [codec(DID_A), caIdCodec(0), ballotMeta({ title: 'Updated', motions: [] })],
       })
     );
 
@@ -256,7 +265,7 @@ describe('ballot meta decoding', () => {
           codec(DID_A),
           caIdCodec(0),
           codec({ start: 1_000, end: 2_000 }),
-          codec({
+          ballotMeta({
             title: '0x416e6e75616c204d656574696e67',
             motions: [
               {

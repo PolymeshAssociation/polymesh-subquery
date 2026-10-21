@@ -367,6 +367,19 @@ The chain matches a call against a key's or an agent group's extrinsic permissio
 
 Names are kept as the chain stores them: padded, misspelt and retired names stay, and grant nothing, as on chain. Asset and portfolio permissions are unchanged; before 7.0 an asset permission still names a ticker.
 
+### 9.11 Text as the chain stores it (2026-10-21)
+
+Master trimmed a user's text when the event decoded it as `Text` (before metadata v14) and kept it as given when it decoded as `Bytes` (from v14), so the same chain value could be stored two ways. Every text a user enters is now stored as the chain holds it, whichever runtime wrote it: its bytes as UTF-8, nothing trimmed, without a fixed-width value's trailing NUL padding, and as hex when the bytes are not text.
+
+| Field | Was | Now |
+|---|---|---|
+| `Asset.name`, `Asset.fundingRound`, `Portfolio.name`, `Venue.details`, `Proposal.url`, `Proposal.description`, `CorporateAction.details`, `Sto.name` | trimmed when set before v14 | as stored, spaces kept (testnet venue 36 is `"New STO !!! "`) |
+| `Asset.fundingRound` | null when the asset was created with an empty round | `""`, the empty round the chain stores; null only when it stores none |
+| `CustomClaimType.name`, `CustomAssetType.name`, `AssetMetadata` names and values, ballot titles, motions and choices, confidential asset names, symbols and data | NUL characters anywhere removed | trailing NUL padding removed; a value with other NULs, or that is not UTF-8, is its hex |
+| `AssetDocument.name`, `.link`, `.type` | a value beginning `0x` was read as hex | read from the document's bytes, whatever they spell |
+
+Tickers and memos keep their rule: text without the NUL padding.
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

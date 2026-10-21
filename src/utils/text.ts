@@ -1,6 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { hexToU8a, isHex, u8aToHex } from '@polkadot/util';
 import { utf8Text } from './bytes';
+import { UnexpectedShapeError } from './codec';
 import { getTextValue, removeNullChars } from './common';
 
 /**
@@ -60,4 +61,42 @@ export const memoText = (value: Codec | string | null | undefined): string | und
   const bytes = hexToU8a(raw);
   const text = paddedText(bytes);
   return hasControl(text) ? u8aToHex(bytes) : text;
+};
+
+/** An `Option` codec, as far as reading its value needs */
+interface OptionLike {
+  isNone: boolean;
+  unwrap: () => Codec;
+}
+
+const isOption = (value: Codec): value is Codec & OptionLike =>
+  typeof (value as Partial<OptionLike>).isNone === 'boolean' &&
+  typeof (value as Partial<OptionLike>).unwrap === 'function';
+
+/**
+ * A text a user entered (a name, details, a description), as the chain stores it: its bytes as
+ * UTF-8, nothing trimmed, without a fixed-width value's NUL padding, or their hex when they are not
+ * text (`paddedText`). `""` for an empty value; `undefined` for none, such as an `Option`'s `None`.
+ *
+ * The bytes are the codec's hex, the same for the `Bytes` metadata v14 decodes and the `Text` the
+ * type bundle decoded before it, so the text doesn't depend on the runtime; and as a string they
+ * cross into the host without a typed array or an `instanceof` across the sandbox.
+ */
+export const storedText = (value: Codec | null | undefined): string | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (isOption(value)) {
+    return value.isNone ? undefined : storedText(value.unwrap());
+  }
+  return paddedText(hexToU8a(value.toHex()));
+};
+
+/** `storedText` of a value the chain always gives, such as a required name; `what` names it */
+export const requiredText = (value: Codec | null | undefined, what: string): string => {
+  const text = storedText(value);
+  if (text === undefined) {
+    throw new UnexpectedShapeError(`${what} was expected to be text, but is absent`);
+  }
+  return text;
 };

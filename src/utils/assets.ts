@@ -10,10 +10,11 @@ import {
   extractValue,
   getNumberValue,
   getTextValue,
-  hexToString,
   is7xChain,
   serializeTicker,
 } from './common';
+import { requiredText, storedText } from './text';
+import { fieldOf } from './codec';
 
 export interface AssetIdWithTicker {
   assetId: string;
@@ -52,7 +53,7 @@ export const getCustomType = async (
 
   // `customTypes` keys on `CustomAssetTypeId` (u32), not a raw `Codec`
   const customType = await api.query.asset.customTypes(getNumberValue(rawCustomId));
-  const name = hexToString(customType.toString());
+  const name = storedText(customType);
 
   // Dropped deliberately: an anomaly row is a diagnostic, not something worth failing the
   // handler over. See `recordAnomaly`.
@@ -114,10 +115,10 @@ export const getDocValue = (
   }
 
   return {
-    name: coerceHexToString(extractString(document, 'name')),
-    link: coerceHexToString(extractString(document, 'uri')),
+    name: requiredText(fieldOf(doc, 'name'), 'the document name'),
+    link: requiredText(fieldOf(doc, 'uri'), 'the document uri'),
     contentHash,
-    type: coerceHexToString(extractString(document, 'doc_type')),
+    type: storedText(fieldOf(doc, 'doc_type')),
     filedAt,
   };
 };

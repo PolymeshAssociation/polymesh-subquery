@@ -7,16 +7,11 @@ import {
   GlobalMetadataKey,
   MetadataScope,
 } from '../../../types';
-import {
-  bytesToString,
-  getAssetId,
-  getAssetType,
-  getNumberValue,
-  getTextValue,
-} from '../../../utils';
+import { getAssetId, getAssetType, getNumberValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getAsset } from '../common';
 import { MetadataKey, parseMetadataKey, resolveMetadataKey } from './metadataKeyResolver';
+import { requiredText, storedText } from '../../../utils/text';
 
 const metadataId = (assetId: string, key: MetadataKey): string =>
   `${assetId}/${key.scope}/${key.keyId}`;
@@ -101,7 +96,7 @@ export const handleRegisterAssetMetadataLocalType = async (
     { scope: MetadataScope.Local, keyId: getTextValue(rawKeyId) },
     blockEventId,
     row => {
-      row.name = bytesToString(rawName);
+      row.name = requiredText(rawName, 'the metadata name');
     }
   );
 };
@@ -117,12 +112,12 @@ export const handleRegisterAssetMetadataGlobalType = async (
     (await GlobalMetadataKey.get(id)) ??
     GlobalMetadataKey.create({
       id,
-      name: bytesToString(rawName),
+      name: requiredText(rawName, 'the metadata name'),
       createdEventId: blockEventId,
       updatedEventId: blockEventId,
     });
 
-  row.name = bytesToString(rawName);
+  row.name = requiredText(rawName, 'the metadata name');
   row.spec = rawSpec.isEmpty ? undefined : JSON.stringify(rawSpec.toJSON());
   row.updatedEventId = blockEventId;
   await row.save();
@@ -135,7 +130,7 @@ export const handleGlobalMetadataSpecUpdated = async (event: SubstrateEvent): Pr
   // The event carries the name, not the id. Matching on the indexed name is exact: the chain
   // refuses to register a global name twice (`AssetMetadataGlobalNameToKey` is checked first, v8.0.0)
   // and has no rename.
-  const name = bytesToString(rawName);
+  const name = requiredText(rawName, 'the metadata name');
   const [match] = await GlobalMetadataKey.getByName(name, { limit: 1, offset: 0 });
   if (match) {
     match.spec = rawSpec.isEmpty ? undefined : JSON.stringify(rawSpec.toJSON());
@@ -166,7 +161,7 @@ export const handleSetAssetMetadataValue = async (event: SubstrateEvent): Promis
   const detail = rawDetail?.isEmpty ? undefined : detailFrom(rawDetail?.toJSON());
 
   await upsertMetadata(assetId, key, blockEventId, row => {
-    row.value = bytesToString(rawValue);
+    row.value = storedText(rawValue);
     if (detail) {
       row.isLocked = detail.isLocked;
       row.lockedUntil = detail.lockedUntil;
@@ -271,7 +266,7 @@ const upsertCustomAssetType = async (event: SubstrateEvent): Promise<void> => {
 
   await CustomAssetType.create({
     id,
-    name: bytesToString(rawName),
+    name: requiredText(rawName, 'the metadata name'),
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();

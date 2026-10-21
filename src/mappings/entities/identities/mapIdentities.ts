@@ -20,7 +20,6 @@ import {
 } from '../../../types';
 import {
   MeshPortfolio,
-  bytesToString,
   extractString,
   getEventParams,
   getNumberValue,
@@ -33,6 +32,7 @@ import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 import { canonicalExtrinsicPermissions, Subset } from '../../../utils/permissions';
+import { requiredText, storedText } from '../../../utils/text';
 
 /**
  * Returns Identity for a given DID
@@ -565,7 +565,7 @@ export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promi
 
   const identityId = getTextValue(rawDid);
   const id = getNumberValue(rawCustomClaimTypeId);
-  const name = bytesToString(rawName);
+  const name = requiredText(rawName, 'the custom claim type name');
 
   const customClaimType = await CustomClaimType.get(`${id}`);
 
