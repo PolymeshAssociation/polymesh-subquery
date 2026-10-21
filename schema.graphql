@@ -3508,7 +3508,8 @@ maintained rollup), never stored as primary truth.
 A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
 filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
 
-Indexes: `asset`, `portfolio`, `account`, `identity` and `assetHolder` are indexed as relations.
+Indexes: `portfolio`, `account`, `identity` and `assetHolder` are indexed as relations; `asset` is
+trimmed (`db/trimIndexes.ts`), so filter it together with one of them.
 `assetHolder` serves one identity's holdings of one asset across its portfolios and accounts, the
 per-identity total the rollup has to agree with. There is no `(portfolio, asset)` composite: that
 pair is the id of a portfolio holding, so it is already a point lookup.

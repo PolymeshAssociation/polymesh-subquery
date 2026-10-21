@@ -290,7 +290,7 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `Authorization` | `toKey` (hex public key, unindexed) | `toAccountId` (SS58 address, indexed) |
 | `Investment` | `stoId` (the offering's number, filtered with `offeringAssetId`) | `stoId` is the offering's id, `asset/number`, or `sto { … }` |
 | `Investment` | `raisingAssetId` held the ticker of an off-chain raising asset | `raisingAssetId` is null for it; the ticker is `raiseToken` |
-| `NftHolder` | `nftHolders { identityId nftIds }` | removed: `assetHolders(filter: { nftCount: { greaterThan: 0 } }) { identityId nftCount holdings { nodes { nfts { nodes { nftId } } } } }` |
+| `NftHolder` | `nftHolders { identityId nftIds }` | removed. An identity's collections are `assetHolders(filter: { identityId: { equalTo: $did }, nftCount: { greaterThan: 0 } }) { assetId nftCount }`, and its tokens `nfts(filter: { holding: { identityId: { equalTo: $did } } }, orderBy: [ASSET_ID_ASC, NFT_ID_ASC], first: $size, offset: $start) { totalCount nodes { assetId nftId } }`, paged. Don't nest them under `holdings`: the query service returns at most 100 records per connection, nested ones included, so a large holder's list would stop at 100 without saying so (testnet: 100 of 2,724) |
 | `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
 | `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
 | `ConfidentialAccount` | `account` (the confidential public key) | `publicKey`, the same value as `id` |
@@ -321,6 +321,13 @@ The generated API gives every relation a collection on the entity it points at, 
 | `Venue` | `stos` | `offerings` |
 
 Collections over relations that are new in this schema (an account's approvals, allowances, subsidies and multisig signers, among others) had no generated name to replace.
+
+Two collections went with the entity they were generated from, `NftHolder`:
+
+| Entity | Was | Now |
+|---|---|---|
+| `Asset` | `nftHolders` | `assetHolders(filter: { nftCount: { greaterThan: 0 } })`; the tokens are `nfts`, paged, as in the `NftHolder` row of §9.7 |
+| `Identity` | `nftHolders` | `assetHolders(filter: { nftCount: { greaterThan: 0 } })`, and `nfts(filter: { holding: { identityId: … } })`, paged |
 
 ## 10. Reads that scan, because their index is trimmed
 
