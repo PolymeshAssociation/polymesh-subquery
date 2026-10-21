@@ -31,17 +31,12 @@ import {
   getSecurityIdentifiers,
 } from '../../utils/assets';
 import { jsonOf, memberOf } from '../../utils/codec';
-import {
-  bytesToString,
-  getBigIntValue,
-  getBooleanValue,
-  getTextValue,
-  hexToString,
-} from '../../utils/common';
+import { getBigIntValue, getBooleanValue, getTextValue, hexToString } from '../../utils/common';
 import { pageRows, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 import { assetIdOf, assetIds, identityHoldings } from './assetKeys';
 import { canonicalExtrinsicPermissions, Subset } from '../../utils/permissions';
+import { requiredText, storedText } from '../../utils/text';
 
 const created = (ctx: SeedContext) => ({
   createdEventId: ctx.eventId,
@@ -77,7 +72,7 @@ export const customAssetTypeSeeder: Seeder<CustomAssetType> = {
           ? [
               CustomAssetType.create({
                 id: args[0].toString(),
-                name: bytesToString(value),
+                name: requiredText(value, 'a custom asset type name'),
                 ...created(ctx),
               }),
             ]
@@ -143,12 +138,8 @@ const assetType = ({ customTypes }: AssetViews, raw: Codec): string | undefined 
     return builtInAssetType(raw);
   }
   const name = customTypes.get(custom.toString())?.value;
-  return name ? bytesToString(name) : undefined;
+  return storedText(name);
 };
-
-/** Text the chain may hold empty, unset when empty or absent, as the creation handler leaves it */
-const optionalText = (value: Codec | undefined): string | undefined =>
-  (value && bytesToString(value)) || undefined;
 
 const assetRow = (
   views: AssetViews,
@@ -170,10 +161,10 @@ const assetRow = (
     id: assetId,
     assetId,
     ticker: rawTicker ? hexToString(rawTicker) : undefined,
-    name: optionalText(views.names.get(key)?.value),
+    name: storedText(views.names.get(key)?.value),
     type: assetType(views, memberOf(details, 'assetType')),
     isNftCollection: views.collections.has(key),
-    fundingRound: optionalText(views.fundingRounds.get(key)?.value),
+    fundingRound: storedText(views.fundingRounds.get(key)?.value),
     isDivisible: getBooleanValue(memberOf(details, 'divisible')),
     isFrozen: views.frozen.get(key)?.value?.toJSON() === true,
     holderCount: held.filter(({ amount, nftCount }) => amount > BigInt(0) || nftCount > 0).length,
@@ -305,7 +296,7 @@ export const globalMetadataKeySeeder: Seeder<GlobalMetadataKey> = {
           ? [
               GlobalMetadataKey.create({
                 id,
-                name: bytesToString(value),
+                name: requiredText(value, 'a global metadata key name'),
                 spec: spec ? JSON.stringify(spec.toJSON()) : undefined,
                 ...created(ctx),
               }),
@@ -348,8 +339,8 @@ export const assetMetadataSeeder: Seeder<AssetMetadata> = {
         assetId,
         scope: key.scope,
         keyId: key.keyId,
-        name: name ? bytesToString(name) : undefined,
-        value: value ? bytesToString(value) : undefined,
+        name: storedText(name),
+        value: storedText(value),
         isLocked,
         lockedUntil,
         expiry,

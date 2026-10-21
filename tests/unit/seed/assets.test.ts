@@ -266,6 +266,23 @@ describe('from 7.0', () => {
   });
 });
 
+describe('text the chain stores empty', () => {
+  it('is "", as the chain holds it, not unset', async () => {
+    const chain = fakeChain(8_000_020);
+    chain.put('asset.assets', [ASSET], {
+      totalSupply: 1,
+      ownerDid: OWNER,
+      divisible: true,
+      assetType: 'EquityCommon',
+    });
+    chain.put('asset.assetNames', [ASSET], '');
+    chain.put('asset.fundingRound', [ASSET], '');
+    await seedAssets(chain);
+
+    expect(byId(chain.rows('Asset'))[ASSET]).toMatchObject({ name: '', fundingRound: '' });
+  });
+});
+
 describe('before 7.0', () => {
   it('reads assets, reservations and pre-approvals by ticker, with the asset ids derived from them', async () => {
     const chain = fakeChain(6_002_010);
