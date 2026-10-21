@@ -12,10 +12,10 @@ export type StorageRef = `${string}.${string}`;
 export type Entry = ScannedEntry;
 
 /**
- * The chain state a seed reads: storage as it stood when the start block began. Each item is
- * fetched at most once, whichever seeders ask for it, and checked first against the shapes the
- * seeders declare (`knownShapes.json`), so a runtime that changed an item's shape stops the seed instead
- * of being misread.
+ * The chain state a seed reads: storage as it stood when the start block began. Each item, and each
+ * key prefix of one, is fetched at most once, whichever seeders ask for it and however (`map` or
+ * `pages`), and checked first against the shapes the seeders declare (`knownShapes.json`), so a
+ * runtime that changed an item's shape stops the seed instead of being misread.
  */
 export interface ChainSnapshot {
   readonly block: SubstrateBlock;
@@ -54,6 +54,7 @@ export const snapshotAtParent = (
 ): ChainSnapshot => {
   const checked = new Map<string, Promise<void>>();
   const maps = new Map<string, Promise<ReadonlyMap<string, Entry>>>();
+  const prefixed = new Map<string, Promise<Entry[]>>();
   const derived = new Map<string, Promise<unknown>>();
   const undecodable = new Map<StorageRef, number>();
   // the scan returns only keys that exist, so an entry with no value is one that doesn't decode
@@ -110,20 +111,31 @@ export const snapshotAtParent = (
     return whole;
   };
 
+  /** The item's entries under leading key arguments `prefix`, fetched once per prefix */
+  const under = (item: StorageRef, prefix: unknown[]): Promise<Entry[]> => {
+    const key = [item, ...prefix.map(String)].join('/');
+    let entries = prefixed.get(key);
+    if (!entries) {
+      entries = (async () => {
+        await check(item);
+        const read: Entry[] = [];
+        for await (const page of scanAtParent(block, ...split(item), ...prefix)) {
+          read.push(...counted(item, page));
+        }
+        return read;
+      })();
+      prefixed.set(key, entries);
+    }
+    return entries;
+  };
+
   return {
     block,
     has: item => Boolean(findStorage(...split(item))),
     map,
     async *pages(item, ...prefix) {
-      await check(item);
-      const whole = prefix.length === 0 ? maps.get(item) : undefined;
-      if (whole === undefined) {
-        for await (const page of scanAtParent(block, ...split(item), ...prefix)) {
-          yield counted(item, page);
-        }
-        return;
-      }
-      const entries = [...(await whole).values()];
+      const entries =
+        prefix.length > 0 ? await under(item, prefix) : [...(await map(item)).values()];
       for (let i = 0; i < entries.length; i += PAGE) {
         yield entries.slice(i, i + PAGE);
       }

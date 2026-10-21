@@ -52,6 +52,49 @@ describe('ChainSnapshot', () => {
     expect(keysPaged).toHaveBeenCalledTimes(1);
   });
 
+  it('reads an item once when seeders page through it, before or without a map', async () => {
+    const keysPaged = jest.spyOn((globalThis as any).api.rpc.state, 'getKeysPaged');
+    const snap = snapshotAtParent(chain.block, declared);
+    const paged = async () => {
+      const entries = [];
+      for await (const page of snap.pages('staking.ledger')) {
+        entries.push(...page);
+      }
+      return entries;
+    };
+
+    const [first, second] = [await paged(), await paged()];
+    const whole = await snap.map('staking.ledger');
+
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(2);
+    expect(whole.size).toBe(2);
+    expect(keysPaged).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the entries under a key prefix once, whichever seeders ask', async () => {
+    chain.put('staking.erasValidatorPrefs', [7, STASH], { commission: 0, blocked: false });
+    chain.put('staking.erasValidatorPrefs', [8, STASH], { commission: 0, blocked: false });
+    declared['staking.erasValidatorPrefs'] = [
+      shapeOf(findStorage('staking', 'erasValidatorPrefs') as never),
+    ];
+    const keysPaged = jest.spyOn((globalThis as any).api.rpc.state, 'getKeysPaged');
+    const snap = snapshotAtParent(chain.block, declared);
+    const paged = async () => {
+      const entries = [];
+      for await (const page of snap.pages('staking.erasValidatorPrefs', 7)) {
+        entries.push(...page);
+      }
+      return entries;
+    };
+
+    const [first, second] = [await paged(), await paged()];
+
+    expect(first.map(({ args }) => args[1].toString())).toEqual([STASH]);
+    expect(second).toEqual(first);
+    expect(keysPaged).toHaveBeenCalledTimes(1);
+  });
+
   it("decodes each entry with the block's registry", async () => {
     const entries = await snapshotAtParent(chain.block, declared).map('staking.ledger');
 
