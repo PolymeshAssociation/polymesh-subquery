@@ -4,7 +4,6 @@ import { mapBlock } from '../mappings/entities/block/mapBlock';
 import { writeIndexOrigin } from '../mappings/indexOrigin';
 import { ArgumentsJson, Block, Event, EventIdEnum, ModuleIdEnum } from '../types';
 import { blockTime, padId } from '../utils/common';
-import { parentStateReadable } from '../utils/storageAtParent';
 import { relativeFields, seed, SeedReport } from './seeder';
 import { SEEDERS } from './seeders';
 import { accountRows } from './seeders/identities';
@@ -48,6 +47,17 @@ const insertSeedEvent = (blockId: string, specVersion: number): Promise<void> =>
   }).save();
 
 /**
+ * Whether the runtime that executed `block`'s parent is this block's, so the state the block began
+ * from is one its registry reads. That runtime is the one the grandparent's state names. A fresh
+ * index has recorded no upgrade to tell it, so this asks the chain.
+ */
+const parentRanThisRuntime = async (block: SubstrateBlock): Promise<boolean> => {
+  const parent = await api.rpc.chain.getHeader(block.block.header.parentHash);
+  const ran = await api.rpc.state.getRuntimeVersion(parent.parentHash);
+  return ran.specVersion.toNumber() === api.runtimeVersion.specVersion.toNumber();
+};
+
+/**
  * Starts an index at `block`: seeds every entity from the chain state the block began from, then
  * leaves the block's own events to the handlers, as any block's. Genesis is the start block 1,
  * whose rows point at the genesis block.
@@ -58,7 +68,7 @@ const insertSeedEvent = (blockId: string, specVersion: number): Promise<void> =>
 export const startIndex = async (block: SubstrateBlock): Promise<SeedReport[]> => {
   const number = Number(block.block.header.number.toString());
   const genesis = number <= 1;
-  if (!genesis && !(await parentStateReadable(block))) {
+  if (!genesis && !(await parentRanThisRuntime(block))) {
     throw new Error(
       `START_BLOCK can't be seeded: block ${number} is the first after a runtime upgrade, so the state it began from was written by the previous runtime; start at the next block`
     );

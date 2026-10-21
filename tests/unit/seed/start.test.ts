@@ -159,18 +159,19 @@ describe('starting after genesis', () => {
     ]);
   });
 
+  // a fresh index has no ChainUpgrade row: only the chain can say an upgrade preceded the block
   it("refuses the first block after an upgrade, whose parent's state the previous runtime wrote", async () => {
     const chain = fakeChain(8_001_020);
     const block = chain.blockAt(500);
-    await (globalThis as any).store.set('ChainUpgrade', '0008001020', {
-      id: '0008001020',
-      firstBlockId: '0000000499',
-    });
-    (globalThis as any).api.rpc.state.getRuntimeVersion = async () => ({
+    const getRuntimeVersion = jest.fn(async () => ({
       specVersion: { toNumber: () => 8_001_010 },
-    });
+    }));
+    (globalThis as any).api.rpc.state.getRuntimeVersion = getRuntimeVersion;
 
     await expect(startIndex(block)).rejects.toThrow(/first after a runtime upgrade/);
+    // the runtime that executed the parent is the one the grandparent's state names
+    expect(getRuntimeVersion).toHaveBeenCalledWith('0xgrandparent');
+    expect(chain.rows('Event')).toEqual([]);
   });
 });
 
