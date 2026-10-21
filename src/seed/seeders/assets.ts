@@ -41,6 +41,7 @@ import {
 import { pageRows, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 import { assetIdOf, assetIds, identityHoldings } from './assetKeys';
+import { canonicalExtrinsicPermissions, Subset } from '../../utils/permissions';
 
 const created = (ctx: SeedContext) => ({
   createdEventId: ctx.eventId,
@@ -390,7 +391,7 @@ export const agentGroupSeeder: Seeder<AgentGroup> = {
       AgentGroup.create({
         id: `${assetId}/${args[1].toString()}`,
         assetId,
-        permissions: JSON.stringify(value.toJSON()),
+        permissions: JSON.stringify(canonicalExtrinsicPermissions(value.toJSON() as Subset)),
         ...created(ctx),
       }),
     ]),

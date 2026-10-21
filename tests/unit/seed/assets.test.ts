@@ -292,20 +292,46 @@ describe('before 7.0', () => {
     expect(byId(chain.rows('TickerReservation')).SPARE.assetId).toBeUndefined();
     expect(Object.keys(byId(chain.rows('AssetPreApproval')))).toEqual([`${assetId}/${HOLDER}`]);
   });
+
+  it("seeds an agent group's permissions in the form the index stores them", async () => {
+    const chain = fakeChain(6_002_010);
+    chain.put('asset.tokens', [ticker('ACME')], {
+      totalSupply: 5,
+      ownerDid: OWNER,
+      divisible: true,
+      assetType: 'EquityCommon',
+    });
+    // a list of pallets before 7.0, which this runtime's metadata decodes with names in hex
+    chain.put('externalAgents.groupPermissions', [ticker('ACME'), 1], {
+      These: [{ palletName: 'Asset', dispatchableNames: { These: ['redeem', 'issue'] } }],
+    });
+    await seedAssets(chain);
+
+    const assetId = await getAssetIdForLegacyTicker(ticker('ACME'));
+    expect(
+      JSON.parse(byId(chain.rows('AgentGroup'))[`${assetId}/1`].permissions as string)
+    ).toEqual({
+      these: { Asset: { extrinsics: { these: ['issue', 'redeem'] } } },
+    });
+  });
 });
 
 /** Before 6.0 a schedule is a period and a count, held in a list per ticker */
 describe('before 6.0', () => {
   it('seeds the schedules the chain still holds, with their period and next moment', async () => {
     const chain = fakeChain(5_001_002);
-    chain.put('checkpoint.schedules', [ticker('ACME')], [
-      {
-        schedule: { start: 1_640_011_451_564, period: { unit: 'Week', amount: 4 } },
-        id: 1,
-        at: 1_640_011_451_000,
-        remaining: 3,
-      },
-    ]);
+    chain.put(
+      'checkpoint.schedules',
+      [ticker('ACME')],
+      [
+        {
+          schedule: { start: 1_640_011_451_564, period: { unit: 'Week', amount: 4 } },
+          id: 1,
+          at: 1_640_011_451_000,
+          remaining: 3,
+        },
+      ]
+    );
     await seedAssets(chain);
 
     const assetId = await getAssetIdForLegacyTicker(ticker('ACME'));
