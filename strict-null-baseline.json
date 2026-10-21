@@ -16,7 +16,6 @@
   "src/mappings/entities/identities/repairAuthorizations.ts": 3,
   "src/mappings/entities/multiSig/mapMultiSig.ts": 10,
   "src/mappings/entities/multiSig/mapMultiSigProposal.ts": 6,
-  "src/mappings/entities/pips/mapProposal.ts": 1,
   "src/mappings/entities/settlements/mapSettlement.ts": 13,
   "src/mappings/entities/stos/mapSto.ts": 4,
   "src/mappings/migrations/genesisHandler.ts": 10,
