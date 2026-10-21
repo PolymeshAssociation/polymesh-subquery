@@ -253,3 +253,22 @@ export const migrateToAssetIds = async (blockEventId: string): Promise<void> => 
     }),
   ]);
 };
+
+/**
+ * 7.1.0's `migrate_to_v6` removed each ticker link to an asset id no asset was created under, the
+ * links 7.0 gave every registration. It kept the registration, announcing a new expiry with
+ * `TickerRegistered` only where one was set, so a registration with no expiry lost its link silently.
+ */
+export const unlinkTickersOfMissingAssets = async (blockEventId: string): Promise<void> => {
+  const reservations = await getAllByFields<TickerReservation>('TickerReservation', []);
+
+  await Promise.all(
+    reservations.map(async reservation => {
+      if (reservation.assetId && !(await Asset.get(reservation.assetId))) {
+        reservation.assetId = EXPLICIT_NULL;
+        reservation.updatedEventId = blockEventId;
+        await reservation.save();
+      }
+    })
+  );
+};

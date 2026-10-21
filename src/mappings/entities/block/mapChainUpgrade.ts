@@ -3,7 +3,7 @@ import { ChainUpgrade } from '../../../types';
 import { padId } from '../../../utils';
 import { removeIdentitySigners } from '../multiSig/mapMultiSig';
 import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
-import { migrateToAssetIds } from '../../migrations/assetIdMigration';
+import { migrateToAssetIds, unlinkTickersOfMissingAssets } from '../../migrations/assetIdMigration';
 import { migrateStoredSchedules } from '../../migrations/checkpointScheduleMigration';
 import { migrateOffChainLegs } from '../../migrations/offChainLegMigration';
 import { migrateTransferManagers } from '../../migrations/statisticsMigration';
@@ -62,6 +62,9 @@ const OFF_CHAIN_LEGS_FROM = 6_000_000;
 /** The first runtime that names assets by id, and whose multisigs have only account signers */
 const ASSET_IDS_FROM = 7_000_000;
 
+/** The first runtime that keeps a ticker linked only to an asset created under it */
+const LINKS_TO_ASSETS_FROM = 7_001_000;
+
 /**
  * Work that only makes sense to run once, at the boundary the chain crossed.
  *
@@ -91,6 +94,10 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
   if (crossed(ASSET_IDS_FROM)) {
     await removeIdentitySigners(blockEventId);
     await migrateToAssetIds(blockEventId);
+  }
+
+  if (crossed(LINKS_TO_ASSETS_FROM)) {
+    await unlinkTickersOfMissingAssets(blockEventId);
   }
 
   if (transactionVersion > storedTransactionVersion) {

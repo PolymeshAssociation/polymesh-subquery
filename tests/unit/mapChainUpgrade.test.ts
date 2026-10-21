@@ -1,6 +1,9 @@
 import { SubstrateEvent } from '@subql/types';
 import mapChainUpgrade from '../../src/mappings/entities/block/mapChainUpgrade';
-import { migrateToAssetIds } from '../../src/mappings/migrations/assetIdMigration';
+import {
+  migrateToAssetIds,
+  unlinkTickersOfMissingAssets,
+} from '../../src/mappings/migrations/assetIdMigration';
 import { migrateStoredSchedules } from '../../src/mappings/migrations/checkpointScheduleMigration';
 import { migrateOffChainLegs } from '../../src/mappings/migrations/offChainLegMigration';
 import { migrateTransferManagers } from '../../src/mappings/migrations/statisticsMigration';
@@ -16,6 +19,7 @@ jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
 }));
 jest.mock('../../src/mappings/migrations/assetIdMigration', () => ({
   migrateToAssetIds: jest.fn(),
+  unlinkTickersOfMissingAssets: jest.fn(),
 }));
 jest.mock('../../src/mappings/migrations/checkpointScheduleMigration', () => ({
   migrateStoredSchedules: jest.fn(),
@@ -243,6 +247,18 @@ describe('mapChainUpgrade', () => {
     expect(migrateToAssetIds).toHaveBeenCalledTimes(1);
   });
 
+  it('unlinks tickers from asset ids no asset has as the chain crosses into 7.1', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0007000005', specVersionId: 7_000_005, transactionVersion: 7 },
+    ]);
+    stubRuntimeVersions({ spec: 7_001_000, tx: 7 }, { spec: 7_000_005, tx: 7 });
+
+    await mapChainUpgrade(upgradeEvent(17_070_424, 7_000_005));
+
+    expect(unlinkTickersOfMissingAssets).toHaveBeenCalledTimes(1);
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+  });
+
   it('leaves signers alone at a later upgrade', async () => {
     (store.getByFields as jest.Mock).mockResolvedValue([
       { id: '0007004001', specVersionId: 7_004_001, transactionVersion: 7 },
@@ -256,5 +272,6 @@ describe('mapChainUpgrade', () => {
     expect(migrateTransferManagers).not.toHaveBeenCalled();
     expect(migrateOffChainLegs).not.toHaveBeenCalled();
     expect(migrateStoredSchedules).not.toHaveBeenCalled();
+    expect(unlinkTickersOfMissingAssets).not.toHaveBeenCalled();
   });
 });

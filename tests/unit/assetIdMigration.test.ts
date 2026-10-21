@@ -9,6 +9,7 @@ import {
   complianceToV7,
   extrinsicPermissionsToV7,
   migrateToAssetIds,
+  unlinkTickersOfMissingAssets,
 } from '../../src/mappings/migrations/assetIdMigration';
 import { EXPLICIT_NULL } from '../../src/utils';
 import { mockStore } from './helpers';
@@ -310,5 +311,34 @@ describe('migrateToAssetIds', () => {
     await migrateToAssetIds(EVENT);
 
     expect(db.Compliance.c.updatedEventId).toBe('before');
+  });
+});
+
+/**
+ * 7.1.0's `migrate_to_v6` took back each link 7.0 made to an asset id no asset was created under,
+ * keeping the registration; testnet ticker 02072022 lost its link at 17,070,425.
+ */
+describe('unlinkTickersOfMissingAssets', () => {
+  const EVENT = '0017070424/0000000002';
+
+  it('unlinks a registration from an asset id no asset has, and keeps linked assets', async () => {
+    const db = mockStore({
+      Asset: { [CSB0313_ID]: { id: CSB0313_ID, ticker: 'CSB0313' } },
+      TickerReservation: {
+        MTICKER03: { id: 'MTICKER03', ticker: 'MTICKER03', assetId: MTICKER03_ID },
+        CSB0313: { id: 'CSB0313', ticker: 'CSB0313', assetId: CSB0313_ID },
+        FREE: { id: 'FREE', ticker: 'FREE' },
+      },
+    });
+
+    await unlinkTickersOfMissingAssets(EVENT);
+
+    expect(db.TickerReservation.MTICKER03).toMatchObject({
+      assetId: EXPLICIT_NULL,
+      updatedEventId: EVENT,
+    });
+    expect(db.TickerReservation.CSB0313).toMatchObject({ assetId: CSB0313_ID });
+    expect(db.TickerReservation.CSB0313.updatedEventId).toBeUndefined();
+    expect(db.TickerReservation.FREE.updatedEventId).toBeUndefined();
   });
 });
