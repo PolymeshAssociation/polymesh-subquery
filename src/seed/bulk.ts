@@ -148,46 +148,5 @@ export async function* scanAtParent(
   }
 }
 
-/** The key under which `mapAtParent` files an entry: its key arguments, joined by `/` */
+/** The key under which a snapshot's `map` files an entry: its key arguments, joined by `/` */
 export const entryKey = (args: Codec[]): string => args.map(arg => arg.toString()).join('/');
-
-/** Every entry of a storage item, keyed by `entryKey`, for joining against another item's scan */
-export const mapAtParent = async (
-  block: SubstrateBlock,
-  section: string,
-  item: string
-): Promise<Map<string, ScannedEntry>> => {
-  const map = new Map<string, ScannedEntry>();
-  for await (const page of scanAtParent(block, section, item)) {
-    page.forEach(entry => map.set(entryKey(entry.args), entry));
-  }
-  return map;
-};
-
-/** The values of known keys as they stood when `block` began, a batch of 1,000 per request */
-export const readManyAtParent = async (
-  block: SubstrateBlock,
-  section: string,
-  item: string,
-  keys: unknown[][]
-): Promise<(Codec | undefined)[]> => {
-  const storage = itemOf(section, item);
-  if (!storage) {
-    return keys.map(() => undefined);
-  }
-  await ensureReadable(block);
-
-  const name = `${section}.${item}`;
-  const parentHash = block.block.header.parentHash;
-  const batches = Array.from({ length: Math.ceil(keys.length / PAGE) }, (_, i) =>
-    keys.slice(i * PAGE, (i + 1) * PAGE).map(args => storage.key(...args))
-  );
-  const values = await Promise.all(
-    batches.map(async batch =>
-      (
-        await valuesAt(batch, parentHash, `the stored batch of ${name}`)
-      ).map(raw => decoded(storage, raw, name))
-    )
-  );
-  return values.flat();
-};

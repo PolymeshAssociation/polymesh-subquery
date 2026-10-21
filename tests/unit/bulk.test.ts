@@ -1,5 +1,5 @@
 import { SubstrateBlock } from '@subql/types';
-import { mapAtParent, readManyAtParent, scanAtParent, __limiter } from '../../src/seed/bulk';
+import { scanAtParent, __limiter } from '../../src/seed/bulk';
 import * as storage from '../../src/utils/storageAtParent';
 import { UndecodableStateError } from '../../src/utils/storageAtParent';
 
@@ -147,47 +147,14 @@ describe('scanAtParent', () => {
   });
 });
 
-describe('mapAtParent', () => {
-  it('holds a whole map, keyed by its key arguments', async () => {
-    chainWith(1200);
-
-    const map = await mapAtParent(block, 'things', 'stored');
-
-    expect(map.size).toBe(1200);
-    expect(map.get('key-00007')?.value?.toJSON()).toBe(7);
-  });
-});
-
-describe('readManyAtParent', () => {
-  it('reads known keys in batches of 1,000', async () => {
-    const { rpc } = chainWith(2500);
-
-    const values = await readManyAtParent(
-      block,
-      'things',
-      'stored',
-      Array.from({ length: 2500 }, (_, i) => [`key-${String(i).padStart(5, '0')}`])
-    );
-
-    expect(rpc.queryStorageAt).toHaveBeenCalledTimes(3);
-    expect(values.map(value => value?.toJSON())).toEqual(Array.from({ length: 2500 }, (_, i) => i));
-  });
-});
-
 describe('the request limiter', () => {
   it('never has more than 4 requests in flight to the endpoint', async () => {
     const { inFlight } = chainWith(9000);
 
-    await Promise.all([
-      collect(scanAtParent(block, 'things', 'stored')),
-      readManyAtParent(
-        block,
-        'things',
-        'stored',
-        Array.from({ length: 9000 }, (_, i) => [`key-${String(i).padStart(5, '0')}`])
-      ),
-      mapAtParent(block, 'things', 'stored'),
-    ]);
+    // six scans at once ask for six key pages, then six value pages, at a time
+    await Promise.all(
+      Array.from({ length: 6 }, () => collect(scanAtParent(block, 'things', 'stored')))
+    );
 
     expect(inFlight.max).toBeLessThanOrEqual(4);
     expect(__limiter.max).toBe(4);
