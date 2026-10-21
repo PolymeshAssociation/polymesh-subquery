@@ -13,7 +13,7 @@ import {
 } from '../../types';
 import { getAccountKeyType } from '../../utils/accounts';
 import { bytesToString, EXPLICIT_NULL, extractValue, getTextValue } from '../../utils/common';
-import { SeedContext, Seeder, SeedRow } from '../seeder';
+import { pagesOf, SeedContext, Seeder, SeedRow } from '../seeder';
 import { ChainSnapshot } from '../snapshot';
 import { primaryKeyOf, StoredKey, storedKeys } from './keys';
 
@@ -57,10 +57,12 @@ export const identitySeeder: Seeder<Identity> = {
       });
     // a record with no key isn't an identity: before 7.0 each asset had one, which no DidCreated
     // announced
-    yield [...records].flatMap(([did, { value }]) => {
-      const primaryKey = primaryKeyOf(value);
-      return primaryKey ? [row(did, primaryKey)] : [];
-    });
+    yield* pagesOf(
+      [...records].flatMap(([did, { value }]) => {
+        const primaryKey = primaryKeyOf(value);
+        return primaryKey ? [row(did, primaryKey)] : [];
+      })
+    );
     yield systematic()
       .filter(({ did }) => !records.has(did))
       .map(({ did, primaryAccountId }) => row(did, primaryAccountId));
@@ -99,7 +101,7 @@ export const accountSeeder: Seeder<Account> = {
   terminal: ({ keyRole, identityId }) => keyRole === AccountKeyRole.Unlinked && !identityId,
   async *rows(snap, ctx) {
     const keys = await storedKeys(snap);
-    yield [...keys.values()].map(key => accountRow(key.address, key, ctx));
+    yield* pagesOf([...keys.values()].map(key => accountRow(key.address, key, ctx)));
     for await (const page of snap.pages('system.account')) {
       yield page
         .map(({ args }) => args[0].toString())
@@ -224,19 +226,22 @@ export const identityKeySeeder: Seeder<IdentityKey> = {
   // the event that opened an interval is history; the seed's open at the seed
   relative: ['addedReason'],
   async *rows(snap, ctx) {
-    yield (await openKeys(snap)).map(({ did, address, role, permissions, index }) =>
-      IdentityKey.create({
-        id: identityKeyId(did, address, ctx.blockId, index),
-        identityId: did,
-        accountId: address,
-        role,
-        permissions: role === IdentityKeyRole.SecondaryKey ? permissionsOf(permissions) : undefined,
-        validFromBlockId: ctx.blockId,
-        validToBlockId: EXPLICIT_NULL,
-        addedReason: EventIdEnum.Seeded,
-        createdEventId: ctx.eventId,
-        updatedEventId: ctx.eventId,
-      })
+    yield* pagesOf(
+      (await openKeys(snap)).map(({ did, address, role, permissions, index }) =>
+        IdentityKey.create({
+          id: identityKeyId(did, address, ctx.blockId, index),
+          identityId: did,
+          accountId: address,
+          role,
+          permissions:
+            role === IdentityKeyRole.SecondaryKey ? permissionsOf(permissions) : undefined,
+          validFromBlockId: ctx.blockId,
+          validToBlockId: EXPLICIT_NULL,
+          addedReason: EventIdEnum.Seeded,
+          createdEventId: ctx.eventId,
+          updatedEventId: ctx.eventId,
+        })
+      )
     );
   },
 };
@@ -275,7 +280,7 @@ export const portfolioSeeder: Seeder<Portfolio> = {
         updatedEventId: ctx.eventId,
       });
     };
-    yield (await identityDids(snap)).map(did => row(`${did}/0`));
+    yield* pagesOf((await identityDids(snap)).map(did => row(`${did}/0`)));
     for await (const page of snap.pages('portfolio.portfolios')) {
       yield page.map(({ args, value }) =>
         row(`${args[0].toString()}/${args[1].toString()}`, value ? bytesToString(value) : undefined)
