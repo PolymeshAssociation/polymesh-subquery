@@ -15,9 +15,8 @@ import {
   ConfidentialSettlement,
   ConfidentialSettlementStatusEnum,
 } from '../../types';
-import { isObject, variantOf } from '../../utils/codec';
-import { bytesToString } from '../../utils/common';
-import { memoText } from '../../utils/text';
+import { fieldOf, isObject, variantOf } from '../../utils/codec';
+import { memoText, storedText } from '../../utils/text';
 import { SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 
@@ -90,23 +89,20 @@ export const confidentialAssetSeeder: Seeder<ConfidentialAsset> = {
       snap.map('confidentialAssets.symbols'),
       snap.map('confidentialAssets.decimals'),
     ]);
-    const text = (value?: Codec) => (value && !value.isEmpty ? bytesToString(value) : undefined);
     yield* rowsOf(snap, 'confidentialAssets.details', ({ args, value }) => {
       const id = args[0].toString();
-      const { totalSupply, ownerDid, data } = value.toJSON() as {
+      const { totalSupply, ownerDid } = value.toJSON() as {
         totalSupply: number | string;
         ownerDid: string;
-        data: string;
       };
       return [
         ConfidentialAsset.create({
           id,
           assetId: Number(id),
-          name: text(names.get(id)?.value),
-          symbol: text(symbols.get(id)?.value),
+          name: storedText(names.get(id)?.value),
+          symbol: storedText(symbols.get(id)?.value),
           decimals: Number(decimals.get(id)?.value?.toString() ?? 0),
-          data:
-            data && data !== '0x' ? bytesToString({ toString: () => data } as Codec) : undefined,
+          data: storedText(fieldOf(value, 'data')),
           creatorId: ownerDid,
           totalSupply: BigInt(totalSupply),
           ...created(ctx),
