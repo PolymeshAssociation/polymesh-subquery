@@ -294,6 +294,8 @@ Columns that named another entity by a bare id are now relations, so each can be
 | `Identity` | `heldNfts` | removed: `heldAssets`, one `AssetHolder` per asset, fungible or NFT |
 | `Holding` | `(asset, identity)` composite index | `assetHolder` relation; an identity's holdings of one asset are `AssetHolder.holdings` |
 | `ConfidentialAccount` | `account` (the confidential public key) | `publicKey`, the same value as `id` |
+| `ConfidentialAccount` | `encryptionKey` (the key itself) | `encryptionKeyId`, or `encryptionKey { … }` |
+| `ConfidentialAsset` | `auditors`, `mediators` (lists of `MediatorKey` JSON) | `keys { role encryptionKeyId accountId }`, one row per auditor or mediator |
 
 ### 9.8 Reverse relations renamed by `@derivedFrom` (2026-10-16)
 
