@@ -18,7 +18,7 @@ import {
 } from '../../utils/common';
 import { pageRows, Seeder } from '../seeder';
 import { assetWithTicker } from './assetKeys';
-import { canonicalPermissions, PERMISSION_AUTHORIZATIONS, Subset } from '../../utils/permissions';
+import { authorizationData } from '../../utils/permissions';
 import { requiredText } from '../../utils/text';
 
 export const customClaimTypeSeeder: Seeder<CustomClaimType> = {
@@ -104,7 +104,6 @@ export const authorizationSeeder: Seeder<Authorization> = {
         const type = ((name: string) => RENAMED[name] ?? (name as AuthTypeEnum))(
           capitalizeFirstLetter(getFirstKeyFromJson(data))
         );
-        const payload: unknown = getFirstValueFromJson(data);
         return [
           Authorization.create({
             id: padNumericId(args[1].toString()),
@@ -112,12 +111,7 @@ export const authorizationSeeder: Seeder<Authorization> = {
             toId: 'identity' in signatory ? signatory.identity : undefined,
             toAccountId: 'account' in signatory ? signatory.account : undefined,
             type,
-            // as the handler stores it: a key's permissions with their extrinsics in one form
-            data: JSON.stringify(
-              PERMISSION_AUTHORIZATIONS.has(type) && payload && typeof payload === 'object'
-                ? canonicalPermissions(payload as Subset)
-                : payload
-            ),
+            data: JSON.stringify(authorizationData(type, getFirstValueFromJson(data))),
             expiry: getDateValue(memberOf(value, 'expiry')),
             status: AuthorizationStatusEnum.Pending,
             createdEventId: ctx.eventId,
