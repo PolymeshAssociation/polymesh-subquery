@@ -3,15 +3,16 @@
 -- every row it returns is one inconsistency. Only current row versions are read.
 
 -- The on-chain holders on each instruction's legs: a portfolio (`did/number`) or an account.
--- Off-chain legs hold nothing on chain.
+-- A 6.0+ off-chain leg has neither. A pre-6.0 leg of a ticker that is no asset is `OffChain` but
+-- keeps its portfolios, which still affirm, so the holder being null is the test, not the leg type.
 CREATE TEMP VIEW leg_holders AS
 SELECT instruction_id, coalesce(from_account_id, from_portfolio_id) AS holder
 FROM legs
-WHERE upper_inf(_block_range) AND leg_type <> 'OffChain'
+WHERE upper_inf(_block_range)
 UNION
 SELECT instruction_id, coalesce(to_account_id, to_portfolio_id)
 FROM legs
-WHERE upper_inf(_block_range) AND leg_type <> 'OffChain';
+WHERE upper_inf(_block_range);
 
 -- 1. An executed instruction with a holder or mediator still pending.
 SELECT i.id AS instruction_id, a.id AS affirmation_id
