@@ -375,7 +375,7 @@ Master trimmed a user's text when the event decoded it as `Text` (before metadat
 |---|---|---|
 | `Asset.name`, `Asset.fundingRound`, `Portfolio.name`, `Venue.details`, `Proposal.url`, `Proposal.description`, `CorporateAction.details`, `Sto.name` | trimmed when set before v14 | as stored, spaces kept (testnet venue 36 is `"New STO !!! "`) |
 | `Asset.fundingRound` | null when the asset was created with an empty round | `""`, the empty round the chain stores; null only when it stores none |
-| `CustomClaimType.name`, `CustomAssetType.name`, `AssetMetadata` names and values, ballot titles, motions and choices, confidential asset names, symbols and data | NUL characters anywhere removed | trailing NUL padding removed; a value with other NULs, or that is not UTF-8, is its hex |
+| Every field above, and `CustomClaimType.name`, `CustomAssetType.name`, `AssetMetadata` names and values, ballot titles, motions and choices, confidential asset names, symbols and data | bytes that are not UTF-8 read one character per byte (testnet: 24 venues' details); NUL characters anywhere removed | trailing NUL padding removed; a value that is not UTF-8, or holds another NUL, is its hex |
 | `AssetDocument.name`, `.link`, `.type` | a value beginning `0x` was read as hex | read from the document's bytes, whatever they spell |
 
 Tickers and memos keep their rule: text without the NUL padding.
