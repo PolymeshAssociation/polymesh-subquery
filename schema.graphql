@@ -2517,7 +2517,7 @@ type Sto @entity {
   venue: Venue!
   offeringAsset: Asset!
   offeringPortfolio: Portfolio!
-  "The asset raised. It can join to no asset: before 7.x it is named by a ticker that need not be registered, such as USD"
+  "The asset raised. Before 7.x it is the id derived from the raising ticker, which need not be a registered asset (such as USD), so it can join to no row; the ticker is `raisingTicker`"
   raisingAsset: Asset
   "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
   raisingTicker: String
