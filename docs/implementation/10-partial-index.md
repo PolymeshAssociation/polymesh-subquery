@@ -68,7 +68,10 @@ A runtime upgrade's migration runs as the first block of the new code begins and
 The handlers apply each one by rule as the chain crosses into its runtime (`onUpgradeCrossed` in
 `src/mappings/entities/block/mapChainUpgrade.ts`, the rules in `src/mappings/migrations/`), with no
 chain read, so an index started before an upgrade holds what one started after it would.
-`verify-seed` at the first block after an upgrade proves its rule.
+`verify-seed` at U+2, where U is the block carrying `system.CodeUpdated`, proves its rule. The rule
+runs at U and the migration as U+1 begins, so a seed at U+1 reads U's pre-migration state against
+an index that has already applied the rule; at U+2 both sides are past the migration. It is also
+the first block after U that `startIndex` accepts.
 
 ## Proving it
 
@@ -87,5 +90,5 @@ to a handler or a seeder.
 - **New or changed storage:** run the storage survey and `yarn seed:shapes`. A changed shape fails
   the seed until a seeder handles it.
 - **An upgrade whose migration rewrites storage:** a rule in `src/mappings/migrations/`, called from
-  `onUpgradeCrossed`, then `verify-seed` at the first block after the upgrade.
+  `onUpgradeCrossed`, then `verify-seed` at U+2 (see Upgrades).
 - **A field history alone can give:** add it to the seeder's `relative`.
