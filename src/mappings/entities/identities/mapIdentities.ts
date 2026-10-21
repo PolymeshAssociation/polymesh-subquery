@@ -32,7 +32,7 @@ import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
 import { canonicalExtrinsicPermissions, Subset } from '../../../utils/permissions';
-import { requiredText, storedText } from '../../../utils/text';
+import { requiredText } from '../../../utils/text';
 
 /**
  * Returns Identity for a given DID

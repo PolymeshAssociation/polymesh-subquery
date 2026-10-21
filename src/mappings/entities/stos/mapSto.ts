@@ -16,7 +16,7 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
-import { requiredText, storedText } from '../../../utils/text';
+import { requiredText } from '../../../utils/text';
 
 const getOfferingAsset = (
   block: SubstrateBlock,

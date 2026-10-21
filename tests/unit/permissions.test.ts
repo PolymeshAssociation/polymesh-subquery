@@ -4,7 +4,11 @@
  * fields and text names, and from v14 to 7.0 as a list with camelCase fields and names in hex.
  */
 import { getPermissions } from '../../src/mappings/entities/identities/mapIdentities';
-import { canonicalExtrinsicPermissions, canonicalPermissions } from '../../src/utils/permissions';
+import {
+  authorizationData,
+  canonicalExtrinsicPermissions,
+  canonicalPermissions,
+} from '../../src/utils/permissions';
 
 const hex = (text: string) => `0x${Buffer.from(text).toString('hex')}`;
 
@@ -112,5 +116,17 @@ describe("a key's permissions (getPermissions)", () => {
     expect(preV14.transactions).toEqual(expected);
     expect(v14.transactions).toEqual(expected);
     expect(key({ whole: null }).transactions).toEqual({ type: 'whole', values: null });
+  });
+});
+
+describe("an authorization's data (authorizationData)", () => {
+  it("puts a key's extrinsic permissions in the index's form, and leaves any other payload", () => {
+    const extrinsic = { these: [{ pallet_name: 'Asset', dispatchable_names: { whole: null } }] };
+
+    expect(authorizationData('JoinIdentity', { extrinsic })).toEqual({
+      extrinsic: { these: { Asset: { extrinsics: { whole: null } } } },
+    });
+    expect(authorizationData('TransferAssetOwnership', '0x1234')).toBe('0x1234');
+    expect(authorizationData('BecomeAgent', [{ extrinsic }])).toEqual([{ extrinsic }]);
   });
 });

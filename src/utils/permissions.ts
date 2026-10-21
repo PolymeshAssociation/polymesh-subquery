@@ -78,3 +78,12 @@ export const canonicalPermissions = (permissions: Subset): Subset =>
       member === 'extrinsic' && value ? canonicalExtrinsicPermissions(value as Subset) : value,
     ])
   );
+
+/**
+ * An authorization's payload as the index stores it: a key's `Permissions` with its extrinsic
+ * permissions in the index's form; any other payload as the chain gives it.
+ */
+export const authorizationData = (type: string, payload: unknown): unknown =>
+  PERMISSION_AUTHORIZATIONS.has(type) && payload && typeof payload === 'object'
+    ? canonicalPermissions(payload as Subset)
+    : payload;
