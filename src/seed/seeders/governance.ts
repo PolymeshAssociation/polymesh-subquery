@@ -28,7 +28,7 @@ import {
 } from '../../utils/common';
 import { getMultiSigSigner } from '../../utils/multisigs';
 import { getProposerValue } from '../../utils/proposals';
-import { SeedContext, Seeder } from '../seeder';
+import { pagesOf, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot } from '../snapshot';
 import { storedKeys } from './keys';
 
@@ -545,6 +545,6 @@ export const subsidySeeder: Seeder<Subsidy> = {
         }
       });
     }
-    yield [...rows.values()];
+    yield* pagesOf([...rows.values()]);
   },
 };
