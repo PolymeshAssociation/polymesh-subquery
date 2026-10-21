@@ -24,14 +24,17 @@ import { isLockConflict } from './applySql';
 //
 // What is trimmed follows table size. On the five big tables (staking_positions, account_balances,
 // staking_events, polyx_entries, events) every relation index is trimmed but the lookups readers
-// filter those tables by, such as `staking_events (stash_id)` and `(identity_id)`: 18 indexes,
-// 17 of them 8.57 GB on mainnet.
+// filter those tables by, such as `staking_events (stash_id)` and `(identity_id)`: 18 indexes. The
+// 17 measured before they were trimmed took 8.57 GB on mainnet; `reward_destination_account_id`
+// came later and, trimmed from the start, has no measure.
 // On the small tables only the event and extrinsic stamps (`created_event_id`,
-// `updated_event_id` and the like) are trimmed, 36 indexes and 111 MB, because nothing looks a row
-// up by the event that wrote it. The lookups to other entities stay as SubQuery's GiST, 27 indexes
-// and 228 MB: they are the joins an explorer runs (holders of an asset, keys of an identity), they
-// cost little at these sizes, and the replayed SDK and portal queries that sized the list could not
-// speak for every reader. The REMOVED list frees about 4.3 GB more.
+// `updated_event_id` and the like) are trimmed, 36 indexes and 111 MB when last measured, because
+// nothing looks a row up by the event that wrote it. The lookups to other entities stay as
+// SubQuery's GiST, 166 single-column indexes of 490 MB on testnet and 311 MB on mainnet (the
+// 2026-10-20 resyncs, with the settlement approvals on top): they are the joins an explorer runs
+// (holders of an asset, keys of an identity), each costs at most tens of MB, and the replayed SDK
+// and portal queries that sized the list could not speak for every reader. The REMOVED list frees
+// about 4.3 GB more.
 //
 // Entries match on the table and column list, not on a generated name, and only while the index is
 // still a GiST, so this is idempotent and safe on a database that never had them. Only indexes of
