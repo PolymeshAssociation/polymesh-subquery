@@ -19,18 +19,13 @@ import {
 import { encodeAddress } from '@polkadot/util-crypto';
 import { codecBytes } from '../../utils/bytes';
 import { isObject, memberOf, optionOf, variantOf } from '../../utils/codec';
-import {
-  bytesToString,
-  getFirstKeyFromJson,
-  getTextValue,
-  is7xChain,
-  padNumericId,
-} from '../../utils/common';
+import { getFirstKeyFromJson, getTextValue, is7xChain, padNumericId } from '../../utils/common';
 import { getMultiSigSigner } from '../../utils/multisigs';
 import { getProposerValue } from '../../utils/proposals';
 import { pagesOf, SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot } from '../snapshot';
 import { storedKeys } from './keys';
+import { storedText } from '../../utils/text';
 
 /**
  * Multisigs with their signers, admins, proposals and votes; PIPs and their votes; and subsidies,
@@ -411,8 +406,6 @@ export const proposalSeeder: Seeder<Proposal> = {
           | undefined;
         const state = states.get(id)?.value ?? (value && memberOf(value, 'state'));
         const snapshotted = queued.has(id);
-        const text = (bytes?: Codec) =>
-          bytes && !bytes.isEmpty ? bytesToString(bytes) : undefined;
         return [
           Proposal.create({
             id: padNumericId(id),
@@ -422,8 +415,8 @@ export const proposalSeeder: Seeder<Proposal> = {
             balance: deposit
               ? BigInt((deposit.toJSON() as { amount: number | string }).amount)
               : BigInt(0),
-            url: text(pipMeta?.url),
-            description: text(pipMeta?.description),
+            url: storedText(pipMeta?.url),
+            description: storedText(pipMeta?.description),
             snapshotted,
             snapshotId: snapshotted ? snapshotId : undefined,
             skippedCount: skips.get(id)?.value
