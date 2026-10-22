@@ -45,6 +45,7 @@ import {
   padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
+  specVersionOf,
 } from '../../../utils';
 import { blockEvents } from '../../../utils/blockEvents';
 import { recordAnomaly } from '../../../utils/anomaly';
@@ -344,6 +345,21 @@ export const moveFungibleHolding = async (
   await destination.save();
 };
 
+const FUNDING_ROUND_OPTIONAL_FROM = 6_000_000;
+
+/**
+ * The funding round an asset was created with, as the chain stored it. Before 6.0 creation stored
+ * `funding_round.unwrap_or_default()`, so an event's `None` is `""` there; from 6.0 it stores only
+ * a named round. The value is the event's `Option` from 5.1, and the stored value before it.
+ */
+export const fundingRoundAtCreation = (
+  rawFundingRound: Codec,
+  specVersion: number
+): string | undefined => {
+  const fundingRound = storedText(rawFundingRound);
+  return specVersion < FUNDING_ROUND_OPTIONAL_FROM ? fundingRound ?? '' : fundingRound;
+};
+
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId, eventIdx } = extractArgs(event);
   const decoded = decodeEvent(event);
@@ -388,8 +404,7 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
    * FundingRound isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
    */
-  // an event's `Option`: `None` is no round; before 5.1 the chain stored one at creation, empty by default
-  const fundingRound = storedText(rawFundingRound as Codec);
+  const fundingRound = fundingRoundAtCreation(rawFundingRound as Codec, specVersionOf(block));
 
   /**
    * Events from chain >= 5.1.0 has identifiers emitted as well
