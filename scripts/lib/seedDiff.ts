@@ -1,12 +1,13 @@
 /**
  * The difference between a seed and the index it should equal, entity by entity: the rows only one
  * side holds and the fields they disagree on, matched by id or a seeder's natural `key`. Provenance
- * (`*EventId`, `*BlockId`) and a seeder's `relative` fields are not compared, and an indexed row the
- * seed lacks is allowed when its seeder calls it `terminal` or it belongs to an allowed `parent`
- * row: finished, and pruned from the chain.
+ * (`*EventId`, `*BlockId`) and a seeder's `relative` fields are not compared, its `unordered` fields
+ * are compared in any order, and an indexed row the seed lacks is allowed when its seeder calls it
+ * `terminal` or it belongs to an allowed `parent` row: finished, and pruned from the chain.
  */
 import { sameValue } from '../../src/seed/sameValue';
 import { Seeder } from '../../src/seed/seeder';
+import { byCodeUnit } from '../../src/utils/order';
 
 export { sameValue };
 
@@ -59,10 +60,23 @@ const isCompared = (field: string, relative: string[]): boolean =>
   !field.endsWith('BlockId') &&
   !relative.includes(field);
 
+/** An array field's members in one order, for a field the chain keeps as a set */
+const asSet = (value: unknown): unknown =>
+  Array.isArray(value) ? value.map(member => JSON.stringify(member)).sort(byCodeUnit) : value;
+
 /** The compared fields a seeded row and the index's disagree on */
-const fieldDiffs = (id: string, ours: Row, theirs: Row, relative: string[]): FieldDiff[] =>
+const fieldDiffs = (
+  id: string,
+  ours: Row,
+  theirs: Row,
+  relative: string[],
+  unordered: string[]
+): FieldDiff[] =>
   Object.keys(theirs)
-    .filter(field => isCompared(field, relative) && !sameValue(ours[field], theirs[field]))
+    .filter(field => {
+      const read = unordered.includes(field) ? asSet : (value: unknown) => value;
+      return isCompared(field, relative) && !sameValue(read(ours[field]), read(theirs[field]));
+    })
     .map(field => ({ id, field, seeded: ours[field], indexed: theirs[field] }));
 
 /** One entity's diff; `allowedIds` holds each parent entity's rows the chain pruned */
@@ -72,7 +86,7 @@ const diffEntity = (
   indexedRows: Row[],
   allowedIds: Map<string, Set<string>>
 ): EntityDiff => {
-  const { entity, relative = [], terminal, parent, key } = seeder;
+  const { entity, relative = [], relativeFor, unordered = [], terminal, parent, key } = seeder;
   const keyOf = (row: Row): string => (key ? key(row as never) : (row.id as string));
   const ours = new Map(seededRows.map(row => [keyOf(row), row]));
   const matched = new Set<string>();
@@ -92,7 +106,10 @@ const diffEntity = (
     if (ourRow) {
       matched.add(keyOf(row));
       // the index's columns: a field its schema lacks isn't compared
-      differing.push(...fieldDiffs(id, ourRow, row, relative));
+      const rowRelative = relativeFor?.when(ourRow as never)
+        ? [...relative, ...relativeFor.fields]
+        : relative;
+      differing.push(...fieldDiffs(id, ourRow, row, rowRelative, unordered));
     } else if (isPruned(row, isTerminal)) {
       allowed.add(id);
     } else {

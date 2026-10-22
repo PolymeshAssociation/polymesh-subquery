@@ -13,6 +13,7 @@ import {
   InstructionParty,
   InstructionStatusEnum,
   Leg,
+  LegTypeEnum,
   Venue,
 } from '../../types';
 import { isObject, memberOf, variantOf } from '../../utils/codec';
@@ -52,6 +53,8 @@ export const venueSeeder: Seeder<Venue> = {
   reads: ['settlement.venueInfo', 'settlement.details', 'settlement.venueSigners'],
   // 5.x's is the same record under its pallet's type name
   oldShapes: { 'settlement.venueInfo': [5000002] },
+  // a map keyed by venue and signer, iterated in hash order
+  unordered: ['signers'],
   async *rows(snap, ctx) {
     const [details, signers] = await Promise.all([
       snap.map('settlement.details'),
@@ -411,6 +414,12 @@ export const legSeeder = bundleSeeder<Leg>('Leg', ({ legs }) => legs, {
   accounts: ['fromAccountId', 'toAccountId'],
   // the keys that created and affirmed it
   relative: ['addresses'],
+  // an off-chain leg's portfolios, which the chain doesn't keep: 6.0 dropped them from a pre-6.0 leg
+  // it made off-chain, and an index has them from the leg's creation
+  relativeFor: {
+    fields: ['fromPortfolioId', 'toPortfolioId'],
+    when: ({ legType }) => legType === LegTypeEnum.OffChain,
+  },
   parent: { entity: 'Instruction', field: 'instructionId' },
 });
 export const instructionPartySeeder = bundleSeeder<InstructionParty>(

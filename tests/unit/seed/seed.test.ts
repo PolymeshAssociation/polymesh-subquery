@@ -77,6 +77,19 @@ describe('seed', () => {
       ])
     ).toEqual(['Asset.totalTransfers', 'StakingPosition.totalRewarded']);
   });
+
+  it('counts the fields a seeder counts from the start block on some of its rows', () => {
+    expect(
+      relativeFields([
+        {
+          entity: 'Leg',
+          reads: [],
+          relativeFor: { fields: ['toPortfolioId', 'fromPortfolioId'], when: () => true },
+          rows: pagesOf(),
+        },
+      ])
+    ).toEqual(['Leg.fromPortfolioId', 'Leg.toPortfolioId']);
+  });
 });
 
 /**

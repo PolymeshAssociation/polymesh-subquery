@@ -34,6 +34,13 @@ export interface Seeder<T extends SeedRow = SeedRow> {
    * there, and facts the chain doesn't keep, such as who created a row
    */
   relative?: string[];
+  /**
+   * fields that are `relative` only on the rows `when` picks: a seed can't know them there, so an
+   * index may hold a value the seed doesn't, and verify-seed doesn't compare them on those rows
+   */
+  relativeFor?: { fields: string[]; when(row: T): boolean };
+  /** array fields the chain keeps as a set, whose order is only the index's */
+  unordered?: string[];
   /** a row's natural key, when its id names the event that opened it (an interval) */
   key?(row: T): string;
   /** the fields naming an `Account`, for the account closure */
@@ -75,10 +82,12 @@ export function* pagesOf<T>(rows: readonly T[]): Generator<T[]> {
   }
 }
 
-/** `Entity.field` for every field a seeder counts from the start block, sorted */
+/** `Entity.field` for every field a seeder counts from the start block on any row, sorted */
 export const relativeFields = (seeders: Seeder[]): string[] =>
   seeders
-    .flatMap(({ entity, relative = [] }) => relative.map(field => `${entity}.${field}`))
+    .flatMap(({ entity, relative = [], relativeFor }) =>
+      [...relative, ...(relativeFor?.fields ?? [])].map(field => `${entity}.${field}`)
+    )
     .sort(byCodeUnit);
 
 /**

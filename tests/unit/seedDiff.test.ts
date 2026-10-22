@@ -5,6 +5,7 @@
  */
 import { connectionNames, diffSeed, sameValue } from '../../scripts/lib/seedDiff';
 import { Seeder } from '../../src/seed/seeder';
+import { legSeeder, venueSeeder } from '../../src/seed/seeders/settlement';
 
 const seeder = (entity: string, extra: Partial<Seeder> = {}): Seeder => ({
   entity,
@@ -128,6 +129,61 @@ describe('sameValue', () => {
     expect(sameValue({ b: BigInt(1), a: [1] }, { a: [1], b: '1' })).toBe(true);
     expect(sameValue('a', 'b')).toBe(false);
     expect(sameValue(0, null)).toBe(false);
+  });
+});
+
+describe('fields the chain keeps less of than the index', () => {
+  it("compares a venue's signers in any order, as the chain keeps them as a set", () => {
+    const diffs = diffSeed(
+      {
+        Venue: [
+          { id: '1', signers: ['a', 'b'] },
+          { id: '2', signers: ['a'] },
+        ],
+      },
+      {
+        Venue: [
+          { id: '1', signers: ['b', 'a'] },
+          { id: '2', signers: ['a', 'b'] },
+        ],
+      },
+      [venueSeeder]
+    );
+
+    expect(diffs[0].differing).toEqual([
+      { id: '2', field: 'signers', seeded: ['a'], indexed: ['a', 'b'] },
+    ]);
+  });
+
+  it("skips an off-chain leg's portfolios, which 6.0 dropped from a pre-6.0 leg it made off-chain", () => {
+    const portfolio = (did: string) => `${did}/0`;
+    const diffs = diffSeed(
+      {
+        Instruction: [{ id: '1', status: 'Pending' }],
+        Leg: [
+          { id: '1/0', instructionId: '1', legType: 'OffChain' },
+          { id: '1/1', instructionId: '1', legType: 'Fungible', fromPortfolioId: portfolio('a') },
+        ],
+      },
+      {
+        Instruction: [{ id: '1', status: 'Pending' }],
+        Leg: [
+          {
+            id: '1/0',
+            instructionId: '1',
+            legType: 'OffChain',
+            fromPortfolioId: portfolio('a'),
+            toPortfolioId: portfolio('b'),
+          },
+          { id: '1/1', instructionId: '1', legType: 'Fungible', fromPortfolioId: portfolio('c') },
+        ],
+      },
+      [legSeeder]
+    );
+
+    expect(diffs.find(({ entity }) => entity === 'Leg')?.differing).toEqual([
+      { id: '1/1', field: 'fromPortfolioId', seeded: portfolio('a'), indexed: portfolio('c') },
+    ]);
   });
 });
 
