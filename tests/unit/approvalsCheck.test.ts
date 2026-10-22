@@ -210,7 +210,7 @@ describe('chainApprovals', () => {
 });
 
 describe('compareClosed', () => {
-  it('reports an instruction the index closed that the chain still holds open', () => {
+  it('reports an instruction the index closed that the chain holds open or closed the other way', () => {
     expect(
       compareClosed(
         [
@@ -218,26 +218,44 @@ describe('compareClosed', () => {
           { id: '0000000043', status: 'Executed' },
           { id: '0000000044', status: 'Executed' },
           { id: '0000000045', status: 'Rejected' },
+          { id: '0000000046', status: 'Rejected' },
+          { id: '0000000047', status: 'Executed' },
+          { id: '0000000048', status: 'Rejected' },
         ],
         new Map([
           ['0000000042', 'Pending'],
           ['0000000043', 'LockedForExecution'],
           ['0000000044', 'Success'],
           ['0000000045', 'Unknown'],
+          ['0000000046', 'Rejected'],
+          ['0000000047', 'Rejected'],
+          ['0000000048', 'Success'],
         ])
       )
     ).toEqual([
       {
-        check: '9 closed instruction open on chain',
+        check: '9 closed instruction status',
         id: '0000000042',
         index: 'Rejected',
         chain: 'Pending',
       },
       {
-        check: '9 closed instruction open on chain',
+        check: '9 closed instruction status',
         id: '0000000043',
         index: 'Executed',
         chain: 'LockedForExecution',
+      },
+      {
+        check: '9 closed instruction status',
+        id: '0000000047',
+        index: 'Executed',
+        chain: 'Rejected',
+      },
+      {
+        check: '9 closed instruction status',
+        id: '0000000048',
+        index: 'Rejected',
+        chain: 'Success',
       },
     ]);
   });

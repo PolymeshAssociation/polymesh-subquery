@@ -117,9 +117,15 @@ export const compareApprovals = (
   return out;
 };
 
+/** The index's status for each chain status a closed instruction can have */
+const CLOSED: Record<string, string> = {
+  Success: 'Executed',
+  Rejected: 'Rejected',
+};
+
 /**
- * Reports each instruction the index holds as closed (`Executed` or `Rejected`) that the chain still
- * holds open.
+ * Reports each instruction the index holds as closed (`Executed` or `Rejected`) that the chain holds
+ * open or closed the other way. One the chain has pruned to `Unknown` passes.
  */
 export const compareClosed = (
   instructions: IndexedInstruction[],
@@ -127,9 +133,9 @@ export const compareClosed = (
 ): ApprovalDifference[] =>
   instructions.flatMap(({ id, status }) => {
     const chain = statuses.get(id) ?? 'none';
-    return chain in OPEN
-      ? [{ check: '9 closed instruction open on chain', id, index: status, chain }]
-      : [];
+    return chain === 'Unknown' || CLOSED[chain] === status
+      ? []
+      : [{ check: '9 closed instruction status', id, index: status, chain }];
   });
 
 /** The variant of an enum codec, such as `InstructionStatus` or `MediatorAffirmationStatus`. */
