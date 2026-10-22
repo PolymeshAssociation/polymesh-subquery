@@ -222,6 +222,7 @@ const POSITION_READS: StorageRef[] = [
   'portfolio.portfolioNFT',
   'identity.keyRecords',
   'identity.keyToIdentityIds',
+  'multiSig.keyToMultiSig',
   'identity.didRecords',
 ];
 
@@ -230,7 +231,11 @@ export const holdingSeeder: Seeder<Holding> = {
   // an emptied holding stays indexed; the chain drops it
   terminal: ({ amount, nftCount }) => BigInt(amount) === BigInt(0) && !nftCount,
   reads: POSITION_READS,
-  oldShapes: { 'identity.keyToIdentityIds': [3000], 'identity.didRecords': [3000] },
+  oldShapes: {
+    'identity.keyToIdentityIds': [3000],
+    'identity.didRecords': [3000],
+    'multiSig.keyToMultiSig': [3000],
+  },
   accounts: ['accountId'],
   relative: ['frozenSince'],
   async *rows(snap, ctx) {
@@ -267,7 +272,11 @@ export const assetHolderSeeder: Seeder<AssetHolder> = {
 export const nftSeeder: Seeder<Nft> = {
   entity: 'Nft',
   reads: POSITION_READS,
-  oldShapes: { 'identity.keyToIdentityIds': [3000], 'identity.didRecords': [3000] },
+  oldShapes: {
+    'identity.keyToIdentityIds': [3000],
+    'identity.didRecords': [3000],
+    'multiSig.keyToMultiSig': [3000],
+  },
   terminal: ({ burnedEventId }) => Boolean(burnedEventId),
   async *rows(snap, ctx) {
     yield* pagesOf((await positions(snap, ctx)).nfts);
