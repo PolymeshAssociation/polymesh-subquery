@@ -21,9 +21,14 @@ type LedgerJson = Parameters<typeof ledgerSnapshot>[0] & { stash?: string };
 const KEYS: StorageRef[] = [
   'identity.keyRecords',
   'identity.keyToIdentityIds',
+  'multiSig.keyToMultiSig',
   'identity.didRecords',
 ];
-const KEY_SHAPES = { 'identity.keyToIdentityIds': [3000], 'identity.didRecords': [3000] };
+const KEY_SHAPES = {
+  'identity.keyToIdentityIds': [3000],
+  'identity.didRecords': [3000],
+  'multiSig.keyToMultiSig': [3000],
+};
 
 /**
  * Each bonded stash's position from its ledger: keyed by its controller before 8.0, by the stash
