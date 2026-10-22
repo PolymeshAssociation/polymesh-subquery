@@ -50,7 +50,8 @@ export const primaryKeyOf = (record: Codec | undefined): string | undefined =>
 
 /**
  * Every key the chain records, by address: `identity.keyRecords` from 5.0, and before it
- * `identity.keyToIdentityIds`, with the role read from the identity's record.
+ * `identity.keyToIdentityIds`, with the role read from the identity's record, and
+ * `multiSig.keyToMultiSig` for a multisig signer's key, which 5.0 moved into the key records.
  */
 export const storedKeys = (snap: ChainSnapshot): Promise<ReadonlyMap<string, StoredKey>> =>
   snap.derive('storedKeys', async () => {
@@ -78,6 +79,15 @@ export const storedKeys = (snap: ChainSnapshot): Promise<ReadonlyMap<string, Sto
             did,
             role: primary ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
           });
+        }
+      });
+    }
+    // a key is an identity's or a multisig's signer, never both (`unsafe_accept_multisig_signer`)
+    for await (const page of snap.pages('multiSig.keyToMultiSig')) {
+      page.forEach(({ args, value }) => {
+        const address = args[0].toString();
+        if (value && !keys.has(address)) {
+          keys.set(address, { address, role: AccountKeyRole.MultiSigSigner });
         }
       });
     }

@@ -73,13 +73,26 @@ describe.each(['testnet', 'mainnet'] as const)('the %s genesis', chainName => {
 
   it("seeds the identities' accounts the genesis handler wrote", () => {
     // an unlinked account comes with the multisig or balance that names it
-    expect(byId(lessSystematicKeys(chain.rows('Account')))).toEqual(
+    expect(
+      byId(
+        lessSystematicKeys(chain.rows('Account')).filter(
+          ({ keyRole }) => keyRole !== 'MultiSigSigner'
+        )
+      )
+    ).toEqual(
       byId(
         lessSystematicKeys(genuine(chainName, 'Account')).filter(
           ({ keyRole }) => keyRole !== 'Unlinked'
         )
       )
     );
+  });
+
+  it("makes each genesis multisig's signers multisig signers, as `multiSig.keyToMultiSig` records them", () => {
+    // the genesis handler wrote them unlinked, and the index's first multisig events relinked them
+    const signers = chain.rows('Account').filter(({ keyRole }) => keyRole === 'MultiSigSigner');
+    expect(signers).toHaveLength(5);
+    expect(signers.every(({ identityId }) => !identityId)).toBe(true);
   });
 
   it('opens the key intervals the genesis handler opened, with their permissions', () => {

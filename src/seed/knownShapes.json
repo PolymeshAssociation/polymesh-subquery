@@ -261,6 +261,9 @@
   "multiSig.adminDid": [
     "[[\"AccountId32\"],\"[u8;32]\",[\"Identity\"]]"
   ],
+  "multiSig.keyToMultiSig": [
+    "[[\"AccountId\"],\"AccountId\",[\"Twox64Concat\"]]"
+  ],
   "multiSig.multiSigSigners": [
     "[[\"AccountId\",\"Signatory\"],\"Signatory\",[\"Identity\",\"Twox64Concat\"]]",
     "[[\"AccountId32\",\"AccountId32\"],\"bool\",[\"Identity\",\"Twox64Concat\"]]",

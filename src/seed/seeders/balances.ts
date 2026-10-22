@@ -99,6 +99,7 @@ export const accountBalanceSeeder: Seeder<AccountBalance> = {
     'staking.ledger',
     'identity.keyRecords',
     'identity.keyToIdentityIds',
+    'multiSig.keyToMultiSig',
     'identity.didRecords',
   ],
   oldShapes: {
@@ -107,6 +108,7 @@ export const accountBalanceSeeder: Seeder<AccountBalance> = {
     'staking.bonded': [3000],
     'staking.ledger': [3000],
     'identity.keyToIdentityIds': [3000],
+    'multiSig.keyToMultiSig': [3000],
     'identity.didRecords': [3000],
   },
   accounts: ['accountId'],

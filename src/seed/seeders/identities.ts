@@ -92,11 +92,13 @@ export const accountSeeder: Seeder<Account> = {
     'identity.keyRecords',
     'identity.keyToIdentityIds',
     'identity.didRecords',
+    'multiSig.keyToMultiSig',
     'system.account',
   ],
   oldShapes: {
     'identity.keyToIdentityIds': [3000],
     'identity.didRecords': [3000],
+    'multiSig.keyToMultiSig': [3000],
     'system.account': [3000],
   },
   terminal: ({ keyRole, identityId }) => keyRole === AccountKeyRole.Unlinked && !identityId,
@@ -217,12 +219,17 @@ export const identityKeySeeder: Seeder<IdentityKey> = {
   reads: [
     'identity.keyRecords',
     'identity.keyToIdentityIds',
+    'multiSig.keyToMultiSig',
     'identity.didRecords',
     'identity.keyAssetPermissions',
     'identity.keyExtrinsicPermissions',
     'identity.keyPortfolioPermissions',
   ],
-  oldShapes: { 'identity.keyToIdentityIds': [3000], 'identity.didRecords': [3000] },
+  oldShapes: {
+    'identity.keyToIdentityIds': [3000],
+    'identity.didRecords': [3000],
+    'multiSig.keyToMultiSig': [3000],
+  },
   accounts: ['accountId'],
   // the event that opened an interval is history; the seed's open at the seed
   relative: ['addedReason'],
