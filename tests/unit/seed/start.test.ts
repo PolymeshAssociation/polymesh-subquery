@@ -23,11 +23,21 @@ const expected = (chainName: 'testnet' | 'mainnet', entity: string): Row[] => {
   const phantom = new Set(
     rows.Identity.filter(({ primaryAccountId }) => primaryAccountId === zero).map(({ id }) => id)
   );
-  return (rows[entity] ?? []).filter(
-    row =>
-      row.id !== zero &&
-      ![row.id, row.identityId, String(row.id).split('/')[0]].some(id => phantom.has(id as string))
+  // the genesis handler left a genesis multisig's signers unlinked; `multiSig.keyToMultiSig` names them
+  const signers = new Set(
+    (rows.MultiSigSigner ?? []).map(({ signerAccountId }) => signerAccountId)
   );
+  return (rows[entity] ?? [])
+    .filter(
+      row =>
+        row.id !== zero &&
+        ![row.id, row.identityId, String(row.id).split('/')[0]].some(id =>
+          phantom.has(id as string)
+        )
+    )
+    .map(row =>
+      entity === 'Account' && signers.has(row.id) ? { ...row, keyRole: 'MultiSigSigner' } : row
+    );
 };
 
 /** Which fields of an entity the seed sets differently from the genesis handler, by design */
