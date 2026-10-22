@@ -415,7 +415,8 @@ export const handlePolyxLimitUpdated = async (event: SubstrateEvent): Promise<vo
  * emitted `SubsidyDebited` only from 8.0), so after a fee that `feeAccount` paid for someone else,
  * that subsidy's allowance is read back from the chain. `users` are who the fee may have been for:
  * the subsidy of one of them, or failing that every live subsidy `feeAccount` pays, since the
- * runtime's payer is not always the signer. A fee its payer paid itself reads nothing.
+ * runtime's payer is not always the signer. A fee its payer paid itself reads only the payer's
+ * subsidy of itself, which `debit_subsidy` draws down like any other.
  */
 export const refreshDrawnAllowances = async (
   block: SubstrateBlock,
@@ -424,19 +425,27 @@ export const refreshDrawnAllowances = async (
   feeAccount: string,
   users: (string | undefined)[]
 ): Promise<void> => {
-  const subsidised = users.filter(user => user && user !== feeAccount);
-
-  if (is8xChain(block) || !subsidised.length) {
+  if (is8xChain(block)) {
     return;
   }
 
-  const paid = (
-    await getAllByFields<Subsidy>('Subsidy', [['payingAccountId', '=', feeAccount]])
-  ).filter(subsidy => subsidy.isAccepted && !subsidy.isRemoved);
-  const drawn = paid.filter(subsidy => subsidised.includes(subsidy.beneficiaryAccountId));
+  const subsidised = users.filter(user => user && user !== feeAccount);
+  const live = (subsidy: Subsidy | undefined): subsidy is Subsidy =>
+    !!subsidy?.isAccepted && !subsidy.isRemoved;
+  let drawn: Subsidy[];
+
+  if (subsidised.length) {
+    const paid = (
+      await getAllByFields<Subsidy>('Subsidy', [['payingAccountId', '=', feeAccount]])
+    ).filter(live);
+    const ofUsers = paid.filter(subsidy => subsidised.includes(subsidy.beneficiaryAccountId));
+    drawn = ofUsers.length ? ofUsers : paid;
+  } else {
+    drawn = [await Subsidy.get(`${feeAccount}/${feeAccount}`)].filter(live);
+  }
 
   await Promise.all(
-    (drawn.length ? drawn : paid).map(async subsidy => {
+    drawn.map(async subsidy => {
       const remaining = await readChainAllowance(
         subsidy.beneficiaryAccountId,
         feeAccount,

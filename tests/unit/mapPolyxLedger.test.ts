@@ -1847,6 +1847,25 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
       expect(subsidies).not.toHaveBeenCalled();
     });
 
+    it('from v5.4.1: a fee its signer paid through a subsidy of itself draws that subsidy down', async () => {
+      // testnet 5CkJnr8D…: `debit_subsidy` draws any subsidy down, its paying key the user's own
+      db['Subsidy'][`${PAYER}/${PAYER}`] = {
+        id: `${PAYER}/${PAYER}`,
+        beneficiaryAccountId: PAYER,
+        payingAccountId: PAYER,
+        isAccepted: true,
+        isRemoved: false,
+      };
+      const subsidies = subsidyLeft(93);
+
+      await handleTransactionFeeCharged(
+        feePaidIn('asset', { signer: PAYER, specVersion: 6_002_010 })
+      );
+
+      expect(subsidies).toHaveBeenCalledWith(PAYER);
+      expect(db['Subsidy'][`${PAYER}/${PAYER}`].allowance).toBe(BigInt(93));
+    });
+
     it('pre-v8: a protocol fee is debited from the paying key, not the user', async () => {
       await handleTransactionFeeCharged(
         structEvent(
