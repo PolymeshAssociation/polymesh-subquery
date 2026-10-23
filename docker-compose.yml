@@ -69,7 +69,9 @@ services:
       start_period: 30s
 
   graphql-engine:
-    image: onfinality/subql-query:v2.25.0
+    build:
+      context: .
+      dockerfile: ./docker/query-Dockerfile
     ports:
       - 3001:3000
     depends_on:
