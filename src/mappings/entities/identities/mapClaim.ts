@@ -19,10 +19,9 @@ import {
   getAssetIdWithTicker,
   getTextValue,
   recordAnomaly,
-  scanDoubleMap,
 } from '../../../utils';
+import { AssetIdWithTicker } from '../../../utils/assets';
 import { CanonicalValue, encodeValue } from '../../args/encode';
-import { memberOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 
@@ -68,11 +67,15 @@ export const getId = (
   return idAttributes.join('/');
 };
 
-const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promise<Scope> => {
+/** A claim scope's asset, by id and by ticker, given the scope's raw asset id or ticker */
+export type AssetOfScope = (assetIdOrTicker: string) => Promise<AssetIdWithTicker>;
+
+/** A claim scope from its JSON, an asset scope as the chain names it, with its asset id */
+export const scopeOf = async (claimScope: string, assetOf: AssetOfScope): Promise<Scope> => {
   const scope = JSON.parse(claimScope);
 
   if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
-    const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
+    const { assetId, ticker } = await assetOf(scope.value);
 
     // as the chain scopes it: by the ticker before 7.0, by the asset id from it
     scope.value = scope.type === ClaimScopeTypeEnum.Ticker ? ticker : assetId;
@@ -81,6 +84,73 @@ const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promis
   }
 
   return scope;
+};
+
+const processClaimScope = (claimScope: string, block: SubstrateBlock): Promise<Scope> =>
+  scopeOf(claimScope, assetIdOrTicker => getAssetIdWithTicker(assetIdOrTicker, block));
+
+/**
+ * The claim `identityClaim` describes, an `IdentityClaim` in the canonical encoding, as its row;
+ * `undefined` for a claim type the 6.0 upgrade retired. `assetOf` names a scope's asset.
+ */
+export const claimRow = async (
+  target: string,
+  identityClaim: CanonicalValue,
+  blockEventId: string,
+  assetOf: AssetOfScope
+): Promise<Claim | undefined> => {
+  const {
+    claimExpiry,
+    claimIssuer,
+    claimScope,
+    claimType,
+    issuanceDate,
+    lastUpdateDate,
+    cddId,
+    jurisdiction,
+    customClaimTypeId,
+  } = extractClaimInfo(identityClaim);
+  if (claimType && RETIRED_CLAIM_TYPES.has(claimType)) {
+    return undefined;
+  }
+  // every `IdentityClaim` names its issuer
+  const issuer = claimIssuer as string;
+  const scope = claimScope ? await scopeOf(claimScope, assetOf) : undefined;
+
+  // the encoding carries moments as decimal strings; the numeric columns hold bigints
+  const moment = (value: string | null | undefined): bigint | undefined =>
+    value === null || value === undefined ? undefined : BigInt(value);
+  const requiredMoment = (value: string | null | undefined, name: string): bigint => {
+    const parsed = moment(value);
+
+    if (parsed === undefined) {
+      throw new Error(`IdentityClaim has no ${name}`);
+    }
+
+    return parsed;
+  };
+  const expiry = moment(claimExpiry);
+
+  return Claim.create({
+    id: getId(target, issuer, claimType, scope, customClaimTypeId),
+    targetId: target,
+    issuerId: issuer,
+    // both are always present on an `IdentityClaim`
+    issuanceDate: requiredMoment(issuanceDate, 'issuanceDate'),
+    lastUpdateDate: requiredMoment(lastUpdateDate, 'lastUpdateDate'),
+    expiry,
+    type: claimType as ClaimTypeEnum,
+    scope,
+    jurisdiction,
+    cddId,
+    filterExpiry: expiry ?? END_OF_TIME,
+    // A fresh `Claim.create` fully replaces any row at this id, so a re-issue after
+    // revocation implicitly clears `revokeDate` — stated here rather than left implicit.
+    revokeDate: undefined,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+    customClaimTypeId,
+  });
 };
 
 interface ClaimContext {
@@ -96,42 +166,12 @@ const writeClaim = async (
   identityClaim: CanonicalValue,
   { block, blockId, eventIdx, blockEventId }: ClaimContext
 ): Promise<void> => {
-  const {
-    claimExpiry,
-    claimIssuer,
-    claimScope,
-    claimType,
-    issuanceDate,
-    lastUpdateDate,
-    cddId,
-    jurisdiction,
-    customClaimTypeId,
-  } = extractClaimInfo(identityClaim);
-  if (claimType && RETIRED_CLAIM_TYPES.has(claimType)) {
+  const row = await claimRow(target, identityClaim, blockEventId, assetIdOrTicker =>
+    getAssetIdWithTicker(assetIdOrTicker, block)
+  );
+  if (!row) {
     return;
   }
-  // every `IdentityClaim` names its issuer
-  const issuer = claimIssuer as string;
-
-  let scope: Scope | undefined;
-  if (claimScope) {
-    scope = await processClaimScope(claimScope, block);
-  }
-
-  // the encoding carries moments as decimal strings; the numeric columns hold bigints
-  const moment = (value: string | null | undefined): bigint | undefined =>
-    value === null || value === undefined ? undefined : BigInt(value);
-  const requiredMoment = (value: string | null | undefined, name: string): bigint => {
-    const parsed = moment(value);
-
-    if (parsed === undefined) {
-      throw new Error(`IdentityClaim has no ${name}`);
-    }
-
-    return parsed;
-  };
-  const expiry = moment(claimExpiry);
-  const filterExpiry = expiry ?? END_OF_TIME;
 
   // The `target` for any claim is not validated, so we make sure it is present in `identities` table
   await createIdentityIfNotExists(
@@ -143,26 +183,7 @@ const writeClaim = async (
     blockEventId
   );
 
-  await Claim.create({
-    id: getId(target, issuer, claimType, scope, customClaimTypeId),
-    targetId: target,
-    issuerId: issuer,
-    // both are always present on an `IdentityClaim`
-    issuanceDate: requiredMoment(issuanceDate, 'issuanceDate'),
-    lastUpdateDate: requiredMoment(lastUpdateDate, 'lastUpdateDate'),
-    expiry,
-    type: claimType as ClaimTypeEnum,
-    scope,
-    jurisdiction,
-    cddId,
-    filterExpiry,
-    // A fresh `Claim.create` fully replaces any row at this id, so a re-issue after
-    // revocation implicitly clears `revokeDate` — stated here rather than left implicit.
-    revokeDate: undefined,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-    customClaimTypeId,
-  }).save();
+  await row.save();
 };
 
 export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => {
@@ -176,7 +197,7 @@ export const handleClaimAdded = async (event: SubstrateEvent): Promise<void> => 
  * An `identity.claims` value as the runtime stores it: a plain `IdentityClaim` in early runtimes,
  * the genesis one (v3.0) among them, and an `Option` in later ones.
  */
-const storedClaim = (value: Codec): Codec | undefined => {
+export const storedClaim = (value: Codec): Codec | undefined => {
   const optional = value as Partial<Option<Codec>>;
 
   if (typeof optional.unwrap !== 'function') {
@@ -184,38 +205,6 @@ const storedClaim = (value: Codec): Codec | undefined => {
   }
 
   return optional.isNone ? undefined : optional.unwrap();
-};
-
-/**
- * The claims in the chain's genesis config, which no `ClaimAdded` announces: CDD claims for genesis
- * and system identities, issued by the governance committee and the CDD system identity. Read from
- * `identity.claims` at the genesis block and written as if added there, so a later `ClaimRevoked`
- * finds them.
- */
-export const seedGenesisClaims = async (
-  block: SubstrateBlock,
-  blockId: string,
-  blockEventId: string
-): Promise<void> => {
-  const entries = await scanDoubleMap(api.query.identity.claims);
-
-  await Promise.all(
-    entries.map(([key, value], eventIdx) => {
-      const stored = storedClaim(value);
-
-      if (!stored) {
-        return undefined;
-      }
-
-      const target = memberOf(key.args[0], 'target').toString();
-      return writeClaim(target, encodeValue(stored, 'IdentityClaim'), {
-        block,
-        blockId,
-        eventIdx,
-        blockEventId,
-      });
-    })
-  );
 };
 
 export const handleClaimRevoked = async (event: SubstrateEvent): Promise<void> => {

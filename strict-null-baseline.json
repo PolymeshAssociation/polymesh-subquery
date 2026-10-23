@@ -18,8 +18,6 @@
   "src/mappings/entities/multiSig/mapMultiSigProposal.ts": 3,
   "src/mappings/entities/settlements/mapSettlement.ts": 3,
   "src/mappings/entities/stos/mapSto.ts": 4,
-  "src/mappings/migrations/genesisHandler.ts": 10,
-  "src/seed/holding.ts": 3,
   "src/utils/assets.ts": 3,
   "src/utils/common.ts": 7,
   "src/utils/ethExtrinsic.ts": 3,

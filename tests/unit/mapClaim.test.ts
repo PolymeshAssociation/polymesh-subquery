@@ -14,14 +14,12 @@ import {
   getId,
   handleClaimAdded,
   handleClaimRevoked,
-  seedGenesisClaims,
 } from '../../src/mappings/entities/identities/mapClaim';
 
 const TARGET = TEST_DID;
 const ISSUER_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const ISSUER_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const CDD_1 = `0x${'c1'.repeat(32)}`;
-const CDD_GENESIS = `0x${'c0'.repeat(32)}`;
 
 /** The chain types of the latest runtime, so claims are real `IdentityClaim` codecs. */
 const registry = new TypeRegistry();
@@ -151,48 +149,6 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
    * Mainnet block 20,842,777: PIP 149 revoked a CDD claim from the chain's genesis config, which no
    * `ClaimAdded` announced. The index had never written it, so the revocation found nothing.
    */
-  it('seeds the genesis claims, so a later revocation finds them', async () => {
-    const genesisClaim = identityClaim(ISSUER_A, CDD_GENESIS, '0');
-    (globalThis as any).api.query = {
-      identity: {
-        claims: {
-          entries: jest.fn().mockResolvedValue([
-            // the genesis runtime (v3.0) stores the claim itself, not an `Option` of it
-            [{ args: [{ target: mockCodec(TARGET) }, {}] }, genesisClaim],
-            // a later runtime's empty `Option` is no claim
-            [
-              { args: [{ target: mockCodec(ISSUER_B) }, {}] },
-              { isNone: true, unwrap: () => genesisClaim },
-            ],
-          ]),
-        },
-      },
-    };
-    const genesis = {
-      block: { header: { number: { toString: () => '0' } } },
-      timestamp: new Date('2020-01-01T00:00:00Z'),
-      specVersion: 3000,
-    };
-
-    await seedGenesisClaims(genesis as never, '0000000000', '0000000000/0000000000');
-
-    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence`;
-    expect(Object.keys(claims)).toEqual([id]);
-    expect(claims[id]).toMatchObject({
-      targetId: TARGET,
-      issuerId: ISSUER_A,
-      issuanceDate: BigInt(0),
-      createdEventId: '0000000000/0000000000',
-    });
-
-    await handleClaimRevoked(
-      mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: CDD_GENESIS, dateValue: '5000' })
-    );
-
-    expect(claims[id].revokeDate).toBe(REVOKED_AT);
-    (globalThis as any).api.query = {};
-  });
-
   it("stores the claim dates as bigints, not the encoding's decimal strings", async () => {
     await handleClaimAdded(
       mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })

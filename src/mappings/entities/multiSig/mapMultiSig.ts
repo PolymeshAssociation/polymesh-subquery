@@ -143,7 +143,7 @@ export const createMultiSigSigner = async (
  * The DID comes from chain storage or from an event payload, neither of which says whether the
  * index holds that identity — and `admin` is a non-null relation, so a DID the index has never
  * seen would make the field unresolvable for every consumer selecting it. The identity is
- * resolved (and read from the chain if need be) first; a DID that resolves to nothing leaves no
+ * resolved first; a DID the index lacks leaves no
  * row rather than a broken one.
  */
 export const createMultiSigAdmin = async (

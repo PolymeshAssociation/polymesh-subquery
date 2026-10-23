@@ -16,7 +16,7 @@ import { isObject, jsonOf } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
 import { findStorage } from '../../../utils/legacyQuery';
 
-interface ParsedSchedule {
+export interface ParsedSchedule {
   scheduleId: number;
   scheduledCheckpoints?: Date[];
   period?: string;
@@ -25,7 +25,7 @@ interface ParsedSchedule {
   nextCheckpointAt?: Date;
 }
 
-interface StoredScheduleJson {
+export interface StoredScheduleJson {
   schedule: { start: number; period: { unit: string; amount: number } };
   id: number;
   at: number;
@@ -36,7 +36,7 @@ interface ScheduleCheckpointsJson {
   pending: number[];
 }
 
-const isStoredSchedule = (json: unknown): json is StoredScheduleJson =>
+export const isStoredSchedule = (json: unknown): json is StoredScheduleJson =>
   isObject(json) &&
   typeof json.id === 'number' &&
   typeof json.at === 'number' &&
@@ -50,6 +50,15 @@ const isScheduleCheckpoints = (json: unknown): json is ScheduleCheckpointsJson =
   Array.isArray(json.pending) &&
   json.pending.every(moment => typeof moment === 'number');
 
+/** A pre-v6 schedule's row fields, as its event and the chain's `checkpoint.schedules` hold it */
+export const storedScheduleFields = (stored: StoredScheduleJson): ParsedSchedule => ({
+  scheduleId: stored.id,
+  period: JSON.stringify(stored.schedule.period),
+  start: new Date(stored.schedule.start),
+  remaining: stored.remaining,
+  nextCheckpointAt: new Date(stored.at),
+});
+
 /**
  * `ScheduleCreated` / `ScheduleRemoved` are the one real version change in the corporate-actions
  * domain: arity 3 → 4 at v6.0.0, `ScheduleId` inserted at index 2 and the payload type changing
@@ -59,15 +68,7 @@ const isScheduleCheckpoints = (json: unknown): json is ScheduleCheckpointsJson =
  */
 export const parseSchedule = (decoded: DecodedEvent, specVersion: number): ParsedSchedule => {
   if (specVersion < V6) {
-    const stored = jsonOf(decoded.storedSchedule, isStoredSchedule, 'StoredSchedule');
-
-    return {
-      scheduleId: stored.id,
-      period: JSON.stringify(stored.schedule.period),
-      start: new Date(stored.schedule.start),
-      remaining: stored.remaining,
-      nextCheckpointAt: new Date(stored.at),
-    };
+    return storedScheduleFields(jsonOf(decoded.storedSchedule, isStoredSchedule, 'StoredSchedule'));
   }
 
   const { pending } = jsonOf(decoded.schedule, isScheduleCheckpoints, 'ScheduleCheckpoints');

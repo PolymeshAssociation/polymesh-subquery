@@ -20,6 +20,7 @@
     "typecheck": "yarn codegen && tsc --noEmit -p tsconfig.test.json",
     "check-handlers": "ts-node scripts/check-handlers.ts",
     "check-strict-null": "ts-node scripts/check-strict-null.ts",
+    "verify-seed": "ts-node scripts/verify-seed.ts",
     "sync-metadata": "ts-node scripts/sync-metadata.ts",
     "commit": "npx git-cz",
     "start:docker": "docker compose pull && docker compose up --remove-orphans",
@@ -28,7 +29,8 @@
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package polymesh-subql/api-interfaces --endpoint ./metadata.json --output ./src/api-interfaces --strict",
     "format": "cross-env prettier-eslint $PWD\"/src/**/*.{ts,tsx,js,jsx,json,css,md}\" --write",
     "semantic-release": "semantic-release",
-    "set-version": "sh scripts/set-package-version.sh"
+    "set-version": "sh scripts/set-package-version.sh",
+    "seed:shapes": "ts-node scripts/seed-shapes.ts"
   },
   "homepage": "https://polymesh.network/",
   "repository": "github:PolymeshAssociation/polymesh-subquery",

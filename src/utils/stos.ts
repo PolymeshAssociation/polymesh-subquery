@@ -2,7 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
 import { FundraiserTierJson, Sto } from '../types';
-import { getAssetId, getAssetIdWithTicker } from './assets';
+import { AssetIdWithTicker, getAssetId, getAssetIdWithTicker } from './assets';
 import {
   capitalizeFirstLetter,
   extractBigInt,
@@ -15,7 +15,10 @@ import { getPortfolioId, meshPortfolioToAssetHolder } from './portfolios';
 
 export const getFundraiserDetails = async (
   item: Codec,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  // how the raising asset is named: the store for the handlers, the chain state for the seed
+  assetOf: (assetIdOrTicker: string) => Promise<AssetIdWithTicker> = assetIdOrTicker =>
+    getAssetIdWithTicker(assetIdOrTicker, block)
 ): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'> | null> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
@@ -32,9 +35,8 @@ export const getFundraiserDetails = async (
     stoStatus = capitalizeFirstLetter(Object.keys(status)[0]);
   }
 
-  const { assetId: raisingAssetId, ticker: raisingTicker } = await getAssetIdWithTicker(
-    extractString(rest, 'raising_asset'),
-    block
+  const { assetId: raisingAssetId, ticker: raisingTicker } = await assetOf(
+    extractString(rest, 'raising_asset')
   );
 
   return {

@@ -11,9 +11,11 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   hexToString,
+  padId,
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
+import { AssetIdWithTicker } from './assets';
 import {
   AssetHolderDetails,
   extractAssetHolder,
@@ -93,12 +95,16 @@ export const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegS
 };
 
 /** One pre-v6 leg, as `getLegsValue` reads it. */
-const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promise<LegDetails> => {
+const readLeg = async (
+  leg: any,
+  legIndex: number,
+  { assetOf, isAsset: assetExists }: LegLookups
+): Promise<LegDetails> => {
   const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
-  const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
+  const { assetId, ticker } = await assetOf(leg.asset);
   // a leg of a ticker that is no asset moved nothing on chain and was settled with a receipt;
   // 6.0's migration made each one an off-chain leg, as the chain has held it since
-  const isAsset = Boolean(await Asset.get(assetId));
+  const isAsset = await assetExists(assetId);
 
   return {
     legIndex,
@@ -132,11 +138,15 @@ export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails
 /**
  * This only extracts legs for spec version < 6000000
  */
-export const getLegsValue = async (item: Codec, block: SubstrateBlock): Promise<LegDetails[]> => {
+export const getLegsValue = async (
+  item: Codec,
+  block: SubstrateBlock,
+  lookups: LegLookups = storeLookups(block, padId(block.block.header.number.toString()))
+): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
-  // legs are independent (each only reads the store for its own asset); order is preserved
-  return Promise.all(legs.map((leg, legIndex) => readLeg(leg, legIndex, block)));
+  // legs are independent (each only looks up its own asset); order is preserved
+  return Promise.all(legs.map((leg, legIndex) => readLeg(leg, legIndex, lookups)));
 };
 
 const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => ({
@@ -152,29 +162,45 @@ const processOffChainLeg = (legValue: any, legIndex: number): LegDetails => ({
 /** Test hook. */
 export const processOffChainLegForTest = processOffChainLeg;
 
+/**
+ * How a leg's parties and asset are named: a holder from its storage form, an asset by id and
+ * ticker. Handlers read the store; the seed reads the chain state it starts from.
+ */
+export interface LegLookups {
+  holderOf(value: any): Promise<AssetHolderDetails>;
+  assetOf(assetIdOrTicker: any): Promise<AssetIdWithTicker>;
+  /** whether an asset exists under the id, which a pre-6.0 leg needn't name */
+  isAsset(assetId: string): Promise<boolean>;
+}
+
+const storeLookups = (
+  block: SubstrateBlock,
+  blockId: string,
+  blockEventId?: string
+): LegLookups => ({
+  holderOf: value => extractAssetHolder(value, block, blockId, blockEventId),
+  assetOf: assetIdOrTicker => getAssetIdWithTicker(assetIdOrTicker, block),
+  isAsset: async assetId => Boolean(await Asset.get(assetId)),
+});
+
 const processOnChainLeg = async (
   legValue: any,
   legType: LegTypeEnum,
   legIndex: number,
-  block: SubstrateBlock,
-  blockId: string,
-  blockEventId?: string
+  { holderOf, assetOf }: LegLookups
 ): Promise<LegDetails> => {
-  const fromData = await extractAssetHolder(legValue.sender, block, blockId, blockEventId);
-  const toData = await extractAssetHolder(legValue.receiver, block, blockId, blockEventId);
+  const fromData = await holderOf(legValue.sender);
+  const toData = await holderOf(legValue.receiver);
 
   let assetId: string;
   let ticker: string;
   let amount, nftIds;
 
   if (legType === LegTypeEnum.Fungible) {
-    ({ assetId, ticker } = await getAssetIdWithTicker(legValue.ticker ?? legValue.assetId, block));
+    ({ assetId, ticker } = await assetOf(legValue.ticker ?? legValue.assetId));
     amount = extractBigInt(legValue, 'amount');
   } else {
-    ({ assetId, ticker } = await getAssetIdWithTicker(
-      legValue.nfts.ticker ?? legValue.nfts.assetId,
-      block
-    ));
+    ({ assetId, ticker } = await assetOf(legValue.nfts.ticker ?? legValue.nfts.assetId));
     nftIds = legValue.nfts.ids;
   }
   return {
@@ -192,12 +218,14 @@ export const getSettlementLeg = async (
   item: Codec,
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string
+  blockEventId?: string,
+  lookups: LegLookups = storeLookups(block, blockId, blockEventId)
 ): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
   const legDetails: LegDetails[] = [];
 
+  // in order: a handler's lookup creates the account a leg names, which a later leg may name too
   let legIndex = 0;
   for (const leg of legs) {
     const legTypeKey = Object.keys(leg)[0];
@@ -208,16 +236,7 @@ export const getSettlementLeg = async (
     if (legType === LegTypeEnum.OffChain) {
       legDetails.push(processOffChainLeg(legValue, legIndex));
     } else {
-      legDetails.push(
-        await processOnChainLeg(
-          legValue,
-          legType as LegTypeEnum,
-          legIndex,
-          block,
-          blockId,
-          blockEventId
-        )
-      );
+      legDetails.push(await processOnChainLeg(legValue, legType as LegTypeEnum, legIndex, lookups));
     }
 
     legIndex++;

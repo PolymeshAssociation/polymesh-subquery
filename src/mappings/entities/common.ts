@@ -4,7 +4,6 @@ import { FunctionPropertyNames } from '@subql/types-core';
 import { AnomalyKind, Asset, EventIdEnum, ModuleIdEnum } from '../../types';
 import { padId } from '../../utils';
 import { recordAnomaly } from '../../utils/anomaly';
-import { assetFromChain } from './assets/assetFromChain';
 
 export type Attributes<T> = Omit<
   T,
@@ -33,17 +32,15 @@ export interface HandlerArgs {
 }
 
 /**
- * The asset a handler is about to change — from the index, or, given the event that names it,
- * built from chain storage when the index has never seen it (see `assetFromChain`). Only an asset
- * neither holds still fails the block, as it always has: a handler cannot make a change to an asset
- * that exists nowhere.
+ * The asset a handler is about to change. The start block's seed wrote every asset the chain held,
+ * so one the index lacks fails the block: a handler cannot change an asset that exists nowhere.
  */
 export const getAsset = async (assetId: string, event?: SubstrateEvent): Promise<Asset> => {
-  const asset =
-    (await Asset.get(assetId)) ?? (event ? await assetFromChain(assetId, event) : undefined);
+  const asset = await Asset.get(assetId);
 
   if (!asset) {
-    throw new Error(`Asset with ID ${assetId} was not found.`);
+    const at = event ? ` (block ${event.block.block.header.number.toString()})` : '';
+    throw new Error(`Asset with ID ${assetId} was not found${at}.`);
   }
 
   return asset;

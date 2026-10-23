@@ -8,20 +8,21 @@ import mapChainUpgrade from './entities/block/mapChainUpgrade';
 import { handleExtrinsic } from './entities/block/mapExtrinsic';
 import mapSubqueryVersion from './entities/block/mapSubqueryVersion';
 import { handleToolingEvent } from './entities/events/mapEvent';
-import genesisHandler, { seedFromStartBlock } from './migrations/genesisHandler';
+import { startIndex } from '../seed/start';
 
+/** The first block of an index from genesis: block 1, seeded from the genesis state (`startIndex`) */
 export async function handleGenesis(block: SubstrateBlock): Promise<void> {
   await ensureTrueSpecVersion(block);
   // this is need to populate subquery version on startup
   await handleStartup();
-  await genesisHandler(block);
+  await startIndex(block);
 }
 
-/** The first block of an index started after genesis — see `seedFromStartBlock`. */
+/** The first block of an index started after genesis, seeded the same way */
 export async function handleSeed(block: SubstrateBlock): Promise<void> {
   await ensureTrueSpecVersion(block);
   await handleStartup();
-  await seedFromStartBlock(block);
+  await startIndex(block);
 }
 
 export async function handleMigration(substrateEvent: SubstrateEvent): Promise<void> {

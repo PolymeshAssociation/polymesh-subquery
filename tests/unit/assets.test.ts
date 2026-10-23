@@ -1,8 +1,6 @@
 /**
- * `getCustomType` reads the already-indexed `CustomAssetType` entity (populated by
- * `CustomAssetTypeRegistered`/`Exists`) instead of an unconditional chain read — a chain read is
- * a fallback for the case that shouldn't happen (a type used before its registration was
- * indexed), and that fallback records an anomaly rather than silently trusting the read.
+ * `getCustomType` reads the indexed `CustomAssetType`, which the seed and
+ * `CustomAssetTypeRegistered` write, and never the chain.
  */
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
@@ -31,40 +29,20 @@ describe('getCustomType', () => {
     expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(0);
   });
 
-  it('falls back to a chain read and records an anomaly when the type is not yet indexed', async () => {
-    const db = mockStore();
-    (globalThis as any).api.query = {
-      asset: {
-        customTypes: jest
-          .fn()
-          .mockResolvedValue({ toString: () => '0x4c6567616379', toHex: () => '0x4c6567616379' }),
-      },
-    };
-
-    const name = await getCustomType(codec(9) as unknown as Codec, blockAt(500));
-
-    expect(name).toBe('Legacy');
-    expect(Object.keys(db.IndexerAnomaly ?? {})).toHaveLength(1);
-    expect(Object.values(db.IndexerAnomaly)[0].detail).toMatch(/registered on chain/);
-  });
-
   /**
-   * The chain did not check a custom type id when an NFT collection was created — testnet has
-   * collections naming id 0, never registered, and id 100 long before it was. The chain answers
-   * with empty bytes, which used to be written as an asset type of `''`: a name that happens to be
-   * blank, rather than an unknown one.
+   * The seed writes every registered type, so one the index lacks is one the chain never
+   * registered: testnet has NFT collections naming id 0, never registered, and id 100 long before
+   * it was, as the chain didn't check the id.
    */
-  it('leaves the type unknown, not blank, when the chain has not registered it either', async () => {
+  it('leaves the type unknown, with an anomaly, when the index holds no such type', async () => {
     const db = mockStore();
     (globalThis as any).api.query = {
-      asset: {
-        customTypes: jest.fn().mockResolvedValue({ toString: () => '0x', toHex: () => '0x' }),
-      },
+      asset: { customTypes: jest.fn().mockRejectedValue(new Error('should not be called')) },
     };
 
     const name = await getCustomType(codec(0) as unknown as Codec, blockAt(12_029_979));
 
     expect(name).toBeUndefined();
-    expect(Object.values(db.IndexerAnomaly)[0].detail).toMatch(/has not registered/);
+    expect(Object.values(db.IndexerAnomaly)[0].detail).toMatch(/no CustomAssetType 0/);
   });
 });

@@ -26,6 +26,14 @@ const describe = (value: unknown): string => {
 export const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+/** An enum's variant, lower-cased, whether its JSON is the bare name or `{ variant: value }` */
+export const variantOf = (json: unknown): string => {
+  if (typeof json === 'string') {
+    return json.toLowerCase();
+  }
+  return isObject(json) ? (Object.keys(json)[0] ?? '').toLowerCase() : '';
+};
+
 /** Whether `value` has a member `key` that is a function, for the dispatch that must not throw. */
 export const hasFunction = (value: unknown, key: string): boolean =>
   isObject(value) && typeof value[key] === 'function';

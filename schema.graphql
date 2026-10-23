@@ -1834,10 +1834,8 @@ type IndexOrigin @entity {
   startBlockHash: String!
   "The runtime that executed the start block"
   specVersion: Int!
-  "Domains seeded from chain storage at the start block, or derived from genesis"
-  seededDomains: [String!]!
-  "Domains the index could not seed, each with the reason"
-  unseededDomains: [String!]!
+  "The fields whose value depends on history before the start block, as `Entity.field`: totals counted from it, such as lifetime totals, and facts the chain doesn't keep, such as who created a row, which a seeded row leaves empty"
+  relativeFields: [String!]!
   "When the start block was produced. UTC, serialised with no timezone marker — parse as UTC"
   datetime: Date!
 }
@@ -3222,7 +3220,8 @@ type Proposal @entity {
   id: ID!
   proposer: Proposer!
   state: ProposalStateEnum!
-  owner: Identity!
+  "The proposer's identity; null for a PIP seeded from the chain that a committee proposed, as the chain doesn't keep which member"
+  owner: Identity
   balance: BigInt!
   url: String
   description: String
@@ -3766,7 +3765,8 @@ type AssetMandatoryMediator @entity {
   asset: Asset!
   "The mediator. The chain does not check the DID exists, so this can join to no identity"
   identity: Identity
-  addedBy: Identity!
+  "Who added the mediator; null for one seeded from the chain, which doesn't record it"
+  addedBy: Identity
   createdEvent: Event!
   updatedEvent: Event!
 }
@@ -4258,7 +4258,7 @@ type ConfidentialSettlement @entity {
   """
   The block number of the asset curve tree root the settlement proof was built against
   """
-  assetRootBlock: Int!
+  assetRootBlock: Int
   legCount: Int!
   status: ConfidentialSettlementStatusEnum!
   legs: [ConfidentialLeg!]! @derivedFrom(field: "settlement")

@@ -29,15 +29,14 @@ export interface AssetIdWithTicker {
  * recorded as an anomaly rather than silently trusted.
  */
 /**
- * The name of a custom asset type, from the index — or from the chain when the index has not seen
- * it registered, which a start block past the registration allows.
+ * The name of a custom asset type, from the index, which the seed and `CustomAssetTypeRegistered`
+ * write.
  *
- * `undefined` when the chain has no such type either. That is not hypothetical: the chain did not
- * check a custom type id when an NFT collection was created, and testnet has collections naming id
- * 0, which was never registered, and id 100 two million blocks before anyone registered it. The
- * type is left unknown rather than written as an empty name, and a registration that comes later is
- * not read back onto the asset — it was made by someone else, for their own meaning, and the asset
- * never had it.
+ * `undefined`, with an anomaly, when the index has no such type: the chain did not check a custom
+ * type id when an NFT collection was created, and testnet has collections naming id 0, never
+ * registered, and id 100 two million blocks before anyone registered it. The type is left unknown,
+ * and a later registration is not read back onto the asset: it was made by someone else, for their
+ * own meaning.
  */
 export const getCustomType = async (
   rawCustomId: Codec,
@@ -51,22 +50,32 @@ export const getCustomType = async (
     return existing.name;
   }
 
-  // `customTypes` keys on `CustomAssetTypeId` (u32), not a raw `Codec`
-  const customType = await api.query.asset.customTypes(getNumberValue(rawCustomId));
-  const name = storedText(customType);
-
   // Dropped deliberately: an anomaly row is a diagnostic, not something worth failing the
   // handler over. See `recordAnomaly`.
   void recordAnomaly({
     kind: AnomalyKind.MissingReferencedEntity,
-    detail: name
-      ? `CustomAssetType ${id} is registered on chain but its registration is not in the index`
-      : `the asset type names CustomAssetType ${id}, which the chain has not registered`,
+    detail: `the asset type names CustomAssetType ${id}, and the index has no CustomAssetType ${id}`,
     block,
     eventIdx,
   });
 
-  return name || undefined;
+  return undefined;
+};
+
+/** The custom type an `AssetType` names, its own or its NFT type's; `undefined` for a built-in one */
+export const customTypeIdOf = (item: Codec): Codec | undefined => {
+  const anyItem: any = item;
+  if (anyItem.isNonFungible) {
+    const nftType = anyItem.asNonFungible;
+    return nftType.type === 'Custom' ? nftType.asCustom : undefined;
+  }
+  return anyItem.isCustom ? anyItem.asCustom : undefined;
+};
+
+/** A built-in `AssetType`'s name, or its NFT type's */
+export const builtInAssetType = (item: Codec): string => {
+  const anyItem: any = item;
+  return anyItem.isNonFungible ? anyItem.asNonFungible.type : getTextValue(item);
 };
 
 export const getAssetType = async (
@@ -74,22 +83,8 @@ export const getAssetType = async (
   block: SubstrateBlock,
   eventIdx?: number
 ): Promise<string | undefined> => {
-  const anyItem: any = item;
-
-  if (anyItem.isNonFungible) {
-    const nftType = anyItem.asNonFungible;
-    if (nftType.type === 'Custom') {
-      return getCustomType(nftType.asCustom, block, eventIdx);
-    }
-
-    return nftType.type;
-  } else {
-    if (anyItem.isCustom) {
-      return getCustomType(anyItem.asCustom, block, eventIdx);
-    }
-
-    return getTextValue(item);
-  }
+  const custom = customTypeIdOf(item);
+  return custom ? getCustomType(custom, block, eventIdx) : builtInAssetType(item);
 };
 
 /**
