@@ -6,9 +6,9 @@ import {
   findStorage,
   getAllByFields,
   getBigIntValue,
-  getOrCreateAccount,
   getTextValue,
   is8xChain,
+  ledgerAccount,
 } from '../../../utils';
 import { readOrAnomaly } from '../../../utils/anomaly';
 import { readStorage } from '../../../utils/storageAtParent';
@@ -32,8 +32,8 @@ const ensureAccounts = async (
   blockEventId: string
 ): Promise<void> => {
   await Promise.all([
-    getOrCreateAccount(userKey, blockId, datetime, blockEventId),
-    getOrCreateAccount(payingKey, blockId, datetime, blockEventId),
+    ledgerAccount(userKey, blockId, datetime, blockEventId),
+    ledgerAccount(payingKey, blockId, datetime, blockEventId),
   ]);
 };
 

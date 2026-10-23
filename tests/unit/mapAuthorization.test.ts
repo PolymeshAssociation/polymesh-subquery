@@ -6,10 +6,10 @@
  */
 
 import { SubstrateEvent } from '@subql/types';
-import { Authorization, AuthorizationStatusEnum } from '../../src/types';
+import { AccountKeyRole, Authorization, AuthorizationStatusEnum } from '../../src/types';
 import { handleAuthorization } from '../../src/mappings/entities/identities/mapAuthorization';
 import { offerSubsidy } from '../../src/mappings/entities/relayer/mapSubsidy';
-import { codec as helperCodec, mockStore, tupleEvent } from './helpers';
+import { codec as helperCodec, mockLedgerAccountQuery, mockStore, tupleEvent } from './helpers';
 
 const DID = '0x01'.padEnd(66, '0');
 const KEY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -84,8 +84,15 @@ describe('handleAuthorization — AuthorizationAdded', () => {
       ],
     });
 
-  it("stores a key's permissions with its extrinsic permissions in the index's form", async () => {
+  /** the issuer's identity, over a chain holding no key record for the target key */
+  const mockIssuer = () => {
     const db = mockStore({ Identity: { [DID]: { id: DID } } });
+    (globalThis as any).api.query = mockLedgerAccountQuery();
+    return db;
+  };
+
+  it("stores a key's permissions with its extrinsic permissions in the index's form", async () => {
+    const db = mockIssuer();
     const permissions = {
       asset: { whole: null },
       // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
@@ -105,12 +112,26 @@ describe('handleAuthorization — AuthorizationAdded', () => {
   });
 
   it('links an authorization to a key by the SS58 address its Account row is keyed by', async () => {
-    const db = mockStore({ Identity: { [DID]: { id: DID } } });
+    const db = mockIssuer();
 
     await handleAuthorization(added(null, KEY));
 
     expect(db.Authorization['0000000042']).toMatchObject({ toAccountId: KEY, toId: undefined });
     expect(db.Authorization['0000000042'].toKey).toBeUndefined();
+  });
+
+  /** testnet: 101 authorization targets that never held a key or POLYX had no `Account` row */
+  it('creates the Account of a target the chain holds no key record for', async () => {
+    const db = mockIssuer();
+
+    await handleAuthorization(added(null, KEY));
+
+    expect(db.Account[KEY]).toMatchObject({
+      id: KEY,
+      address: KEY,
+      keyRole: AccountKeyRole.Unlinked,
+      createdEventId: '0000001000/0000000000',
+    });
   });
 
   it('links an authorization to an identity', async () => {

@@ -6,7 +6,8 @@ import {
   handleSubsidyDebited,
   handleSubsidyRemoved,
 } from '../../src/mappings/entities/relayer/mapSubsidy';
-import { codec, mockStore, tupleEvent } from './helpers';
+import { AccountKeyRole } from '../../src/types';
+import { codec, mockLedgerAccountQuery, mockStore, tupleEvent } from './helpers';
 
 const USER_KEY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const PAYING_KEY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
@@ -116,6 +117,30 @@ describe('v8 subsidy lifecycle', () => {
 
     // `RemovedSubsidy`'s third field is the allowance left when it ended, not an amount drawn
     expect(db.Subsidy[SUBSIDY_ID]).toMatchObject({ isRemoved: true, allowance: BigInt(700) });
+  });
+});
+
+describe('the accounts a subsidy names', () => {
+  it('creates both, even when the chain holds no key record for them', async () => {
+    const db = mockStore({});
+    (globalThis as any).api.query = { ...noSubsidyEntry(), ...mockLedgerAccountQuery() };
+
+    await handleSubsidyApproved(
+      tupleEvent({
+        section: 'relayer',
+        method: 'ApprovedSubsidy',
+        data: [codec(USER_KEY), codec(PAYING_KEY), codec(1_000)],
+      })
+    );
+
+    expect(db.Account[USER_KEY]).toMatchObject({
+      address: USER_KEY,
+      keyRole: AccountKeyRole.Unlinked,
+    });
+    expect(db.Account[PAYING_KEY]).toMatchObject({
+      address: PAYING_KEY,
+      keyRole: AccountKeyRole.Unlinked,
+    });
   });
 });
 

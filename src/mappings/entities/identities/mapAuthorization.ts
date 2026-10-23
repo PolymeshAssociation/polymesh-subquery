@@ -16,6 +16,7 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   getTextValue,
+  ledgerAccount,
   padNumericId,
 } from '../../../utils';
 import { extractArgs } from '../common';
@@ -64,11 +65,18 @@ export async function handleAuthorization(event: SubstrateEvent): Promise<void> 
       getFirstKeyFromJson(decoded.authorizationData)
     ) as AuthTypeEnum;
     const data = authorizationData(type, getFirstValueFromJson(decoded.authorizationData));
+    const toAccountId = decoded.targetKey.isEmpty ? undefined : getTextValue(decoded.targetKey);
+
+    // the target need not be a key yet, or ever hold POLYX, so nothing else may create its row
+    if (toAccountId) {
+      await ledgerAccount(toAccountId, blockId, blockTime(block), blockEventId);
+    }
+
     await Authorization.create({
       id: authId,
       fromId,
       toId: decoded.targetDid.isEmpty ? undefined : getTextValue(decoded.targetDid),
-      toAccountId: decoded.targetKey.isEmpty ? undefined : getTextValue(decoded.targetKey),
+      toAccountId,
       type,
       data: JSON.stringify(data),
       expiry: getDateValue(decoded.expiry),
