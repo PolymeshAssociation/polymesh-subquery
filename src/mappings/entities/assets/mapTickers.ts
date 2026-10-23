@@ -1,7 +1,15 @@
 import { SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import { TickerReservation } from '../../../types';
-import { getDateValue, getTextValue, serializeTicker } from '../../../utils';
+import {
+  EXPLICIT_NULL,
+  getAssetId,
+  getDateValue,
+  getTextValue,
+  is7xChain,
+  serializeTicker,
+} from '../../../utils';
+import { isMigratedAssetId } from '../../../utils/assets';
 import { extractArgs, getAsset } from '../common';
 
 const getTickerReservation = (ticker: string): Promise<TickerReservation> => {
@@ -78,6 +86,8 @@ export const handleTickerLinkedToAsset = async (event: SubstrateEvent): Promise<
   asset.updatedEventId = blockEventId;
   reservation.updatedEventId = blockEventId;
   reservation.assetId = asset.id;
+  // a linked ticker no longer expires: the chain clears the registration's expiry
+  reservation.expiry = EXPLICIT_NULL;
 
   await Promise.all([asset.save(), reservation.save()]);
 };
@@ -87,21 +97,15 @@ export const handleTickerUnlinkedFromAsset = async (event: SubstrateEvent): Prom
   const { ticker: rawTicker, assetId: rawAssetId } = decodeEvent(event);
 
   const ticker = serializeTicker(rawTicker);
-  const assetId = getTextValue(rawAssetId);
-  const [asset, reservation] = await Promise.all([
-    getAsset(assetId, event),
-    getTickerReservation(ticker),
-  ]);
+  const asset = await getAsset(getTextValue(rawAssetId), event);
 
   if (asset.ticker === ticker) {
     asset.ticker = undefined;
     asset.updatedEventId = blockEventId;
   }
 
-  reservation.assetId = null;
-  reservation.updatedEventId = blockEventId;
-
-  await Promise.all([asset.save(), reservation.save()]);
+  // the chain removes the registration with the link, so the ticker is free to register again
+  await Promise.all([asset.save(), TickerReservation.remove(ticker)]);
 };
 
 export const handleTickerTransferred = async (event: SubstrateEvent): Promise<void> => {
@@ -122,4 +126,48 @@ export const handleTickerTransferred = async (event: SubstrateEvent): Promise<vo
   reservation.updatedEventId = blockEventId;
 
   await reservation.save();
+};
+
+/**
+ * Before 7.0 an asset is created on its ticker. Until 6.0, creating it on a ticker its owner had
+ * reserved only clears the registration's expiry, with no event; from 6.0, and for a ticker no one
+ * reserved, the chain re-registers it with `TickerRegistered`. The 7.0 migration then linked every
+ * registration to its asset's id. From 7.0 `TickerLinkedToAsset` says so.
+ */
+export const handleTickerOfNewAsset = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawTicker, ownerDid: rawOwnerDid } = decodeEvent(event);
+  if (is7xChain(block) || isMigratedAssetId(rawTicker)) {
+    return;
+  }
+
+  const ticker = serializeTicker(rawTicker);
+  const reservation =
+    (await getTickerReservation(ticker)) ??
+    TickerReservation.create({
+      id: ticker,
+      ticker,
+      identityId: getTextValue(rawOwnerDid),
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    });
+  reservation.assetId = await getAssetId(rawTicker, block);
+  reservation.expiry = EXPLICIT_NULL;
+  reservation.updatedEventId = blockEventId;
+
+  await reservation.save();
+};
+
+/** The registration of an asset's ticker follows the asset to a new owner, with no ticker event */
+export const moveTickerWithAsset = async (
+  ticker: string | undefined,
+  identityId: string,
+  blockEventId: string
+): Promise<void> => {
+  const reservation = ticker ? await getTickerReservation(ticker) : undefined;
+  if (reservation && reservation.identityId !== identityId) {
+    reservation.identityId = identityId;
+    reservation.updatedEventId = blockEventId;
+    await reservation.save();
+  }
 };

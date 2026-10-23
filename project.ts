@@ -17,11 +17,11 @@ const filters: Record<string, Record<string, string[]>> = {
     Approval: ['handleApproval'],
     AssetAffirmationExemption: [],
     AssetBalanceUpdated: ['handleAssetBalanceUpdated'],
-    AssetCreated: ['handleAssetCreated'],
+    AssetCreated: ['handleAssetCreated', 'handleCreatorAgent', 'handleTickerOfNewAsset'],
     AssetFrozen: ['handleFrozen'],
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
-    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred'],
+    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred', 'handleOwnerReplacedAsAgent'],
     AssetRenamed: ['handleAssetRenamed'],
     AssetTypeChanged: ['handleAssetTypeChanged'],
     AssetUnfrozen: ['handleUnfrozen'],
@@ -54,7 +54,7 @@ const filters: Record<string, Record<string, string[]>> = {
     RegisterAssetMetadataLocalType: ['handleRegisterAssetMetadataLocalType'],
     RemoveAssetAffirmationExemption: [],
     RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
-    Redeemed: ['handleRedeemed', 'handleAssetRedeemedStatistics'],
+    Redeemed: ['handleRedeemed'],
     SetAccountFreeze: ['handleSetAccountFreeze'],
     SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
     SetAssetMetadataValueDetails: ['handleSetAssetMetadataValueDetails'],
@@ -137,7 +137,7 @@ const filters: Record<string, Record<string, string[]>> = {
     AssetComplianceReplaced: ['handleComplianceReplaced'],
     AssetComplianceReset: ['handleComplianceReset'],
     AssetComplianceResumed: ['handleAssetComplianceResumed'],
-    ComplianceRequirementChanged: [],
+    ComplianceRequirementChanged: ['handleComplianceChanged'],
     ComplianceRequirementCreated: ['handleComplianceCreated'],
     ComplianceRequirementRemoved: ['handleComplianceRemoved'],
     TrustedDefaultClaimIssuerAdded: ['handleTrustedDefaultClaimIssuerAdded'],
@@ -252,7 +252,7 @@ const filters: Record<string, Record<string, string[]>> = {
     PipClosed: ['handlePipClosed'],
     PipSkipped: ['handlePipSkipped'],
     ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
-    ProposalRefund: ['handleProposalRefund'],
+    ProposalRefund: ['handleProposalRefund', 'handleProposalRefunded'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
     SnapshotCleared: ['handleSnapshotCleared'],
     SnapshotResultsEnacted: ['handleSnapshotResultsEnacted'],
@@ -328,7 +328,7 @@ const filters: Record<string, Record<string, string[]>> = {
     // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
     // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
     Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
-    Chilled: ['handleChilled'],
+    Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
     CurrencyMigrated: ['handleCurrencyMigrated', 'handlePositionCurrencyMigrated'],
@@ -336,11 +336,10 @@ const filters: Record<string, Record<string, string[]>> = {
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
     ForceEra: [],
-    InvalidatedNominators: ['handleInvalidatedNominators'],
-    Kicked: ['handleKicked'],
+    InvalidatedNominators: [],
+    Kicked: [],
     MinimumBondThresholdUpdated: [],
-    // `handleNominated` must run before `handleStakingEvent` for the same reason as `Bonded`.
-    Nominated: ['handleNominated', 'handleStakingEvent'],
+    Nominated: ['handleStakingEvent'],
     OldSlashingReportDiscarded: [],
     // supplies the `eraIndex` that `Rewarded` lacks; consumed by the POLYX ledger's handleReward
     PayoutStarted: ['handlePayoutStarted'],
@@ -414,8 +413,8 @@ const filters: Record<string, Record<string, string[]>> = {
   },
   validators: {
     CommissionCapUpdated: [],
-    InvalidatedNominators: ['handleInvalidatedNominators'],
-    Nominated: ['handleNominated', 'handleStakingEvent'],
+    InvalidatedNominators: [],
+    Nominated: ['handleStakingEvent'],
     PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
     PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
     RewardPaymentSchedulingInterrupted: [],
@@ -628,6 +627,13 @@ const project: SubstrateProject = {
             handler: 'handleRebond',
             filter: { module: 'staking', method: 'rebond', success: true },
           },
+          ...['preApproveTicker', 'removeTickerPreApproval'].map(
+            (method): SubstrateCallHandler => ({
+              kind: SubstrateHandlerKind.Call,
+              handler: 'handleSilentAssetPreApproval',
+              filter: { module: 'asset', method, success: true },
+            })
+          ),
           ...[
             'batch',
             'batchAll',

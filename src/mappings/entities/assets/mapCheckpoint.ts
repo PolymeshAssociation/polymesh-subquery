@@ -1,3 +1,4 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { DecodedEvent, decodeEvent, V6 } from '../../../decode';
 import { AnomalyKind, Checkpoint, CheckpointSchedule } from '../../../types';
@@ -13,6 +14,7 @@ import { recordAnomaly } from '../../../utils/anomaly';
 import { extractArgs, getOrAnomaly } from '../common';
 import { isObject, jsonOf } from '../../../utils/codec';
 import { blockEvents } from '../../../utils/blockEvents';
+import { findStorage } from '../../../utils/legacyQuery';
 
 interface ParsedSchedule {
   scheduleId: number;
@@ -232,15 +234,78 @@ export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<vo
   // belongs to no schedule, so it skips the lookup entirely.
   const scheduled = decodeEvent(event).callerDid.isEmpty;
 
+  const scheduleId = scheduled ? await scheduleForCheckpoint(assetId, datetime, event) : undefined;
   await Checkpoint.create({
     id: `${assetId}/${checkpointId}`,
     assetId,
     checkpointId,
     totalSupply: getBigIntValue(rawTotalSupply),
     datetime,
-    scheduleId: scheduled ? await scheduleForCheckpoint(assetId, datetime, event) : undefined,
+    scheduleId,
     createdEventId: blockEventId,
   }).save();
+
+  if (!scheduled) {
+    return;
+  }
+  if (specVersionOf(block) < V6) {
+    await followStoredSchedules(assetId, rawAssetId, blockEventId);
+  } else if (scheduleId) {
+    await completeIfDone(scheduleId, blockEventId);
+  }
+};
+
+/** A v6+ schedule is done once each moment it declared has a checkpoint; the chain then drops it */
+const completeIfDone = async (scheduleId: string, blockEventId: string): Promise<void> => {
+  const schedule = await CheckpointSchedule.get(scheduleId);
+  const declared = schedule?.scheduledCheckpoints?.length ?? 0;
+  if (!schedule || declared === 0) {
+    return;
+  }
+  const fired = await getAllByFields<Checkpoint>('Checkpoint', [['scheduleId', '=', scheduleId]]);
+  if (fired.length >= declared) {
+    schedule.completedEventId = blockEventId;
+    await schedule.save();
+  }
+};
+
+/**
+ * Before v6 a schedule is a period and a count, which the chain advances as it fires and drops at
+ * the end, so the asset's schedules are read back after a scheduled checkpoint: each one still held
+ * takes its next moment and count, and each one gone is complete.
+ */
+const followStoredSchedules = async (
+  assetId: string,
+  rawAssetId: Codec,
+  blockEventId: string
+): Promise<void> => {
+  // the pre-v6 item, which the current metadata no longer names
+  const schedulesOf = findStorage('checkpoint', 'schedules');
+  if (!schedulesOf) {
+    return;
+  }
+  const stored = ((await schedulesOf(rawAssetId)).toJSON() ??
+    []) as unknown as StoredScheduleJson[];
+  const schedules = await getAllByFields<CheckpointSchedule>('CheckpointSchedule', [
+    ['assetId', '=', assetId],
+  ]);
+
+  await Promise.all(
+    schedules
+      .filter(({ period, removedEventId, completedEventId }) =>
+        Boolean(period && !removedEventId && !completedEventId)
+      )
+      .map(schedule => {
+        const held = stored.find(({ id }) => id === schedule.scheduleId);
+        if (held) {
+          schedule.remaining = held.remaining;
+          schedule.nextCheckpointAt = new Date(held.at);
+        } else {
+          schedule.completedEventId = blockEventId;
+        }
+        return schedule.save();
+      })
+  );
 };
 
 export const handleScheduleCreated = async (event: SubstrateEvent): Promise<void> => {

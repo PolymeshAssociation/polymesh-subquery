@@ -4,14 +4,15 @@ import { decodeEvent } from '../../../decode';
 import { Venue } from '../../../types';
 import {
   addIfNotIncludes,
-  bytesToString,
   getBooleanValue,
   getTextValue,
   padNumericId,
   removeIfIncludes,
 } from '../../../utils';
 import { itemsOf } from '../../../utils/codec';
+import { findStorage } from '../../../utils/legacyQuery';
 import { extractArgs } from '../common';
+import { storedText } from '../../../utils/text';
 
 /**
  * Extracts venue signer addresses from the raw `VenueSignersUpdated` event param.
@@ -44,12 +45,19 @@ export const handleVenueCreated = async (event: SubstrateEvent): Promise<void> =
   const { blockEventId } = extractArgs(event);
   const { callerDid: did, venueId, details, venueType } = decodeEvent(event);
 
+  // `createVenue` takes the first signers and announces them with no `VenueSignersUpdated`, so they
+  // are read from the chain; a later event adds to them idempotently
+  const signersOf = findStorage('settlement', 'venueSigners');
+  const signers = signersOf
+    ? (await signersOf.keys(venueId)).map(({ args }) => args[1].toString())
+    : [];
+
   await Venue.create({
     id: processVenueId(venueId),
     ownerId: getTextValue(did),
-    details: bytesToString(details),
+    details: storedText(details),
     type: getTextValue(venueType),
-    signers: [],
+    signers,
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
@@ -61,7 +69,7 @@ export const handleVenueDetailsUpdated = async (event: SubstrateEvent): Promise<
 
   const venue = await getVenue(processVenueId(venueId));
 
-  venue.details = bytesToString(details);
+  venue.details = storedText(details);
   venue.updatedEventId = blockEventId;
 
   await venue.save();

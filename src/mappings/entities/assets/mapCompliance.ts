@@ -37,11 +37,19 @@ export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promi
   await asset.save();
 };
 
+/** A reset removes the asset's compliance entry, the paused flag with it */
 export const handleComplianceReset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
+
+  const asset = await getAsset(assetId, event);
+  if (asset.isCompliancePaused) {
+    asset.isCompliancePaused = false;
+    asset.updatedEventId = blockEventId;
+    await asset.save();
+  }
 
   const compliances = await getAllByFields<Compliance>('Compliance', [['assetId', '=', assetId]]);
 
@@ -69,6 +77,25 @@ export const handleComplianceCreated = async (event: SubstrateEvent): Promise<vo
   const { complianceId, data } = getComplianceValue(rawCompliance);
 
   await createCompliance(assetId, complianceId, data, blockEventId);
+};
+
+/** `change_compliance_requirement` replaces one requirement in place, under its id */
+export const handleComplianceChanged = async (event: SubstrateEvent): Promise<void> => {
+  const { params, block, blockEventId } = extractArgs(event);
+  const [, rawAssetId, rawCompliance] = params;
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const { complianceId, data } = getComplianceValue(rawCompliance);
+  const compliance = await Compliance.get(`${assetId}/${complianceId}`);
+
+  if (!compliance) {
+    await createCompliance(assetId, complianceId, data, blockEventId);
+    return;
+  }
+
+  compliance.data = data;
+  compliance.updatedEventId = blockEventId;
+  await compliance.save();
 };
 
 export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<void> => {

@@ -7,8 +7,7 @@ import {
 } from '../../src/utils/storageAtParent';
 import { IndexerAnomaly } from '../../src/types';
 import { handleStakersElected } from '../../src/mappings/entities/events/mapEra';
-import { handleChilled, handleNominated } from '../../src/mappings/entities/events/mapNomination';
-import { handleValidatorPrefsSet } from '../../src/mappings/entities/events/mapValidator';
+import { getOrCreatePosition } from '../../src/mappings/entities/events/mapStakingPosition';
 import { resolveLegacyRewardDestination } from '../../src/utils/staking';
 import { mockLedgerAccountQuery, mockStore, namedEvent } from './helpers';
 
@@ -133,58 +132,14 @@ describe('handlers reading state that does not decode', () => {
     __resetStakingCaches();
   });
 
-  it('Nominated: records an undecodable controller against the event, and carries on', async () => {
+  it('a new position: records an undecodable controller against the event, and carries on', async () => {
     const db = mockStore();
     withUndecodableBonded();
+    const { block } = eventOf('Bonded', {});
 
-    await handleNominated(eventOf('Nominated', { stash: STASH, targets: [] }));
+    await (await getOrCreatePosition(STASH, '0000001000', new Date(0), 'e', block, IDX)).save();
 
     expect(db['StakingPosition'][STASH].controllerId).toBe(STASH);
-    expect(anomalies(db)).toHaveLength(1);
-    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
-  });
-
-  it('Nominated: records an undecodable activeEra, and leaves the era unrecorded', async () => {
-    const db = mockStore();
-    (globalThis as any).api.query = {
-      ...mockLedgerAccountQuery(),
-      staking: {
-        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
-        activeEra: jest.fn().mockImplementation(undecodable),
-      },
-    };
-    const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
-
-    await handleNominated(eventOf('Nominated', { stash: STASH, targets: [OTHER] }));
-
-    expect(anomalies(db)).toHaveLength(1);
-    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
-    expect(Object.values(db['Nomination'])[0].eraIndex).toBeUndefined();
-  });
-
-  it('Chilled: records an undecodable controller against the event, and carries on', async () => {
-    const db = mockStore();
-    withUndecodableBonded();
-
-    await handleChilled(eventOf('Chilled', { stash: STASH }));
-
-    expect(db['StakingPosition'][STASH].isChilled).toBe(true);
-    expect(anomalies(db)).toHaveLength(1);
-    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
-  });
-
-  it('ValidatorPrefsSet: records an undecodable controller against the event, and carries on', async () => {
-    const db = mockStore();
-    withUndecodableBonded();
-    (globalThis as any).api.query.identity.keyRecords = jest
-      .fn()
-      .mockResolvedValue({ isEmpty: true });
-
-    await handleValidatorPrefsSet(
-      eventOf('ValidatorPrefsSet', { stash: STASH, prefs: { commission: 1, blocked: false } })
-    );
-
-    expect(db['StakingPosition'][STASH].isValidator).toBe(true);
     expect(anomalies(db)).toHaveLength(1);
     expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
   });

@@ -83,7 +83,10 @@ describe('IndexOrigin', () => {
       'evmAccountMappings',
     ]);
     expect(db.IndexOrigin.origin.unseededDomains).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^assetCounts: .*relative/)])
+      expect.arrayContaining([
+        expect.stringMatching(/^assetCounts: .*relative/),
+        expect.stringMatching(/^tickerReservations: /),
+      ])
     );
     await expect(isPartialIndex()).resolves.toBe(true);
   });

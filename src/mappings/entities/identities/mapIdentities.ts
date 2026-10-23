@@ -20,18 +20,19 @@ import {
 } from '../../../types';
 import {
   MeshPortfolio,
-  bytesToString,
   extractString,
   getEventParams,
   getNumberValue,
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
-import { restampPositionIdentity, upsertAccount } from '../../../utils/accounts';
+import { restampIdentityCopies, upsertAccount } from '../../../utils/accounts';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
 import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
+import { canonicalExtrinsicPermissions, Subset } from '../../../utils/permissions';
+import { requiredText } from '../../../utils/text';
 
 /**
  * Returns Identity for a given DID
@@ -224,7 +225,7 @@ interface PermissionsLike {
   transactionGroups: string[];
 }
 
-const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
+export const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
   let assets: AssetPermissions | undefined = undefined,
     portfolios: PortfolioPermissions | undefined = undefined,
     transactions: TransactionPermissions | undefined = undefined,
@@ -261,11 +262,13 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
         break;
       }
       case 'extrinsic': {
-        const transactionPermissions = accountPermissions.extrinsic as Record<string, string[]>;
+        const transactionPermissions = canonicalExtrinsicPermissions(
+          accountPermissions.extrinsic as Subset
+        );
         type = Object.keys(transactionPermissions)[0];
         transactions = {
           type,
-          values: transactionPermissions[type],
+          values: transactionPermissions[type] as TransactionPermissions['values'],
         };
         break;
       }
@@ -350,7 +353,7 @@ const unlinkAccount = async (
   account.updatedEventId = blockEventId;
 
   await account.save();
-  await restampPositionIdentity(address, undefined, blockEventId);
+  await restampIdentityCopies(address, undefined, blockEventId);
 };
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
@@ -562,7 +565,7 @@ export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promi
 
   const identityId = getTextValue(rawDid);
   const id = getNumberValue(rawCustomClaimTypeId);
-  const name = bytesToString(rawName);
+  const name = requiredText(rawName, 'the custom claim type name');
 
   const customClaimType = await CustomClaimType.get(`${id}`);
 

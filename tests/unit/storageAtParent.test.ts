@@ -89,6 +89,20 @@ describe('storageAtParent', () => {
     });
   });
 
+  // the 8.1 testnet registry reads a hold's two-byte reason as one byte, and so the amount from
+  // one byte early, without error
+  it('refuses a value its type reads only part of, as `api.query` does', async () => {
+    getStorage.mockResolvedValue({
+      isSome: true,
+      unwrap: () => ({ toU8a: () => Uint8Array.from([4, 46, 1, 80]) }),
+    });
+    createType.mockImplementation(() => ({ encodedLength: 3 }));
+
+    await expect(storageAtParent(block, 'bridge', 'controller')).rejects.toThrow(
+      /could not decode bridge.controller/
+    );
+  });
+
   it('is undefined when nothing is stored', async () => {
     getStorage.mockResolvedValue({ isSome: false, unwrap: () => undefined });
 

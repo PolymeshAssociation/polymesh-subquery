@@ -192,6 +192,17 @@ const STAKING_HOLD_REASON = { staking: 'Staking' };
 /** The one hold a `TransferOnHold` is emitted for: pallet-revive refunding a storage deposit. */
 const REVIVE_DEPOSIT_REASON = { revive: 'StorageDepositReserve' };
 
+/** `relayer.subsidies` holding no subsidy, which a subsidised pre-v8 fee reads back */
+const noSubsidyLeft = () => {
+  (globalThis as any).api.query = {
+    ...(globalThis as any).api.query,
+    relayer: { subsidies: jest.fn().mockResolvedValue({ toJSON: () => null }) },
+  };
+};
+
+/** Who signed the batch the extrinsic helpers wrap their events in: an account no test charges */
+const BATCH_SIGNER = { toString: () => '5HpG9w8EBLe5XCrbczpwq5TSXvedjrBGCwqxK1iQ7qUsSWFc' };
+
 /**
  * A run of events emitted by one extrinsic, in order, sharing a block — which is what the
  * cross-event pairings key on. Each gets its own event index so their entries do not collide.
@@ -208,7 +219,7 @@ const extrinsicEvents = (
     (event as { extrinsic?: unknown }).extrinsic = {
       idx: 1,
       // `getEventParams` resolves the call, and the eth-transact check walks into it
-      extrinsic: { method: { section: 'utility', method: 'batchAll' } },
+      extrinsic: { method: { section: 'utility', method: 'batchAll' }, signer: BATCH_SIGNER },
       success: true,
     };
 
@@ -263,7 +274,7 @@ const v7ExtrinsicEvents = (
     (event as { idx: number }).idx = index;
     (event as { extrinsic?: unknown }).extrinsic = {
       idx: 1,
-      extrinsic: { method: { section: 'utility', method: 'batchAll' } },
+      extrinsic: { method: { section: 'utility', method: 'batchAll' }, signer: BATCH_SIGNER },
       success: true,
     };
 
@@ -1780,6 +1791,7 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
     const PAYER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
 
     beforeEach(() => {
+      noSubsidyLeft();
       // the signer pays, as for every call but a few (see feePayer.test.ts)
       (resolveFeePayer as jest.Mock).mockImplementation((extrinsic: any) =>
         Promise.resolve(extrinsic.extrinsic.signer.toString())
@@ -1793,6 +1805,65 @@ describe('v8 pairings the chain emits but the ledger double-counted', () => {
           isRemoved: false,
         },
       };
+    });
+
+    /** `relayer.subsidies(user)` at the end of the block: ALICE's subsidy from PAYER, `remaining` left */
+    const subsidyLeft = (remaining: number) => {
+      const subsidies = jest.fn().mockResolvedValue({
+        toJSON: () => ({ payingKey: PAYER, remaining }),
+      });
+      (globalThis as any).api.query = { ...(globalThis as any).api.query, relayer: { subsidies } };
+      return subsidies;
+    };
+
+    it('pre-v8: a protocol fee draws the subsidy down to what the chain has left of it', async () => {
+      subsidyLeft(9_997_500);
+
+      await handleTransactionFeeCharged(
+        structEvent(
+          'protocolFee',
+          'FeeCharged',
+          { who: ALICE, amount: '2500' },
+          { specVersion: 5_003_001 }
+        )
+      );
+
+      expect(db['Subsidy'][`${ALICE}/${PAYER}`].allowance).toBe(BigInt(9_997_500));
+    });
+
+    it('from v5.4.1: a fee its paying key paid draws down the subsidy of the signer', async () => {
+      subsidyLeft(93);
+
+      await handleTransactionFeeCharged(feePaidIn('asset', { who: PAYER, specVersion: 6_002_010 }));
+
+      expect(db['Subsidy'][`${ALICE}/${PAYER}`].allowance).toBe(BigInt(93));
+    });
+
+    it('reads no subsidy for a fee its signer paid itself', async () => {
+      const subsidies = subsidyLeft(93);
+
+      await handleTransactionFeeCharged(feePaidIn('asset', { specVersion: 6_002_010 }));
+
+      expect(subsidies).not.toHaveBeenCalled();
+    });
+
+    it('from v5.4.1: a fee its signer paid through a subsidy of itself draws that subsidy down', async () => {
+      // testnet 5CkJnr8D…: `debit_subsidy` draws any subsidy down, its paying key the user's own
+      db['Subsidy'][`${PAYER}/${PAYER}`] = {
+        id: `${PAYER}/${PAYER}`,
+        beneficiaryAccountId: PAYER,
+        payingAccountId: PAYER,
+        isAccepted: true,
+        isRemoved: false,
+      };
+      const subsidies = subsidyLeft(93);
+
+      await handleTransactionFeeCharged(
+        feePaidIn('asset', { signer: PAYER, specVersion: 6_002_010 })
+      );
+
+      expect(subsidies).toHaveBeenCalledWith(PAYER);
+      expect(db['Subsidy'][`${PAYER}/${PAYER}`].allowance).toBe(BigInt(93));
     });
 
     it('pre-v8: a protocol fee is debited from the paying key, not the user', async () => {
@@ -2571,8 +2642,8 @@ describe('pre-v8 PIPs deposit locks', () => {
     });
 
     expect(row.locks).toEqual([
-      { lockId: 'staking ', amount: '3', reasons: 'staking' },
       { lockId: 'pips    ', amount: '2000', reasons: 'pips' },
+      { lockId: 'staking ', amount: '3', reasons: 'staking' },
     ]);
     expect(row.frozen).toBe(BigInt(2000));
     expect(row.bonded).toBe(BigInt(3));
@@ -2910,6 +2981,7 @@ describe('a fee its runtime did not announce', () => {
   const quote = (fee: string) => ({ partialFee: { toString: () => fee } });
 
   beforeEach(() => {
+    noSubsidyLeft();
     queryInfo.mockReset().mockResolvedValue(quote('400011'));
     (globalThis as any).api.rpc = { payment: { queryInfo } };
     (blockAuthor as jest.Mock).mockResolvedValue(AUTHOR);
@@ -2982,6 +3054,26 @@ describe('a fee its runtime did not announce', () => {
 
     expect(balance(PAYING_KEY)?.free).toBe(BigInt(-186554));
     expect(balance(ALICE)).toBeUndefined();
+  });
+
+  it('draws the subsidy down to what the chain has left of it', async () => {
+    db['Subsidy'] = {
+      s1: {
+        id: 's1',
+        beneficiaryAccountId: ALICE,
+        payingAccountId: PAYING_KEY,
+        allowance: BigInt(1_000_000),
+        isAccepted: true,
+        isRemoved: false,
+      },
+    };
+    (globalThis as any).api.query.relayer.subsidies.mockResolvedValue({
+      toJSON: () => ({ payingKey: PAYING_KEY, remaining: 813_446 }),
+    });
+
+    await postUneventedTransactionFee(signedExtrinsic({ specVersion: 5_003_001 }));
+
+    expect(db['Subsidy'].s1.allowance).toBe(BigInt(813_446));
   });
 
   it('charges the fee to the account the runtime chose, not the signer', async () => {

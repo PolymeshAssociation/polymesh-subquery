@@ -2,7 +2,7 @@
 
 Turns a raw event stream into queryable position state.
 
-**Entities:** `StakingPosition` (new), `Nomination` (new), `Era` (new), `Validator` (new), `StakingEvent` (kept, extended).
+**Entities:** `StakingPosition` (new), `Era` (new), `Validator` (new), `StakingEvent` (kept, extended).
 
 **Depends on:** [02](./02-polyx-ledger.md) — the v7/v8 lock-vs-hold split is decided there.
 
@@ -36,9 +36,6 @@ type StakingPosition @entity {
 
   rewardDestination: String
   rewardDestinationAccount: Account
-  isValidator: Boolean!
-  isChilled: Boolean!
-  nominations: [Nomination!]! @derivedFrom(field: "position")
 
   totalRewarded: BigInt!         # lifetime — free, row already written
   totalSlashed: BigInt!
@@ -46,16 +43,6 @@ type StakingPosition @entity {
 }
 
 type UnlockChunk @jsonField { amount: BigInt!, era: Int! }
-
-type Nomination @entity @compositeIndexes(fields: [["positionId", "eraIndex"]]) {
-  id: ID!                        # stash/validator/padId(fromBlock)
-  position: StakingPosition! @index
-  validator: Account! @index
-  eraIndex: Int @index
-  validFromBlock: Block!
-  "null = still nominated. Filter `validToBlockId: { isNull: true }` (Boolean cannot be indexed, §8b)"
-  validToBlock: Block @index
-}
 
 type Validator @entity {
   id: ID!                        # stash address
@@ -115,6 +102,15 @@ Recording a POLYX movement from the `staking.*` events themselves would be wrong
 
 **[I]** Verify the pairing holds for multi-page payouts (`page`, `next`) before relying on it.
 
+## Not tracked: nominations, chilled, validating
+
+Who a stash nominates, and whether it is chilled or validating right now, are not indexed. The
+chain doesn't announce every change: from 8.0 `nominate` emits no event, before 7.0 `chill` emits
+none, and a full withdrawal or a `validate` drops a nominator silently. Rows built from events
+would drift, and nothing reads them. The current state is one read (`staking.nominators`,
+`staking.validators`); who backed whom in an era is the era's exposure. `Nominated` events stay in
+`StakingEvent` as a log, which ends at 8.0.
+
 ---
 
 ## Handler changes
@@ -126,10 +122,8 @@ Recording a POLYX movement from the `staking.*` events themselves would be wrong
 | `handleStakingEvent` | Keep writing `StakingEvent`; additionally maintain `StakingPosition`. |
 | `get8xStakingEventDetails` | Replace the silent `return { stashAccount }` fallthrough (defect B3) with an explicit exhaustive switch that writes an `IndexerAnomaly` on an unhandled id. |
 | `extract8xStakingAmount` | Retire. The numeric-regex shape sniff (B1) is replaced by named-field decode ([09](./09-infrastructure.md)) — v8 staking events are all named structs **[V]**. |
-| **new** `handleNominated` | Open/close `Nomination` rows. Currently `Nominated` is handled only into `StakingEvent`. |
 | **new** `handlePayoutStarted` | Record era; create/update `Era`. |
 | **new** `handleEraPaid` | Close `Era`, set `validatorPayout`/`remainder`. |
-| **new** `handleChilled` / `handleKicked` | Update `isChilled`; close nominations. |
 | **new** `handleValidatorPrefsSet` | Upsert `Validator.commission`/`blocked`. |
 | **new** `handleStakersElected` | Mark active validators for the era. |
 
@@ -139,12 +133,10 @@ Recording a POLYX movement from the `staking.*` events themselves would be wrong
 
 ```diff
   staking: {
--   Chilled: [], EraPaid: [], Kicked: [], PayoutStarted: [],
+-   EraPaid: [], PayoutStarted: [],
 -   PermissionedIdentityAdded: [], PermissionedIdentityRemoved: [],
 -   SlashReported: [], StakersElected: [], ValidatorPrefsSet: [],
-+   Chilled: ['handleChilled'],
 +   EraPaid: ['handleEraPaid'],
-+   Kicked: ['handleKicked'],
 +   PayoutStarted: ['handlePayoutStarted'],
 +   PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
 +   PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
@@ -176,4 +168,4 @@ Election-provider and snapshot-size events stay `[]` — chain mechanics with no
 | Portal | `stakingEvents` | **Compatible.** `StakingEvent` is retained with the same shape; `eraIndex` and `position` are additive. Its `eventId: { in: [Reward, Rewarded] }` filter keeps working. |
 | SDK | — | No staking queries **[V]**. |
 
-Additive for consumers. The value is the new capability: current bonded/unbonding per account, nominations, and per-era reward aggregation via `groupedAggregates(groupBy: [ERA_INDEX])` — none expressible today.
+Additive for consumers. The value is the new capability: current bonded/unbonding per account, and per-era reward aggregation via `groupedAggregates(groupBy: [ERA_INDEX])` — none expressible today.

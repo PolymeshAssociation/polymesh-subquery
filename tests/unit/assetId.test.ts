@@ -64,3 +64,19 @@ describe('getAssetId', () => {
     expect(await getAssetId({ toString: () => ASSET_ID } as any, block(6_003_050))).toBe(ASSET_ID);
   });
 });
+
+describe('getAssetIdForLegacyTicker', () => {
+  /** "T1" as stored on chain, trailing spaces, and the id 7.0 gave it (testnet authorization 54631) */
+  const T1 = '0x543120202020202020202020';
+
+  it('derives the id 7.0 gave the ticker', async () => {
+    expect(await getAssetIdForLegacyTicker(T1)).toBe('0x7edf86b7e651823cb21c2574e61c6ff3');
+  });
+
+  it('applies the staging chain exception, which migrated without UUID normalisation', async () => {
+    globalAny.chainId = '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee';
+
+    // the same blake2 digest, without the version and variant bits forced
+    expect(await getAssetIdForLegacyTicker(T1)).toBe('0x7edf86b7e651123cb21c2574e61c6ff3');
+  });
+});

@@ -8,7 +8,6 @@ import {
   TargetTreatment,
 } from '../../../types';
 import {
-  bytesToString,
   extractNumber,
   extractString,
   extractValue,
@@ -17,6 +16,7 @@ import {
   getTextValue,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly, toEnum } from '../common';
+import { storedText } from '../../../utils/text';
 
 /**
  * The `CorporateAction` struct, identical in shape v5.4.3 through v8.0.0
@@ -98,7 +98,7 @@ export const handleCaInitiated = async (event: SubstrateEvent): Promise<void> =>
     declarationDate: new Date(ca.declDate),
     recordDate: ca.recordDate ? new Date(ca.recordDate.date) : undefined,
     checkpointId: existingCheckpointId(assetId, ca.recordDate),
-    details: bytesToString(rawDetails),
+    details: storedText(rawDetails),
     targetIdentities: ca.targets.identities,
     // No catch-all fallback: `Include` and `Exclude` are opposites, so guessing one would invert
     // who the action applies to. `toEnum` records the unknown value; the column stays null.

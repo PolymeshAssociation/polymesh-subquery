@@ -7,6 +7,7 @@ import { closingEventOf, indexClosingEvent } from '../block/closingEvent';
 import { extractArgs, HandlerArgs } from '../common';
 import { resolveFeePayer } from './feePayer';
 import { extrinsicEmits, postTransition } from './ledgerCore';
+import { refreshDrawnAllowances } from '../relayer/mapSubsidy';
 import { creditBlockAuthor, treasuryShareAt } from './preV8Ledger';
 
 /**
@@ -165,13 +166,17 @@ export const postUneventedTransactionFee = async (extrinsic: SubstrateExtrinsic)
   await indexClosingEvent(extrinsic);
 
   const args = extractArgs(closing);
+  const feeAccount = await resolveFeeAccount(extrinsic);
 
   await postTransition(args, {
-    from: { address: await resolveFeeAccount(extrinsic), pool: PolyxPool.Free },
+    from: { address: feeAccount, pool: PolyxPool.Free },
     amount: fee,
     kind: MovementKind.Fee,
   });
   await creditBlockAuthor(args, fee, treasuryShare);
+  await refreshDrawnAllowances(block, closing.idx, args.blockEventId, feeAccount, [
+    extrinsic.extrinsic.signer.toString(),
+  ]);
 };
 
 /**

@@ -20,7 +20,6 @@ import {
 } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
   camelToSnakeCase,
   classifyInternalTransfer,
   coerceHexToString,
@@ -42,15 +41,22 @@ import {
   is7xChain,
   isMigratedAssetId,
   ledgerAccount,
+  padId,
   padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
+  specVersionOf,
 } from '../../../utils';
 import { blockEvents } from '../../../utils/blockEvents';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
-import { memoText } from '../../../utils/text';
+import { memoText, storedText } from '../../../utils/text';
+import { identityOfKey } from '../../../utils/accounts';
+import { indexClosingEvent } from '../block/closingEvent';
+import { preApprovesSilently } from '../settlements/silentPreApprovals';
+import { ensureTrueSpecVersion } from '../../trueSpec';
+import { moveTickerWithAsset } from './mapTickers';
 
 export const createFunding = (
   blockId: string,
@@ -339,6 +345,21 @@ export const moveFungibleHolding = async (
   await destination.save();
 };
 
+const FUNDING_ROUND_OPTIONAL_FROM = 6_000_000;
+
+/**
+ * The funding round an asset was created with, as the chain stored it. Before 6.0 creation stored
+ * `funding_round.unwrap_or_default()`, so an event's `None` is `""` there; from 6.0 it stores only
+ * a named round. The value is the event's `Option` from 5.1, and the stored value before it.
+ */
+export const fundingRoundAtCreation = (
+  rawFundingRound: Codec,
+  specVersion: number
+): string | undefined => {
+  const fundingRound = storedText(rawFundingRound);
+  return specVersion < FUNDING_ROUND_OPTIONAL_FROM ? fundingRound ?? '' : fundingRound;
+};
+
 export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId, eventIdx } = extractArgs(event);
   const decoded = decodeEvent(event);
@@ -378,16 +399,12 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     rawFundingRoundName ?? api.query.asset.fundingRound(assetKey),
   ]);
 
-  const name = bytesToString(rawName as Codec);
+  const name = storedText(rawName as Codec);
   /**
    * FundingRound isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
    */
-  let fundingRound: string = null;
-
-  if (!rawFundingRound.isEmpty) {
-    fundingRound = bytesToString(rawFundingRound as Codec);
-  }
+  const fundingRound = fundingRoundAtCreation(rawFundingRound as Codec, specVersionOf(block));
 
   /**
    * Events from chain >= 5.1.0 has identifiers emitted as well
@@ -429,7 +446,7 @@ export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> =
   const assetId = await getAssetId(rawAssetId, block);
 
   const asset = await getAsset(assetId, event);
-  asset.name = bytesToString(rawName);
+  asset.name = storedText(rawName);
   asset.updatedEventId = blockEventId;
 
   await asset.save();
@@ -443,7 +460,7 @@ export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void
 
   const asset = await getAsset(assetId, event);
 
-  asset.fundingRound = bytesToString(rawFundingRound);
+  asset.fundingRound = storedText(rawFundingRound);
   asset.updatedEventId = blockEventId;
 
   await asset.save();
@@ -518,7 +535,7 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   const issuerDid = getTextValue(rawBeneficiaryDid);
   const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
-  const fundingRound = bytesToString(rawFundingRound);
+  const fundingRound = storedText(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
   const asset = await getAsset(assetId, event);
@@ -665,7 +682,7 @@ export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Pr
   asset.ownerId = getTextValue(rawNewOwnerDid);
   asset.updatedEventId = blockEventId;
 
-  await asset.save();
+  await Promise.all([asset.save(), moveTickerWithAsset(asset.ticker, asset.ownerId, blockEventId)]);
 };
 
 /**
@@ -1014,6 +1031,43 @@ export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<voi
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
+};
+
+/**
+ * 6.0.0 and 6.0.1 pre-approve a ticker, and take the pre-approval away, with no event
+ * (`PreApprovedAsset` and `RemovePreApprovedAsset` arrived in 6.1.0), so the call stands in. The
+ * dictionary has no spec to query a call by, so the handler checks it.
+ */
+export const handleSilentAssetPreApproval = async (
+  extrinsic: SubstrateExtrinsic
+): Promise<void> => {
+  const { block } = extrinsic;
+  await ensureTrueSpecVersion(block);
+  if (!preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
+    return;
+  }
+
+  const blockId = padId(block.block.header.number.toString());
+  const identityId = await identityOfKey(extrinsic.extrinsic.signer.toString(), blockId);
+  const closing = identityId ? await indexClosingEvent(extrinsic) : undefined;
+  if (!identityId || !closing) {
+    return;
+  }
+
+  const assetId = await getAssetId(extrinsic.extrinsic.method.args[0], block);
+  const id = `${assetId}/${identityId}`;
+  if (extrinsic.extrinsic.method.method === 'preApproveTicker') {
+    const { blockEventId } = extractArgs(closing);
+    await AssetPreApproval.create({
+      id,
+      assetId,
+      identityId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    }).save();
+  } else {
+    await AssetPreApproval.remove(id);
+  }
 };
 
 export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {

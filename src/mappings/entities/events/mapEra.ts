@@ -141,12 +141,20 @@ export const recordElection = async (
         block,
         eventIdx
       );
+      const own = prefs.get(exposure.stash);
       validator.isActive = true;
+      // the preferences as they stand: before 7.0 `staking.validate` set them with no event
+      if (own?.commission !== undefined) {
+        validator.commission = own.commission;
+      }
+      if (own?.blocked !== undefined) {
+        validator.blocked = own.blocked;
+      }
       validator.updatedEventId = blockEventId;
 
       await Promise.all([
         validator.save(),
-        validatorEra(eraIndex, validator, exposure, prefs.get(exposure.stash), blockEventId).save(),
+        validatorEra(eraIndex, validator, exposure, own, blockEventId).save(),
       ]);
     }),
   ]);

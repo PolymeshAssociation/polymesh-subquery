@@ -13,10 +13,13 @@ import {
   IdentityKey,
   IdentityKeyRole,
   StakingPosition,
+  AccountBalance,
+  Validator,
 } from '../types';
 import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
+import { readPermissionedIdentity } from './staking';
 
 export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
@@ -66,8 +69,8 @@ export type KeyRecordResolution =
  * `identity.keyRecords` is a 5.x rename of `identity.keyToIdentityIds`; a genesis resync sees the
  * older name on early blocks. The legacy storage is `Option<IdentityId>` on both public chains
  * (Polymesh launched at v3, so there is no `LinkedKeyInfo` enum to unwrap), and primary vs
- * secondary is read from `identity.didRecords`. It predates multisig signer keys, so that variant
- * only arises on the current path.
+ * secondary is read from `identity.didRecords`. A multisig signer key was kept apart then, in
+ * `multiSig.keyToMultiSig`, which 5.0 migrated into `keyRecords`.
  */
 const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution | undefined> => {
   if (typeof api.query.identity.keyRecords === 'function') {
@@ -84,7 +87,10 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
     }
 
     if (keyRecord.isSecondaryKey) {
-      return { kind: 'secondaryKey', did: keyRecord.asSecondaryKey.toString() };
+      // until 7.0 the record is `SecondaryKey(IdentityId, Permissions)`, a pair
+      const secondary: unknown = keyRecord.asSecondaryKey;
+      const did = Array.isArray(secondary) ? secondary[0] : secondary;
+      return { kind: 'secondaryKey', did: String(did) };
     }
 
     return { kind: 'multiSigSigner', multiSig: keyRecord.asMultiSigSignerKey.toString() };
@@ -93,7 +99,9 @@ const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution 
   const raw = await legacyQuery('identity', 'keyToIdentityIds', [3000, 5_000_002])(address);
 
   if (raw.isEmpty) {
-    return undefined;
+    const multiSig = await legacyQuery('multiSig', 'keyToMultiSig', [3000, 5_000_002])(address);
+
+    return multiSig.isEmpty ? undefined : { kind: 'multiSigSigner', multiSig: multiSig.toString() };
   }
 
   const did = getTextValue(raw);
@@ -169,31 +177,53 @@ const resolveKeyRecord = async (
 export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
   keyRoleFor(await resolveKeyRecord(address, blockId));
 
+/** The identity `address` is a primary or secondary key of, read at most once per block */
+export const identityOfKey = async (
+  address: string,
+  blockId: string
+): Promise<string | undefined> => {
+  const resolution = await resolveKeyRecord(address, blockId);
+  return resolution && resolution.kind !== 'multiSigSigner' ? resolution.did : undefined;
+};
+
 /**
- * Carries an account's identity onto the staking position it is the stash of, when there is one.
+ * Carries an account's identity onto its balance, the staking position and the validator it is the
+ * stash of.
  *
- * `StakingPosition.identity` is copied from the stash's `Account` so positions can be listed by
- * identity without a join, which makes the account the source of truth and the position's field a
- * copy that has to follow it. A stash can leave its identity and join another while it stays bonded,
- * so the copy is updated here, where the account's identity changes, rather than re-read on every
- * staking event: identity changes are rare, and staking events — a reward per nominator per era —
- * are not.
+ * `AccountBalance.identity`, `StakingPosition.identity` and `Validator.identity` are copied from the
+ * `Account` so each can be listed by identity without a join, which makes the account the source of
+ * truth and each field a copy that has to follow it. They are updated here, where the account's
+ * identity changes, rather than re-read on every balance or staking event: identity changes are
+ * rare, and those events are not. A validator is permissioned as its identity is.
  */
-export const restampPositionIdentity = async (
+export const restampIdentityCopies = async (
   address: string,
   identityId: string | undefined,
   blockEventId: string
 ): Promise<void> => {
-  const position = await StakingPosition.get(address);
+  const [position, balance, validator] = await Promise.all([
+    StakingPosition.get(address),
+    AccountBalance.get(address),
+    Validator.get(address),
+  ]);
 
-  if (!position || position.identityId === identityId) {
-    return;
+  const copies: (StakingPosition | AccountBalance | Validator)[] = [];
+  [position, balance, validator].forEach(
+    row => row && row.identityId !== identityId && copies.push(row)
+  );
+  if (validator && copies.includes(validator)) {
+    validator.isPermissioned = identityId
+      ? (await readPermissionedIdentity(identityId)) ?? false
+      : false;
   }
 
-  position.identityId = identityId;
-  position.updatedEventId = blockEventId;
-
-  await position.save();
+  await Promise.all(
+    copies.map(row => {
+      row.identityId = identityId;
+      row.updatedEventId = blockEventId;
+      return row.save();
+    })
+  );
 };
 
 /**
@@ -220,7 +250,7 @@ export const upsertAccount = async (
     await existing.save();
 
     if (identityChanged) {
-      await restampPositionIdentity(args.address, args.identityId, blockEventId);
+      await restampIdentityCopies(args.address, args.identityId, blockEventId);
     }
 
     return;

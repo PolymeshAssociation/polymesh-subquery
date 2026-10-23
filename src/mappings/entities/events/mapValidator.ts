@@ -6,7 +6,6 @@ import { ledgerAccount } from '../../../utils/accounts';
 import { readOrAnomaly } from '../../../utils/anomaly';
 import { readPermissionedIdentity } from '../../../utils/staking';
 import { extractArgs } from '../common';
-import { getOrCreatePosition } from './mapStakingPosition';
 
 /**
  * A `permissionedIdentity` that doesn't decode with the block's metadata is recorded as an anomaly
@@ -75,20 +74,7 @@ export const handleValidatorPrefsSet = async (event: SubstrateEvent): Promise<vo
   validator.blocked = Boolean(prefs.blocked);
   validator.updatedEventId = blockEventId;
 
-  // `validate()` is on-chain proof the stash is a validator and actively participating again.
-  const position = await getOrCreatePosition(
-    stash,
-    blockId,
-    blockTime(block),
-    blockEventId,
-    block,
-    eventIdx
-  );
-  position.isValidator = true;
-  position.isChilled = false;
-  position.updatedEventId = blockEventId;
-
-  await Promise.all([validator.save(), position.save()]);
+  await validator.save();
 };
 
 /**

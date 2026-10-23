@@ -14758,6 +14758,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     typeorm: "npm:^0.3.20"
     typescript: "npm:~5.8.3"
+    vm2: "npm:3.9.19"
   languageName: unknown
   linkType: soft
 

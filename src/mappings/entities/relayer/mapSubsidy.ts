@@ -1,12 +1,14 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { Subsidy } from '../../../types';
+import { EventIdEnum, Subsidy } from '../../../types';
 import {
   blockTime,
+  findStorage,
+  getAllByFields,
   getBigIntValue,
-  getOrCreateAccount,
   getTextValue,
   is8xChain,
+  ledgerAccount,
 } from '../../../utils';
 import { readOrAnomaly } from '../../../utils/anomaly';
 import { readStorage } from '../../../utils/storageAtParent';
@@ -30,8 +32,8 @@ const ensureAccounts = async (
   blockEventId: string
 ): Promise<void> => {
   await Promise.all([
-    getOrCreateAccount(userKey, blockId, datetime, blockEventId),
-    getOrCreateAccount(payingKey, blockId, datetime, blockEventId),
+    ledgerAccount(userKey, blockId, datetime, blockEventId),
+    ledgerAccount(payingKey, blockId, datetime, blockEventId),
   ]);
 };
 
@@ -44,19 +46,21 @@ const ensureAccounts = async (
  * it here marked a live subsidy as merely offered, and every fee the paying key covered in between
  * was charged to the user instead.
  */
-export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockId, blockEventId } = extractArgs(event);
-  const {
-    userKey: rawUserKey,
-    payingKey: rawPayingKey,
-    initialPolyxLimit: rawLimit,
-  } = decodeEvent(event);
-
-  const userKey = getTextValue(rawUserKey);
-  const payingKey = getTextValue(rawPayingKey);
+export const offerSubsidy = async (
+  { userKey, payingKey, limit }: { userKey: string; payingKey: string; limit: bigint },
+  { block, blockId, blockEventId }: { block: SubstrateBlock; blockId: string; blockEventId: string }
+): Promise<void> => {
   const existing = await Subsidy.get(subsidyId(userKey, payingKey));
 
   if (existing?.isAccepted && !existing.isRemoved) {
+    return;
+  }
+
+  // the latest offer takes over one still pending, which keeps the row it made
+  if (existing && !existing.isRemoved) {
+    existing.allowance = limit;
+    existing.updatedEventId = blockEventId;
+    await existing.save();
     return;
   }
 
@@ -66,7 +70,7 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
     id: subsidyId(userKey, payingKey),
     beneficiaryAccountId: userKey,
     payingAccountId: payingKey,
-    allowance: getBigIntValue(rawLimit),
+    allowance: limit,
     // Only countable from v8, which is when the chain started emitting `SubsidyDebited`. Left null
     // across the earlier range so "nothing was drawn" and "not knowable" stay different answers.
     totalDebited: is8xChain(block) ? BigInt(0) : undefined,
@@ -75,6 +79,24 @@ export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
+};
+
+/** `relayer.set_paying_key`'s offer: `AuthorizedPayingKey`, from 8.0 `ApprovedSubsidy` */
+export const handleSubsidyApproved = async (event: SubstrateEvent): Promise<void> => {
+  const {
+    userKey: rawUserKey,
+    payingKey: rawPayingKey,
+    initialPolyxLimit: rawLimit,
+  } = decodeEvent(event);
+
+  await offerSubsidy(
+    {
+      userKey: getTextValue(rawUserKey),
+      payingKey: getTextValue(rawPayingKey),
+      limit: getBigIntValue(rawLimit),
+    },
+    extractArgs(event)
+  );
 };
 
 /**
@@ -92,15 +114,16 @@ const getSubsidyOrAnomaly = (
   getOrAnomaly(id => Subsidy.get(id), subsidyId(userKey, payingKey), 'Subsidy', event);
 
 /**
- * The allowance the chain records for `userKey` right now.
+ * What is left of `userKey`'s subsidy from `payingKey`, as the chain holds it at the end of the
+ * block.
  *
- * `relayer.subsidies(userKey)` is `Option<{ payingKey, remaining }>`. Only needed on the pre-v8
- * acceptance path, which does not carry a limit in the event — `undefined` on an absent entry,
- * which the caller treats as "start at zero" rather than guessing. Also `undefined`, with an
- * anomaly, when the entry doesn't decode with the block's metadata.
+ * `relayer.subsidies(userKey)` is `Option<{ payingKey, remaining }>`. `undefined` when the user has
+ * no subsidy from `payingKey` by then, and also, with an anomaly, when the entry doesn't decode with
+ * the block's metadata.
  */
 const readChainAllowance = (
   userKey: string,
+  payingKey: string,
   block: SubstrateBlock,
   eventIdx: number
 ): Promise<bigint | undefined> =>
@@ -112,13 +135,142 @@ const readChainAllowance = (
         `relayer.subsidies of ${userKey}`,
         async () =>
           (await api.query.relayer.subsidies(userKey)).toJSON() as {
+            payingKey?: string;
             remaining?: string | number;
           } | null
       );
 
-      return raw?.remaining === undefined ? undefined : BigInt(raw.remaining);
+      return raw?.remaining === undefined || raw.payingKey !== payingKey
+        ? undefined
+        : BigInt(raw.remaining);
     }
   );
+
+/** The paying-key authorization: `AddRelayerPayingKey` before 8.0, `OldAddRelayerPayingKey` from it */
+const PAYING_KEY_OFFERS = new Set(['addrelayerpayingkey', 'oldaddrelayerpayingkey']);
+
+/** A field by name, whatever casing the runtime's metadata gave it */
+const field = (record: Record<string, unknown> | null | undefined, name: string): unknown =>
+  Object.entries(record ?? {}).find(([key]) => key.replace(/_/g, '').toLowerCase() === name)?.[1];
+
+/**
+ * The limit of an offer from `payingKey` that `userKey` can still accept, at the end of the block.
+ *
+ * From 8.0 an offer is a `relayer.pendingSubsidies(user, payer)` entry, which a new offer replaces.
+ * Before 8.0 each offer is a paying-key authorization of its own, so several can be pending at once,
+ * and the latest is taken. A paying-key authorization made before 8.0 can still be pending after it.
+ */
+const readPendingOffer = (
+  userKey: string,
+  payingKey: string,
+  block: SubstrateBlock,
+  eventIdx: number
+): Promise<bigint | undefined> =>
+  readOrAnomaly(
+    { block, eventIdx },
+    `the offers pending for ${userKey} were not read from the chain`,
+    async () => {
+      const pendingSubsidies = findStorage('relayer', 'pendingSubsidies');
+
+      if (pendingSubsidies) {
+        const pending = await readStorage(
+          `relayer.pendingSubsidies of ${userKey}`,
+          async () =>
+            (await pendingSubsidies(userKey, payingKey)).toJSON() as string | number | null
+        );
+
+        if (pending !== null && pending !== undefined) {
+          return BigInt(pending);
+        }
+      }
+
+      const authorizations = await readStorage(`identity.authorizations of ${userKey}`, () =>
+        api.query.identity.authorizations.entries({ Account: userKey })
+      );
+      let latest: { authId: number; limit: bigint } | undefined;
+
+      for (const [key, value] of authorizations) {
+        const data = field(
+          value.toJSON() as Record<string, unknown> | null,
+          'authorizationdata'
+        ) as Record<string, unknown> | undefined;
+        const [type, offer] = Object.entries(data ?? {})[0] ?? [];
+
+        if (
+          type &&
+          PAYING_KEY_OFFERS.has(type.toLowerCase()) &&
+          Array.isArray(offer) &&
+          offer[1] === payingKey
+        ) {
+          const authId = Number(key.args[1].toString());
+
+          if (!latest || authId > latest.authId) {
+            latest = { authId, limit: BigInt(String(offer[2])) };
+          }
+        }
+      }
+
+      return latest?.limit;
+    }
+  );
+
+/**
+ * Ends what `subsidy` holds, the subsidy or an offer. The chain keeps an offer apart from the
+ * subsidy it would replace, and one row holds the pair, so an offer the paying key still has
+ * pending takes the row over. Otherwise the row is removed, with `remaining` when the event states
+ * what was left.
+ */
+const endOrReoffer = async (
+  subsidy: Subsidy,
+  block: SubstrateBlock,
+  eventIdx: number,
+  remaining?: bigint
+): Promise<void> => {
+  const offer = await readPendingOffer(
+    subsidy.beneficiaryAccountId,
+    subsidy.payingAccountId,
+    block,
+    eventIdx
+  );
+
+  if (offer === undefined) {
+    subsidy.isRemoved = true;
+    if (remaining !== undefined) {
+      subsidy.allowance = remaining;
+    }
+
+    return;
+  }
+
+  subsidy.isAccepted = false;
+  subsidy.isRemoved = false;
+  subsidy.allowance = offer;
+  // see `handleSubsidyApproved`
+  subsidy.totalDebited = is8xChain(block) ? BigInt(0) : undefined;
+};
+
+/**
+ * An offer from `payingKey` to `userKey` was withdrawn, rejected or given up on. A live subsidy
+ * goes on; a row that holds an offer ends it, or shows another offer still pending.
+ */
+export const endSubsidyOffer = async (
+  userKey: string,
+  payingKey: string,
+  block: SubstrateBlock,
+  eventIdx: number,
+  blockEventId: string
+): Promise<void> => {
+  const subsidy = await Subsidy.get(subsidyId(userKey, payingKey));
+
+  if (!subsidy || subsidy.isAccepted || subsidy.isRemoved) {
+    return;
+  }
+
+  await endOrReoffer(subsidy, block, eventIdx);
+  subsidy.updatedEventId = blockEventId;
+
+  await subsidy.save();
+};
 
 /**
  * Acceptance is on-chain proof the subsidy exists, so a missing row is created here rather than
@@ -149,7 +301,7 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
       id,
       beneficiaryAccountId: userKey,
       payingAccountId: payingKey,
-      allowance: (await readChainAllowance(userKey, block, eventIdx)) ?? BigInt(0),
+      allowance: BigInt(0),
       // see `handleSubsidyApproved` — pre-v8 there is nothing to accumulate from
       totalDebited: is8xChain(block) ? BigInt(0) : undefined,
       isAccepted: false,
@@ -160,47 +312,50 @@ export const handleSubsidyAccepted = async (event: SubstrateEvent): Promise<void
   }
 
   // Accepting replaces whatever subsidy the user had, and the chain removes the old one first. When
-  // the old one had the same paying key, its `RemovedPayingKey` has just marked this same row
-  // removed, so acceptance has to make it live again.
-  const replacedLive = subsidy.isAccepted && subsidy.isRemoved;
-
+  // the old one had the same paying key, its removal has just ended this same row, so acceptance
+  // has to make it live again.
   subsidy.isAccepted = true;
   subsidy.isRemoved = false;
 
-  // v8+ `AcceptedSubsidy` repeats the limit. Pre-v8 `AcceptedPayingKey` does not carry one. The
-  // approval's limit stands unless it was not recorded because a subsidy was already live; then
-  // the chain's own figure is read.
-  if ('initialPolyxLimit' in decoded) {
-    subsidy.allowance = getBigIntValue(decoded.initialPolyxLimit);
-  } else if (replacedLive) {
-    subsidy.allowance = (await readChainAllowance(userKey, block, eventIdx)) ?? subsidy.allowance;
-  }
+  // v8+ `AcceptedSubsidy` repeats the limit. Pre-v8 `AcceptedPayingKey` does not carry one, and the
+  // offer accepted need not be the one the row shows: several can be pending, and one may have
+  // been made while a subsidy was live. So the chain's own figure is read.
+  subsidy.allowance =
+    'initialPolyxLimit' in decoded
+      ? getBigIntValue(decoded.initialPolyxLimit)
+      : (await readChainAllowance(userKey, payingKey, block, eventIdx)) ?? subsidy.allowance;
   subsidy.updatedEventId = blockEventId;
 
   await subsidy.save();
 };
 
 export const handleSubsidyRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
+  const { block, blockEventId, eventId, eventIdx } = extractArgs(event);
   const decoded = decodeEvent(event);
-  const { userKey: rawUserKey, payingKey: rawPayingKey } = decoded;
+  const userKey = getTextValue(decoded.userKey);
+  const payingKey = getTextValue(decoded.payingKey);
 
-  const subsidy = await getSubsidyOrAnomaly(
-    getTextValue(rawUserKey),
-    getTextValue(rawPayingKey),
-    event
-  );
+  // a withdrawn offer, which leaves the subsidy it would have replaced
+  if (eventId === EventIdEnum.RemovedPendingSubsidy) {
+    await endSubsidyOffer(userKey, payingKey, block, eventIdx, blockEventId);
+
+    return;
+  }
+
+  const subsidy = await getSubsidyOrAnomaly(userKey, payingKey, event);
 
   if (!subsidy) {
     return;
   }
 
-  subsidy.isRemoved = true;
   // `RemovedSubsidy` states the allowance left at the moment it ended — more exact than whatever the
-  // last `UpdatedPolyxLimit` or debit left behind. The other two removal events carry no such figure.
-  if ('remaining' in decoded) {
-    subsidy.allowance = getBigIntValue(decoded.remaining);
-  }
+  // last `UpdatedPolyxLimit` or debit left behind. `RemovedPayingKey` carries no such figure.
+  await endOrReoffer(
+    subsidy,
+    block,
+    eventIdx,
+    'remaining' in decoded ? getBigIntValue(decoded.remaining) : undefined
+  );
   subsidy.updatedEventId = blockEventId;
 
   await subsidy.save();
@@ -253,4 +408,56 @@ export const handlePolyxLimitUpdated = async (event: SubstrateEvent): Promise<vo
   subsidy.updatedEventId = blockEventId;
 
   await subsidy.save();
+};
+
+/**
+ * Before 8.0 a subsidised fee came out of the subsidy's allowance with no event (`debit_subsidy`
+ * emitted `SubsidyDebited` only from 8.0), so after a fee that `feeAccount` paid for someone else,
+ * that subsidy's allowance is read back from the chain. `users` are who the fee may have been for:
+ * the subsidy of one of them, or failing that every live subsidy `feeAccount` pays, since the
+ * runtime's payer is not always the signer. A fee its payer paid itself reads only the payer's
+ * subsidy of itself, which `debit_subsidy` draws down like any other.
+ */
+export const refreshDrawnAllowances = async (
+  block: SubstrateBlock,
+  eventIdx: number,
+  blockEventId: string,
+  feeAccount: string,
+  users: (string | undefined)[]
+): Promise<void> => {
+  if (is8xChain(block)) {
+    return;
+  }
+
+  const subsidised = users.filter(user => user && user !== feeAccount);
+  const live = (subsidy: Subsidy | undefined): subsidy is Subsidy =>
+    !!subsidy?.isAccepted && !subsidy.isRemoved;
+  let drawn: Subsidy[];
+
+  if (subsidised.length) {
+    const paid = (
+      await getAllByFields<Subsidy>('Subsidy', [['payingAccountId', '=', feeAccount]])
+    ).filter(live);
+    const ofUsers = paid.filter(subsidy => subsidised.includes(subsidy.beneficiaryAccountId));
+    drawn = ofUsers.length ? ofUsers : paid;
+  } else {
+    drawn = [await Subsidy.get(`${feeAccount}/${feeAccount}`)].filter(live);
+  }
+
+  await Promise.all(
+    drawn.map(async subsidy => {
+      const remaining = await readChainAllowance(
+        subsidy.beneficiaryAccountId,
+        feeAccount,
+        block,
+        eventIdx
+      );
+
+      if (remaining !== undefined && remaining !== subsidy.allowance) {
+        subsidy.allowance = remaining;
+        subsidy.updatedEventId = blockEventId;
+        await subsidy.save();
+      }
+    })
+  );
 };

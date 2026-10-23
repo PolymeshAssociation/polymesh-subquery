@@ -100,7 +100,7 @@ const queriesIn = (path: string): Query[] => {
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const name = calleeName(node);
-      if (name && QUERIES.has(name) && !ts.isFunctionLike(node.parent)) {
+      if (name && QUERIES.has(name)) {
         const { line } = source.getLineAndCharacterOfPosition(node.getStart());
         const at = `${relative(ROOT, path)}:${line + 1}`;
         const receiver = receiverEntity(node);
@@ -252,7 +252,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
 
   it('reads the entries it checks', () => {
     expect(trimmed.length).toBeGreaterThan(50);
-    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(54);
+    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(53);
     expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
   });
 

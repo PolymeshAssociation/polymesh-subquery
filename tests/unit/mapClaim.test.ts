@@ -74,7 +74,11 @@ const mockClaimEvent = (
 ): SubstrateEvent => claimEvent(method, identityClaim(issuer, cddId, dateValue));
 
 /** A `ClaimAdded`/`ClaimRevoked` event for `target` carrying `claim`, an `IdentityClaim` codec. */
-const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): SubstrateEvent => {
+const claimEvent = (
+  method: 'ClaimAdded' | 'ClaimRevoked',
+  claim: unknown,
+  specVersion = 8000000
+): SubstrateEvent => {
   const data = [mockCodec(TARGET), claim];
 
   return {
@@ -82,7 +86,7 @@ const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): Subs
     block: {
       block: { header: { number: { toString: () => '1234' } } },
       timestamp: new Date('2026-01-01T00:00:00Z'),
-      specVersion: 8000000,
+      specVersion,
     },
     event: {
       method,
@@ -102,49 +106,17 @@ const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): Subs
 
 describe('getId', () => {
   it('includes the issuer, producing distinct ids for two issuers over an otherwise identical claim', () => {
-    const idA = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      'cdd-1',
-      undefined
-    );
-    const idB = getId(
-      TARGET,
-      ISSUER_B,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      'cdd-1',
-      undefined
-    );
+    const idA = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
+    const idB = getId(TARGET, ISSUER_B, 'CustomerDueDiligence', undefined, undefined);
 
     expect(idA).not.toBe(idB);
-    expect(idA).toBe(`${TARGET}/${ISSUER_A}/CustomerDueDiligence/cdd-1`);
-    expect(idB).toBe(`${TARGET}/${ISSUER_B}/CustomerDueDiligence/cdd-1`);
+    expect(idA).toBe(`${TARGET}/${ISSUER_A}/CustomerDueDiligence`);
+    expect(idB).toBe(`${TARGET}/${ISSUER_B}/CustomerDueDiligence`);
   });
 
   it('produces the same id for the same target/issuer/type/scope', () => {
-    const first = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      'cdd-1',
-      undefined
-    );
-    const second = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      'cdd-1',
-      undefined
-    );
+    const first = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
+    const second = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
 
     expect(first).toBe(second);
   });
@@ -204,7 +176,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
     await seedGenesisClaims(genesis as never, '0000000000', '0000000000/0000000000');
 
-    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence/${CDD_GENESIS}`;
+    const id = `${TARGET}/${ISSUER_A}/CustomerDueDiligence`;
     expect(Object.keys(claims)).toEqual([id]);
     expect(claims[id]).toMatchObject({
       targetId: TARGET,
@@ -279,24 +251,8 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
     const ids = Object.keys(claims);
     expect(ids).toHaveLength(2);
 
-    const idA = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      CDD_1,
-      undefined
-    );
-    const idB = getId(
-      TARGET,
-      ISSUER_B,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      CDD_1,
-      undefined
-    );
+    const idA = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
+    const idB = getId(TARGET, ISSUER_B, 'CustomerDueDiligence', undefined, undefined);
 
     expect(claims[idA]).toMatchObject({ issuerId: ISSUER_A, targetId: TARGET });
     expect(claims[idB]).toMatchObject({ issuerId: ISSUER_B, targetId: TARGET });
@@ -314,27 +270,38 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       mockClaimEvent('ClaimRevoked', { issuer: ISSUER_B, cddId: CDD_1, dateValue: '3000' })
     );
 
-    const idA = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      CDD_1,
-      undefined
-    );
-    const idB = getId(
-      TARGET,
-      ISSUER_B,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      CDD_1,
-      undefined
-    );
+    const idA = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
+    const idB = getId(TARGET, ISSUER_B, 'CustomerDueDiligence', undefined, undefined);
 
     expect(claims[idA].revokeDate).toBeUndefined();
     expect(claims[idB].revokeDate).toBe(REVOKED_AT);
+  });
+
+  it('replaces a CDD claim its issuer re-issues with another CDD id, as the chain keys it', async () => {
+    const CDD_2 = `0x${'c2'.repeat(32)}`;
+    await handleClaimAdded(
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '1000' })
+    );
+    await handleClaimAdded(
+      mockClaimEvent('ClaimAdded', { issuer: ISSUER_A, cddId: CDD_2, dateValue: '2000' })
+    );
+
+    expect(Object.values(claims)).toEqual([expect.objectContaining({ cddId: CDD_2 })]);
+  });
+
+  it('replaces a jurisdiction claim its issuer re-issues for another country, as the chain keys it', async () => {
+    const jurisdiction = (country: string) =>
+      registry.createType('IdentityClaim', {
+        claimIssuer: ISSUER_A,
+        issuanceDate: 1,
+        lastUpdateDate: 1,
+        expiry: null,
+        claim: { Jurisdiction: [country, { Identity: ISSUER_B }] },
+      });
+    await handleClaimAdded(claimEvent('ClaimAdded', jurisdiction('Ie')));
+    await handleClaimAdded(claimEvent('ClaimAdded', jurisdiction('Fr')));
+
+    expect(Object.values(claims)).toEqual([expect.objectContaining({ jurisdiction: 'FR' })]);
   });
 
   it('clears revokeDate when the same issuer re-issues the claim after revoking it', async () => {
@@ -346,15 +313,7 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
       mockClaimEvent('ClaimRevoked', { issuer: ISSUER_A, cddId: CDD_1, dateValue: '2000' })
     );
 
-    const id = getId(
-      TARGET,
-      ISSUER_A,
-      'CustomerDueDiligence',
-      undefined,
-      undefined,
-      CDD_1,
-      undefined
-    );
+    const id = getId(TARGET, ISSUER_A, 'CustomerDueDiligence', undefined, undefined);
     expect(claims[id].revokeDate).toBe(REVOKED_AT);
 
     await handleClaimAdded(
@@ -394,6 +353,50 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
     expect(anomalies).toHaveLength(0);
     expect(Object.keys(claims)).toHaveLength(0);
+  });
+
+  /**
+   * From 7.0 the chain scopes a claim to an asset id, which a ticker can be unlinked from (testnet
+   * MINT, block 20,687,589) or never have been an asset's (mainnet NIO).
+   */
+  it('scopes a claim to an asset by its id, as the chain does, not by its ticker', async () => {
+    const ASSET_ID = `0x${'ab'.repeat(16)}`;
+    const fallback = storeGet().getMockImplementation() as (entity: string, id: string) => unknown;
+    storeGet().mockImplementation((entity: string, id: string) =>
+      entity === 'Asset' ? Promise.resolve({ id, ticker: 'ACME' }) : fallback(entity, id)
+    );
+    const accredited = registry.createType('IdentityClaim', {
+      claimIssuer: ISSUER_A,
+      issuanceDate: 1,
+      lastUpdateDate: 1,
+      expiry: null,
+      claim: { Accredited: { Asset: ASSET_ID } },
+    });
+
+    await handleClaimAdded(claimEvent('ClaimAdded', accredited));
+
+    expect(Object.values(claims)).toEqual([
+      expect.objectContaining({ scope: { type: 'Asset', value: ASSET_ID, assetId: ASSET_ID } }),
+    ]);
+  });
+
+  it('scopes a claim before 7.0 by its ticker, as the chain did, beside the asset id', async () => {
+    const accredited = v5.createType('IdentityClaim', {
+      claim_issuer: ISSUER_A,
+      issuance_date: 1,
+      last_update_date: 1,
+      expiry: null,
+      claim: { Accredited: { Ticker: '0x414243000000000000000000' } },
+    });
+
+    await handleClaimAdded(claimEvent('ClaimAdded', accredited, 5004000));
+
+    const [saved] = Object.values(claims);
+    expect(saved.scope).toEqual({
+      type: 'Asset',
+      value: 'ABC',
+      assetId: expect.stringMatching(/^0x[0-9a-f]{32}$/),
+    });
   });
 
   /**

@@ -6,9 +6,10 @@
  */
 
 import { SubstrateEvent } from '@subql/types';
-import { Authorization, AuthorizationStatusEnum } from '../../src/types';
+import { AccountKeyRole, Authorization, AuthorizationStatusEnum } from '../../src/types';
 import { handleAuthorization } from '../../src/mappings/entities/identities/mapAuthorization';
-import { codec as helperCodec, mockStore, tupleEvent } from './helpers';
+import { offerSubsidy } from '../../src/mappings/entities/relayer/mapSubsidy';
+import { codec as helperCodec, mockLedgerAccountQuery, mockStore, tupleEvent } from './helpers';
 
 const DID = '0x01'.padEnd(66, '0');
 const KEY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -65,7 +66,11 @@ describe('handleAuthorization — AuthorizationRetryLimitReached', () => {
 });
 
 describe('handleAuthorization — AuthorizationAdded', () => {
-  const added = (targetDid: string | null, targetKey: string | null) =>
+  const added = (
+    targetDid: string | null,
+    targetKey: string | null,
+    authorizationData: unknown = { joinIdentity: { asset: null } }
+  ) =>
     tupleEvent({
       section: 'identity',
       method: 'AuthorizationAdded',
@@ -74,18 +79,59 @@ describe('handleAuthorization — AuthorizationAdded', () => {
         helperCodec(targetDid),
         helperCodec(targetKey),
         helperCodec(AUTH_ID),
-        helperCodec({ joinIdentity: { asset: null } }),
+        helperCodec(authorizationData),
         helperCodec(null),
       ],
     });
 
-  it('links an authorization to a key by the SS58 address its Account row is keyed by', async () => {
+  /** the issuer's identity, over a chain holding no key record for the target key */
+  const mockIssuer = () => {
     const db = mockStore({ Identity: { [DID]: { id: DID } } });
+    (globalThis as any).api.query = mockLedgerAccountQuery();
+    return db;
+  };
+
+  it("stores a key's permissions with its extrinsic permissions in the index's form", async () => {
+    const db = mockIssuer();
+    const permissions = {
+      asset: { whole: null },
+      // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
+      extrinsic: {
+        these: [{ palletName: '0x4173736574', dispatchableNames: { these: ['0x6973737565'] } }],
+      },
+      portfolio: { whole: null },
+    };
+
+    await handleAuthorization(added(null, KEY, { joinIdentity: permissions }));
+
+    expect(JSON.parse(db.Authorization['0000000042'].data)).toEqual({
+      asset: { whole: null },
+      extrinsic: { these: { Asset: { extrinsics: { these: ['issue'] } } } },
+      portfolio: { whole: null },
+    });
+  });
+
+  it('links an authorization to a key by the SS58 address its Account row is keyed by', async () => {
+    const db = mockIssuer();
 
     await handleAuthorization(added(null, KEY));
 
     expect(db.Authorization['0000000042']).toMatchObject({ toAccountId: KEY, toId: undefined });
     expect(db.Authorization['0000000042'].toKey).toBeUndefined();
+  });
+
+  /** testnet: 101 authorization targets that never held a key or POLYX had no `Account` row */
+  it('creates the Account of a target the chain holds no key record for', async () => {
+    const db = mockIssuer();
+
+    await handleAuthorization(added(null, KEY));
+
+    expect(db.Account[KEY]).toMatchObject({
+      id: KEY,
+      address: KEY,
+      keyRole: AccountKeyRole.Unlinked,
+      createdEventId: '0000001000/0000000000',
+    });
   });
 
   it('links an authorization to an identity', async () => {
@@ -95,5 +141,50 @@ describe('handleAuthorization — AuthorizationAdded', () => {
     await handleAuthorization(added(TARGET, null));
 
     expect(db.Authorization['0000000042']).toMatchObject({ toId: TARGET, toAccountId: undefined });
+  });
+
+  /**
+   * A paying-key authorization raised through `identity.add_authorization` emits no relayer event,
+   * and is addressed to the paying key, which accepts it (testnet authorization 51504).
+   */
+  it('records the subsidy a paying-key authorization offers', async () => {
+    const USER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+    const db = mockStore({
+      Identity: { [DID]: { id: DID } },
+      Account: { [USER]: { id: USER }, [KEY]: { id: KEY } },
+    });
+    const offered = tupleEvent({
+      section: 'identity',
+      method: 'AuthorizationAdded',
+      data: [
+        helperCodec(DID),
+        helperCodec(null),
+        helperCodec(KEY),
+        helperCodec(AUTH_ID),
+        helperCodec({ addRelayerPayingKey: [USER, KEY, 10_000_000] }),
+        helperCodec(null),
+      ],
+    });
+
+    await handleAuthorization(offered);
+
+    expect(db.Subsidy[`${USER}/${KEY}`]).toMatchObject({
+      beneficiaryAccountId: USER,
+      payingAccountId: KEY,
+      allowance: BigInt(10_000_000),
+      isAccepted: false,
+      isRemoved: false,
+    });
+
+    // `set_paying_key` raises the same offer as a relayer event too, which keeps the row it made
+    await offerSubsidy(
+      { userKey: USER, payingKey: KEY, limit: BigInt(20_000_000) },
+      { block: offered.block, blockId: '0000001000', blockEventId: '0000001000/0000000001' }
+    );
+    expect(db.Subsidy[`${USER}/${KEY}`]).toMatchObject({
+      allowance: BigInt(20_000_000),
+      createdEventId: '0000001000/0000000000',
+      updatedEventId: '0000001000/0000000001',
+    });
   });
 });

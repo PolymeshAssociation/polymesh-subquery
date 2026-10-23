@@ -63,6 +63,7 @@ import {
   syncStakingLock,
   treasuryShareAt,
 } from './preV8Ledger';
+import { refreshDrawnAllowances } from '../relayer/mapSubsidy';
 import { chargedFor } from './preV54Fees';
 
 /**
@@ -987,8 +988,10 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
     }
   }
 
+  const feeAccount = await chargedFor(args, who);
+
   await postTransition(args, {
-    from: { address: await chargedFor(args, who), pool: PolyxPool.Free },
+    from: { address: feeAccount, pool: PolyxPool.Free },
     amount: fee,
     kind: MovementKind.Fee,
   });
@@ -1001,6 +1004,10 @@ export const handleTransactionFeeCharged = async (event: SubstrateEvent): Promis
     const splitAt = args.eventId === EventIdEnum.FeeCharged ? event.idx + 1 : event.idx - 1;
 
     await creditBlockAuthor(args, fee, treasuryShareAt(args.block, splitAt, event.idx));
+    await refreshDrawnAllowances(args.block, event.idx, args.blockEventId, feeAccount, [
+      who,
+      args.extrinsic?.extrinsic.signer.toString(),
+    ]);
   }
 };
 

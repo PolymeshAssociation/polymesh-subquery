@@ -1,13 +1,34 @@
 import { SubstrateEvent } from '@subql/types';
 import mapChainUpgrade from '../../src/mappings/entities/block/mapChainUpgrade';
-import { repairAuthorizationsAfterUpgrade } from '../../src/mappings/entities/identities/repairAuthorizations';
-import { handleMultiSigProposalDeleted } from '../../src/mappings/entities/multiSig/mapMultiSigProposal';
+import {
+  migrateToAssetIds,
+  unlinkTickersOfMissingAssets,
+} from '../../src/mappings/migrations/assetIdMigration';
+import { migrateStoredSchedules } from '../../src/mappings/migrations/checkpointScheduleMigration';
+import { migrateOffChainLegs } from '../../src/mappings/migrations/offChainLegMigration';
+import { migrateTransferManagers } from '../../src/mappings/migrations/statisticsMigration';
+import { removeIdentitySigners } from '../../src/mappings/entities/multiSig/mapMultiSig';
+import { deletePendingProposals } from '../../src/mappings/entities/multiSig/mapMultiSigProposal';
+
+jest.mock('../../src/mappings/entities/multiSig/mapMultiSig', () => ({
+  removeIdentitySigners: jest.fn(),
+}));
 
 jest.mock('../../src/mappings/entities/multiSig/mapMultiSigProposal', () => ({
-  handleMultiSigProposalDeleted: jest.fn(),
+  deletePendingProposals: jest.fn(),
 }));
-jest.mock('../../src/mappings/entities/identities/repairAuthorizations', () => ({
-  repairAuthorizationsAfterUpgrade: jest.fn(),
+jest.mock('../../src/mappings/migrations/assetIdMigration', () => ({
+  migrateToAssetIds: jest.fn(),
+  unlinkTickersOfMissingAssets: jest.fn(),
+}));
+jest.mock('../../src/mappings/migrations/checkpointScheduleMigration', () => ({
+  migrateStoredSchedules: jest.fn(),
+}));
+jest.mock('../../src/mappings/migrations/offChainLegMigration', () => ({
+  migrateOffChainLegs: jest.fn(),
+}));
+jest.mock('../../src/mappings/migrations/statisticsMigration', () => ({
+  migrateTransferManagers: jest.fn(),
 }));
 
 /**
@@ -55,8 +76,12 @@ const savedUpgrades = () =>
 
 describe('mapChainUpgrade', () => {
   beforeEach(() => {
-    (handleMultiSigProposalDeleted as jest.Mock).mockResolvedValue(undefined);
-    (repairAuthorizationsAfterUpgrade as jest.Mock).mockResolvedValue(undefined);
+    (deletePendingProposals as jest.Mock).mockResolvedValue(undefined);
+    (removeIdentitySigners as jest.Mock).mockResolvedValue(undefined);
+    (migrateToAssetIds as jest.Mock).mockResolvedValue(undefined);
+    (migrateTransferManagers as jest.Mock).mockResolvedValue(undefined);
+    (migrateOffChainLegs as jest.Mock).mockResolvedValue(undefined);
+    (migrateStoredSchedules as jest.Mock).mockResolvedValue(undefined);
     (store.set as jest.Mock).mockResolvedValue(undefined);
   });
 
@@ -87,7 +112,7 @@ describe('mapChainUpgrade', () => {
     await mapChainUpgrade(upgradeEvent(1_234, 8_000_000));
 
     expect(savedUpgrades()).toHaveLength(0);
-    expect(handleMultiSigProposalDeleted).not.toHaveBeenCalled();
+    expect(deletePendingProposals).not.toHaveBeenCalled();
   });
 
   it('runs the boundary work when the transaction version changed', async () => {
@@ -98,8 +123,7 @@ describe('mapChainUpgrade', () => {
 
     await mapChainUpgrade(upgradeEvent(1_234, 7_004_000));
 
-    expect(handleMultiSigProposalDeleted).toHaveBeenCalledTimes(1);
-    expect(repairAuthorizationsAfterUpgrade).toHaveBeenCalledTimes(1);
+    expect(deletePendingProposals).toHaveBeenCalledTimes(1);
   });
 
   it('skips the boundary work when only the spec version moved', async () => {
@@ -111,7 +135,7 @@ describe('mapChainUpgrade', () => {
     await mapChainUpgrade(upgradeEvent(1_234, 7_003_000));
 
     expect(savedUpgrades()).toHaveLength(1);
-    expect(handleMultiSigProposalDeleted).not.toHaveBeenCalled();
+    expect(deletePendingProposals).not.toHaveBeenCalled();
   });
 
   it('reads the previous version from the parent block only when nothing is persisted', async () => {
@@ -121,7 +145,33 @@ describe('mapChainUpgrade', () => {
     await mapChainUpgrade(upgradeEvent(1_234, 7_004_000));
 
     expect((api.rpc as any).state.getRuntimeVersion).toHaveBeenCalledWith('0xparent-1234');
-    expect(handleMultiSigProposalDeleted).toHaveBeenCalledTimes(1);
+    expect(deletePendingProposals).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Multisig stores the transaction version it last cleared at, which is 0 until the chain's first
+   * upgrade: that upgrade clears every proposal, though the genesis runtime had the same version
+   * (testnet 3000 to 3001, both 1).
+   */
+  it("deletes pending proposals at the chain's first upgrade, whatever its transaction version", async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([]);
+    stubRuntimeVersions({ spec: 3_001, tx: 1 }, { spec: 3_000, tx: 1 });
+
+    await mapChainUpgrade(upgradeEvent(1_045_804, 3_000));
+
+    expect(deletePendingProposals).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps pending proposals when the transaction version went down', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0003000000', specVersionId: 3_000_000, transactionVersion: 7 },
+    ]);
+    stubRuntimeVersions({ spec: 4_000_000, tx: 1 }, { spec: 3_000_000, tx: 7 });
+
+    await mapChainUpgrade(upgradeEvent(1_234, 3_000_000));
+
+    expect(savedUpgrades()).toHaveLength(1);
+    expect(deletePendingProposals).not.toHaveBeenCalled();
   });
 
   /**
@@ -146,6 +196,82 @@ describe('mapChainUpgrade', () => {
         firstBlockId: '0024730585',
       },
     ]);
-    expect(repairAuthorizationsAfterUpgrade).toHaveBeenCalledTimes(1);
+    expect(deletePendingProposals).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes identity signers as the chain crosses into 7.0, which keeps only account signers', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0006003050', specVersionId: 6_003_050, transactionVersion: 4 },
+    ]);
+    stubRuntimeVersions({ spec: 7_000_003, tx: 5 }, { spec: 6_003_050, tx: 4 });
+
+    await mapChainUpgrade(upgradeEvent(15_978_579, 6_003_050));
+
+    expect(removeIdentitySigners).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes the transfer conditions 5.0 made of transfer managers as the chain crosses into it', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0000003010', specVersionId: 3_010, transactionVersion: 2 },
+    ]);
+    stubRuntimeVersions({ spec: 5_000_002, tx: 3 }, { spec: 3_010, tx: 2 });
+
+    await mapChainUpgrade(upgradeEvent(4_397_818, 3_010));
+
+    expect(migrateTransferManagers).toHaveBeenCalledTimes(1);
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+  });
+
+  it('settles the leg types and checkpoint schedules 6.0 migrated as the chain crosses into it', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0005004001', specVersionId: 5_004_001, transactionVersion: 3 },
+    ]);
+    stubRuntimeVersions({ spec: 6_000_000, tx: 4 }, { spec: 5_004_001, tx: 3 });
+
+    await mapChainUpgrade(upgradeEvent(10_036_147, 5_004_001));
+
+    expect(migrateOffChainLegs).toHaveBeenCalledTimes(1);
+    expect(migrateStoredSchedules).toHaveBeenCalledTimes(1);
+    expect(migrateTransferManagers).not.toHaveBeenCalled();
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+  });
+
+  it('rewrites what 7.0 migrated to asset ids as the chain crosses into it', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0006003050', specVersionId: 6_003_050, transactionVersion: 4 },
+    ]);
+    stubRuntimeVersions({ spec: 7_000_003, tx: 5 }, { spec: 6_003_050, tx: 4 });
+
+    await mapChainUpgrade(upgradeEvent(15_978_579, 6_003_050));
+
+    expect(migrateToAssetIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('unlinks tickers from asset ids no asset has as the chain crosses into 7.1', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0007000005', specVersionId: 7_000_005, transactionVersion: 7 },
+    ]);
+    stubRuntimeVersions({ spec: 7_001_000, tx: 7 }, { spec: 7_000_005, tx: 7 });
+
+    await mapChainUpgrade(upgradeEvent(17_070_424, 7_000_005));
+
+    expect(unlinkTickersOfMissingAssets).toHaveBeenCalledTimes(1);
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+  });
+
+  it('leaves signers alone at a later upgrade', async () => {
+    (store.getByFields as jest.Mock).mockResolvedValue([
+      { id: '0007004001', specVersionId: 7_004_001, transactionVersion: 7 },
+    ]);
+    stubRuntimeVersions({ spec: 8_000_000, tx: 8 }, { spec: 7_004_001, tx: 7 });
+
+    await mapChainUpgrade(upgradeEvent(24_730_585, 7_004_001));
+
+    expect(removeIdentitySigners).not.toHaveBeenCalled();
+    expect(migrateToAssetIds).not.toHaveBeenCalled();
+    expect(migrateTransferManagers).not.toHaveBeenCalled();
+    expect(migrateOffChainLegs).not.toHaveBeenCalled();
+    expect(migrateStoredSchedules).not.toHaveBeenCalled();
+    expect(unlinkTickersOfMissingAssets).not.toHaveBeenCalled();
   });
 });

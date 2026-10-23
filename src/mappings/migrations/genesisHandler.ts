@@ -9,13 +9,16 @@ import {
   ModuleIdEnum,
   MultiSigSignerStatusEnum,
   SignerTypeEnum,
+  TickerReservation,
 } from '../../types';
 import {
   capitalizeFirstLetter,
   extractString,
   extractValue,
+  findStorage,
   legacyQuery,
   padId,
+  serializeTicker,
 } from '../../utils';
 import { upsertAccount } from '../../utils/accounts';
 import { readOrAnomaly } from '../../utils/anomaly';
@@ -23,7 +26,7 @@ import { readCurrentEraIndex } from '../../utils/staking';
 import { getAccountId, SEED_EVENT_ID, systematicIssuers } from '../consts';
 import { recordElection } from '../entities/events/mapEra';
 import { seedGenesisClaims } from '../entities/identities/mapClaim';
-import { createIdentity } from '../entities/identities/mapIdentities';
+import { createIdentity, getPermissions } from '../entities/identities/mapIdentities';
 import { openIdentityKey } from '../entities/identities/mapIdentityKey';
 import { createPortfolio } from '../entities/identities/mapPortfolio';
 import {
@@ -101,7 +104,7 @@ export const insertSeedEvent = (
  * - Permission - adds in default whole permissions for the primary account
  * - Account - adds entry for the primary account
  */
-const handleGenesisDids = async () => {
+export const handleGenesisDids = async (): Promise<void> => {
   const ss58Format = api.registry.chainSS58;
 
   // There are special Identities specified in the chain's genesis block that need to be included in the DB.
@@ -127,6 +130,9 @@ const handleGenesisDids = async () => {
     const secondaryKeys = secondaryKeyValues.map(
       ({ signer: { account: secondaryKey } }) => secondaryKey
     );
+    // a secondary key's permissions, as its record gives them; a primary key always has full ones
+    const permissionsOf = (keyIndex: number) =>
+      keyIndex === 0 ? undefined : getPermissions(secondaryKeyValues[keyIndex - 1].permissions);
 
     gcIdentities.push({
       did,
@@ -153,6 +159,7 @@ const handleGenesisDids = async () => {
               identityId: did,
               address: key,
               role: keyIndex === 0 ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
+              permissions: permissionsOf(keyIndex),
               addedReason: EventIdEnum.DidCreated,
               eventIdx: keyIndex,
             },
@@ -191,6 +198,38 @@ const handleGenesisDids = async () => {
     .flat();
 
   await Promise.all([...identityAndPortfolioInserts, ...accountInserts]);
+};
+
+/**
+ * The tickers the genesis config registered, with no event: on the public chains, the fiat
+ * currencies and the Polymath classic tickers, held by their system identities. The registrations
+ * are `asset.tickers` until 7.0, then `asset.uniqueTickerRegistration`.
+ */
+export const handleGenesisTickers = async (blockEventId: string): Promise<void> => {
+  const registrations =
+    findStorage('asset', 'uniqueTickerRegistration') ?? findStorage('asset', 'tickers');
+
+  if (!registrations) {
+    return;
+  }
+
+  const entries = await registrations.entries();
+
+  await Promise.all(
+    entries.map(([{ args }, value]) => {
+      const ticker = serializeTicker(args[0]);
+      const { owner, expiry } = value.toJSON() as { owner: string; expiry: number | null };
+
+      return TickerReservation.create({
+        id: ticker,
+        ticker,
+        identityId: owner,
+        expiry: expiry === null || expiry === undefined ? undefined : new Date(Number(expiry)),
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
+      }).save();
+    })
+  );
 };
 
 /**
@@ -365,6 +404,9 @@ const genesisHandler = async (block: SubstrateBlock): Promise<void> => {
   await insertSeedEvent();
 
   await Promise.all([handleGenesisDids(), handleMultiSigs(datetime)]);
+
+  // after the system identities that hold them
+  await handleGenesisTickers(SEED_EVENT_ID);
 
   // after the identities, which the genesis claims are made about
   await seedGenesisClaims(block, genesisBlock, SEED_EVENT_ID);

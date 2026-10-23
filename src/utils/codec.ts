@@ -80,6 +80,21 @@ export const memberOf = (value: unknown, key: string): Codec => {
 };
 
 /**
+ * A struct codec's field by name, whatever casing its decoding gave it: snake_case from the type
+ * bundle before metadata v14, camelCase from v14. `undefined` when the struct has no such field.
+ */
+export const fieldOf = (value: Codec, name: string): Codec | undefined => {
+  const wanted = name.replace(/_/g, '').toLowerCase();
+  const entries = (value as unknown as Map<string, Codec>).entries();
+  for (const [key, field] of entries) {
+    if (key.replace(/_/g, '').toLowerCase() === wanted) {
+      return field;
+    }
+  }
+  return undefined;
+};
+
+/**
  * A codec's `toJSON()` as the shape the caller reads, after `check` has confirmed it. `toJSON()` is
  * typed as arbitrary JSON, so reading a field off it needs either a cast or a check; the check is
  * the one that notices a runtime that changed the shape.

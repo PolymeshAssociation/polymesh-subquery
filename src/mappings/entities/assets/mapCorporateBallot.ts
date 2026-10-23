@@ -7,10 +7,11 @@ import {
   CorporateBallot,
   CorporateBallotVote,
 } from '../../../types';
-import { bytesToString, getBooleanValue, getCaIdValue } from '../../../utils';
-import { isObject, jsonOf } from '../../../utils/codec';
+import { getBooleanValue, getCaIdValue } from '../../../utils';
+import { fieldOf, isObject, itemsOf, jsonOf } from '../../../utils/codec';
 import { extractArgs, getOrAnomaly } from '../common';
 import { caId } from './mapCorporateAction';
+import { storedText } from '../../../utils/text';
 
 /**
  * `corporateBallot` pallet handlers.
@@ -58,10 +59,6 @@ const isVotes = (json: unknown): json is VoteJson[] =>
       (vote.fallback === null || typeof vote.fallback === 'number')
   );
 
-/** Hex-encoded `Bytes` as text. `toJSON()` gives `0x…` for every `Bytes` field in this structure. */
-const text = (value: string | undefined): string | undefined =>
-  value === undefined ? undefined : bytesToString({ toString: () => value } as Codec);
-
 /**
  * `BallotMeta { title: Bytes, motions: Vec<Motion> }`, where
  * `Motion { title: Bytes, info_link: Bytes, choices: Vec<Bytes> }`.
@@ -72,15 +69,22 @@ const text = (value: string | undefined): string | undefined =>
  * The stored shape is unchanged; only the byte fields inside it become text.
  */
 const decodeMeta = (rawMeta: Codec): string => {
-  const { title, motions } = jsonOf(rawMeta, isMeta, 'BallotMeta');
+  // the shape checked on the JSON; the text read from the codec, as the chain stores it
+  jsonOf(rawMeta, isMeta, 'BallotMeta');
+  const motions = fieldOf(rawMeta, 'motions');
 
   return JSON.stringify({
-    title: text(title),
-    motions: (motions ?? []).map(motion => ({
-      title: text(motion.title),
-      infoLink: text(motion.infoLink ?? motion.info_link),
-      choices: (motion.choices ?? []).map(choice => text(choice)),
-    })),
+    title: storedText(fieldOf(rawMeta, 'title')),
+    motions: (motions ? itemsOf(motions, 'BallotMeta.motions') : []).map(motion => {
+      const choices = fieldOf(motion, 'choices');
+      return {
+        title: storedText(fieldOf(motion, 'title')),
+        infoLink: storedText(fieldOf(motion, 'info_link')),
+        choices: (choices ? itemsOf(choices, 'Motion.choices') : []).map(choice =>
+          storedText(choice)
+        ),
+      };
+    }),
   });
 };
 

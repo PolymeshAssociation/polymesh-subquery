@@ -141,6 +141,7 @@ Direct consequences:
 - `Claim.revokeDate` is the timestamp of the block that revoked the claim. It used to be the revoked claim's own issuance date. A filter on `revokeDate: { isNull: true }`, as the SDK uses for current claims, is unaffected.
 - `InvestorUniqueness`, `InvestorUniquenessV2` and `NoData` claims are not indexed in any era, and the three values are removed from `ClaimTypeEnum`. The v6.0 upgrade's storage migration (`migrate_claims`) deleted every claim of those types without an event, so the index held them as live forever, and a query for them returns nothing. Neither consumer reads them.
 - A claim without a scope (a `Custom` claim whose scope is `None`) has `scope: null`. It used to be `{ "type": null, "value": null }`, against `Scope`'s non-null fields, and its id ended in `//`; the id is now `target/issuer/Custom/<id>`. The SDK already treats both forms as no scope.
+- From 7.0 an asset scope's `value` is the asset id, as the chain scopes the claim, and a claim held at the 7.0 upgrade is rewritten to it; before 7.0 it is the ticker. It used to be the asset's ticker when the index knew one at the time of the claim, which stayed after the ticker was unlinked (testnet MINT). Read the asset from `assetId`, as the SDK already does for both filtering and reading; a filter on `scope: { contains: { value: "<ticker>" } }` no longer matches a 7.x claim.
 - Memos (`Instruction.memo`, `AssetTransaction.memo` / `instructionMemo`, `PolyxEntry.memo`, `ConfidentialSettlement.memo`) are the memo's UTF-8 text without its trailing NUL padding, or `0x` hex of all 32 bytes when it is not text. ASCII memos read as before. A non-ASCII memo used to be decoded a byte at a time (`"€"` came out as `"â\u0082¬"`) and now reads correctly; a binary memo such as a hash used to come out as control characters and is now hex; a NUL inside a memo used to be dropped silently and now makes the memo hex. A text memo that itself looks like hex (`"0x5f3a"`) stays text; the two can't be confused, since the hex form is always 66 characters and a text memo is at most 32 bytes.
 - The `AssetTransaction` of a pre-v6 issuance names the beneficiary's default portfolio, where the chain credited it, rather than the asset owner's.
 - `FoundType` and `Debug` are removed.
@@ -349,6 +350,37 @@ What was "the identity's affirmation" is its holder rows: `instructionAffirmatio
 
 An off-chain leg has no `Pending` approval row. The chain keeps its approval per leg, pending from the instruction's creation (from 6.0) until a receipt is claimed for it, so an instruction is fully approved only when no row is `Pending` and every `OffChain` leg has an entry in `offChainReceipts`.
 
+### 9.10 Extrinsic permissions in one form (2026-10-21)
+
+The chain matches a call against a key's or an agent group's extrinsic permissions by its pallet and extrinsic names, exactly. Master stored those permissions as polkadot-js decoded them at the event, so their shape depended on the runtime: before metadata v14 a list of `{ pallet_name, dispatchable_names }` with names as text, from v14 to 7.0 a list of `{ palletName, dispatchableNames }` with names in hex, from 7.0 a map by pallet name. A row kept the shape of the event that last wrote it, so before 7.0 one field held two. Every row now holds 7.0's shape, whichever runtime set it:
+
+```json
+{ "these": { "Asset": { "extrinsics": { "these": ["add_documents", "issue"] } },
+             "Identity": { "extrinsics": { "whole": null } } } }
+```
+
+| Entity | Was | Now |
+|---|---|---|
+| `IdentityKey` (master's `Permissions`) | `transactions.values` before 7.0: the list, in the decoding of the event that set it | a map by pallet name, names as text, in byte order |
+| `AgentGroup` | `permissions` before 7.0: the list, as decoded | the map |
+| `AssetAgentHistory` (master's `TickerExternalAgentHistory`) | a built-in group's `permissions` (`Full`, `ExceptMeta`, `PolymeshV1CAA`, `PolymeshV1PIA`): always a snake_case list | the map, like a custom group's |
+| `Authorization` | `data.extrinsic` of `JoinIdentity` and `RotatePrimaryKeyToSecondary` before 7.0: the list, as decoded | the map |
+
+Names are kept as the chain stores them: padded, misspelt and retired names stay, and grant nothing, as on chain. Asset and portfolio permissions are unchanged; before 7.0 an asset permission still names a ticker.
+
+### 9.11 Text as the chain stores it (2026-10-21)
+
+Master trimmed a user's text when the event decoded it as `Text` (before metadata v14) and kept it as given when it decoded as `Bytes` (from v14), so the same chain value could be stored two ways. Every text a user enters is now stored as the chain holds it, whichever runtime wrote it: its bytes as UTF-8, nothing trimmed, without a fixed-width value's trailing NUL padding, and as hex when the bytes are not text.
+
+| Field | Was | Now |
+|---|---|---|
+| `Asset.name`, `Asset.fundingRound`, `Portfolio.name`, `Venue.details`, `Proposal.url`, `Proposal.description`, `CorporateAction.details`, `Sto.name` | trimmed when set before v14 | as stored, spaces kept (testnet venue 36 is `"New STO !!! "`) |
+| `Asset.fundingRound` | null when the asset was created with an empty round | `""`, the empty round the chain stores; null only when it stores none |
+| Every field above, and `CustomClaimType.name`, `CustomAssetType.name`, `AssetMetadata` names and values, ballot titles, motions and choices, confidential asset names, symbols and data | bytes that are not UTF-8 read one character per byte (testnet: 24 venues' details); NUL characters anywhere removed | trailing NUL padding removed; a value that is not UTF-8, or holds another NUL, is its hex |
+| `AssetDocument.name`, `.link`, `.type` | a value beginning `0x` was read as hex | read from the document's bytes, whatever they spell |
+
+Tickers and memos keep their rule: text without the NUL padding.
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.
@@ -374,7 +406,6 @@ Small tables (only the event and extrinsic stamps are trimmed; no alternative is
 | `Era` | `startEvent`, `endEvent` |
 | `MultiSigProposal` | `extrinsic` |
 | `Nft` | `burnedEvent` |
-| `Nomination` | `validFromEvent` |
 | `IdentityKey` | `validFromBlock` |
 
 Entity lookups on the small tables (holders of an asset, keys of an identity, holdings of an identity, NFTs, instruction parties) are not trimmed.

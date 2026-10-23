@@ -3,6 +3,9 @@ import { DecodedEvent, decodeEvent } from '../../../decode';
 import {
   Account,
   AnomalyKind,
+  Authorization,
+  AuthorizationStatusEnum,
+  AuthTypeEnum,
   MultiSig,
   MultiSigAdmin,
   MultiSigAdminStatusEnum,
@@ -11,6 +14,8 @@ import {
   SignerTypeEnum,
 } from '../../../types';
 import {
+  blockTime,
+  getAllByFields,
   getMultiSigSigner,
   getMultiSigSigners,
   getNumberValue,
@@ -190,11 +195,74 @@ const getMultiSigSignersDetails = (
   }));
 };
 
+/** The pending offers an account or identity holds, as the index keeps them */
+const pendingAuthorizations = (signer: MultiSigSigner): Promise<Authorization[]> =>
+  signer.signerType === SignerTypeEnum.Account
+    ? getAllByFields<Authorization>('Authorization', [
+        ['toAccountId', '=', signer.signerValue],
+        ['status', '=', AuthorizationStatusEnum.Pending],
+      ])
+    : getAllByFields<Authorization>('Authorization', [
+        ['toId', '=', signer.signerValue],
+        ['status', '=', AuthorizationStatusEnum.Pending],
+      ]);
+
+/**
+ * Whether an offer of `signer`'s place, other than authorization `except`, can still be accepted
+ * at `at`. A key can be offered the place more than once, and accepting, ending or being removed
+ * under one offer leaves the others standing.
+ */
+export const offerStands = async (
+  signer: MultiSigSigner,
+  at: Date,
+  except?: string
+): Promise<boolean> =>
+  (await pendingAuthorizations(signer)).some(
+    ({ id, type, data, expiry }) =>
+      id !== except &&
+      type === AuthTypeEnum.AddMultiSigSigner &&
+      data !== undefined &&
+      JSON.parse(data) === signer.multisigId &&
+      (!expiry || expiry.getTime() > at.getTime())
+  );
+
+/**
+ * Sets a signer's standing and re-reads its account's cached role: accepting makes it a signer
+ * key, being removed takes the role away. A signer removed while an offer of its place stands is
+ * invited still.
+ */
+const setSignerStatus = async (
+  multiSigSigner: MultiSigSigner,
+  status: MultiSigSignerStatusEnum,
+  {
+    block,
+    blockId,
+    blockEventId,
+  }: Pick<ReturnType<typeof extractArgs>, 'block' | 'blockId' | 'blockEventId'>
+): Promise<void> => {
+  multiSigSigner.status =
+    status === MultiSigSignerStatusEnum.Removed &&
+    (await offerStands(multiSigSigner, blockTime(block)))
+      ? MultiSigSignerStatusEnum.Authorized
+      : status;
+  multiSigSigner.updatedEventId = blockEventId;
+  await multiSigSigner.save();
+
+  const account = multiSigSigner.signerAccountId
+    ? await Account.get(multiSigSigner.signerAccountId)
+    : undefined;
+
+  if (account) {
+    await refreshKeyRole(account, blockId, blockEventId);
+  }
+};
+
 const handleMultiSigSignerStatus = async (
   event: SubstrateEvent,
   status: MultiSigSignerStatusEnum
 ): Promise<void> => {
-  const { block, blockId, blockEventId, eventId, eventIdx } = extractArgs(event);
+  const args = extractArgs(event);
+  const { block, eventId, eventIdx } = args;
 
   const { multisigId, signerType, signerValue } = getMultiSigSignerDetails(
     decodeEvent(event),
@@ -213,19 +281,7 @@ const handleMultiSigSignerStatus = async (
     return;
   }
 
-  multiSigSigner.status = status;
-  multiSigSigner.updatedEventId = blockEventId;
-  await multiSigSigner.save();
-
-  // The signer's standing just changed, so its account's cached role is re-read: accepting makes
-  // it a signer key, being removed takes the role away again.
-  const account = multiSigSigner.signerAccountId
-    ? await Account.get(multiSigSigner.signerAccountId)
-    : undefined;
-
-  if (account) {
-    await refreshKeyRole(account, blockId, blockEventId);
-  }
+  await setSignerStatus(multiSigSigner, status, args);
 };
 
 export const handleMultiSigCreated = async (event: SubstrateEvent): Promise<void> => {
@@ -381,9 +437,9 @@ export const handleMultiSigSignerRemoved = async (event: SubstrateEvent): Promis
 };
 
 export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
+  const args = extractArgs(event);
 
-  const signerDetails = getMultiSigSignersDetails(decodeEvent(event), block);
+  const signerDetails = getMultiSigSignersDetails(decodeEvent(event), args.block);
 
   const multiSigSigners = await Promise.all(
     signerDetails.map(({ multisigId, signerType, signerValue }) =>
@@ -391,13 +447,34 @@ export const handleMultiSigSignersRemoved = async (event: SubstrateEvent): Promi
     )
   );
 
-  const existingSigners = multiSigSigners.filter(multiSigSigner => multiSigSigner);
-  existingSigners.forEach(multiSigSigner => {
-    multiSigSigner.status = MultiSigSignerStatusEnum.Removed;
-    multiSigSigner.updatedEventId = blockEventId;
-  });
+  await Promise.all(
+    multiSigSigners.map(
+      multiSigSigner =>
+        multiSigSigner && setSignerStatus(multiSigSigner, MultiSigSignerStatusEnum.Removed, args)
+    )
+  );
+};
 
-  await Promise.all(existingSigners.map(existingSigner => existingSigner.save()));
+/**
+ * 7.0 keeps only account signers: its migration dropped every identity signer, with no event, so
+ * they are removed when the chain crosses into it.
+ */
+export const removeIdentitySigners = async (blockEventId: string): Promise<void> => {
+  // read whole, once: no index covers `signerType`
+  const signers = await getAllByFields<MultiSigSigner>('MultiSigSigner', []);
+
+  await Promise.all(
+    signers
+      .filter(
+        ({ signerType, status }) =>
+          signerType === SignerTypeEnum.Identity && status !== MultiSigSignerStatusEnum.Removed
+      )
+      .map(signer => {
+        signer.status = MultiSigSignerStatusEnum.Removed;
+        signer.updatedEventId = blockEventId;
+        return signer.save();
+      })
+  );
 };
 
 export const handleMultiSigSignaturesRequiredChanged = async (

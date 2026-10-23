@@ -6,6 +6,7 @@ import {
 import {
   handleAgentAdded,
   handleAgentRemoved,
+  handleCreatorAgent,
   handleGroupChanged,
   handleGroupCreated,
 } from '../../src/mappings/entities/externalAgents/mapExternalAgentHistory';
@@ -66,6 +67,56 @@ describe('AgentGroup', () => {
     const [group] = Object.values(db.AgentGroup) as any[];
 
     expect(group.assetId).toBe(ASSET_ID);
+  });
+
+  it("stores its permissions in the index's form, a map by pallet with names as text", async () => {
+    const db = mockStore();
+
+    await handleGroupCreated(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'GroupCreated',
+        data: [
+          codec(DID_A),
+          codec(ASSET_ID),
+          codec(1),
+          // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
+          codec({
+            these: [{ palletName: '0x4173736574', dispatchableNames: { these: ['0x6973737565'] } }],
+          }),
+        ],
+      })
+    );
+
+    const [group] = Object.values(db.AgentGroup) as any[];
+
+    expect(JSON.parse(group.permissions)).toEqual({
+      these: { Asset: { extrinsics: { these: ['issue'] } } },
+    });
+  });
+});
+
+describe("an agent's history", () => {
+  it("records a built-in group's permissions in the index's form", async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleAgentAdded(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentAdded',
+        data: [codec(DID_A), codec(ASSET_ID), codec({ polymeshV1PIA: null })],
+      })
+    );
+
+    const [history] = Object.values(db.AssetAgentHistory) as any[];
+
+    expect(JSON.parse(history.permissions)).toEqual({
+      these: {
+        Asset: { extrinsics: { these: ['controller_transfer', 'issue', 'redeem'] } },
+        Sto: { extrinsics: { except: ['invest'] } },
+      },
+    });
   });
 });
 
@@ -168,5 +219,82 @@ describe('FundraiserCreated recorded as an agent action', () => {
       callerId: DID_A,
       eventId: 'FundraiserCreated',
     });
+  });
+});
+
+/**
+ * Before external agents had an event of their own at creation, creating an asset made its
+ * creator a Full agent with nothing to say so. Which 3.x did is not one spec on both chains:
+ * testnet's 3.2 emits `AgentAdded`, mainnet's 3.3 (WORLDCAPITAL, block 1,947,849) does not.
+ */
+describe('the creator of a new asset', () => {
+  const ticker = '0x555553440000000000000000';
+  const PHASE = { toString: () => '{"applyExtrinsic":1}' };
+  const record = (section: string, method: string, data: unknown[], phase = PHASE) => ({
+    phase,
+    event: { section, method, data },
+  });
+  const assetCreated = [
+    codec(DID_A),
+    codec(ticker),
+    codec(true),
+    codec('StableCoin'),
+    codec(DID_A),
+    codec(false),
+  ];
+  const created = (siblings: unknown[]) =>
+    tupleEvent({
+      section: 'asset',
+      method: 'AssetCreated',
+      specVersion: 3_003,
+      idx: 1,
+      data: assetCreated,
+      events: [siblings[0], record('asset', 'AssetCreated', assetCreated), ...siblings.slice(1)],
+    });
+
+  it('is made a Full agent when its extrinsic emits no AgentAdded for the asset', async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        // another extrinsic's agent, for the same asset, is no announcement of this one
+        record(
+          'externalAgents',
+          'AgentAdded',
+          [codec(DID_A), codec(ticker), codec({ full: null })],
+          {
+            toString: () => '{"applyExtrinsic":2}',
+          }
+        ),
+      ])
+    );
+
+    const assetId = await getAssetIdForLegacyTicker(ticker);
+    expect(Object.values(db.AssetAgent ?? {})).toEqual([
+      expect.objectContaining({ id: `${assetId}/${DID_A}`, assetId, identityId: DID_A }),
+    ]);
+    expect(Object.values(db.AssetAgentHistory ?? {})).toEqual([
+      expect.objectContaining({ assetId, identityId: DID_A, type: 'AgentAdded' }),
+    ]);
+  });
+
+  it('is left to the AgentAdded its extrinsic emits', async () => {
+    const db = mockStore();
+
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        record('externalAgents', 'AgentAdded', [
+          codec(DID_A),
+          codec(ticker),
+          codec({ full: null }),
+        ]),
+      ])
+    );
+
+    expect(db.AssetAgent ?? {}).toEqual({});
+    expect(db.AssetAgentHistory ?? {}).toEqual({});
   });
 });

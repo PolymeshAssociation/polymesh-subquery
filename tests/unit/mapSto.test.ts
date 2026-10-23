@@ -126,4 +126,19 @@ describe('handleInvested', () => {
       raiseToken: 'RAISE',
     });
   });
+
+  // the offering pallet sells from its tiers in order
+  it("takes the tokens bought from the offering's tiers, in order", async () => {
+    const tier = (remaining: string) => ({ price: '1', total: '60', remaining });
+    const db = mockStore({
+      Asset: { [OFFERING]: { id: OFFERING, ticker: 'OFFER' } },
+      Sto: {
+        [`${OFFERING}/4`]: { id: `${OFFERING}/4`, tiers: [tier('0'), tier('60'), tier('60')] },
+      },
+    });
+
+    await handleInvested(invested({ offChain: '0x5449434b4552' }));
+
+    expect(db.Sto[`${OFFERING}/4`].tiers).toEqual([tier('0'), tier('0'), tier('20')]);
+  });
 });

@@ -7,7 +7,6 @@ import {
   ConfidentialKeyRole,
 } from '../../../types';
 import {
-  bytesToString,
   getAllByFields,
   getBigIntValue,
   getNumberValue,
@@ -15,6 +14,7 @@ import {
   getTextValue,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { storedText } from '../../../utils/text';
 
 type AssetKey = Pick<
   ConfidentialAssetKey,
@@ -73,10 +73,10 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
   await ConfidentialAsset.create({
     id: assetId,
     assetId: getNumberValue(rawAssetId),
-    name: bytesToString(rawName),
-    symbol: bytesToString(rawSymbol),
+    name: storedText(rawName),
+    symbol: storedText(rawSymbol),
     decimals: getNumberValue(rawDecimals),
-    data: bytesToString(rawData),
+    data: storedText(rawData),
     creatorId: getTextValue(rawDid),
     totalSupply: BigInt(0),
     createdEventId: blockEventId,

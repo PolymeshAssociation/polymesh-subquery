@@ -718,6 +718,18 @@ describe('asset metadata', () => {
     expect(db['AssetMetadata'][`${ASSET}/Local/1`].value).toBeUndefined();
   });
 
+  it("removes a global key's row on MetadataValueDeleted, as the asset holds nothing of it then", async () => {
+    db['AssetMetadata'] = {
+      [`${ASSET}/Global/2`]: { id: `${ASSET}/Global/2`, scope: 'Global', keyId: '2', value: 'x' },
+    };
+
+    await handleMetadataValueDeleted(
+      metaEvent('MetadataValueDeleted', [codec('0xdid'), codec(ASSET), codec({ global: 2 })])
+    );
+
+    expect(db['AssetMetadata'][`${ASSET}/Global/2`]).toBeUndefined();
+  });
+
   it('removes the row entirely on LocalMetadataKeyDeleted', async () => {
     db['AssetMetadata'] = { [`${ASSET}/Local/1`]: { id: `${ASSET}/Local/1` } };
 

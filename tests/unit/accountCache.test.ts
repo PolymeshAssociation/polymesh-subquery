@@ -1,3 +1,4 @@
+import { TypeRegistry } from '@polkadot/types';
 import { Codec } from '@polkadot/types/types';
 import { __resetBlockContext } from '../../src/mappings/blockContext';
 import { Account, AccountKeyRole, Identity } from '../../src/types';
@@ -213,6 +214,33 @@ describe('getOrCreateAccount for keys of one unindexed identity resolved concurr
 
     expect(identities[DID].primaryAccountId).toBe(ADDRESS);
     expect(createPortfolio).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getOrCreateAccount for a 5.x or 6.x secondary key', () => {
+  /**
+   * Until 7.0 a secondary key's record is `SecondaryKey(IdentityId, Permissions)`, so the record's
+   * value is a pair, and the identity is its first member.
+   */
+  it('files the key under the identity the pair names', async () => {
+    const registry = new TypeRegistry();
+    const pair = registry.createType('(H256, u32)', [DID, 0]);
+    (globalThis as any).api.registry = { chainSS58: 12 };
+    (api as any).query = {
+      identity: {
+        keyRecords: jest.fn(async () => ({
+          isEmpty: false,
+          unwrap: () => ({ isPrimaryKey: false, isSecondaryKey: true, asSecondaryKey: pair }),
+        })),
+      },
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(undefined);
+    jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
+    jest.spyOn(Identity, 'get').mockResolvedValue({ id: DID, primaryAccountId: ADDRESS } as never);
+
+    const account = await getOrCreateAccount(OTHER, freshBlockId(), datetime);
+
+    expect(account).toMatchObject({ identityId: DID, keyRole: AccountKeyRole.SecondaryKey });
   });
 });
 

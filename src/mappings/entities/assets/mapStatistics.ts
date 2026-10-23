@@ -1,7 +1,6 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
-  Asset,
   ClaimTypeEnum,
   StatOpTypeEnum,
   StatType,
@@ -76,7 +75,7 @@ const getStatTypes = (
   });
 };
 
-const upsertStatType = async (
+export const upsertStatType = async (
   { assetId, opType, claimType, claimIssuerId, customClaimTypeId }: Attributes<StatType>,
   blockEventId: string
 ) => {
@@ -99,11 +98,8 @@ const upsertStatType = async (
   return statType.save();
 };
 
-interface MeshStatClaim {
-  Accredited?: boolean;
-  Affiliate?: boolean;
-  Jurisdiction?: string;
-}
+/** `{ accredited: bool }`, `{ affiliate: bool }` or `{ jurisdiction: CountryCode | null }` */
+type MeshStatClaim = Record<string, boolean | string | null>;
 
 interface MeshTransferCondition {
   maxInvestorCount: bigint;
@@ -112,12 +108,19 @@ interface MeshTransferCondition {
   claimCount: [MeshStatClaim, string, bigint, bigint];
 }
 
+/** A stat claim's type, and its value as text, as `claimValue` holds it: a boolean or a country code */
 const getStatClaim = (statClaim: MeshStatClaim) => {
-  const type = Object.keys(statClaim)[0];
-  return { type: capitalizeFirstLetter(type) as ClaimTypeEnum, value: statClaim[type] };
+  const [[type, value]] = Object.entries(statClaim);
+  return {
+    type: capitalizeFirstLetter(type) as ClaimTypeEnum,
+    value: value === null ? undefined : String(value),
+  };
 };
 
-const getTransferConditions = (item: Codec, assetId: string): Attributes<TransferCompliance>[] => {
+export const getTransferConditions = (
+  item: Codec,
+  assetId: string
+): Attributes<TransferCompliance>[] => {
   const transferConditions = JSON.parse(item.toString()) as MeshTransferCondition[];
 
   const optBigInt = (x?: bigint) => {
@@ -174,7 +177,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
   );
 };
 
-const getStatTypeId = (
+export const getStatTypeId = (
   assetId: string,
   opType: string,
   claimType?: string,
@@ -191,6 +194,21 @@ const getStatTypeId = (
   }
   return statTypeId;
 };
+
+/**
+ * A condition's id: its statistic and its own terms. An asset can set several conditions over one
+ * statistic, such as two investor counts, so the statistic alone doesn't name one.
+ */
+export const conditionId = ({
+  statTypeId,
+  value,
+  claimValue,
+  min,
+  max,
+}: Attributes<TransferCompliance>): string =>
+  value === null || value === undefined
+    ? `${statTypeId}/${claimValue ?? ''}/${min ?? ''}/${max ?? ''}`
+    : `${statTypeId}/${value}`;
 
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId, block } = extractArgs(event);
@@ -241,19 +259,17 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
     [['assetId', '=', assetId]]
   );
 
+  const ids = new Set(transferConditions.map(conditionId));
   const removedConditions = existingTransferCompliances
-    .filter(
-      ({ statTypeId: existingStatTypeId }) =>
-        !transferConditions.some(({ statTypeId }) => statTypeId === existingStatTypeId)
-    )
+    .filter(({ id }) => !ids.has(id))
     .map(({ id }) => TransferCompliance.remove(id));
 
   const newConditions = [];
 
   transferConditions.forEach(condition => {
     const upsert = async () => {
-      const { statTypeId } = condition;
-      let transferCompliance = await TransferCompliance.get(statTypeId);
+      const id = conditionId(condition);
+      let transferCompliance = await TransferCompliance.get(id);
       if (transferCompliance) {
         Object.assign(transferCompliance, {
           ...condition,
@@ -261,7 +277,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
         } satisfies Partial<TransferComplianceProps>);
       } else {
         transferCompliance = TransferCompliance.create({
-          id: statTypeId,
+          id,
           ...condition,
           createdEventId: blockEventId,
           updatedEventId: blockEventId,
@@ -336,21 +352,5 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
       { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
       blockEventId
     );
-  }
-};
-
-export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-
-  const [, rawAssetId] = params;
-  const assetId = await getAssetId(rawAssetId, block);
-
-  const specVersion = block.specVersion;
-  const specName = api.runtimeVersion.specName.toString();
-  if (specVersion < transferRestrictionSpecVersion && specName !== 'polymesh_private_dev') {
-    const asset = await Asset.get(assetId);
-    if (asset.totalSupply === BigInt(0)) {
-      await StatType.remove(`${assetId}/Count`);
-    }
   }
 };

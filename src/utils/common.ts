@@ -4,6 +4,7 @@ import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/uti
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
 import { normaliseSpecVersion } from '../decode/specVersion';
+import { utf8Text } from './bytes';
 import { ErrorJson } from '../types';
 import * as generatedModels from '../types/models';
 export const emptyDid = '0x00'.padEnd(66, '0');
@@ -181,12 +182,17 @@ export const getBooleanValue = (item: Codec): boolean => {
   return JSON.parse(getTextValue(item) || 'false');
 };
 
+/**
+ * Text from hex bytes: as UTF-8, which is how an event codec renders the same bytes, or a character
+ * per byte for bytes that are no UTF-8.
+ */
 export const hexToString = (input: string): string => {
-  const hex = hexStripPrefix(input);
-  let str = '';
-  for (let i = 0; i < hex.length; i += 2)
-    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-  return removeNullChars(str);
+  const text =
+    utf8Text(input) ??
+    Array.from(Buffer.from(hexStripPrefix(input), 'hex'), byte => String.fromCodePoint(byte)).join(
+      ''
+    );
+  return removeNullChars(text);
 };
 
 /**

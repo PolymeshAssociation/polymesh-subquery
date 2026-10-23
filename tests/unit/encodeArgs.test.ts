@@ -6,6 +6,7 @@ import {
   RawReference,
   tryEncodeArgs,
 } from '../../src/mappings/args/encode';
+import { inSandbox } from './sandbox';
 
 const registry = new TypeRegistry();
 registry.register({
@@ -134,42 +135,15 @@ describe('encodeArgs', () => {
   });
 });
 
-/**
- * Mappings run in SubQuery's vm2 sandbox, where the host's `TextDecoder` rejects the sandbox's typed
- * arrays but accepts a `Buffer` (testnet block 90,237 failed on its first ticker). The encoder is
- * loaded afresh here with a `TextDecoder`, global and from `util`, that does the same.
- */
+/** Testnet block 90,237 failed on its first ticker, decoding inside the sandbox. */
 describe('encodeValue inside the mappings sandbox', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const util = require('util') as { TextDecoder: typeof TextDecoder };
-  const realm = globalThis as unknown as { TextDecoder: typeof TextDecoder };
-  const host = util.TextDecoder;
-  let sandboxed: typeof encodeValue;
-
-  beforeAll(() => {
-    class HostOnlyDecoder extends host {
-      decode(input?: Parameters<TextDecoder['decode']>[0]): string {
-        if (!Buffer.isBuffer(input)) {
-          throw new TypeError('The "list" argument must be an instance of ArrayBufferView');
-        }
-        return super.decode(input);
-      }
-    }
-    util.TextDecoder = HostOnlyDecoder;
-    realm.TextDecoder = HostOnlyDecoder;
-    jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      sandboxed = require('../../src/mappings/args/encode').encodeValue;
-    });
-  });
-
-  afterAll(() => {
-    util.TextDecoder = host;
-    realm.TextDecoder = host;
-  });
+  const sandboxed = inSandbox(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('../../src/mappings/args/encode').encodeValue as typeof encodeValue
+  );
 
   const encodeIn = (type: string, value: unknown) =>
-    sandboxed(registry.createType(type as never, value), type);
+    sandboxed()(registry.createType(type as never, value), type);
 
   it('writes tickers, Bytes and Text without the host TextDecoder', () => {
     expect(encodeIn('Ticker', '0x4d554d424149524f434b5353')).toBe('MUMBAIROCKSS');

@@ -2074,7 +2074,10 @@ type AssetPermissions @jsonField {
 }
 
 """
-Represents which extrinsics an Account may sign for an Identity
+Represents which extrinsics an Account may sign for an Identity. For `these` or `except`, `values`
+is a map by pallet name of `{ extrinsics }`, itself `whole` or `these`/`except` a list of extrinsic
+names: 7.0's form, whichever runtime set them. Names are as the chain stores them and matches them,
+exactly, so a misspelt or retired one grants nothing
 """
 type TransactionPermissions @jsonField {
   type: String!
@@ -2312,6 +2315,7 @@ type StakingEvent @entity {
   amount: BigInt
   rewardDestination: String
   rewardDestinationAccount: Account
+  "the targets of a `Nominated` event; none from 8.0, which nominates without an event"
   nominatedValidators: [String!]
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
@@ -2332,7 +2336,8 @@ type UnlockChunk @jsonField {
 }
 
 """
-Current staking position for a stash — how much is bonded/unbonding, and with whom. `bonded`
+Current staking position for a stash — how much is bonded/unbonding. Who it nominates is not
+indexed: from 8.0 nominating emits no event, so read `staking.nominators` instead. `bonded`
 mirrors the same `staking.ledger`/hold read `AccountBalance.bonded`/`.locks`/`.holds` already
 track (`readStakingLock` in `src/utils/staking.ts`) — this is a second view onto the same number,
 not an independently accumulated one, so the two cannot drift apart
@@ -2350,32 +2355,10 @@ type StakingPosition @entity {
   unlocking: [UnlockChunk]
   rewardDestination: String
   rewardDestinationAccount: Account
-  isValidator: Boolean!
-  isChilled: Boolean!
-  nominations: [Nomination!]! @derivedFrom(field: "position")
   totalRewarded: BigInt!
   totalSlashed: BigInt!
   createdEvent: Event!
   updatedEvent: Event!
-}
-
-"""
-One identity's nomination of one validator, from `staking.Nominated` (pre-v8) /
-`validators.Nominated` (v8+). A `nominate` call replaces the whole target set — the previous
-open rows for targets no longer nominated are closed, rows for targets already nominated are left
-untouched, and rows for newly-added targets are created
-"""
-type Nomination
-  @entity
-  @compositeIndexes(fields: [["position", "validToEvent"]]) {
-  id: ID! # stash/validator/blockEventId — the event that opened this nomination
-  position: StakingPosition! @index
-  validator: Account! @index
-  "the era active when the nomination was submitted — nominations apply going forward, not to a specific past era"
-  eraIndex: Int
-  validFromEvent: Event!
-  "null = still nominated"
-  validToEvent: Event
 }
 
 """
@@ -2654,7 +2637,7 @@ type AssetAgentHistory @entity {
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
   type: AgentHistoryType!
-  "The permissions as at this history row, JSON-in-a-string. An `AgentGroup`'s `ExtrinsicPermissions` is a richer structure (`Whole | These | Except`, nesting per-pallet dispatchable names) than the `PermissionsJson` jsonField's flat shape, so typing it properly is a separate exercise rather than a lossy flattening"
+  "The agent's extrinsic permissions as at this history row, JSON text in `AgentGroup.permissions`'s form; a built-in group's are written out the same way"
   permissions: String
   createdEvent: Event!
 }
@@ -2665,6 +2648,7 @@ Represents a set of agents authorized to perform actions for a given Asset
 type AgentGroup @entity {
   id: ID! #assetId/group_id
   asset: Asset! @index
+  "The group's extrinsic permissions as JSON text: `{\"whole\":null}`, or `these`/`except` a map by pallet name as in `TransactionPermissions`"
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
   createdEvent: Event!
@@ -3112,8 +3096,10 @@ type CheckpointSchedule @entity {
   nextCheckpointAt: Date
   "The checkpoints this schedule has actually created"
   checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
-  "null while active"
+  "Set when an agent removes the schedule; null otherwise"
   removedEvent: Event
+  "The scheduled checkpoint after which the chain dropped the schedule, its last; null while checkpoints are still to come. The chain emits nothing when a schedule runs out"
+  completedEvent: Event
   createdEvent: Event!
 }
 
@@ -3293,6 +3279,7 @@ Represents where this claim may apply
 """
 type Scope @jsonField {
   type: String!
+  "For an `Asset` scope, the asset id from 7.0 and the ticker before it, as the chain scopes the claim"
   value: String!
   "`assetId` is only present when `type` is `Asset`"
   assetId: String
@@ -3385,7 +3372,7 @@ Represents restriction that will ensure the composition of ownership remains a c
 e.g. No more than 2000 individual investors to avoid additional reporting requirements
 """
 type TransferCompliance @entity {
-  id: ID! # assetId/op/type/claimIssuer
+  id: ID! # its stat type id, then its value, or its claim value, min and max
   asset: Asset! @index(unique: false)
   type: TransferComplianceTypeEnum!
   statType: StatType!
@@ -4341,14 +4328,15 @@ type AssetPreApproval @entity {
 }
 
 """
-Represents a ticker reservation. If linked to an Asset `asset` will be set
+A ticker registered to an identity. Once linked to an asset, `asset` is set and the reservation
+no longer expires; unlinking it frees the ticker, and the reservation goes.
 """
 type TickerReservation @entity {
   id: ID!
   ticker: String!
   asset: Asset
   identity: Identity! @index(unique: false)
-  "When the ticker reservation lapses. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
+  "When the ticker reservation lapses; null once it is linked to an asset. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time; see docs/architecture-review.md §10.1"
   expiry: Date
   createdEvent: Event!
   updatedEvent: Event!

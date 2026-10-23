@@ -1,27 +1,18 @@
 import { Codec } from '@polkadot/types/types';
-import { hexStripPrefix, hexToU8a, isHex, u8aToHex } from '@polkadot/util';
+import { hexToU8a, isHex, u8aToHex } from '@polkadot/util';
+import { utf8Text } from './bytes';
+import { UnexpectedShapeError } from './codec';
 import { getTextValue, removeNullChars } from './common';
 
 /**
  * UTF-8 text, keeping a leading byte-order mark, or `undefined` when it is invalid or holds a NUL,
  * which Postgres text rejects.
- *
- * Decoded through a `Buffer`, which the host provides: mappings run in SubQuery's vm2 sandbox,
- * where the host's `TextDecoder` rejects the sandbox's typed arrays. A `Buffer` replaces each
- * invalid sequence, so the text is valid exactly when it encodes back to the same bytes.
  */
-const utf8Text = (bytes: Uint8Array): string | undefined => {
-  if (bytes.includes(0)) {
-    return undefined;
-  }
-  const buffer = Buffer.from(hexStripPrefix(u8aToHex(bytes)), 'hex');
-  const text = buffer.toString('utf8');
-
-  return Buffer.from(text, 'utf8').equals(buffer) ? text : undefined;
-};
+const nulFreeText = (bytes: Uint8Array): string | undefined =>
+  bytes.includes(0) ? undefined : utf8Text(bytes);
 
 /** UTF-8 text when it is valid and NUL-free; otherwise hex. */
-export const textOrHex = (bytes: Uint8Array): string => utf8Text(bytes) ?? u8aToHex(bytes);
+export const textOrHex = (bytes: Uint8Array): string => nulFreeText(bytes) ?? u8aToHex(bytes);
 
 /**
  * A fixed-width value padded with trailing NULs, such as a ticker or a memo: its text without the
@@ -32,7 +23,7 @@ export const paddedText = (bytes: Uint8Array): string => {
   while (end > 0 && bytes[end - 1] === 0) {
     end -= 1;
   }
-  return utf8Text(bytes.subarray(0, end)) ?? u8aToHex(bytes);
+  return nulFreeText(bytes.subarray(0, end)) ?? u8aToHex(bytes);
 };
 
 /** Whether `text` holds a control character other than tab, line feed and carriage return. */
@@ -70,4 +61,42 @@ export const memoText = (value: Codec | string | null | undefined): string | und
   const bytes = hexToU8a(raw);
   const text = paddedText(bytes);
   return hasControl(text) ? u8aToHex(bytes) : text;
+};
+
+/** An `Option` codec, as far as reading its value needs */
+interface OptionLike {
+  isNone: boolean;
+  unwrap: () => Codec;
+}
+
+const isOption = (value: Codec): value is Codec & OptionLike =>
+  typeof (value as Partial<OptionLike>).isNone === 'boolean' &&
+  typeof (value as Partial<OptionLike>).unwrap === 'function';
+
+/**
+ * A text a user entered (a name, details, a description), as the chain stores it: its bytes as
+ * UTF-8, nothing trimmed, without a fixed-width value's NUL padding, or their hex when they are not
+ * text (`paddedText`). `""` for an empty value; `undefined` for none, such as an `Option`'s `None`.
+ *
+ * The bytes are the codec's hex, the same for the `Bytes` metadata v14 decodes and the `Text` the
+ * type bundle decoded before it, so the text doesn't depend on the runtime; and as a string they
+ * cross into the host without a typed array or an `instanceof` across the sandbox.
+ */
+export const storedText = (value: Codec | null | undefined): string | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (isOption(value)) {
+    return value.isNone ? undefined : storedText(value.unwrap());
+  }
+  return paddedText(hexToU8a(value.toHex()));
+};
+
+/** `storedText` of a value the chain always gives, such as a required name; `what` names it */
+export const requiredText = (value: Codec | null | undefined, what: string): string => {
+  const text = storedText(value);
+  if (text === undefined) {
+    throw new UnexpectedShapeError(`${what} was expected to be text, but is absent`);
+  }
+  return text;
 };

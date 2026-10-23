@@ -150,15 +150,20 @@ interface KindTotalValue {
 export const locksOf = (balance: AccountBalance): Lock[] =>
   (balance.locks ?? []).map(lock => ({ ...lock, amount: BigInt(lock.amount) }));
 
+// by id and by reason, so the order doesn't depend on which event added each one first
 const setLocks = (balance: AccountBalance, locks: Lock[]): void => {
-  balance.locks = locks.map(lock => ({ ...lock, amount: lock.amount.toString() }));
+  balance.locks = [...locks]
+    .sort((a, b) => a.lockId.localeCompare(b.lockId))
+    .map(lock => ({ ...lock, amount: lock.amount.toString() }));
 };
 
 export const holdsOf = (balance: AccountBalance): Hold[] =>
   (balance.holds ?? []).map(hold => ({ ...hold, amount: BigInt(hold.amount) }));
 
 const setHolds = (balance: AccountBalance, holds: Hold[]): void => {
-  balance.holds = holds.map(hold => ({ ...hold, amount: hold.amount.toString() }));
+  balance.holds = [...holds]
+    .sort((a, b) => String(a.reason).localeCompare(String(b.reason)))
+    .map(hold => ({ ...hold, amount: hold.amount.toString() }));
 };
 
 const kindTotalsOf = (balance: AccountBalance): KindTotalValue[] =>

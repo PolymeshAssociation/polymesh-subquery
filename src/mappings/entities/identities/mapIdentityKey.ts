@@ -51,6 +51,17 @@ export const openIdentityKey = async (
   blockEventId: string
 ): Promise<void> => {
   const blockId = blockEventId.split('/')[0];
+
+  // an account lookup earlier in the block, reading the chain state the block left, may have
+  // opened this key's interval already, with no terms: the event's own opening replaces it
+  const lookedUp = await IdentityKey.get(identityKeyId(identityId, address, blockId, 0));
+  if (
+    lookedUp?.addedReason === EventIdEnum.AccountCreated &&
+    addedReason !== lookedUp.addedReason
+  ) {
+    await store.remove('IdentityKey', lookedUp.id);
+  }
+
   await IdentityKey.create({
     id: identityKeyId(identityId, address, blockId, eventIdx),
     identityId,

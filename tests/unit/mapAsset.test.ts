@@ -1,7 +1,11 @@
 import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
+import { TypeRegistry } from '@polkadot/types';
 import { EventRecord } from '@polkadot/types/interfaces';
-import { processUpdateReason } from '../../src/mappings/entities/assets/mapAsset';
+import {
+  fundingRoundAtCreation,
+  processUpdateReason,
+} from '../../src/mappings/entities/assets/mapAsset';
 import { EventIdEnum } from '../../src/types';
 
 /**
@@ -51,5 +55,21 @@ describe('processUpdateReason', () => {
 
     expect(result.eventId).toBeUndefined();
     expect(result.assetDelta).toStrictEqual({});
+  });
+});
+
+describe('fundingRoundAtCreation', () => {
+  const registry = new TypeRegistry();
+  const none = registry.createType('Option<Bytes>');
+  const named = registry.createType('Option<Bytes>', 'Series A ');
+
+  it('gives no round as "" before 6.0, which stored `unwrap_or_default()`', () => {
+    expect(fundingRoundAtCreation(none, 5_004_003)).toBe('');
+    expect(fundingRoundAtCreation(named, 5_004_003)).toBe('Series A ');
+  });
+
+  it('gives no round as undefined from 6.0, which stores only a named one', () => {
+    expect(fundingRoundAtCreation(none, 6_000_000)).toBeUndefined();
+    expect(fundingRoundAtCreation(named, 6_000_000)).toBe('Series A ');
   });
 });

@@ -3,7 +3,7 @@ import { decodeEvent } from '../../../decode';
 import { EventIdEnum, Portfolio } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
+  EXPLICIT_NULL,
   getAssetId,
   getBigIntValue,
   getFirstKeyFromJson,
@@ -17,7 +17,7 @@ import { createAssetTransaction, moveFungibleHolding } from '../assets/mapAsset'
 import { moveNftsWithinIdentity } from '../assets/mapNfts';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
-import { memoText } from '../../../utils/text';
+import { memoText, storedText } from '../../../utils/text';
 
 export const getPortfolio = async ({
   identityId,
@@ -81,7 +81,7 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = bytesToString(rawName);
+  const name = storedText(rawName);
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
   if (portfolio) {
@@ -109,7 +109,7 @@ export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<voi
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = bytesToString(rawName);
+  const name = storedText(rawName);
 
   const portfolio = await getPortfolio({ identityId: ownerId, number });
 
@@ -145,7 +145,8 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
   const custodian = getTextValue(rawCustodian);
 
   const portfolio = await getPortfolio(portfolioValue);
-  portfolio.custodianId = custodian;
+  // custody returned to the owner removes the custodian on chain
+  portfolio.custodianId = custodian === portfolio.identityId ? EXPLICIT_NULL : custodian;
   portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();

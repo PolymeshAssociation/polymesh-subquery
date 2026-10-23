@@ -1,7 +1,7 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
-import { Instruction, LegTypeEnum } from '../types';
+import { Asset, Instruction, LegTypeEnum } from '../types';
 import {
   capitalizeFirstLetter,
   extractBigInt,
@@ -96,6 +96,9 @@ export const legSides = (from: AssetHolderDetails, to: AssetHolderDetails): LegS
 const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promise<LegDetails> => {
   const { from: rawFromPortfolio, to: rawToPortfolio, amount } = leg;
   const { assetId, ticker } = await getAssetIdWithTicker(leg.asset, block);
+  // a leg of a ticker that is no asset moved nothing on chain and was settled with a receipt;
+  // 6.0's migration made each one an off-chain leg, as the chain has held it since
+  const isAsset = Boolean(await Asset.get(assetId));
 
   return {
     legIndex,
@@ -103,10 +106,10 @@ const readLeg = async (leg: any, legIndex: number, block: SubstrateBlock): Promi
       meshPortfolioToAssetHolder(rawFromPortfolio),
       meshPortfolioToAssetHolder(rawToPortfolio)
     ),
-    assetId,
+    assetId: isAsset ? assetId : undefined,
     ticker,
     amount: getBigIntValue(amount),
-    legType: LegTypeEnum.Fungible,
+    legType: isAsset ? LegTypeEnum.Fungible : LegTypeEnum.OffChain,
   };
 };
 

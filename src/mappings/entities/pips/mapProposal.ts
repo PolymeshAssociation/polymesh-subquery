@@ -3,16 +3,17 @@ import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
 import { blockEvents } from '../../../utils/blockEvents';
 import {
-  bytesToString,
   getAllByFields,
   getBigIntValue,
   getBooleanValue,
   getNumberValue,
   getProposerValue,
   getTextValue,
+  is8xChain,
   padNumericId,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
+import { storedText } from '../../../utils/text';
 
 /**
  * A PIP id is a bare numeric sequence. Zero-pad it (D12 / A14) so `Proposal.id` and
@@ -47,22 +48,38 @@ export const handleProposalCreated = async (event: SubstrateEvent): Promise<void
   const { params, blockEventId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
   const id = processPipId(rawPipId);
+  const proposer = getProposerValue(rawProposer);
+  const deposit = getBigIntValue(rawBalance);
+  // a community PIP's deposit is its proposer's aye, which `propose` records with no `Voted`
+  const depositVote =
+    proposer.type === 'Community'
+      ? ProposalVote.create({
+          id: `${id}/${proposer.value}`,
+          proposalId: id,
+          accountId: proposer.value,
+          vote: true,
+          weight: deposit,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
+        })
+      : undefined;
 
   await Proposal.create({
     id,
-    proposer: getProposerValue(rawProposer),
+    proposer,
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
-    balance: getBigIntValue(rawBalance),
-    url: bytesToString(rawUrl),
-    description: bytesToString(rawDescription),
+    balance: deposit,
+    url: storedText(rawUrl),
+    description: storedText(rawDescription),
     snapshotted: false,
     expiresAt: scheduledExpiry(event, id),
-    totalAyeWeight: BigInt(0),
+    totalAyeWeight: depositVote ? deposit : BigInt(0),
     totalNayWeight: BigInt(0),
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
+  await depositVote?.save();
 };
 
 export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise<void> => {
@@ -127,6 +144,10 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
     proposal.totalAyeWeight += weight;
   } else {
     proposal.totalNayWeight += weight;
+  }
+  // a vote sets the voter's deposit to the one it's weighed by, the proposer's included
+  if (proposal.proposer?.type === 'Community' && proposal.proposer.value === account) {
+    proposal.balance = weight;
   }
   proposal.updatedEventId = blockEventId;
 
@@ -209,6 +230,32 @@ export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<v
   await updateProposal(rawPipId, event, proposal => {
     proposal.executionScheduledAt = getNumberValue(rawBlock);
   });
+};
+
+/**
+ * `ProposalRefund(did, pipId, amount)`: the PIP's deposits are returned, the proposer's with them.
+ * Until 8.0 all at once. From 8.0 128 a block, each batch with its own event and in storage order,
+ * so the proposer's deposit is gone once the chain no longer holds it.
+ */
+export const handleProposalRefunded = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId] = extractArgs(event).params;
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
+
+  const { type, value: proposer } = proposal.proposer;
+  if (is8xChain(event.block) && type === 'Community' && proposal.balance > BigInt(0)) {
+    const deposit = await api.query.pips.deposits(getNumberValue(rawPipId), proposer);
+    if (deposit.isSome) {
+      return;
+    }
+  }
+
+  proposal.balance = BigInt(0);
+  proposal.updatedEventId = extractArgs(event).blockEventId;
+  await proposal.save();
 };
 
 /** `PipClosed(did, pipId, pruned)` — the PIP is closed; whether the chain pruned it does not change the history here. */

@@ -16,6 +16,7 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
+import { requiredText } from '../../../utils/text';
 
 const getOfferingAsset = (
   block: SubstrateBlock,
@@ -50,7 +51,7 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
   }
 
   const stoId = getNumberValue(rawStoId);
-  const name = coerceHexToString(getTextValue(rawStoName));
+  const name = requiredText(rawStoName, 'the fundraiser name');
 
   await Sto.create({
     id: `${fundraiserDetails.offeringAssetId}/${stoId}`,
@@ -215,18 +216,47 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
     raisingAssetType = RaisingAssetTypeEnum.OnChain;
   }
 
-  await Investment.create({
-    id: blockEventId,
-    investorId: getTextValue(rawInvestor),
-    stoId: `${offeringAssetId}/${getNumberValue(rawStoId)}`,
-    offeringAssetId,
-    offeringToken,
-    raisingAssetId: raisingAssetType === RaisingAssetTypeEnum.OnChain ? raisingAssetId : undefined,
-    raiseToken,
-    raisingAssetType,
-    offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
-    raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  }).save();
+  const offeringTokenAmount = getBigIntValue(rawOfferingTokenAmount);
+  await Promise.all([
+    sellFromTiers(
+      `${offeringAssetId}/${getNumberValue(rawStoId)}`,
+      offeringTokenAmount,
+      blockEventId
+    ),
+    Investment.create({
+      id: blockEventId,
+      investorId: getTextValue(rawInvestor),
+      stoId: `${offeringAssetId}/${getNumberValue(rawStoId)}`,
+      offeringAssetId,
+      offeringToken,
+      raisingAssetId:
+        raisingAssetType === RaisingAssetTypeEnum.OnChain ? raisingAssetId : undefined,
+      raiseToken,
+      raisingAssetType,
+      offeringTokenAmount,
+      raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    }).save(),
+  ]);
+};
+
+/** An offering sells from its tiers in order, which `Invested` doesn't itemise */
+const sellFromTiers = async (
+  stoId: string,
+  amount: bigint,
+  blockEventId: string
+): Promise<void> => {
+  const sto = await Sto.get(stoId);
+  if (!sto) {
+    return;
+  }
+  let left = amount;
+  sto.tiers = sto.tiers.map(tier => {
+    const sold = left < BigInt(tier.remaining) ? left : BigInt(tier.remaining);
+    left -= sold;
+    return { ...tier, remaining: (BigInt(tier.remaining) - sold).toString() };
+  });
+  sto.updatedEventId = blockEventId;
+  await sto.save();
 };

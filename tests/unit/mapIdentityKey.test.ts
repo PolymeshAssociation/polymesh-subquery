@@ -67,6 +67,55 @@ const rows = (): Row[] => Object.values(db);
 const openRows = (): Row[] => rows().filter(r => r.validToBlockId == null);
 
 describe('openIdentityKey', () => {
+  /**
+   * An event that names a key resolves its account from chain state at the end of the block, which
+   * may already hold the key a later event of the block adds: a 7.x multisig made a secondary key
+   * (MultiSigCreated, then SecondaryKeysAdded). The lookup opened an interval with no permissions;
+   * the event's own opening replaces it (testnet 16,253,776, 136 keys by 8.0).
+   */
+  it("replaces the interval an account lookup opened earlier in the block for the event's key", async () => {
+    const lazy = `${DID}/${SECONDARY}/0016253776/0000000000`;
+    db[lazy] = {
+      id: lazy,
+      identityId: DID,
+      accountId: SECONDARY,
+      role: IdentityKeyRole.SecondaryKey,
+      validFromBlockId: '0016253776',
+      validToBlockId: null,
+      addedReason: EventIdEnum.AccountCreated,
+    };
+    (store.remove as jest.Mock).mockImplementation((_entity: string, id: string) => {
+      delete db[id];
+      return Promise.resolve();
+    });
+    const permissions = {
+      assets: { type: 'whole', values: null },
+      portfolios: { type: 'whole' },
+      transactions: { type: 'whole', values: null },
+      transactionGroups: [],
+    };
+
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: permissions as never,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 5,
+      },
+      '0016253776/0000000005'
+    );
+
+    expect(openRows()).toEqual([
+      expect.objectContaining({
+        id: `${DID}/${SECONDARY}/0016253776/0000000005`,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        permissions,
+      }),
+    ]);
+  });
+
   it('opens an interval with null validTo / removedReason', async () => {
     await openIdentityKey(
       {
