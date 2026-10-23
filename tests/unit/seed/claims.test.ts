@@ -150,14 +150,14 @@ describe('from 7.0', () => {
     expect(rows('CustomClaimType')['4']).toMatchObject({ name: 'KYC-plus' });
   });
 
-  it('seeds each claim under the id the chain keys it by, its asset scope naming the ticker', () => {
+  it('seeds each claim under the id the chain keys it by, its asset scope naming the asset id', () => {
     const claims = chain.rows('Claim');
     expect(claims).toHaveLength(3);
     expect(claims.find(({ type }) => type === 'Accredited')).toMatchObject({
       id: `${TARGET}/${ISSUER}/Accredited/Asset/${ASSET}`,
       targetId: TARGET,
       issuerId: ISSUER,
-      scope: { type: 'Asset', value: 'ACME', assetId: ASSET },
+      scope: { type: 'Asset', value: ASSET, assetId: ASSET },
       expiry: BigInt(1_900_000_000_000),
       filterExpiry: BigInt(1_900_000_000_000),
     });

@@ -44,19 +44,17 @@ export const customClaimTypeSeeder: Seeder<CustomClaimType> = {
 };
 
 /**
- * Every claim `identity.claims` holds, built as the claim handlers build it, its asset scope
- * naming the asset's ticker; nothing of a claim type the 6.0 upgrade retired. The genesis config's
- * CDD claims are in its plain 3.x form.
+ * Every claim `identity.claims` holds, built as the claim handlers build it; nothing of a claim
+ * type the 6.0 upgrade retired. The genesis config's CDD claims are in its plain 3.x form.
  */
 export const claimSeeder: Seeder<Claim> = {
   entity: 'Claim',
-  reads: ['identity.claims', 'asset.assetIdTicker'],
+  reads: ['identity.claims'],
   oldShapes: { 'identity.claims': [3000] },
   terminal: ({ revokeDate }) => revokeDate !== undefined && revokeDate !== null,
   async *rows(snap, ctx) {
-    const tickers = await snap.map('asset.assetIdTicker');
-    // a scope names a ticker before 7.0, and an asset id from it
-    const assetOf = assetWithTicker(tickers, ctx.block);
+    // a scope names a ticker before 7.0 and an asset id from it, so no ticker link is read
+    const assetOf = assetWithTicker(new Map(), ctx.block);
     for await (const page of snap.pages('identity.claims')) {
       yield await pageRows(page, async ({ args, value }) => {
         const stored = value && storedClaim(value);
