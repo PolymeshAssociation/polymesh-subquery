@@ -1,5 +1,14 @@
+# Upstream onfinality/subql-node images lag behind Node.js security releases, so
+# the indexer's JS install is lifted out of the upstream image and run on a
+# patched Node base. Bump NODE_IMAGE for Node fixes and SUBQL_NODE_IMAGE for
+# @subql/node upgrades.
+ARG NODE_IMAGE=node:24.22.1-alpine
+ARG SUBQL_NODE_IMAGE=onfinality/subql-node:v6.4.6
+
+FROM ${SUBQL_NODE_IMAGE} AS subql-node
+
 # Stage 1: Build Stage
-FROM node:lts-alpine3.17 AS builder
+FROM ${NODE_IMAGE} AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -26,17 +35,24 @@ RUN corepack enable \
   && rm -rf /root/.npm /root/.cache
 
 # Stage 2: Production Stage
-FROM onfinality/subql-node:v6.4.6 AS production
+FROM ${NODE_IMAGE} AS production
 
-USER root
+# Same runtime packages as the upstream image, plus bash and gettext for the entrypoint
+RUN apk add --no-cache tini curl git gettext bash
+
+ENV TZ=utc
+
+# @subql/node is installed at the filesystem root upstream, and /bin/run requires ../dist/main.js
+COPY --from=subql-node /package.json /yarn.lock /
+COPY --from=subql-node /bin/run /bin/run
+COPY --from=subql-node /dist /dist
+COPY --from=subql-node /node_modules /node_modules
+COPY --from=subql-node --chown=1000:1000 /.monitor /.monitor
 
 WORKDIR /app
 
 # Copy only necessary files from the build stage
 COPY --from=builder --chown=1000:1000 /app/builder/ ./
-
-# Install bash to run the entrypoint script
-RUN apk add --no-cache gettext bash
 
 # Switch to the non-root user
 USER 1000
