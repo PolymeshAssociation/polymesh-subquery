@@ -199,11 +199,10 @@ describe('migrateToAssetIds', () => {
   });
 
   /**
-   * From 7.0 a claim's scope is an asset id, and the handlers name it by the asset's ticker beside the
-   * id, as a ticker's claims before it already are: so only a held claim of a ticker that is no
-   * asset changes, its value becoming the id, as a 7.x event names it.
+   * From 7.0 a claim's scope is an asset id, so a held claim's ticker becomes the id, whether or not
+   * an asset was created under it. A revoked claim keeps the scope it was revoked under.
    */
-  it("names a held claim's scope as a 7.x event would: by the asset's ticker, or its id", async () => {
+  it("scopes a held claim to its asset's id, as 7.0's chain holds it", async () => {
     const scope = { type: 'Asset', value: 'MTICKER03', assetId: MTICKER03_ID };
     const orphan = { type: 'Asset', value: 'NOASSET', assetId: '0x' + 'ab'.repeat(16) };
     const db = mockStore({
@@ -218,7 +217,8 @@ describe('migrateToAssetIds', () => {
 
     await migrateToAssetIds(EVENT);
 
-    expect(db.Claim.held.scope).toEqual(scope);
+    expect(db.Claim.held.scope).toEqual({ ...scope, value: MTICKER03_ID });
+    expect(db.Claim.held.updatedEventId).toBe(EVENT);
     expect(db.Claim.orphan.scope).toEqual({ ...orphan, value: orphan.assetId });
     expect(db.Claim.revoked.scope).toEqual(orphan);
     expect(db.Claim.identity.scope).toEqual({ type: 'Identity', value: '0x01' });

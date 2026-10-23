@@ -180,16 +180,10 @@ export const migrateToAssetIds = async (blockEventId: string): Promise<void> => 
       const next = await complianceToV7(compliance.data);
       await rewrite(compliance, compliance.data, next, row => (row.data = next), blockEventId);
     }),
-    // a scope is named by its asset's ticker beside the id, as before 7.0; a ticker that is no
-    // asset has only the id from 7.0, as its events name it
+    // a held claim is scoped to the asset id from 7.0, as the chain holds it
     ...claims.map(async claim => {
       const { scope } = claim;
-      if (
-        !claim.revokeDate &&
-        scope?.type === ClaimScopeTypeEnum.Asset &&
-        scope.assetId &&
-        !(await Asset.get(scope.assetId))
-      ) {
+      if (!claim.revokeDate && scope?.type === ClaimScopeTypeEnum.Asset && scope.assetId) {
         const next = { ...scope, value: scope.assetId };
         await rewrite(claim, scope, next, row => (row.scope = next), blockEventId);
       }

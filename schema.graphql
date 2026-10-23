@@ -3279,6 +3279,7 @@ Represents where this claim may apply
 """
 type Scope @jsonField {
   type: String!
+  "For an `Asset` scope, the asset id from 7.0 and the ticker before it, as the chain scopes the claim"
   value: String!
   "`assetId` is only present when `type` is `Asset`"
   assetId: String

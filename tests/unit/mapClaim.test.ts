@@ -74,7 +74,11 @@ const mockClaimEvent = (
 ): SubstrateEvent => claimEvent(method, identityClaim(issuer, cddId, dateValue));
 
 /** A `ClaimAdded`/`ClaimRevoked` event for `target` carrying `claim`, an `IdentityClaim` codec. */
-const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): SubstrateEvent => {
+const claimEvent = (
+  method: 'ClaimAdded' | 'ClaimRevoked',
+  claim: unknown,
+  specVersion = 8000000
+): SubstrateEvent => {
   const data = [mockCodec(TARGET), claim];
 
   return {
@@ -82,7 +86,7 @@ const claimEvent = (method: 'ClaimAdded' | 'ClaimRevoked', claim: unknown): Subs
     block: {
       block: { header: { number: { toString: () => '1234' } } },
       timestamp: new Date('2026-01-01T00:00:00Z'),
-      specVersion: 8000000,
+      specVersion,
     },
     event: {
       method,
@@ -349,6 +353,50 @@ describe('handleClaimAdded / handleClaimRevoked', () => {
 
     expect(anomalies).toHaveLength(0);
     expect(Object.keys(claims)).toHaveLength(0);
+  });
+
+  /**
+   * From 7.0 the chain scopes a claim to an asset id, which a ticker can be unlinked from (testnet
+   * MINT, block 20,687,589) or never have been an asset's (mainnet NIO).
+   */
+  it('scopes a claim to an asset by its id, as the chain does, not by its ticker', async () => {
+    const ASSET_ID = `0x${'ab'.repeat(16)}`;
+    const fallback = storeGet().getMockImplementation() as (entity: string, id: string) => unknown;
+    storeGet().mockImplementation((entity: string, id: string) =>
+      entity === 'Asset' ? Promise.resolve({ id, ticker: 'ACME' }) : fallback(entity, id)
+    );
+    const accredited = registry.createType('IdentityClaim', {
+      claimIssuer: ISSUER_A,
+      issuanceDate: 1,
+      lastUpdateDate: 1,
+      expiry: null,
+      claim: { Accredited: { Asset: ASSET_ID } },
+    });
+
+    await handleClaimAdded(claimEvent('ClaimAdded', accredited));
+
+    expect(Object.values(claims)).toEqual([
+      expect.objectContaining({ scope: { type: 'Asset', value: ASSET_ID, assetId: ASSET_ID } }),
+    ]);
+  });
+
+  it('scopes a claim before 7.0 by its ticker, as the chain did, beside the asset id', async () => {
+    const accredited = v5.createType('IdentityClaim', {
+      claim_issuer: ISSUER_A,
+      issuance_date: 1,
+      last_update_date: 1,
+      expiry: null,
+      claim: { Accredited: { Ticker: '0x414243000000000000000000' } },
+    });
+
+    await handleClaimAdded(claimEvent('ClaimAdded', accredited, 5004000));
+
+    const [saved] = Object.values(claims);
+    expect(saved.scope).toEqual({
+      type: 'Asset',
+      value: 'ABC',
+      assetId: expect.stringMatching(/^0x[0-9a-f]{32}$/),
+    });
   });
 
   /**

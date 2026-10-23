@@ -72,13 +72,11 @@ const processClaimScope = async (claimScope: any, block: SubstrateBlock): Promis
   const scope = JSON.parse(claimScope);
 
   if (scope.type === ClaimScopeTypeEnum.Ticker || scope.type === ClaimScopeTypeEnum.Asset) {
-    scope.type = ClaimScopeTypeEnum.Asset;
     const { assetId, ticker } = await getAssetIdWithTicker(scope.value, block);
 
-    if (ticker) {
-      scope.value = ticker;
-    }
-
+    // as the chain scopes it: by the ticker before 7.0, by the asset id from it
+    scope.value = scope.type === ClaimScopeTypeEnum.Ticker ? ticker : assetId;
+    scope.type = ClaimScopeTypeEnum.Asset;
     scope.assetId = assetId;
   }
 
