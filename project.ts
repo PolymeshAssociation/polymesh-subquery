@@ -150,9 +150,9 @@ const filters: Record<string, Record<string, string[]>> = {
     CAInitiated: ['handleCaInitiated'],
     CALinkedToDoc: ['handleCaLinkedToDoc'],
     CARemoved: ['handleCaRemoved'],
-    DefaultTargetIdentitiesChanged: ['handleDefaultTargetIdentitiesChanged'],
-    DefaultWithholdingTaxChanged: ['handleDefaultWithholdingTaxChanged'],
-    DidWithholdingTaxChanged: ['handleDidWithholdingTaxChanged'],
+    DefaultTargetIdentitiesChanged: [],
+    DefaultWithholdingTaxChanged: [],
+    DidWithholdingTaxChanged: [],
     MaxDetailsLengthChanged: [], // chain config, no entity
     RecordDateChanged: ['handleRecordDateChanged'],
     // pre-6.0 CAA transfers — superseded by external agents, not indexed

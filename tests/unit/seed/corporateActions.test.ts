@@ -1,5 +1,5 @@
 /**
- * Corporate actions, their assets' defaults, distributions, ballots and their votes, and
+ * Corporate actions, distributions, ballots and their votes, and
  * offerings, built as their handlers build them.
  */
 import { stringToHex } from '@polkadot/util';
@@ -18,7 +18,6 @@ const VOTER = `0x${'02'.repeat(32)}`;
 const CA = { assetId: ASSET, localId: 3 };
 const ENTITIES = [
   'CorporateAction',
-  'CorporateActionDefaultConfig',
   'Distribution',
   'CorporateBallot',
   'CorporateBallotVote',
@@ -41,12 +40,6 @@ describe('from 7.0', () => {
     });
     chain.put('corporateAction.details', [CA], 'Dividend Q3');
     chain.put('corporateAction.caDocLink', [CA], [1, 2]);
-    chain.put('corporateAction.defaultTargetIdentities', [ASSET], {
-      identities: [VOTER],
-      treatment: 'Include',
-    });
-    chain.put('corporateAction.defaultWithholdingTax', [ASSET], 200_000);
-    chain.put('corporateAction.didWithholdingTax', [ASSET], [[VOTER, 10_000]]);
     chain.put('capitalDistribution.distributions', [CA], {
       from: { did: ISSUER, kind: { User: 1 } },
       currency: CURRENCY,
@@ -113,15 +106,6 @@ describe('from 7.0', () => {
       targetIdentities: [VOTER],
       targetTreatment: 'Exclude',
       isRemoved: false,
-    });
-  });
-
-  it("seeds an asset's default targets and taxes", () => {
-    expect(rows('CorporateActionDefaultConfig')[ASSET]).toMatchObject({
-      targetIdentities: [VOTER],
-      targetTreatment: 'Include',
-      defaultWithholdingTax: '200000',
-      didWithholdingTax: [{ did: VOTER, tax: '10000' }],
     });
   });
 

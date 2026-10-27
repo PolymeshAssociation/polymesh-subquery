@@ -185,21 +185,9 @@
     "[[\"[u8;12]\",\"u32\"],\"{\\\"kind\\\":\\\"PalletCorporateActionsCaKind\\\",\\\"declDate\\\":\\\"u64\\\",\\\"recordDate\\\":\\\"Option<PalletCorporateActionsRecordDate>\\\",\\\"targets\\\":\\\"PalletCorporateActionsTargetIdentities\\\",\\\"defaultWithholdingTax\\\":\\\"Permill\\\",\\\"withholdingTax\\\":\\\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"u32\"],\"{\\\"kind\\\":\\\"PalletCorporateActionsCaKind\\\",\\\"declDate\\\":\\\"u64\\\",\\\"recordDate\\\":\\\"Option<PalletCorporateActionsRecordDate>\\\",\\\"targets\\\":\\\"PalletCorporateActionsTargetIdentities\\\",\\\"defaultWithholdingTax\\\":\\\"Permill\\\",\\\"withholdingTax\\\":\\\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
   ],
-  "corporateAction.defaultTargetIdentities": [
-    "[[\"[u8;12]\"],\"{\\\"identities\\\":\\\"Vec<PolymeshPrimitivesIdentityId>\\\",\\\"treatment\\\":\\\"PalletCorporateActionsTargetTreatment\\\"}\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"{\\\"identities\\\":\\\"Vec<PolymeshPrimitivesIdentityId>\\\",\\\"treatment\\\":\\\"PalletCorporateActionsTargetTreatment\\\"}\",[\"Blake2_128Concat\"]]"
-  ],
-  "corporateAction.defaultWithholdingTax": [
-    "[[\"[u8;12]\"],\"Permill\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"Permill\",[\"Blake2_128Concat\"]]"
-  ],
   "corporateAction.details": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Bytes\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"ticker\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Bytes\",[\"Blake2_128Concat\"]]"
-  ],
-  "corporateAction.didWithholdingTax": [
-    "[[\"[u8;12]\"],\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\",[\"Blake2_128Concat\"]]"
   ],
   "corporateBallot.metas": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"title\\\":\\\"Bytes\\\",\\\"motions\\\":\\\"Vec<PalletCorporateActionsBallotMotion>\\\"}\",[\"Blake2_128Concat\"]]",

@@ -153,7 +153,7 @@ Direct consequences:
 - `CheckpointSchedule.pendingCheckpoints` is renamed `scheduledCheckpoints`, because it was never decremented as checkpoints fired. Still-pending is `scheduledCheckpoints` minus the new `CheckpointSchedule.checkpoints`.
 - `Subsidy.totalDebited` is nullable and null across the pre-v8 range, where the chain emitted nothing to accumulate. A zero now means "nothing was drawn"; it used to also mean "not knowable".
 - `TransferRestrictionTypeEnum` is removed with the pre-v5 transfer-manager events, which are no longer mapped onto the statistics model. The partial mapping wrote exemptions against restrictions it never created; neither consumer reads that era, and the SDK reads transfer restrictions from chain state.
-- `CorporateAction.targetTreatment` / `CorporateActionDefaultConfig.targetTreatment` are left null on a treatment value the schema does not know, rather than defaulting to `Exclude`. `Include` and `Exclude` are opposites, so the old fallback could invert who an action applied to.
+- `CorporateAction.targetTreatment` is left null on a treatment value the schema does not know, rather than defaulting to `Exclude`. `Include` and `Exclude` are opposites, so the old fallback could invert who an action applied to.
 
 The two consumers will need coordinated updates. The SDK's 27 connections and the portal's 6 are a bounded, enumerable surface — this document is the checklist.
 
@@ -388,6 +388,7 @@ What the chain answers in one read, and the index added nothing to, is no longer
 | Entity | Was | Now |
 |---|---|---|
 | `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
+| `CorporateActionDefaultConfig` | an asset's default targets and withholding taxes | `corporateAction.defaultTargetIdentities`, `defaultWithholdingTax` and `didWithholdingTax`, each by asset; every corporate action keeps the values it was declared with |
 
 ## 10. Reads that scan, because their index is trimmed
 

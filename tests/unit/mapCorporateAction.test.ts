@@ -2,9 +2,6 @@ import {
   handleCaInitiated,
   handleCaLinkedToDoc,
   handleCaRemoved,
-  handleDefaultTargetIdentitiesChanged,
-  handleDefaultWithholdingTaxChanged,
-  handleDidWithholdingTaxChanged,
   handleRecordDateChanged,
 } from '../../src/mappings/entities/assets/mapCorporateAction';
 import { codec, mockStore, tupleEvent } from './helpers';
@@ -241,67 +238,5 @@ describe('handleCaLinkedToDoc', () => {
     await handleCaLinkedToDoc(event);
 
     expect(db.CorporateAction[`${ASSET_ID}/0`].documents).toEqual(['1', '2']);
-  });
-});
-
-describe('asset-level defaults', () => {
-  it('handleDefaultTargetIdentitiesChanged creates a config row keyed by asset', async () => {
-    const db = mockStore();
-
-    const event = tupleEvent({
-      section: 'corporateAction',
-      method: 'DefaultTargetIdentitiesChanged',
-      data: [codec(DID_A), codec(ASSET_ID), codec({ identities: [DID_B], treatment: 'Include' })],
-    });
-
-    await handleDefaultTargetIdentitiesChanged(event);
-
-    expect(db.CorporateActionDefaultConfig[ASSET_ID]).toMatchObject({
-      assetId: ASSET_ID,
-      targetIdentities: [DID_B],
-      targetTreatment: 'Include',
-    });
-  });
-
-  it('handleDefaultWithholdingTaxChanged upserts onto the same config row', async () => {
-    const db = mockStore();
-
-    await handleDefaultWithholdingTaxChanged(
-      tupleEvent({
-        section: 'corporateAction',
-        method: 'DefaultWithholdingTaxChanged',
-        data: [codec(DID_A), codec(ASSET_ID), codec(75_000)],
-      })
-    );
-
-    expect(db.CorporateActionDefaultConfig[ASSET_ID]).toMatchObject({
-      defaultWithholdingTax: BigInt(75_000),
-    });
-  });
-
-  it('handleDidWithholdingTaxChanged upserts and then removes a per-DID override', async () => {
-    const db = mockStore();
-
-    await handleDidWithholdingTaxChanged(
-      tupleEvent({
-        section: 'corporateAction',
-        method: 'DidWithholdingTaxChanged',
-        data: [codec(DID_A), codec(ASSET_ID), codec(DID_B), codec(25_000)],
-      })
-    );
-
-    expect(db.CorporateActionDefaultConfig[ASSET_ID].didWithholdingTax).toEqual([
-      { did: DID_B, tax: '25000' },
-    ]);
-
-    await handleDidWithholdingTaxChanged(
-      tupleEvent({
-        section: 'corporateAction',
-        method: 'DidWithholdingTaxChanged',
-        data: [codec(DID_A), codec(ASSET_ID), codec(DID_B), codec(null, { isEmpty: true })],
-      })
-    );
-
-    expect(db.CorporateActionDefaultConfig[ASSET_ID].didWithholdingTax).toEqual([]);
   });
 });

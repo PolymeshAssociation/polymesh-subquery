@@ -1,21 +1,8 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import {
-  CorporateAction,
-  CorporateActionDefaultConfig,
-  CorporateActionKind,
-  DidTax,
-  TargetTreatment,
-} from '../../../types';
-import {
-  extractNumber,
-  extractString,
-  extractValue,
-  getAssetId,
-  getCaIdValue,
-  getTextValue,
-} from '../../../utils';
+import { CorporateAction, CorporateActionKind, DidTax, TargetTreatment } from '../../../types';
+import { extractNumber, extractString, extractValue, getCaIdValue } from '../../../utils';
 import { extractArgs, getOrAnomaly, toEnum } from '../common';
 import { storedText } from '../../../utils/text';
 
@@ -215,76 +202,4 @@ export const handleCaLinkedToDoc = async (event: SubstrateEvent): Promise<void> 
   corporateAction.updatedEventId = blockEventId;
 
   await corporateAction.save();
-};
-
-const getOrCreateDefaultConfig = async (
-  assetId: string,
-  blockEventId: string
-): Promise<CorporateActionDefaultConfig> => {
-  let config = await CorporateActionDefaultConfig.get(assetId);
-
-  if (!config) {
-    config = CorporateActionDefaultConfig.create({
-      id: assetId,
-      assetId,
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    });
-  }
-
-  return config;
-};
-
-export const handleDefaultTargetIdentitiesChanged = async (
-  event: SubstrateEvent
-): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, targets: rawTargets } = decodeEvent(event);
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const targets = rawTargets.toJSON() as { identities: string[]; treatment: string };
-
-  const config = await getOrCreateDefaultConfig(assetId, blockEventId);
-
-  config.targetIdentities = targets.identities;
-  // see `handleCaInitiated` — an unrecognised treatment is left null rather than inverted
-  config.targetTreatment = toEnum(TargetTreatment, targets.treatment, undefined, {
-    enumName: 'TargetTreatment',
-    block,
-  });
-  config.updatedEventId = blockEventId;
-
-  await config.save();
-};
-
-export const handleDefaultWithholdingTaxChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, tax: rawTax } = decodeEvent(event);
-
-  const assetId = await getAssetId(rawAssetId, block);
-
-  const config = await getOrCreateDefaultConfig(assetId, blockEventId);
-
-  config.defaultWithholdingTax = BigInt(rawTax.toJSON() as number);
-  config.updatedEventId = blockEventId;
-
-  await config.save();
-};
-
-export const handleDidWithholdingTaxChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
-  const { assetId: rawAssetId, taxedDid: targetDid, tax: rawTax } = decodeEvent(event);
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const did = getTextValue(targetDid);
-  const tax = rawTax.toJSON() as number | null;
-
-  const config = await getOrCreateDefaultConfig(assetId, blockEventId);
-  const existing = (config.didWithholdingTax ?? []).filter(entry => entry.did !== did);
-
-  config.didWithholdingTax =
-    tax === null ? existing : [...existing, { did, tax: BigInt(tax).toString() }];
-  config.updatedEventId = blockEventId;
-
-  await config.save();
 };

@@ -40,7 +40,6 @@ import {
   venueSeeder,
 } from './settlement';
 import {
-  corporateActionDefaultConfigSeeder,
   corporateActionSeeder,
   corporateBallotSeeder,
   corporateBallotVoteSeeder,
@@ -57,12 +56,7 @@ import {
   proposalVoteSeeder,
   subsidySeeder,
 } from './governance';
-import {
-  eraSeeder,
-  stakingPositionSeeder,
-  validatorEraSeeder,
-  validatorSeeder,
-} from './staking';
+import { eraSeeder, stakingPositionSeeder, validatorEraSeeder, validatorSeeder } from './staking';
 import {
   confidentialAccountAssetSeeder,
   confidentialAccountSeeder,
@@ -120,7 +114,6 @@ export const SEEDERS: Seeder[] = [
   instructionPartySeeder,
   instructionAffirmationSeeder,
   corporateActionSeeder,
-  corporateActionDefaultConfigSeeder,
   distributionSeeder,
   corporateBallotSeeder,
   corporateBallotVoteSeeder,
