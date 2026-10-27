@@ -1,5 +1,5 @@
 import { hexToU8a, u8aToHex } from '@polkadot/util';
-import { Codec } from '@polkadot/types/types';
+import { Codec, Registry } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { decodeEvent } from '../../../decode';
 import {
@@ -66,9 +66,9 @@ const scheduledInstructionId = (rawName: Codec): string | undefined => {
   return padNumericId(id.getBigUint64(0, true).toString());
 };
 
-/** A dispatch error as `getErrorDetails` reads one, from its JSON. */
-const errorDetailsOf = (dispatchError: unknown): ErrorJson =>
-  getErrorDetails({ toString: () => JSON.stringify(dispatchError) } as Codec);
+/** A dispatch error as `getErrorDetails` reads one, from its JSON and the registry it came from. */
+const errorDetailsOf = (dispatchError: unknown, registry: Registry): ErrorJson =>
+  getErrorDetails({ toString: () => JSON.stringify(dispatchError) } as Codec, registry);
 
 interface Failure {
   instruction: Instruction;
@@ -127,7 +127,7 @@ export const handleScheduledExecutionResult = async (event: SubstrateEvent): Pro
 
   await recordFailure({
     instruction,
-    failureReason: errorDetailsOf(result.err),
+    failureReason: errorDetailsOf(result.err, rawResult.registry),
     blockEventId,
     instructionEventId: blockEventId,
   });
@@ -153,7 +153,8 @@ export const handleManualExecutionAttempt = async (
   const failed = extrinsic.events.find(
     ({ event }) => event.section === 'system' && event.method === 'ExtrinsicFailed'
   );
-  const failureReason = failed && errorDetailsOf(failed.event.data[0].toJSON());
+  const failureReason =
+    failed && errorDetailsOf(failed.event.data[0].toJSON(), failed.event.data[0].registry);
   if (!failureReason || !EXECUTION_ERRORS.has(failureReason.errorType ?? '')) {
     return;
   }

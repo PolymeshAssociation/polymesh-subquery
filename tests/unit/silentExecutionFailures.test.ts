@@ -178,7 +178,8 @@ describe('a failed manual execution before 6.0', () => {
         getRuntimeVersion: jest.fn(async () => ({ specVersion: { toNumber: () => specOf } })),
       },
     };
-    (globalThis as any).api.registry.findMetaError = ({
+    // 5.3's error table, in the registry that decoded the event
+    jest.spyOn(registry, 'findMetaError').mockImplementation((({
       error,
     }: {
       error: { toNumber(): number };
@@ -186,7 +187,7 @@ describe('a failed manual execution before 6.0', () => {
       section: 'settlement',
       name: ERRORS[`0x${error.toNumber().toString(16).padStart(2, '0')}000000`],
       docs: ['Instruction failed to execute.'],
-    });
+    })) as never);
     db = mockStore({
       Instruction: {
         '0000004669': instruction('0000004669'),

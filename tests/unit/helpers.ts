@@ -36,6 +36,10 @@ export const codec = (value: unknown, opts: { isEmpty?: boolean } = {}) => ({
     return text?.startsWith('0x') ? text : `0x${Buffer.from(text ?? '', 'utf8').toString('hex')}`;
   },
   toJSON: () => value,
+  // a decoded codec carries the registry that decoded it: here the test's `api.registry`
+  get registry() {
+    return (globalThis as any).api.registry;
+  },
 });
 
 export type MockDb = Record<string, Record<string, any>>;

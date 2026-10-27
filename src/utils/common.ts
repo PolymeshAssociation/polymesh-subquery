@@ -1,5 +1,5 @@
 import { decodeAddress } from '@polkadot/keyring';
-import { Codec } from '@polkadot/types/types';
+import { Codec, Registry } from '@polkadot/types/types';
 import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
 import { Entity, FieldsExpression } from '@subql/types-core';
@@ -270,7 +270,13 @@ export const getStringArrayValue = (item: Codec): string[] => {
   return set;
 };
 
-export const getErrorDetails = (item: Codec): ErrorJson => {
+/**
+ * A dispatch error's type and docs, named from the error table of the runtime that decoded it.
+ *
+ * Not `api.registry`: on a block the node labels with the neighbouring runtime's spec, that holds
+ * the other runtime's metadata, while the event itself was decoded at its own block's runtime.
+ */
+export const getErrorDetails = (item: Codec, registry: Registry = item.registry): ErrorJson => {
   const dispatchError = JSON.parse(item.toString());
 
   if ('module' in dispatchError) {
@@ -281,7 +287,7 @@ export const getErrorDetails = (item: Codec): ErrorJson => {
       error: new BN(hexStripPrefix(error), 'hex', 'le'),
     };
 
-    const { docs, name, section } = api.registry.findMetaError(metaError);
+    const { docs, name, section } = registry.findMetaError(metaError);
     return { errorType: `${section}.${name}`, details: docs.join('\n') };
   }
 
