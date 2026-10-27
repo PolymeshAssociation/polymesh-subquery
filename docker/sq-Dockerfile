@@ -4,8 +4,19 @@
 # @subql/node upgrades.
 ARG NODE_IMAGE=node:24.22.1-alpine
 ARG SUBQL_NODE_IMAGE=onfinality/subql-node:v6.4.6
+# @subql/node 6.4.6 pins ~19.0.0, which keeps a fork block whose successor came from the canonical
+# chain (fixed in 19.2.0, #3016). Drop this once a @subql/node release depends on it.
+ARG SUBQL_NODE_CORE_VERSION=19.3.1
 
 FROM ${SUBQL_NODE_IMAGE} AS subql-node
+ARG SUBQL_NODE_CORE_VERSION
+USER root
+RUN cd /tmp \
+  && npm pack --silent "@subql/node-core@${SUBQL_NODE_CORE_VERSION}" \
+  && rm -rf /node_modules/@subql/node-core \
+  && mkdir /node_modules/@subql/node-core \
+  && tar xzf subql-node-core-*.tgz -C /node_modules/@subql/node-core --strip-components 1 \
+  && rm subql-node-core-*.tgz /root/.npm -rf
 
 # Stage 1: Build Stage
 FROM ${NODE_IMAGE} AS builder

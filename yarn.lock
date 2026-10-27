@@ -5053,9 +5053,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subql/node-core@npm:~19.0.0":
-  version: 19.0.0
-  resolution: "@subql/node-core@npm:19.0.0"
+"@subql/node-core@npm:19.3.1":
+  version: 19.3.1
+  resolution: "@subql/node-core@npm:19.3.1"
   dependencies:
     "@apollo/client": "npm:^3.14.0"
     "@nestjs/common": "npm:^11.0.16"
@@ -5082,7 +5082,7 @@ __metadata:
     toposort-class: "npm:^1.0.1"
     vm2: "npm:3.9.19"
     yargs: "npm:^16.2.0"
-  checksum: 10c0/96a722b41d5740473ad2630ecb2d6a3622d68829515c77f6eeef072586faa0240a4c3be448895d94d15a248c1a53522b8cf4f2f302a9df1bb48342bf26658eff
+  checksum: 10c0/b3c2f175ad96b93d98e0f216743a64f33ccc33a79c8ecbd7109d193027f67f43b9f206787611529ade37e0ed0b114310092172d45f056ccc4e6c407271b068d7
   languageName: node
   linkType: hard
 
