@@ -381,6 +381,14 @@ Master trimmed a user's text when the event decoded it as `Text` (before metadat
 
 Tickers and memos keep their rule: text without the NUL padding.
 
+### 9.12 State read from the chain instead (2026-10-27)
+
+What the chain answers in one read, and the index added nothing to, is no longer indexed.
+
+| Entity | Was | Now |
+|---|---|---|
+| `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.

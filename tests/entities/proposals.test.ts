@@ -14,7 +14,6 @@ describe('proposals', () => {
             state
             url
             description
-            balance
             lastStateUpdatedAt: updatedBlockId
             yay: votes(filter: { vote: { equalTo: true } }) {
               totalCount
@@ -39,7 +38,6 @@ describe('proposals', () => {
           state
           url
           description
-          balance
           votes {
             totalCount
             nodes {

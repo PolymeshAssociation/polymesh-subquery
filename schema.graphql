@@ -3224,7 +3224,6 @@ type Proposal @entity {
   state: ProposalStateEnum!
   "The proposer's identity; null for a PIP seeded from the chain that a committee proposed, as the chain doesn't keep which member"
   owner: Identity
-  balance: BigInt!
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")

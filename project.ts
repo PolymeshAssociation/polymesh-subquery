@@ -255,7 +255,7 @@ const filters: Record<string, Record<string, string[]>> = {
     PipClosed: ['handlePipClosed'],
     PipSkipped: ['handlePipSkipped'],
     ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
-    ProposalRefund: ['handleProposalRefund', 'handleProposalRefunded'],
+    ProposalRefund: ['handleProposalRefund'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
     SnapshotCleared: ['handleSnapshotCleared'],
     SnapshotResultsEnacted: ['handleSnapshotResultsEnacted'],

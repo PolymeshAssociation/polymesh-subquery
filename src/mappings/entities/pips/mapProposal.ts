@@ -9,7 +9,6 @@ import {
   getNumberValue,
   getProposerValue,
   getTextValue,
-  is8xChain,
   padNumericId,
 } from '../../../utils';
 import { extractArgs, getOrAnomaly } from '../common';
@@ -69,7 +68,6 @@ export const handleProposalCreated = async (event: SubstrateEvent): Promise<void
     proposer,
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
-    balance: deposit,
     url: storedText(rawUrl),
     description: storedText(rawDescription),
     snapshotted: false,
@@ -144,10 +142,6 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
     proposal.totalAyeWeight += weight;
   } else {
     proposal.totalNayWeight += weight;
-  }
-  // a vote sets the voter's deposit to the one it's weighed by, the proposer's included
-  if (proposal.proposer?.type === 'Community' && proposal.proposer.value === account) {
-    proposal.balance = weight;
   }
   proposal.updatedEventId = blockEventId;
 
@@ -230,32 +224,6 @@ export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<v
   await updateProposal(rawPipId, event, proposal => {
     proposal.executionScheduledAt = getNumberValue(rawBlock);
   });
-};
-
-/**
- * `ProposalRefund(did, pipId, amount)`: the PIP's deposits are returned, the proposer's with them.
- * Until 8.0 all at once. From 8.0 128 a block, each batch with its own event and in storage order,
- * so the proposer's deposit is gone once the chain no longer holds it.
- */
-export const handleProposalRefunded = async (event: SubstrateEvent): Promise<void> => {
-  const [, rawPipId] = extractArgs(event).params;
-  const proposal = await getProposal(rawPipId, event);
-
-  if (!proposal) {
-    return;
-  }
-
-  const { type, value: proposer } = proposal.proposer;
-  if (is8xChain(event.block) && type === 'Community' && proposal.balance > BigInt(0)) {
-    const deposit = await api.query.pips.deposits(getNumberValue(rawPipId), proposer);
-    if (deposit.isSome) {
-      return;
-    }
-  }
-
-  proposal.balance = BigInt(0);
-  proposal.updatedEventId = extractArgs(event).blockEventId;
-  await proposal.save();
 };
 
 /** `PipClosed(did, pipId, pruned)` — the PIP is closed; whether the chain pruned it does not change the history here. */

@@ -50,10 +50,6 @@ const READS: Record<string, [number, string]> = {
     1,
     'whether an identity is a child (6.1–6.x): DidCreated does not say',
   ],
-  'src/mappings/entities/pips/mapProposal.ts': [
-    1,
-    "whether an 8.x refund batch returned the proposer's deposit: ProposalRefund gives only a total",
-  ],
   'src/mappings/entities/relayer/mapSubsidy.ts': [
     3,
     "a subsidy's allowance before 8.0, accepted or drawn by fees, and the offers still pending when a subsidy ends: no event carries them",
