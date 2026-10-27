@@ -368,9 +368,6 @@
   "relayer.subsidies": [
     "[[\"AccountId32\"],\"{\\\"payingKey\\\":\\\"AccountId32\\\",\\\"remaining\\\":\\\"u128\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "revive.originalAccount": [
-    "[[\"H160\"],\"AccountId32\",[\"Identity\"]]"
-  ],
   "settlement.affirmsReceived": [
     "[[\"u64\",\"{\\\"_enum\\\":{\\\"Portfolio\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
     "[[\"u64\",\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]"

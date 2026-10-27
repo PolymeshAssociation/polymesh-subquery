@@ -389,6 +389,7 @@ What the chain answers in one read, and the index added nothing to, is no longer
 |---|---|---|
 | `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
 | `CorporateActionDefaultConfig` | an asset's default targets and withholding taxes | `corporateAction.defaultTargetIdentities`, `defaultWithholdingTax` and `didWithholdingTax`, each by asset; every corporate action keeps the values it was declared with |
+| `EvmAccountMapping` | whether `revive.map_account` registered an account, by its H160 | `Account.evmAddress` (indexed) for the H160 of any account; `revive.originalAccount(h160)` for whether it is mapped |
 
 ## 10. Reads that scan, because their index is trimmed
 

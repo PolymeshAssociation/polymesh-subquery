@@ -152,9 +152,9 @@ interface ClassifyTotals {
  * ones decoding as `0xEE` padded; migration 20's provisional `substrate` is already right for the
  * rest.
  *
- * This is deliberately independent of `EvmAccountMapping`, which tracks the *registered*
- * `revive.mapAccount` relationship and is revoked by `unmapAccount`. The address derived here
- * never stops being valid, so historical joins survive an unmapping.
+ * This is independent of whether `revive.mapAccount` registered the account, which is
+ * `revive.originalAccount` on chain and revoked by `unmapAccount`. The address derived here never
+ * stops being valid, so historical joins survive an unmapping.
  */
 interface Classification {
   evmAddress: string;

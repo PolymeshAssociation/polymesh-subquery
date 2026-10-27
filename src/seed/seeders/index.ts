@@ -23,7 +23,6 @@ import {
   transferComplianceSeeder,
   trustedClaimIssuerSeeder,
 } from './compliance';
-import { evmAccountMappingSeeder } from './evm';
 import {
   assetAllowanceSeeder,
   assetHolderSeeder,
@@ -80,7 +79,6 @@ export const SEEDERS: Seeder[] = [
   identityKeySeeder,
   portfolioSeeder,
   accountBalanceSeeder,
-  evmAccountMappingSeeder,
   customAssetTypeSeeder,
   assetSeeder,
   tickerReservationSeeder,

@@ -1955,24 +1955,6 @@ type EvmTransaction @entity {
 }
 
 """
-Mapping between an Ethereum address and its original `AccountId32`, registered with `revive.mapAccount`
-"""
-type EvmAccountMapping @entity {
-  "Same ID as `evmAddress`"
-  id: ID!
-  "Checksummed Ethereum address the account is reachable at inside `pallet_revive`. Same value as `id`"
-  evmAddress: String!
-  "SS58 address of the account that registered the mapping"
-  address: String! @index(unique: true)
-  account: Account
-  "`false` once the mapping has been removed with `revive.unmapAccount`"
-  mapped: Boolean!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
 Information of a chain state transition on. For most use cases a more specific entity should be queried
 """
 type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
