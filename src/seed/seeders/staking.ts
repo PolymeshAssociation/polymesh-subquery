@@ -1,12 +1,11 @@
-import { Era, Validator, ValidatorEra } from '../../types';
+import { Era, ValidatorEra } from '../../types';
 import { padId } from '../../utils/common';
 import { SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, StorageRef } from '../snapshot';
 import { storedKeys } from './keys';
 
 /**
- * Staking: the validators that declared their intent, and the active era with its elected set.
- * Earlier eras are history.
+ * Staking: the active era with its elected set. Earlier eras are history.
  */
 
 const created = (ctx: SeedContext) => ({
@@ -94,16 +93,6 @@ const exposuresOf = (snap: ChainSnapshot, era: number): Promise<Exposure[]> =>
     return overview.length ? overview : read('staking.erasStakers');
   });
 
-/** The stashes the latest election chose */
-const latestElected = (snap: ChainSnapshot): Promise<ReadonlySet<string>> =>
-  snap.derive('latestElected', async () => {
-    const eras = await electedEras(snap);
-    const latest = eras.at(-1);
-    return new Set(
-      latest === undefined ? [] : (await exposuresOf(snap, latest)).map(({ stash }) => stash)
-    );
-  });
-
 const ERA_READS: StorageRef[] = [
   'staking.activeEra',
   'staking.currentEra',
@@ -188,67 +177,6 @@ export const validatorEraSeeder: Seeder<ValidatorEra> = {
           blocked: pref?.blocked,
           ...created(ctx),
         });
-      });
-    }
-  },
-};
-
-/**
- * A stash that declared its intent to validate, with its prefs, whether its identity is
- * permissioned (`validators.permissionedIdentity` from 8.0, `staking.` before), and whether the
- * latest election chose it, which is when the index marks it active.
- */
-export const validatorSeeder: Seeder<Validator> = {
-  entity: 'Validator',
-  // a validator that stopped validating stays indexed
-  terminal: ({ isActive }) => !isActive,
-  reads: [
-    'staking.validators',
-    'validators.permissionedIdentity',
-    'staking.permissionedIdentity',
-    ...ERA_READS,
-    ...KEYS,
-  ],
-  oldShapes: {
-    'staking.validators': [3000],
-    'staking.permissionedIdentity': [3000],
-    ...ERA_SHAPES,
-    ...KEY_SHAPES,
-  },
-  accounts: ['accountId'],
-  async *rows(snap, ctx) {
-    const [permissioned, elected, keys] = await Promise.all([
-      snap.map(
-        snap.has('validators.permissionedIdentity')
-          ? 'validators.permissionedIdentity'
-          : 'staking.permissionedIdentity'
-      ),
-      latestElected(snap),
-      storedKeys(snap),
-    ]);
-    for await (const page of snap.pages('staking.validators')) {
-      yield page.flatMap(({ args, value }) => {
-        if (!value) {
-          return [];
-        }
-        const stash = args[0].toString();
-        const { commission, blocked } = value.toJSON() as {
-          commission?: number;
-          blocked?: boolean;
-        };
-        const identityId = keys.get(stash)?.did;
-        return [
-          Validator.create({
-            id: stash,
-            accountId: stash,
-            identityId,
-            commission: commission === undefined ? undefined : BigInt(commission),
-            blocked: Boolean(blocked),
-            isPermissioned: identityId ? permissioned.has(identityId) : false,
-            isActive: elected.has(stash),
-            ...created(ctx),
-          }),
-        ];
       });
     }
   },

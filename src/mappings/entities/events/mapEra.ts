@@ -1,7 +1,8 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent } from '../../../decode';
-import { AnomalyKind, Era, Validator, ValidatorEra } from '../../../types';
+import { AnomalyKind, Era, ValidatorEra } from '../../../types';
 import { blockTime, getAllByFields, getBigIntValue, getTextValue, padId } from '../../../utils';
+import { ledgerAccount } from '../../../utils/accounts';
 import { readOrAnomaly, recordAnomaly } from '../../../utils/anomaly';
 import {
   EraExposure,
@@ -13,7 +14,6 @@ import {
   readEraValidatorPrefs,
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
-import { getOrCreateValidator } from './mapValidator';
 
 /**
  * `StakersElected`/`EraPaid` — era boundaries. `StakersElected` carries no payload in either era
@@ -72,13 +72,13 @@ export const handleStakersElected = async (event: SubstrateEvent): Promise<void>
 };
 
 /**
- * Records the validators elected for `eraIndex`: the `Era`, a `ValidatorEra` per validator with its
- * exposure and preferences, and which `Validator`s are active. Called on each election event, and
+ * Records the validators elected for `eraIndex`: the `Era`, and a `ValidatorEra` per validator with
+ * its exposure and preferences. Called on each election event, and
  * by the genesis seed for the era the genesis config elects, which has no election event.
  *
  * An election always stores its exposures, so finding none means they were read from the wrong
  * map, such as a v7 `erasStakers` on a block whose `api` carries a neighbouring runtime's metadata.
- * That is recorded, and nothing is written: an empty set would mark every validator inactive.
+ * That is recorded, and nothing is written.
  */
 export const recordElection = async (
   eraIndex: number,
@@ -118,46 +118,19 @@ export const recordElection = async (
 
   await era.save();
 
-  const validators = exposures.map(({ stash }) => stash);
-  const activeSet = new Set(validators);
+  await Promise.all(
+    exposures.map(async exposure => {
+      const { identityId } = await ledgerAccount(exposure.stash, blockId, blockTime(block));
 
-  const previouslyActive = await getAllByFields<Validator>('Validator', [['isActive', '=', true]]);
-
-  await Promise.all([
-    ...previouslyActive
-      .filter(validator => !activeSet.has(validator.id))
-      .map(validator => {
-        validator.isActive = false;
-        validator.updatedEventId = blockEventId;
-
-        return validator.save();
-      }),
-    ...exposures.map(async exposure => {
-      const validator = await getOrCreateValidator(
-        exposure.stash,
-        blockId,
-        blockTime(block),
-        blockEventId,
-        block,
-        eventIdx
-      );
-      const own = prefs.get(exposure.stash);
-      validator.isActive = true;
-      // the preferences as they stand: before 7.0 `staking.validate` set them with no event
-      if (own?.commission !== undefined) {
-        validator.commission = own.commission;
-      }
-      if (own?.blocked !== undefined) {
-        validator.blocked = own.blocked;
-      }
-      validator.updatedEventId = blockEventId;
-
-      await Promise.all([
-        validator.save(),
-        validatorEra(eraIndex, validator, exposure, own, blockEventId).save(),
-      ]);
-    }),
-  ]);
+      await validatorEra(
+        eraIndex,
+        identityId,
+        exposure,
+        prefs.get(exposure.stash),
+        blockEventId
+      ).save();
+    })
+  );
 };
 
 const validatorEraId = (eraIndex: number, stash: string): string =>
@@ -166,7 +139,7 @@ const validatorEraId = (eraIndex: number, stash: string): string =>
 /** A validator's row in an era's elected set, as the election stored it. */
 const validatorEra = (
   eraIndex: number,
-  validator: Validator,
+  identityId: string | undefined,
   exposure: EraExposure,
   prefs: EraValidatorPrefs | undefined,
   blockEventId: string
@@ -175,8 +148,8 @@ const validatorEra = (
     id: validatorEraId(eraIndex, exposure.stash),
     eraId: padId(eraIndex.toString()),
     eraIndex,
-    validatorId: validator.id,
-    identityId: validator.identityId,
+    validatorId: exposure.stash,
+    identityId,
     ownStake: exposure.own,
     totalStake: exposure.total,
     nominatorCount: exposure.nominatorCount,

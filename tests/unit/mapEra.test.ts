@@ -91,19 +91,8 @@ const mockElection = (
 };
 
 describe('handleStakersElected', () => {
-  it('creates an Era and marks exactly the resolved validator set active', async () => {
-    const db = mockStore({
-      Validator: {
-        [VAL_OLD]: {
-          id: VAL_OLD,
-          accountId: VAL_OLD,
-          isActive: true,
-          blocked: false,
-          isPermissioned: false,
-        },
-      },
-    });
-    mockGetByFields(db, 'Validator');
+  it('creates an Era and a ValidatorEra for exactly the resolved validator set', async () => {
+    const db = mockStore();
     mockElection(5, [VAL_NEW]);
 
     await handleStakersElected(
@@ -112,13 +101,11 @@ describe('handleStakersElected', () => {
 
     expect(Object.values(db.Era)).toHaveLength(1);
     expect(Object.values(db.Era)[0]).toMatchObject({ eraIndex: 5 });
-    expect(db.Validator[VAL_OLD].isActive).toBe(false);
-    expect(db.Validator[VAL_NEW]).toMatchObject({ accountId: VAL_NEW, isActive: true });
+    expect(Object.keys(db.ValidatorEra)).toEqual([`0000000005/${VAL_NEW}`]);
   });
 
   it("records each elected validator's stake and commission for the era", async () => {
     const db = mockStore();
-    mockGetByFields(db, 'Validator');
     mockElection(5, [VAL_NEW]);
 
     await handleStakersElected(
@@ -138,57 +125,15 @@ describe('handleStakersElected', () => {
     });
   });
 
-  /**
-   * Before 7.0 `staking.validate` set a validator's preferences with no event; the election stores
-   * them as they stand, so the validator takes them from it (mainnet: 35 validators had none).
-   */
-  it('gives each elected validator the preferences the election stored for it', async () => {
-    const db = mockStore({
-      Validator: {
-        [VAL_OLD]: {
-          id: VAL_OLD,
-          accountId: VAL_OLD,
-          isActive: true,
-          commission: BigInt(10_000_000),
-          blocked: true,
-          isPermissioned: false,
-        },
-      },
-    });
-    mockGetByFields(db, 'Validator');
-    mockElection(5, [VAL_OLD, VAL_NEW]);
-
-    await handleStakersElected(
-      namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
-    );
-
-    for (const stash of [VAL_OLD, VAL_NEW]) {
-      expect(db.Validator[stash]).toMatchObject({ commission: BigInt(50_000_000), blocked: false });
-    }
-  });
-
   /** v8 writes only `erasStakersOverview`, so reading `erasStakers` found nobody elected. */
   it('reads a v8 election from erasStakersOverview', async () => {
-    const db = mockStore({
-      Validator: {
-        [VAL_OLD]: {
-          id: VAL_OLD,
-          accountId: VAL_OLD,
-          isActive: true,
-          blocked: false,
-          isPermissioned: false,
-        },
-      },
-    });
-    mockGetByFields(db, 'Validator');
+    const db = mockStore();
     mockElection(7, [VAL_OLD, VAL_NEW], 'v8');
 
     await handleStakersElected(
       namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
     );
 
-    expect(db.Validator[VAL_OLD].isActive).toBe(true);
-    expect(db.Validator[VAL_NEW].isActive).toBe(true);
     expect(db.ValidatorEra[`0000000007/${VAL_NEW}`]).toMatchObject({
       ownStake: BigInt(200),
       totalStake: BigInt(2_000),
@@ -202,7 +147,6 @@ describe('handleStakersElected', () => {
    */
   it('writes nothing and reports the gap when the chain has no current era', async () => {
     const db = mockStore();
-    mockGetByFields(db, 'Validator');
     mockElection(null, []);
     const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
 
@@ -214,19 +158,8 @@ describe('handleStakersElected', () => {
     expect(anomaly).toHaveBeenCalledTimes(1);
   });
 
-  it('fails the block when the validator-set read fails, leaving the active set untouched', async () => {
-    const db = mockStore({
-      Validator: {
-        [VAL_OLD]: {
-          id: VAL_OLD,
-          accountId: VAL_OLD,
-          isActive: true,
-          blocked: false,
-          isPermissioned: false,
-        },
-      },
-    });
-    mockGetByFields(db, 'Validator');
+  it('fails the block when the validator-set read fails', async () => {
+    const db = mockStore();
     mockElection(5, 'unreadable');
 
     await expect(
@@ -234,22 +167,11 @@ describe('handleStakersElected', () => {
     ).rejects.toThrow('no such storage');
 
     // a failed read is not "nobody elected"
-    expect(db.Validator[VAL_OLD].isActive).toBe(true);
+    expect(Object.keys(db.ValidatorEra ?? {})).toHaveLength(0);
   });
 
-  it('records an election that stores no exposures, leaving the active set untouched', async () => {
-    const db = mockStore({
-      Validator: {
-        [VAL_OLD]: {
-          id: VAL_OLD,
-          accountId: VAL_OLD,
-          isActive: true,
-          blocked: false,
-          isPermissioned: false,
-        },
-      },
-    });
-    mockGetByFields(db, 'Validator');
+  it('records an election that stores no exposures, and writes nothing for it', async () => {
+    const db = mockStore();
     // a v8 election read through v7 metadata: `erasStakers` is empty
     mockElection(5, []);
     const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
@@ -258,7 +180,6 @@ describe('handleStakersElected', () => {
       namedEvent({ section: 'staking', method: 'StakersElected', fields: {} })
     );
 
-    expect(db.Validator[VAL_OLD].isActive).toBe(true);
     expect(Object.keys(db.Era ?? {})).toHaveLength(0);
     expect(Object.keys(db.ValidatorEra ?? {})).toHaveLength(0);
     expect(anomaly).toHaveBeenCalledTimes(1);
@@ -267,7 +188,6 @@ describe('handleStakersElected', () => {
   /** The genesis config elects era 0 with no election event; the genesis seed records it. */
   it('records the era the genesis config elects', async () => {
     const db = mockStore();
-    mockGetByFields(db, 'Validator');
     mockElection(0, [VAL_OLD, VAL_NEW]);
     const { block } = namedEvent({ section: 'staking', method: 'StakersElected', fields: {} });
 
@@ -286,7 +206,6 @@ describe('handleStakersElected', () => {
 
   it('handles the pre-v7 StakingElection the same way, ignoring its ElectionCompute payload', async () => {
     const db = mockStore();
-    mockGetByFields(db, 'Validator');
     mockElection(3, [VAL_NEW]);
 
     await handleStakersElected(
@@ -299,7 +218,7 @@ describe('handleStakersElected', () => {
     );
 
     expect(Object.values(db.Era)[0]).toMatchObject({ eraIndex: 3 });
-    expect(db.Validator[VAL_NEW]).toMatchObject({ accountId: VAL_NEW, isActive: true });
+    expect(db.ValidatorEra[`0000000003/${VAL_NEW}`]).toMatchObject({ validatorId: VAL_NEW });
   });
 });
 

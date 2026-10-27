@@ -72,7 +72,7 @@ const READS: Record<string, [number, string]> = {
     'slashes held back until their era: applying one emits nothing',
   ],
   'src/utils/staking.ts': [
-    13,
+    12,
     "an era's exposures, prefs, points and stake, and a payee's ledger: events carry totals only",
   ],
 };

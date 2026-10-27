@@ -440,14 +440,6 @@
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "staking.permissionedIdentity": [
-    "[[\"IdentityId\"],\"PermissionedIdentityPrefs\",[\"Twox64Concat\"]]",
-    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
-  ],
-  "staking.validators": [
-    "[[\"AccountId\"],\"ValidatorPrefs\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"commission\\\":\\\"Compact<Perbill>\\\",\\\"blocked\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]"
-  ],
   "statistics.activeAssetStats": [
     "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"_enum\\\":{\\\"Ticker\\\":\\\"PolymeshPrimitivesTicker\\\"}}\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]"
@@ -475,8 +467,5 @@
     "[[\"AccountId\"],\"AccountInfo\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PalletBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PolymeshCommonUtilitiesBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]"
-  ],
-  "validators.permissionedIdentity": [
-    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
   ]
 }

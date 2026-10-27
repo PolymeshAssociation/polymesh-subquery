@@ -11,7 +11,7 @@ import { byId, golden } from './goldens';
 
 const STASH = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const DID = `0x${'01'.repeat(32)}`;
-const ENTITIES = ['Validator', 'Era', 'ValidatorEra', 'Account', 'Identity'];
+const ENTITIES = ['Era', 'ValidatorEra', 'Account', 'Identity'];
 
 const seedStaking = (chain: FakeChain, blockId = '0000001000') =>
   seed(
@@ -37,12 +37,6 @@ describe.each(['testnet', 'mainnet'] as const)('the %s genesis', chainName => {
   it.each(['Era', 'ValidatorEra'])('seeds the %s rows the genesis election wrote', entity => {
     expect(byId(chain.rows(entity))).toEqual(byId(golden(chainName)[entity]));
   });
-
-  it('seeds the validators the genesis handler wrote, with the commission they set', () => {
-    expect(byId(chain.rows('Validator'), ['commission'])).toEqual(
-      byId(golden(chainName).Validator)
-    );
-  });
 });
 
 describe('from 8.0', () => {
@@ -52,8 +46,6 @@ describe('from 8.0', () => {
   beforeAll(async () => {
     chain = fakeChain(8_001_020);
     chain.put('identity.keyRecords', [STASH], { PrimaryKey: DID });
-    chain.put('staking.validators', [STASH], { commission: 50_000_000, blocked: false });
-    chain.put('validators.permissionedIdentity', [DID], { intendedCount: 1, runningCount: 1 });
     chain.put('staking.activeEra', [], { index: 12, start: 1_700_000_000_000 });
     chain.put('staking.erasStakersOverview', [12, STASH], {
       total: 1_100,
@@ -66,16 +58,6 @@ describe('from 8.0', () => {
       blocked: false,
     });
     await seedStaking(chain);
-  });
-
-  it('seeds each validator, permissioned, and active as the latest election chose it', () => {
-    expect(rows('Validator')[STASH]).toMatchObject({
-      identityId: DID,
-      commission: '50000000',
-      blocked: false,
-      isPermissioned: true,
-      isActive: true,
-    });
   });
 
   it('seeds the active era with its elected set', () => {
@@ -95,7 +77,6 @@ describe('the first era of 8.0', () => {
   it('reads an era elected before 8.0 from erasStakers, which 8.0 still holds', async () => {
     const chain = fakeChain(8_000_020);
     chain.put('identity.keyRecords', [STASH], { PrimaryKey: DID });
-    chain.put('staking.validators', [STASH], { commission: 0, blocked: false });
     chain.put('staking.activeEra', [], { index: 6901, start: 1_700_000_000_000 });
     chain.put('staking.erasStakers', [6901, STASH], { total: 900, own: 900, others: [] });
     await seedStaking(chain);
@@ -103,6 +84,5 @@ describe('the first era of 8.0', () => {
     expect(byId(chain.rows('ValidatorEra'))[`0000006901/${STASH}`]).toMatchObject({
       totalStake: '900',
     });
-    expect(byId(chain.rows('Validator'))[STASH]).toMatchObject({ isActive: true });
   });
 });

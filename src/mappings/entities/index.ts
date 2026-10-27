@@ -32,7 +32,6 @@ export * from './settlements/mapVenue';
 export * from './events/mapEra';
 export * from './events/mapSlash';
 export * from './events/mapStakingEvent';
-export * from './events/mapValidator';
 export * from './assets/mapStatistics';
 export * from './stos/mapSto';
 export * from './block/mapSubqueryVersion';

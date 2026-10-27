@@ -44,8 +44,6 @@ const expected = (chainName: 'testnet' | 'mainnet', entity: string): Row[] => {
 const CHANGED: Record<string, string[]> = {
   // opened at the seed, with a secondary key's permissions
   IdentityKey: ['addedReason', 'permissions'],
-  // the commission its prefs set
-  Validator: ['commission'],
 };
 
 describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', chainName => {
@@ -74,7 +72,6 @@ describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', c
     'Era',
     'ValidatorEra',
     'AccountBalance',
-    'Validator',
   ])('writes the %s rows the genesis handler wrote', entity => {
     const changed = CHANGED[entity] ?? [];
     expect(byId(rowsOf(entity), changed)).toEqual(byId(expected(chainName, entity), changed));
@@ -111,7 +108,6 @@ describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', c
       'MultiSigAdmin',
       'Era',
       'ValidatorEra',
-      'Validator',
       'AccountBalance',
       'TickerReservation',
       'IndexOrigin',
@@ -188,7 +184,7 @@ describe('starting after genesis', () => {
  */
 describe('a seed that fails part-way', () => {
   it('ends, when retried, exactly as a clean start does', async () => {
-    const entities = ['Identity', 'Account', 'Portfolio', 'Claim', 'Validator', 'IndexOrigin'];
+    const entities = ['Identity', 'Account', 'Portfolio', 'Claim', 'ValidatorEra', 'IndexOrigin'];
     const clean = genesisChain('testnet');
     await startIndex(clean.blockAt(1, new Date(0)));
     const expected = Object.fromEntries(entities.map(entity => [entity, byId(clean.rows(entity))]));
