@@ -215,7 +215,7 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalAdded: ['handleMultiSigProposalAdded'],
     ProposalApprovalVote: ['handleMultiSigVoteApproved'],
     ProposalApproved: ['handleMultiSigProposalApproved'],
-    ProposalExecuted: ['handleMultiSigProposalExecuted', 'handlePositionAfterProposal'],
+    ProposalExecuted: ['handleMultiSigProposalExecuted'],
     ProposalExecutionFailed: [],
     ProposalRejected: ['handleMultiSigProposalRejected'],
     ProposalRejectionVote: ['handleMultiSigVoteRejected'],
@@ -328,13 +328,11 @@ const filters: Record<string, Record<string, string[]>> = {
     VenueUnauthorized: [],
   },
   staking: {
-    // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
-    // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
-    Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
+    Bonded: ['handleStakingEvent', 'handleBonded'],
     Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
-    CurrencyMigrated: ['handleCurrencyMigrated', 'handlePositionCurrencyMigrated'],
+    CurrencyMigrated: ['handleCurrencyMigrated'],
     EraPaid: ['handleEraPaid'],
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
@@ -362,9 +360,9 @@ const filters: Record<string, Record<string, string[]>> = {
     // pre-v7.0 name for StakersElected: emitted after CurrentEra and ErasStakers are written
     StakingElection: ['handleStakersElected'],
     StakingElectionFailed: [],
-    Unbonded: ['handlePositionUnbonded', 'handleStakingEvent', 'handleUnbonded'],
+    Unbonded: ['handleStakingEvent', 'handleUnbonded'],
     ValidatorPrefsSet: ['handleValidatorPrefsSet'],
-    Withdrawn: ['handleWithdrawn', 'handlePositionWithdrawn'],
+    Withdrawn: ['handleWithdrawn'],
   },
   statistics: {
     AssetStatsUpdated: [],
@@ -620,35 +618,11 @@ const project: SubstrateProject = {
           // Changes that arrive with no event of their own, caught by the call that makes them.
           // Filtered to the one call each, which the dictionary indexes like an event, so empty
           // blocks are still skipped.
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleSetController',
-            filter: { module: 'staking', method: 'setController', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleRebond',
-            filter: { module: 'staking', method: 'rebond', success: true },
-          },
           ...['preApproveTicker', 'removeTickerPreApproval'].map(
             (method): SubstrateCallHandler => ({
               kind: SubstrateHandlerKind.Call,
               handler: 'handleSilentAssetPreApproval',
               filter: { module: 'asset', method, success: true },
-            })
-          ),
-          ...[
-            'batch',
-            'batchAll',
-            'batchAtomic',
-            'batchOptimistic',
-            'forceBatch',
-            'asDerivative',
-          ].map(
-            (method): SubstrateCallHandler => ({
-              kind: SubstrateHandlerKind.Call,
-              handler: 'handleBatchedStakingCalls',
-              filter: { module: 'utility', method, success: true },
             })
           ),
         ],

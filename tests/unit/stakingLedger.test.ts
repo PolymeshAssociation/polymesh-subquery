@@ -19,8 +19,8 @@ describe('readStakingLedger', () => {
   });
 
   it("reads a stash's ledger once per block, however many handlers ask", async () => {
-    // a payout block restakes many rewards, and both the balance ledger and `StakingPosition` read
-    // each stash's ledger; `api.query` returns the block's end state, so one read answers both
+    // a payout block restakes many rewards, each reading its stash's ledger; `api.query` returns
+    // the block's end state, so one read answers them all
     const first = await readStakingLedger(STASH, '0000000100');
     const second = await readStakingLedger(STASH, '0000000100');
 

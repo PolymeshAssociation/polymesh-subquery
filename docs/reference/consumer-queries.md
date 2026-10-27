@@ -390,6 +390,7 @@ What the chain answers in one read, and the index added nothing to, is no longer
 | `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
 | `CorporateActionDefaultConfig` | an asset's default targets and withholding taxes | `corporateAction.defaultTargetIdentities`, `defaultWithholdingTax` and `didWithholdingTax`, each by asset; every corporate action keeps the values it was declared with |
 | `EvmAccountMapping` | whether `revive.map_account` registered an account, by its H160 | `Account.evmAddress` (indexed) for the H160 of any account; `revive.originalAccount(h160)` for whether it is mapped |
+| `StakingPosition` | a stash's bond, unbonding chunks, controller, payee and lifetime totals | `AccountBalance.bonded` (now also `Account.balance`) for the bond and unbonding together, by account or identity and at any block; `staking.ledger(controller).unlocking` for the chunks; `staking.bonded(stash)` and `staking.payee(stash)` for the controller and payee; `AccountBalance.totalRewards` and `totalSlashed` for the totals. Each reward's receiver stays on `StakingEvent.rewardDestinationAccount` |
 
 ## 10. Reads that scan, because their index is trimmed
 
@@ -405,8 +406,7 @@ Big tables (every relation index trimmed):
 | `PolyxEntry` | `extrinsic`, `createdEvent` | none; filter by `account` or `identity`, which stay indexed |
 | `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
 | `AccountBalance` | `account`, `identity`, `updatedEvent` | look up by `id`, which is the account's address |
-| `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | for `stash`, look up by `id`, which is the stash; none for the rest |
-| `StakingEvent` | `validator`, `position`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
+| `StakingEvent` | `validator`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
 
 Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
 

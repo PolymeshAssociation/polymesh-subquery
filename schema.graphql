@@ -2113,6 +2113,8 @@ type Account @entity {
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
+  "The account's POLYX balance"
+  balance: AccountBalance @derivedFrom(field: "account")
   "One per asset this account has held as a v8 account-level holder"
   holdings: [Holding!] @derivedFrom(field: "account")
   "Settlement legs sending from this account, including assets it has never held"
@@ -2304,43 +2306,7 @@ type StakingEvent @entity {
   eraIndex: Int
   "the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
   validator: Validator @index
-  position: StakingPosition
   createdEvent: Event!
-}
-
-"""
-An unbonding chunk still in the queue, not yet withdrawable — `staking.ledger(controller).unlocking`
-"""
-type UnlockChunk @jsonField {
-  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
-  amount: String!
-  era: Int!
-}
-
-"""
-Current staking position for a stash — how much is bonded/unbonding. Who it nominates is not
-indexed: from 8.0 nominating emits no event, so read `staking.nominators` instead. `bonded`
-mirrors the same `staking.ledger`/hold read `AccountBalance.bonded`/`.locks`/`.holds` already
-track (`readStakingLock` in `src/utils/staking.ts`) — this is a second view onto the same number,
-not an independently accumulated one, so the two cannot drift apart
-"""
-type StakingPosition @entity {
-  id: ID! # stash address
-  stash: Account! @index
-  controller: Account
-  identity: Identity @index
-  "currently bonded (active in the staking ledger), same source as AccountBalance.bonded"
-  bonded: BigInt!
-  "in the unbonding queue, not yet withdrawable"
-  unbonding: BigInt!
-  "unbonding chunks with their unlock eras"
-  unlocking: [UnlockChunk]
-  rewardDestination: String
-  rewardDestinationAccount: Account
-  totalRewarded: BigInt!
-  totalSlashed: BigInt!
-  createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """
@@ -3895,6 +3861,7 @@ type AccountBalance @entity {
   total: BigInt!
   "free - frozen, floored at 0"
   transferable: BigInt!
+  "the staking lock: bonded plus unbonding, until withdrawn. Its unbonding chunks are `staking.ledger(controller).unlocking`"
   bonded: BigInt!
   otherReserved: BigInt!
 

@@ -2435,18 +2435,6 @@ describe('v8 reward destinations', () => {
     expect(balance(ALICE)).toBeUndefined();
   });
 
-  it('pays the controller the index holds for the stash, without a chain read', async () => {
-    bondedTo(null);
-    db['StakingPosition'] = { [ALICE]: { id: ALICE, controllerId: CONTROLLER } as Row };
-
-    await handleReward(
-      structEvent('staking', 'Rewarded', { stash: ALICE, dest: 'Controller', amount: '250' })
-    );
-
-    expect(balance(CONTROLLER)?.free).toBe(BigInt(250));
-    expect((globalThis as any).api.query.staking.bonded).not.toHaveBeenCalled();
-  });
-
   it('falls back to the stash when the controller cannot be resolved', async () => {
     bondedTo(null);
 

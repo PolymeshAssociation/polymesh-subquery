@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS data_multi_sig_proposal_created_event_id ON multi_sig
 -- SubQuery gives `id` is a plain btree: `addHistoricalIdIndex` runs after `_block_range` has been
 -- appended to the declared indexes, so it never gets one. An account touched every block builds up
 -- tens of thousands of row versions, and each close-out scanned all of them. On a testnet genesis
--- resync, `account_balances` and `staking_positions` held ~27,000 versions for busy ids, the
+-- resync, `account_balances` held ~27,000 versions for busy ids, the
 -- update took 3-12 s per batch with Postgres at 100% CPU, and this index took a lookup from
 -- 157 ms to 0.8 ms and the sync from ~180 to ~1,280 heights/s.
 --
@@ -66,7 +66,7 @@ DO $$
 DECLARE
   tbl TEXT;
 BEGIN
-  FOREACH tbl IN ARRAY ARRAY['account_balances', 'staking_positions'] LOOP
+  FOREACH tbl IN ARRAY ARRAY['account_balances'] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_indexes
       WHERE schemaname = current_schema() AND tablename = tbl
@@ -77,7 +77,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- The GiST indexes that no reader uses (every relation index of the five big tables, and the event
+-- The GiST indexes that no reader uses (every relation index of the four big tables, and the event
 -- and extrinsic stamps of the small ones; lookups to other entities on small tables stay) are
 -- dropped by `db/trimIndexes.ts`, one at a time after this script has run: dropping ~100 of them
 -- here would hold an exclusive lock on each table until the whole transaction commits, while the

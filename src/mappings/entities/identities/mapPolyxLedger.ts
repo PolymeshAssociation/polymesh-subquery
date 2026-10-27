@@ -13,7 +13,6 @@ import {
   MovementKind,
   PolyxEntry,
   PolyxPool,
-  StakingPosition,
 } from '../../../types';
 import { getBigIntValue, getTextValue, padId } from '../../../utils';
 import { blockEvents } from '../../../utils/blockEvents';
@@ -1184,21 +1183,16 @@ const rewardRecipient = async (
     return { recipient: account, restaked: false };
   }
 
-  // `make_payout` still honours the deprecated `Controller` payee and pays `bonded(stash)`. The
-  // index tracks the controller (`Bonded`, `set_controller`), so it is read from the stash's
-  // position, and from chain only for a stash the index has no position for. A controller that
-  // can't be read is recorded, and the stash is credited: the runtime pays `bonded(stash)`, which
-  // for a stash with no separate controller is the stash itself.
+  // `make_payout` still honours the deprecated `Controller` payee and pays `bonded(stash)`, read
+  // from chain. A controller that can't be read is recorded, and the stash is credited: for a
+  // stash with no separate controller, `bonded(stash)` is the stash itself.
   if (destination === 'Controller') {
-    const indexed = (await StakingPosition.get(stash))?.controllerId;
-    const recipient =
-      indexed ??
-      (await readOrAnomaly(
-        { block, eventIdx },
-        `the reward to ${stash} was credited to the stash because the controller could not be read`,
-        () => resolveController(stash, blockId),
-        stash
-      ));
+    const recipient = await readOrAnomaly(
+      { block, eventIdx },
+      `the reward to ${stash} was credited to the stash because the controller could not be read`,
+      () => resolveController(stash, blockId),
+      stash
+    );
 
     return { recipient, restaked: false };
   }

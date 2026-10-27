@@ -8,7 +8,7 @@
  *   holding, nft      a portfolio's (`did/number`) amount or NFT count of `--asset`, against
  *                     `portfolio.portfolioAssetBalances` or `portfolio.portfolioNFT`
  *   account-holding   an account's amount of `--asset` (v8), against `asset.assetBalance`
- *   bonded            a stash's `StakingPosition.bonded`, against its `staking.ledger` `active`
+ *   bonded            a stash's `AccountBalance.bonded`, against its `staking.ledger` `total`
  *
  * With `--chain-only` it reads no index: it finds the first block where the chain's value differs
  * from its value at `--from`, which answers "what changed this?" for any account or portfolio.
@@ -86,9 +86,9 @@ const chainValue = async (api: ApiPromise, target: Target, height: number): Prom
     case 'bonded': {
       const controller = (await at.query.staking.bonded(target.id)).unwrapOr(undefined);
       const ledger = (await at.query.staking.ledger(controller ?? target.id)).toJSON() as {
-        active?: string | number;
+        total?: string | number;
       } | null;
-      return BigInt(ledger?.active ?? 0).toString();
+      return BigInt(ledger?.total ?? 0).toString();
     }
   }
 };
@@ -141,7 +141,7 @@ const indexValue = async (db: DataSource, target: Target, height: number): Promi
       );
     case 'bonded':
       return read(
-        `SELECT bonded AS value FROM staking_positions WHERE id = $1 AND ${at}`,
+        `SELECT bonded AS value FROM account_balances WHERE id = $1 AND ${at}`,
         target.id
       );
   }

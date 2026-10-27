@@ -34,10 +34,6 @@ const READS: Record<string, [number, string]> = {
     2,
     'the runtime an upgrade installed, and the one it replaced: CodeUpdated carries neither',
   ],
-  'src/mappings/entities/events/mapStakingPosition.ts': [
-    1,
-    "a controller's stash: the event names only the controller",
-  ],
   'src/mappings/entities/identities/feePayer.ts': [
     4,
     "who paid a fee (subsidiser, multisig's identity, bridge controller): fee events name only the account",

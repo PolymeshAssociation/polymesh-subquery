@@ -46,8 +46,6 @@ const CHANGED: Record<string, string[]> = {
   IdentityKey: ['addedReason', 'permissions'],
   // the commission its prefs set
   Validator: ['commission'],
-  // with its payee; the genesis handler also wrote flags the schema has since dropped
-  StakingPosition: ['isValidator', 'isChilled', 'rewardDestination', 'rewardDestinationAccountId'],
 };
 
 describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', chainName => {
@@ -77,7 +75,6 @@ describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', c
     'ValidatorEra',
     'AccountBalance',
     'Validator',
-    'StakingPosition',
   ])('writes the %s rows the genesis handler wrote', entity => {
     const changed = CHANGED[entity] ?? [];
     expect(byId(rowsOf(entity), changed)).toEqual(byId(expected(chainName, entity), changed));
@@ -115,7 +112,6 @@ describe.each(['testnet', 'mainnet'] as const)('starting from the %s genesis', c
       'Era',
       'ValidatorEra',
       'Validator',
-      'StakingPosition',
       'AccountBalance',
       'TickerReservation',
       'IndexOrigin',

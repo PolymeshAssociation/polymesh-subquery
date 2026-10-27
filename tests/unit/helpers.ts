@@ -96,7 +96,7 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
 
 /**
  * `staking.bonded` reporting no controller, so `resolveController` treats a stash as its own
- * controller. Creating or refreshing a `StakingPosition` reads it.
+ * controller.
  */
 export const mockSelfControlled = (): { bonded: jest.Mock } => ({
   bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),

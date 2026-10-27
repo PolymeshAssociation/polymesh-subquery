@@ -7,9 +7,8 @@ import {
 } from '../../src/utils/storageAtParent';
 import { IndexerAnomaly } from '../../src/types';
 import { handleStakersElected } from '../../src/mappings/entities/events/mapEra';
-import { getOrCreatePosition } from '../../src/mappings/entities/events/mapStakingPosition';
 import { resolveLegacyRewardDestination } from '../../src/utils/staking';
-import { mockLedgerAccountQuery, mockStore, namedEvent } from './helpers';
+import { mockStore, namedEvent } from './helpers';
 
 const blockAt = (blockNumber: number) =>
   namedEvent({
@@ -114,34 +113,11 @@ describe('handlers reading state that does not decode', () => {
   const anomalies = (db: Record<string, Record<string, any>>) =>
     Object.values(db['IndexerAnomaly'] ?? {});
 
-  /** `bonded` can't be decoded; everything else on chain reads as absent. */
-  const withUndecodableBonded = () => {
-    (globalThis as any).api.query = {
-      ...mockLedgerAccountQuery(),
-      staking: {
-        bonded: jest.fn().mockImplementation(undecodable),
-        activeEra: jest.fn().mockResolvedValue({ toJSON: () => ({ index: 5 }) }),
-      },
-    };
-  };
-
   const eventOf = (method: string, fields: Record<string, unknown>) =>
     namedEvent({ section: 'staking', method, fields, idx: IDX });
 
   beforeEach(() => {
     __resetStakingCaches();
-  });
-
-  it('a new position: records an undecodable controller against the event, and carries on', async () => {
-    const db = mockStore();
-    withUndecodableBonded();
-    const { block } = eventOf('Bonded', {});
-
-    await (await getOrCreatePosition(STASH, '0000001000', new Date(0), 'e', block, IDX)).save();
-
-    expect(db['StakingPosition'][STASH].controllerId).toBe(STASH);
-    expect(anomalies(db)).toHaveLength(1);
-    expect(anomalies(db)[0].id).toMatch(/^0000001000\/0000000007\//);
   });
 
   it('StakersElected: records one anomaly for a currentEra that does not decode', async () => {

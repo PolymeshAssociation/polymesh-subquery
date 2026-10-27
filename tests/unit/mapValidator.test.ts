@@ -62,22 +62,6 @@ describe('handleValidatorPrefsSet', () => {
 
     expect(db.Validator[STASH]).toMatchObject({ commission: BigInt(10_000), blocked: false });
   });
-
-  it('records the validator without touching its staking position', async () => {
-    const db = mockStore();
-    (globalThis as any).api.query = { ...mockLedgerAccountQuery(), staking: mockSelfControlled() };
-
-    await handleValidatorPrefsSet(
-      namedEvent({
-        section: 'staking',
-        method: 'ValidatorPrefsSet',
-        fields: { stash: STASH, prefs: { commission: 50_000, blocked: false } },
-      })
-    );
-
-    expect(db.Validator[STASH]).toBeDefined();
-    expect(db.StakingPosition).toBeUndefined();
-  });
 });
 
 describe('handlePermissionedIdentityAdded / handlePermissionedIdentityRemoved', () => {

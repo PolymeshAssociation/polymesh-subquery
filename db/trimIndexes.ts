@@ -22,11 +22,9 @@ import { isLockConflict } from './applySql';
 //              The stand-in is built first, under another name and without blocking writes, and
 //              only then swapped in for the GiST in a short transaction (see `trimIndexes`).
 //
-// What is trimmed follows table size. On the five big tables (staking_positions, account_balances,
-// staking_events, polyx_entries, events) every relation index is trimmed but the lookups readers
-// filter those tables by, such as `staking_events (stash_id)` and `(identity_id)`: 18 indexes. The
-// 17 measured before they were trimmed took 8.57 GB on mainnet; `reward_destination_account_id`
-// came later and, trimmed from the start, has no measure.
+// What is trimmed follows table size. On the four big tables (account_balances, staking_events,
+// polyx_entries, events) every relation index is trimmed but the lookups readers filter those
+// tables by, such as `staking_events (stash_id)` and `(identity_id)`: 11 indexes.
 // On the small tables only the event and extrinsic stamps (`created_event_id`,
 // `updated_event_id` and the like) are trimmed, 36 indexes and 111 MB when last measured, because
 // nothing looks a row up by the event that wrote it. The lookups to other entities stay as
@@ -66,8 +64,7 @@ export const RELATIONS = `
   nfts  burned_event_id created_event_id updated_event_id
   polyx_entries  counterparty_identity_id created_event_id extrinsic_id
   portfolios  created_event_id updated_event_id
-  staking_events  created_event_id position_id reward_destination_account_id validator_id
-  staking_positions  controller_id created_event_id identity_id reward_destination_account_id stash_id updated_event_id
+  staking_events  created_event_id reward_destination_account_id validator_id
   validator_eras  created_event_id updated_event_id
 `;
 

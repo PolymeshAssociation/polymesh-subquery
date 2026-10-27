@@ -1,22 +1,18 @@
-import { getRewardDestinationAccount } from '../../mappings/entities/events/mapStakingEvent';
-import { Era, StakingPosition, Validator, ValidatorEra } from '../../types';
+import { Era, Validator, ValidatorEra } from '../../types';
 import { padId } from '../../utils/common';
-import { ledgerSnapshot, readRewardDestination } from '../../utils/staking';
 import { SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, StorageRef } from '../snapshot';
 import { storedKeys } from './keys';
 
 /**
- * Staking: each bonded stash's position, the validators that declared their intent, and the active era with its elected set. What a stash was paid or slashed, and earlier
- * eras, are history.
+ * Staking: the validators that declared their intent, and the active era with its elected set.
+ * Earlier eras are history.
  */
 
 const created = (ctx: SeedContext) => ({
   createdEventId: ctx.eventId,
   updatedEventId: ctx.eventId,
 });
-
-type LedgerJson = Parameters<typeof ledgerSnapshot>[0] & { stash?: string };
 
 const KEYS: StorageRef[] = [
   'identity.keyRecords',
@@ -28,62 +24,6 @@ const KEY_SHAPES = {
   'identity.keyToIdentityIds': [3000],
   'identity.didRecords': [3000],
   'multiSig.keyToMultiSig': [3000],
-};
-
-/**
- * Each bonded stash's position from its ledger: keyed by its controller before 8.0, by the stash
- * from it, which the ledger names either way.
- */
-export const stakingPositionSeeder: Seeder<StakingPosition> = {
-  entity: 'StakingPosition',
-  // a fully unbonded stash stays indexed
-  terminal: ({ bonded, unbonding }) =>
-    BigInt(bonded) === BigInt(0) && BigInt(unbonding) === BigInt(0),
-  reads: ['staking.ledger', 'staking.payee', ...KEYS],
-  oldShapes: {
-    'staking.ledger': [3000],
-    'staking.payee': [3000],
-    ...KEY_SHAPES,
-  },
-  accounts: ['stashId', 'controllerId', 'rewardDestinationAccountId'],
-  relative: ['totalRewarded', 'totalSlashed'],
-  async *rows(snap, ctx) {
-    const [payees, keys] = await Promise.all([snap.map('staking.payee'), storedKeys(snap)]);
-    for await (const page of snap.pages('staking.ledger')) {
-      yield page.flatMap(({ args, value }) => {
-        const ledger = value?.toJSON() as LedgerJson | undefined;
-        if (!ledger) {
-          return [];
-        }
-        const controller = args[0].toString();
-        const stash = ledger.stash ?? controller;
-        const snapshot = ledgerSnapshot(ledger);
-        const payee = payees.get(stash)?.value;
-        const destination = payee ? readRewardDestination(payee.toJSON()) : undefined;
-        return [
-          StakingPosition.create({
-            id: stash,
-            stashId: stash,
-            controllerId: controller,
-            identityId: keys.get(stash)?.did,
-            bonded: snapshot.active,
-            unbonding: snapshot.total - snapshot.active,
-            unlocking: snapshot.unlocking.map(chunk => ({
-              ...chunk,
-              amount: chunk.amount.toString(),
-            })),
-            rewardDestination: destination?.destination,
-            rewardDestinationAccountId: destination
-              ? getRewardDestinationAccount(destination.destination, destination.account, stash)
-              : undefined,
-            totalRewarded: BigInt(0),
-            totalSlashed: BigInt(0),
-            ...created(ctx),
-          }),
-        ];
-      });
-    }
-  },
 };
 
 /**

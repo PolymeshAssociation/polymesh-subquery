@@ -3,14 +3,7 @@ import { EventRecord } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import { decodeEvent, DecodedEvent, optionalField } from '../../../decode';
-import {
-  Account,
-  AnomalyKind,
-  EventIdEnum,
-  HoldReason,
-  StakingEvent,
-  StakingPosition,
-} from '../../../types';
+import { Account, AnomalyKind, EventIdEnum, StakingEvent } from '../../../types';
 import { getBigIntValue, getTextValue } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { blockEvents, substrateEventAt } from '../../../utils/blockEvents';
@@ -21,9 +14,7 @@ import {
   RewardDestinationName,
 } from '../../../utils/staking';
 import { extractArgs } from '../common';
-import { holdReasonFromJson } from '../identities/ledgerCore';
 import { currentPayoutEra, currentPayoutValidator } from '../identities/mapPolyxLedger';
-import { refreshPositionFromLedger } from './mapStakingPosition';
 
 const bondedUnbondedOrReward = new Set([
   EventIdEnum.Bonded,
@@ -33,7 +24,6 @@ const bondedUnbondedOrReward = new Set([
 ]);
 
 const rewardEvents = new Set([EventIdEnum.Reward, EventIdEnum.Rewarded]);
-const slashEvents = new Set([EventIdEnum.Slash, EventIdEnum.Slashed]);
 
 type StakingEventDetails = {
   amount?: bigint;
@@ -286,84 +276,6 @@ const getStakingEventDetails = async (
 };
 
 /**
- * Rolls a reward or slash into the stash's `StakingPosition`. Other staking events leave it alone.
- */
-/**
- * Whether v8 really compounded the `Staked` reward `event` reports for `stash`.
- *
- * `make_payout` mints the reward, then writes the ledger, whose hold emits `balances.Held` with
- * reason `Staking` for the stash, then emits `Rewarded`. It ignores a failed ledger write, which is
- * what a stash whose currency hadn't yet migrated to holds gets: its `Rewarded` still says `Staked`,
- * but the reward stays free and `active` doesn't move.
- */
-const heldForStaking = (event: SubstrateEvent, stash: string): boolean => {
-  const records = event.block.events ?? [];
-
-  for (let index = event.idx - 1; index >= 0; index -= 1) {
-    const { section, method, data } = records[index].event;
-
-    // the previous reward, or the start of this payout: this reward's own events are all after it
-    if (section === 'staking') {
-      return false;
-    }
-
-    if (
-      section === 'balances' &&
-      method === 'Held' &&
-      data[1]?.toString() === stash &&
-      holdReasonFromJson(data[0]?.toJSON()) === HoldReason.Staking
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const applyToPosition = async (
-  position: StakingPosition,
-  eventId: EventIdEnum,
-  details: StakingEventDetails,
-  stashAccount: string,
-  amount: bigint,
-  event: SubstrateEvent
-): Promise<void> => {
-  const { blockEventId } = extractArgs(event);
-
-  if (rewardEvents.has(eventId)) {
-    position.totalRewarded += amount;
-    if (details.rewardDestination !== undefined) {
-      position.rewardDestination = details.rewardDestination;
-    }
-    if (details.rewardDestinationAccount !== undefined) {
-      position.rewardDestinationAccountId = details.rewardDestinationAccount;
-    }
-
-    // A `Staked` payee compounds straight into `staking.ledger`: `make_payout` does
-    // `active += amount; total += amount` and nothing else to it, in every runtime (Polymesh
-    // v3.0 to v7.4 `pallets/staking`, and `pallet-staking` on `polymesh-v8-stable2603-7`). So the
-    // bond grows by the reward, with no ledger read; `check-state.ts` check 6 compares positions
-    // with the ledger. Other destinations pay out to a free balance and leave the ledger alone.
-    if (
-      details.rewardDestination === 'Staked' &&
-      (!is8xChain(event.block) || heldForStaking(event, stashAccount))
-    ) {
-      position.bonded += amount;
-    }
-  } else if (slashEvents.has(eventId)) {
-    position.totalSlashed += amount;
-
-    // `do_slash` calls `ledger.slash(...)` and `ledger.update()`, emitting only `Slashed`.
-    await refreshPositionFromLedger(position, stashAccount, event);
-  } else {
-    return;
-  }
-
-  position.updatedEventId = blockEventId;
-  await position.save();
-};
-
-/**
  * Subscribes to staking events
  */
 export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
@@ -382,14 +294,6 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     transactionId = hexAddPrefix(extrinsic.extrinsic.hash.toJSON());
   }
 
-  const position = details.stashAccount
-    ? await StakingPosition.get(details.stashAccount)
-    : undefined;
-
-  if (position && details.stashAccount && details.amount !== undefined) {
-    await applyToPosition(position, eventId, details, details.stashAccount, details.amount, event);
-  }
-
   const { stashAccount, rewardDestinationAccount, ...rest } = details;
 
   await StakingEvent.create({
@@ -401,7 +305,6 @@ export async function handleStakingEvent(event: SubstrateEvent): Promise<void> {
     transactionId,
     eraIndex: currentPayoutEra(blockId),
     validatorId: rewardEvents.has(eventId) ? currentPayoutValidator(blockId) : undefined,
-    positionId: position?.id,
     createdEventId: blockEventId,
   }).save();
 }

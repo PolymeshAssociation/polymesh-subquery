@@ -55,7 +55,7 @@ import {
   proposalVoteSeeder,
   subsidySeeder,
 } from './governance';
-import { eraSeeder, stakingPositionSeeder, validatorEraSeeder, validatorSeeder } from './staking';
+import { eraSeeder, validatorEraSeeder, validatorSeeder } from './staking';
 import {
   confidentialAccountAssetSeeder,
   confidentialAccountSeeder,
@@ -124,7 +124,6 @@ export const SEEDERS: Seeder[] = [
   proposalSeeder,
   proposalVoteSeeder,
   subsidySeeder,
-  stakingPositionSeeder,
   validatorSeeder,
   eraSeeder,
   validatorEraSeeder,

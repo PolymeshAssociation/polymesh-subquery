@@ -440,11 +440,6 @@
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "staking.payee": [
-    "[[\"AccountId\"],\"RewardDestination\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\",\\\"None\\\":\\\"Null\\\"}}\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",[\"Twox64Concat\"]]"
-  ],
   "staking.permissionedIdentity": [
     "[[\"IdentityId\"],\"PermissionedIdentityPrefs\",[\"Twox64Concat\"]]",
     "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"

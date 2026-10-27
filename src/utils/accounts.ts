@@ -12,7 +12,6 @@ import {
   Identity,
   IdentityKey,
   IdentityKeyRole,
-  StakingPosition,
   AccountBalance,
   Validator,
 } from '../types';
@@ -187,30 +186,26 @@ export const identityOfKey = async (
 };
 
 /**
- * Carries an account's identity onto its balance, the staking position and the validator it is the
- * stash of.
+ * Carries an account's identity onto its balance and the validator it is the stash of.
  *
- * `AccountBalance.identity`, `StakingPosition.identity` and `Validator.identity` are copied from the
- * `Account` so each can be listed by identity without a join, which makes the account the source of
- * truth and each field a copy that has to follow it. They are updated here, where the account's
- * identity changes, rather than re-read on every balance or staking event: identity changes are
- * rare, and those events are not. A validator is permissioned as its identity is.
+ * `AccountBalance.identity` and `Validator.identity` are copied from the `Account` so each can be
+ * listed by identity without a join, which makes the account the source of truth and each field a
+ * copy that has to follow it. They are updated here, where the account's identity changes, rather
+ * than re-read on every balance or staking event: identity changes are rare, and those events are
+ * not. A validator is permissioned as its identity is.
  */
 export const restampIdentityCopies = async (
   address: string,
   identityId: string | undefined,
   blockEventId: string
 ): Promise<void> => {
-  const [position, balance, validator] = await Promise.all([
-    StakingPosition.get(address),
+  const [balance, validator] = await Promise.all([
     AccountBalance.get(address),
     Validator.get(address),
   ]);
 
-  const copies: (StakingPosition | AccountBalance | Validator)[] = [];
-  [position, balance, validator].forEach(
-    row => row && row.identityId !== identityId && copies.push(row)
-  );
+  const copies: (AccountBalance | Validator)[] = [];
+  [balance, validator].forEach(row => row && row.identityId !== identityId && copies.push(row));
   if (validator && copies.includes(validator)) {
     validator.isPermissioned = identityId
       ? (await readPermissionedIdentity(identityId)) ?? false
