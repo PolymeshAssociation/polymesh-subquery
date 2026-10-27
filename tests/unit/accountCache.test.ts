@@ -217,6 +217,84 @@ describe('getOrCreateAccount for keys of one unindexed identity resolved concurr
   });
 });
 
+describe('getOrCreateAccount for a bare row', () => {
+  const primaryKeyRecord = {
+    isEmpty: false,
+    unwrap: () => ({ isPrimaryKey: true, asPrimaryKey: { toString: () => DID } }),
+  } as unknown as Codec;
+
+  let stored: any;
+  const save = jest.fn();
+
+  beforeEach(() => {
+    (globalThis as any).api.registry = { chainSS58: 12 };
+    (createIdentity as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (createPortfolio as jest.Mock).mockReset().mockResolvedValue(undefined);
+    stored = {
+      id: ADDRESS,
+      address: ADDRESS,
+      identityId: undefined,
+      keyRole: AccountKeyRole.Unlinked,
+      createdEventId: '0000000050/0000000002',
+      updatedEventId: '0000000050/0000000002',
+    };
+    // a fresh copy per read, as the store gives
+    jest.spyOn(Account, 'get').mockImplementation(async () => {
+      const row: any = { ...stored };
+      row.save = async () => {
+        save();
+        const { save: _, ...fields } = row;
+        stored = fields;
+      };
+      return row;
+    });
+    jest.spyOn(Identity, 'get').mockResolvedValue(undefined);
+    jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
+  });
+
+  /**
+   * testnet `5D1v3…`: an authorization made its row at 1,072,297, and it was onboarded at
+   * 1,908,926, where the `Endowed` before `DidCreated` must already carry the identity
+   */
+  it('links the row to the identity of a key the chain has since recorded', async () => {
+    (api as any).query = {
+      identity: {
+        keyRecords: jest.fn().mockResolvedValue(primaryKeyRecord),
+        didRecords: jest.fn().mockResolvedValue({ toJSON: () => ({ primary_key: ADDRESS }) }),
+      },
+    };
+    const blockId = freshBlockId();
+
+    const account = await getOrCreateAccount(ADDRESS, blockId, datetime, `${blockId}/0000000002`);
+
+    expect(account).toMatchObject({
+      identityId: DID,
+      keyRole: AccountKeyRole.PrimaryKey,
+      createdEventId: '0000000050/0000000002',
+      updatedEventId: `${blockId}/0000000002`,
+    });
+    expect(stored).toMatchObject({ identityId: DID, keyRole: AccountKeyRole.PrimaryKey });
+    expect(createIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ did: DID, primaryAccountId: ADDRESS }),
+      `${blockId}/0000000002`
+    );
+  });
+
+  it('leaves the row as it is while the chain records no key for it', async () => {
+    (api as any).query = { identity: { keyRecords: jest.fn().mockResolvedValue(emptyRecord) } };
+    const blockId = freshBlockId();
+
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toMatchObject({
+      identityId: undefined,
+      keyRole: AccountKeyRole.Unlinked,
+    });
+    await getOrCreateAccount(ADDRESS, blockId, datetime);
+
+    expect(save).not.toHaveBeenCalled();
+    expect(keyRecords()).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('getOrCreateAccount for a 5.x or 6.x secondary key', () => {
   /**
    * Until 7.0 a secondary key's record is `SecondaryKey(IdentityId, Permissions)`, so the record's

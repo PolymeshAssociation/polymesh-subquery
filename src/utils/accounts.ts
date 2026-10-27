@@ -296,7 +296,8 @@ const withIdentityLock = async (did: string, task: () => Promise<void>): Promise
 };
 
 /**
- * The `Account` an address belongs to, creating it from the chain's key record when it is absent.
+ * The `Account` an address belongs to, creating it from the chain's key record when it is absent,
+ * or linking a bare `Unlinked` row whose address the key record now names.
  *
  * A primary or secondary key brings its identity with it, and that identity and its default
  * portfolio are created alongside. Every other address resolves to nothing, deliberately - an
@@ -323,14 +324,15 @@ export const getOrCreateAccount = async (
 ): Promise<Account | undefined> => {
   const existing = await Account.get(address);
 
-  if (existing) {
+  // a bare row can predate the address becoming a key, as an authorization's target's does
+  if (existing && (existing.identityId || existing.keyRole !== AccountKeyRole.Unlinked)) {
     return existing;
   }
 
   const resolution = await resolveKeyRecord(address, blockId);
 
   if (!resolution) {
-    return;
+    return existing;
   }
 
   // No `Account` row for a signer key: it has no identity and no permissions, so it would carry
@@ -339,7 +341,7 @@ export const getOrCreateAccount = async (
   // the genesis/seed scan own - neither `status` nor `createdBlock` is derivable from a key
   // record, so writing one from here would be guessing at both.
   if (resolution.kind === 'multiSigSigner') {
-    return;
+    return existing;
   }
 
   const { did, kind } = resolution;
@@ -366,17 +368,25 @@ export const getOrCreateAccount = async (
     }
   });
 
-  const account = Account.create({
-    id: address,
-    identityId: did,
-    address,
-    keyRole: kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey,
-    ...getAccountKeyType(address),
-    createdEventId,
-    updatedEventId: createdEventId,
-  });
+  const keyRole = kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey;
+  let account: Account;
 
-  await account.save();
+  if (existing) {
+    await upsertAccount({ address, identityId: did, keyRole }, createdEventId);
+    account = (await Account.get(address)) ?? existing;
+  } else {
+    account = Account.create({
+      id: address,
+      identityId: did,
+      address,
+      keyRole,
+      ...getAccountKeyType(address),
+      createdEventId,
+      updatedEventId: createdEventId,
+    });
+
+    await account.save();
+  }
 
   // The membership interval, so a key discovered lazily from chain state has the same
   // `IdentityKey` history as one seen through a `DidCreated` / `SecondaryKeysAdded` event.
