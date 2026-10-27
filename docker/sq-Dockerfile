@@ -5,18 +5,21 @@
 ARG NODE_IMAGE=node:24.22.1-alpine
 ARG SUBQL_NODE_IMAGE=onfinality/subql-node:v6.4.6
 # @subql/node 6.4.6 pins ~19.0.0, which keeps a fork block whose successor came from the canonical
-# chain (fixed in 19.2.0, #3016). Drop this once a @subql/node release depends on it.
+# chain (fixed in 19.2.0, #3016), and 19.2.0 onwards exit on that fork instead of rewinding it
+# (patch-node-core.js). Drop both once a @subql/node release depends on a fixed node-core.
 ARG SUBQL_NODE_CORE_VERSION=19.3.1
 
 FROM ${SUBQL_NODE_IMAGE} AS subql-node
 ARG SUBQL_NODE_CORE_VERSION
 USER root
+COPY docker/patch-node-core.js /tmp/
 RUN cd /tmp \
   && npm pack --silent "@subql/node-core@${SUBQL_NODE_CORE_VERSION}" \
   && rm -rf /node_modules/@subql/node-core \
   && mkdir /node_modules/@subql/node-core \
   && tar xzf subql-node-core-*.tgz -C /node_modules/@subql/node-core --strip-components 1 \
-  && rm subql-node-core-*.tgz /root/.npm -rf
+  && node patch-node-core.js \
+  && rm -rf subql-node-core-*.tgz patch-node-core.js /root/.npm
 
 # Stage 1: Build Stage
 FROM ${NODE_IMAGE} AS builder
