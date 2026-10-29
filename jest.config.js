@@ -1,12 +1,6 @@
-/** @type {import('@ts-jest/dist/types').InitialOptionsTsJest} */
+/** @type {import('jest').Config} */
 // eslint-disable-next-line no-undef
 module.exports = {
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.test.json',
-    },
-  },
-
   globalSetup: './tests/setup.ts',
   globalTeardown: './tests/teardown.ts',
   testEnvironment: 'node',
@@ -17,7 +11,7 @@ module.exports = {
   coverageProvider: 'v8',
 
   transform: {
-    '^.+\\.(ts|tsx)?$': 'ts-jest',
+    '^.+\\.(ts|tsx)?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: ['node_modules/(?!(@polkadot|@babel/runtime/helpers/esm|@subql)/)'],
