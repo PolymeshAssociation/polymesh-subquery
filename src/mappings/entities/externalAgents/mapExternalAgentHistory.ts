@@ -1,56 +1,68 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
   AgentGroup as AgentGroupEntity,
   AgentGroupMembership,
-  TickerExternalAgentHistory,
+  AgentHistoryType,
+  AssetAgent,
+  AssetAgentHistory,
 } from '../../../types';
-import { getAssetId, getPaginatedData } from '../../../utils';
+import { decodeEvent } from '../../../decode';
+import { getAllByFields, getAssetId } from '../../../utils';
+import { blockEvents } from '../../../utils/blockEvents';
 import { extractArgs } from '../common';
+import { writeAssetAgent } from './mapExternalAgent';
+import {
+  canonicalExtrinsicPermissions,
+  ExtrinsicPermissionsJson,
+  Subset,
+} from '../../../utils/permissions';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
-  const group = params[2].toJSON();
-  const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = await getAssetId(params[1], block);
+  const group = agId.toJSON();
+  const permissions = JSON.stringify(
+    canonicalExtrinsicPermissions(rawPermissions.toJSON() as Subset)
+  );
+  const assetId = await getAssetId(rawAssetId, block);
 
   await AgentGroupEntity.create({
     id: `${assetId}/${group}`,
+    assetId,
     permissions,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agId, permissions: rawPermissions } = decodeEvent(event);
 
-  const group = params[2].toJSON();
-  const permissions = JSON.stringify(params[3].toJSON());
-  const assetId = await getAssetId(params[1], block);
+  const group = agId.toJSON();
+  const permissions = JSON.stringify(
+    canonicalExtrinsicPermissions(rawPermissions.toJSON() as Subset)
+  );
+  const assetId = await getAssetId(rawAssetId, block);
 
   const ag = await AgentGroupEntity.get(`${assetId}/${group}`);
   ag.permissions = permissions;
 
   const promises = [ag.save()];
-  const members = await getPaginatedData<AgentGroupMembership, 'groupId'>(
-    'AgentGroupMembership',
-    'groupId',
-    `${assetId}/${group}`
-  );
+  const members = await getAllByFields<AgentGroupMembership>('AgentGroupMembership', [
+    ['groupId', '=', `${assetId}/${group}`],
+  ]);
 
   for (const member of members) {
     promises.push(
-      TickerExternalAgentHistory.create({
-        id: `${blockEventId}/${member.member}`,
+      AssetAgentHistory.create({
+        id: `${blockEventId}/${member.memberId}`,
         assetId,
-        identityId: member.member,
-        eventIdx,
-        datetime: block.timestamp,
-        type: 'AgentPermissionsChanged',
+        identityId: member.memberId,
+        type: AgentHistoryType.AgentPermissionsChanged,
         permissions,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
         createdEventId: blockEventId,
       }).save()
     );
@@ -59,13 +71,59 @@ export const handleGroupPermissionsUpdated = async (event: SubstrateEvent): Prom
 };
 
 export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { block } = extractArgs(event);
+  const { agentDid: rawDid, assetId: rawAssetId, group: agentGroup } = decodeEvent(event);
 
-  const did = params[0].toString();
-  const assetId = await getAssetId(params[1], block);
+  await recordAgentAdded(
+    await getAssetId(rawAssetId, block),
+    rawDid.toString(),
+    agentGroup.toJSON() as AgentGroup,
+    event
+  );
+};
 
-  const group = params[2].toJSON() as AgentGroup;
+/** Whether the extrinsic that emitted `event` also emits an `AgentAdded` for the asset `rawAssetId` */
+const announcesAgent = (event: SubstrateEvent, rawAssetId: Codec): boolean => {
+  const records = blockEvents(event.block);
+  const phase = records[event.idx]?.phase.toString();
+  const asset = rawAssetId.toString();
 
+  return records.some(
+    ({ phase: other, event: { section, method, data } }) =>
+      section === 'externalAgents' &&
+      method === 'AgentAdded' &&
+      other.toString() === phase &&
+      data.some(arg => arg.toString() === asset)
+  );
+};
+
+/**
+ * Early 3.x made an asset's creator a Full agent with no `AgentAdded`, so the agent is recorded from
+ * the `AssetCreated`, unless its extrinsic announces one. Which 3.x stopped is not one spec version
+ * on both chains: testnet's 3.2 emits it, mainnet's 3.3 does not.
+ */
+export const handleCreatorAgent = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const { callerDid, assetId: rawAssetId } = decodeEvent(event);
+  if (announcesAgent(event, rawAssetId)) {
+    return;
+  }
+  const did = callerDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
+
+  await Promise.all([
+    writeAssetAgent(assetId, did, blockEventId),
+    recordAgentAdded(assetId, did, { full: null }, event),
+  ]);
+};
+
+const recordAgentAdded = async (
+  assetId: string,
+  did: string,
+  group: AgentGroup,
+  event: SubstrateEvent
+): Promise<void> => {
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const promises = [
     addExternalAgentHistory(
       assetId,
@@ -74,24 +132,25 @@ export const handleAgentAdded = async (event: SubstrateEvent): Promise<void> => 
       eventIdx,
       did,
       block,
-      'AgentAdded',
+      AgentHistoryType.AgentAdded,
       blockEventId
     ),
   ];
 
   // Only keep track of membership for custom agent groups.
   if (isCustom(group)) {
-    promises.push(addAgentGroupMembership(blockId, assetId, group, did));
+    promises.push(addAgentGroupMembership(blockEventId, assetId, group, did));
   }
   await Promise.all(promises);
 };
 
 export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid, group: agentGroup } = decodeEvent(event);
 
-  const did = params[2].toString();
-  const group = params[3].toJSON() as AgentGroup;
-  const assetId = await getAssetId(params[1], block);
+  const did = agentDid.toString();
+  const group = agentGroup.toJSON() as AgentGroup;
+  const assetId = await getAssetId(rawAssetId, block);
 
   const promises = [
     removeMember(did, assetId),
@@ -102,34 +161,32 @@ export const handleGroupChanged = async (event: SubstrateEvent): Promise<void> =
       eventIdx,
       did,
       block,
-      'AgentPermissionsChanged',
+      AgentHistoryType.GroupChanged,
       blockEventId
     ),
   ];
 
   // Only keep track of membership for custom agent groups.
   if (isCustom(group)) {
-    promises.push(addAgentGroupMembership(blockId, assetId, group, did));
+    promises.push(addAgentGroupMembership(blockEventId, assetId, group, did));
   }
   await Promise.all(promises);
 };
 
 export async function handleAgentRemoved(event: SubstrateEvent): Promise<void> {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const did = params[2].toString();
-  const assetId = await getAssetId(params[1], block);
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid } = decodeEvent(event);
+
+  const did = agentDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
 
   const promises = [
     removeMember(did, assetId),
-    TickerExternalAgentHistory.create({
+    AssetAgentHistory.create({
       id: `${blockEventId}/${did}`,
       assetId,
       identityId: did,
-      eventIdx,
-      datetime: block.timestamp,
-      type: 'AgentRemoved',
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      type: AgentHistoryType.AgentRemoved,
       createdEventId: blockEventId,
     }).save(),
   ];
@@ -144,48 +201,42 @@ const addExternalAgentHistory = async (
   eventIdx: number,
   did: string,
   block: SubstrateBlock,
-  type: 'AgentAdded' | 'AgentPermissionsChanged',
+  type: AgentHistoryType.AgentAdded | AgentHistoryType.GroupChanged,
   blockEventId: string
 ): Promise<void> => {
   const permissions = await permissionsFromAgentGroup(assetId, group, async n => {
     const ag = await AgentGroupEntity.get(`${assetId}/${n}`);
     return ag.permissions;
   });
-  await TickerExternalAgentHistory.create({
+  await AssetAgentHistory.create({
     id: `${blockEventId}/${did}`,
     assetId,
     identityId: did,
-    eventIdx,
-    datetime: block.timestamp,
     type,
     permissions,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   }).save();
 };
 
 const addAgentGroupMembership = (
-  blockId: string,
+  blockEventId: string,
   assetId: string,
   group: CustomAG,
   did: string
 ): Promise<void> => {
   return AgentGroupMembership.create({
     id: `${assetId}/${group.custom}/${did}`,
-    member: did,
+    memberId: did,
     groupId: `${assetId}/${group.custom}`,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 const removeMember = async (did: string, assetId: string) => {
-  const memberships = await getPaginatedData<AgentGroupMembership, 'member'>(
-    'AgentGroupMembership',
-    'member',
-    did
-  );
+  const memberships = await getAllByFields<AgentGroupMembership>('AgentGroupMembership', [
+    ['memberId', '=', did],
+  ]);
 
   const memberIds = memberships
     .filter(({ groupId }) => groupId.split('/')[0] === assetId)
@@ -212,11 +263,8 @@ const isCAA = (ag: AgentGroup): ag is PolymeshV1CAAAG =>
 const isPIA = (ag: AgentGroup): ag is PolymeshV1PIAAG =>
   (ag as PolymeshV1PIAAG).polymeshV1PIA === null;
 
-const wholePallets = (...pallets: string[]): ExtrinsicPermissions => ({
-  these: pallets.map(pallet_name => ({
-    pallet_name,
-    dispatchable_names: { whole: null },
-  })),
+const wholePallets = (...pallets: string[]): ExtrinsicPermissionsJson => ({
+  these: Object.fromEntries(pallets.map(pallet => [pallet, { extrinsics: { whole: null } }])),
 });
 
 /**
@@ -230,29 +278,25 @@ const permissionsFromAgentGroup = async (
   ag: AgentGroup,
   customPermissions: GetCustomGroupPermissions
 ): Promise<string> => {
+  // the built-in groups' permissions, written as the index stores any: by pallet, in byte order
   if (isFull(ag)) {
-    const p: ExtrinsicPermissions = { whole: null };
+    const p: ExtrinsicPermissionsJson = { whole: null };
     return JSON.stringify(p);
   } else if (isExceptMeta(ag)) {
-    const p: ExtrinsicPermissions = {
-      except: [{ pallet_name: 'ExternalAgents', dispatchable_names: { whole: null } }],
+    const p: ExtrinsicPermissionsJson = {
+      except: { ExternalAgents: { extrinsics: { whole: null } } },
     };
     return JSON.stringify(p);
   } else if (isCAA(ag)) {
     return JSON.stringify(
-      wholePallets('CorporateAction', 'CorporateBallot', 'CapitalDistribution')
+      wholePallets('CapitalDistribution', 'CorporateAction', 'CorporateBallot')
     );
   } else if (isPIA(ag)) {
-    const p: ExtrinsicPermissions = {
-      these: [
-        { pallet_name: 'Sto', dispatchable_names: { except: ['invest'] } },
-        {
-          pallet_name: 'Asset',
-          dispatchable_names: {
-            these: ['issue', 'redeem', 'controller_transfer'],
-          },
-        },
-      ],
+    const p: ExtrinsicPermissionsJson = {
+      these: {
+        Asset: { extrinsics: { these: ['controller_transfer', 'issue', 'redeem'] } },
+        Sto: { extrinsics: { except: ['invest'] } },
+      },
     };
     return JSON.stringify(p);
   } else if (isCustom(ag)) {
@@ -269,12 +313,35 @@ const permissionsFromAgentGroup = async (
 
 type GetCustomGroupPermissions = (gn: number) => Promise<string>;
 
-type PalletPermissions = {
-  pallet_name: string;
-  dispatchable_names: DispatchableNames;
-};
-type Whole = { whole: null };
-type These<T> = { these: T[] };
-type Except<T> = { except: T[] };
-type DispatchableNames = Whole | These<string> | Except<string>;
-type ExtrinsicPermissions = Whole | These<PalletPermissions> | Except<PalletPermissions>;
+/** The first runtime whose ownership transfer takes the previous owner out of the agents */
+const OWNER_LEAVES_AGENTS_FROM = 7_004_000;
+
+/**
+ * From 7.4, accepting an asset's ownership removes the previous owner from its agents, which the
+ * chain does with no event (the new owner's `AgentAdded` comes with it).
+ */
+export async function handleOwnerReplacedAsAgent(event: SubstrateEvent): Promise<void> {
+  const { block, blockEventId } = extractArgs(event);
+  if (block.specVersion < OWNER_LEAVES_AGENTS_FROM) {
+    return;
+  }
+  const { assetId: rawAssetId, oldOwnerDid } = decodeEvent(event);
+  const did = oldOwnerDid.toString();
+  const assetId = await getAssetId(rawAssetId, block);
+  const agentId = `${assetId}/${did}`;
+  if (!(await AssetAgent.get(agentId))) {
+    return;
+  }
+
+  await Promise.all([
+    AssetAgent.remove(agentId),
+    removeMember(did, assetId),
+    AssetAgentHistory.create({
+      id: `${blockEventId}/${did}`,
+      assetId,
+      identityId: did,
+      type: AgentHistoryType.AgentRemoved,
+      createdEventId: blockEventId,
+    }).save(),
+  ]);
+}
