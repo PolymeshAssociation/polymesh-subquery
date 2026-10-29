@@ -2568,14 +2568,17 @@ Represents a place to trade assets. This allows for additional mediation and con
 e.g. An asset may specify it can only be exchanged at a particular Venue, allowing the Venue owner to explicitly approve transactions
 """
 type Venue @entity {
+  "The chain's numeric venue sequence, zero-padded to 10 digits so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID! # venueId
   owner: Identity!
   type: String!
   details: String
   instructions: [Instruction!] @derivedFrom(field: "venue")
+  "Offerings settling through this venue"
+  offerings: [Sto!] @derivedFrom(field: "venue")
   signers: [String!]!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2613,6 +2616,12 @@ If any party fails to satisfy any compliance or transfer restriction the Instruc
 and no movement of assets will occur.
 """
 type Instruction @entity {
+  """
+  The chain's numeric instruction sequence, stored as text and zero-padded to 10
+  digits, so `orderBy: [ID_ASC/DESC]` is a total order that matches
+  id-assignment (chronological) order. Filter by a literal id with the padded
+  form, e.g. `id: { equalTo: "0000014712" }`.
+  """
   id: ID!
   status: InstructionStatusEnum!
   venue: Venue @index(unique: false)
@@ -2621,18 +2630,32 @@ type Instruction @entity {
   endBlock: Int
   "`endAfterBlock` is applicable only when `type` is `SettleManual`"
   endAfterBlock: Int
+  """
+  The trade date, as reported by the chain. UTC, but serialised with no timezone
+  marker: a consumer receives `"2021-11-05T13:56:36"` and `new Date(...)` parses it
+  as *local* time, shifting it silently by the reader's offset. Parse as UTC — e.g.
+  `new Date(value + 'Z')`.
+  """
   tradeDate: Date
+  "The value date, as reported by the chain. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   valueDate: Date
   memo: String
   "DID of the mediators"
   mediators: [String!]!
   failureReason: ErrorJson
+  "How many legs the instruction has. Their ids are `id/0` to `id/(legCount - 1)`"
+  legCount: Int!
   legs: [Leg!]! @derivedFrom(field: "instruction")
   parties: [InstructionParty]! @derivedFrom(field: "instruction")
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "instruction")
   events: [InstructionEvent]! @derivedFrom(field: "instruction")
-  createdBlock: Block!
-  updatedBlock: Block!
+  "What executing this instruction moved"
+  transfers: [AssetTransaction!] @derivedFrom(field: "instruction")
+  "Who rejected the instruction: the rejection's caller, who need not be a party"
+  rejectedBy: Identity
+  "The account that signed the rejection; null when there is none"
+  rejectedBySigner: Account
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2653,24 +2676,31 @@ type Leg @entity {
   instruction: Instruction!
   legIndex: Int!
   legType: LegTypeEnum!
-  "`assetId` can be ID of the asset for the on chain or ticker of an off chain asset"
-  assetId: String! @index(unique: false)
-  ticker: String @index(unique: false)
-  from: String! @index(unique: false)
-  fromAccount: String
-  "`fromPortfolio` is null for off chain legs"
-  fromPortfolio: Int
-  to: String! @index(unique: false)
-  toAccount: String
-  "`toPortfolio` is null for off chain legs"
-  toPortfolio: Int
+  "The asset moved; null for off-chain legs, whose asset is named only by `ticker`"
+  asset: Asset
+  "The asset's ticker when it has one; the only asset identifier of an off-chain leg"
+  ticker: String
+  "The sender's identity; null only for an account-level sender the index cannot resolve to one"
+  from: Identity
+  "Set when the sender is an account-level holder"
+  fromAccount: Account
+  "Set when the sender is a portfolio; null for off-chain and account-level legs"
+  fromPortfolio: Portfolio
+  "The receiver's identity; null only for an account-level receiver the index cannot resolve to one"
+  to: Identity
+  "Set when the receiver is an account-level holder"
+  toAccount: Account
+  "Set when the receiver is a portfolio; null for off-chain and account-level legs"
+  toPortfolio: Portfolio
   "`amount` is null for non-fungible legs"
   amount: BigInt
   "`nftIds` is only applicable for non-fungible legs"
   nftIds: [BigInt]
   addresses: [String!]!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Receipts settling this off-chain leg. From 6.0 the chain starts an off-chain leg's approval pending when the instruction is created; the leg is approved once a receipt is here"
+  offChainReceipts: [OffChainReceipt!] @derivedFrom(field: "leg")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2680,13 +2710,12 @@ type InstructionParty @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   isMediator: Boolean!
-  "`identity` is the DID of the party involved in the instruction. No mapping to Identity is added, since instruction can have leg (e.g. off chain) where DID doesn't exists"
-  identity: String! @index(unique: false)
-  "`portfolios` depicts which portfolios for the identity are involved in the instructions. Legs can have different portfolios of a same identity involved"
-  portfolios: [Int]
+  "The party: an identity, whatever portfolios and accounts it holds through. A relation with no row when the DID is not indexed (an off-chain counterparty)"
+  identity: Identity!
+  "The party's approval rows: one per holder (portfolio or account) it has on the legs, or its mediator row. It is fully approved when none is `Pending`. An off-chain leg's approval is the leg's (`Leg.offChainReceipts`), so a party only on off-chain legs has no rows"
   affirmations: [InstructionAffirmation]! @derivedFrom(field: "party")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2695,33 +2724,42 @@ Represents an off chain receipt
 type OffChainReceipt @entity {
   id: ID!
   uid: Int! @index(unique: false)
-  signer: String! @index(unique: false)
+  signer: Account!
   leg: Leg
   metadata: String
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
-Represents affirmations received on an Instruction
+One approval of an Instruction: a holder's (portfolio or account), one row per holder on the
+legs, or a mediator's. Each starts `Pending` and records who last acted on it. An off-chain leg's
+approval is the leg's, not a holder's: it has no `Pending` row here, and is pending while
+`Leg.offChainReceipts` is empty. Claiming a receipt writes an `Affirmed` row for the caller
 """
 type InstructionAffirmation @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
   party: InstructionParty!
-  identity: String! @index(unique: false)
-  account: String
-  "`portfolio` will be null for mediator affirmation and off chain affirmation"
-  portfolios: [Int]
+  "The holder's identity (the portfolio's owner, or the account's identity), or the mediator"
+  identity: Identity!
+  "The holder, when it is an account"
+  account: Account
+  "The holder, when it is a portfolio"
+  portfolio: Portfolio
   isMediator: Boolean!
   isAutomaticallyAffirmed: Boolean!
   status: AffirmStatusEnum!
-  "If `expiry` is present the time should be check top ensure the affirmation is still valid. Applicable for mediator affirmations"
+  "If `expiry` is present the time should be checked to ensure the affirmation is still valid. Applicable for mediator affirmations. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   expiry: Date
   "`offChainReceipt` is only applicable when affirmation"
   offChainReceipt: OffChainReceipt
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Who last set `status`: the event's caller, which can be a custodian, a spender or a mediator rather than the holder"
+  affirmedBy: Identity
+  "The account that signed the extrinsic that last set `status`; null when there is none"
+  signer: Account
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 enum InstructionEventEnum {
@@ -2759,15 +2797,16 @@ Represents events associated with an Instruction
 type InstructionEvent @entity {
   id: ID!
   instruction: Instruction! @index(unique: false)
+  "Kept locally so an event type can be filtered without joining `events`. Not indexed: filter it together with `instruction`"
   event: InstructionEventEnum!
-  eventIdx: Int!
-  identity: String @index(unique: false)
-  portfolio: Int
-  account: String
+  "Who acted: the event's caller, or the mediator for a mediator event. The holder it acted for is `portfolio` or `account`"
+  identity: Identity
+  portfolio: Portfolio
+  account: Account
   offChainReceipt: OffChainReceipt
   failureReason: ErrorJson
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The account that signed the extrinsic that emitted the event; null when there is none"
+  signer: Account
   createdEvent: Event!
 }
 
@@ -3395,10 +3434,12 @@ type Funding @entity {
 type AssetMandatoryMediator @entity {
   id: ID! # /assetId/did
   asset: Asset!
-  identityId: String! # The chain doesn't validate existence of the DID
-  addedBy: Identity!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The mediator. The chain does not check the DID exists, so this can join to no identity"
+  identity: Identity
+  "Who added the mediator; null for one seeded from the chain, which doesn't record it"
+  addedBy: Identity
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3747,8 +3788,8 @@ enum AffirmingPartyEnum {
 }
 
 enum AffirmStatusEnum {
+  Pending
   Affirmed
-  Rejected
 }
 
 enum ConfidentialSettlementStatusEnum {
@@ -3924,8 +3965,8 @@ type AssetPreApproval @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
