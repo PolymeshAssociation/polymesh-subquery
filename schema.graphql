@@ -2342,9 +2342,12 @@ type AssetAgentAction @entity {
 Represents how much tokens can be purchased at a certain price as part of an Offering
 """
 type FundraiserTierJson @jsonField {
-  price: BigInt!
-  remaining: BigInt!
-  total: BigInt!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  price: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  remaining: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  total: String!
 }
 
 """
@@ -2367,20 +2370,25 @@ type Sto @entity {
   venue: Venue!
   offeringAsset: Asset!
   offeringPortfolio: Portfolio!
-  raisingAssetId: String! # This is not marked as Asset, since the raising asset need not be an registered asset. For example, USD
+  "The asset raised. Before 7.x it is the id derived from the raising ticker, which need not be a registered asset (such as USD), so it can join to no row; the ticker is `raisingTicker`"
+  raisingAsset: Asset
   "The ticker value associated with the raising asset ID. For cases where stable coin is used, which is not a registered asset, this value will be same as `raisingAssetId`"
   raisingTicker: String
   raisingPortfolio: Portfolio!
   creator: Identity!
+  "Offering opens. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   start: Date
+  "Offering closes. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   end: Date
   tiers: [FundraiserTierJson!]!
   status: StoStatus!
   minimumInvestment: BigInt!
   offChainFundingEnabled: Boolean!
   offChainFundingToken: String
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The investments made in this offering"
+  investments: [Investment!] @derivedFrom(field: "sto")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2448,17 +2456,18 @@ Represents participation in an STO
 type Investment @entity {
   id: ID!
   investor: Identity!
-  stoId: Int! @index(unique: false)
-  offeringAssetId: String! @index(unique: false)
+  "The offering invested in"
+  sto: Sto!
+  offeringAsset: Asset!
   offeringToken: String @index(unique: false)
-  raisingAssetId: String!
+  "The asset paid with; null when it is an off-chain asset, named by `raiseToken`"
+  raisingAsset: Asset
   raiseToken: String
   raisingAssetType: RaisingAssetTypeEnum!
   offeringTokenAmount: BigInt!
   raiseTokenAmount: BigInt!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2818,6 +2827,8 @@ type Distribution @entity {
   identity: Identity!
   localId: Int! @index(unique: false)
   asset: Asset! @index(unique: false)
+  "The corporate action this distribution declares — the same `CAId`, so the same row id. Nullable because the action is created by an earlier extrinsic, possibly in an earlier block: under an arbitrary start block, or after a missed `CAInitiated`, it can be outside the index. Left null with an anomaly rather than pointed at a row that is not there, which a non-null relation would only fail on at query time"
+  corporateAction: CorporateAction
   portfolio: Portfolio!
   currency: Asset!
   perShare: BigInt!
@@ -2826,8 +2837,10 @@ type Distribution @entity {
   paymentAt: BigInt!
   expiresAt: BigInt
   taxes: BigInt! # withheld tax for CA
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Payments made out of this distribution"
+  payments: [DistributionPayment!] @derivedFrom(field: "distribution")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2837,15 +2850,22 @@ type DistributionPayment @entity {
   id: ID!
   distribution: Distribution!
   target: Identity!
-  eventId: EventIdEnum!
   amount: BigInt!
   tax: BigInt!
   amountAfterTax: BigInt!
   reclaimed: Boolean!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
   createdEvent: Event!
+}
+
+"""
+The kind of benefit or notice a `CorporateAction` represents
+"""
+enum CorporateActionKind {
+  PredictableBenefit
+  UnpredictableBenefit
+  IssuerNotice
+  Reorganization
+  Other
 }
 
 """
@@ -2854,6 +2874,152 @@ Whether `CorporateAction.targetIdentities` names the holders it applies to, or t
 enum TargetTreatment {
   Include
   Exclude
+}
+
+"""
+A per-DID withholding tax override, as set by `corporateAction.DidWithholdingTaxChanged`
+"""
+type DidTax @jsonField {
+  did: String!
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%; a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  tax: String!
+}
+
+"""
+A corporate action on an Asset — a dividend, benefit, or issuer notice. Defines the record date,
+target holders and withholding tax that a linked `Distribution` or `CorporateBallot` is subject to
+"""
+type CorporateAction @entity @compositeIndexes(fields: [["asset", "kind"]]) {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  localId: Int!
+  kind: CorporateActionKind!
+  declarationDate: Date!
+  recordDate: Date
+  "The checkpoint the record date names. Set when the chain names one that already exists (`CACheckpoint::Existing`); for the `Scheduled` variant the checkpoint does not exist yet and links itself from `CheckpointCreated` instead"
+  checkpoint: Checkpoint
+  details: String
+  "null = applies to every holder, subject to `targetTreatment`"
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  documents: [String!]
+  isRemoved: Boolean!
+  "The distribution this action declares, when it declares one"
+  distribution: Distribution @derivedFrom(field: "corporateAction")
+  "The ballot this action declares, when it declares one"
+  ballot: CorporateBallot @derivedFrom(field: "corporateAction")
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Asset-level corporate action defaults — `corporateAction.DefaultTargetIdentitiesChanged`,
+`DefaultWithholdingTaxChanged` and `DidWithholdingTaxChanged` set these ahead of any specific CA
+"""
+type CorporateActionDefaultConfig @entity {
+  id: ID! # assetId
+  asset: Asset! @index
+  targetIdentities: [String!]
+  targetTreatment: TargetTreatment
+  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
+  defaultWithholdingTax: BigInt
+  didWithholdingTax: [DidTax]
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A balance-at-record-date snapshot for an Asset, from `checkpoint.CheckpointCreated`. Makes a
+linked `CorporateAction`'s distribution amounts verifiable
+"""
+type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
+  id: ID! # assetId/checkpointId
+  asset: Asset! @index
+  checkpointId: Int!
+  totalSupply: BigInt!
+  datetime: Date!
+  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
+  schedule: CheckpointSchedule
+  "Corporate actions recorded against this checkpoint"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "checkpoint")
+  createdEvent: Event!
+}
+
+"""
+A recurring checkpoint schedule for an Asset, from `checkpoint.ScheduleCreated`. The pre-v6
+period-based model (`period`/`start`/`remaining`) and the v6+ explicit-timestamp model
+(`pendingCheckpoints`) are mutually exclusive on one row, era implicit in which is null
+"""
+type CheckpointSchedule @entity {
+  id: ID! # assetId/scheduleId
+  asset: Asset! @index
+  scheduleId: Int!
+  "v6+ — the checkpoint timestamps this schedule declared when it was created. Not decremented as they fire, and not cleared on removal, where it records what was cancelled. Still-pending is this set minus `checkpoints`"
+  scheduledCheckpoints: [Date!]
+  "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
+  period: String
+  start: Date
+  remaining: Int
+  nextCheckpointAt: Date
+  "The checkpoints this schedule has actually created"
+  checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
+  "Set when an agent removes the schedule; null otherwise"
+  removedEvent: Event
+  "The scheduled checkpoint after which the chain dropped the schedule, its last; null while checkpoints are still to come. The chain emits nothing when a schedule runs out"
+  completedEvent: Event
+  createdEvent: Event!
+}
+
+"""
+A shareholder ballot on a `CorporateAction`, from `corporateBallot.Created`
+"""
+type CorporateBallot @entity {
+  id: ID! # assetId/localId
+  asset: Asset! @index
+  "The corporate action this ballot is attached to — the same `CAId`, so the same row id. Nullable for the same reason as `Distribution.corporateAction`: the action comes from an earlier extrinsic, which can be outside the index"
+  corporateAction: CorporateAction
+  startDate: Date!
+  endDate: Date!
+  "title, motions"
+  meta: String
+  "ranked-choice voting enabled"
+  rcv: Boolean!
+  isRemoved: Boolean!
+  votes: [CorporateBallotVote!]! @derivedFrom(field: "ballot")
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+Per-motion vote weights cast in a `CorporateBallot`
+"""
+type BallotVoteEntry @jsonField {
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  power: String!
+  fallback: Int
+}
+
+"""
+One identity's current vote in a `CorporateBallot`, from `corporateBallot.VoteCast`.
+
+One row per voter per ballot, not one per `VoteCast`. On chain `Votes` is keyed
+`(CAId, IdentityId)`, so voting again while the ballot is open *replaces* the previous vote —
+a row per event would give a voter who changed their mind two rows with nothing marking which
+counts, and `ballot.votes` would double-count them in a tally. Superseded votes stay readable as
+the `VoteCast` events themselves.
+"""
+type CorporateBallotVote @entity {
+  id: ID! # ballotId/voterId
+  ballot: CorporateBallot! @index
+  voter: Identity! @index
+  "per-motion weights, in motion order"
+  votes: [BallotVoteEntry]
+  "The `VoteCast` this row's weights came from — a later one than `createdEvent` when the voter changed their vote"
+  updatedEvent: Event!
+  createdEvent: Event!
 }
 
 """

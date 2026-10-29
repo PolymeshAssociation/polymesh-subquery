@@ -1,0 +1,349 @@
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { DecodedEvent, decodeEvent, V6 } from '../../../decode';
+import { AnomalyKind, Checkpoint, CheckpointSchedule } from '../../../types';
+import {
+  getAllByFields,
+  getAssetId,
+  getBigIntValue,
+  getDateValue,
+  getNumberValue,
+  specVersionOf,
+} from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { extractArgs, getOrAnomaly } from '../common';
+import { isObject, jsonOf } from '../../../utils/codec';
+import { blockEvents } from '../../../utils/blockEvents';
+import { findStorage } from '../../../utils/legacyQuery';
+
+export interface ParsedSchedule {
+  scheduleId: number;
+  scheduledCheckpoints?: Date[];
+  period?: string;
+  start?: Date;
+  remaining?: number;
+  nextCheckpointAt?: Date;
+}
+
+export interface StoredScheduleJson {
+  schedule: { start: number; period: { unit: string; amount: number } };
+  id: number;
+  at: number;
+  remaining: number;
+}
+
+interface ScheduleCheckpointsJson {
+  pending: number[];
+}
+
+export const isStoredSchedule = (json: unknown): json is StoredScheduleJson =>
+  isObject(json) &&
+  typeof json.id === 'number' &&
+  typeof json.at === 'number' &&
+  typeof json.remaining === 'number' &&
+  isObject(json.schedule) &&
+  typeof json.schedule.start === 'number' &&
+  isObject(json.schedule.period);
+
+const isScheduleCheckpoints = (json: unknown): json is ScheduleCheckpointsJson =>
+  isObject(json) &&
+  Array.isArray(json.pending) &&
+  json.pending.every(moment => typeof moment === 'number');
+
+/** A pre-v6 schedule's row fields, as its event and the chain's `checkpoint.schedules` hold it */
+export const storedScheduleFields = (stored: StoredScheduleJson): ParsedSchedule => ({
+  scheduleId: stored.id,
+  period: JSON.stringify(stored.schedule.period),
+  start: new Date(stored.schedule.start),
+  remaining: stored.remaining,
+  nextCheckpointAt: new Date(stored.at),
+});
+
+/**
+ * `ScheduleCreated` / `ScheduleRemoved` are the one real version change in the corporate-actions
+ * domain: arity 3 → 4 at v6.0.0, `ScheduleId` inserted at index 2 and the payload type changing
+ * from `StoredSchedule` (period-based) to `ScheduleCheckpoints` (an explicit timestamp list). The
+ * pre-v6 schedule id is recoverable from the nested `StoredSchedule.id`, so pre-v6 rows are not
+ * lossy, just decoded differently.
+ */
+export const parseSchedule = (decoded: DecodedEvent, specVersion: number): ParsedSchedule => {
+  if (specVersion < V6) {
+    return storedScheduleFields(jsonOf(decoded.storedSchedule, isStoredSchedule, 'StoredSchedule'));
+  }
+
+  const { pending } = jsonOf(decoded.schedule, isScheduleCheckpoints, 'ScheduleCheckpoints');
+
+  return {
+    scheduleId: getNumberValue(decoded.scheduleId),
+    scheduledCheckpoints: pending.map(moment => new Date(moment)),
+  };
+};
+
+/**
+ * A moment as a comparable number, whatever shape the store handed back.
+ *
+ * A list of timestamps is held as a JSON array, so the `Date`s written on the way in come back out
+ * as ISO strings — only a column-typed timestamp, like a checkpoint's own `datetime`, round-trips as
+ * a `Date`. Both kinds are compared here, so both are widened rather than trusted to be `Date`s.
+ */
+const momentValue = (moment: Date | string): number =>
+  moment instanceof Date ? moment.getTime() : new Date(moment).getTime();
+
+/**
+ * How many scheduled checkpoints for the same asset and moment the chain already announced earlier
+ * in this block.
+ *
+ * Every schedule due at one moment fires in the same block, in ascending `ScheduleId`, so this count
+ * is the checkpoint's position among the schedules that declared that moment, read from the
+ * block's own event list rather than every checkpoint the asset has had.
+ *
+ * `CheckpointCreated` carries `(Option<IdentityId>, AssetId, CheckpointId, Balance, Moment)`, and the
+ * raw parameters are compared rather than the resolved ids: siblings in one block share an encoding,
+ * so comparing them as emitted is exact and needs no asset-id resolution per sibling.
+ */
+const earlierScheduledCheckpoints = (event: SubstrateEvent): number => {
+  const records = blockEvents(event.block);
+
+  const own = records[event.idx]?.event?.data;
+
+  if (!own) {
+    return 0;
+  }
+
+  let earlier = 0;
+
+  for (let i = 0; i < event.idx; i += 1) {
+    const emitted = records[i]?.event;
+
+    if (
+      emitted?.section === 'checkpoint' &&
+      emitted.method === 'CheckpointCreated' &&
+      // scheduled, not a manual `createCheckpoint`, which belongs to no schedule
+      emitted.data[0]?.isEmpty &&
+      emitted.data[1]?.toString() === own[1]?.toString() &&
+      emitted.data[4]?.toString() === own[4]?.toString()
+    ) {
+      earlier += 1;
+    }
+  }
+
+  return earlier;
+};
+
+/**
+ * The schedule that produced a scheduled checkpoint, resolved from the index rather than the chain.
+ *
+ * `CheckpointCreated` names the moment but not the schedule, and two schedules can fall due at the
+ * same moment — so the timestamp alone is ambiguous and the order is what resolves it. The chain
+ * processes schedules in ascending `ScheduleId` and, within one, its moments in ascending order, so
+ * the events arrive in that order too. Taking the lowest-numbered schedule that declared this moment
+ * and has not yet had a checkpoint linked to it therefore assigns them one-to-one: the first event
+ * claims the first schedule, the next claims the next.
+ *
+ * An unresolvable pairing is recorded and left null rather than guessed at.
+ */
+const scheduleForCheckpoint = async (
+  assetId: string,
+  moment: Date,
+  event: SubstrateEvent
+): Promise<string | undefined> => {
+  const schedules = await getAllByFields<CheckpointSchedule>('CheckpointSchedule', [
+    ['assetId', '=', assetId],
+  ]);
+
+  /**
+   * Pre-v6 schedules do not enumerate their moments — they carry a period, a start and a count, and
+   * the chain advances them as balances change. So there is nothing to pair a moment against, and a
+   * checkpoint from that era is left unlinked without comment: unpairable by construction is not the
+   * same as unexpected, and reporting it would mean one anomaly per scheduled checkpoint for the
+   * whole pre-v6 range.
+   */
+  const declaring = schedules.filter(({ scheduledCheckpoints }) => scheduledCheckpoints?.length);
+
+  if (declaring.length === 0) {
+    return undefined;
+  }
+
+  const candidates = declaring
+    .filter(({ scheduledCheckpoints }) =>
+      (scheduledCheckpoints ?? []).some(declared => momentValue(declared) === momentValue(moment))
+    )
+    .sort((a, b) => a.scheduleId - b.scheduleId);
+
+  const paired = candidates[earlierScheduledCheckpoints(event)];
+
+  if (paired) {
+    return paired.id;
+  }
+
+  const { block, eventIdx, moduleId, eventId } = extractArgs(event);
+
+  await recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `no unclaimed CheckpointSchedule of asset ${assetId} declared the moment ${moment.toISOString()}`,
+    block,
+    eventIdx,
+    moduleId,
+    eventId,
+  });
+
+  return undefined;
+};
+
+export const handleCheckpointCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const {
+    assetId: rawAssetId,
+    checkpointId: rawCheckpointId,
+    totalSupply: rawTotalSupply,
+    timestamp: moment,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const checkpointId = getNumberValue(rawCheckpointId);
+  // The checkpoint's own moment, never the block's. A schedule only advances when the asset's
+  // balances change, so a checkpoint's moment can predate the block that created it by some
+  // margin — substituting the block time would quietly move the balance snapshot's date.
+  const datetime = getDateValue(moment);
+
+  // `datetime` is the row's own snapshot date and the column is not nullable, so a moment that will
+  // not read is reported and the row skipped rather than written as null — which would fail the
+  // insert and take the whole block down with it.
+  if (!datetime) {
+    const { eventIdx, moduleId, eventId } = extractArgs(event);
+
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `CheckpointCreated for asset ${assetId} carried no readable Moment, so checkpoint ${checkpointId} was not recorded`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+
+    return;
+  }
+
+  // `CheckpointCreated`'s first arg is `Option<IdentityId>`: `Some` for a manual
+  // `checkpoint.createCheckpoint`, `None` only when a schedule triggered it. A manual checkpoint
+  // belongs to no schedule, so it skips the lookup entirely.
+  const scheduled = decodeEvent(event).callerDid.isEmpty;
+
+  const scheduleId = scheduled ? await scheduleForCheckpoint(assetId, datetime, event) : undefined;
+  await Checkpoint.create({
+    id: `${assetId}/${checkpointId}`,
+    assetId,
+    checkpointId,
+    totalSupply: getBigIntValue(rawTotalSupply),
+    datetime,
+    scheduleId,
+    createdEventId: blockEventId,
+  }).save();
+
+  if (!scheduled) {
+    return;
+  }
+  if (specVersionOf(block) < V6) {
+    await followStoredSchedules(assetId, rawAssetId, blockEventId);
+  } else if (scheduleId) {
+    await completeIfDone(scheduleId, blockEventId);
+  }
+};
+
+/** A v6+ schedule is done once each moment it declared has a checkpoint; the chain then drops it */
+const completeIfDone = async (scheduleId: string, blockEventId: string): Promise<void> => {
+  const schedule = await CheckpointSchedule.get(scheduleId);
+  const declared = schedule?.scheduledCheckpoints?.length ?? 0;
+  if (!schedule || declared === 0) {
+    return;
+  }
+  const fired = await getAllByFields<Checkpoint>('Checkpoint', [['scheduleId', '=', scheduleId]]);
+  if (fired.length >= declared) {
+    schedule.completedEventId = blockEventId;
+    await schedule.save();
+  }
+};
+
+/**
+ * Before v6 a schedule is a period and a count, which the chain advances as it fires and drops at
+ * the end, so the asset's schedules are read back after a scheduled checkpoint: each one still held
+ * takes its next moment and count, and each one gone is complete.
+ */
+const followStoredSchedules = async (
+  assetId: string,
+  rawAssetId: Codec,
+  blockEventId: string
+): Promise<void> => {
+  // the pre-v6 item, which the current metadata no longer names
+  const schedulesOf = findStorage('checkpoint', 'schedules');
+  if (!schedulesOf) {
+    return;
+  }
+  const stored = ((await schedulesOf(rawAssetId)).toJSON() ??
+    []) as unknown as StoredScheduleJson[];
+  const schedules = await getAllByFields<CheckpointSchedule>('CheckpointSchedule', [
+    ['assetId', '=', assetId],
+  ]);
+
+  await Promise.all(
+    schedules
+      .filter(({ period, removedEventId, completedEventId }) =>
+        Boolean(period && !removedEventId && !completedEventId)
+      )
+      .map(schedule => {
+        const held = stored.find(({ id }) => id === schedule.scheduleId);
+        if (held) {
+          schedule.remaining = held.remaining;
+          schedule.nextCheckpointAt = new Date(held.at);
+        } else {
+          schedule.completedEventId = blockEventId;
+        }
+        return schedule.save();
+      })
+  );
+};
+
+export const handleScheduleCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const { assetId: rawAssetId } = decoded;
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const parsed = parseSchedule(decoded, specVersionOf(block));
+
+  await CheckpointSchedule.create({
+    id: `${assetId}/${parsed.scheduleId}`,
+    assetId,
+    scheduleId: parsed.scheduleId,
+    scheduledCheckpoints: parsed.scheduledCheckpoints,
+    period: parsed.period,
+    start: parsed.start,
+    remaining: parsed.remaining,
+    nextCheckpointAt: parsed.nextCheckpointAt,
+    createdEventId: blockEventId,
+  }).save();
+};
+
+export const handleScheduleRemoved = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const { assetId: rawAssetId } = decoded;
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const { scheduleId } = parseSchedule(decoded, specVersionOf(block));
+
+  const schedule = await getOrAnomaly(
+    id => CheckpointSchedule.get(id),
+    `${assetId}/${scheduleId}`,
+    'CheckpointSchedule',
+    event
+  );
+
+  if (!schedule) {
+    return;
+  }
+
+  schedule.removedEventId = blockEventId;
+
+  await schedule.save();
+};
