@@ -1,13 +1,9 @@
-import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import {
-  EventIdEnum,
-  Portfolio,
-  PortfolioMovement,
-  PortfolioMovementTypeEnum,
-} from '../../../types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { decodeEvent } from '../../../decode';
+import { EventIdEnum, Portfolio } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
+  EXPLICIT_NULL,
   getAssetId,
   getBigIntValue,
   getFirstKeyFromJson,
@@ -17,8 +13,11 @@ import {
   getTextValue,
   rawPortfolioToAssetHolder,
 } from '../../../utils';
+import { createAssetTransaction, moveFungibleHolding } from '../assets/mapAsset';
+import { moveNftsWithinIdentity } from '../assets/mapNfts';
 import { Attributes, extractArgs } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
+import { memoText, storedText } from '../../../utils/text';
 
 export const getPortfolio = async ({
   identityId,
@@ -37,14 +36,14 @@ export const getPortfolio = async ({
 
 export const createPortfolio = (
   attributes: Attributes<Portfolio>,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const { identityId, number } = attributes;
   return Portfolio.create({
     id: `${identityId}/${number}`,
     ...attributes,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -70,29 +69,25 @@ export const createPortfolioIfNotExists = async (
         identityId,
         number,
         name: '',
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 };
 
 export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = bytesToString(rawName);
+  const name = storedText(rawName);
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
   if (portfolio) {
     // If the Portfolio was initially created by createPortfolioIfNotExists we update it as if it were newly created.
     portfolio.name = name;
-    portfolio.eventIdx = eventIdx;
-    portfolio.createdBlockId = blockId;
-    portfolio.updatedBlockId = blockId;
+    portfolio.updatedEventId = blockEventId;
     portfolio.createdEventId = blockEventId;
 
     await portfolio.save();
@@ -102,32 +97,30 @@ export const handlePortfolioCreated = async (event: SubstrateEvent): Promise<voi
         identityId: ownerId,
         number,
         name,
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 };
 
 export const handlePortfolioRenamed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber, rawName] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
   const number = getNumberValue(rawPortfolioNumber);
-  const name = bytesToString(rawName);
+  const name = storedText(rawName);
 
   const portfolio = await getPortfolio({ identityId: ownerId, number });
 
   portfolio.name = name;
-  portfolio.updatedBlockId = blockId;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };
 
 export const handlePortfolioDeleted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [rawOwnerDid, rawPortfolioNumber] = params;
 
   const ownerId = getTextValue(rawOwnerDid);
@@ -135,13 +128,13 @@ export const handlePortfolioDeleted = async (event: SubstrateEvent): Promise<voi
 
   const portfolio = await Portfolio.get(`${ownerId}/${number}`);
   portfolio.deletedAt = block.timestamp;
-  portfolio.updatedBlockId = blockId;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };
 
 export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawPortfolio, rawCustodian] = params;
 
   const portfolioValue = rawPortfolioToAssetHolder(rawPortfolio);
@@ -152,51 +145,56 @@ export const handlePortfolioCustodianChanged = async (event: SubstrateEvent): Pr
   const custodian = getTextValue(rawCustodian);
 
   const portfolio = await getPortfolio(portfolioValue);
-  portfolio.custodianId = custodian;
-  portfolio.updatedBlockId = blockId;
+  // custody returned to the owner removes the custodian on chain
+  portfolio.custodianId = custodian === portfolio.identityId ? EXPLICIT_NULL : custodian;
+  portfolio.updatedEventId = blockEventId;
 
   await portfolio.save();
 };
 
 /**
- * Handles old event for portfolio movement
+ * Handles the pre-6.0 `portfolio.MovedBetweenPortfolios` event.
+ *
+ * Written as an `AssetTransaction` through the shared writer, `mapAssetMovement`.
  */
 export const handlePortfolioMovement = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { params, extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawAssetId, rawAmount, rawMemo] = params;
 
-  const address = getSignerAddress(extrinsic);
-  const from = rawPortfolioToAssetHolder(rawFromPortfolio);
-  // since this event was on old event, it is safe to assume that only portfolio data can be received for below params
-  if ('account' in from) {
+  const fromHolder = rawPortfolioToAssetHolder(rawFromPortfolio);
+  const toHolder = rawPortfolioToAssetHolder(rawToPortfolio);
+  // this pre-6.0 event only ever carried portfolio holders
+  if ('account' in fromHolder || 'account' in toHolder) {
     return;
   }
-  const to = rawPortfolioToAssetHolder(rawToPortfolio);
-  if ('account' in to) {
-    return;
-  }
+
   const assetId = await getAssetId(rawAssetId, block);
   const amount = getBigIntValue(rawAmount);
-  const memo = bytesToString(rawMemo);
 
-  await PortfolioMovement.create({
-    id: blockEventId,
-    fromId: `${from.identityId}/${from.number}`,
-    toId: `${to.identityId}/${to.number}`,
-    identityId: from.identityId,
-    type: PortfolioMovementTypeEnum.Fungible,
-    assetId,
-    amount,
-    address,
-    memo,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId,
+      fromHolder,
+      toHolder,
+      amount,
+      memo: memoText(rawMemo),
+      address: getSignerAddress(extrinsic),
+    },
+    blockEventId,
+    EventIdEnum.MovedBetweenPortfolios,
+    extrinsic
+  );
+  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId, block.specVersion);
 };
 
 type AssetMovementArgs = {
   blockEventId: string;
   blockId: string;
+  eventIdx: number;
+  eventId: EventIdEnum;
   address: string;
   fromHolder: AssetHolderDetails;
   toHolder: AssetHolderDetails;
@@ -204,11 +202,19 @@ type AssetMovementArgs = {
   fundDescription: unknown;
   memo: string | undefined;
   block: SubstrateBlock;
+  extrinsic?: SubstrateExtrinsic;
 };
 
+/**
+ * Shared writer for the fund-description movement events (`FundsMovedBetweenPortfolios`,
+ * `settlement.FundsTransferred`). Writes one `AssetTransaction` row; `createAssetTransaction`
+ * classifies `isInternalTransfer` from the two holders.
+ */
 export const mapAssetMovement = async ({
   blockEventId,
   blockId,
+  eventIdx,
+  eventId,
   address,
   fromHolder,
   toHolder,
@@ -216,82 +222,181 @@ export const mapAssetMovement = async ({
   fundDescription,
   memo,
   block,
-}: AssetMovementArgs): Promise<void> => {
-  let fromPortfolioId: string, toPortfolioId: string, fromAccount: string, toAccount: string;
-
-  if ('account' in fromHolder) {
-    ({ account: fromAccount } = fromHolder);
-  } else {
-    fromPortfolioId = `${fromHolder.identityId}/${fromHolder.number}`;
-  }
-
-  if ('account' in toHolder) {
-    ({ account: toAccount } = toHolder);
-  } else {
-    toPortfolioId = `${toHolder.identityId}/${toHolder.number}`;
-  }
-
-  let assetId: string, amount: bigint, nftIds: bigint[];
-  let type: PortfolioMovementTypeEnum;
+  extrinsic,
+}: AssetMovementArgs): Promise<
+  { assetId: string; amount?: bigint; nftIds?: bigint[] } | undefined
+> => {
+  let assetId: string;
+  let amount: bigint | undefined;
+  let nftIds: bigint[] | undefined;
 
   if (assetType === 'fungible') {
-    const description = fundDescription as {
-      ticker?: string;
-      assetId?: string;
-      amount: number;
-    };
+    const description = fundDescription as { ticker?: string; assetId?: string; amount: number };
     assetId = await getAssetId(description.ticker ?? description.assetId, block);
     amount = BigInt(description.amount);
-    type = PortfolioMovementTypeEnum.Fungible;
   } else if (assetType === 'nonFungible') {
-    const description = fundDescription as {
-      ticker?: string;
-      assetId?: string;
-      ids: number[];
-    };
-    nftIds = description.ids.map(BigInt);
+    const description = fundDescription as { ticker?: string; assetId?: string; ids: number[] };
     assetId = await getAssetId(description.ticker ?? description.assetId, block);
-    type = PortfolioMovementTypeEnum.NonFungible;
+    nftIds = description.ids.map(BigInt);
+  } else {
+    return undefined;
   }
 
-  await PortfolioMovement.create({
-    id: blockEventId,
-    fromId: fromPortfolioId,
-    fromAccount,
-    identityId: fromHolder.identityId,
-    toId: toPortfolioId,
-    toAccount,
-    type,
-    assetId,
-    amount,
-    nftIds,
-    address,
-    memo,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    { assetId, fromHolder, toHolder, amount, nftIds, memo, address },
+    blockEventId,
+    eventId,
+    extrinsic
+  );
+
+  return { assetId, amount, nftIds };
 };
 
+/**
+ * `portfolio.FundsMovedBetweenPortfolios` (v6.0 on): funds moved between two portfolios of one
+ * identity. No balance event accompanies it, so the two portfolios' holdings are moved here.
+ */
 export const handleFundsMovedBetweenPortfolios = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
+  const { params, extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
   const [, rawFromPortfolio, rawToPortfolio, rawFundDescription, rawMemo] = params;
-  const address = getSignerAddress(extrinsic);
   const fromHolder = rawPortfolioToAssetHolder(rawFromPortfolio);
   const toHolder = rawPortfolioToAssetHolder(rawToPortfolio);
 
-  const assetType = getFirstKeyFromJson(rawFundDescription);
-  const fundDescription = getFirstValueFromJson(rawFundDescription);
-  const memo = bytesToString(rawMemo);
-
-  await mapAssetMovement({
+  const moved = await mapAssetMovement({
     blockEventId,
     blockId,
-    address,
+    eventIdx,
+    eventId: EventIdEnum.FundsMovedBetweenPortfolios,
+    address: getSignerAddress(extrinsic),
     fromHolder,
     toHolder,
-    assetType,
-    fundDescription,
-    memo,
+    assetType: getFirstKeyFromJson(rawFundDescription),
+    fundDescription: getFirstValueFromJson(rawFundDescription),
+    memo: memoText(rawMemo),
     block,
+    extrinsic,
   });
+
+  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId, block.specVersion);
+};
+
+/**
+ * Applies a movement between two holders of one identity to their holdings. The chain emits no
+ * balance event for one (`FundsMovedBetweenPortfolios`, and from v8 `settlement.FundsTransferred`,
+ * which only a transfer within one identity emits), so this is the only place it is recorded.
+ */
+export const applyMoveWithinIdentity = async (
+  moved: Awaited<ReturnType<typeof mapAssetMovement>>,
+  fromHolder: AssetHolderDetails,
+  toHolder: AssetHolderDetails,
+  blockEventId: string,
+  specVersion: number
+): Promise<void> => {
+  if (moved?.amount !== undefined) {
+    await moveFungibleHolding(
+      moved.assetId,
+      fromHolder,
+      toHolder,
+      moved.amount,
+      blockEventId,
+      specVersion
+    );
+  } else if (moved?.nftIds) {
+    await moveNftsWithinIdentity(
+      moved.assetId,
+      moved.nftIds.map(Number),
+      fromHolder,
+      toHolder,
+      blockEventId
+    );
+  }
+};
+
+/**
+ * `portfolio.FungibleTokensMovedBetweenPortfolios` — a v5.4.3-only event. Emitted
+ * from `unchecked_move_funds` and removed at v6.0.0; `MovedBetweenPortfolios` is not emitted
+ * alongside it, so without this the movement is not indexed at all.
+ */
+export const handleFungibleTokensMovedBetweenPortfolios = async (
+  event: SubstrateEvent
+): Promise<void> => {
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const {
+    fromPortfolio: rawFrom,
+    toPortfolio: rawTo,
+    ticker: rawTicker,
+    amount: rawAmount,
+    memo: rawMemo,
+  } = decodeEvent(event);
+
+  const fromHolder = rawPortfolioToAssetHolder(rawFrom);
+  const toHolder = rawPortfolioToAssetHolder(rawTo);
+  if ('account' in fromHolder || 'account' in toHolder) {
+    return;
+  }
+
+  const assetId = await getAssetId(rawTicker, block);
+  const amount = getBigIntValue(rawAmount);
+
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId,
+      fromHolder,
+      toHolder,
+      amount,
+      memo: memoText(rawMemo),
+      address: getSignerAddress(extrinsic),
+    },
+    blockEventId,
+    EventIdEnum.FungibleTokensMovedBetweenPortfolios,
+    extrinsic
+  );
+  await moveFungibleHolding(assetId, fromHolder, toHolder, amount, blockEventId, block.specVersion);
+};
+
+/**
+ * `portfolio.NFTsMovedBetweenPortfolios` — the non-fungible sibling of the above, 5 args
+ * (an `NFTs` collection rather than a ticker/amount pair).
+ */
+export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): Promise<void> => {
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const {
+    fromPortfolio: rawFrom,
+    toPortfolio: rawTo,
+    nfts: rawNfts,
+    memo: rawMemo,
+  } = decodeEvent(event);
+
+  const fromHolder = rawPortfolioToAssetHolder(rawFrom);
+  const toHolder = rawPortfolioToAssetHolder(rawTo);
+  if ('account' in fromHolder || 'account' in toHolder) {
+    return;
+  }
+
+  const nfts = rawNfts.toJSON() as { ticker?: string; assetId?: string; ids: number[] };
+  const assetId = await getAssetId(nfts.ticker ?? nfts.assetId, block);
+
+  await createAssetTransaction(
+    blockId,
+    eventIdx,
+    block.timestamp,
+    {
+      assetId,
+      fromHolder,
+      toHolder,
+      nftIds: nfts.ids.map(BigInt),
+      memo: memoText(rawMemo),
+      address: getSignerAddress(extrinsic),
+    },
+    blockEventId,
+    EventIdEnum.NFTsMovedBetweenPortfolios,
+    extrinsic
+  );
+  await moveNftsWithinIdentity(assetId, nfts.ids, fromHolder, toHolder, blockEventId);
 };
