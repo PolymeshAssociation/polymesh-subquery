@@ -1,24 +1,21 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
-  Asset,
   ClaimTypeEnum,
   StatOpTypeEnum,
   StatType,
   TransferCompliance,
   TransferComplianceExemption,
   TransferComplianceTypeEnum,
-  TransferRestrictionTypeEnum,
 } from '../../../types';
 import { TransferComplianceProps } from '../../../types/models/TransferCompliance';
 import {
   capitalizeFirstLetter,
   getAssetId,
   getExemptKeyValue,
-  getExemptionsValue,
-  getPaginatedData,
-  getTransferManagerValue,
+  getAllByFields,
   is7xChain,
+  isMigratedAssetId,
 } from '../../../utils';
 import { Attributes, extractArgs } from '../common';
 
@@ -28,7 +25,7 @@ export const getAssetIdForStatisticsEvent = (
 ): Promise<string> => {
   let assetId: string;
 
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(item) || is7xChain(block)) {
     assetId = item.toString();
   } else {
     const scope = JSON.parse(item.toString());
@@ -41,7 +38,7 @@ export const getAssetIdForStatisticsEvent = (
 const transferRestrictionSpecVersion = 5000000;
 const statTypeAsEnumSpecVersion = 5001000;
 
-const getStatTypes = (
+export const getStatTypes = (
   item: Codec,
   block: SubstrateBlock
 ): Omit<Attributes<StatType>, 'assetId'>[] => {
@@ -78,14 +75,14 @@ const getStatTypes = (
   });
 };
 
-const upsertStatType = async (
+export const upsertStatType = async (
   { assetId, opType, claimType, claimIssuerId, customClaimTypeId }: Attributes<StatType>,
-  blockId: string
+  blockEventId: string
 ) => {
   const statTypeId = getStatTypeId(assetId, opType, claimType, claimIssuerId, customClaimTypeId);
   let statType = await StatType.get(statTypeId);
   if (statType) {
-    statType.updatedBlockId = blockId;
+    statType.updatedEventId = blockEventId;
   } else {
     statType = StatType.create({
       id: statTypeId,
@@ -94,18 +91,15 @@ const upsertStatType = async (
       claimType,
       claimIssuerId,
       customClaimTypeId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
   return statType.save();
 };
 
-interface MeshStatClaim {
-  Accredited?: boolean;
-  Affiliate?: boolean;
-  Jurisdiction?: string;
-}
+/** `{ accredited: bool }`, `{ affiliate: bool }` or `{ jurisdiction: CountryCode | null }` */
+type MeshStatClaim = Record<string, boolean | string | null>;
 
 interface MeshTransferCondition {
   maxInvestorCount: bigint;
@@ -114,12 +108,19 @@ interface MeshTransferCondition {
   claimCount: [MeshStatClaim, string, bigint, bigint];
 }
 
+/** A stat claim's type, and its value as text, as `claimValue` holds it: a boolean or a country code */
 const getStatClaim = (statClaim: MeshStatClaim) => {
-  const type = Object.keys(statClaim)[0];
-  return { type: capitalizeFirstLetter(type) as ClaimTypeEnum, value: statClaim[type] };
+  const [[type, value]] = Object.entries(statClaim);
+  return {
+    type: capitalizeFirstLetter(type) as ClaimTypeEnum,
+    value: value === null ? undefined : String(value),
+  };
 };
 
-const getTransferConditions = (item: Codec, assetId: string): Attributes<TransferCompliance>[] => {
+export const getTransferConditions = (
+  item: Codec,
+  assetId: string
+): Attributes<TransferCompliance>[] => {
   const transferConditions = JSON.parse(item.toString()) as MeshTransferCondition[];
 
   const optBigInt = (x?: bigint) => {
@@ -176,7 +177,7 @@ const getTransferConditions = (item: Codec, assetId: string): Attributes<Transfe
   );
 };
 
-const getStatTypeId = (
+export const getStatTypeId = (
   assetId: string,
   opType: string,
   claimType?: string,
@@ -194,8 +195,23 @@ const getStatTypeId = (
   return statTypeId;
 };
 
+/**
+ * A condition's id: its statistic and its own terms. An asset can set several conditions over one
+ * statistic, such as two investor counts, so the statistic alone doesn't name one.
+ */
+export const conditionId = ({
+  statTypeId,
+  value,
+  claimValue,
+  min,
+  max,
+}: Attributes<TransferCompliance>): string =>
+  value === null || value === undefined
+    ? `${statTypeId}/${claimValue ?? ''}/${min ?? ''}/${max ?? ''}`
+    : `${statTypeId}/${value}`;
+
 export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, blockEventId, block } = extractArgs(event);
 
   const [, rawStatisticsScope, rawStatType] = params;
 
@@ -205,7 +221,7 @@ export const handleStatTypeAdded = async (event: SubstrateEvent): Promise<void> 
   const promises = [];
   statTypes.forEach(statType => {
     const upsert = async () => {
-      return upsertStatType({ assetId, ...statType }, blockId);
+      return upsertStatType({ assetId, ...statType }, blockEventId);
     };
     promises.push(upsert());
   });
@@ -230,7 +246,7 @@ export const handleStatTypeRemoved = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleSetTransferCompliance = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawStatisticsScope, rawTransferConditions] = params;
 
@@ -238,36 +254,33 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 
   const transferConditions = getTransferConditions(rawTransferConditions, assetId);
 
-  const existingTransferCompliances = await getPaginatedData<TransferCompliance, 'assetId'>(
+  const existingTransferCompliances = await getAllByFields<TransferCompliance>(
     'TransferCompliance',
-    'assetId',
-    assetId
+    [['assetId', '=', assetId]]
   );
 
+  const ids = new Set(transferConditions.map(conditionId));
   const removedConditions = existingTransferCompliances
-    .filter(
-      ({ statTypeId: existingStatTypeId }) =>
-        !transferConditions.some(({ statTypeId }) => statTypeId === existingStatTypeId)
-    )
+    .filter(({ id }) => !ids.has(id))
     .map(({ id }) => TransferCompliance.remove(id));
 
   const newConditions = [];
 
   transferConditions.forEach(condition => {
     const upsert = async () => {
-      const { statTypeId } = condition;
-      let transferCompliance = await TransferCompliance.get(statTypeId);
+      const id = conditionId(condition);
+      let transferCompliance = await TransferCompliance.get(id);
       if (transferCompliance) {
         Object.assign(transferCompliance, {
           ...condition,
-          updatedBlockId: blockId,
+          updatedEventId: blockEventId,
         } satisfies Partial<TransferComplianceProps>);
       } else {
         transferCompliance = TransferCompliance.create({
-          id: statTypeId,
+          id,
           ...condition,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         });
       }
       return transferCompliance.save();
@@ -279,7 +292,7 @@ export const handleSetTransferCompliance = async (event: SubstrateEvent): Promis
 };
 
 export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawExemptKey, rawExemptions] = params;
 
@@ -294,14 +307,14 @@ export const handleStatisticExemptionsAdded = async (event: SubstrateEvent): Pro
       const exemptionId = `${assetId}/${opType}/${claimType}/${entity}`;
       let exemption = await TransferComplianceExemption.get(exemptionId);
       if (exemption) {
-        exemption.updatedBlockId = blockId;
+        exemption.updatedEventId = blockEventId;
       } else {
         exemption = TransferComplianceExemption.create({
           id: exemptionId,
           ...exemptKey,
           exemptedEntityId: entity,
-          createdBlockId: blockId,
-          updatedBlockId: blockId,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
         });
       }
       return exemption.save();
@@ -327,107 +340,8 @@ export const handleStatisticExemptionsRemoved = async (event: SubstrateEvent): P
   );
 };
 
-export const handleStatisticTransferManagerAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-
-  const [, rawAssetId, rawManager] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const { type } = getTransferManagerValue(rawManager);
-
-  if (type === TransferRestrictionTypeEnum.Percentage) {
-    await upsertStatType(
-      { assetId, opType: StatOpTypeEnum.Balance, claimType: null, claimIssuerId: null },
-      blockId
-    );
-  }
-};
-
-export const handleTransferManagerExemptionsAdded = async (
-  event: SubstrateEvent
-): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-
-  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const { type } = getTransferManagerValue(rawAgentGroup);
-  const parsedExemptions = getExemptionsValue(rawExemptions);
-
-  const opType =
-    type === TransferRestrictionTypeEnum.Percentage ? StatOpTypeEnum.Balance : StatOpTypeEnum.Count;
-
-  const exemptKey = {
-    assetId,
-    opType,
-    claimType: null,
-  };
-
-  const transferComplianceExemptions = await getPaginatedData<
-    TransferComplianceExemption,
-    'assetId'
-  >('TransferComplianceExemption', 'assetId', assetId);
-
-  const existingExemptions = transferComplianceExemptions.filter(
-    ({ opType: exemptionType, exemptedEntityId }) =>
-      exemptionType == opType && parsedExemptions.includes(exemptedEntityId)
-  );
-
-  const promises = parsedExemptions.map(exemption => {
-    const existingExemption = existingExemptions.find(
-      ({ exemptedEntityId }) => exemption === exemptedEntityId
-    );
-
-    if (existingExemption) {
-      existingExemption.updatedBlockId = blockId;
-      return existingExemption.save();
-    }
-
-    return TransferComplianceExemption.create({
-      id: exemption,
-      ...exemptKey,
-      exemptedEntityId: exemption,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save();
-  });
-
-  await Promise.all(promises);
-};
-
-export const handleTransferManagerExemptionsRemoved = async (
-  event: SubstrateEvent
-): Promise<void> => {
-  const { params, block } = extractArgs(event);
-
-  const [, rawAssetId, rawAgentGroup, rawExemptions] = params;
-
-  const assetId = await getAssetId(rawAssetId, block);
-  const transferManagerValue = getTransferManagerValue(rawAgentGroup);
-  const parsedExemptions = getExemptionsValue(rawExemptions);
-
-  const transferComplianceExemptions = await getPaginatedData<
-    TransferComplianceExemption,
-    'assetId'
-  >('TransferComplianceExemption', 'assetId', assetId);
-
-  const selectedOpType =
-    transferManagerValue.type === TransferRestrictionTypeEnum.Percentage
-      ? StatOpTypeEnum.Balance
-      : StatOpTypeEnum.Count;
-
-  const promises = transferComplianceExemptions
-    .filter(
-      ({ exemptedEntityId, opType }) =>
-        opType === selectedOpType && parsedExemptions.includes(exemptedEntityId)
-    )
-    .map(({ id }) => TransferComplianceExemption.remove(id));
-
-  await Promise.all(promises);
-};
-
 export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, blockId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId] = params;
 
@@ -436,23 +350,7 @@ export const handleAssetIssuedStatistics = async (event: SubstrateEvent): Promis
   if (specVersion < transferRestrictionSpecVersion) {
     await upsertStatType(
       { assetId, opType: StatOpTypeEnum.Count, claimType: null, claimIssuerId: null },
-      blockId
+      blockEventId
     );
-  }
-};
-
-export const handleAssetRedeemedStatistics = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-
-  const [, rawAssetId] = params;
-  const assetId = await getAssetId(rawAssetId, block);
-
-  const specVersion = block.specVersion;
-  const specName = api.runtimeVersion.specName.toString();
-  if (specVersion < transferRestrictionSpecVersion && specName !== 'polymesh_private_dev') {
-    const asset = await Asset.get(assetId);
-    if (asset.totalSupply === BigInt(0)) {
-      await StatType.remove(`${assetId}/Count`);
-    }
   }
 };

@@ -1,4 +1,3 @@
-import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Compliance, TrustedClaimIssuer } from '../../../types';
 import {
@@ -6,48 +5,53 @@ import {
   getComplianceValue,
   getComplianceValues,
   getNumberValue,
-  getPaginatedData,
+  getAllByFields,
   getTextValue,
 } from '../../../utils';
+import { memberOf } from '../../../utils/codec';
 import { extractArgs, getAsset } from '../common';
 
 export const handleAssetCompliancePaused = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isCompliancePaused = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleAssetComplianceResumed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isCompliancePaused = false;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
+/** A reset removes the asset's compliance entry, the paused flag with it */
 export const handleComplianceReset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const compliances = await getPaginatedData<Compliance, 'assetId'>(
-    'Compliance',
-    'assetId',
-    assetId
-  );
+  const asset = await getAsset(assetId, event);
+  if (asset.isCompliancePaused) {
+    asset.isCompliancePaused = false;
+    asset.updatedEventId = blockEventId;
+    await asset.save();
+  }
+
+  const compliances = await getAllByFields<Compliance>('Compliance', [['assetId', '=', assetId]]);
 
   await store.bulkRemove(
     'Compliance',
@@ -55,39 +59,56 @@ export const handleComplianceReset = async (event: SubstrateEvent): Promise<void
   );
 };
 
-const createCompliance = (assetId: string, complianceId: number, data: any, blockId: string) =>
+const createCompliance = (assetId: string, complianceId: number, data: any, blockEventId: string) =>
   Compliance.create({
     id: `${assetId}/${complianceId}`,
     complianceId,
     data,
     assetId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
 export const handleComplianceCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawCompliance] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
   const { complianceId, data } = getComplianceValue(rawCompliance);
 
-  await createCompliance(assetId, complianceId, data, blockId);
+  await createCompliance(assetId, complianceId, data, blockEventId);
+};
+
+/** `change_compliance_requirement` replaces one requirement in place, under its id */
+export const handleComplianceChanged = async (event: SubstrateEvent): Promise<void> => {
+  const { params, block, blockEventId } = extractArgs(event);
+  const [, rawAssetId, rawCompliance] = params;
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const { complianceId, data } = getComplianceValue(rawCompliance);
+  const compliance = await Compliance.get(`${assetId}/${complianceId}`);
+
+  if (!compliance) {
+    await createCompliance(assetId, complianceId, data, blockEventId);
+    return;
+  }
+
+  compliance.data = data;
+  compliance.updatedEventId = blockEventId;
+  await compliance.save();
 };
 
 export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawAssetId, rawCompliances] = params;
 
   const assetId = await getAssetId(rawAssetId, block);
 
   const compliances = getComplianceValues(rawCompliances);
 
-  const compliancesToRemove = await getPaginatedData<Compliance, 'assetId'>(
-    'Compliance',
-    'assetId',
-    assetId
-  );
+  const compliancesToRemove = await getAllByFields<Compliance>('Compliance', [
+    ['assetId', '=', assetId],
+  ]);
   await Promise.all([
     store.bulkRemove(
       'Compliance',
@@ -100,8 +121,8 @@ export const handleComplianceReplaced = async (event: SubstrateEvent): Promise<v
         complianceId,
         data,
         assetId,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
       }))
     ),
   ]);
@@ -120,20 +141,18 @@ export const handleComplianceRemoved = async (event: SubstrateEvent): Promise<vo
 export const handleTrustedDefaultClaimIssuerAdded = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawIssuer] = params;
   const assetId = await getAssetId(rawAssetId, block);
-  const issuer = (rawIssuer as unknown as { issuer: Codec }).issuer.toString();
+  const issuer = memberOf(rawIssuer, 'issuer').toString();
 
   await TrustedClaimIssuer.create({
     id: `${assetId}/${issuer}`,
-    eventIdx,
     assetId,
-    issuer,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    issuerId: issuer,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 

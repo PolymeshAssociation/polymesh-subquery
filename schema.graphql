@@ -2891,7 +2891,8 @@ type Proposal @entity {
 }
 
 """
-Represents all possible claims that can be made of an identity
+Represents all possible claims that can be made of an identity. `InvestorUniqueness`, `InvestorUniquenessV2`
+and `NoData` claims are not indexed in any era: the v6.0 upgrade deleted them without an event
 """
 enum ClaimTypeEnum {
   Accredited
@@ -2904,9 +2905,6 @@ enum ClaimTypeEnum {
   Jurisdiction
   Exempted
   Blocked
-  InvestorUniqueness
-  NoData
-  InvestorUniquenessV2
   NoType
 }
 
@@ -2926,23 +2924,10 @@ Represents where this claim may apply
 """
 type Scope @jsonField {
   type: String!
+  "For an `Asset` scope, the asset id from 7.0 and the ticker before it, as the chain scopes the claim"
   value: String!
   "`assetId` is only present when `type` is `Asset`"
   assetId: String
-}
-
-"""
-The scope of a claim.
-
-e.g. `target` is Blocked from owning "TICKER-A" or `target` is an Affiliate of "TICKER-B"
-"""
-type ClaimScope @entity {
-  id: ID!
-  target: String! @index(unique: false)
-  asset: Asset
-  scope: Scope
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2952,21 +2937,19 @@ e.g. The Identity belongs to an accredited, US citizen
 """
 type Claim @entity {
   id: ID!
-  eventIdx: Int! @index(unique: false)
   target: Identity! @index(unique: false)
   issuer: Identity! @index(unique: false)
   issuanceDate: BigInt!
   lastUpdateDate: BigInt!
   expiry: BigInt
-  filterExpiry: BigInt! @index(unique: false)
+  filterExpiry: BigInt!
   type: ClaimTypeEnum!
   jurisdiction: String
   scope: Scope
   cddId: String
   customClaimType: CustomClaimType
   revokeDate: BigInt
-  createdBlock: Block! @index(unique: false)
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2978,10 +2961,8 @@ Assets relying on on chain compliance should be explicit on which issuers they t
 type TrustedClaimIssuer @entity {
   id: ID!
   asset: Asset! @index(unique: false)
-  issuer: String! @index(unique: false)
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  issuer: Identity! @index(unique: false)
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2993,26 +2974,6 @@ type SecurityIdentifier @jsonField {
   value: String!
 }
 
-"""
-Represents all possible transfer restriction types
-"""
-enum TransferRestrictionTypeEnum {
-  Count
-  Percentage
-}
-
-"""
-deprecated in favor of `TransferCompliance`
-"""
-type TransferManager @entity {
-  id: ID! # assetId/transferManagerType/value
-  asset: Asset! @index(unique: false)
-  type: TransferRestrictionTypeEnum!
-  value: Int!
-  exemptedEntities: [String]!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
 
 """
 Represents all known stat types
@@ -3036,8 +2997,8 @@ type StatType @entity {
   claimType: ClaimTypeEnum
   customClaimType: CustomClaimType
   claimIssuer: Identity
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3056,7 +3017,7 @@ Represents restriction that will ensure the composition of ownership remains a c
 e.g. No more than 2000 individual investors to avoid additional reporting requirements
 """
 type TransferCompliance @entity {
-  id: ID! # assetId/op/type/claimIssuer
+  id: ID! # its stat type id, then its value, or its claim value, min and max
   asset: Asset! @index(unique: false)
   type: TransferComplianceTypeEnum!
   statType: StatType!
@@ -3068,8 +3029,8 @@ type TransferCompliance @entity {
   claimIssuer: Identity
   min: BigInt
   max: BigInt
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3080,9 +3041,10 @@ type TransferComplianceExemption @entity {
   asset: Asset! @index(unique: false)
   opType: StatOpTypeEnum!
   claimType: ClaimTypeEnum
-  exemptedEntityId: String!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The exempted identity"
+  exemptedEntity: Identity!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3095,8 +3057,8 @@ type Compliance @entity {
   complianceId: Int!
   data: String! # This could be expanded into structured data
   asset: Asset! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3576,8 +3538,8 @@ type CustomClaimType @entity {
   id: ID!
   identity: Identity
   name: String!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 enum AffirmingPartyEnum {
