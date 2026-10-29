@@ -1,0 +1,24 @@
+# Upstream onfinality/subql-query images lag behind Node.js security releases, so
+# the query service's JS install is lifted out of the upstream image and run on a
+# patched Node base. Bump NODE_IMAGE for Node fixes and SUBQL_QUERY_IMAGE for
+# @subql/query upgrades.
+ARG NODE_IMAGE=node:24.22.1-alpine
+ARG SUBQL_QUERY_IMAGE=onfinality/subql-query:v2.25.0
+
+FROM ${SUBQL_QUERY_IMAGE} AS subql-query
+
+FROM ${NODE_IMAGE}
+
+# Same runtime packages as the upstream image
+RUN apk add --no-cache tini curl git
+
+# @subql/query is installed at the filesystem root upstream, and /bin/run requires ../dist/main.js
+COPY --from=subql-query /package.json /yarn.lock /
+COPY --from=subql-query /bin/run /bin/run
+COPY --from=subql-query /dist /dist
+COPY --from=subql-query /node_modules /node_modules
+
+USER 1000
+
+ENTRYPOINT ["/sbin/tini", "--", "/bin/run"]
+CMD ["-f", "/app"]
