@@ -10,14 +10,13 @@ import {
 import { decodeEvent } from '../../../decode';
 import { getAllByFields, getAssetId, specVersionOf } from '../../../utils';
 import { blockEvents } from '../../../utils/blockEvents';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
 import { writeAssetAgent } from './mapExternalAgent';
 import {
   canonicalExtrinsicPermissions,
   ExtrinsicPermissionsJson,
   Subset,
 } from '../../../utils/permissions';
-import { getOrAnomaly } from '../common';
 
 export const handleGroupCreated = async (event: SubstrateEvent): Promise<void> => {
   const { block, blockEventId } = extractArgs(event);

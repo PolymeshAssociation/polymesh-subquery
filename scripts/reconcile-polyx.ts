@@ -103,13 +103,12 @@ const sampleAccounts = async (
     .slice(0, typical)
     .forEach(r => add(r.account_id, 'typical'));
 
-  for (const [reason, kind] of oversampledKinds) {
-    const rows: Array<{ account_id: string }> = await db.query(
-      `SELECT DISTINCT account_id FROM polyx_entries WHERE kind = $1 LIMIT 200`,
-      [kind]
-    );
-    rows.forEach(r => add(r.account_id, reason));
-  }
+  const byKind: Array<Array<{ account_id: string }>> = await Promise.all(
+    oversampledKinds.map(([, kind]) =>
+      db.query(`SELECT DISTINCT account_id FROM polyx_entries WHERE kind = $1 LIMIT 200`, [kind])
+    )
+  );
+  byKind.forEach((rows, i) => rows.forEach(r => add(r.account_id, oversampledKinds[i][0])));
 
   const legacyRewards: Array<{ account_id: string }> = await db.query(
     `SELECT DISTINCT account_id FROM polyx_entries
@@ -368,12 +367,17 @@ const main = async (): Promise<void> => {
     `Sampled ${samples.length} accounts; comparing at ${BOUNDARIES.length * 2} boundary blocks each`
   );
 
-  for (const sample of samples) {
-    for (const boundary of BOUNDARIES) {
-      await probeOne(context, sample, boundary, 'before', boundary - 1);
-      await probeOne(context, sample, boundary, 'after', boundary + 1);
-    }
-  }
+  // one probe at a time: each checkpoints its result, and a public endpoint rate-limits
+  const probes = samples.flatMap(sample =>
+    BOUNDARIES.flatMap(boundary => [
+      () => probeOne(context, sample, boundary, 'before', boundary - 1),
+      () => probeOne(context, sample, boundary, 'after', boundary + 1),
+    ])
+  );
+  await probes.reduce(async (previous, probe) => {
+    await previous;
+    await probe();
+  }, Promise.resolve());
 
   await api.disconnect();
   await db.destroy();

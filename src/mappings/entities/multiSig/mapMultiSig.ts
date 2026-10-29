@@ -25,9 +25,8 @@ import {
 import { ledgerAccount, resolveKeyRole } from '../../../utils/accounts';
 import { recordAnomaly } from '../../../utils/anomaly';
 import { ResolveIdentityArgs, resolveIdentity } from '../identities/mapIdentities';
-import { Attributes, extractArgs } from '../common';
+import { Attributes, extractArgs, getOrAnomaly } from '../common';
 import { MultiSigSignerProps } from '../../../types/models/MultiSigSigner';
-import { getOrAnomaly } from '../common';
 
 /**
  * Creates a `MultiSig` and, first, the `Account` row it links to — a multisig is an account, so

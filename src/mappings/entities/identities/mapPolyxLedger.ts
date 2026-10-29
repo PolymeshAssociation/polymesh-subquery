@@ -311,10 +311,14 @@ export const handleBalanceTransferWithMemo = async (event: SubstrateEvent): Prom
   );
 
   if (unmemoed) {
-    for (const side of getLedgerEntries(args.blockId).ofMovement(unmemoed.movementId)) {
-      side.memo = memo;
-      await side.save();
-    }
+    await Promise.all(
+      getLedgerEntries(args.blockId)
+        .ofMovement(unmemoed.movementId)
+        .map(side => {
+          side.memo = memo;
+          return side.save();
+        })
+    );
 
     return;
   }
@@ -1092,7 +1096,7 @@ let payoutBlock: string | undefined;
 let payoutEraIndex: number | undefined;
 let payoutValidator: string | undefined;
 
-export const handlePayoutStarted = async (event: SubstrateEvent): Promise<void> => {
+export const handlePayoutStarted = (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
   const decoded = decodeEvent(event);
   const era = optionalField(decoded, 'eraIndex');
@@ -1101,6 +1105,8 @@ export const handlePayoutStarted = async (event: SubstrateEvent): Promise<void> 
   payoutBlock = args.blockId;
   payoutEraIndex = era !== undefined ? Number(getTextValue(era)) : undefined;
   payoutValidator = validator !== undefined ? getTextValue(validator) : undefined;
+
+  return Promise.resolve();
 };
 
 /**

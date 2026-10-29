@@ -16,10 +16,9 @@ import {
 } from '../../../utils';
 import { createAssetTransaction, moveFungibleHolding } from '../assets/mapAsset';
 import { moveNftsWithinIdentity } from '../assets/mapNfts';
-import { Attributes, extractArgs } from '../common';
+import { Attributes, extractArgs, getOrAnomaly } from '../common';
 import { createIdentityIfNotExists } from './mapIdentities';
 import { memoText, storedText } from '../../../utils/text';
-import { getOrAnomaly } from '../common';
 
 export const getPortfolio = async ({
   identityId,
