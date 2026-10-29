@@ -1,30 +1,10 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { HandlerArgs, toEnum } from '../mappings/entities/common';
 import { CallIdEnum, EventIdEnum, ModuleIdEnum } from '../types';
-import { JSONStringifyExceptStringAndNull, camelToSnakeCase, padId } from './common';
+import { blockTime, camelToSnakeCase, padId } from './common';
 import { resolveEthTransact } from './ethExtrinsic';
 
-export const extractEventArg = (arg: any, exists: boolean) => {
-  if (arg !== undefined && arg !== null && arg?.value != null) {
-    return JSONStringifyExceptStringAndNull(arg?.value);
-  } else if (exists) {
-    return 'null';
-  } else {
-    return null;
-  }
-};
-
-export const extractEventArgs = (args: any[]) => {
-  const [arg0, arg1, arg2, arg3] = args;
-  return {
-    eventArg_0: extractEventArg(arg0, args.length > 0),
-    eventArg_1: extractEventArg(arg1, args.length > 1),
-    eventArg_2: extractEventArg(arg2, args.length > 2),
-    eventArg_3: extractEventArg(arg3, args.length > 3),
-  };
-};
-
-type EventParams = {
+export type EventParams = {
   id: string;
   moduleId: ModuleIdEnum;
   moduleIdText: string;
@@ -35,8 +15,9 @@ type EventParams = {
   extrinsicId?: string;
   datetime: Date;
   eventIdx: number;
-  createdBlockId: string;
-  updatedBlockId: string;
+  blockId: string;
+  createdEventId: string;
+  updatedEventId: string;
   blockEventId: string;
 };
 
@@ -48,11 +29,12 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     moduleIdText,
     eventIdText,
     eventIdx,
-    block: { timestamp: datetime },
+    block,
     extrinsic,
     blockEventId,
     extrinsicId,
   } = args;
+  const datetime = blockTime(block);
 
   let callId: CallIdEnum | undefined;
   let callIdText: string | undefined;
@@ -64,7 +46,11 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     const resolved = resolveEthTransact(extrinsic);
 
     callIdText = resolved?.callId ?? camelToSnakeCase(extrinsic.extrinsic.method.method);
-    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown);
+    callId = toEnum(CallIdEnum, callIdText, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: args.block,
+      eventIdx,
+    });
   }
 
   return {
@@ -78,11 +64,9 @@ export const getEventParams = (args: HandlerArgs): EventParams => {
     callIdText,
     datetime,
     eventIdx,
-    createdBlockId: padId(blockId),
-    updatedBlockId: padId(blockId),
+    blockId: padId(blockId),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
     blockEventId,
   };
 };
-
-export const extractTransferTo = (args: any[]) =>
-  JSONStringifyExceptStringAndNull(args[3]?.value?.did);

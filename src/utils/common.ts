@@ -1,9 +1,12 @@
 import { decodeAddress } from '@polkadot/keyring';
-import { Codec } from '@polkadot/types/types';
-import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex, u8aToString } from '@polkadot/util';
+import { Codec, Registry } from '@polkadot/types/types';
+import { BN, hexHasPrefix, hexStripPrefix, isHex, u8aToHex } from '@polkadot/util';
 import { SubstrateBlock, SubstrateExtrinsic } from '@subql/types';
-import { Entity } from '@subql/types-core';
-import { ErrorJson, FoundType } from '../types';
+import { Entity, FieldsExpression } from '@subql/types-core';
+import { normaliseSpecVersion } from '../decode/specVersion';
+import { utf8Text } from './bytes';
+import { ErrorJson } from '../types';
+import * as generatedModels from '../types/models';
 export const emptyDid = '0x00'.padEnd(66, '0');
 
 const blockIdLength = 10;
@@ -14,6 +17,21 @@ const blockIdLength = 10;
 export const padId = (id: string): string => {
   return id.padStart(blockIdLength, '0');
 };
+
+/**
+ * Zero-pad a bare chain-assigned numeric id (an instruction / venue / PIP / authorization
+ * sequence stored as a `String` id) so a lexicographic `orderBy: ID_DESC` is also a numeric
+ * one — otherwise `"9999"` ranks above `"14712"`. Applied at construction and at every lookup, so
+ * stored ids and the FK references to them stay consistent.
+ *
+ * `undefined` passes through (a nullable FK such as `Instruction.venueId` stays absent), mirroring
+ * `getTextValue`, which this is almost always composed with.
+ */
+export function padNumericId(id: string): string;
+export function padNumericId(id: string | undefined): string | undefined;
+export function padNumericId(id: string | undefined): string | undefined {
+  return id === undefined ? undefined : padId(id);
+}
 
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 export const JSONStringifyExceptStringAndNull = (arg: any) => {
@@ -130,9 +148,9 @@ export const getOrDefault = <K, V>(map: Map<K, V>, key: K, getDefault: () => V):
   }
 };
 
-export const serializeTicker = (item: Codec): string => {
-  return removeNullChars(u8aToString(item.toU8a()));
-};
+/** Decoded through a `Buffer`, as `text.ts` does, rather than the host's bytes and `TextDecoder` */
+export const serializeTicker = (item: Codec): string =>
+  removeNullChars(Buffer.from(hexStripPrefix(item.toHex()), 'hex').toString('utf8'));
 
 export const getFirstKeyFromJson = (item: Codec): string => {
   return Object.keys(item.toJSON())[0];
@@ -162,12 +180,17 @@ export const getBooleanValue = (item: Codec): boolean => {
   return JSON.parse(getTextValue(item) || 'false');
 };
 
+/**
+ * Text from hex bytes: as UTF-8, which is how an event codec renders the same bytes, or a character
+ * per byte for bytes that are no UTF-8.
+ */
 export const hexToString = (input: string): string => {
-  const hex = hexStripPrefix(input);
-  let str = '';
-  for (let i = 0; i < hex.length; i += 2)
-    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-  return removeNullChars(str);
+  const text =
+    utf8Text(input) ??
+    Array.from(Buffer.from(hexStripPrefix(input), 'hex'), byte => String.fromCodePoint(byte)).join(
+      ''
+    );
+  return removeNullChars(text);
 };
 
 /**
@@ -197,11 +220,15 @@ export const getSigner = (extrinsic: SubstrateExtrinsic): string => {
   );
 };
 
-export const logFoundType = (type: string, rawType: string): void => {
-  FoundType.create({ id: type, rawType }).save();
-};
-
 export const END_OF_TIME = BigInt('253402194600000');
+
+/**
+ * `null`, for a field the generated models type as `string | undefined`: an open interval or
+ * nomination is written and looked up with an explicit `null` in its closing field, because the
+ * store's cache matches a filter with `isEqual`, which does not take an unset field for `null`.
+ * The cast stays: the generated field types cannot admit `null`, and the store accepts it.
+ */
+export const EXPLICIT_NULL = null as unknown as undefined;
 
 export function addIfNotIncludes<T>(arr: T[], item: T): void {
   if (!arr.includes(item)) {
@@ -216,13 +243,9 @@ export function removeIfIncludes<T>(arr: T[], item: T): void {
   }
 }
 
-export const getSignerAddress = (extrinsic: SubstrateExtrinsic): string => {
-  let signer: string;
-  if (extrinsic) {
-    signer = extrinsic.extrinsic.signer.toString();
-  }
-  return signer;
-};
+/** The account that signed `extrinsic`; undefined for an event with none (a scheduled one). */
+export const getSignerAddress = (extrinsic: SubstrateExtrinsic | undefined): string | undefined =>
+  extrinsic?.extrinsic.signer.toString();
 
 export const logError = (message: string): void => {
   logger.error(message);
@@ -245,7 +268,13 @@ export const getStringArrayValue = (item: Codec): string[] => {
   return set;
 };
 
-export const getErrorDetails = (item: Codec): ErrorJson => {
+/**
+ * A dispatch error's type and docs, named from the error table of the runtime that decoded it.
+ *
+ * Not `api.registry`: on a block the node labels with the neighbouring runtime's spec, that holds
+ * the other runtime's metadata, while the event itself was decoded at its own block's runtime.
+ */
+export const getErrorDetails = (item: Codec, registry: Registry = item.registry): ErrorJson => {
   const dispatchError = JSON.parse(item.toString());
 
   if ('module' in dispatchError) {
@@ -256,7 +285,7 @@ export const getErrorDetails = (item: Codec): ErrorJson => {
       error: new BN(hexStripPrefix(error), 'hex', 'le'),
     };
 
-    const { docs, name, section } = api.registry.findMetaError(metaError);
+    const { docs, name, section } = registry.findMetaError(metaError);
     return { errorType: `${section}.${name}`, details: docs.join('\n') };
   }
 
@@ -275,76 +304,108 @@ export const getErrorDetails = (item: Codec): ErrorJson => {
   };
 };
 
-export const is7xChain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 7000000 || (specName === 'polymesh_private_dev' && specVersion >= 2000000);
-};
+/**
+ * A block's spec version on the public chain's scale.
+ *
+ * Every version comparison in the indexer goes through this, so the `polymesh_private_dev`
+ * offsets live in one place rather than being repeated per predicate. See
+ * `normaliseSpecVersion`.
+ */
+export const specVersionOf = (block: SubstrateBlock): number =>
+  normaliseSpecVersion(block.specVersion);
+
+export const is7xSpecVersion = (specVersion: number): boolean =>
+  normaliseSpecVersion(specVersion) >= 7_000_000;
+
+export const is7xChain = (block: SubstrateBlock): boolean => is7xSpecVersion(block.specVersion);
 
 /**
  * From the spec version 7.3, sto events were modified to include asset ID details
  */
-export const is7Dot3Chain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 7003000 || (specName === 'polymesh_private_dev' && specVersion >= 2001000);
-};
+export const is7Dot3Chain = (block: SubstrateBlock): boolean => specVersionOf(block) >= 7_003_000;
 
-export const is8xChain = (block: SubstrateBlock) => {
-  const { specVersion } = block;
-  const specName = api.runtimeVersion.specName.toString();
-  return specVersion >= 8000000 || (specName === 'polymesh_private_dev' && specVersion >= 2002000);
+/**
+ * Whether a spec version is 8.x or later.
+ *
+ * Split out from `is8xChain` because upgrade detection compares the version the chain came
+ * *from*, for which there is no block to hand.
+ */
+export const is8xSpecVersion = (specVersion: number): boolean =>
+  normaliseSpecVersion(specVersion) >= 8_000_000;
+
+export const is8xChain = (block: SubstrateBlock): boolean => is8xSpecVersion(block.specVersion);
+
+/**
+ * `store.getByFields` rejects a limit above the node's query limit, so pages are kept small
+ */
+const PAGE_SIZE = 100;
+
+/**
+ * Rebuilds a raw store record into its generated model instance.
+ *
+ * `store.getByFields` hands back plain objects — the generated `Model.getByFields` is what
+ * normally maps them through `Model.create`, and reading the store directly skips that. A plain
+ * row carries every field but none of the methods, so `row.save()` on it would throw.
+ *
+ * An entity with no generated model is returned untouched rather than dropped.
+ */
+const hydrate = <T extends Entity>(entityName: string, rows: T[]): T[] => {
+  const model = (generatedModels as Record<string, { create?: (record: unknown) => Entity }>)[
+    entityName
+  ];
+
+  return model?.create ? rows.map(row => model.create(row) as T) : rows;
 };
 
 /**
- * Extracts the amount from 8.x chain staking event parameters.
+ * Every row matching `filter`, read in pages, as saveable entity instances.
  *
- * On 8.x chain, staking events have different parameter structures:
- * - Bonded/Unbonded: [stash, amount] (2 params)
- * - Rewarded: [stash, dest, amount] (3 params, dest is RewardDestination enum)
+ * `store.getByFields` returns one page, so reading a whole set is a loop; the filter is an
+ * expression list, so narrowing belongs in the query.
  *
- * This function detects if the second param is numeric (amount) or an enum (RewardDestination),
- * and returns the amount from the appropriate position.
+ * Ordered by `id`. Every entity's id is unique, so offset paging over it is a total order; the
+ * filter columns are not, and paging over one of those repeats a row and skips another.
  *
- * @param rawSecondParam - The second parameter (could be amount or RewardDestination)
- * @param rawThirdParam - The third parameter (amount for Rewarded events), optional
- * @returns The amount as bigint
+ * Note the store searches its write cache before the database, so a page can include rows
+ * written earlier in this block.
  */
-export const extract8xStakingAmount = (rawSecondParam: Codec, rawThirdParam?: Codec): bigint => {
-  const secondParamText = getTextValue(rawSecondParam);
-  const isSecondParamNumeric = /^\d+$/.test(secondParamText);
-
-  if (isSecondParamNumeric) {
-    return getBigIntValue(rawSecondParam);
-  } else if (rawThirdParam) {
-    return getBigIntValue(rawThirdParam);
-  }
-  return BigInt(0);
-};
-
-export const getPaginatedData = async <T extends Entity, F extends keyof T>(
+export const getAllByFields = async <T extends Entity>(
   entityName: string,
-  field: F,
-  param: T[F]
+  filter: FieldsExpression<T>[]
 ): Promise<T[]> => {
+  const results: T[] = [];
   let offset = 0;
-  const result: T[] = [];
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const data = await store.getByField<T>(entityName, field, param, {
-      limit: 100,
+    const page = await store.getByFields<T>(entityName, filter, {
+      limit: PAGE_SIZE,
       offset,
-      orderBy: field,
+      orderBy: 'id',
       orderDirection: 'ASC',
     });
 
-    result.push(...data);
+    results.push(...hydrate(entityName, page));
 
-    if (data.length < 100) {
-      break;
+    if (page.length < PAGE_SIZE) {
+      return results;
     }
 
-    offset += data.length;
+    offset += page.length;
   }
-  return result;
+};
+
+/**
+ * When a block was produced.
+ *
+ * SubQuery types a block's timestamp as optional because some chains have no timestamp pallet.
+ * Every Polymesh block sets one in its first inherent, so a block without it is not one this index
+ * can make sense of — it fails loudly here rather than a date column being filled with a guess.
+ */
+export const blockTime = (block: SubstrateBlock): Date => {
+  if (!block.timestamp) {
+    throw new Error(`Block ${block.block.header.number.toString()} carries no timestamp`);
+  }
+
+  return block.timestamp;
 };

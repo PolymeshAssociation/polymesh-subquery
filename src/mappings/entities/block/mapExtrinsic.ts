@@ -1,16 +1,34 @@
 import { SubstrateExtrinsic } from '@subql/types';
-import { CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
+import { AnomalyKind, CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from '../../../types';
 import {
-  ResolvedEthTransact,
+  blockTime,
   camelToSnakeCase,
   evmAddressFromSs58,
   getOrCreateAccount,
   getSignerAddress,
   padId,
+  ResolvedEthTransact,
   resolveEthTransact,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { argumentsJson, tryCallArgs } from '../../args/encode';
 import { toEnum } from '../common';
+import { postUneventedTransactionFee } from '../identities/preV54Fees';
 import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
+
+/** Events a batch deposits when a call in it failed; a batch that fully succeeded deposits none */
+const BATCH_FAILURE_EVENTS = new Set([
+  'BatchInterrupted',
+  'BatchInterruptedOld',
+  'BatchOptimisticFailed',
+  'BatchCompletedWithErrors',
+  'ItemFailed',
+]);
+
+const hasBatchFailure = (extrinsic: SubstrateExtrinsic): boolean =>
+  (extrinsic.events ?? []).some(
+    ({ event }) => event.section === 'utility' && BATCH_FAILURE_EVENTS.has(event.method)
+  );
 
 export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const blockId = padId(extrinsic.block.block.header.number.toString());
@@ -18,9 +36,17 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
   const extrinsicId = `${blockId}/${padId(extrinsicIdx.toString())}`;
   const signedbyAddress = !extrinsic.extrinsic.signer.isEmpty;
   const address = signedbyAddress ? extrinsic.extrinsic.signer.toString() : null;
-  const paramsTxt = JSON.stringify((extrinsic.extrinsic.toHuman() as any).method.args);
+  const { args, failure } = tryCallArgs(extrinsic.extrinsic.method);
   const moduleId = extrinsic.extrinsic.method.section.toLowerCase();
   const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
+
+  if (failure !== undefined) {
+    void recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${failure}, so the extrinsic's args were left empty`,
+      block: extrinsic.block,
+    });
+  }
 
   const created = Extrinsic.create({
     id: extrinsicId,
@@ -28,12 +54,19 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     extrinsicIdx,
     extrinsicLength: extrinsic.extrinsic.length,
     signed: extrinsic.extrinsic.isSigned ? 1 : 0,
-    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown),
+    moduleId: toEnum(ModuleIdEnum, moduleId, ModuleIdEnum.unknown, {
+      enumName: 'ModuleIdEnum',
+      block: extrinsic.block,
+    }),
     moduleIdText: moduleId,
-    callId: toEnum(CallIdEnum, callId, CallIdEnum.unknown),
+    callId: toEnum(CallIdEnum, callId, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: extrinsic.block,
+    }),
     callIdText: callId,
-    paramsTxt,
+    args: argumentsJson(args),
     success: extrinsic.success ? 1 : 0,
+    batchFailed: hasBatchFailure(extrinsic),
     signedbyAddress: signedbyAddress ? 1 : 0,
     address,
     nonce: extrinsic.extrinsic.nonce.toNumber(),
@@ -52,11 +85,17 @@ export function createExtrinsic(extrinsic: SubstrateExtrinsic): Extrinsic {
     created.address = resolved.fromAddress;
     created.ethAddress = resolved.fromEthAddress;
     created.ethTxHash = resolved.ethTxHash;
-    created.moduleId = toEnum(ModuleIdEnum, resolved.moduleId, ModuleIdEnum.unknown);
+    created.moduleId = toEnum(ModuleIdEnum, resolved.moduleId, ModuleIdEnum.unknown, {
+      enumName: 'ModuleIdEnum',
+      block: extrinsic.block,
+    });
     created.moduleIdText = resolved.moduleId;
-    created.callId = toEnum(CallIdEnum, resolved.callId, CallIdEnum.unknown);
+    created.callId = toEnum(CallIdEnum, resolved.callId, CallIdEnum.unknown, {
+      enumName: 'CallIdEnum',
+      block: extrinsic.block,
+    });
     created.callIdText = resolved.callId;
-    created.paramsTxt = resolved.paramsTxt;
+    created.args = argumentsJson(resolved.args);
     created.nonce = Number(resolved.tx.nonce);
     created.success = extrinsic.success && !resolved.reverted ? 1 : 0;
   }
@@ -80,7 +119,7 @@ const createEvmTransaction = (
     ethTxType: tx.txType,
     callKind: resolved.callKind,
     fromEthAddress: resolved.fromEthAddress,
-    fromAddress: resolved.fromAddress,
+    fromAccountId: resolved.fromAddress,
     toEthAddress: tx.to,
     contractAddress: resolved.contractAddress,
     value: tx.value.toString(),
@@ -93,9 +132,6 @@ const createEvmTransaction = (
     input: tx.data,
     reverted: resolved.reverted,
     revertReason: resolved.revertReason,
-    datetime: extrinsic.block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
   }).save();
 };
 
@@ -105,6 +141,9 @@ const createEvmTransaction = (
  */
 const handleEvmAccountMapping = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   const address = getSignerAddress(extrinsic);
+  if (!address) {
+    return;
+  }
   const evmAddress = evmAddressFromSs58(address, extrinsic.extrinsic.registry.chainSS58);
 
   if (!evmAddress) {
@@ -115,7 +154,7 @@ const handleEvmAccountMapping = async (extrinsic: SubstrateExtrinsic): Promise<v
     evmAddress,
     address,
     mapped: camelToSnakeCase(extrinsic.extrinsic.method.method) === 'map_account',
-    datetime: extrinsic.block.timestamp,
+    datetime: blockTime(extrinsic.block),
     blockId: padId(extrinsic.block.block.header.number.toString()),
   });
 };
@@ -138,6 +177,9 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
 
   await createExtrinsic(extrinsic).save();
 
+  // A fee its runtime charged without announcing it — see `postUneventedTransactionFee`.
+  await postUneventedTransactionFee(extrinsic);
+
   if (resolved) {
     // `EvmTransaction` references the extrinsic, so it has to be written after it
     await createEvmTransaction(extrinsic, resolved);
@@ -146,7 +188,7 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
     await getOrCreateAccount(
       resolved.fromAddress,
       padId(extrinsic.block.block.header.number.toString()),
-      extrinsic.block.timestamp
+      blockTime(extrinsic.block)
     );
   } else if (isAccountMappingCall(extrinsic)) {
     await handleEvmAccountMapping(extrinsic);
