@@ -2071,7 +2071,10 @@ type AssetPermissions @jsonField {
 }
 
 """
-Represents which extrinsics an Account may sign for an Identity
+Represents which extrinsics an Account may sign for an Identity. For `these` or `except`, `values`
+is a map by pallet name of `{ extrinsics }`, itself `whole` or `these`/`except` a list of extrinsic
+names: 7.0's form, whichever runtime set them. Names are as the chain stores them and matches them,
+exactly, so a misspelt or retired one grants nothing
 """
 type TransactionPermissions @jsonField {
   type: String!
@@ -2087,17 +2090,22 @@ type PortfolioPermissions @jsonField {
 }
 
 """
-Represents an Account's permissions. The primary key for an Identity always has full permission
+The role a key plays in the identity system, from the chain's own `KeyRecord`.
+
+Distinct from `Account.keyType` (the cryptographic shape of the key). Treated as an OPEN set —
+`Unlinked` currently covers pallet addresses, system pots, and deliberately-detached keys as one
+label, and may be split later. A multisig's own account reads `PrimaryKey` / `SecondaryKey` per
+its key record; multisig-ness is the `MultiSig` row keyed by the same address, not this field.
+
+A superset of `IdentityKeyRole`: a key can sit outside the identity system entirely, which a
+membership interval cannot express. The values common to both are spelled the same way.
 """
-type Permissions @entity {
-  id: ID!
-  assets: AssetPermissions
-  portfolios: PortfolioPermissions
-  transactions: TransactionPermissions
-  transactionGroups: [String]!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+enum AccountKeyRole {
+  PrimaryKey
+  SecondaryKey
+  MultiSigSigner
+  "Pallet / system address, or a key with no current key record"
+  Unlinked
 }
 
 """
@@ -2110,38 +2118,66 @@ type Account @entity {
   address: String! @index(unique: true)
   "`substrate` for a regular key, `ethereum` for the `0xEE` padded account of an Ethereum key"
   keyType: String!
+  "The key's current role, derived from the chain's `KeyRecord`. A convenience column: the membership history it summarises is `keyAssignments`"
+  keyRole: AccountKeyRole! @index(unique: false)
   "Checksummed Ethereum address this account is reachable at inside `pallet_revive`"
   evmAddress: String @index(unique: false)
+  "The identity this key currently belongs to, null once it is detached. A convenience column for the current state; `keyAssignments` is the authoritative membership record, including past ones"
   identity: Identity
-  permissions: Permissions
-  eventId: EventIdEnum!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Every `IdentityKey` membership interval this account has held, current and historical. The source of truth for key membership"
+  keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
+  "Set when this account is a multisig — the account IS the multisig"
+  multiSig: MultiSig @derivedFrom(field: "account")
+  "One per asset this account has held as a v8 account-level holder"
+  holdings: [Holding!] @derivedFrom(field: "account")
+  "Settlement legs sending from this account, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromAccount")
+  "Settlement legs delivering to this account, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toAccount")
+  "Transfers out of this account as a v8 account-level holder"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromAccount")
+  "Transfers into this account as a v8 account-level holder"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toAccount")
+  "Staking events whose stash is this account"
+  stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
+  "Authorizations targeting this key, including invitations to join an identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "toAccount")
+  "This account's POLYX ledger entries"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "account")
+  "Multisigs this account is a signer of"
+  signerOf: [MultiSigSigner!] @derivedFrom(field: "signerAccount")
+  "Subsidies this account pays for"
+  subsidiesPaid: [Subsidy!] @derivedFrom(field: "payingAccount")
+  "Subsidies paying this account's fees"
+  subsidiesReceived: [Subsidy!] @derivedFrom(field: "beneficiaryAccount")
+  "Per-token NFT approvals this account granted"
+  nftApprovalsGranted: [NftApproval!] @derivedFrom(field: "owner")
+  "Per-token NFT approvals granted to this account"
+  nftApprovalsReceived: [NftApproval!] @derivedFrom(field: "spender")
+  "Collection-wide NFT operator approvals this account granted"
+  nftOperatorApprovalsGranted: [NftOperatorApproval!] @derivedFrom(field: "owner")
+  "Collection-wide NFT operator approvals granted to this account"
+  nftOperatorApprovalsReceived: [NftOperatorApproval!] @derivedFrom(field: "operator")
+  "Fungible allowances this account granted"
+  allowancesGranted: [AssetAllowance!] @derivedFrom(field: "owner")
+  "Fungible allowances granted to this account"
+  allowancesReceived: [AssetAllowance!] @derivedFrom(field: "spender")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
-Represents permissions to be saved in account history
+An account's permissions for one `IdentityKey` membership interval.
+
+These are not filterable: SubQuery generates filters over an entity's own columns, not over the
+contents of a jsonField. Filter on `IdentityKey`'s own columns and read the permissions from the
+rows that come back.
 """
 type PermissionsJson @jsonField {
   assets: AssetPermissions
   portfolios: PortfolioPermissions
   transactions: TransactionPermissions
   transactionGroups: [String]!
-}
-
-"""
-Represents historical data of identities assigned to an account
-"""
-type AccountHistory @entity {
-  id: ID!
-  account: String!
-  identity: String!
-  eventId: EventIdEnum!
-  permissions: PermissionsJson
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2152,17 +2188,101 @@ An Identity needs a valid CDD claim from at least one KYC/KYB provider to perfor
 type Identity @entity {
   id: ID!
   did: String! @index(unique: true)
-  primaryAccount: String! @index(unique: false)
-  secondaryAccounts: [Account!]! @derivedFrom(field: "identity")
+  "The identity's current primary key. A convenience column; the authoritative record, including the history, is `keys`. Null only for an identity seeded before its key was readable"
+  primaryAccount: Account
   secondaryKeysFrozen: Boolean!
-  eventId: EventIdEnum!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
+  "One rollup per asset the identity holds or has held, fungible or NFT"
   heldAssets: [AssetHolder]! @derivedFrom(field: "identity")
-  heldNfts: [NftHolder]! @derivedFrom(field: "identity")
+  "Every holding of every portfolio and account of this identity, at the grain the chain keeps"
+  holdings: [Holding!] @derivedFrom(field: "identity")
+  "Asset movements out of any of this identity's portfolios or accounts, redemptions included"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromIdentity")
+  "Asset movements into any of this identity's portfolios or accounts, issuances included"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toIdentity")
+  "Every instruction this identity is a party to, as a party or a mediator"
+  instructionParties: [InstructionParty!] @derivedFrom(field: "identity")
+  "Authorizations targeting this identity"
+  authorizationsReceived: [Authorization!] @derivedFrom(field: "to")
+  "The confidential accounts this identity registered"
+  confidentialAccounts: [ConfidentialAccount!] @derivedFrom(field: "creator")
+  "The confidential assets this identity created"
+  confidentialAssets: [ConfidentialAsset!] @derivedFrom(field: "creator")
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
-  children: [ChildIdentity!]! @derivedFrom(field: "parent")
+  "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
+  agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
+  """
+  Every key membership this Identity has held, current and historical — see `IdentityKey`.
+
+  Current secondary keys are
+  `keys(filter: { role: { equalTo: SecondaryKey }, validToBlockId: { isNull: true } })`.
+  """
+  keys: [IdentityKey!]! @derivedFrom(field: "identity")
+  "Claims made about this identity"
+  claims: [Claim!] @derivedFrom(field: "target")
+  "Claims this identity issued about others"
+  claimsIssued: [Claim!] @derivedFrom(field: "issuer")
+  "Assets this identity owns"
+  assetsOwned: [Asset!] @derivedFrom(field: "owner")
+  "Settlement venues this identity owns"
+  venues: [Venue!] @derivedFrom(field: "owner")
+  "Portfolios whose custody was last assigned to this identity, its own included when custody was handed back"
+  custodiedPortfolios: [Portfolio!] @derivedFrom(field: "custodian")
+  "POLYX ledger entries of this identity's accounts"
+  polyxEntries: [PolyxEntry!] @derivedFrom(field: "identity")
+  "Distributions this identity created"
+  distributions: [Distribution!] @derivedFrom(field: "identity")
+  "Distribution payments this identity claimed or was pushed"
+  distributionPayments: [DistributionPayment!] @derivedFrom(field: "target")
+  "Investments this identity made in offerings"
+  investments: [Investment!] @derivedFrom(field: "investor")
+  "Offerings this identity created"
+  offeringsCreated: [Sto!] @derivedFrom(field: "creator")
+}
+
+"""
+The role a key holds within one `IdentityKey` membership interval.
+
+Not a closed set — treat it as open. `MultiSigSigner` and detached-key roles belong to
+`AccountKeyRole`, the account's current state, rather than here: an unlinked membership interval
+is a contradiction, and further membership roles may be added. The values shared with that enum
+are spelled the same way, so neither has to be translated into the other.
+"""
+enum IdentityKeyRole {
+  PrimaryKey
+  SecondaryKey
+}
+
+"""
+One row per `(identity, account, role)` membership interval — an append-only key-rotation history.
+
+A key joining an identity opens a row (`validFromBlock` set, `validToBlock` null). A key leaving,
+being rotated out, or having its permissions changed closes the row (`validToBlock`,
+`removedReason`) and, for a permissions change or rotation, opens a fresh one. The currently active
+membership for an account is the row with `validToBlockId: { isNull: true }` (`Boolean` cannot be
+indexed on the Postgres in use, so the null-FK filter is the query form).
+
+The source of truth for key membership.
+"""
+type IdentityKey @entity
+  @compositeIndexes(fields: [["account", "validToBlock"]]) {
+  "`identity/address/validFromBlockId/paddedEventIdx` — the event index disambiguates two intervals opened for one identity in the same block"
+  id: ID!
+  identity: Identity! @index
+  account: Account! @index
+  role: IdentityKeyRole!
+  "Permissions granted to the key for this interval. Null for a primary key, which always has full permission"
+  permissions: PermissionsJson
+  validFromBlock: Block!
+  "Null while the membership is active. Filter `validToBlockId: { isNull: true }` for current keys"
+  validToBlock: Block @index
+  "The event that opened this membership interval"
+  addedReason: EventIdEnum!
+  "The event that closed it — null while active"
+  removedReason: EventIdEnum
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2289,22 +2409,28 @@ enum AuthorizationStatusEnum {
   Consumed
   Rejected
   Revoked
+  "The chain gave up re-offering the authorization after too many failed accept attempts. No row is expected to hold this: the runtime declares the event but never emits it, and the retry count itself is not in any event, so an exhausted authorization stays Pending"
+  RetryLimitReached
 }
 
 """
 Represents a request to grant an Account some permission to perform actions for an Identity. e.g. become a Portfolio custodian
 """
 type Authorization @entity {
+  "The chain's numeric authorization sequence, zero-padded to 10 digits so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   type: AuthTypeEnum!
   from: Identity! @index(unique: false)
-  toId: String @index(unique: false)
-  toKey: String @index(unique: false)
+  "The identity the authorization targets; null for a key with no identity yet, such as a `JoinIdentity` invitation"
+  to: Identity
+  "The key the authorization targets, as an SS58 address (the form `Account.id` uses); null when it targets an identity"
+  toAccount: Account
   data: String
+  "When the authorization stops being acceptable. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   expiry: Date @index(unique: false)
-  status: AuthorizationStatusEnum!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Indexed because `repairAuthorizationsAfterUpgrade` reads every pending row, and `store.getByFields` refuses to filter on a column with no index"
+  status: AuthorizationStatusEnum! @index
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2406,10 +2532,18 @@ type Portfolio @entity {
   number: Int! @index(unique: false)
   name: String
   custodian: Identity
-  eventIdx: Int!
   deletedAt: Date
-  createdBlock: Block!
-  updatedBlock: Block!
+  "One per asset this portfolio has held"
+  holdings: [Holding!] @derivedFrom(field: "portfolio")
+  "Settlement legs sending from this portfolio, including assets it has never held"
+  legsOut: [Leg!] @derivedFrom(field: "fromPortfolio")
+  "Settlement legs delivering to this portfolio, including assets it has never held"
+  legsIn: [Leg!] @derivedFrom(field: "toPortfolio")
+  "Asset movements out of this portfolio: transfers, redemptions and moves to another portfolio"
+  transfersOut: [AssetTransaction!] @derivedFrom(field: "fromPortfolio")
+  "Asset movements into this portfolio: transfers, issuances and moves from another portfolio"
+  transfersIn: [AssetTransaction!] @derivedFrom(field: "toPortfolio")
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3124,17 +3258,6 @@ type Migration @entity {
   version: String!
   executed: Int! @index(unique: false)
   processedBlock: Int!
-}
-
-"""
-Represents the parent child mapping for an Identity
-"""
-type ChildIdentity @entity {
-  id: ID!
-  child: Identity!
-  parent: Identity!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 # POLYX ledger

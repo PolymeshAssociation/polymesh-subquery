@@ -1,82 +1,203 @@
+/**
+ * `keyRole` is mutable state and rides the same writes that link/unlink a key: when
+ * `SecondaryKeyLeftIdentity` (or `PrimaryKeyUpdated`) clears `Account.identityId`, it also sets
+ * `keyRole` to `Unlinked` in the same save — a stale role field would be worse than none.
+ */
+
 import { SubstrateEvent } from '@subql/types';
-import { handleDidCreated } from '../../src/mappings/entities/identities/mapIdentities';
+import { Account, Identity, IndexerAnomaly, AccountKeyRole } from '../../src/types';
+import {
+  handlePrimaryKeyUpdated,
+  handleSecondaryKeyLeftIdentity,
+  handleSecondaryKeysRemoved,
+} from '../../src/mappings/entities/identities/mapIdentities';
 
-const DID = '0x43657eb6b86d817de407bb697eafa08d1cc28cfd91b2386a14262a11d620cb4d';
-const ADDRESS = '5EHpPfLVndwpmjh1z82VbKoUEhFoRbhqH8LHsnMXbM98ukd4';
-const PORTFOLIO_ID = `${DID}/0`;
+const DID = '0x01'.padEnd(66, '0');
+const OTHER_DID = '0x02'.padEnd(66, '0');
+const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 
-const didCreated = (): SubstrateEvent =>
+const codec = (value: string) => ({ toString: () => value, toJSON: () => value });
+
+const leftIdentityEvent = (): SubstrateEvent =>
   ({
-    idx: 5,
+    idx: 2,
+    block: {
+      block: { header: { number: { toString: () => '900000' } } },
+      timestamp: new Date('2024-01-01T00:00:00.000Z'),
+      specVersion: 7_000_000,
+    },
     event: {
       section: 'identity',
-      method: 'DidCreated',
-      data: [{ toString: () => DID }, { toString: () => ADDRESS }, []],
+      method: 'SecondaryKeyLeftIdentity',
+      data: [codec(DID), codec(SECONDARY)],
+      meta: { fields: [{ name: { isSome: false } }, { name: { isSome: false } }] },
     },
-    block: {
-      timestamp: new Date('2026-11-06T12:00:00Z'),
-      specVersion: 8001003,
-      block: { header: { number: { toString: () => '26594857' } } },
-    },
-    extrinsic: { idx: 1, extrinsic: { method: { method: 'selfRegisterDid' } } },
   } as unknown as SubstrateEvent);
 
-describe('handleDidCreated', () => {
-  const rows = new Map<string, Record<string, unknown>>();
+const openKeyRow = (identityId: string) => ({
+  id: `${identityId}/${SECONDARY}/0000800000/0001`,
+  identityId,
+  accountId: SECONDARY,
+  role: 'SecondaryKey',
+  validFromBlockId: '0000800000',
+  validToBlockId: null,
+  addedReason: 'SecondaryKeysAdded',
+  createdEventId: '0000800000/0001',
+  updatedEventId: '0000800000/0001',
+});
 
-  const seed = (entity: string, id: string, row: Record<string, unknown>) =>
-    rows.set(`${entity}/${id}`, row);
+const removedEvent = (): SubstrateEvent =>
+  ({
+    idx: 3,
+    block: {
+      block: { header: { number: { toString: () => '900001' } } },
+      timestamp: new Date('2024-01-01T00:00:00.000Z'),
+      specVersion: 7_000_000,
+    },
+    event: {
+      section: 'identity',
+      method: 'SecondaryKeysRemoved',
+      data: [codec(DID), { toJSON: () => [SECONDARY], toString: () => `["${SECONDARY}"]` }],
+      meta: { fields: [{ name: { isSome: false } }, { name: { isSome: false } }] },
+    },
+  } as unknown as SubstrateEvent);
 
-  beforeEach(() => {
-    rows.clear();
-    (globalThis as any).store = {
-      get: jest.fn(async (entity: string, id: string) => rows.get(`${entity}/${id}`)),
-      set: jest.fn(async (entity: string, id: string, row: Record<string, unknown>) => {
-        seed(entity, id, row);
-      }),
+const primaryKeyUpdatedEvent = (): SubstrateEvent =>
+  ({
+    idx: 4,
+    block: {
+      block: { header: { number: { toString: () => '900002' } } },
+      timestamp: new Date('2024-01-01T00:00:00.000Z'),
+      specVersion: 7_000_000,
+    },
+    event: {
+      section: 'identity',
+      method: 'PrimaryKeyUpdated',
+      data: [codec(DID), codec(''), codec(SECONDARY)],
+      meta: {
+        fields: [
+          { name: { isSome: false } },
+          { name: { isSome: false } },
+          { name: { isSome: false } },
+        ],
+      },
+    },
+  } as unknown as SubstrateEvent);
+
+beforeEach(() => {
+  (api.runtimeVersion.specName as any).toString = () => 'polymesh';
+  (globalThis as any).api.registry = { chainSS58: 12 };
+  (store.getByFields as jest.Mock).mockResolvedValue([]);
+});
+
+describe('handleSecondaryKeyLeftIdentity', () => {
+  it('nulls identityId and sets keyRole = Unlinked in the same write', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const account: any = {
+      id: SECONDARY,
+      identityId: DID,
+      keyRole: AccountKeyRole.SecondaryKey,
+      save,
     };
-    Object.assign((globalThis as any).api, { registry: { chainSS58: 42 } });
+    jest.spyOn(Account, 'get').mockResolvedValue(account);
+
+    await handleSecondaryKeyLeftIdentity(leftIdentityEvent());
+
+    expect(account.identityId).toBeUndefined();
+    expect(account.keyRole).toBe(AccountKeyRole.Unlinked);
+    expect(save).toHaveBeenCalled();
   });
+});
 
-  it('creates the default portfolio of an identity an ethTransact sender already created', async () => {
-    seed('Identity', DID, { id: DID, did: DID, primaryAccount: ADDRESS });
-
-    await handleDidCreated(didCreated());
-
-    expect(rows.get(`Portfolio/${PORTFOLIO_ID}`)).toMatchObject({
+describe('handleSecondaryKeysRemoved', () => {
+  it('keeps the account row and unlinks it instead of deleting it', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const account: any = {
+      id: SECONDARY,
       identityId: DID,
-      number: 0,
-      eventIdx: 5,
-      createdBlockId: '0026594857',
-      createdEventId: '0026594857/0000000005',
-    });
+      keyRole: AccountKeyRole.SecondaryKey,
+      save,
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(account);
+    const remove = jest.spyOn(Account, 'remove').mockResolvedValue(undefined);
+
+    await handleSecondaryKeysRemoved(removedEvent());
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(account.identityId).toBeUndefined();
+    expect(account.keyRole).toBe(AccountKeyRole.Unlinked);
+    expect(save).toHaveBeenCalled();
   });
 
-  it('keeps an existing default portfolio, marking it updated', async () => {
-    seed('Identity', DID, { id: DID, did: DID, primaryAccount: '' });
-    seed('Portfolio', PORTFOLIO_ID, {
-      id: PORTFOLIO_ID,
+  it("closes the removing identity's open membership", async () => {
+    jest.spyOn(Account, 'get').mockResolvedValue({
+      id: SECONDARY,
       identityId: DID,
-      number: 0,
-      eventIdx: 2,
-      createdBlockId: '0000000001',
-      createdEventId: '0000000001/0000000002',
-      updatedBlockId: '0000000001',
-    });
+      keyRole: AccountKeyRole.SecondaryKey,
+      save: jest.fn().mockResolvedValue(undefined),
+    } as any);
+    (store.getByFields as jest.Mock).mockImplementation(async (entity: string) =>
+      entity === 'IdentityKey' ? [openKeyRow(DID)] : []
+    );
 
-    await handleDidCreated(didCreated());
+    await handleSecondaryKeysRemoved(removedEvent());
 
-    expect(rows.get(`Portfolio/${PORTFOLIO_ID}`)).toMatchObject({
-      eventIdx: 2,
-      createdBlockId: '0000000001',
-      updatedBlockId: '0026594857',
-    });
+    expect(store.bulkUpdate).toHaveBeenCalledWith('IdentityKey', [
+      expect.objectContaining({ identityId: DID, validToBlockId: '0000900001' }),
+    ]);
   });
 
-  it('creates the identity and its default portfolio when neither exists', async () => {
-    await handleDidCreated(didCreated());
+  it('leaves a key of another identity linked', async () => {
+    // The chain ignores a removal naming a key the caller's identity doesn't hold, but still
+    // emits the event
+    const save = jest.fn().mockResolvedValue(undefined);
+    const account: any = {
+      id: SECONDARY,
+      identityId: OTHER_DID,
+      keyRole: AccountKeyRole.SecondaryKey,
+      save,
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(account);
+    (store.getByFields as jest.Mock).mockImplementation(async (entity: string) =>
+      entity === 'IdentityKey' ? [openKeyRow(OTHER_DID)] : []
+    );
 
-    expect(rows.get(`Identity/${DID}`)).toMatchObject({ primaryAccount: ADDRESS });
-    expect(rows.get(`Portfolio/${PORTFOLIO_ID}`)).toMatchObject({ number: 0, eventIdx: 5 });
+    await handleSecondaryKeysRemoved(removedEvent());
+
+    expect(account.identityId).toBe(OTHER_DID);
+    expect(account.keyRole).toBe(AccountKeyRole.SecondaryKey);
+    expect(save).not.toHaveBeenCalled();
+    expect(store.bulkUpdate).not.toHaveBeenCalled();
+  });
+
+  it('records an anomaly when the removed key was never indexed', async () => {
+    jest.spyOn(Account, 'get').mockResolvedValue(undefined);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await handleSecondaryKeysRemoved(removedEvent());
+
+    expect(anomaly).toHaveBeenCalled();
+  });
+});
+
+describe('handlePrimaryKeyUpdated', () => {
+  /**
+   * An identity created from a key record alone carries no primary key, so the outgoing account
+   * cannot be read. The rotation still has to link the incoming key rather than kill the block.
+   */
+  it('links the new key and records an anomaly when the outgoing account is missing', async () => {
+    const identitySave = jest.fn().mockResolvedValue(undefined);
+    const identity: any = { id: DID, primaryAccountId: '', save: identitySave };
+    jest.spyOn(Identity, 'get').mockResolvedValue(identity);
+    jest.spyOn(Account, 'get').mockResolvedValue(undefined);
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    const created = jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
+
+    await handlePrimaryKeyUpdated(primaryKeyUpdatedEvent());
+
+    expect(anomaly).toHaveBeenCalled();
+    expect(identity.primaryAccountId).toBe(SECONDARY);
+    expect(identitySave).toHaveBeenCalled();
+    expect(created).toHaveBeenCalled();
   });
 });
