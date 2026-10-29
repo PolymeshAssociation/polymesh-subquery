@@ -1817,6 +1817,29 @@ type Block @entity {
 }
 
 """
+Where this index starts, and which of its derived values it can vouch for.
+
+One row. A genesis replay derives everything, so it lists every domain as seeded. An index started
+at a later block seeds what it can from chain storage at that block; a value accumulated by the
+index — a supply, a holder count, a balance — is only absolute if its domain is listed as seeded.
+Anything a consumer totals from a partial index should be checked against this first.
+"""
+type IndexOrigin @entity {
+  "Always `origin`"
+  id: ID!
+  "The first block this index processed"
+  startBlock: Int!
+  "Hash of that block, so a reseed against a different fork is detectable"
+  startBlockHash: String!
+  "The runtime that executed the start block"
+  specVersion: Int!
+  "The fields whose value depends on history before the start block, as `Entity.field`: totals counted from it, such as lifetime totals, and facts the chain doesn't keep, such as who created a row, which a seeded row leaves empty"
+  relativeFields: [String!]!
+  "When the start block was produced. UTC, serialised with no timezone marker — parse as UTC"
+  datetime: Date!
+}
+
+"""
 A runtime upgrade the indexer observed, one row per spec version.
 
 Written from `system.CodeUpdated`, which the runtime emits for every upgrade. Read by upgrade
@@ -2667,6 +2690,14 @@ type DistributionPayment @entity {
 }
 
 """
+Whether `CorporateAction.targetIdentities` names the holders it applies to, or the holders it excludes
+"""
+enum TargetTreatment {
+  Include
+  Exclude
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {
@@ -3140,6 +3171,16 @@ type ChildIdentity @entity {
   parent: Identity!
   createdBlock: Block!
   updatedBlock: Block!
+}
+
+type KindTotal @jsonField {
+  "a `MovementKind` value — jsonField members cannot be enum-typed, same as `Scope.type` etc."
+  kind: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  totalAbs: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  net: String!
+  count: Int!
 }
 
 """
