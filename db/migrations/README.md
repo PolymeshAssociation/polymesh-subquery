@@ -45,37 +45,19 @@ There may be instances where a new metadata attribute is added to an existing en
 ```
 with sto_data as (
   select
-    event_arg_1::int as sto_id,
-    event_arg_2 as name,
-    coalesce(
-        attributes->3->'value'->>'venueId',
-        attributes->3->'value'->>'venue_id' --needed for chain < 5.0.0
-      ) as venue_id,
-    coalesce(
-        attributes->3->'value'->>'offeringAsset',
-        attributes->3->'value'->>'offering_asset' --needed for chain < 5.0.0
-      ) as offering_asset_id,
-    coalesce(
-        attributes->3->'value'->'offeringPortfolio',
-        attributes->3->'value'->'offering_portfolio' --needed for chain < 5.0.0
-      ) as offering_portfolio,
-    coalesce(
-        attributes->3->'value'->>'raisingAsset',
-        attributes->3->'value'->>'raising_asset' --needed for chain < 5.0.0
-      ) as raising_asset_id,
-    coalesce(
-        attributes->3->'value'->'raisingPortfolio',
-        attributes->3->'value'->'raising_portfolio' --needed for chain < 5.0.0
-      ) as raising_portfolio,
-    "attributes"->3->'value'->>'creator' as creator_id,
-    to_timestamp(("attributes"->3->'value'->>'start')::NUMERIC/1000) as start,
-    to_timestamp(("attributes"->3->'value'->>'end')::NUMERIC/1000) as end,
-    "attributes"->3->'value'->'tiers' as tiers,
+    (args ->> '1')::int as sto_id,
+    args ->> '2' as name,
+    args->'3'->>'venueId' as venue_id,
+    args->'3'->>'offeringAsset' as offering_asset_id,
+    args->'3'->'offeringPortfolio' as offering_portfolio,
+    args->'3'->>'raisingAsset' as raising_asset_id,
+    args->'3'->'raisingPortfolio' as raising_portfolio,
+    args->'3'->>'creator' as creator_id,
+    to_timestamp((args->'3'->>'start')::NUMERIC/1000) as start,
+    to_timestamp((args->'3'->>'end')::NUMERIC/1000) as end,
+    args->'3'->'tiers' as tiers,
     'Live' as status,
-    coalesce(
-        attributes->3->'value'->'minimumInvestment',
-        attributes->3->'value'->'minimum_investment' --needed for chain < 5.0.0
-      )::NUMERIC as minimum_investment,
+    (args->'3'->>'minimumInvestment')::NUMERIC as minimum_investment,
     block_id as created_block_id,
     block_id as updated_block_id,
     created_at as created_at,
