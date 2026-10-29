@@ -1,0 +1,198 @@
+import { Codec } from '@polkadot/types/types';
+import { SubstrateEvent } from '@subql/types';
+import { EventIdEnum, ModuleIdEnum } from '../types';
+import { recordAnomaly } from '../utils/anomaly';
+import { DecodeError, FieldNotFound, NoDecoderForSpecVersion } from './errors';
+import { DecodedEvent, hasNamedFields, metadataFieldNames, namedFields } from './field';
+import { resolveShape } from './shapes';
+import { normaliseSpecVersion } from './specVersion';
+
+/**
+ * Property names a decoded event must answer without complaint.
+ *
+ * The guard below turns an unknown field into a throw, and these are the names runtimes and test
+ * tooling probe for on any object - `then` decides whether a value is awaited, the rest are
+ * inspection hooks. Throwing on them would break unrelated machinery.
+ */
+const PROBED_PROPERTIES = new Set([
+  'then',
+  'toJSON',
+  'inspect',
+  'constructor',
+  'hasOwnProperty',
+  'nodeType',
+]);
+
+const asModuleId = (section: string): ModuleIdEnum | undefined => {
+  const moduleId = section.toLowerCase();
+
+  return Object.values(ModuleIdEnum).includes(moduleId as ModuleIdEnum)
+    ? (moduleId as ModuleIdEnum)
+    : undefined;
+};
+
+const asEventId = (method: string): EventIdEnum | undefined =>
+  Object.values(EventIdEnum).includes(method as EventIdEnum) ? (method as EventIdEnum) : undefined;
+
+const record = (event: SubstrateEvent, error: DecodeError): void => {
+    // not awaited: decoding is synchronous, and the row is a diagnostic
+  void recordAnomaly({
+    kind: error.kind,
+    detail: error.message,
+    block: event.block,
+    eventIdx: event.idx,
+    moduleId: asModuleId(error.moduleId),
+    eventId: asEventId(error.eventId),
+  });
+};
+
+/**
+ * Wraps a decoded event so that reading a field it does not carry throws instead of yielding
+ * `undefined`.
+ *
+ * Without this, a name misspelled in a handler or in the shape table is invisible: the
+ * destructure succeeds, the value is `undefined`, and a wrong row is written.
+ */
+const guard = (event: SubstrateEvent, decoded: Record<string, Codec>): DecodedEvent =>
+  new Proxy(Object.freeze(decoded), {
+    get(target, property, receiver) {
+      if (typeof property !== 'string' || property in target || PROBED_PROPERTIES.has(property)) {
+        return Reflect.get(target, property, receiver);
+      }
+
+      const error = new FieldNotFound(
+        event.event.section,
+        event.event.method,
+        property,
+        Object.keys(target)
+      );
+
+      record(event, error);
+
+      throw error;
+    },
+  });
+
+/** One Polymesh release line on the public spec-version scale (`v6.x` is `6_000_000..6_999_999`). */
+const ONE_RELEASE_LINE = 1_000_000;
+
+/**
+ * The shape for a tuple-style event, tolerating a stale block spec version.
+ *
+ * `@subql/node` occasionally reports the *previous* runtime's spec version for the one block a
+ * runtime upgrade takes effect on. `api.runtimeVersion` is
+ * read from the block's own runtime, so when the reported version resolves no decoder, retry with
+ * it once — but only when it is newer and within one release line, so neither a correct reported
+ * version nor a stale/HEAD `api.runtimeVersion` can pull in a wildly wrong shape.
+ */
+const resolveShapeTolerant = (
+  section: string,
+  method: string,
+  reportedSpecVersion: number,
+  arity: number
+): ReturnType<typeof resolveShape> => {
+  try {
+    return resolveShape(section, method, reportedSpecVersion, arity);
+  } catch (error) {
+    if (!(error instanceof NoDecoderForSpecVersion)) {
+      throw error;
+    }
+
+    let fromRuntime: number;
+    try {
+      fromRuntime = normaliseSpecVersion(api.runtimeVersion.specVersion.toNumber());
+    } catch {
+      throw error;
+    }
+
+    if (
+      fromRuntime <= reportedSpecVersion ||
+      fromRuntime - reportedSpecVersion > ONE_RELEASE_LINE
+    ) {
+      throw error;
+    }
+
+    return resolveShape(section, method, fromRuntime, arity);
+  }
+};
+
+/**
+ * The names an event's stored arguments are keyed by: the block's metadata names when it names
+ * every field, else the registered shape's for this spec version and parameter count, else none,
+ * and the arguments are stored by position.
+ *
+ * Never throws and records nothing: an event no shape covers is still stored, and `decodeEvent`
+ * reports the gap for the events a handler reads.
+ */
+export const argumentNames = (event: SubstrateEvent): (string | undefined)[] => {
+  if (hasNamedFields(event)) {
+    return metadataFieldNames(event);
+  }
+
+  const { section, method, data } = event.event;
+
+  try {
+    return resolveShapeTolerant(
+      section,
+      method,
+      normaliseSpecVersion(event.block.specVersion),
+      data.length
+    ).fields.slice(0, data.length);
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * An event's parameters keyed by name.
+ *
+ * Two sources, in order:
+ *
+ * 1. the block's own metadata, for struct-style events, which since v14 name every field. This
+ *    is immune to a field being inserted or reordered by a runtime upgrade, and covers every
+ *    upstream Substrate pallet;
+ * 2. the registered shape table, for Polymesh's tuple-style events, which carry no names at any
+ *    spec version.
+ *
+ * Both failure modes - no decoder for the spec version, and a parameter count that disagrees
+ * with the one registered - are recorded as an `IndexerAnomaly` and then thrown. Nothing here
+ * returns a partial decode.
+ */
+export const decodeEvent = (event: SubstrateEvent): DecodedEvent => {
+  const named = namedFields(event);
+
+  if (named) {
+    return guard(event, { ...named });
+  }
+
+  const { section, method, data } = event.event;
+
+  try {
+    const shape = resolveShapeTolerant(
+      section,
+      method,
+      normaliseSpecVersion(event.block.specVersion),
+      data.length
+    );
+
+    /**
+     * Every declared field is present as a key, including the trailing ones a shorter event did
+     * not carry. Those read as `undefined`, which is what the handlers reading them already
+     * expect; a name the shape does not declare at all still throws
+     */
+    const fields: Record<string, Codec> = Object.fromEntries(
+      shape.fields.map((name, index) => [name, data[index]])
+    );
+    for (const [alias, field] of Object.entries(shape.aliases ?? {})) {
+      fields[alias] = fields[field];
+    }
+
+    return guard(event, fields);
+  } catch (error) {
+    if (error instanceof DecodeError) {
+      record(event, error);
+    }
+
+    throw error;
+  }
+};

@@ -3,7 +3,7 @@
  *
  * These extrinsics are unsigned - the sender exists only inside the Ethereum style signature
  * carried by their call argument - so rows indexed before sender attribution was added have
- * `address = null`. The raw RLP payloads are still stored in `extrinsics.params_txt`, which makes
+ * `address = null`. The raw RLP payloads are still stored in `extrinsics.args`, which makes
  * history recoverable offline, without touching the chain.
  *
  * It runs two passes:
@@ -23,7 +23,7 @@
  *
  * Only current revisions are read and written, and pagination runs on `_id` - see
  * `scripts/backfill/historical.ts` for why. Backfilled rows keep their raw
- * `module_id`/`call_id`/`params_txt`/`success` and get no `EvmTransaction` entity; the deployment
+ * `module_id`/`call_id`/`args`/`success` and get no `EvmTransaction` entity; the deployment
  * notes cover what that means for consumers.
  *
  * Usage (from the repo root):
@@ -106,19 +106,14 @@ const parseArgs = (): Args => {
   return args;
 };
 
-/** Extracts the RLP payload hex from the `{"payload": "0x..."}` JSON stored in `params_txt` */
-const extractPayload = (paramsTxt: string | null): string | undefined => {
-  if (!paramsTxt) {
-    return undefined;
-  }
+/**
+ * The RLP payload hex from `extrinsics.args`, `{ "payload": "0x..." }`: `Bytes` that are not UTF-8
+ * text, which an RLP payload never is, are encoded as hex
+ */
+const extractPayload = (args: { payload?: unknown } | null): string | undefined => {
+  const payload = args?.payload;
 
-  try {
-    const { payload } = JSON.parse(paramsTxt);
-
-    return typeof payload === 'string' && payload.startsWith('0x') ? payload : undefined;
-  } catch {
-    return undefined;
-  }
+  return typeof payload === 'string' && payload.startsWith('0x') ? payload : undefined;
 };
 
 interface Recovered {
@@ -279,7 +274,7 @@ const recoverBatch = async (
   afterId: string | null,
   fetchSize: number
 ): Promise<RecoveredBatch> => {
-  const rows = await fetchCurrentBatch<{ id: string; params_txt: string | null }>(
+  const rows = await fetchCurrentBatch<{ id: string; args: { payload?: unknown } | null }>(
     postgres,
     { table: 'extrinsics', where: UNATTRIBUTED_ETH_TRANSACT },
     afterId,
@@ -290,10 +285,10 @@ const recoverBatch = async (
   let lastScannedId = afterId;
   let failed = 0;
 
-  for (const { _id, id, params_txt } of rows) {
+  for (const { _id, id, args: callArgs } of rows) {
     lastScannedId = _id;
 
-    const payload = extractPayload(params_txt);
+    const payload = extractPayload(callArgs);
     const tx = payload ? decodeEthTransaction(hexToU8a(payload)) : undefined;
     const from = tx ? recoverEthSender(tx) : undefined;
 

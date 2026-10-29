@@ -2,6 +2,7 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
 import { Investment, RaisingAssetTypeEnum, Sto, StoStatus } from '../../../types';
 import {
+  blockTime,
   coerceHexToString,
   getAssetId,
   getAssetIdWithTicker,
@@ -15,20 +16,24 @@ import {
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { capitalizeFirstLetter, getFirstValueFromJson } from './../../../utils/common';
+import { requiredText } from '../../../utils/text';
 
 const getOfferingAsset = (
   block: SubstrateBlock,
   params: Codec[],
   extrinsic?: SubstrateExtrinsic
 ): Promise<string> => {
-  const rawOfferingAsset = is7Dot3Chain(block)
-    ? params[1]
-    : (extrinsic?.extrinsic.args[0] as unknown as Codec);
-  return getAssetId(rawOfferingAsset, block);
+  if (is7Dot3Chain(block)) {
+    return getAssetId(params[1], block);
+  }
+  if (!extrinsic) {
+    throw new Error('The fundraiser event names its asset only in its extrinsic, and has none');
+  }
+  return getAssetId(extrinsic.extrinsic.args[0], block);
 };
 
 export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   let rawStoId: Codec;
   let rawStoName: Codec;
   let rawFundraiserDetails: Codec;
@@ -46,15 +51,15 @@ export const handleFundraiserCreated = async (event: SubstrateEvent): Promise<vo
   }
 
   const stoId = getNumberValue(rawStoId);
-  const name = coerceHexToString(getTextValue(rawStoName));
+  const name = requiredText(rawStoName, 'the fundraiser name');
 
   await Sto.create({
     id: `${fundraiserDetails.offeringAssetId}/${stoId}`,
     stoId,
     name,
     ...fundraiserDetails,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
@@ -73,7 +78,7 @@ export const handleStoClosed = async (event: SubstrateEvent): Promise<void> => {
 export const handleFundraiserOffchainFundingEnabled = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, block, blockId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
   const [, rawOfferingAsset, rawStoId, rawOffChainTicker] = params;
   const offeringAssetId = await getAssetId(rawOfferingAsset, block);
   const stoId = getNumberValue(rawStoId);
@@ -84,13 +89,13 @@ export const handleFundraiserOffchainFundingEnabled = async (
   if (sto) {
     sto.offChainFundingEnabled = true;
     sto.offChainFundingToken = offChainTicker;
-    sto.updatedBlockId = blockId;
+    sto.updatedEventId = blockEventId;
     await sto.save();
   }
 };
 
 const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus): Promise<void> => {
-  const { params, extrinsic, block, blockId } = extractArgs(event);
+  const { params, extrinsic, block, blockEventId } = extractArgs(event);
   let rawStoId: Codec;
 
   if (is7Dot3Chain(block)) {
@@ -111,16 +116,16 @@ const handleFundraiserStatus = async (event: SubstrateEvent, status: StoStatus):
   sto.status = status;
   if (status === StoStatus.Closed) {
     // if sto is closed before the configured end time, status should be set as `ClosedEarly`
-    if (sto.end && block.timestamp < sto.end) {
+    if (sto.end && blockTime(block) < sto.end) {
       sto.status = StoStatus.ClosedEarly;
     }
   }
-  sto.updatedBlockId = blockId;
+  sto.updatedEventId = blockEventId;
   await sto.save();
 };
 
 export const handleFundraiserWindowModified = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block } = extractArgs(event);
+  const { params, extrinsic, block, blockEventId } = extractArgs(event);
   const offeringAssetId = await getOfferingAsset(block, params, extrinsic);
 
   let rawStoId: Codec;
@@ -140,13 +145,13 @@ export const handleFundraiserWindowModified = async (event: SubstrateEvent): Pro
   if (sto) {
     sto.start = getDateValue(rawStart);
     sto.end = getDateValue(rawEnd);
-    sto.updatedBlockId = blockId;
+    sto.updatedEventId = blockEventId;
     await sto.save();
   }
 };
 
 export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block, blockEventId } = extractArgs(event);
+  const { params, block, blockEventId } = extractArgs(event);
 
   let rawInvestor: Codec;
   let rawStoId: Codec;
@@ -211,19 +216,47 @@ export const handleInvested = async (event: SubstrateEvent): Promise<void> => {
     raisingAssetType = RaisingAssetTypeEnum.OnChain;
   }
 
-  await Investment.create({
-    id: blockEventId,
-    investorId: getTextValue(rawInvestor),
-    stoId: getNumberValue(rawStoId),
-    offeringAssetId,
-    offeringToken,
-    raisingAssetId,
-    raiseToken,
-    raisingAssetType,
-    offeringTokenAmount: getBigIntValue(rawOfferingTokenAmount),
-    raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
-    datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
+  const offeringTokenAmount = getBigIntValue(rawOfferingTokenAmount);
+  await Promise.all([
+    sellFromTiers(
+      `${offeringAssetId}/${getNumberValue(rawStoId)}`,
+      offeringTokenAmount,
+      blockEventId
+    ),
+    Investment.create({
+      id: blockEventId,
+      investorId: getTextValue(rawInvestor),
+      stoId: `${offeringAssetId}/${getNumberValue(rawStoId)}`,
+      offeringAssetId,
+      offeringToken,
+      raisingAssetId:
+        raisingAssetType === RaisingAssetTypeEnum.OnChain ? raisingAssetId : undefined,
+      raiseToken,
+      raisingAssetType,
+      offeringTokenAmount,
+      raiseTokenAmount: getBigIntValue(rawRaiseTokenAmount),
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    }).save(),
+  ]);
+};
+
+/** An offering sells from its tiers in order, which `Invested` doesn't itemise */
+const sellFromTiers = async (
+  stoId: string,
+  amount: bigint,
+  blockEventId: string
+): Promise<void> => {
+  const sto = await Sto.get(stoId);
+  if (!sto) {
+    return;
+  }
+  let left = amount;
+  sto.tiers = sto.tiers.map(tier => {
+    const sold = left < BigInt(tier.remaining) ? left : BigInt(tier.remaining);
+    left -= sold;
+    return { ...tier, remaining: (BigInt(tier.remaining) - sold).toString() };
+  });
+  sto.updatedEventId = blockEventId;
+  await sto.save();
 };

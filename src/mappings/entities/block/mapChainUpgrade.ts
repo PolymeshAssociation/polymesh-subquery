@@ -1,63 +1,159 @@
-import { SubstrateEvent } from '@subql/types';
-import { handleMultiSigProposalDeleted } from '../multiSig/mapMultiSigProposal';
-import { repairAuthorizationsAfterUpgrade } from '../identities/repairAuthorizations';
+import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { ChainUpgrade } from '../../../types';
+import { padId } from '../../../utils';
+import { removeIdentitySigners } from '../multiSig/mapMultiSig';
+import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
+import { migrateToAssetIds, unlinkTickersOfMissingAssets } from '../../migrations/assetIdMigration';
+import { migrateStoredSchedules } from '../../migrations/checkpointScheduleMigration';
+import { migrateOffChainLegs } from '../../migrations/offChainLegMigration';
+import { migrateTransferManagers } from '../../migrations/statisticsMigration';
 
-let oldTxVersion = 0;
-let oldSpecVersion = 3000;
+/** Zero padded so `orderBy: id` on the table is numeric order over spec versions */
+export const chainUpgradeId = (specVersion: number): string => padId(specVersion.toString());
 
 /**
- * This method helps handling some entity data on chain upgrades
+ * The most recently observed upgrade, or `undefined` before the first one is recorded.
+ *
+ * Ordering by `id` rather than `specVersionId` keeps the read on the primary key, and the two
+ * agree because the id is the zero padded spec version.
+ */
+export const getLatestChainUpgrade = async (): Promise<ChainUpgrade | undefined> => {
+  const [latest] = await store.getByFields<ChainUpgrade>('ChainUpgrade', [], {
+    limit: 1,
+    orderBy: 'id',
+    orderDirection: 'DESC',
+  });
+
+  return latest;
+};
+
+/**
+ * Runtime version of the block before this one, read from the chain.
+ *
+ * Only reached when the table is empty - the first upgrade a fresh index observes has nothing
+ * persisted to compare against. `api.rpc.state.getRuntimeVersion` is block scoped, so passing the
+ * parent hash asks for the version the chain ran under before the upgrade.
+ */
+const runtimeVersionBefore = async (block: SubstrateBlock) => {
+  const runtimeVersion = await api.rpc.state.getRuntimeVersion(block.block.header.parentHash);
+
+  return {
+    specVersion: runtimeVersion.specVersion.toNumber(),
+    transactionVersion: runtimeVersion.transactionVersion.toNumber(),
+  };
+};
+
+export interface ChainUpgradeCrossing {
+  previousSpecVersion: number;
+  specVersion: number;
+  /** The transaction version of the last upgrade, which multisig stores; 0 before the first */
+  storedTransactionVersion: number;
+  transactionVersion: number;
+  /** The `system.CodeUpdated` event id — provenance for the rows the boundary work rewrites. */
+  blockEventId: string;
+}
+
+/** The first runtime whose transfer restrictions are statistics, not transfer managers */
+const STATISTICS_FROM = 5_000_000;
+
+/** The first runtime with off-chain legs, and whose checkpoint schedules list their moments */
+const OFF_CHAIN_LEGS_FROM = 6_000_000;
+
+/** The first runtime that names assets by id, and whose multisigs have only account signers */
+const ASSET_IDS_FROM = 7_000_000;
+
+/** The first runtime that keeps a ticker linked only to an asset created under it */
+const LINKS_TO_ASSETS_FROM = 7_001_000;
+
+/** Work that only makes sense to run once, at the boundary the chain crossed. */
+const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> => {
+  const {
+    previousSpecVersion,
+    specVersion,
+    storedTransactionVersion,
+    transactionVersion,
+    blockEventId,
+  } = crossing;
+
+  /** Whether this upgrade moved the chain onto `release` or later from a runtime before it */
+  const crossed = (release: number) => previousSpecVersion < release && specVersion >= release;
+
+  if (crossed(STATISTICS_FROM)) {
+    await migrateTransferManagers(blockEventId);
+  }
+
+  if (crossed(OFF_CHAIN_LEGS_FROM)) {
+    await migrateOffChainLegs(blockEventId);
+    await migrateStoredSchedules();
+  }
+
+  if (crossed(ASSET_IDS_FROM)) {
+    await removeIdentitySigners(blockEventId);
+    await migrateToAssetIds(blockEventId);
+  }
+
+  if (crossed(LINKS_TO_ASSETS_FROM)) {
+    await unlinkTickersOfMissingAssets(blockEventId);
+  }
+
+  if (transactionVersion > storedTransactionVersion) {
+    await deletePendingProposals(blockEventId);
+  }
+};
+
+/**
+ * Records the runtime upgrade a `system.CodeUpdated` announces, and runs the one off work that
+ * belongs to the boundary it crossed.
+ *
+ * Detection reads `ChainUpgrade` rows, not process state, so it is the same whichever worker sees
+ * the event and however many times the block is replayed.
  */
 export default async (substrateEvent: SubstrateEvent): Promise<void> => {
-  const specVersion = substrateEvent.block.specVersion;
+  const block = substrateEvent.block;
+  const blockId = padId(block.block.header.number.toString());
+  const blockEventId = `${blockId}/${padId(String(substrateEvent.idx ?? 0))}`;
 
-  /**
-   * When SQ is started for the first time or the SQ restarts after a crash,
-   * the transaction version gets reset to 0 and spec version to 3000, forcing to check for chain upgrade.
-   *
-   * Hence, we need to get the transaction version and spec version from the parent block.
-   */
-  if (oldTxVersion === 0) {
-    const currentBlockId = substrateEvent.block.block.header.number.toNumber();
-    logger.info(
-      `No transaction version found, getting it from parent block. Current block id: ${currentBlockId}`
-    );
+  // `CodeUpdated` is emitted by the upgrade itself, so the block carrying it still ran under the
+  // runtime being replaced: `block.specVersion` names the spec the chain is *leaving*. The new code
+  // takes effect from the next block. The block-scoped runtime version is the state this block
+  // leaves behind, so it is the one place both the new spec and its transaction version come from
+  // the same runtime.
+  const runtimeVersion = await api.rpc.state.getRuntimeVersion();
+  const specVersion = runtimeVersion.specVersion.toNumber();
+  const transactionVersion = runtimeVersion.transactionVersion.toNumber();
 
-    const parentBlockHash = substrateEvent.block.block.header.parentHash;
+  const latest = await getLatestChainUpgrade();
 
-    const runtimeVersion = await api.rpc.state.getRuntimeVersion(parentBlockHash);
+  if (latest?.specVersionId === specVersion) {
+    logger.info(`Spec version ${specVersion} is already recorded; nothing to do at ${blockId}`);
 
-    oldSpecVersion = runtimeVersion.specVersion.toNumber();
-    oldTxVersion = runtimeVersion.transactionVersion.toNumber();
-
-    logger.info(
-      `Details for parent block <${
-        currentBlockId - 1
-      }> - Spec version: <${oldSpecVersion}>. Transaction version: <${oldTxVersion}>`
-    );
+    return;
   }
 
-  if (oldSpecVersion !== specVersion) {
-    logger.info(
-      `Checking for transaction version after chain spec version upgrade from "${oldSpecVersion}" to "${specVersion}"`
-    );
+  const previous = latest
+    ? { specVersion: latest.specVersionId, transactionVersion: latest.transactionVersion }
+    : await runtimeVersionBefore(block);
 
-    const runtimeVersion = await api.rpc.state.getRuntimeVersion();
-    const txVersion = runtimeVersion.transactionVersion.toNumber();
+  logger.info(
+    `Chain upgrade at block ${blockId}: spec ${previous.specVersion} -> ${specVersion}, transaction version ${previous.transactionVersion} -> ${transactionVersion}`
+  );
 
-    logger.info(
-      `Current runtime transaction version - ${oldTxVersion}. New runtime tx version - ${txVersion}`
-    );
+  await ChainUpgrade.create({
+    id: chainUpgradeId(specVersion),
+    specVersionId: specVersion,
+    transactionVersion,
+    firstBlockId: blockId,
+  }).save();
 
-    if (txVersion === oldTxVersion) {
-      logger.info(`Transaction version was not changed for the chain upgrade`);
-    } else {
-      logger.info(`Major chain upgrade found with transaction version upgraded `);
-      await handleMultiSigProposalDeleted(substrateEvent.block);
-      await repairAuthorizationsAfterUpgrade(substrateEvent.block);
-      oldTxVersion = txVersion;
-    }
-
-    oldSpecVersion = specVersion;
+  if (previous.specVersion === specVersion) {
+    return;
   }
+
+  await onUpgradeCrossed({
+    previousSpecVersion: previous.specVersion,
+    specVersion,
+    storedTransactionVersion: latest?.transactionVersion ?? 0,
+    transactionVersion,
+    blockEventId,
+  });
 };

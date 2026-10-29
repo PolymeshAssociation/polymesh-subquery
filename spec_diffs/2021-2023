@@ -1,9 +1,0 @@
-- Expected
-+ Received
-
-- Object {}
-+ Object {
-+   "AccountInfo": "AccountInfoWithRefCount",
-+   "Address": "IndicesLookupSource",
-+   "LookupSource": "IndicesLookupSource",
-+ }

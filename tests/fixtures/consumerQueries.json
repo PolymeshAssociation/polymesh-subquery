@@ -1,0 +1,246 @@
+[
+  {
+    "name": "sdk.latestBlock",
+    "query": "query latestBlock {\n  blocks(first: 1, orderBy: [BLOCK_ID_DESC]) {\n    nodes {\n      blockId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.heartbeat",
+    "query": "query heartbeat {\n  blocks(filter: {blockId: {equalTo: 1}}) {\n    nodes {\n      blockId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.metadata",
+    "query": "query Metadata {\n  _metadata {\n    chain\n    specName\n    genesisHash\n    lastProcessedHeight\n    lastProcessedTimestamp\n    targetHeight\n    indexerHealthy\n    indexerNodeVersion\n    queryNodeVersion\n    dynamicDatasources\n  }\n}\n"
+  },
+  {
+    "name": "sdk.latestSqVersion",
+    "query": "query SubqueryVersions {\n  subqueryVersions(orderBy: [ID_DESC], first: 1) {\n    nodes {\n      id\n      version\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.asset",
+    "query": "query AssetQuery($id: String!) {\n  assets(filter: {id: {equalTo: $id}}) {\n    nodes {\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.assetHolders(identity)",
+    "query": "query AssetHoldersQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      amount\n      asset {\n        id\n        ticker\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.nftHolders(identity)",
+    "query": "query NftHolderQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}, nftCount: {greaterThan: 0}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      asset {\n        id\n        ticker\n      }\n      nftCount\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.nftHolders(identity).nfts",
+    "query": "query NftHolderNftsQuery($start: Int, $size: Int, $identityId: String!) {\n  nfts(\n    filter: {holding: {identityId: {equalTo: $identityId}}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC, NFT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      assetId\n      nftId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.assetTransactions(asset)",
+    "query": "query AssetTransactionQuery($start: Int, $size: Int, $assetId: String!) {\n  assetTransactions(\n    filter: {assetId: {equalTo: $assetId}}\n    first: $size\n    offset: $start\n    orderBy: [ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      asset {\n        id\n        ticker\n      }\n      amount\n      nftIds\n      fromPortfolioId\n      fromAccountId\n      fromIdentityId\n      toPortfolioId\n      toAccountId\n      toIdentityId\n      eventId\n      fundingRound\n      instructionId\n      instructionMemo\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.nftCollectionHolders",
+    "query": "query NftCollectionHolders($assetId: String!, $size: Int, $start: Int) {\n  assetHolders(\n    first: $size\n    offset: $start\n    filter: {assetId: {equalTo: $assetId}, nftCount: {greaterThan: 0}}\n    orderBy: [IDENTITY_ID_DESC]\n  ) {\n    nodes {\n      identityId\n      nftCount\n      holdings {\n        nodes {\n          nfts {\n            nodes {\n              nftId\n            }\n          }\n        }\n      }\n    }\n    totalCount\n  }\n}\n"
+  },
+  {
+    "name": "sdk.authorizations(toId)",
+    "query": "query AuthorizationsQuery($size: Int, $start: Int, $toId: String!) {\n  authorizations(\n    filter: {toId: {equalTo: $toId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      id\n      type\n      fromId\n      toId\n      toAccountId\n      data\n      expiry\n      status\n      createdEventId\n      updatedEventId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.claimsGrouping(issuer)",
+    "query": "query claimsGroupingQuery($size: Int, $start: Int, $trustedClaimIssuers: [String!], $expiryTimestamp: BigFloat) {\n  claims(\n    filter: {revokeDate: {isNull: true}, issuerId: {in: $trustedClaimIssuers}, or: [{expiry: {isNull: true}}, {filterExpiry: {greaterThan: $expiryTimestamp}}]}\n    orderBy: [TARGET_ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    groupedAggregates(groupBy: [TARGET_ID], having: {}) {\n      keys\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.claims(target)",
+    "query": "query ClaimsQuery($size: Int, $start: Int, $dids: [String!]) {\n  claims(\n    filter: {revokeDate: {isNull: true}, targetId: {in: $dids}}\n    orderBy: [TARGET_ID_ASC, CREATED_EVENT_ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      targetId\n      type\n      scope\n      cddId\n      issuerId\n      issuanceDate\n      lastUpdateDate\n      expiry\n      jurisdiction\n      customClaimTypeId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.claims(issuer,unexpired)",
+    "query": "query ClaimsQuery($size: Int, $start: Int, $trustedClaimIssuers: [String!], $expiryTimestamp: BigFloat) {\n  claims(\n    filter: {revokeDate: {isNull: true}, issuerId: {in: $trustedClaimIssuers}, or: [{expiry: {isNull: true}}, {filterExpiry: {greaterThan: $expiryTimestamp}}]}\n    orderBy: [TARGET_ID_ASC, CREATED_EVENT_ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      targetId\n      type\n      scope\n      cddId\n      issuerId\n      issuanceDate\n      lastUpdateDate\n      expiry\n      jurisdiction\n      customClaimTypeId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.trustedClaimIssuer",
+    "query": "query TrustedClaimIssuerQuery($assetId: String!, $issuer: String!) {\n  trustedClaimIssuers(\n    filter: {assetId: {equalTo: $assetId}, issuerId: {equalTo: $issuer}}\n    orderBy: [CREATED_EVENT_ID_DESC]\n  ) {\n    nodes {\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.trustingAssets",
+    "query": "query TrustedClaimIssuerQuery($issuer: String!) {\n  trustedClaimIssuers(\n    filter: {issuerId: {equalTo: $issuer}}\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    nodes {\n      asset {\n        id\n        ticker\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.customClaimTypes",
+    "query": "query CustomClaimTypesQuery($size: Int, $start: Int) {\n  customClaimTypes(\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_ASC, ID_ASC]\n  ) {\n    nodes {\n      id\n      name\n      identityId\n    }\n    totalCount\n  }\n}\n"
+  },
+  {
+    "name": "sdk.distribution",
+    "query": "query DistributionQuery($assetId: String!, $localId: Int!) {\n  distributions(\n    filter: {assetId: {equalTo: $assetId}, localId: {equalTo: $localId}}\n  ) {\n    nodes {\n      taxes\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.distributionPayments",
+    "query": "query DistributionPaymentQuery($start: Int, $size: Int) {\n  distributionPayments(first: $size, offset: $start, orderBy: [ID_ASC]) {\n    totalCount\n    nodes {\n      targetId\n      amount\n      tax\n      createdEvent {\n        block {\n          blockId\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.tickerExternalAgents",
+    "query": "query ($assetId: String!) {\n  assetAgents(filter: {assetId: {equalTo: $assetId}}) {\n    nodes {\n      identityId\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.tickerExternalAgentHistory",
+    "query": "query ($assetId: String!) {\n  assetAgentHistories(\n    filter: {assetId: {equalTo: $assetId}}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      identityId\n      assetId\n      type\n      permissions\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.tickerExternalAgentActions",
+    "query": "query ($assetId: String!) {\n  assetAgentActions(\n    first: 25\n    offset: 0\n    orderBy: [CREATED_EVENT_ID_DESC]\n    filter: {assetId: {equalTo: $assetId}}\n  ) {\n    totalCount\n    nodes {\n      assetId\n      callerId\n      palletName\n      eventId\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.extrinsicByHash",
+    "query": "query TransactionByHashQuery($extrinsicHash: String!) {\n  extrinsics(filter: {extrinsicHash: {equalTo: $extrinsicHash}}) {\n    nodes {\n      extrinsicIdx\n      address\n      nonce\n      moduleId\n      callId\n      args\n      success\n      specVersionId\n      extrinsicHash\n      block {\n        blockId\n        hash\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.extrinsicsByArgs(address)",
+    "query": "query TransactionsQuery($start: Int, $size: Int, $address: String!) {\n  extrinsics(\n    filter: {address: {equalTo: $address}}\n    orderBy: [ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      blockId\n      extrinsicIdx\n      address\n      nonce\n      moduleId\n      callId\n      args\n      success\n      specVersionId\n      extrinsicHash\n      block {\n        hash\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.extrinsicsByArgs(module,call)",
+    "query": "query TransactionsQuery($start: Int, $size: Int, $moduleId: ModuleIdEnum!, $callId: CallIdEnum!) {\n  extrinsics(\n    filter: {moduleId: {equalTo: $moduleId}, callId: {equalTo: $callId}}\n    orderBy: [ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      blockId\n      extrinsicIdx\n      address\n      nonce\n      moduleId\n      callId\n      args\n      success\n      specVersionId\n      extrinsicHash\n      block {\n        hash\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.multiSigProposal",
+    "query": "query MultiSigProposalQuery($multisigId: String!, $proposalId: Int!) {\n  multiSigProposals(\n    filter: {multisigId: {equalTo: $multisigId}, proposalId: {equalTo: $proposalId}}\n  ) {\n    nodes {\n      creatorId\n      creatorAccountId\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n      votes(orderBy: [CREATED_EVENT_ID_ASC]) {\n        nodes {\n          action\n          signer {\n            signerType\n            signerValue\n          }\n        }\n      }\n      updatedEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.multiSigProposalVotes",
+    "query": "query MultiSigProposalVotesQuery($proposalId: String!) {\n  multiSigProposalVotes(\n    filter: {proposalId: {equalTo: $proposalId}}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      signer {\n        signerType\n        signerValue\n      }\n      action\n      createdEventId\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.multiSigProposals",
+    "query": "query MultiSigProposalsQuery($start: Int, $size: Int, $multisigId: String!) {\n  multiSigProposals(\n    filter: {multisigId: {equalTo: $multisigId}}\n    first: $size\n    offset: $start\n    orderBy: [PROPOSAL_ID_DESC]\n  ) {\n    nodes {\n      id\n      proposalId\n      multisigId\n      status\n      approvalCount\n      rejectionCount\n      params\n    }\n    totalCount\n  }\n}\n"
+  },
+  {
+    "name": "sdk.polyxTransactions(identity)",
+    "query": "query ($identityId: String!) {\n  polyxEntries(\n    first: 25\n    offset: 0\n    orderBy: [ID_DESC]\n    filter: {identityId: {equalTo: $identityId}}\n  ) {\n    totalCount\n    nodes {\n      id\n      accountId\n      identityId\n      counterpartyAddress\n      counterpartyIdentityId\n      pool\n      amount\n      kind\n      direction\n      memo\n      moduleId\n      callId\n      eventId\n      extrinsic {\n        extrinsicIdx\n      }\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.polyxTransactions(address)",
+    "query": "query ($addresses: [String!]!) {\n  polyxEntries(\n    first: 25\n    offset: 0\n    orderBy: [ID_DESC]\n    filter: {accountId: {in: $addresses}}\n  ) {\n    totalCount\n    nodes {\n      id\n      accountId\n      identityId\n      counterpartyAddress\n      counterpartyIdentityId\n      pool\n      amount\n      kind\n      direction\n      memo\n      moduleId\n      callId\n      eventId\n      extrinsic {\n        extrinsicIdx\n      }\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.portfolio",
+    "query": "query PortfolioQuery($identityId: String!, $number: Int!) {\n  portfolios(\n    filter: {identityId: {equalTo: $identityId}, number: {equalTo: $number}}\n  ) {\n    nodes {\n      createdEvent {\n        block {\n          blockId\n          datetime\n          hash\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.portfolioMovements",
+    "query": "query ($from: String!) {\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: [CREATED_EVENT_ID_ASC]\n    filter: {isInternalTransfer: {equalTo: true}, or: [{fromPortfolioId: {equalTo: $from}}, {toPortfolioId: {equalTo: $from}}]}\n  ) {\n    totalCount\n    nodes {\n      id\n      fromPortfolioId\n      toPortfolioId\n      assetId\n      amount\n      nftIds\n      memo\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.portfoliosMovements",
+    "query": "query ($did: String!) {\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: [CREATED_EVENT_ID_ASC]\n    filter: {isInternalTransfer: {equalTo: true}, or: [{fromIdentityId: {equalTo: $did}}, {toIdentityId: {equalTo: $did}}]}\n  ) {\n    totalCount\n    nodes {\n      id\n      fromPortfolioId\n      toPortfolioId\n      assetId\n      amount\n      nftIds\n      memo\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.instructionEvents",
+    "query": "query InstructionEventsQuery($start: Int, $size: Int, $instructionId: String!) {\n  instructionEvents(\n    filter: {instructionId: {equalTo: $instructionId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_DESC]\n  ) {\n    totalCount\n    nodes {\n      id\n      event\n      identityId\n      accountId\n      portfolioId\n      offChainReceiptId\n      offChainReceipt {\n        legId\n        signerId\n        uid\n      }\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.instructions(venue)",
+    "query": "query InstructionsQuery($start: Int, $size: Int, $venueId: String!) {\n  instructions(\n    filter: {venueId: {equalTo: $venueId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_DESC]\n  ) {\n    totalCount\n    nodes {\n      id\n      venueId\n      status\n      type\n      endBlock\n      endAfterBlock\n      tradeDate\n      valueDate\n      mediators\n      legs {\n        nodes {\n          legIndex\n          legType\n          fromId\n          fromPortfolioId\n          fromAccountId\n          toId\n          toPortfolioId\n          toAccountId\n          assetId\n          ticker\n          amount\n          nftIds\n          addresses\n          offChainReceipts {\n            nodes {\n              uid\n              signerId\n            }\n          }\n        }\n      }\n      memo\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n      updatedEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.instructionAffirmations",
+    "query": "query InstructionAffirmationsQuery($start: Int, $size: Int, $instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}}\n    first: $size\n    offset: $start\n    orderBy: [CREATED_EVENT_ID_DESC, ID_DESC]\n  ) {\n    totalCount\n    nodes {\n      id\n      identityId\n      accountId\n      portfolioId\n      affirmedById\n      signerId\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.offChainAffirmations",
+    "query": "query InstructionAffirmationsQuery($instructionId: String!) {\n  instructionAffirmations(\n    filter: {instructionId: {equalTo: $instructionId}, offChainReceiptExists: true}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      id\n      identityId\n      accountId\n      portfolioId\n      affirmedById\n      signerId\n      offChainReceiptId\n      offChainReceipt {\n        leg {\n          id\n          legIndex\n        }\n        signerId\n      }\n      status\n      isAutomaticallyAffirmed\n      isMediator\n      expiry\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.legs",
+    "query": "query LegsQuery($start: Int, $size: Int, $instructionId: String!) {\n  legs(\n    filter: {instructionId: {equalTo: $instructionId}}\n    first: $size\n    offset: $start\n    orderBy: [LEG_INDEX_ASC]\n  ) {\n    totalCount\n    nodes {\n      legIndex\n      legType\n      fromId\n      fromPortfolioId\n      fromAccountId\n      toId\n      toPortfolioId\n      toAccountId\n      assetId\n      ticker\n      amount\n      nftIds\n      addresses\n      offChainReceipts {\n        nodes {\n          uid\n          signerId\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.historicalInstructions(identity)",
+    "query": "query InstructionsQuery($start: Int, $size: Int, $identity: String!) {\n  instructions(\n    filter: {parties: {some: {identityId: {equalTo: $identity}}}}\n    orderBy: [CREATED_EVENT_ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    nodes {\n      id\n      venueId\n      status\n      type\n      endBlock\n      endAfterBlock\n      tradeDate\n      valueDate\n      mediators\n      legs {\n        nodes {\n          legIndex\n          legType\n          fromId\n          fromPortfolioId\n          fromAccountId\n          toId\n          toPortfolioId\n          toAccountId\n          assetId\n          ticker\n          amount\n          nftIds\n          addresses\n          offChainReceipts {\n            nodes {\n              uid\n              signerId\n            }\n          }\n        }\n      }\n      memo\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n      updatedEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n    totalCount\n  }\n}\n"
+  },
+  {
+    "name": "sdk.historicalInstructions(asset)",
+    "query": "query InstructionsQuery($start: Int, $size: Int, $asset: String!) {\n  instructions(\n    filter: {legs: {some: {assetId: {equalTo: $asset}}}}\n    orderBy: [CREATED_EVENT_ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    nodes {\n      id\n      venueId\n      status\n      type\n      endBlock\n      endAfterBlock\n      tradeDate\n      valueDate\n      mediators\n      legs {\n        nodes {\n          legIndex\n          legType\n          fromId\n          fromPortfolioId\n          fromAccountId\n          toId\n          toPortfolioId\n          toAccountId\n          assetId\n          ticker\n          amount\n          nftIds\n          addresses\n          offChainReceipts {\n            nodes {\n              uid\n              signerId\n            }\n          }\n        }\n      }\n      memo\n      createdEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n      updatedEvent {\n        block {\n          blockId\n          hash\n          datetime\n        }\n      }\n    }\n    totalCount\n  }\n}\n"
+  },
+  {
+    "name": "sdk.settlements(portfolio)",
+    "query": "query SettlementsQuery($fromPortfolio: String!, $toPortfolio: String!) {\n  legs(\n    filter: {or: [{fromPortfolioId: {equalTo: $fromPortfolio}}, {toPortfolioId: {equalTo: $toPortfolio}}]}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      instruction {\n        id\n        venueId\n        status\n        type\n        endBlock\n        endAfterBlock\n        tradeDate\n        valueDate\n        mediators\n        legs {\n          nodes {\n            legIndex\n            legType\n            fromId\n            fromPortfolioId\n            fromAccountId\n            toId\n            toPortfolioId\n            toAccountId\n            assetId\n            ticker\n            amount\n            nftIds\n            addresses\n            offChainReceipts {\n              nodes {\n                uid\n                signerId\n              }\n            }\n          }\n        }\n        memo\n        createdEvent {\n          block {\n            blockId\n            hash\n            datetime\n          }\n        }\n        updatedEvent {\n          block {\n            blockId\n            hash\n            datetime\n          }\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.settlementsForAllPortfolios",
+    "query": "query SettlementsQuery($from: String!, $to: String!) {\n  legs(\n    filter: {or: [{fromId: {equalTo: $from}}, {toId: {equalTo: $to}}]}\n    orderBy: [CREATED_EVENT_ID_ASC]\n  ) {\n    nodes {\n      instruction {\n        id\n        venueId\n        status\n        type\n        endBlock\n        endAfterBlock\n        tradeDate\n        valueDate\n        mediators\n        legs {\n          nodes {\n            legIndex\n            legType\n            fromId\n            fromPortfolioId\n            fromAccountId\n            toId\n            toPortfolioId\n            toAccountId\n            assetId\n            ticker\n            amount\n            nftIds\n            addresses\n            offChainReceipts {\n              nodes {\n                uid\n                signerId\n              }\n            }\n          }\n        }\n        memo\n        createdEvent {\n          block {\n            blockId\n            hash\n            datetime\n          }\n        }\n        updatedEvent {\n          block {\n            blockId\n            hash\n            datetime\n          }\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.investments",
+    "query": "query InvestmentsQuery($start: Int, $size: Int, $stoId: String!) {\n  investments(\n    filter: {stoId: {equalTo: $stoId}}\n    first: $size\n    offset: $start\n    orderBy: [ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      investorId\n      offeringAssetId\n      offeringToken\n      raisingAssetId\n      raiseToken\n      raisingAssetType\n      offeringTokenAmount\n      raiseTokenAmount\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.transferEvents(identity)",
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromIdentityId: {equalTo: \"0x77ce16f3b34e9e8dfbae9f7a296bde9084f5538e5fd730537f5d513256413ec4\"}}, {toIdentityId: {equalTo: \"0x77ce16f3b34e9e8dfbae9f7a296bde9084f5538e5fd730537f5d513256413ec4\"}}], amount: {isNull: false}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccountId\n      fromAccountId\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.transferEvents(portfolio)",
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromPortfolioId: {equalTo: \"0x77ce16f3b34e9e8dfbae9f7a296bde9084f5538e5fd730537f5d513256413ec4/0\"}}, {toPortfolioId: {equalTo: \"0x77ce16f3b34e9e8dfbae9f7a296bde9084f5538e5fd730537f5d513256413ec4/0\"}}], amount: {isNull: false}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccountId\n      fromAccountId\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.transferEvents(account)",
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromAccountId: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}, {toAccountId: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}}], amount: {isNull: false}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccountId\n      fromAccountId\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.transferEvents(nft)",
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {or: [{fromIdentityId: {equalTo: \"0x27e5b972ff844e3a77e4c6eff092d0980cf85e885c886ea6d0c7dae62c3a539a\"}}, {toIdentityId: {equalTo: \"0x27e5b972ff844e3a77e4c6eff092d0980cf85e885c886ea6d0c7dae62c3a539a\"}}], amount: {isNull: true}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      amount\n      asset {\n        name\n        ticker\n      }\n      assetId\n      nftIds\n      id\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      toPortfolioId\n      fromPortfolioId\n      toAccountId\n      fromAccountId\n      toIdentityId\n      fromIdentityId\n      instructionId\n      instructionMemo\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.portfolioMovements(identity)",
+    "query": "{\n  assetTransactions(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {isInternalTransfer: {equalTo: true}, amount: {isNull: false}, or: [{fromIdentityId: {equalTo: \"0x5fd24b1b8c9e98e967d968d46c6f19d7c08b95b0e21bf1b03339bf56c0aa4c47\"}}, {toIdentityId: {equalTo: \"0x5fd24b1b8c9e98e967d968d46c6f19d7c08b95b0e21bf1b03339bf56c0aa4c47\"}}]}\n  ) {\n    totalCount\n    nodes {\n      id\n      fromPortfolioId\n      toPortfolioId\n      assetId\n      amount\n      memo\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.historicalDistributions",
+    "query": "{\n  distributionPayments(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {targetId: {equalTo: \"0x77ce16f3b34e9e8dfbae9f7a296bde9084f5538e5fd730537f5d513256413ec4\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n    }\n    nodes {\n      id\n      targetId\n      distributionId\n      amount\n      amountAfterTax\n      tax\n      distribution {\n        amount\n        currency {\n          id\n          ticker\n        }\n        expiresAt\n        portfolioId\n        portfolio {\n          name\n        }\n        assetId\n        localId\n        paymentAt\n        perShare\n      }\n      createdEvent {\n        block {\n          blockId\n          datetime\n        }\n      }\n      nodeId\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.stakingRewards(stash)",
+    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, stashId: {equalTo: \"2FTmkfcG6qxGWZ3MY5L9ctNyeJ6rauRfMEtknKTjXz1yom4q\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashId\n      amount\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.stakingRewards(identity)",
+    "query": "{\n  stakingEvents(\n    first: 25\n    offset: 0\n    orderBy: CREATED_EVENT_ID_DESC\n    filter: {eventId: {in: [Reward, Rewarded]}, identityId: {equalTo: \"0x0400000000000000000000000000000000000000000000000000000000000000\"}}\n  ) {\n    totalCount\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    nodes {\n      id\n      createdEvent {\n        eventIdx\n      }\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      eventId\n      identityId\n      stashId\n      amount\n    }\n  }\n}\n"
+  },
+  {
+    "name": "portal.multisigProposals",
+    "query": "{\n  multiSigProposals(\n    first: 25\n    filter: {multisigId: {equalTo: \"2Et5SveAu1ZSUU3hf5aLPBMJ6wmF3nyzqHnXC21VQmKseM3M\"}}\n    orderBy: CREATED_EVENT_ID_DESC\n  ) {\n    totalCount\n    nodes {\n      updatedEvent {\n        block {\n          blockId\n        }\n      }\n      approvalCount\n      createdEvent {\n        block {\n          blockId\n        }\n      }\n      creatorAccountId\n      proposalId\n      rejectionCount\n      status\n      votes {\n        nodes {\n          action\n          signer {\n            signerValue\n          }\n        }\n      }\n      createdEvent {\n        extrinsic {\n          args\n          extrinsicIdx\n        }\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "sdk.eventsByArgs(refs)",
+    "query": "query EventsQuery($start: Int, $size: Int, $moduleId: ModuleIdEnum!, $eventId: EventIdEnum!, $ref: JSON!) {\n  events(\n    filter: {moduleId: {equalTo: $moduleId}, eventId: {equalTo: $eventId}, refs: {contains: [$ref]}}\n    orderBy: [ID_ASC]\n    first: $size\n    offset: $start\n  ) {\n    nodes {\n      eventIdx\n      block {\n        blockId\n        hash\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(refs identity)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {refs: {contains: [\"identity:0x554e0d387768a82d3b1a8c7372a6026640efe8d0b3dba13c7e2c23a55ce1a7b0\"]}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(refs account)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {refs: {contains: [\"account:2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"]}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(refs asset)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {refs: {contains: [\"asset:0x70588e1294348287ae9f03a12729d13a\"]}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(module+event+refs identity)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {moduleId: {equalTo: settlement}, eventId: {equalTo: InstructionCreated}, refs: {contains: [\"identity:0x554e0d387768a82d3b1a8c7372a6026640efe8d0b3dba13c7e2c23a55ce1a7b0\"]}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(args contains assetId)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {moduleId: {equalTo: asset}, eventId: {equalTo: AssetBalanceUpdated}, args: {contains: {assetId: \"0x70588e1294348287ae9f03a12729d13a\"}}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(args contains instructionId)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {moduleId: {equalTo: settlement}, eventId: {equalTo: InstructionCreated}, args: {contains: {instructionId: \"3236\"}}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "events(args contains ticker)",
+    "query": "query EventsQuery($size: Int, $start: Int) {\n  events(\n    filter: {moduleId: {equalTo: asset}, eventId: {equalTo: TickerRegistered}, args: {contains: {ticker: \"USDS\"}}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      eventId\n      args\n      refs\n      block {\n        blockId\n        datetime\n      }\n    }\n  }\n}\n"
+  },
+  {
+    "name": "extrinsics(args contains)",
+    "query": "query ($size: Int, $start: Int) {\n  extrinsics(\n    filter: {moduleId: {equalTo: asset}, callId: {equalTo: issue}, address: {equalTo: \"2DK6iDQ3fcP9BDtLzPE9DcmTpkMq8JpwE3sLZvPWQnP7SaFf\"}, args: {contains: {amount: \"5\"}}}\n    orderBy: [ID_DESC]\n    first: $size\n    offset: $start\n  ) {\n    totalCount\n    nodes {\n      id\n      moduleId\n      callId\n      args\n      success\n    }\n  }\n}\n"
+  }
+]

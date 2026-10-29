@@ -1,23 +1,23 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
-import { EventIdEnum, ModuleIdEnum, TickerExternalAgentAction } from '../../../types';
+import { AssetAgentAction, EventIdEnum, ModuleIdEnum } from '../../../types';
 import {
   getAssetId,
   getExemptKeyValue,
-  getOfferingAsset,
+  getOfferingAssetId,
   getOrDefault,
   getTextValue,
   is7Dot3Chain,
 } from '../../../utils';
 import { extractArgs } from '../common';
 import { getAssetIdForStatisticsEvent } from '../assets/mapStatistics';
+import { assetOfCollection } from '../assets/mapNfts';
 
 /**
  * Subscribes to the events related to external agents
  */
 export async function mapExternalAgentAction(event: SubstrateEvent): Promise<void> {
-  const { moduleId, eventId, blockId, block, params, extrinsic, eventIdx, blockEventId } =
-    extractArgs(event);
+  const { moduleId, eventId, blockId, block, params, extrinsic, blockEventId } = extractArgs(event);
 
   const assetId = await mgr.getAssetIdForEvent(
     moduleId,
@@ -28,16 +28,14 @@ export async function mapExternalAgentAction(event: SubstrateEvent): Promise<voi
     extrinsic
   );
   if (assetId) {
-    await TickerExternalAgentAction.create({
+    await AssetAgentAction.create({
       id: blockEventId,
-      eventIdx,
       assetId,
       palletName: moduleId,
       eventId,
       callerId: getTextValue(params[0]),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 }
@@ -91,6 +89,11 @@ const assetIdFromCorporateAction: AssetIdFromParams = async (
  *
  * External agent authorized extrinsics are defined as those that call "ensure_agent_permissioned"
  * meaning they are extrinsics that can only be called if you are an external agent of the Asset.
+ */
+/**
+ * Where each agent-permissioned event names its asset, by parameter position, across roughly
+ * twenty pallets. Nothing checks this table against the runtime: a new agent-permissioned event
+ * has to be added by hand.
  */
 class ExternalAgentEventsManager {
   private entries: Map<ModuleIdEnum, Map<EventIdEnum, Entry[]>> = new Map();
@@ -154,7 +157,12 @@ class ExternalAgentEventsManager {
       )
       .add(
         ModuleIdEnum.statistics,
-        [EventIdEnum.AssetStatsUpdated, EventIdEnum.StatTypesAdded, EventIdEnum.StatTypesRemoved],
+        [
+          EventIdEnum.AssetStatsUpdated,
+          EventIdEnum.StatTypesAdded,
+          EventIdEnum.StatTypesRemoved,
+          EventIdEnum.SetAssetTransferCompliance,
+        ],
         async (params, block) => await getAssetIdForStatisticsEvent(params[1], block)
       )
       .add(
@@ -211,9 +219,15 @@ class ExternalAgentEventsManager {
         ],
         1
       )
+      /**
+       * `BenefitClaimed` is deliberately absent. It is emitted by `push_benefit`, which an agent
+       * calls, *and* by `claim`, which any holder calls — so recording it would attribute holders'
+       * own claims to the agents, the same over-inclusion `asset.Transfer` is excluded for.
+       * `Reclaimed` has no such ambiguity: only an agent can reclaim.
+       */
       .add(
         ModuleIdEnum.capitaldistribution,
-        [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.BenefitClaimed],
+        [EventIdEnum.Created, EventIdEnum.Removed, EventIdEnum.Reclaimed],
         assetIdFromCorporateAction
       )
       .add(
@@ -237,6 +251,7 @@ class ExternalAgentEventsManager {
           EventIdEnum.Issued,
           EventIdEnum.Redeemed,
           EventIdEnum.ControllerTransfer,
+          EventIdEnum.ControllerTransferTo,
           EventIdEnum.AssetFrozen,
           EventIdEnum.AssetUnfrozen,
           EventIdEnum.AssetRenamed,
@@ -266,9 +281,24 @@ class ExternalAgentEventsManager {
       .add(
         ModuleIdEnum.asset,
         [
-          // EventIdEnum.TickerLinkedToAsset,
+          EventIdEnum.TickerLinkedToAsset,
+          EventIdEnum.TickerUnlinkedFromAsset,
+          EventIdEnum.FrozenBalanceSet,
+          EventIdEnum.SetAccountFreeze,
         ],
         2
+      )
+      /**
+       * The `nft` counterparts of `asset.create` / `issue` / `redeem`, under every spec version's
+       * names. `NFTPortfolioUpdated` / `NFTHoldingsUpdated` stay out for the reason `asset.Transfer`
+       * does: they fire on every transfer. `IssuedNFT` names the collection rather than the asset,
+       * so it resolves through the collection's own storage.
+       */
+      .add(ModuleIdEnum.nft, [EventIdEnum.NftCollectionCreated, EventIdEnum.RedeemedNFT], 1)
+      .add(
+        ModuleIdEnum.nft,
+        [EventIdEnum.IssuedNFT],
+        async (params, block) => (await assetOfCollection(params[1], block)) as string
       )
       .add(
         ModuleIdEnum.externalagents,
@@ -294,7 +324,7 @@ class ExternalAgentEventsManager {
       // Special case for the Sto pallet because most events don't contain the Asset,
       // they contain a reference to a previously created fundraiser instead.
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserCreated], async (params, block) =>
-        is7Dot3Chain(block) ? getAssetId(params[1], block) : getOfferingAsset(params[3])
+        is7Dot3Chain(block) ? getAssetId(params[1], block) : getOfferingAssetId(params[3], block)
       )
       .add(
         ModuleIdEnum.sto,
@@ -304,10 +334,17 @@ class ExternalAgentEventsManager {
           EventIdEnum.FundraiserFrozen,
           EventIdEnum.FundraiserUnfrozen,
         ],
-        async (params, block, extrinsic) =>
-          is7Dot3Chain(block)
-            ? getAssetId(params[1], block)
-            : getAssetId(extrinsic?.extrinsic.args[0] as unknown as Codec, block)
+        async (params, block, extrinsic) => {
+          if (is7Dot3Chain(block)) {
+            return getAssetId(params[1], block);
+          }
+          if (!extrinsic) {
+            throw new Error(
+              'The fundraiser event names its asset only in its extrinsic, and has none'
+            );
+          }
+          return getAssetId(extrinsic.extrinsic.args[0], block);
+        }
       )
       .add(ModuleIdEnum.sto, [EventIdEnum.FundraiserOffchainFundingEnabled], 1);
 

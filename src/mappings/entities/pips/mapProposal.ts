@@ -1,63 +1,122 @@
+import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import { Proposal, ProposalStateEnum, ProposalVote } from '../../../types';
+import { blockEvents } from '../../../utils/blockEvents';
 import {
-  bytesToString,
+  getAllByFields,
   getBigIntValue,
   getBooleanValue,
+  getNumberValue,
   getProposerValue,
   getTextValue,
-  serializeAccount,
+  is8xChain,
+  padNumericId,
 } from '../../../utils';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
+import { storedText } from '../../../utils/text';
+
+/**
+ * A PIP id is a bare numeric sequence. Zero-pad it so `Proposal.id` and
+ * `ProposalVote.proposalId` sort numerically under `ID_DESC`. Every construction and every
+ * lookup routes through here.
+ */
+const processPipId = (rawPipId: Codec): string => padNumericId(getTextValue(rawPipId));
+
+/**
+ * The block the PIP's expiry was scheduled for, if it was.
+ *
+ * `propose` schedules the expiry before it emits `ProposalCreated`, so `ExpiryScheduled` comes
+ * earlier in the same extrinsic, before its PIP exists. Nothing is scheduled for a PIP without an
+ * expiry, and `ExpirySchedulingFailed` replaces it when the scheduler refuses.
+ */
+const scheduledExpiry = (event: SubstrateEvent, pipId: string): number | undefined => {
+  const records = blockEvents(event.block);
+  const phase = records[event.idx]?.phase.toString();
+
+  for (let i = event.idx - 1; i >= 0 && records[i].phase.toString() === phase; i -= 1) {
+    const { section, method, data } = records[i].event;
+
+    if (section === 'pips' && method === 'ExpiryScheduled' && processPipId(data[1]) === pipId) {
+      return getNumberValue(data[2]);
+    }
+  }
+
+  return undefined;
+};
 
 export const handleProposalCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawDid, rawProposer, rawPipId, rawBalance, rawUrl, rawDescription] = params;
+  const id = processPipId(rawPipId);
+  const proposer = getProposerValue(rawProposer);
+  const deposit = getBigIntValue(rawBalance);
+  // a community PIP's deposit is its proposer's aye, which `propose` records with no `Voted`
+  const depositVote =
+    proposer.type === 'Community'
+      ? ProposalVote.create({
+          id: `${id}/${proposer.value}`,
+          proposalId: id,
+          accountId: proposer.value,
+          vote: true,
+          weight: deposit,
+          createdEventId: blockEventId,
+          updatedEventId: blockEventId,
+        })
+      : undefined;
 
   await Proposal.create({
-    id: getTextValue(rawPipId),
-    proposer: getProposerValue(rawProposer),
+    id,
+    proposer,
     ownerId: getTextValue(rawDid),
     state: ProposalStateEnum.Pending,
-    balance: getBigIntValue(rawBalance),
-    url: bytesToString(rawUrl),
-    description: bytesToString(rawDescription),
+    balance: deposit,
+    url: storedText(rawUrl),
+    description: storedText(rawDescription),
     snapshotted: false,
-    totalAyeWeight: BigInt(0),
+    expiresAt: scheduledExpiry(event, id),
+    totalAyeWeight: depositVote ? deposit : BigInt(0),
     totalNayWeight: BigInt(0),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
+  await depositVote?.save();
 };
 
 export const handleProposalStateUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawPipId, rawState] = params;
 
-  const pipId = getTextValue(rawPipId);
-  const proposal = await Proposal.get(pipId);
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
 
   proposal.state = getTextValue(rawState) as ProposalStateEnum;
-  proposal.updatedBlockId = blockId;
+  proposal.updatedEventId = blockEventId;
 
   await proposal.save();
 };
 
 export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [, rawAccount, rawPipId, rawVote, rawWeight] = params;
 
-  const account = serializeAccount(rawAccount);
-  const pipId = getTextValue(rawPipId);
+  const account = rawAccount.toString();
+  const pipId = processPipId(rawPipId);
   const vote = getBooleanValue(rawVote);
   const weight = getBigIntValue(rawWeight);
 
-  let proposal: Proposal = null;
-  let proposalVote: ProposalVote = null;
-  [proposal, proposalVote] = await Promise.all([
-    Proposal.get(pipId),
+  const [proposal, existingVote] = await Promise.all([
+    getProposal(rawPipId, event),
     ProposalVote.get(`${pipId}/${account}`),
   ]);
+
+  if (!proposal) {
+    return;
+  }
+
+  let proposalVote = existingVote;
 
   if (proposalVote) {
     // when vote is changed, remove the previous weights
@@ -68,16 +127,16 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
     }
     proposalVote.vote = vote;
     proposalVote.weight = weight;
-    proposalVote.updatedBlockId = blockId;
+    proposalVote.updatedEventId = blockEventId;
   } else {
     proposalVote = ProposalVote.create({
       id: `${pipId}/${account}`,
       proposalId: pipId,
-      account,
+      accountId: account,
       vote,
       weight,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
 
@@ -86,23 +145,168 @@ export const handleVoted = async (event: SubstrateEvent): Promise<void> => {
   } else {
     proposal.totalNayWeight += weight;
   }
-  proposal.updatedBlockId = blockId;
+  // a vote sets the voter's deposit to the one it's weighed by, the proposer's included
+  if (proposal.proposer?.type === 'Community' && proposal.proposer.value === account) {
+    proposal.balance = weight;
+  }
+  proposal.updatedEventId = blockEventId;
 
   await Promise.all([proposal.save(), proposalVote.save()]);
 };
 
 export const handleSnapshotTaken = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const pips = params[2].toJSON() as any;
-  const promises = [];
-  pips.forEach(pip => {
-    const job = async () => {
-      const proposal = await Proposal.get(pip.id);
+  const { params, blockEventId } = extractArgs(event);
+  const snapshotId = getNumberValue(params[1]);
+  const pips = params[2].toJSON() as { id: number }[];
+
+  await Promise.all(
+    pips.map(async pip => {
+      const proposal = await getProposal(pip.id, event);
+
+      if (!proposal) {
+        return;
+      }
+
       proposal.snapshotted = true;
-      proposal.updatedBlockId = blockId;
-      return proposal.save();
-    };
-    promises.push(job());
+      proposal.snapshotId = snapshotId;
+      proposal.updatedEventId = blockEventId;
+      await proposal.save();
+    })
+  );
+};
+
+/**
+ * The PIP an event names, recorded as missing rather than left to fail the block when the index
+ * does not have it — a PIP created before an arbitrary start block, for one.
+ */
+const getProposal = (
+  rawPipId: Codec | number,
+  event: SubstrateEvent
+): Promise<Proposal | undefined> =>
+  getOrAnomaly(
+    id => Proposal.get(id),
+    typeof rawPipId === 'number' ? padNumericId(String(rawPipId)) : processPipId(rawPipId),
+    'Proposal',
+    event
+  );
+
+/** Applies `change` to the PIP an event names, stamping the event as its latest. */
+const updateProposal = async (
+  rawPipId: Codec | number,
+  event: SubstrateEvent,
+  change: (proposal: Proposal) => void
+): Promise<void> => {
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
+
+  change(proposal);
+  proposal.updatedEventId = extractArgs(event).blockEventId;
+
+  await proposal.save();
+};
+
+/** Takes a PIP out of the snapshot queue — the queue was cleared, or its result enacted. */
+const leaveSnapshot = (proposal: Proposal): void => {
+  proposal.snapshotted = false;
+  proposal.snapshotId = undefined;
+};
+
+/** `PipSkipped(did, pipId, skippedCount)` — the new skip count, not an increment. */
+export const handlePipSkipped = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId, rawCount] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.skippedCount = getNumberValue(rawCount);
   });
-  await Promise.all(promises);
+};
+
+/** `ExecutionScheduled(did, pipId, block)` — when an approved PIP will run. */
+export const handleExecutionScheduled = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId, rawBlock] = extractArgs(event).params;
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.executionScheduledAt = getNumberValue(rawBlock);
+  });
+};
+
+/**
+ * `ProposalRefund(did, pipId, amount)`: the PIP's deposits are returned, the proposer's with them.
+ * Until 8.0 all at once. From 8.0 128 a block, each batch with its own event and in storage order,
+ * so the proposer's deposit is gone once the chain no longer holds it.
+ */
+export const handleProposalRefunded = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId] = extractArgs(event).params;
+  const proposal = await getProposal(rawPipId, event);
+
+  if (!proposal) {
+    return;
+  }
+
+  const { type, value: proposer } = proposal.proposer;
+  if (is8xChain(event.block) && type === 'Community' && proposal.balance > BigInt(0)) {
+    const deposit = await api.query.pips.deposits(getNumberValue(rawPipId), proposer);
+    if (deposit.isSome) {
+      return;
+    }
+  }
+
+  proposal.balance = BigInt(0);
+  proposal.updatedEventId = extractArgs(event).blockEventId;
+  await proposal.save();
+};
+
+/** `PipClosed(did, pipId, pruned)` — the PIP is closed; pruning does not change its history. */
+export const handlePipClosed = async (event: SubstrateEvent): Promise<void> => {
+  const [, rawPipId] = extractArgs(event).params;
+  const { blockEventId } = extractArgs(event);
+
+  await updateProposal(rawPipId, event, proposal => {
+    proposal.closedEventId = blockEventId;
+  });
+};
+
+/**
+ * `SnapshotResultsEnacted(did, snapshotId?, skipped, rejected, approved)` — every PIP it names
+ * leaves the snapshot queue, and a skipped one carries its new skip count. Approval and rejection
+ * arrive as their own state updates.
+ */
+export const handleSnapshotResultsEnacted = async (event: SubstrateEvent): Promise<void> => {
+  const [, , rawSkipped, rawRejected, rawApproved] = extractArgs(event).params;
+  const skipped = (rawSkipped.toJSON() as [number, number][]) ?? [];
+  const decided = [
+    ...((rawRejected.toJSON() as number[]) ?? []),
+    ...((rawApproved.toJSON() as number[]) ?? []),
+  ];
+
+  await Promise.all([
+    ...skipped.map(([pipId, count]) =>
+      updateProposal(pipId, event, proposal => {
+        proposal.skippedCount = count;
+        leaveSnapshot(proposal);
+      })
+    ),
+    ...decided.map(pipId => updateProposal(pipId, event, leaveSnapshot)),
+  ]);
+};
+
+/**
+ * `SnapshotCleared(did, snapshotId)` — the queue is emptied, and with it the flag `SnapshotTaken`
+ * set on each queued PIP.
+ */
+export const handleSnapshotCleared = async (event: SubstrateEvent): Promise<void> => {
+  const { params, blockEventId } = extractArgs(event);
+  const snapshotId = getNumberValue(params[1]);
+  const queued = await getAllByFields<Proposal>('Proposal', [['snapshotId', '=', snapshotId]]);
+
+  await Promise.all(
+    queued.map(proposal => {
+      leaveSnapshot(proposal);
+      proposal.updatedEventId = blockEventId;
+
+      return proposal.save();
+    })
+  );
 };

@@ -1,4 +1,5 @@
 import {
+  SubstrateCallHandler,
   SubstrateDatasourceKind,
   SubstrateEventHandler,
   SubstrateHandlerKind,
@@ -12,40 +13,51 @@ const dictionary = process.env.NETWORK_DICTIONARY || '';
 
 const filters: Record<string, Record<string, string[]>> = {
   asset: {
+    AllowanceSpent: ['handleAllowanceSpent'],
+    Approval: ['handleApproval'],
     AssetAffirmationExemption: [],
     AssetBalanceUpdated: ['handleAssetBalanceUpdated'],
-    AssetCreated: ['handleAssetCreated'],
+    AssetCreated: ['handleAssetCreated', 'handleCreatorAgent', 'handleTickerOfNewAsset'],
     AssetFrozen: ['handleFrozen'],
     AssetMediatorsAdded: ['handleAssetMediatorsAdded'],
     AssetMediatorsRemoved: ['handleAssetMediatorsRemoved'],
-    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred'],
+    AssetOwnershipTransferred: ['handleAssetOwnershipTransferred', 'handleOwnerReplacedAsAgent'],
     AssetRenamed: ['handleAssetRenamed'],
-    AssetTypeChanged: [],
+    AssetTypeChanged: ['handleAssetTypeChanged'],
     AssetUnfrozen: ['handleUnfrozen'],
     ClassicTickerClaimed: [],
+    // Not a movement of its own: `transfer_asset` emits it after `settlement::transfer_funds`, whose
+    // `FundsTransferred` / `AssetBalanceUpdated` already records the movement — or, while the
+    // receiver's affirmation is pending, has not happened yet.
     CreatedAssetTransfer: [],
+    // Neither controller transfer is a movement of its own: both go through the same unverified
+    // transfer path, which emits `AssetBalanceUpdated` from the source to the destination — including
+    // the named third party `ControllerTransferTo` delivers to — and that records the movement.
     ControllerTransfer: [],
-    CustomAssetTypeExists: [],
-    CustomAssetTypeRegistered: [],
+    ControllerTransferTo: [],
+    CustomAssetTypeExists: ['handleCustomAssetTypeExists'],
+    CustomAssetTypeRegistered: ['handleCustomAssetTypeRegistered'],
     DivisibilityChanged: ['handleDivisibilityChanged'],
     DocumentAdded: ['handleDocumentAdded'],
     DocumentRemoved: ['handleDocumentRemoved'],
     ExtensionRemoved: [],
+    FrozenBalanceSet: ['handleFrozenBalanceSet'],
     FundingRoundSet: ['handleFundingRoundSet'],
-    GlobalMetadataSpecUpdated: [],
+    GlobalMetadataSpecUpdated: ['handleGlobalMetadataSpecUpdated'],
     IdentifiersUpdated: ['handleIdentifiersUpdated'],
     IsIssuable: [],
     Issued: ['handleIssued', 'handleAssetIssuedStatistics'],
-    LocalMetadataKeyDeleted: [],
-    MetadataValueDeleted: [],
+    LocalMetadataKeyDeleted: ['handleLocalMetadataKeyDeleted'],
+    MetadataValueDeleted: ['handleMetadataValueDeleted'],
     PreApprovedAsset: ['handlePreApprovedAsset'],
-    RegisterAssetMetadataGlobalType: [],
-    RegisterAssetMetadataLocalType: [],
+    RegisterAssetMetadataGlobalType: ['handleRegisterAssetMetadataGlobalType'],
+    RegisterAssetMetadataLocalType: ['handleRegisterAssetMetadataLocalType'],
     RemoveAssetAffirmationExemption: [],
     RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
-    Redeemed: ['handleRedeemed', 'handleAssetRedeemedStatistics'],
-    SetAssetMetadataValue: [],
-    SetAssetMetadataValueDetails: [],
+    Redeemed: ['handleRedeemed'],
+    SetAccountFreeze: ['handleSetAccountFreeze'],
+    SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
+    SetAssetMetadataValueDetails: ['handleSetAssetMetadataValueDetails'],
     TickerLinkedToAsset: ['handleTickerLinkedToAsset'],
     TickerRegistered: ['handleTickerRegistered'],
     TickerTransferred: ['handleTickerTransferred'],
@@ -54,26 +66,36 @@ const filters: Record<string, Record<string, string[]>> = {
     TransferWithData: [],
   },
   balances: {
+    // POLYX ledger: every balances movement writes a PolyxEntry per account side plus a running
+    // AccountBalance, from mapPolyxLedger.ts.
     AccountBalanceBurned: ['handleBalanceBurned'],
     BalanceSet: ['handleBalanceSet'],
     Burned: ['handleBalanceBurned'],
-    Deposit: ['handleBalanceDeposit'],
-    DustLost: [],
+    BurnedDebt: [], // issuance only — no account side
+    BurnedHeld: ['handleBalanceBurnedHeld'],
+    Deposit: ['handleBalanceMinted'],
+    DustLost: ['handleDustLost'],
     Endowed: ['handleBalanceEndowed'],
     Frozen: ['handleBalanceFrozen'],
+    Held: ['handleBalanceHeld'],
     Issued: [],
     Locked: ['handleBalanceLocked'],
     Minted: ['handleBalanceMinted'],
+    MintedCredit: [], // issuance only — no account side
     Rescinded: [],
+    Released: ['handleBalanceReleased'],
     Reserved: ['handleBalanceReserved'],
     ReserveRepatriated: ['handleReserveRepatriated'],
     Restored: ['handleBalanceMinted'],
     Slashed: ['handleBalanceBurned'],
-    Suspended: ['handleBalanceSuspended'],
-    Thawed: [],
+    Suspended: ['handleBalanceSuspended'], // The handler did not exist before
+    Thawed: ['handleBalanceThawed'],
     TotalIssuanceForced: [],
     Transfer: ['handleBalanceTransfer'],
-    TransferWithMemo: ['handleBalanceTransfer'],
+    TransferAndHold: ['handleTransferAndHold'],
+    TransferOnHold: ['handleTransferOnHold'],
+    TransferWithMemo: ['handleBalanceTransferWithMemo'], // Memo enrichment only, never its own entry
+    Unexpected: [], // anomaly marker; consider IndexerAnomaly
     Unlocked: ['handleBalanceUnlocked'],
     Unreserved: ['handleBalanceUnreserved'],
     Upgraded: [],
@@ -85,7 +107,7 @@ const filters: Record<string, Record<string, string[]>> = {
     BridgeTxFailed: [],
     BridgeTxScheduleFailed: [],
     BridgeTxScheduled: [],
-    Bridged: ['handleBridgeEvent'],
+    Bridged: ['handleBridgeEvent', 'handleBridgeMint'],
     ControllerChanged: [],
     ExemptedUpdated: [],
     FreezeAdminAdded: [],
@@ -105,17 +127,17 @@ const filters: Record<string, Record<string, string[]>> = {
     Removed: ['handleDistributionRemoved'],
   },
   checkpoint: {
-    CheckpointCreated: [],
-    MaximumSchedulesComplexityChanged: [],
-    ScheduleCreated: [],
-    ScheduleRemoved: [],
+    CheckpointCreated: ['handleCheckpointCreated'],
+    MaximumSchedulesComplexityChanged: [], // chain config, no entity
+    ScheduleCreated: ['handleScheduleCreated'],
+    ScheduleRemoved: ['handleScheduleRemoved'],
   },
   complianceManager: {
     AssetCompliancePaused: ['handleAssetCompliancePaused'],
     AssetComplianceReplaced: ['handleComplianceReplaced'],
     AssetComplianceReset: ['handleComplianceReset'],
     AssetComplianceResumed: ['handleAssetComplianceResumed'],
-    ComplianceRequirementChanged: [],
+    ComplianceRequirementChanged: ['handleComplianceChanged'],
     ComplianceRequirementCreated: ['handleComplianceCreated'],
     ComplianceRequirementRemoved: ['handleComplianceRemoved'],
     TrustedDefaultClaimIssuerAdded: ['handleTrustedDefaultClaimIssuerAdded'],
@@ -125,22 +147,24 @@ const filters: Record<string, Record<string, string[]>> = {
   // never deployed to a production chain. Events are only indexed into the generic events table
   confidentialAsset: {},
   corporateAction: {
-    CAInitiated: [],
-    CALinkedToDoc: [],
-    CARemoved: [],
-    DefaultTargetIdentitiesChanged: [],
-    DefaultWithholdingTaxChanged: [],
-    DidWithholdingTaxChanged: [],
-    MaxDetailsLengthChanged: [],
-    RecordDateChanged: [],
+    CAInitiated: ['handleCaInitiated'],
+    CALinkedToDoc: ['handleCaLinkedToDoc'],
+    CARemoved: ['handleCaRemoved'],
+    DefaultTargetIdentitiesChanged: ['handleDefaultTargetIdentitiesChanged'],
+    DefaultWithholdingTaxChanged: ['handleDefaultWithholdingTaxChanged'],
+    DidWithholdingTaxChanged: ['handleDidWithholdingTaxChanged'],
+    MaxDetailsLengthChanged: [], // chain config, no entity
+    RecordDateChanged: ['handleRecordDateChanged'],
+    // pre-6.0 CAA transfers — superseded by external agents, not indexed
+    // CAATransferred: [],
   },
   corporateBallot: {
-    Created: [],
-    MetaChanged: [],
-    RangeChanged: [],
-    RCVChanged: [],
-    Removed: [],
-    VoteCast: [],
+    Created: ['handleBallotCreated'],
+    MetaChanged: ['handleBallotMetaChanged'],
+    RangeChanged: ['handleBallotRangeChanged'],
+    RCVChanged: ['handleBallotRcvChanged'],
+    Removed: ['handleBallotRemoved'],
+    VoteCast: ['handleBallotVoteCast'],
   },
   externalAgents: {
     AgentAdded: ['handleExternalAgentAdded', 'handleAgentAdded'],
@@ -154,16 +178,19 @@ const filters: Record<string, Record<string, string[]>> = {
     AuthorizationAdded: ['handleAuthorization'],
     AuthorizationConsumed: ['handleAuthorization'],
     AuthorizationRejected: ['handleAuthorization'],
-    AuthorizationRetryLimitReached: [],
+    AuthorizationRetryLimitReached: ['handleAuthorization'],
     AuthorizationRevoked: ['handleAuthorization'],
+    // CddClaimsInvalidated is a CDD-claims concern (it invalidates the CDD claims issued by a
+    // provider whose own CDD was revoked), not a key concern, and is absent from the v8 runtime.
+    // It belongs with the claim handlers; left unhandled here deliberately.
     CddClaimsInvalidated: [],
     CddRequirementForPrimaryKeyUpdated: [],
-    ChildDidCreated: ['handleChildDidCreated'],
-    ChildDidUnlinked: ['handleChildDidUnlinked'],
+    ChildDidCreated: [],
+    ChildDidUnlinked: [],
     ClaimAdded: ['handleClaimAdded'],
     ClaimRevoked: ['handleClaimRevoked'],
     CustomClaimTypeAdded: ['handleCustomClaimTypeCreated'],
-    DidCreated: ['handleDidCreated'],
+    DidCreated: ['handleDidCreated', 'handleIdentityGrant'],
     PrimaryKeyUpdated: ['handlePrimaryKeyUpdated'],
     SecondaryKeyLeftIdentity: ['handleSecondaryKeyLeftIdentity'],
     SecondaryKeyPermissionsUpdated: ['handleSecondaryKeysPermissionsUpdated'],
@@ -188,7 +215,7 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalAdded: ['handleMultiSigProposalAdded'],
     ProposalApprovalVote: ['handleMultiSigVoteApproved'],
     ProposalApproved: ['handleMultiSigProposalApproved'],
-    ProposalExecuted: ['handleMultiSigProposalExecuted'],
+    ProposalExecuted: ['handleMultiSigProposalExecuted', 'handlePositionAfterProposal'],
     ProposalExecutionFailed: [],
     ProposalRejected: ['handleMultiSigProposalRejected'],
     ProposalRejectionVote: ['handleMultiSigVoteRejected'],
@@ -196,36 +223,48 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalFailedToExecute: [],
   },
   nft: {
+    IssuedNFT: ['handleLegacyNftIssued'],
+    NFTApproval: ['handleNftApproval'],
+    NFTApprovalForAll: ['handleNftApprovalForAll'],
+    NFTApprovalSpent: ['handleNftApprovalSpent'],
     NFTPortfolioUpdated: ['handleNftHoldingsUpdates'],
     NFTHoldingsUpdated: ['handleNftHoldingsUpdates'],
     NftCollectionCreated: ['handleNftCollectionCreated'],
+    RedeemedNFT: ['handleLegacyNftRedeemed'],
   },
   pips: {
+    // Governance settings, not facts about a PIP: nothing derived reads them, and each stays
+    // queryable as the raw `Event` the catch-all handler records.
     ActivePipLimitChanged: [],
     DefaultEnactmentPeriodChanged: [],
-    ExecutionCancellingFailed: [],
-    ExecutionScheduled: [],
-    ExecutionSchedulingFailed: [],
-    ExpiryScheduled: [],
-    ExpirySchedulingFailed: [],
     HistoricalPipsPruned: [],
     MaxPipSkipCountChanged: [],
     MinimumProposalDepositChanged: [],
     PendingPipExpiryChanged: [],
-    PipClosed: [],
-    PipSkipped: [],
-    ProposalCreated: ['handleProposalCreated'],
-    ProposalRefund: [],
+    // The scheduler refused a schedule. The field a successful schedule would set simply stays
+    // unset, and the refusal is kept as its raw `Event`.
+    ExecutionCancellingFailed: [],
+    ExecutionSchedulingFailed: [],
+    ExpirySchedulingFailed: [],
+    ExecutionScheduled: ['handleExecutionScheduled'],
+    // Read by `ProposalCreated`, which follows it in the same extrinsic (see `scheduledExpiry`).
+    ExpiryScheduled: [],
+    PipClosed: ['handlePipClosed'],
+    PipSkipped: ['handlePipSkipped'],
+    ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
+    ProposalRefund: ['handleProposalRefund', 'handleProposalRefunded'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
-    SnapshotCleared: [],
-    SnapshotResultsEnacted: [],
+    SnapshotCleared: ['handleSnapshotCleared'],
+    SnapshotResultsEnacted: ['handleSnapshotResultsEnacted'],
     SnapshotTaken: ['handleSnapshotTaken'],
-    Voted: ['handleVoted'],
+    Voted: ['handleVoted', 'handlePipsDeposit'],
   },
   portfolio: {
     AllowIdentityToCreatePortfolios: [],
     FundsMovedBetweenPortfolios: ['handleFundsMovedBetweenPortfolios'],
+    FungibleTokensMovedBetweenPortfolios: ['handleFungibleTokensMovedBetweenPortfolios'],
     MovedBetweenPortfolios: ['handlePortfolioMovement'],
+    NFTsMovedBetweenPortfolios: ['handleNftsMovedBetweenPortfolios'],
     PortfolioCreated: ['handlePortfolioCreated'],
     PortfolioCustodianChanged: ['handlePortfolioCustodianChanged'],
     PortfolioDeleted: ['handlePortfolioDeleted'],
@@ -236,7 +275,23 @@ const filters: Record<string, Record<string, string[]>> = {
     UserPortfolios: [],
   },
   protocolFee: {
-    FeeCharged: ['handleFeeCharged'],
+    FeeCharged: ['handleTransactionFeeCharged'],
+  },
+  relayer: {
+    // deprecated from 8.0.0 chain version — superseded by the Subsidy events below
+    AuthorizedPayingKey: ['handleSubsidyApproved'],
+    AcceptedPayingKey: ['handleSubsidyAccepted'],
+    RemovedPayingKey: ['handleSubsidyRemoved'],
+    UpdatedPolyxLimit: ['handlePolyxLimitUpdated'],
+    ApprovedSubsidy: ['handleSubsidyApproved'],
+    AcceptedSubsidy: ['handleSubsidyAccepted'],
+    RemovedPendingSubsidy: ['handleSubsidyRemoved'],
+    RemovedSubsidy: ['handleSubsidyRemoved'],
+    SubsidyDebited: ['handleSubsidyDebited'],
+    // unhandled deliberately: the standing relationship and every fee drawn against it are already
+    // recorded on `Subsidy`, and the relayed call itself is indexed as an `Extrinsic` like any other.
+    // A per-relay row would add a third record of the same activity with no query asking for it.
+    RelayedTx: [],
   },
   settlement: {
     AffirmationWithdrawn: ['handleAffirmationWithdrawn'],
@@ -244,15 +299,15 @@ const filters: Record<string, Record<string, string[]>> = {
     FundsTransferred: ['handleFundsTransferred'],
     InstructionAffirmed: ['handleInstructionUpdate'],
     InstructionAutomaticallyAffirmed: ['handleAutomaticAffirmation'],
-    InstructionAuthorized: ['handleInstructionUpdate'],
     InstructionCreated: ['handleInstructionCreated'],
+    // v5.3's `InstructionCreated`, from `add_instruction_with_memo_v2`, with `LegV2` legs
+    InstructionV2Created: ['handleInstructionCreated'],
     InstructionExecuted: ['handleInstructionFinalizedEvent'],
     InstructionFailed: ['handleInstructionFinalizedEvent'],
     InstructionLocked: ['handleInstructionFinalizedEvent'],
     InstructionMediators: ['handleInstructionMediators'],
     InstructionRejected: ['handleInstructionRejected'],
-    InstructionRescheduled: [],
-    InstructionUnauthorized: ['handleInstructionUpdate'],
+    InstructionRescheduled: ['handleInstructionRescheduled'],
     InstructionUnlocked: ['handleInstructionFinalizedEvent'],
     LegFailedExecution: [],
     MediatorAffirmationReceived: ['handleMediatorAffirmationReceived'],
@@ -270,48 +325,56 @@ const filters: Record<string, Record<string, string[]>> = {
     VenueUnauthorized: [],
   },
   staking: {
-    Bonded: ['handleStakingEvent', 'handleBonded'],
+    // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
+    // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
+    Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
     Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
-    CurrencyMigrated: [],
-    EraPaid: [],
-    EraPayout: [],
+    CurrencyMigrated: ['handleCurrencyMigrated', 'handlePositionCurrencyMigrated'],
+    EraPaid: ['handleEraPaid'],
+    // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
+    EraPayout: ['handleEraPaid'],
     ForceEra: [],
     InvalidatedNominators: [],
     Kicked: [],
     MinimumBondThresholdUpdated: [],
     Nominated: ['handleStakingEvent'],
     OldSlashingReportDiscarded: [],
-    PayoutStarted: [],
-    PermissionedIdentityAdded: [],
-    PermissionedIdentityRemoved: [],
+    // supplies the `eraIndex` that `Rewarded` lacks; consumed by the POLYX ledger's handleReward
+    PayoutStarted: ['handlePayoutStarted'],
+    PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
+    PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
     Reward: ['handleStakingEvent', 'handleReward'],
     Rewarded: ['handleStakingEvent', 'handleReward'],
     RewardPaymentSchedulingInterrupted: [],
-    Slash: ['handleStakingEvent'],
-    Slashed: ['handleStakingEvent'],
-    SlashReported: [],
+    Slash: ['handleStakingEvent', 'handleStakingSlash', 'handleSlash'],
+    Slashed: ['handleStakingEvent', 'handleStakingSlash', 'handleSlash'],
+    SlashReported: ['handleStakingEvent'],
     SlashingAllowedForChanged: [],
     SnapshotTargetsSizeExceeded: [],
     SnapshotVotersSizeExceeded: [],
     SolutionStored: [],
-    StakersElected: [],
-    StakingElection: [],
+    StakersElected: ['handleStakersElected'],
+    // pre-v7.0 name for StakersElected: emitted after CurrentEra and ErasStakers are written
+    StakingElection: ['handleStakersElected'],
     StakingElectionFailed: [],
-    Unbonded: ['handleStakingEvent', 'handleUnbonded'],
-    ValidatorPrefsSet: [],
-    Withdrawn: ['handleWithdrawn'],
+    Unbonded: ['handlePositionUnbonded', 'handleStakingEvent', 'handleUnbonded'],
+    ValidatorPrefsSet: ['handleValidatorPrefsSet'],
+    Withdrawn: ['handleWithdrawn', 'handlePositionWithdrawn'],
   },
   statistics: {
     AssetStatsUpdated: [],
     SetAssetTransferCompliance: ['handleSetTransferCompliance'],
     StatTypesAdded: ['handleStatTypeAdded'],
     StatTypesRemoved: ['handleStatTypeRemoved'],
-    TransferManagerAdded: ['handleTransferManagerAdded', 'handleStatisticTransferManagerAdded'],
-    TransferManagerRemoved: ['handleTransferManagerRemoved'],
-    ExemptionsAdded: ['handleExemptionsAdded', 'handleTransferManagerExemptionsAdded'],
-    ExemptionsRemoved: ['handleExemptionsRemoved', 'handleTransferManagerExemptionsRemoved'],
+    // The pre-v5 transfer-manager model is gone from the chain, and its events are not mapped onto
+    // the statistics model that replaced it: the two disagree on what a restriction is, so they are
+    // recorded as unhandled rather than half-translated.
+    TransferManagerAdded: [],
+    TransferManagerRemoved: [],
+    ExemptionsAdded: [],
+    ExemptionsRemoved: [],
     TransferConditionExemptionsAdded: ['handleStatisticExemptionsAdded'],
     TransferConditionExemptionsRemoved: ['handleStatisticExemptionsRemoved'],
   },
@@ -328,6 +391,15 @@ const filters: Record<string, Record<string, string[]>> = {
     CodeUpdated: ['handleMigration'],
     NewAccount: [],
   },
+  // Only the events that tell a batch failed: the extrinsic itself still succeeds, so without
+  // them a partly-failed batch reads as a full success.
+  utility: {
+    BatchCompletedWithErrors: [],
+    BatchInterrupted: [],
+    BatchInterruptedOld: [],
+    BatchOptimisticFailed: [],
+    ItemFailed: [],
+  },
   transactionPayment: {
     TransactionFeePaid: ['handleTransactionFeeCharged'],
   },
@@ -340,8 +412,8 @@ const filters: Record<string, Record<string, string[]>> = {
     CommissionCapUpdated: [],
     InvalidatedNominators: [],
     Nominated: ['handleStakingEvent'],
-    PermissionedIdentityAdded: [],
-    PermissionedIdentityRemoved: [],
+    PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
+    PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
     RewardPaymentSchedulingInterrupted: [],
     SlashingAllowedForChanged: [],
   },
@@ -382,11 +454,14 @@ const filters: Record<string, Record<string, string[]>> = {
   electionProviderMultiPhase: {},
 };
 
+/** Modules subscribed event by event, not as a whole: they emit far more than is wanted */
+const listedOnly = new Set(['system', 'utility']);
+
 const handlers: SubstrateEventHandler[] = [];
 const eventSpecificHandlers: SubstrateEventHandler[] = [];
 
 Object.keys(filters).forEach(module => {
-  if (module !== 'system') {
+  if (!listedOnly.has(module)) {
     handlers.push({
       kind: SubstrateHandlerKind.Event,
       handler: 'handleEvent',
@@ -397,7 +472,7 @@ Object.keys(filters).forEach(module => {
   }
 
   Object.keys(filters[module]).forEach(method => {
-    if (module === 'system') {
+    if (listedOnly.has(module)) {
       handlers.push({
         kind: SubstrateHandlerKind.Event,
         handler: 'handleEvent',
@@ -424,6 +499,35 @@ Object.keys(filters).forEach(module => {
     }
   });
 });
+
+/**
+ * Runtimes before 6.0 could fail an instruction without a settlement event, which only these
+ * report: see `silentExecutionFailures`. The events are bounded by spec, so no later block is
+ * handed to them. The call can't be: the dictionary has no spec to query a call by, so its
+ * handler checks the spec itself.
+ */
+const BEFORE_V6: [number, number] = [0, 5_999_999];
+
+handlers.push({
+  kind: SubstrateHandlerKind.Event,
+  handler: 'handleEvent',
+  filter: { module: 'scheduler', method: 'Dispatched', specVersion: BEFORE_V6 },
+});
+eventSpecificHandlers.push({
+  kind: SubstrateHandlerKind.Event,
+  handler: 'handleScheduledExecutionResult',
+  filter: { module: 'scheduler', method: 'Dispatched', specVersion: BEFORE_V6 },
+});
+
+const manualExecutionFailure: SubstrateCallHandler = {
+  kind: SubstrateHandlerKind.Call,
+  handler: 'handleManualExecutionAttempt',
+  filter: {
+    module: 'settlement',
+    method: 'executeManualInstruction',
+    success: false,
+  },
+};
 
 const project: SubstrateProject = {
   specVersion: '1.0.0',
@@ -460,34 +564,88 @@ const project: SubstrateProject = {
     },
   },
   dataSources: [
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock: 1,
-      endBlock: 1,
-      mapping: {
-        file: './dist/index.js',
-        handlers: [
-          {
-            kind: SubstrateHandlerKind.Block,
-            handler: 'handleGenesis',
+    /**
+     * The first block's own seeding. From genesis that is the genesis handler over `[1, 1]`. From a
+     * later `START_BLOCK` it cannot be: a `[1, 1]` datasource beside `[startBlock, ∞)` declares two
+     * disjoint ranges the node will not bridge, so nothing between them would ever run. The start
+     * block seeds itself from chain storage instead, over `[startBlock, startBlock]`.
+     */
+    startBlock <= 1
+      ? {
+          kind: SubstrateDatasourceKind.Runtime,
+          startBlock: 1,
+          endBlock: 1,
+          mapping: {
+            file: './dist/index.js',
+            handlers: [{ kind: SubstrateHandlerKind.Block, handler: 'handleGenesis' }],
           },
-        ],
-      },
-    },
-    {
-      kind: SubstrateDatasourceKind.Runtime,
-      startBlock,
-      mapping: {
-        file: './dist/index.js',
-        handlers: eventSpecificHandlers,
-      },
-    },
+        }
+      : {
+          kind: SubstrateDatasourceKind.Runtime,
+          startBlock,
+          endBlock: startBlock,
+          mapping: {
+            file: './dist/index.js',
+            handlers: [{ kind: SubstrateHandlerKind.Block, handler: 'handleSeed' }],
+          },
+        },
+    /**
+     * The catch-all datasource comes first. For every event the node runs each datasource's handlers
+     * in declaration order, and the catch-all handler is where a block's spec label is checked
+     * against the runtime that actually executed it — see `ensureTrueSpecVersion`. Ahead of the
+     * specific handlers, it corrects the label before anything branches on it.
+     */
     {
       kind: SubstrateDatasourceKind.Runtime,
       startBlock,
       mapping: {
         file: './dist/index.js',
         handlers,
+      },
+    },
+    {
+      kind: SubstrateDatasourceKind.Runtime,
+      startBlock,
+      mapping: {
+        file: './dist/index.js',
+        handlers: [
+          ...eventSpecificHandlers,
+          manualExecutionFailure,
+          // Changes that arrive with no event of their own, caught by the call that makes them.
+          // Filtered to the one call each, which the dictionary indexes like an event, so empty
+          // blocks are still skipped.
+          {
+            kind: SubstrateHandlerKind.Call,
+            handler: 'handleSetController',
+            filter: { module: 'staking', method: 'setController', success: true },
+          },
+          {
+            kind: SubstrateHandlerKind.Call,
+            handler: 'handleRebond',
+            filter: { module: 'staking', method: 'rebond', success: true },
+          },
+          ...['preApproveTicker', 'removeTickerPreApproval'].map(
+            (method): SubstrateCallHandler => ({
+              kind: SubstrateHandlerKind.Call,
+              handler: 'handleSilentAssetPreApproval',
+              filter: { module: 'asset', method, success: true },
+            })
+          ),
+          ...[
+            'batch',
+            'batchAll',
+            'batchAtomic',
+            'batchOptimistic',
+            'forceBatch',
+            'asDerivative',
+          ].map(
+            (method): SubstrateCallHandler => ({
+              kind: SubstrateHandlerKind.Call,
+              handler: 'handleBatchedStakingCalls',
+              filter: { module: 'utility', method, success: true },
+            })
+          ),
+        ],
       },
     },
   ],

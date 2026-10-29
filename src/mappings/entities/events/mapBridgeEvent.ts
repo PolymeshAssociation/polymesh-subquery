@@ -1,19 +1,13 @@
 import { SubstrateEvent } from '@subql/types';
 import { BridgeEvent } from '../../../types';
-import { extractString, getTextValue } from '../../../utils';
+import { extractString, getAccountKey, getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
 
 /**
  * Subscribes to bridge events
  */
 export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
-  const {
-    params,
-    blockId,
-    eventIdx,
-    block: { timestamp: datetime },
-    blockEventId,
-  } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
   const [rawDid, rawBridgeDetails] = params;
 
   const { recipient, amount, ...rest } = JSON.parse(rawBridgeDetails.toString());
@@ -21,13 +15,10 @@ export async function handleBridgeEvent(event: SubstrateEvent): Promise<void> {
   await BridgeEvent.create({
     id: blockEventId,
     identityId: getTextValue(rawDid),
-    recipient,
+    // the payload may render the key as hex; Account rows are keyed by SS58 address
+    recipientId: getAccountKey(recipient, api.registry.chainSS58),
     amount: BigInt(amount) / BigInt(1000000),
     txHash: extractString(rest, 'tx_hash'),
-    eventIdx,
-    datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   }).save();
 }

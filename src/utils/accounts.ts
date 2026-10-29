@@ -1,11 +1,25 @@
 import { decodeAddress, encodeAddress } from '@polkadot/keyring';
 import { Codec } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
-import { createIdentity, createPermissions } from '../mappings/entities/identities/mapIdentities';
+import { getKeyRecordCache } from '../mappings/blockContext';
+import { createIdentity } from '../mappings/entities/identities/mapIdentities';
+import { createPortfolio } from '../mappings/entities/identities/mapPortfolio';
 import { Attributes } from '../mappings/entities/common';
-import { Account, EventIdEnum, Identity } from '../types';
-import { getFirstKeyFromJson, getFirstValueFromJson } from './common';
+import {
+  Account,
+  AccountKeyRole,
+  EventIdEnum,
+  Identity,
+  IdentityKey,
+  IdentityKeyRole,
+  StakingPosition,
+  AccountBalance,
+  Validator,
+} from '../types';
+import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
+import { legacyQuery } from './legacyQuery';
+import { readPermissionedIdentity } from './staking';
 
 export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
@@ -35,56 +49,389 @@ export const getAccountKeyType = (
   };
 };
 
-export const getOrCreateAccount = async (
-  address: string,
-  blockId: string,
-  datetime: Date
-): Promise<Account | undefined> => {
-  let account = await Account.get(address);
+/**
+ * What the chain's key record says an address is.
+ *
+ * A multisig signer resolves to no DID, deliberately. The signer is linked to the multisig, and
+ * the multisig is separately linked to an identity that can be unlinked and joined to a different
+ * one; `multiSig.adminDid` names the admin identity, which is not necessarily the one it is
+ * joined to. Reading either through to a DID here would record a two-hop, point-in-time answer on
+ * the `Account` row as though it were a durable fact about the key.
+ */
+export type KeyRecordResolution =
+  | { kind: 'primaryKey'; did: string }
+  | { kind: 'secondaryKey'; did: string }
+  | { kind: 'multiSigSigner'; multiSig: string };
 
-  if (account) {
-    return account;
+/**
+ * What an address is a key of, per the chain's own key record.
+ *
+ * `identity.keyRecords` is a 5.x rename of `identity.keyToIdentityIds`; a genesis resync sees the
+ * older name on early blocks. The legacy storage is `Option<IdentityId>` on both public chains
+ * (Polymesh launched at v3, so there is no `LinkedKeyInfo` enum to unwrap), and primary vs
+ * secondary is read from `identity.didRecords`. A multisig signer key was kept apart then, in
+ * `multiSig.keyToMultiSig`, which 5.0 migrated into `keyRecords`.
+ */
+const resolveKeyIdentity = async (address: string): Promise<KeyRecordResolution | undefined> => {
+  if (typeof api.query.identity.keyRecords === 'function') {
+    const raw = await api.query.identity.keyRecords(address);
+
+    if (raw.isEmpty) {
+      return undefined;
+    }
+
+    const keyRecord = raw.unwrap();
+
+    if (keyRecord.isPrimaryKey) {
+      return { kind: 'primaryKey', did: keyRecord.asPrimaryKey.toString() };
+    }
+
+    if (keyRecord.isSecondaryKey) {
+      // until 7.0 the record is `SecondaryKey(IdentityId, Permissions)`, a pair
+      const secondary: unknown = keyRecord.asSecondaryKey;
+      const did = Array.isArray(secondary) ? secondary[0] : secondary;
+      return { kind: 'secondaryKey', did: String(did) };
+    }
+
+    return { kind: 'multiSigSigner', multiSig: keyRecord.asMultiSigSignerKey.toString() };
   }
 
-  const rawKeyRecord = (await api.query.identity.keyRecords(address)) as unknown as Codec;
+  const raw = await legacyQuery('identity', 'keyToIdentityIds', [3000, 5_000_002])(address);
 
-  if (rawKeyRecord.isEmpty) {
+  if (raw.isEmpty) {
+    const multiSig = await legacyQuery('multiSig', 'keyToMultiSig', [3000, 5_000_002])(address);
+
+    return multiSig.isEmpty ? undefined : { kind: 'multiSigSigner', multiSig: multiSig.toString() };
+  }
+
+  const did = getTextValue(raw);
+  const record = (await api.query.identity.didRecords(did)).toJSON() as Record<string, unknown>;
+  const primaryKey = extractString(record, 'primary_key');
+
+  return { kind: primaryKey === address ? 'primaryKey' : 'secondaryKey', did };
+};
+
+/**
+ * `Account.keyRole` for a key-record resolution — the single place the mapping is defined.
+ *
+ * `undefined` (no key record) and the multisig account itself both fold into `Unlinked`.
+ */
+export const keyRoleFor = (resolution: KeyRecordResolution | undefined): AccountKeyRole => {
+  if (!resolution) {
+    return AccountKeyRole.Unlinked;
+  }
+
+  switch (resolution.kind) {
+    case 'primaryKey':
+      return AccountKeyRole.PrimaryKey;
+    case 'secondaryKey':
+      return AccountKeyRole.SecondaryKey;
+    case 'multiSigSigner':
+      return AccountKeyRole.MultiSigSigner;
+  }
+};
+
+/**
+ * The chain's key record for `address`, read at most once per block.
+ *
+ * `api` is bound to the block being indexed and serves its end-of-block state, so this answer is
+ * the same for every event in the block, which is what makes caching it safe. Addresses that
+ * resolve to nothing are cached too.
+ *
+ * The `Account` row is deliberately NOT cached alongside it. A handler can link or unlink a key
+ * partway through a block, so the row can change between events even though the key record cannot.
+ */
+const resolveKeyRecord = async (
+  address: string,
+  blockId: string
+): Promise<KeyRecordResolution | undefined> => {
+  const cache = getKeyRecordCache(blockId);
+
+  if (cache.has(address)) {
+    return cache.get(address);
+  }
+
+  const resolution = await resolveKeyIdentity(address);
+
+  cache.set(address, resolution);
+
+  return resolution;
+};
+
+/**
+ * The `Account.keyRole` the chain's key record gives an address, read at most once per block.
+ *
+ * Which writers use it follows from what their event proves. An event that grants the role itself
+ * — an identity announcing its primary or secondary key — states the role and writes it directly.
+ * An event that only *implies* one, because acceptance comes later or never, reads it from here
+ * instead: that is every multisig signer write, where creating a multisig and authorising a signer
+ * are offers the chain records on the key only once the signer accepts.
+ *
+ * `keyRoleFor` is the same mapping over a key record the caller already holds, used by the paths
+ * that read the record for other reasons too.
+ */
+export const resolveKeyRole = async (address: string, blockId: string): Promise<AccountKeyRole> =>
+  keyRoleFor(await resolveKeyRecord(address, blockId));
+
+/** The identity `address` is a primary or secondary key of, read at most once per block */
+export const identityOfKey = async (
+  address: string,
+  blockId: string
+): Promise<string | undefined> => {
+  const resolution = await resolveKeyRecord(address, blockId);
+  return resolution && resolution.kind !== 'multiSigSigner' ? resolution.did : undefined;
+};
+
+/**
+ * Carries an account's identity onto its balance, the staking position and the validator it is the
+ * stash of.
+ *
+ * `AccountBalance.identity`, `StakingPosition.identity` and `Validator.identity` are copied from the
+ * `Account` so each can be listed by identity without a join, which makes the account the source of
+ * truth and each field a copy that has to follow it. They are updated here, where the account's
+ * identity changes, rather than re-read on every balance or staking event: identity changes are
+ * rare, and those events are not. A validator is permissioned as its identity is.
+ */
+export const restampIdentityCopies = async (
+  address: string,
+  identityId: string | undefined,
+  blockEventId: string
+): Promise<void> => {
+  const [position, balance, validator] = await Promise.all([
+    StakingPosition.get(address),
+    AccountBalance.get(address),
+    Validator.get(address),
+  ]);
+
+  const copies: (StakingPosition | AccountBalance | Validator)[] = [];
+  [position, balance, validator].forEach(
+    row => row && row.identityId !== identityId && copies.push(row)
+  );
+  if (validator && copies.includes(validator)) {
+    validator.isPermissioned = identityId
+      ? (await readPermissionedIdentity(identityId)) ?? false
+      : false;
+  }
+
+  await Promise.all(
+    copies.map(row => {
+      row.identityId = identityId;
+      row.updatedEventId = blockEventId;
+      return row.save();
+    })
+  );
+};
+
+/**
+ * Writes what a key-link event says about an address, keeping the row an address already has.
+ *
+ * Several events re-announce a key that is already indexed: a primary-key rotation announces the
+ * incoming key, which was a secondary key a moment earlier, and the genesis scan re-announces
+ * every key it seeds. Creating the row afresh each time would move its provenance forward to the
+ * latest of those, so an existing row is updated in place and only a genuinely new address takes
+ * the current event as its `createdEvent`.
+ */
+export const upsertAccount = async (
+  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
+  blockEventId: string
+): Promise<void> => {
+  const existing = await Account.get(args.address);
+
+  if (existing) {
+    const identityChanged = existing.identityId !== args.identityId;
+
+    Object.assign(existing, args, getAccountKeyType(args.address));
+    existing.updatedEventId = blockEventId;
+
+    await existing.save();
+
+    if (identityChanged) {
+      await restampIdentityCopies(args.address, args.identityId, blockEventId);
+    }
+
     return;
   }
 
-  const did = getFirstValueFromJson(rawKeyRecord);
-  const type = getFirstKeyFromJson(rawKeyRecord);
+  await Account.create({
+    id: args.address,
+    ...args,
+    ...getAccountKeyType(args.address),
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+  }).save();
+};
+
+/**
+ * The identity creations in flight, by DID: the tail of each DID's queue.
+ */
+const identityLocks = new Map<string, Promise<void>>();
+
+/**
+ * Runs `task` once every earlier task for the same `did` has finished.
+ *
+ * Creating an identity from a key is a read-then-write: it reads the identity, creates it when
+ * absent with the address being resolved as its primary account, and a later call for the primary
+ * key repairs that. Run concurrently for two keys of one not-yet-indexed identity, both reads see
+ * nothing, both create, and whichever save lands last decides the primary account - possibly a
+ * secondary key whose repair already ran - and the default portfolio is created twice. Queueing
+ * per DID restores the sequential outcome while keys of different identities still run together.
+ */
+const withIdentityLock = async (did: string, task: () => Promise<void>): Promise<void> => {
+  const run = (identityLocks.get(did) ?? Promise.resolve()).then(task);
+  const tail = run.catch(() => undefined);
+
+  identityLocks.set(did, tail);
+
+  try {
+    await run;
+  } finally {
+    if (identityLocks.get(did) === tail) {
+      identityLocks.delete(did);
+    }
+  }
+};
+
+/**
+ * The `Account` an address belongs to, creating it from the chain's key record when it is absent,
+ * or linking a bare `Unlinked` row whose address the key record now names.
+ *
+ * A primary or secondary key brings its identity with it, and that identity and its default
+ * portfolio are created alongside. Every other address resolves to nothing, deliberately - an
+ * `Account` is indexed once the chain attaches it to an identity, which is what `mapExtrinsic`
+ * relies on when it indexes an extrinsic's sender. A multisig signer key is one of those: it has
+ * no identity of its own (see `KeyRecordResolution`) and no permissions.
+ *
+ * The chain read is cached per block by `resolveKeyRecord`. The `Account` row is not: it is read
+ * from the store on every call, so a row another handler wrote or unlinked earlier in the same
+ * block is seen rather than shadowed by a stale cache entry.
+ */
+export const getOrCreateAccount = async (
+  address: string,
+  blockId: string,
+  datetime: Date,
+  /**
+   * The event this account is being created in response to. The fallback is for a path with no
+   * single causing event, such as the seed scan.
+   */
+  createdEventId = `${blockId}/${padId('0')}`
+): Promise<Account | undefined> => {
+  const existing = await Account.get(address);
+
+  // a bare row can predate the address becoming a key, as an authorization's target's does
+  if (existing && (existing.identityId || existing.keyRole !== AccountKeyRole.Unlinked)) {
+    return existing;
+  }
+
+  const resolution = await resolveKeyRecord(address, blockId);
+
+  if (!resolution) {
+    return existing;
+  }
+
+  // No `Account` row for a signer key: it has no identity and no permissions, so it would carry
+  // only its key type, and `ledgerAccount` creates a bare one anyway if the address ever holds
+  // POLYX. The signer itself belongs to `MultiSigSigner`, which the multisig event handlers and
+  // the seed scan own: its `status` is not derivable from a key record.
+  if (resolution.kind === 'multiSigSigner') {
+    return existing;
+  }
+
+  const { did, kind } = resolution;
 
   const eventId = EventIdEnum.AccountCreated;
 
-  const identity = await Identity.get(did);
+  await withIdentityLock(did, async () => {
+    const identity = await Identity.get(did);
 
-  if (!identity || (type === 'primaryKey' && identity.primaryAccount !== address)) {
-    await createIdentity(
-      { did, eventId, datetime, primaryAccount: address, secondaryKeysFrozen: false },
-      blockId
-    );
+    if (!identity) {
+      await createIdentity(
+        { did, primaryAccountId: address, secondaryKeysFrozen: false },
+        createdEventId
+      );
+
+      // The default portfolio, so a later `identity.DidCreated` for this DID finds it — its handler
+      // only creates portfolio 0 when it creates the identity, and this path got there first.
+      await createPortfolio({ identityId: did, number: 0 }, createdEventId);
+    } else if (kind === 'primaryKey' && identity.primaryAccountId !== address) {
+      await createIdentity(
+        { did, primaryAccountId: address, secondaryKeysFrozen: false },
+        createdEventId
+      );
+    }
+  });
+
+  const keyRole = kind === 'primaryKey' ? AccountKeyRole.PrimaryKey : AccountKeyRole.SecondaryKey;
+  let account: Account;
+
+  if (existing) {
+    await upsertAccount({ address, identityId: did, keyRole }, createdEventId);
+    account = (await Account.get(address)) ?? existing;
+  } else {
+    account = Account.create({
+      id: address,
+      identityId: did,
+      address,
+      keyRole,
+      ...getAccountKeyType(address),
+      createdEventId,
+      updatedEventId: createdEventId,
+    });
+
+    await account.save();
   }
 
-  await createPermissions(
-    {
-      datetime,
-      transactionGroups: [],
-    },
-    address,
-    blockId
-  );
+  // The membership interval, so a key discovered lazily from chain state has the same
+  // `IdentityKey` history as one seen through a `DidCreated` / `SecondaryKeysAdded` event.
+  const existingKey = await IdentityKey.get(`${did}/${address}/${blockId}/${padId('0')}`);
 
-  account = Account.create({
+  if (!existingKey) {
+    await IdentityKey.create({
+      id: `${did}/${address}/${blockId}/${padId('0')}`,
+      identityId: did,
+      accountId: address,
+      role: kind === 'primaryKey' ? IdentityKeyRole.PrimaryKey : IdentityKeyRole.SecondaryKey,
+      validFromBlockId: blockId,
+      validToBlockId: EXPLICIT_NULL, // explicitly open (see `openIntervals`)
+      addedReason: eventId,
+      createdEventId,
+      updatedEventId: createdEventId,
+    }).save();
+  }
+
+  return account;
+};
+
+/**
+ * The `Account` an address belongs to, falling back to a bare row when the chain has no key
+ * record for it.
+ *
+ * `getOrCreateAccount` covers every address the chain attaches to an identity. An address that is
+ * not a key — a multisig account, a pallet or system address (the treasury pot, the block-reward
+ * pot, …) — still needs an `Account` row, because non-null relations point at one
+ * (`MultiSig.account`, `PolyxEntry.account`, `AccountBalance.account`) and the account-page query
+ * is keyed on it. The bare row carries only the address and its key type.
+ */
+export const ledgerAccount = async (
+  address: string,
+  blockId: string,
+  datetime: Date,
+  createdEventId = `${blockId}/${padId('0')}`
+): Promise<Account> => {
+  const resolved = await getOrCreateAccount(address, blockId, datetime, createdEventId);
+
+  if (resolved) {
+    return resolved;
+  }
+
+  // The bare path is reached only when the key record is absent (a pallet/pot → `Unlinked`) or
+  // names a multisig (`MultiSigSigner`); a primary/secondary key was already handled above.
+  const account = Account.create({
     id: address,
-    eventId: EventIdEnum.AccountCreated,
-    datetime,
-    identityId: did,
-    permissionsId: address,
     address,
+    keyRole: keyRoleFor(await resolveKeyRecord(address, blockId)),
     ...getAccountKeyType(address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId,
+    updatedEventId: createdEventId,
   });
 
   await account.save();

@@ -1,22 +1,27 @@
 import { EventRecord } from '@polkadot/types/interfaces';
 import { Codec } from '@polkadot/types/types';
-import { SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { SubstrateBlock, SubstrateEvent, SubstrateExtrinsic } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import {
+  AnomalyKind,
   Asset,
   AssetDocument,
   AssetHolder,
+  AssetAllowance,
   AssetMandatoryMediator,
   AssetPreApproval,
   AssetTransaction,
   CallIdEnum,
   EventIdEnum,
   Funding,
+  HolderKind,
+  Holding,
   SecurityIdentifier,
 } from '../../../types';
 import {
   AssetHolderDetails,
-  bytesToString,
   camelToSnakeCase,
+  classifyInternalTransfer,
   coerceHexToString,
   emptyDid,
   getAssetId,
@@ -26,17 +31,32 @@ import {
   getDocValue,
   getFirstKeyFromJson,
   getFirstValueFromJson,
+  getHoldingId,
+  portfolioHolder,
   getNumberValue,
   getPortfolioId,
   getSecurityIdentifiers,
   getStringArrayValue,
   getTextValue,
   is7xChain,
+  isMigratedAssetId,
+  ledgerAccount,
+  padId,
+  padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
+  specVersionOf,
 } from '../../../utils';
+import { blockEvents } from '../../../utils/blockEvents';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
-import { extractArgs, getAsset, toEnum } from './../common';
+import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
+import { memoText, storedText } from '../../../utils/text';
+import { identityOfKey } from '../../../utils/accounts';
+import { indexClosingEvent } from '../block/closingEvent';
+import { preApprovesSilently } from '../settlements/silentPreApprovals';
+import { ensureTrueSpecVersion } from '../../trueSpec';
+import { moveTickerWithAsset } from './mapTickers';
 
 export const createFunding = (
   blockId: string,
@@ -53,9 +73,6 @@ export const createFunding = (
     fundingRound,
     amount: issuedAmount,
     totalFundingAmount,
-    datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   }).save();
 };
@@ -66,7 +83,14 @@ export const createAssetTransaction = (
   datetime: Date,
   details: Pick<
     AssetTransaction,
-    'assetId' | 'amount' | 'fundingRound' | 'nftIds' | 'instructionId' | 'instructionMemo'
+    | 'assetId'
+    | 'amount'
+    | 'fundingRound'
+    | 'nftIds'
+    | 'instructionId'
+    | 'instructionMemo'
+    | 'memo'
+    | 'address'
   > & { fromHolder?: AssetHolderDetails; toHolder?: AssetHolderDetails },
   blockEventId: string,
   eventId?: EventIdEnum,
@@ -117,17 +141,15 @@ export const createAssetTransaction = (
     ...details,
     // adding in fall back for `eventId` helps in identifying cases where utility.batchAtomic is used as extrinsic
     eventId: callToEventMappings[callId] || eventId || callToEventMappings['default'],
+    // classified on holder presence first, DID equality second — an unresolved holder is
+    // present, not absent, and must never read as an issuance/redemption
+    isInternalTransfer: classifyInternalTransfer(details.fromHolder, details.toHolder),
     fromPortfolioId,
-    fromAccount,
+    fromAccountId: fromAccount,
     fromIdentityId,
     toPortfolioId,
-    toAccount,
+    toAccountId: toAccount,
     toIdentityId,
-    eventIdx,
-    extrinsicIdx: extrinsic?.idx,
-    datetime,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   }).save();
 };
@@ -135,7 +157,7 @@ export const createAssetTransaction = (
 export const getAssetHolder = async (
   assetId: string,
   did: string,
-  blockId: string
+  blockEventId: string
 ): Promise<AssetHolder> => {
   const id = `${assetId}/${did}`;
 
@@ -147,8 +169,9 @@ export const getAssetHolder = async (
       identityId: did,
       assetId,
       amount: BigInt(0),
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      nftCount: 0,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
     await assetHolder.save();
   }
@@ -156,30 +179,203 @@ export const getAssetHolder = async (
   return assetHolder;
 };
 
-export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [, rawAssetId, divisible, rawType, rawOwnerDid, ...rest] = params;
-  let disableIu: Codec, rawIdentifiers: Codec, rawAssetName: Codec, rawFundingRoundName: Codec;
+export const getHolding = async (
+  assetId: string,
+  holder: AssetHolderDetails,
+  blockEventId: string
+): Promise<Holding> => {
+  const id = getHoldingId(assetId, holder);
 
-  /**
-   * Events from chain >= 6.0.0 doesn't have disable investor uniqueness value
-   * It defaults to false from 6.0.0
-   *
-   * NOTE - for Polymesh Private SDK the spec version starts again from 1.0.0
-   */
-  let isUniquenessRequired = false;
+  let holding = await Holding.get(id);
 
-  const specName = api.runtimeVersion.specName.toString();
-  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
-    [rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
-  } else {
-    [disableIu, rawAssetName, rawIdentifiers, rawFundingRoundName] = rest;
-    isUniquenessRequired = !getBooleanValue(disableIu);
+  if (!holding) {
+    holding = Holding.create({
+      id,
+      assetId,
+      holderKind: holder.holderKind,
+      portfolioId: holder.holderKind === HolderKind.Portfolio ? getPortfolioId(holder) : undefined,
+      accountId: holder.holderKind === HolderKind.Account ? holder.account : undefined,
+      identityId: holder.identityId || undefined,
+      amount: BigInt(0),
+      frozen: BigInt(0),
+      nftCount: 0,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    });
   }
+
+  // Re-stamped on every touch, not only at creation. An account cannot leave its identity while it
+  // holds an asset (a non-zero balance raises `AccountKeyRefCount`, and unlinking fails with
+  // `AccountKeyIsBeingUsed`), but it can once the balance is zero — and rows outlive a zero
+  // balance, so a reused row takes the holder's current DID; otherwise SUM(Holding.amount) =
+  // AssetHolder.amount breaks for both identities. Every caller saves the row next.
+  holding.identityId = holder.identityId || undefined;
+  const assetHolderId = holder.identityId ? `${assetId}/${holder.identityId}` : undefined;
+
+  // a holding first touched by a freeze has no balance delta to create the rollup it links to
+  if (holder.identityId && holding.assetHolderId !== assetHolderId) {
+    await getAssetHolder(assetId, holder.identityId, blockEventId);
+  }
+  holding.assetHolderId = assetHolderId;
+
+  return holding;
+};
+
+/**
+ * Applies a fungible delta to one holder: the portfolio/account-grain `Holding` row it is the
+ * primary truth for, and the identity-grain `AssetHolder` rollup kept alongside (the SDK queries
+ * the rollup directly, and one row version per touched block is cheap). `Asset.holderCount`
+ * follows the rollup crossing zero.
+ *
+ * The rollup and `holderCount` are only touched when the holder resolves to a DID — an
+ * account-grain holder with no known Identity still gets its `Holding` row, and must not be
+ * folded into a DID rollup it does not belong to.
+ */
+export const applyHoldingDelta = async (
+  asset: Asset,
+  holder: AssetHolderDetails,
+  blockEventId: string,
+  delta: bigint,
+  promises: Promise<void>[]
+): Promise<void> => {
+  const holding = await getHolding(asset.id, holder, blockEventId);
+  holding.amount += delta;
+  holding.updatedEventId = blockEventId;
+  promises.push(holding.save());
+
+  if (!holder.identityId) {
+    return;
+  }
+
+  await applyRollupChange(asset, holder.identityId, blockEventId, promises, rollup => {
+    rollup.amount += delta;
+  });
+};
+
+/** Whether an identity holds the asset: a positive balance, or at least one token. */
+const holds = (rollup: AssetHolder): boolean => rollup.amount > BigInt(0) || rollup.nftCount > 0;
+
+/**
+ * Applies `change` to an identity's `AssetHolder` rollup and counts it in `Asset.holderCount` when
+ * the identity starts or stops holding.
+ */
+const applyRollupChange = async (
+  asset: Asset,
+  did: string,
+  blockEventId: string,
+  promises: Promise<void>[],
+  change: (rollup: AssetHolder) => void
+): Promise<void> => {
+  const rollup = await getAssetHolder(asset.id, did, blockEventId);
+  const before = holds(rollup);
+  change(rollup);
+  rollup.updatedEventId = blockEventId;
+  promises.push(rollup.save());
+
+  if (!before && holds(rollup)) {
+    asset.holderCount += 1;
+  } else if (before && !holds(rollup)) {
+    asset.holderCount = Math.max(0, asset.holderCount - 1);
+  }
+};
+
+/**
+ * The NFT counterpart of `applyHoldingDelta`: `delta` tokens into (or, negative, out of) one
+ * holder's `Holding` and its identity's rollup.
+ */
+export const applyNftCountDelta = async (
+  asset: Asset,
+  holder: AssetHolderDetails,
+  blockEventId: string,
+  delta: number,
+  promises: Promise<void>[]
+): Promise<void> => {
+  const holding = await getHolding(asset.id, holder, blockEventId);
+  holding.nftCount += delta;
+  holding.updatedEventId = blockEventId;
+  promises.push(holding.save());
+
+  if (!holder.identityId) {
+    return;
+  }
+
+  await applyRollupChange(asset, holder.identityId, blockEventId, promises, rollup => {
+    rollup.nftCount += delta;
+  });
+};
+
+/**
+ * Before v6.0, `move_portfolio_funds` checked each item against the source's whole balance and then
+ * applied them all, debiting with `saturating_sub`. One move that listed an asset twice could
+ * therefore take more than the source held: the source stopped at 0 and the destination was
+ * credited in full (testnet block 6,599,003). v6.0 rejects a repeated asset
+ * (`NoDuplicateAssetsAllowed`), so from then on no move exceeds the source.
+ *
+ * The chain never corrected that surplus, so the identity's portfolios still sum to more than its
+ * `balanceOf`, and its `Holding` rows to more than its `AssetHolder`, as on chain.
+ */
+const MOVE_DEBIT_CHECKED_FROM = 6_000_000;
+
+/**
+ * Moves a fungible amount between two holders of one identity (portfolios, or v8 accounts), which
+ * the chain reports only as a movement: no balance event names it, and the identity's total is
+ * unchanged, so only the two `Holding` rows move.
+ */
+export const moveFungibleHolding = async (
+  assetId: string,
+  from: AssetHolderDetails,
+  to: AssetHolderDetails,
+  amount: bigint,
+  blockEventId: string,
+  specVersion: number
+): Promise<void> => {
+  const source = await getHolding(assetId, from, blockEventId);
+  // the pre-v6 chain stopped such a debit at 0; later, a debit past 0 would be the index's error
+  source.amount =
+    specVersion < MOVE_DEBIT_CHECKED_FROM && amount > source.amount
+      ? BigInt(0)
+      : source.amount - amount;
+  source.updatedEventId = blockEventId;
+  await source.save();
+
+  const destination = await getHolding(assetId, to, blockEventId);
+  destination.amount += amount;
+  destination.updatedEventId = blockEventId;
+  await destination.save();
+};
+
+const FUNDING_ROUND_OPTIONAL_FROM = 6_000_000;
+
+/**
+ * The funding round an asset was created with, as the chain stored it. Before 6.0 creation stored
+ * `funding_round.unwrap_or_default()`, so an event's `None` is `""` there; from 6.0 it stores only
+ * a named round. The value is the event's `Option` from 5.1, and the stored value before it.
+ */
+export const fundingRoundAtCreation = (
+  rawFundingRound: Codec,
+  specVersion: number
+): string | undefined => {
+  const fundingRound = storedText(rawFundingRound);
+  return specVersion < FUNDING_ROUND_OPTIONAL_FROM ? fundingRound ?? '' : fundingRound;
+};
+
+export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId, eventIdx } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const {
+    assetId: rawAssetId,
+    divisible,
+    assetType: rawType,
+    ownerDid: rawOwnerDid,
+    name: rawAssetName,
+    identifiers: rawIdentifiers,
+    fundingRound: rawFundingRoundName,
+  } = decoded;
 
   const ownerId = getTextValue(rawOwnerDid);
 
-  const ticker = is7xChain(block) ? undefined : serializeTicker(rawAssetId);
+  const ticker =
+    is7xChain(block) || isMigratedAssetId(rawAssetId) ? undefined : serializeTicker(rawAssetId);
 
   /**
    * Name isn't present on the old events so we need to query storage.
@@ -191,22 +387,23 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
    *       the name is not present, it return 12 bytes string containing TICKER value padded with \0 at the end.
    */
 
+  // `assetNames`/`fundingRound` key on a fixed-width codec: `AssetId` (16 bytes) on 7.x+,
+  // `Ticker` (12 bytes) before it. `.toU8a()` is those exact bytes in both eras. They go straight
+  // back to the host's API, so they stay the host's bytes.
+  // eslint-disable-next-line no-restricted-syntax
+  const assetKey = rawAssetId.toU8a();
   const [assetType, rawName, rawFundingRound] = await Promise.all([
-    getAssetType(rawType),
-    rawAssetName ?? api.query.asset.assetNames(rawAssetId),
-    rawFundingRoundName ?? api.query.asset.fundingRound(rawAssetId),
+    getAssetType(rawType, block, eventIdx),
+    rawAssetName ?? api.query.asset.assetNames(assetKey),
+    rawFundingRoundName ?? api.query.asset.fundingRound(assetKey),
   ]);
 
-  const name = bytesToString(rawName as Codec);
+  const name = storedText(rawName as Codec);
   /**
    * FundingRound isn't present on the old events so we need to query storage.
    * Events from chain >= 5.1.0 has it, and its faster to sync using it
    */
-  let fundingRound: string = null;
-
-  if (!rawFundingRound.isEmpty) {
-    fundingRound = bytesToString(rawFundingRound as Codec);
-  }
+  const fundingRound = fundingRoundAtCreation(rawFundingRound as Codec, specVersionOf(block));
 
   /**
    * Events from chain >= 5.1.0 has identifiers emitted as well
@@ -218,8 +415,11 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     identifiers = getSecurityIdentifiers(rawIdentifiers);
   }
 
+  const assetId = await getAssetId(rawAssetId, block);
+
   await Asset.create({
-    id: await getAssetId(rawAssetId, block),
+    id: assetId,
+    assetId,
     ticker,
     name,
     type: assetType,
@@ -227,69 +427,67 @@ export const handleAssetCreated = async (event: SubstrateEvent): Promise<void> =
     fundingRound,
     isDivisible: getBooleanValue(divisible),
     isFrozen: false,
-    isUniquenessRequired,
+    holderCount: 0,
     identifiers,
     ownerId,
     totalSupply: BigInt(0),
     totalTransfers: BigInt(0),
     isCompliancePaused: false,
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleAssetRenamed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId, rawName] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, name: rawName } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
-  asset.name = bytesToString(rawName);
-  asset.updatedBlockId = blockId;
+  const asset = await getAsset(assetId, event);
+  asset.name = storedText(rawName);
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleFundingRoundSet = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId, rawFundingRound] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, fundingRound: rawFundingRound } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
 
-  asset.fundingRound = bytesToString(rawFundingRound);
-  asset.updatedBlockId = blockId;
+  asset.fundingRound = storedText(rawFundingRound);
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleDocumentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId, rawDocId, rawDoc] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, documentId: rawDocId, document: rawDoc } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
   const docDetails = getDocValue(rawDoc);
 
-  await getAsset(assetId);
+  await getAsset(assetId, event);
 
   await AssetDocument.create({
     id: `${assetId}/${documentId}`,
     documentId,
     ...docDetails,
     assetId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
 export const handleDocumentRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-  const [, rawAssetId, rawDocId] = params;
+  const { block } = extractArgs(event);
+  const { assetId: rawAssetId, documentId: rawDocId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
   const documentId = getNumberValue(rawDocId);
@@ -298,67 +496,73 @@ export const handleDocumentRemoved = async (event: SubstrateEvent): Promise<void
 };
 
 export const handleIdentifiersUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId, rawIdentifiers] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, identifiers: rawIdentifiers } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.identifiers = getSecurityIdentifiers(rawIdentifiers);
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleDivisibilityChanged = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isDivisible = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, extrinsic, block, blockEventId } = extractArgs(event);
-  const [, rawAssetId, rawBeneficiaryDid, rawAmount, rawFundingRound, rawTotalFundingAmount] =
-    params;
+  const { blockId, block, blockEventId } = extractArgs(event);
+  const {
+    assetId: rawAssetId,
+    beneficiaryDid: rawBeneficiaryDid,
+    amount: rawAmount,
+    fundingRound: rawFundingRound,
+    totalFundingAmount: rawTotalFundingAmount,
+  } = decodeEvent(event);
 
   const issuerDid = getTextValue(rawBeneficiaryDid);
   const assetId = await getAssetId(rawAssetId, block);
   const issuedAmount = getBigIntValue(rawAmount);
-  const fundingRound = bytesToString(rawFundingRound);
+  const fundingRound = storedText(rawFundingRound);
   const totalFundingAmount = getBigIntValue(rawTotalFundingAmount);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.totalSupply += issuedAmount;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
-  const assetIssuer = await getAssetHolder(assetId, issuerDid, blockId);
-  assetIssuer.amount += issuedAmount;
-  assetIssuer.updatedBlockId = blockId;
+  // Before v6 `_mint` credits the beneficiary's default portfolio (v3.0 to v5.4)
+  const promises: Promise<void>[] = [];
+  await applyHoldingDelta(
+    asset,
+    portfolioHolder(issuerDid, 0),
+    blockEventId,
+    issuedAmount,
+    promises
+  );
 
   const assetTransaction = AssetTransaction.create({
     id: blockEventId,
     assetId,
-    toPortfolioId: `${asset.ownerId}/0`, // Issued Assets are added to default Portfolio for the issuer
+    toPortfolioId: `${issuerDid}/0`,
     toIdentityId: issuerDid,
     eventId: EventIdEnum.Issued,
-    eventIdx,
     amount: issuedAmount,
     fundingRound,
-    extrinsicIdx: extrinsic?.idx,
-    datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   });
 
-  const promises = [asset.save(), assetIssuer.save(), assetTransaction.save()];
+  promises.push(asset.save(), assetTransaction.save());
   if (fundingRound) {
     promises.push(
       createFunding(
@@ -376,70 +580,171 @@ export const handleIssued = async (event: SubstrateEvent): Promise<void> => {
   await Promise.all(promises);
 };
 
+/**
+ * Before v6 a redemption emits `asset.Transfer` from the portfolio it redeems, to no one, and then
+ * `Redeemed` (v3.0 to v5.4). The holding is debited there, where the portfolio is named, so this
+ * only lowers the supply.
+ */
 export const handleRedeemed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId, rawBeneficiaryDid, rawAmount] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId, amount: rawAmount } = decodeEvent(event);
 
-  const issuerDid = getTextValue(rawBeneficiaryDid);
   const assetId = await getAssetId(rawAssetId, block);
-  const issuedAmount = getBigIntValue(rawAmount);
 
-  const asset = await getAsset(assetId);
-  asset.totalSupply -= issuedAmount;
-  asset.updatedBlockId = blockId;
+  const asset = await getAsset(assetId, event);
+  asset.totalSupply -= getBigIntValue(rawAmount);
+  asset.updatedEventId = blockEventId;
 
-  const assetRedeemer = await getAssetHolder(assetId, issuerDid, blockId);
-  assetRedeemer.amount -= issuedAmount;
-  assetRedeemer.updatedBlockId = blockId;
-
-  const promises = [asset.save(), assetRedeemer.save()];
-
-  await Promise.all(promises);
+  await asset.save();
 };
 
 export const handleFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isFrozen = true;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
 };
 
 export const handleUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const [, rawAssetId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
+  const asset = await getAsset(assetId, event);
   asset.isFrozen = false;
-  asset.updatedBlockId = blockId;
+  asset.updatedEventId = blockEventId;
 
   await asset.save();
+};
+
+/**
+ * An agent set how much of one holder's balance is frozen — through `set_frozen_tokens`,
+ * `freeze_partial_tokens` or `unfreeze_partial_tokens`, which all report the same way.
+ *
+ * The event carries the resulting absolute frozen balance whichever call produced it, so the column
+ * is assigned rather than adjusted, and a missed event is corrected by the next one instead of
+ * compounding. The holder is the chain's own `AssetHolder` — an account or a portfolio — which is
+ * exactly the grain a `Holding` row is keyed on, so this is an upsert onto a row that already
+ * exists for anyone holding the asset.
+ */
+export const handleFrozenBalanceSet = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockId, blockEventId } = extractArgs(event);
+  const { assetHolder, assetId: rawAssetId, frozenBalance } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const holder = await rawAssetHolderToAssetHolder(assetHolder, block, blockId, blockEventId);
+
+  const holding = await getHolding(assetId, holder, blockEventId);
+  holding.frozen = getBigIntValue(frozenBalance);
+  holding.updatedEventId = blockEventId;
+
+  await holding.save();
+};
+
+/**
+ * An agent froze or unfroze one whole holder against transfers of the asset — narrower than an
+ * asset-wide freeze, which is `AssetFrozen`, and independent of any partial frozen balance.
+ *
+ * Freezing an already-frozen holder keeps the original moment, since that is when it became frozen;
+ * the chain treats a repeat as the same state, not a new one.
+ */
+export const handleSetAccountFreeze = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockId, blockEventId } = extractArgs(event);
+  const { holder: rawHolder, assetId: rawAssetId, freeze } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const holder = await rawAssetHolderToAssetHolder(rawHolder, block, blockId, blockEventId);
+
+  const holding = await getHolding(assetId, holder, blockEventId);
+  holding.frozenSince = getBooleanValue(freeze)
+    ? holding.frozenSince ?? block.timestamp
+    : undefined;
+  holding.updatedEventId = blockEventId;
+
+  await holding.save();
 };
 
 export const handleAssetOwnershipTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-
-  const [to, rawAssetId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const { newOwnerDid: rawNewOwnerDid, assetId: rawAssetId } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
 
-  const asset = await getAsset(assetId);
-  asset.ownerId = getTextValue(to);
-  asset.updatedBlockId = blockId;
+  const asset = await getAsset(assetId, event);
+  asset.ownerId = getTextValue(rawNewOwnerDid);
+  asset.updatedEventId = blockEventId;
 
-  await asset.save();
+  await Promise.all([asset.save(), moveTickerWithAsset(asset.ticker, asset.ownerId, blockEventId)]);
+};
+
+/**
+ * Why a pre-v6 `asset.Transfer` happened, which is where its instruction comes from.
+ *
+ * `asset.Transfer` exists up to v5.x (v6.0.0 replaced it with `AssetBalanceUpdated`, which names
+ * the instruction itself) and names no instruction. In those runtimes it is emitted by
+ * `unsafe_transfer`, which only three paths reach (checked at v3.0.0, v4.1.0 and v5.4.0):
+ *
+ * - settlement, which transfers an instruction's legs one at a time and then emits
+ *   `settlement.InstructionExecuted`, in the same dispatch (a failed instruction rolls back with its
+ *   events). STO investments settle this way too. Between the legs there can be only more
+ *   transfers, and the `checkpoint.CheckpointCreated` of a schedule a leg advances; an NFT leg
+ *   emits nothing;
+ * - `asset.controller_transfer`, which emits `asset.ControllerTransfer` straight after;
+ * - a capital distribution claim, which emits `capitalDistribution.BenefitClaimed` straight after.
+ *
+ * (Issuance and redemption, to and from no identity, are told apart before this is asked.)
+ *
+ * So the transfer's instruction is the next `InstructionExecuted` in its phase, reached past only
+ * those, and a transfer followed by either of the other two has none. Anything else means the
+ * reasoning above has a gap: `unexplained` names what was found, for the caller to record, rather
+ * than the transfer quietly being left without one.
+ */
+export const transferInstruction = (
+  block: SubstrateBlock,
+  eventIdx: number
+): { instructionId?: string; unexplained?: string } => {
+  const records = blockEvents(block);
+  const phase = records[eventIdx]?.phase.toString();
+  const name = ({ event }: EventRecord) => `${event.section}.${event.method}`;
+
+  const next = records[eventIdx + 1];
+  if (
+    next?.phase.toString() === phase &&
+    ['asset.ControllerTransfer', 'capitalDistribution.BenefitClaimed'].includes(name(next))
+  ) {
+    return {};
+  }
+
+  for (const record of records.slice(eventIdx + 1)) {
+    if (record.phase.toString() !== phase) {
+      return { unexplained: 'the end of its phase' };
+    }
+    if (name(record) === 'settlement.InstructionExecuted') {
+      return { instructionId: processInstructionId(record.event.data[1]) };
+    }
+    if (!['asset.Transfer', 'checkpoint.CheckpointCreated'].includes(name(record))) {
+      return { unexplained: name(record) };
+    }
+  }
+
+  return { unexplained: 'the end of the block' };
 };
 
 export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
-  const [, rawAssetId, rawFromHolder, rawToHolder, rawAmount] = params;
+  const { blockId, block, eventIdx, extrinsic, blockEventId } = extractArgs(event);
+  const {
+    assetId: rawAssetId,
+    fromHolder: rawFromHolder,
+    toHolder: rawToHolder,
+    amount: rawAmount,
+  } = decodeEvent(event);
   const assetId = await getAssetId(rawAssetId, block);
   const transferAmount = getBigIntValue(rawAmount);
 
@@ -448,7 +753,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   let toDid: string;
 
   if (!rawFromHolder.isEmpty) {
-    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId);
     fromDid = fromHolder.identityId;
     if (fromDid === emptyDid) {
       return; // We ignore the transfer case when Asset tokens are issued
@@ -458,7 +763,7 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId);
     toDid = toHolder.identityId;
     if (toDid === emptyDid) {
       toDid = null;
@@ -466,37 +771,33 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
     }
   }
 
-  let instructionId: string;
+  let instructionId: string | undefined;
 
   const promises = [];
 
-  if (fromHolder && toHolder) {
-    const asset = await getAsset(assetId);
-    asset.totalTransfers += BigInt(1);
-    asset.updatedBlockId = blockId;
+  if (fromHolder) {
+    // a transfer, or a redemption (to no one): the portfolios it names, debited then credited
+    const asset = await getAsset(assetId, event);
+    asset.updatedEventId = blockEventId;
+    await applyHoldingDelta(asset, fromHolder, blockEventId, -transferAmount, promises);
+    if (toHolder) {
+      asset.totalTransfers += BigInt(1);
+      await applyHoldingDelta(asset, toHolder, blockEventId, transferAmount, promises);
+    }
     promises.push(asset.save());
+  }
 
-    const [fromHolder, toHolder] = await Promise.all([
-      getAssetHolder(assetId, fromDid, blockId),
-      getAssetHolder(assetId, toDid, blockId),
-    ]);
+  if (fromHolder && toHolder) {
+    const settled = transferInstruction(block, eventIdx);
+    instructionId = settled.instructionId;
 
-    fromHolder.amount = fromHolder.amount - transferAmount;
-    fromHolder.updatedBlockId = blockId;
-    promises.push(fromHolder.save());
-
-    toHolder.amount = toHolder.amount + transferAmount;
-    toHolder.updatedBlockId = blockId;
-    promises.push(toHolder.save());
-
-    // For old `Transfer` events, `InstructionExecuted` event was separately emitted in the same block
-    const instructionExecutedEvent = block.events.find(
-      ({ event }) => event.method === 'InstructionExecuted'
-    );
-    if (instructionExecutedEvent) {
-      instructionId = processInstructionId(
-        instructionExecutedEvent.event.data[1] as unknown as Codec
-      );
+    if (settled.unexplained) {
+      await recordAnomaly({
+        kind: AnomalyKind.UnreadableValue,
+        detail: `asset.Transfer of ${assetId} is not a settlement leg, controller transfer or distribution claim: it is followed by ${settled.unexplained}, so it has no instruction`,
+        block,
+        eventIdx,
+      });
     }
   }
 
@@ -519,19 +820,6 @@ export const handleAssetTransfer = async (event: SubstrateEvent): Promise<void> 
   );
 
   await Promise.all(promises);
-};
-
-const updateAssetHolderAmount = async (
-  assetId: string,
-  identityId: string,
-  blockId: string,
-  delta: bigint,
-  promises: Promise<void>[]
-): Promise<void> => {
-  const holder = await getAssetHolder(assetId, identityId, blockId);
-  holder.amount += delta;
-  holder.updatedBlockId = blockId;
-  promises.push(holder.save());
 };
 
 type UpdateReasonResult = {
@@ -570,58 +858,71 @@ export const processUpdateReason = (
       instructionId: number | null;
       instructionMemo: `0x${string}` | null;
     };
-    const instructionId = details.instructionId ? details.instructionId.toString() : null;
-    const instructionMemo = details.instructionMemo
-      ? coerceHexToString(details.instructionMemo)
+    // FK to the padded `Instruction.id` — must carry the same zero-padding
+    const instructionId = details.instructionId
+      ? padNumericId(details.instructionId.toString())
       : null;
+    const instructionMemo = memoText(details.instructionMemo) ?? null;
     const eventId = instructionId
       ? EventIdEnum.Transfer
       : toEnum(EventIdEnum, blockEvents[eventIdx + 1]?.event.method, EventIdEnum.Unknown);
     return { eventId, instructionId, instructionMemo, assetDelta: { totalTransfers: BigInt(1) } };
   }
 
+  if (updateReason === 'controllerTransfer') {
+    // A controller transfer is a transfer: count it, and pin the event id so a
+    // batched controller_transfer does not fall back to the wrapping call name.
+    return {
+      eventId: EventIdEnum.ControllerTransfer,
+      assetDelta: { totalTransfers: BigInt(1) },
+    };
+  }
+
   return { eventId: undefined, assetDelta: {} };
 };
 
 export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
-  const [, rawAssetId, rawAmount, rawFromHolder, rawToHolder, rawUpdateReason] = params;
+  const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
+  const {
+    assetId: rawAssetId,
+    amount: rawAmount,
+    from: rawFromHolder,
+    to: rawToHolder,
+    updateReason: rawUpdateReason,
+  } = decodeEvent(event);
 
   const assetId = await getAssetId(rawAssetId, block);
-  const asset = await getAsset(assetId);
+  const asset = await getAssetOrAnomaly(assetId, {
+    block,
+    eventIdx,
+    eventId: EventIdEnum.Transfer,
+  });
+
+  if (!asset) {
+    return;
+  }
+
   const transferAmount = getBigIntValue(rawAmount);
   const promises: Promise<void>[] = [];
 
   let fromHolder: AssetHolderDetails | undefined;
 
   if (!rawFromHolder.isEmpty) {
-    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId);
-    await updateAssetHolderAmount(
-      assetId,
-      fromHolder.identityId,
-      blockId,
-      -transferAmount,
-      promises
-    );
+    fromHolder = await rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId);
+    await applyHoldingDelta(asset, fromHolder, blockEventId, -transferAmount, promises);
   }
   let toHolder: AssetHolderDetails | undefined;
 
   if (!rawToHolder.isEmpty) {
-    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId);
-    await updateAssetHolderAmount(assetId, toHolder.identityId, blockId, transferAmount, promises);
+    toHolder = await rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId);
+    await applyHoldingDelta(asset, toHolder, blockEventId, transferAmount, promises);
   }
 
   const updateReason = getFirstKeyFromJson(rawUpdateReason);
   const value = getFirstValueFromJson(rawUpdateReason);
 
   const { eventId, fundingRoundName, instructionId, instructionMemo, assetDelta } =
-    processUpdateReason(
-      updateReason,
-      value,
-      transferAmount,
-      eventIdx,
-      block.events as unknown as EventRecord[]
-    );
+    processUpdateReason(updateReason, value, transferAmount, eventIdx, blockEvents(block));
 
   if (assetDelta.totalSupply !== undefined) {
     asset.totalSupply += assetDelta.totalSupply;
@@ -629,8 +930,15 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
   if (assetDelta.totalTransfers !== undefined) {
     asset.totalTransfers += assetDelta.totalTransfers;
   }
-  if (assetDelta.totalSupply !== undefined || assetDelta.totalTransfers !== undefined) {
-    asset.updatedBlockId = blockId;
+  if (
+    assetDelta.totalSupply !== undefined ||
+    assetDelta.totalTransfers !== undefined ||
+    fromHolder ||
+    toHolder
+  ) {
+    // one save persists the supply/transfer deltas and any holderCount change applyHoldingDelta
+    // made to this same in-memory Asset
+    asset.updatedEventId = blockEventId;
     promises.push(asset.save());
   }
 
@@ -672,10 +980,12 @@ export const handleAssetBalanceUpdated = async (event: SubstrateEvent): Promise<
 };
 
 export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const addedById = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
-  const mediators = getStringArrayValue(params[2]);
+  const { block, blockEventId } = extractArgs(event);
+  const { callerDid: did, assetId: rawAssetId, mediators: rawMediators } = decodeEvent(event);
+
+  const addedById = getTextValue(did);
+  const assetId = await getAssetId(rawAssetId, block);
+  const mediators = getStringArrayValue(rawMediators);
 
   const createPromises = mediators.map(mediator =>
     AssetMandatoryMediator.create({
@@ -683,8 +993,8 @@ export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<
       identityId: mediator,
       assetId,
       addedById,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save()
   );
 
@@ -692,9 +1002,11 @@ export const handleAssetMediatorsAdded = async (event: SubstrateEvent): Promise<
 };
 
 export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-  const assetId = await getAssetId(params[1], block);
-  const mediators = getStringArrayValue(params[2]);
+  const { block } = extractArgs(event);
+  const { assetId: rawAssetId, mediators: rawMediators } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const mediators = getStringArrayValue(rawMediators);
 
   await Promise.all(
     mediators.map(mediator => AssetMandatoryMediator.remove(`${assetId}/${mediator}`))
@@ -702,24 +1014,151 @@ export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promis
 };
 
 export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
-  const identityId = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
+  const { block, blockEventId } = extractArgs(event);
+  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
+
+  const identityId = getTextValue(did);
+  const assetId = await getAssetId(rawAssetId, block);
 
   await AssetPreApproval.create({
     id: `${assetId}/${identityId}`,
     assetId,
     identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
 
-export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
+/**
+ * 6.0.0 and 6.0.1 pre-approve a ticker, and take the pre-approval away, with no event
+ * (`PreApprovedAsset` and `RemovePreApprovedAsset` arrived in 6.1.0), so the call stands in. The
+ * dictionary has no spec to query a call by, so the handler checks it.
+ */
+export const handleSilentAssetPreApproval = async (
+  extrinsic: SubstrateExtrinsic
+): Promise<void> => {
+  const { block } = extrinsic;
+  await ensureTrueSpecVersion(block);
+  if (!preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
+    return;
+  }
 
-  const identityId = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
+  const blockId = padId(block.block.header.number.toString());
+  const identityId = await identityOfKey(extrinsic.extrinsic.signer.toString(), blockId);
+  const closing = identityId ? await indexClosingEvent(extrinsic) : undefined;
+  if (!identityId || !closing) {
+    return;
+  }
+
+  const assetId = await getAssetId(extrinsic.extrinsic.method.args[0], block);
+  const id = `${assetId}/${identityId}`;
+  if (extrinsic.extrinsic.method.method === 'preApproveTicker') {
+    const { blockEventId } = extractArgs(closing);
+    await AssetPreApproval.create({
+      id,
+      assetId,
+      identityId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    }).save();
+  } else {
+    await AssetPreApproval.remove(id);
+  }
+};
+
+export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
+  const { block } = extractArgs(event);
+  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
+
+  const identityId = getTextValue(did);
+  const assetId = await getAssetId(rawAssetId, block);
 
   await AssetPreApproval.remove(`${assetId}/${identityId}`);
+};
+
+const getAssetAllowance = async (
+  assetId: string,
+  ownerId: string,
+  spenderId: string,
+  blockId: string,
+  block: SubstrateEvent['block'],
+  blockEventId: string
+): Promise<AssetAllowance> => {
+  // `ledgerAccount`, not `getOrCreateAccount`: `approve` never checks the spender, which can be a
+  // key with no identity or a multisig signer, and `AssetAllowance.spender` is non-null. The owner
+  // is resolved the same way.
+  await Promise.all([
+    ledgerAccount(ownerId, blockId, block.timestamp, blockEventId),
+    ledgerAccount(spenderId, blockId, block.timestamp, blockEventId),
+  ]);
+
+  const id = `${assetId}/${ownerId}/${spenderId}`;
+
+  return (
+    (await AssetAllowance.get(id)) ??
+    AssetAllowance.create({
+      id,
+      assetId,
+      ownerId,
+      spenderId,
+      amount: BigInt(0),
+      totalSpent: BigInt(0),
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
+    })
+  );
+};
+
+export const handleApproval = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, block, blockEventId } = extractArgs(event);
+  const {
+    owner: rawOwner,
+    spender: rawSpender,
+    assetId: rawAssetId,
+    amount: rawAmount,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const allowance = await getAssetAllowance(
+    assetId,
+    getTextValue(rawOwner),
+    getTextValue(rawSpender),
+    blockId,
+    block,
+    blockEventId
+  );
+
+  allowance.amount = getBigIntValue(rawAmount);
+  allowance.updatedEventId = blockEventId;
+
+  await allowance.save();
+};
+
+export const handleAllowanceSpent = async (event: SubstrateEvent): Promise<void> => {
+  const { blockId, block, blockEventId } = extractArgs(event);
+  const {
+    owner: rawOwner,
+    spender: rawSpender,
+    assetId: rawAssetId,
+    amountSpent: rawAmountSpent,
+    remainingAllowance: rawRemaining,
+  } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+  const allowance = await getAssetAllowance(
+    assetId,
+    getTextValue(rawOwner),
+    getTextValue(rawSpender),
+    blockId,
+    block,
+    blockEventId
+  );
+
+  // take the chain's own remaining value rather than subtracting — subtraction drifts if any
+  // AllowanceSpent is ever missed or reordered
+  allowance.amount = getBigIntValue(rawRemaining);
+  allowance.totalSpent += getBigIntValue(rawAmountSpent);
+  allowance.updatedEventId = blockEventId;
+
+  await allowance.save();
 };

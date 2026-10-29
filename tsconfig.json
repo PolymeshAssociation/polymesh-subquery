@@ -7,11 +7,36 @@
     "importHelpers": true,
     "incremental": true,
     "resolveJsonModule": true,
-    "module": "commonjs",
+    // `nodenext`, so `src/` resolves `@polkadot/*` to the same `cjs/` declarations as the
+    // `node_modules` declarations that `subql build`'s ts-loader reads them through. Under `node`
+    // the two sides read different copies of the same classes and the build rejects assignments
+    // between them.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "outDir": "dist",
     "baseUrl": ".",
     "rootDir": "src",
-    "target": "es2017"
+    "target": "es2017",
+    // The library types follow the runtime, Node 22, so newer built-ins such as `Array.prototype.at`
+    // type-check; the emitted syntax stays es2017. `dom` and `dom.iterable` are what the default
+    // library for es2017 already included.
+    "lib": ["es2022", "dom", "dom.iterable"],
+    // Explicit, not inherited. TypeScript's own default is `false`, but an editor running the
+    // native preview (tsgo) defaults to `strict: true` — so the handler layer showed hundreds of
+    // `possibly undefined` errors in-editor that CI never reported, and it was not obvious which
+    // of the two was the project's actual contract. Stating it settles that: the checked-in
+    // contract is non-strict. Turning `strictNullChecks` on is wanted, but it is ~260 errors
+    // across 39 files today and has to land as its own ratcheted piece of work, not as a silent
+    // side effect of which tool someone happens to be running.
+    "strict": false,
+    // required for `tsc --noEmit` to pass at all: @subql/types' global.d.ts and
+    // tests/unit/globals.d.ts both declare `api`/`unsafeApi`/`logger` as SubQuery runtime
+    // globals (TS2451), and some node_modules .d.ts files use syntax this TypeScript version
+    // doesn't parse. It is also inherent to how polkadot-js chain-type augmentation works:
+    // `QueryableStorage`'s index signature and the augmented pallets cannot both be satisfied
+    // (TS2411) — polymesh-sdk sets the same flag for the same reason. Every error this
+    // suppresses is in node_modules; project code type-checks clean without it.
+    "skipLibCheck": true
   },
   "ts-node": {
     // load the `include` below, so scripts run through ts-node see SubQuery's injected globals

@@ -1,12 +1,19 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "."
+    "rootDir": ".",
+    // ts-jest transpiles each file on its own: it supports `nodenext` only this way, and
+    // `yarn typecheck` checks the whole program instead
+    "isolatedModules": true
   },
   "include": [
     "src/**/*",
     "tests/**/*",
     "tests/unit/globals.d.ts",
+    // scripts/**/* and project.ts see SubQuery's injected globals via tsconfig.json's
+    // `ts-node.files`, but nothing type-checked them until check-handlers.ts needed project.ts
+    "scripts/**/*",
+    "project.ts",
     "node_modules/@subql/types/dist/global.d.ts",
     "node_modules/@subql/types-core/dist/global.d.ts"
   ]

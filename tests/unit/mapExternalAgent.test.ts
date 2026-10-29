@@ -1,0 +1,300 @@
+import { mapExternalAgentAction } from '../../src/mappings/entities/externalAgents/mapExternalAgentAction';
+import {
+  handleExternalAgentAdded,
+  handleExternalAgentRemoved,
+} from '../../src/mappings/entities/externalAgents/mapExternalAgent';
+import {
+  handleAgentAdded,
+  handleAgentRemoved,
+  handleCreatorAgent,
+  handleGroupChanged,
+  handleGroupCreated,
+} from '../../src/mappings/entities/externalAgents/mapExternalAgentHistory';
+import { getAssetIdForLegacyTicker } from '../../src/utils/assets';
+import { codec, mockStore, tupleEvent } from './helpers';
+
+const ASSET_ID = '0xassetagent0000000000000000000000';
+const DID_A = TEST_DID;
+
+const getByFields = (): jest.Mock => (globalThis as any).store.getByFields as jest.Mock;
+
+describe('AgentAdded — one event, three tables', () => {
+  it('produces exactly one AssetAgent, one AssetAgentHistory, and one AssetAgentAction row', async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    const event = tupleEvent({
+      section: 'externalAgents',
+      method: 'AgentAdded',
+      data: [codec(DID_A), codec(ASSET_ID), codec({ full: null })],
+    });
+
+    // `AgentAdded` is registered against all three handlers in project.ts, driven from one event.
+    await handleExternalAgentAdded(event);
+    await handleAgentAdded(event);
+    await mapExternalAgentAction(event);
+
+    expect(Object.keys(db.AssetAgent ?? {})).toHaveLength(1);
+    expect(Object.keys(db.AssetAgentHistory ?? {})).toHaveLength(1);
+    expect(Object.keys(db.AssetAgentAction ?? {})).toHaveLength(1);
+
+    const [agent] = Object.values(db.AssetAgent) as any[];
+    const [history] = Object.values(db.AssetAgentHistory) as any[];
+
+    expect(agent).toMatchObject({ assetId: ASSET_ID, identityId: DID_A });
+    expect(history).toMatchObject({
+      assetId: ASSET_ID,
+      identityId: DID_A,
+      type: 'AgentAdded',
+    });
+    // append-only: a history row is never rewritten, so it records only the event that made it
+    expect(history.updatedEventId).toBeUndefined();
+  });
+});
+
+describe('AgentGroup', () => {
+  it('is queryable by assetId with no id string-parsing', async () => {
+    const db = mockStore();
+
+    await handleGroupCreated(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'GroupCreated',
+        data: [codec(DID_A), codec(ASSET_ID), codec(1), codec({ these: [] })],
+      })
+    );
+
+    const [group] = Object.values(db.AgentGroup) as any[];
+
+    expect(group.assetId).toBe(ASSET_ID);
+  });
+
+  it("stores its permissions in the index's form, a map by pallet with names as text", async () => {
+    const db = mockStore();
+
+    await handleGroupCreated(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'GroupCreated',
+        data: [
+          codec(DID_A),
+          codec(ASSET_ID),
+          codec(1),
+          // as v14 to 7.0 decode it: a list, camelCase fields, names in hex
+          codec({
+            these: [{ palletName: '0x4173736574', dispatchableNames: { these: ['0x6973737565'] } }],
+          }),
+        ],
+      })
+    );
+
+    const [group] = Object.values(db.AgentGroup) as any[];
+
+    expect(JSON.parse(group.permissions)).toEqual({
+      these: { Asset: { extrinsics: { these: ['issue'] } } },
+    });
+  });
+});
+
+describe("an agent's history", () => {
+  it("records a built-in group's permissions in the index's form", async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleAgentAdded(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentAdded',
+        data: [codec(DID_A), codec(ASSET_ID), codec({ polymeshV1PIA: null })],
+      })
+    );
+
+    const [history] = Object.values(db.AssetAgentHistory) as any[];
+
+    expect(JSON.parse(history.permissions)).toEqual({
+      these: {
+        Asset: { extrinsics: { these: ['controller_transfer', 'issue', 'redeem'] } },
+        Sto: { extrinsics: { except: ['invest'] } },
+      },
+    });
+  });
+});
+
+describe('membership lifecycle', () => {
+  it('added → group changed → removed produces three AssetAgentHistory rows with the right types', async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleAgentAdded(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentAdded',
+        data: [codec(DID_A), codec(ASSET_ID), codec({ full: null })],
+        idx: 0,
+      })
+    );
+
+    await handleGroupChanged(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'GroupChanged',
+        data: [codec(DID_A), codec(ASSET_ID), codec(DID_A), codec({ exceptMeta: null })],
+        idx: 1,
+      })
+    );
+
+    // project.ts registers both handlers on `AgentRemoved`: one drops the current-membership
+    // row, the other appends the history row.
+    await handleExternalAgentRemoved(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentRemoved',
+        data: [codec(DID_A), codec(ASSET_ID), codec(DID_A)],
+        idx: 2,
+      })
+    );
+    await handleAgentRemoved(
+      tupleEvent({
+        section: 'externalAgents',
+        method: 'AgentRemoved',
+        data: [codec(DID_A), codec(ASSET_ID), codec(DID_A)],
+        idx: 2,
+      })
+    );
+
+    const types = Object.values(db.AssetAgentHistory)
+      .map((row: any) => row.type)
+      .sort();
+
+    expect(types).toEqual(['AgentAdded', 'AgentRemoved', 'GroupChanged'].sort());
+  });
+});
+
+describe('agent-permissioned asset calls recorded as agent actions', () => {
+  const HOLDER = codec({ account: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY' });
+
+  it.each([
+    ['SetAccountFreeze', [codec(DID_A), HOLDER, codec(ASSET_ID), codec(true)]],
+    ['FrozenBalanceSet', [codec(DID_A), HOLDER, codec(ASSET_ID), codec(100)]],
+    ['ControllerTransferTo', [codec(DID_A), codec(ASSET_ID), HOLDER, HOLDER, codec(5)]],
+    ['TickerLinkedToAsset', [codec(DID_A), codec('0x5449434b4552000000000000'), codec(ASSET_ID)]],
+    [
+      'TickerUnlinkedFromAsset',
+      [codec(DID_A), codec('0x5449434b4552000000000000'), codec(ASSET_ID)],
+    ],
+  ])('%s', async (method, data) => {
+    const db = mockStore();
+
+    await mapExternalAgentAction(tupleEvent({ section: 'asset', method, data }));
+
+    const actions = Object.values(db.AssetAgentAction ?? {}) as any[];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      assetId: ASSET_ID,
+      callerId: DID_A,
+      palletName: 'asset',
+      eventId: method,
+    });
+  });
+});
+
+describe('FundraiserCreated recorded as an agent action', () => {
+  it('names the asset by its id before 7.3, when the fundraiser names it by ticker', async () => {
+    const db = mockStore();
+    const ticker = '0x464c59000000000000000000';
+    const details = codec({ offering_asset: ticker, raising_asset: ticker, venue_id: 1 });
+
+    await mapExternalAgentAction(
+      tupleEvent({
+        section: 'sto',
+        method: 'FundraiserCreated',
+        specVersion: 5_000_000,
+        data: [codec(DID_A), codec(0), codec('0x6f6666'), details],
+      })
+    );
+
+    const [action] = Object.values(db.AssetAgentAction ?? {}) as any[];
+    expect(action).toMatchObject({
+      assetId: await getAssetIdForLegacyTicker(ticker),
+      callerId: DID_A,
+      eventId: 'FundraiserCreated',
+    });
+  });
+});
+
+/**
+ * Before external agents had an event of their own at creation, creating an asset made its
+ * creator a Full agent with nothing to say so. Which 3.x did is not one spec on both chains:
+ * testnet's 3.2 emits `AgentAdded`, mainnet's 3.3 (WORLDCAPITAL, block 1,947,849) does not.
+ */
+describe('the creator of a new asset', () => {
+  const ticker = '0x555553440000000000000000';
+  const PHASE = { toString: () => '{"applyExtrinsic":1}' };
+  const record = (section: string, method: string, data: unknown[], phase = PHASE) => ({
+    phase,
+    event: { section, method, data },
+  });
+  const assetCreated = [
+    codec(DID_A),
+    codec(ticker),
+    codec(true),
+    codec('StableCoin'),
+    codec(DID_A),
+    codec(false),
+  ];
+  const created = (siblings: unknown[]) =>
+    tupleEvent({
+      section: 'asset',
+      method: 'AssetCreated',
+      specVersion: 3_003,
+      idx: 1,
+      data: assetCreated,
+      events: [siblings[0], record('asset', 'AssetCreated', assetCreated), ...siblings.slice(1)],
+    });
+
+  it('is made a Full agent when its extrinsic emits no AgentAdded for the asset', async () => {
+    const db = mockStore();
+    getByFields().mockResolvedValue([]);
+
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        // another extrinsic's agent, for the same asset, is no announcement of this one
+        record(
+          'externalAgents',
+          'AgentAdded',
+          [codec(DID_A), codec(ticker), codec({ full: null })],
+          {
+            toString: () => '{"applyExtrinsic":2}',
+          }
+        ),
+      ])
+    );
+
+    const assetId = await getAssetIdForLegacyTicker(ticker);
+    expect(Object.values(db.AssetAgent ?? {})).toEqual([
+      expect.objectContaining({ id: `${assetId}/${DID_A}`, assetId, identityId: DID_A }),
+    ]);
+    expect(Object.values(db.AssetAgentHistory ?? {})).toEqual([
+      expect.objectContaining({ assetId, identityId: DID_A, type: 'AgentAdded' }),
+    ]);
+  });
+
+  it('is left to the AgentAdded its extrinsic emits', async () => {
+    const db = mockStore();
+
+    await handleCreatorAgent(
+      created([
+        record('identity', 'AssetDidRegistered', [codec(DID_A), codec(ticker)]),
+        record('externalAgents', 'AgentAdded', [
+          codec(DID_A),
+          codec(ticker),
+          codec({ full: null }),
+        ]),
+      ])
+    );
+
+    expect(db.AssetAgent ?? {}).toEqual({});
+    expect(db.AssetAgentHistory ?? {}).toEqual({});
+  });
+});

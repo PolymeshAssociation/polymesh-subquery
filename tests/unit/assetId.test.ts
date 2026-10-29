@@ -1,0 +1,77 @@
+/**
+ * `getAssetId` maps a raw `asset` event identifier to the id the `Asset` row is keyed on.
+ *
+ * The public chain switched `asset` events from a 12-byte `Ticker` to a 16-byte
+ * `PolymeshPrimitivesAssetAssetId` at v7.0.0, but around an upgrade a block can report the
+ * previous runtime's spec, so the id is told apart by byte length: a `Ticker` is `[u8; 12]`, so a
+ * 16-byte value is a migrated asset id whatever spec the block claims.
+ */
+
+import { SubstrateBlock } from '@subql/types';
+import { getAssetId, getAssetIdForLegacyTicker, isMigratedAssetId } from '../../src/utils/assets';
+
+const globalAny = globalThis as any;
+
+const block = (specVersion: number): SubstrateBlock =>
+  ({ specVersion } as unknown as SubstrateBlock);
+
+/** A 16-byte migrated asset id (ticker "PSRF" as it exists on testnet from v7.0.0). */
+const ASSET_ID = '0x8f68f310c5ea8f27a189154812efd457';
+/** "PSRF" as a 12-byte ticker, hex (0x + 24 chars). */
+const TICKER_HEX = '0x505352460000000000000000';
+
+beforeEach(() => {
+  globalAny.chainId = '0xnotstaging';
+  globalAny.api.runtimeVersion.specName = { toString: () => 'polymesh' };
+});
+
+describe('isMigratedAssetId', () => {
+  it('is true only for a 16-byte hex value', () => {
+    expect(isMigratedAssetId(ASSET_ID)).toBe(true);
+    expect(isMigratedAssetId({ toString: () => ASSET_ID } as any)).toBe(true);
+  });
+
+  it('is false for a 12-byte ticker, a short hex, or a plain string', () => {
+    expect(isMigratedAssetId(TICKER_HEX)).toBe(false);
+    expect(isMigratedAssetId('0xdead')).toBe(false);
+    expect(isMigratedAssetId('PSRF')).toBe(false);
+  });
+});
+
+describe('getAssetId', () => {
+  it('returns a 16-byte asset id unchanged on a 7.x block', async () => {
+    expect(await getAssetId(ASSET_ID, block(7_000_003))).toBe(ASSET_ID);
+  });
+
+  it('hashes a legacy ticker on a pre-7.x block', async () => {
+    // "PSRF" was created pre-v7 as a ticker; the chain migration derives its asset id
+    // deterministically, and `getAssetIdForLegacyTicker` reproduces that — it is ASSET_ID.
+    expect(await getAssetId('PSRF', block(6_003_040))).toBe(
+      await getAssetIdForLegacyTicker('PSRF')
+    );
+    expect(await getAssetId('PSRF', block(6_003_040))).toBe(ASSET_ID);
+  });
+
+  it('returns a 16-byte asset id unchanged even when the block reports a stale pre-7.x spec', async () => {
+    // v7.0.0 was live and the event already carried the 16-byte asset id, but the block reported
+    // spec 6003050
+    expect(await getAssetId(ASSET_ID, block(6_003_050))).toBe(ASSET_ID);
+    expect(await getAssetId({ toString: () => ASSET_ID } as any, block(6_003_050))).toBe(ASSET_ID);
+  });
+});
+
+describe('getAssetIdForLegacyTicker', () => {
+  /** "T1" as stored on chain, trailing spaces, and the id 7.0 gave it (testnet authorization 54631) */
+  const T1 = '0x543120202020202020202020';
+
+  it('derives the id 7.0 gave the ticker', async () => {
+    expect(await getAssetIdForLegacyTicker(T1)).toBe('0x7edf86b7e651823cb21c2574e61c6ff3');
+  });
+
+  it('applies the staging chain exception, which migrated without UUID normalisation', async () => {
+    globalAny.chainId = '0x3c3183f6d701500766ff7d147b79c4f10014a095eaaa98e960dcef6b3ead50ee';
+
+    // the same blake2 digest, without the version and variant bits forced
+    expect(await getAssetIdForLegacyTicker(T1)).toBe('0x7edf86b7e651123cb21c2574e61c6ff3');
+  });
+});

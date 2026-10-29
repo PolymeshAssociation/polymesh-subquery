@@ -1,49 +1,37 @@
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
 import {
+  decodeEvent,
+  legacyPermissionsUpdatedAddress,
+  legacyRemovedAddresses,
+  legacySecondaryKeyEntries,
+  legacySignerLeftAddress,
+} from '../../../decode';
+import {
   Account,
-  AccountHistory,
+  AnomalyKind,
   AssetPermissions,
-  ChildIdentity,
   CustomClaimType,
-  Event,
   EventIdEnum,
   Identity,
-  Permissions,
-  PermissionsJson,
+  IdentityKeyRole,
+  AccountKeyRole,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
 import {
   MeshPortfolio,
-  bytesToString,
   getEventParams,
   getNumberValue,
   getTextValue,
   meshPortfolioToAssetHolder,
 } from '../../../utils';
-import { getAccountKeyType } from '../../../utils/accounts';
+import { restampIdentityCopies, upsertAccount } from '../../../utils/accounts';
+import { recordAnomaly } from '../../../utils/anomaly';
 import { Attributes, extractArgs } from './../common';
+import { closeIdentityKeys, openIdentityKey, rotateIdentityKey } from './mapIdentityKey';
 import { createPortfolio, getPortfolio } from './mapPortfolio';
-
-const createHistoryEntry = async (
-  eventId: EventIdEnum,
-  identity: string,
-  address: string,
-  blockId: string,
-  datetime: Date,
-  blockEventId: string,
-  permissions?: PermissionsJson
-): Promise<void> =>
-  AccountHistory.create({
-    id: blockEventId,
-    eventId,
-    account: address,
-    identity,
-    permissions,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    datetime,
-  }).save();
+import { canonicalExtrinsicPermissions, Subset } from '../../../utils/permissions';
+import { requiredText } from '../../../utils/text';
 
 /**
  * Returns Identity for a given DID
@@ -59,36 +47,15 @@ const getIdentity = async (did: string): Promise<Identity> => {
   return identity;
 };
 
-export const createPermissions = async (
-  args: Attributes<Permissions>,
-  address: string,
-  blockId: string
+export const createIdentity = async (
+  args: Attributes<Identity>,
+  blockEventId: string
 ): Promise<void> =>
-  Permissions.create({
-    id: address,
-    ...args,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
-
-export const createAccount = async (
-  args: Omit<Attributes<Account>, 'keyType' | 'evmAddress'>,
-  blockId: string
-): Promise<void> =>
-  Account.create({
-    id: args.address,
-    ...args,
-    ...getAccountKeyType(args.address),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  }).save();
-
-export const createIdentity = async (args: Attributes<Identity>, blockId: string): Promise<void> =>
   Identity.create({
     id: args.did,
     ...args,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 /**
  * Creates an Identity if already not present. It also creates default Portfolio for that Identity
@@ -109,38 +76,67 @@ export const createIdentityIfNotExists = async (
     await createIdentity(
       {
         did,
-        primaryAccount: '',
-        eventId,
+        primaryAccountId: undefined,
         secondaryKeysFrozen: false,
-        datetime: block.timestamp,
       },
-      blockId
+      blockEventId
     );
 
     await createPortfolio(
       {
         identityId: did,
         number: 0,
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
+};
+
+export interface ResolveIdentityArgs {
+  /** What referenced the DID — an event id, or a description of the path for a non-event caller */
+  reason: string;
+  eventIdx: number;
+  /** Absent on the genesis scan, which runs outside any block's event stream */
+  block?: SubstrateBlock;
+  blockEventId: string;
+}
+
+/**
+ * The identity a DID names, when the index holds it.
+ *
+ * A relation cannot point at a row that is not there: with no foreign keys a dangling reference is
+ * accepted on write and fails at query time. The seed writes every identity the chain holds at the
+ * start and `DidCreated` every later one, so a DID the index lacks is recorded and dropped.
+ */
+export const resolveIdentity = async (
+  did: string,
+  { reason, eventIdx, block }: ResolveIdentityArgs
+): Promise<string | undefined> => {
+  if (await Identity.get(did)) {
+    return did;
+  }
+
+  const detail = `${reason} referenced identity ${did}, which is not indexed`;
+  if (block) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail,
+      block,
+      eventIdx,
+    });
+  } else {
+    logger.warn(detail);
+  }
+
+  return undefined;
 };
 
 export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
 
-  const {
-    eventId,
-    createdBlockId: blockId,
-    datetime,
-    eventIdx,
-    blockEventId,
-  } = getEventParams(args);
+  const { eventId, eventIdx, blockEventId } = getEventParams(args);
 
-  const [rawDid, rawAddress] = args.params;
+  const { did: rawDid, primaryKey: rawAddress } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
   const address = getTextValue(rawAddress);
@@ -148,111 +144,60 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
   let defaultPortfolio;
   const identity = await Identity.get(did);
   if (identity) {
-    identity.primaryAccount = address;
-    identity.updatedBlockId = blockId;
-    identity.eventId = eventId;
-    identity.datetime = datetime;
+    identity.primaryAccountId = address;
+    identity.updatedEventId = blockEventId;
     await identity.save();
 
     const portfolio = await getPortfolio({ identityId: did, number: 0 });
 
-    portfolio.updatedBlockId = blockId;
+    portfolio.updatedEventId = blockEventId;
     defaultPortfolio = portfolio.save();
   } else {
     await createIdentity(
       {
         did,
-        primaryAccount: address,
+        primaryAccountId: address,
         secondaryKeysFrozen: false,
-        eventId,
-        datetime,
       },
-      blockId
+      blockEventId
     );
 
     defaultPortfolio = createPortfolio(
       {
         identityId: did,
         number: 0,
-        eventIdx,
-        createdEventId: blockEventId,
       },
-      blockId
+      blockEventId
     );
   }
 
-  const permissions = createPermissions(
-    {
-      datetime,
-      transactionGroups: [],
-    },
-    address,
-    blockId
-  );
-
-  const account = createAccount(
+  const account = upsertAccount(
     {
       identityId: did,
-      permissionsId: address,
-      eventId,
+      keyRole: AccountKeyRole.PrimaryKey,
       address,
-      datetime,
     },
-    blockId
+    blockEventId
   );
 
-  await Promise.all([permissions, account, defaultPortfolio]);
+  await Promise.all([account, defaultPortfolio]);
+
+  // The primary key's membership record — a primary key always has full permission, so no
+  // `permissions` snapshot is kept.
+  await openIdentityKey(
+    { identityId: did, address, role: IdentityKeyRole.PrimaryKey, addedReason: eventId, eventIdx },
+    blockEventId
+  );
 };
 
-export const handleChildDidCreated = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const { createdBlockId, updatedBlockId } = getEventParams(args);
-
-  let childDid: string, parentDid: string;
-
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [{ value: parentDid }, { value: childDid }] = attributes;
-  } else {
-    const [rawParentDid, rawChildDid] = args.params;
-
-    parentDid = getTextValue(rawParentDid);
-    childDid = getTextValue(rawChildDid);
-  }
-
-  await ChildIdentity.create({
-    id: childDid,
-    parentId: parentDid,
-    childId: childDid,
-    createdBlockId,
-    updatedBlockId,
-  }).save();
-};
-
-export const handleChildDidUnlinked = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  let childDid: string;
-
-  if (args instanceof Event) {
-    const attributes = JSON.parse(args.attributesTxt);
-    [, , { value: childDid }] = attributes;
-  } else {
-    const [, , rawChildDid] = args.params;
-
-    childDid = getTextValue(rawChildDid);
-  }
-
-  await ChildIdentity.remove(childDid);
-};
-
-interface PermissionsLike {
+export interface PermissionsLike {
   assets: AssetPermissions | undefined;
   portfolios: PortfolioPermissions | undefined;
   transactions: TransactionPermissions | undefined;
   transactionGroups: string[];
 }
 
-const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
+export const getPermissions = (accountPermissions: Record<string, unknown>): PermissionsLike => {
   let assets: AssetPermissions | undefined = undefined,
     portfolios: PortfolioPermissions | undefined = undefined,
     transactions: TransactionPermissions | undefined = undefined,
@@ -289,11 +234,13 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
         break;
       }
       case 'extrinsic': {
-        const transactionPermissions = accountPermissions.extrinsic as Record<string, string[]>;
+        const transactionPermissions = canonicalExtrinsicPermissions(
+          accountPermissions.extrinsic as Subset
+        );
         type = Object.keys(transactionPermissions)[0];
         transactions = {
           type,
-          values: transactionPermissions[type],
+          values: transactionPermissions[type] as TransactionPermissions['values'],
         };
         break;
       }
@@ -313,155 +260,165 @@ const getPermissions = (accountPermissions: Record<string, unknown>): Permission
 export const handleSecondaryKeysPermissionsUpdated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const args = extractArgs(event);
-  let address;
+  const { blockEventId, eventId, eventIdx, block } = extractArgs(event);
 
-  const [, rawSignerDetails, , rawUpdatedPermissions] = args.params;
+  const { secondaryKey: rawSignerDetails, newPermissions: rawUpdatedPermissions } =
+    decodeEvent(event);
 
-  if (rawSignerDetails instanceof Map) {
-    // for chain version < 5.0.0
-    const signer = rawSignerDetails.get('signer').toString();
-    address = JSON.parse(signer).account;
-  } else {
-    // for chain version >= 5.0.0
-    address = getTextValue(rawSignerDetails);
-  }
+  const address = legacyPermissionsUpdatedAddress(rawSignerDetails);
   const updatedPermissions = JSON.parse(rawUpdatedPermissions.toString());
-
-  const permissions = await Permissions.get(address);
-  if (!permissions) {
-    throw new Error(`Permissions for account ${address} were not found`);
-  }
 
   const { assets, portfolios, transactionGroups, transactions } =
     getPermissions(updatedPermissions);
 
-  permissions.assets = assets;
-  permissions.portfolios = portfolios;
-  permissions.transactions = transactions;
-  permissions.transactionGroups = transactionGroups;
-  permissions.updatedBlockId = args.blockId;
-
-  await permissions.save();
+  // A permissions change is a new membership interval: close the current one, open a fresh one
+  // carrying the new permissions, so the change is first-class history rather than an overwrite.
+  await rotateIdentityKey(
+    {
+      address,
+      role: IdentityKeyRole.SecondaryKey,
+      reason: eventId,
+      eventIdx,
+      permissions: { assets, portfolios, transactions, transactionGroups },
+      block,
+    },
+    blockEventId
+  );
 };
 
-type MeshAccount = string | { account: string };
+interface UnlinkArgs {
+  eventId: EventIdEnum;
+  blockEventId: string;
+  block: SubstrateBlock;
+  eventIdx: number;
+}
+
+/**
+ * Detaches a key from its identity, keeping the account row.
+ *
+ * Deleting the row instead would orphan everything that points at it — the membership interval
+ * this event closes, the account's balance and every ledger entry — and the account is a non-null
+ * relation on all of them, so those fields stop resolving. A primary-key rotation goes through
+ * here too: the chain announces the incoming key as removed a moment before it becomes the
+ * identity's primary key, and deleting it there costs the row its original provenance when the
+ * next event recreates it.
+ */
+const unlinkAccount = async (
+  address: string,
+  { eventId, blockEventId, block, eventIdx }: UnlinkArgs
+): Promise<void> => {
+  const account = await Account.get(address);
+
+  if (!account) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `${eventId} named account ${address}, which is not indexed`,
+      block,
+      eventIdx,
+    });
+
+    return;
+  }
+
+  account.identityId = undefined;
+  account.keyRole = AccountKeyRole.Unlinked;
+  account.updatedEventId = blockEventId;
+
+  await account.save();
+  await restampIdentityCopies(address, undefined, blockEventId);
+};
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const [, rawAccounts] = args.params;
-  const accounts = rawAccounts.toJSON() as MeshAccount[];
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
+  const { removedKeys: rawAccounts } = decodeEvent(event);
 
-  const removePromises = accounts.map(account => {
-    let address;
-    if (typeof account === 'string') {
-      // for chain version >= 5.0.0
-      address = account;
-    } else {
-      // for chain version < 5.0.0
-      ({ account: address } = account);
-    }
+  const addresses = legacyRemovedAddresses(rawAccounts);
 
-    return [Account.remove(address), Permissions.remove(address)];
-  });
-
-  await Promise.all(removePromises.flat());
+  await Promise.all(
+    addresses.flatMap(address => [
+      unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+      closeIdentityKeys(
+        { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+        blockEventId
+      ),
+    ])
+  );
 };
 
 export const handleSignerLeft = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const [, rawAccount] = args.params;
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
+  const { signer: rawSigner } = decodeEvent(event);
 
-  const account = rawAccount.toJSON() as MeshAccount;
+  const address = legacySignerLeftAddress(rawSigner);
 
-  let address;
-  if (typeof account === 'string') {
-    // for chain version >= 5.0.0
-    address = account;
-  } else {
-    // for chain version < 5.0.0
-    ({ account: address } = account);
-  }
-
-  await Promise.all([Account.remove(address), Permissions.remove(address)]);
+  await Promise.all([
+    unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+    closeIdentityKeys(
+      { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+      blockEventId
+    ),
+  ]);
 };
 
 export const handleSecondaryKeysFrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId, params } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
 
-  const [rawDid] = params;
-  const did = getTextValue(rawDid);
+  const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
   identity.secondaryKeysFrozen = true;
-  identity.updatedBlockId = blockId;
-  identity.eventId = eventId;
+  identity.updatedEventId = blockEventId;
 
   await identity.save();
 };
 
 export const handleSecondaryKeysUnfrozen = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, eventId, params } = extractArgs(event);
+  const { blockEventId } = extractArgs(event);
 
-  const [rawDid] = params;
-  const did = getTextValue(rawDid);
+  const did = getTextValue(decodeEvent(event).did);
 
   const identity = await getIdentity(did);
 
   identity.secondaryKeysFrozen = false;
-  identity.updatedBlockId = blockId;
-  identity.eventId = eventId;
+  identity.updatedEventId = blockEventId;
 
   await identity.save();
 };
 
 export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime } = getEventParams(args);
+  const { eventId, createdEventId: blockEventId, eventIdx } = getEventParams(args);
 
   const promises = [];
-  const [rawDid, rawAccounts] = args.params;
+  const { did: rawDid, secondaryKeys: rawAccounts } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
-  const accounts = JSON.parse(rawAccounts.toString());
 
   const { id: identityId } = await getIdentity(did);
 
-  accounts.forEach((accountWithPermissions: any) => {
-    const { permissions, ...rest } = accountWithPermissions;
-    let address;
-    if ('key' in rest) {
-      // for chain version >= 5.0.0
-      address = rest.key;
-    } else if ('signer' in rest) {
-      // for chain version < 5.0.0
-      address = rest.signer.account;
-    }
-
+  legacySecondaryKeyEntries(rawAccounts).forEach(({ address, permissions }) => {
     const { assets, portfolios, transactions, transactionGroups } = getPermissions(permissions);
 
     promises.push(
-      createPermissions(
-        {
-          assets,
-          portfolios,
-          transactions,
-          transactionGroups,
-          datetime,
-        },
-        address,
-        blockId
-      ),
-      createAccount(
+      upsertAccount(
         {
           address,
           identityId,
-          permissionsId: address,
-          eventId,
-          datetime,
+          keyRole: AccountKeyRole.SecondaryKey,
         },
-        blockId
+        blockEventId
+      ),
+      openIdentityKey(
+        {
+          identityId,
+          address,
+          role: IdentityKeyRole.SecondaryKey,
+          permissions: { assets, portfolios, transactions, transactionGroups },
+          addedReason: eventId,
+          eventIdx,
+        },
+        blockEventId
       )
     );
   });
@@ -469,101 +426,118 @@ export const handleSecondaryKeysAdded = async (event: SubstrateEvent): Promise<v
   await Promise.all(promises);
 };
 
+/**
+ * `PrimaryKeyUpdated` — the identity's primary key changes hands.
+ *
+ * This handler is only half of the transition, and reads as if it leaks a membership interval
+ * unless the rest is known. Both of the chain's rotation calls promote a key that is already a
+ * secondary key of the same identity, and each emits a fixed sequence:
+ *
+ * ```
+ * SecondaryKeysRemoved(did, [new primary])   closes the incoming key's secondary interval
+ * PrimaryKeyUpdated(did, old, new)           this handler
+ * SecondaryKeysAdded(did, [old primary])     only when the old key is demoted rather than dropped
+ * ```
+ *
+ * Handlers run in event order, so the incoming key's secondary interval is already closed by the
+ * time this runs and the demoted key is re-linked after it — no key holds two open intervals at
+ * once. Closing the incoming key's interval here as well would close an interval that no longer
+ * exists; reordering or removing either sibling handler is what would actually break the rotation.
+ */
 export const handlePrimaryKeyUpdated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
+  const { eventId, createdEventId: blockEventId, eventIdx } = getEventParams(args);
 
-  const [rawDid, , newKey] = args.params;
+  const { did: rawDid, newPrimaryKey: rawNewKey } = decodeEvent(event);
 
   const did = getTextValue(rawDid);
-  const address = getTextValue(newKey);
+  const address = getTextValue(rawNewKey);
 
   const identity = await getIdentity(did);
-  const [account, permissions] = await Promise.all([
-    Account.get(identity.primaryAccount),
-    Permissions.get(identity.primaryAccount),
-  ]);
+  // An identity created from a key record alone carries no primary key, so the outgoing account
+  // can be absent. The rotation itself still stands: the new key is linked either way.
+  const account = identity.primaryAccountId
+    ? await Account.get(identity.primaryAccountId)
+    : undefined;
 
-  identity.primaryAccount = address;
-  identity.updatedBlockId = blockId;
-  identity.eventId = eventId;
+  if (!account) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `${eventId} on identity ${did} found no account for the outgoing primary key`,
+      block: args.block,
+      eventIdx,
+    });
+  }
 
-  // remove the identity mapping from account and set permissions to null
-  account.identityId = undefined;
-  account.permissionsId = undefined;
-  account.eventId = eventId;
-  account.updatedBlockId = blockId;
+  identity.primaryAccountId = address;
+  identity.updatedEventId = blockEventId;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { assets, portfolios, transactionGroups, transactions } = permissions || {
-    transactionGroups: [],
-  };
+  const retireOldKey = account
+    ? [
+        // unlink the old primary key from the identity — `keyRole` rides the same write
+        unlinkAccount(account.id, { eventId, blockEventId, block: args.block, eventIdx }),
+        // close its membership interval — the rotation history lives on `IdentityKey`
+        closeIdentityKeys(
+          { address: account.id, role: IdentityKeyRole.PrimaryKey, removedReason: eventId },
+          blockEventId
+        ),
+      ]
+    : [];
 
   await Promise.all([
-    createPermissions(
-      {
-        assets,
-        portfolios,
-        transactions,
-        transactionGroups,
-        datetime,
-      },
-      address,
-      blockId
-    ),
-    createAccount(
+    upsertAccount(
       {
         address,
         identityId: identity.id,
-        permissionsId: address,
-        eventId,
-        datetime,
+        keyRole: AccountKeyRole.PrimaryKey,
       },
-      blockId
+      blockEventId
     ),
     identity.save(),
-    // unlink the old account from the identity
-    account.save(),
-    Permissions.remove(account.id),
-    createHistoryEntry(eventId, identity.id, account.id, blockId, datetime, blockEventId, {
-      assets,
-      portfolios,
-      transactionGroups,
-      transactions,
-    }),
+    ...retireOldKey,
   ]);
+
+  // ...and open the new primary's, so both rows stay queryable and the old row's `validToBlock`
+  // equals the new one's `validFromBlock`.
+  await openIdentityKey(
+    {
+      identityId: identity.id,
+      address,
+      role: IdentityKeyRole.PrimaryKey,
+      addedReason: eventId,
+      eventIdx,
+    },
+    blockEventId
+  );
 };
 
 export const handleSecondaryKeyLeftIdentity = async (event: SubstrateEvent): Promise<void> => {
-  const args = extractArgs(event);
-  const { eventId, createdBlockId: blockId, datetime, blockEventId } = getEventParams(args);
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
 
-  const [, rawAccount] = args.params;
+  const { secondaryKey: rawAccount } = decodeEvent(event);
+
   const address = getTextValue(rawAccount);
 
-  const accountEntity = await Account.get(address);
-  const did = accountEntity.identityId;
-
-  accountEntity.identityId = undefined;
-  accountEntity.permissionsId = undefined;
-  accountEntity.eventId = eventId;
-  accountEntity.updatedBlockId = blockId;
-
   await Promise.all([
-    accountEntity.save(),
-    Permissions.remove(address),
-    createHistoryEntry(eventId, did, address, blockId, datetime, blockEventId),
+    unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+    closeIdentityKeys(
+      { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+      blockEventId
+    ),
   ]);
 };
 
 export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-
-  const [rawDid, rawCustomClaimTypeId, rawName] = params;
+  const { blockEventId } = extractArgs(event);
+  const {
+    callerDid: rawDid,
+    customClaimTypeId: rawCustomClaimTypeId,
+    name: rawName,
+  } = decodeEvent(event);
 
   const identityId = getTextValue(rawDid);
   const id = getNumberValue(rawCustomClaimTypeId);
-  const name = bytesToString(rawName);
+  const name = requiredText(rawName, 'the custom claim type name');
 
   const customClaimType = await CustomClaimType.get(`${id}`);
 
@@ -572,8 +546,8 @@ export const handleCustomClaimTypeCreated = async (event: SubstrateEvent): Promi
       id: `${id}`,
       name,
       identityId,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 };

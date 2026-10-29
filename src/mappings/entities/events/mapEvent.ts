@@ -1,18 +1,12 @@
-import { GenericEvent } from '@polkadot/types/generic';
 import { SubstrateEvent } from '@subql/types';
-import { Event } from '../../../types';
-import {
-  extractClaimInfo,
-  extractCorporateActionTicker,
-  extractEventArgs,
-  extractOfferingAsset,
-  extractTransferTo,
-  logFoundType,
-} from '../../../utils';
-import { serializeLikeHarvester } from '../../serializeLikeHarvester';
+import { argumentNames, metadataTypeNames } from '../../../decode';
+import { AnomalyKind, Event } from '../../../types';
+import { argumentsJson, tryEncodeArgs } from '../../args/encode';
+import { recordAnomaly } from '../../../utils/anomaly';
+import { toEventRefs } from '../../args/refs';
 import { extractArgs } from '../common';
 
-export function handleToolingEvent(event: SubstrateEvent): Event {
+export async function handleToolingEvent(event: SubstrateEvent): Promise<Event> {
   const {
     block,
     blockEventId,
@@ -24,28 +18,24 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     eventIdText,
     moduleId,
     moduleIdText,
-    params: args,
+    params,
   } = extractArgs(event);
-  const genericEvent = event.event as unknown as GenericEvent;
+  const { args, refs, failure } = tryEncodeArgs(
+    params,
+    argumentNames(event),
+    metadataTypeNames(event)
+  );
 
-  const harvesterLikeArgs = args.map((arg, i) => {
-    let type: string;
-    const typeName = genericEvent.meta.fields[i].typeName;
-    if (typeName.isSome) {
-      // for metadata >= v14
-      type = typeName.unwrap().toString();
-    } else {
-      // for metadata < v14
-      type = genericEvent.meta.args[i].toString();
-    }
-    return {
-      value: serializeLikeHarvester(arg, type, logFoundType),
-    };
-  });
-
-  const { eventArg_0, eventArg_1, eventArg_2, eventArg_3 } = extractEventArgs(harvesterLikeArgs);
-
-  const { claimExpiry, claimIssuer, claimScope, claimType } = extractClaimInfo(harvesterLikeArgs);
+  if (failure !== undefined) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${failure}, so the event's args and refs were left empty`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+  }
 
   return Event.create({
     id: blockEventId,
@@ -57,18 +47,8 @@ export function handleToolingEvent(event: SubstrateEvent): Event {
     moduleId,
     moduleIdText,
     eventIdText,
-    attributesTxt: JSON.stringify(harvesterLikeArgs),
-    eventArg_0,
-    eventArg_1,
-    eventArg_2,
-    eventArg_3,
-    claimType,
-    claimExpiry,
-    claimIssuer,
-    claimScope,
-    corporateActionTicker: extractCorporateActionTicker(harvesterLikeArgs),
-    fundraiserOfferingAsset: extractOfferingAsset(harvesterLikeArgs),
-    transferTo: extractTransferTo(harvesterLikeArgs),
+    args: argumentsJson(args),
+    refs: await toEventRefs(refs, block.specVersion),
     extrinsicId,
   });
 }

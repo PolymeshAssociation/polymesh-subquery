@@ -1,27 +1,40 @@
-import { AnyTuple, Codec } from '@polkadot/types/types';
+import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock, SubstrateEvent } from '@subql/types';
-import { Instruction, InstructionEvent, Leg } from '../../../types';
+import { decodeEvent } from '../../../decode';
+import { AnomalyKind, Instruction, InstructionEvent, Leg } from '../../../types';
 import {
   addIfNotIncludes,
-  bytesToString,
-  coerceHexToString,
   getDateValue,
   getErrorDetails,
   getLegsValue,
   getNumberValue,
-  getPaginatedData,
   getSettlementLeg,
   getSettlementTypeDetails,
   getSignerAddress,
   getStringArrayValue,
   getTextValue,
   is7xChain,
-  padId,
+  padNumericId,
   rawAssetHolderToAssetHolder,
-  removeIfIncludes,
+  specVersionOf,
 } from '../../../utils';
+import { recordAnomaly } from '../../../utils/anomaly';
+import {
+  getPartyId,
+  isResolved,
+  pendingHolderAffirmation,
+  pendingMediatorAffirmation,
+  setHolderAffirmation,
+  setMediatorAffirmation,
+} from './holderAffirmations';
+import { applySilentPreApprovals, preApprovesSilently } from './silentPreApprovals';
+import { getLegV2Values } from '../../../utils/legV2';
 import { extractArgs, HandlerArgs } from '../common';
-import { createPortfolioIfNotExists, mapAssetMovement } from '../identities/mapPortfolio';
+import {
+  createPortfolioIfNotExists,
+  applyMoveWithinIdentity,
+  mapAssetMovement,
+} from '../identities/mapPortfolio';
 import {
   AffirmStatusEnum,
   EventIdEnum,
@@ -31,7 +44,54 @@ import {
 import { InstructionAffirmation } from './../../../types/models/InstructionAffirmation';
 import { InstructionParty } from './../../../types/models/InstructionParty';
 import { OffChainReceipt } from './../../../types/models/OffChainReceipt';
-import { getPortfolioOrAccount, LegDetails } from './../../../utils/settlements';
+import {
+  getPortfolioOrAccount,
+  HolderRef,
+  holderAffirmationId,
+  holdersOfLegs,
+  instructionPartiesOf,
+  mediatorAffirmationId,
+  LegDetails,
+  PartyDetails,
+  portfolioNumber,
+} from './../../../utils/settlements';
+import { memoText } from '../../../utils/text';
+
+/**
+ * The `InstructionEvent.event` value for each event that writes one.
+ *
+ * The narrow enum exists so the column cannot hold an event that has nothing to do with an
+ * instruction; casting an `EventIdEnum` straight into it gives that up and would write a value
+ * the GraphQL enum never declared. An event arriving here that this map does not cover is drift
+ * between the handler list and the enum, so it is reported rather than written.
+ */
+const instructionEventMap: Partial<Record<EventIdEnum, InstructionEventEnum>> = {
+  [EventIdEnum.InstructionExecuted]: InstructionEventEnum.InstructionExecuted,
+  [EventIdEnum.InstructionFailed]: InstructionEventEnum.InstructionFailed,
+  [EventIdEnum.InstructionLocked]: InstructionEventEnum.InstructionLocked,
+  [EventIdEnum.InstructionUnlocked]: InstructionEventEnum.InstructionUnlocked,
+  [EventIdEnum.FailedToExecuteInstruction]: InstructionEventEnum.FailedToExecuteInstruction,
+};
+
+const instructionEventFor = async (
+  eventId: EventIdEnum,
+  block: SubstrateBlock,
+  eventIdx: number
+): Promise<InstructionEventEnum | undefined> => {
+  const mapped = instructionEventMap[eventId];
+
+  if (!mapped) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnknownEnumValue,
+      detail: `${eventId} writes an InstructionEvent but has no InstructionEventEnum value`,
+      block,
+      eventIdx,
+      dedupeKey: `instructionEvent/${eventId}`,
+    });
+  }
+
+  return mapped;
+};
 
 const instructionStatusMap = {
   [EventIdEnum.InstructionExecuted]: InstructionStatusEnum.Executed,
@@ -53,18 +113,21 @@ const instructionStatusMap = {
 const prepareLegCreateParams = async (
   blockId: string,
   instructionId: string,
-  address: string,
+  address: string | undefined,
   legDetails: LegDetails,
   { eventIdx, eventId, block, blockEventId }: HandlerArgs
 ): Promise<Parameters<typeof Leg.create>[0]> => {
-  const { from, fromPortfolio, to, toPortfolio, legIndex } = legDetails;
+  const { fromId: from, fromPortfolioId, toId: to, toPortfolioId, legIndex } = legDetails;
+  // the default portfolio (number 0) always exists
+  const fromPortfolio = fromPortfolioId ? portfolioNumber(fromPortfolioId) : undefined;
+  const toPortfolio = toPortfolioId ? portfolioNumber(toPortfolioId) : undefined;
   const promises = [];
 
   /**
    * older versions did not ensure the existence of sender and receivers, so entries may need to be added
    */
   if (is7xChain(block)) {
-    if (fromPortfolio) {
+    if (fromPortfolio && from) {
       promises.push(
         createPortfolioIfNotExists(
           { identityId: from, number: fromPortfolio },
@@ -76,7 +139,7 @@ const prepareLegCreateParams = async (
         )
       );
     }
-    if (toPortfolio) {
+    if (toPortfolio && to) {
       promises.push(
         createPortfolioIfNotExists(
           { identityId: to, number: toPortfolio },
@@ -96,33 +159,68 @@ const prepareLegCreateParams = async (
     id: `${instructionId}/${legIndex}`,
     ...legDetails,
     instructionId,
-    addresses: [address],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    addresses: address ? [address] : [],
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   };
 };
 
-const updateLegs = async (
-  blockId: string,
-  address: string,
-  instructionId: string
+/**
+ * Adds the signer of an affirmation or execution to every leg of `instruction`.
+ *
+ * Nothing to add on the scheduled and unsigned execution paths, which `getSignerAddress` returns
+ * no address for. The legs are read by id, all at once: a leg's id is `instructionId/legIndex`,
+ * the indices run from 0 with no gaps (`getLegsValue`, `getSettlementLeg`), and the instruction
+ * records how many there are.
+ */
+export const updateLegs = async (
+  {
+    blockEventId,
+    block,
+    eventIdx,
+  }: { blockEventId: string; block: SubstrateBlock; eventIdx: number },
+  address: string | undefined,
+  instruction: Pick<Instruction, 'id' | 'legCount'>
 ): Promise<void> => {
-  const legs = await getPaginatedData<Leg, 'instructionId'>('Leg', 'instructionId', instructionId);
+  if (!address) {
+    return;
+  }
 
-  const updatedLegs = legs.map(leg => {
-    if (address) {
-      addIfNotIncludes(leg.addresses, address);
-    }
-    leg.updatedBlockId = blockId;
+  const read = await Promise.all(
+    Array.from({ length: instruction.legCount }, (_, legIndex) =>
+      Leg.get(`${instruction.id}/${legIndex}`)
+    )
+  );
+  const legs = read.filter((leg): leg is Leg => leg !== undefined);
 
-    return leg;
+  if (legs.length < instruction.legCount) {
+    // every instruction has its legs, written when it was created: the index is missing some
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instruction.id} has ${legs.length} of its ${instruction.legCount} legs in the index to add its signer ${address} to`,
+      block,
+      eventIdx,
+    });
+  }
+
+  legs.forEach(leg => {
+    addIfNotIncludes(leg.addresses, address);
+    leg.updatedEventId = blockEventId;
   });
 
-  return store.bulkUpdate('Leg', updatedLegs);
+  if (legs.length > 0) {
+    await store.bulkUpdate('Leg', legs);
+  }
 };
 
+/**
+ * The chain's instruction id is a bare numeric sequence. Zero-pad it so
+ * `Instruction.id` and every FK that references it (`Leg`, `InstructionParty`,
+ * `InstructionAffirmation`, `InstructionEvent`, `AssetTransaction.instructionId`) sort
+ * numerically under `ID_DESC`. Every construction and every lookup routes through here.
+ */
 export const processInstructionId = (id: Codec): string => {
-  return getTextValue(id);
+  return padNumericId(getTextValue(id));
 };
 
 const getInstruction = async (instructionId: string): Promise<Instruction> => {
@@ -135,84 +233,24 @@ const getInstruction = async (instructionId: string): Promise<Instruction> => {
   return instruction;
 };
 
-const getPartyId = (
-  instructionId: string,
-  did: string,
-  account: string | undefined,
-  isMediator: boolean
-) => `${instructionId}/${account ?? did}/${isMediator}`;
-
 const createInstructionParty = async (
   instructionId: string,
-  blockId: string,
-  parties: Record<string, number[] | undefined>,
+  blockEventId: string,
+  parties: Map<string, PartyDetails>,
   isMediator: boolean
 ): Promise<void> => {
-  const promises = Object.keys(parties).map(did =>
-    InstructionParty.create({
-      id: getPartyId(instructionId, did, undefined, isMediator),
-      instructionId,
-      isMediator,
-      identity: did,
-      portfolios: parties[did],
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    }).save()
+  await Promise.all(
+    [...parties.values()].map(({ identityId }) =>
+      InstructionParty.create({
+        id: getPartyId(instructionId, identityId, isMediator),
+        instructionId,
+        isMediator,
+        identityId,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
+      }).save()
+    )
   );
-
-  await Promise.all(promises);
-};
-
-const mapAutomaticAffirmation = async (
-  params: Codec[],
-  block: SubstrateBlock,
-  blockId: string,
-  eventIndex: number,
-  blockEventId: string
-): Promise<[InstructionEvent, InstructionAffirmation]> => {
-  const [, rawHolder, rawInstructionId] = params;
-  const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(rawHolder, block, blockId);
-
-  const automaticAffirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionAutomaticallyAffirmed,
-    eventIdx: eventIndex,
-    identity,
-    account,
-    portfolio,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
-
-  const partyId = getPartyId(instructionId, identity, account, false);
-
-  const affirmation = await InstructionAffirmation.get(partyId);
-
-  if (affirmation) {
-    addIfNotIncludes(affirmation.portfolios, portfolio);
-    affirmation.updatedBlockId = blockId;
-
-    return [automaticAffirmationEvent, affirmation];
-  }
-
-  const automaticAffirmation = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId,
-    identity,
-    account,
-    portfolios: [portfolio],
-    isMediator: false,
-    isAutomaticallyAffirmed: true,
-    status: AffirmStatusEnum.Affirmed,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
-
-  return [automaticAffirmationEvent, automaticAffirmation];
 };
 
 /**
@@ -220,19 +258,19 @@ const mapAutomaticAffirmation = async (
  */
 export const handleInstructionCreated = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { blockId, params, block, extrinsic, eventIdx, blockEventId } = args;
+  const { blockId, block, extrinsic, blockEventId } = args;
   const address = getSignerAddress(extrinsic);
 
-  const [
-    rawCreator,
-    rawVenueId,
-    rawInstructionId,
-    rawSettlementType,
-    rawTradeDate,
-    rawValueDate,
-    rawLegs,
-    rawOptMemo,
-  ] = params;
+  const {
+    callerDid: rawCreator,
+    venueId: rawVenueId,
+    instructionId: rawInstructionId,
+    settlementType: rawSettlementType,
+    tradeDate: rawTradeDate,
+    valueDate: rawValueDate,
+    legs: rawLegs,
+    memo: rawOptMemo,
+  } = decodeEvent(event);
 
   const creator = getTextValue(rawCreator);
 
@@ -245,28 +283,33 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
    *
    * NOTE - For Polymesh private, the spec version starts from 1.0.0
    */
-  const specName = api.runtimeVersion.specName.toString();
-  if (block.specVersion >= 6000000 || specName === 'polymesh_private_dev') {
-    legs = await getSettlementLeg(rawLegs, block, blockId);
+  /**
+   * Events from 6.0.0 were updated to support NFT and OffChain instructions. The parameter
+   * count did not change, so this is a payload branch rather than a positional one
+   */
+  if (specVersionOf(block) >= 6_000_000) {
+    legs = await getSettlementLeg(rawLegs, block, blockId, blockEventId);
+  } else if (args.eventId === EventIdEnum.InstructionV2Created) {
+    legs = await getLegV2Values(rawLegs, block);
   } else {
     legs = await getLegsValue(rawLegs, block);
   }
 
   const instructionId = processInstructionId(rawInstructionId);
-  const memo = bytesToString(rawOptMemo);
+  const memo = memoText(rawOptMemo);
 
   const instruction = Instruction.create({
     id: instructionId,
     status: InstructionStatusEnum.Created,
-    venueId: getTextValue(rawVenueId),
+    venueId: padNumericId(getTextValue(rawVenueId)),
     ...typeDetails,
     tradeDate: getDateValue(rawTradeDate),
     valueDate: getDateValue(rawValueDate),
     memo,
     mediators: [],
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    legCount: legs.length,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   });
   await instruction.save();
 
@@ -276,260 +319,248 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
     )
   );
 
-  const parties = {};
-  legParams.forEach(leg => {
-    const addParty = (did: string, portfolio?: number): void => {
-      if (portfolio === undefined) {
-        parties[did] = undefined;
-      } else {
-        parties[did] = [...(parties[did] || []), portfolio];
-      }
-    };
-
-    if (leg.fromAccount) {
-      addParty(leg.fromAccount);
-    } else {
-      addParty(leg.from, leg.fromPortfolio);
-    }
-    if (leg.toAccount) {
-      addParty(leg.toAccount);
-    } else {
-      addParty(leg.to, leg.toPortfolio);
-    }
-  });
+  const parties = instructionPartiesOf(legParams);
 
   const instructionCreatedEvent = InstructionEvent.create({
     id: blockEventId,
     instructionId,
     event: InstructionEventEnum.InstructionCreated,
-    eventIdx,
-    identity: creator,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    identityId: creator,
+    signerId: address,
     createdEventId: blockEventId,
   });
 
-  const promises = [
-    store.bulkCreate('Leg', legParams),
-    createInstructionParty(instructionId, blockId, parties, false),
-    instructionCreatedEvent.save(),
-  ];
+  // every holder on a leg starts pending, as the chain records it, except one an earlier event
+  // in the block already auto-affirmed (runtimes 6.1.0 to 6.3.0 emit those before this event)
+  const autoAffirmedEarlier = autoAffirmedBefore(block, args.eventIdx, instructionId);
+  const holders = holdersOfLegs(legParams);
+  await Promise.all(
+    holders
+      .filter(holder => !isResolved(holder))
+      .map(({ accountId }) =>
+        recordUnresolvedHolder(args, instructionId, accountId, 'its approval is not recorded')
+      )
+  );
+  const affirmations = await Promise.all(
+    holders
+      .filter(isResolved)
+      .map(
+        async holder =>
+          (autoAffirmedEarlier &&
+            (await InstructionAffirmation.get(holderAffirmationId(instructionId, holder)))) ||
+          pendingHolderAffirmation(instructionId, holder, blockEventId)
+      )
+  );
 
-  /**
-   * Till spec version 6.3.1, InstructionAutomaticallyAffirmed was emitted before InstructionCreated event
-   * The below logic handles the case for this starting from spec version 6.1.0 from where it was introduced.
-   */
-  if (
-    (block.specVersion >= 6001000 && block.specVersion <= 6003001) ||
-    specName !== 'polymesh_private_dev'
-  ) {
-    const automaticAffirmationPromises = [];
-    block.events.forEach((event, eventIndex) => {
-      if (event.event.method === EventIdEnum.InstructionAutomaticallyAffirmed) {
-        const automaticAffirmationPromise = async () => {
-          const blockEventId = `${blockId}/${padId(eventIndex.toString())}`;
-          const [automaticAffirmationEvent, automaticAffirmation] = await mapAutomaticAffirmation(
-            event.event.data as unknown as AnyTuple,
-            block,
-            blockId,
-            eventIndex,
-            blockEventId
-          );
-          promises.push(automaticAffirmation.save(), automaticAffirmationEvent.save());
-        };
-        automaticAffirmationPromises.push(automaticAffirmationPromise());
-      }
+  if (preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
+    await applySilentPreApprovals(affirmations, {
+      block,
+      eventIdx: args.eventIdx,
+      instructionId,
+      legs: legParams,
+      creatorDid: creator,
+      signerId: address,
+      blockEventId,
     });
-
-    await Promise.all(automaticAffirmationPromises);
   }
 
-  await Promise.all(promises);
+  await Promise.all([
+    store.bulkCreate('Leg', legParams),
+    store.bulkCreate('InstructionAffirmation', affirmations),
+    createInstructionParty(instructionId, blockEventId, parties, false),
+    instructionCreatedEvent.save(),
+  ]);
+};
+
+/** Whether an event before `eventIdx` in the block auto-affirmed a holder of `instructionId`. */
+const autoAffirmedBefore = (
+  block: SubstrateBlock,
+  eventIdx: number,
+  instructionId: string
+): boolean =>
+  block.events
+    .slice(0, eventIdx)
+    .some(
+      ({ event }) =>
+        event.section === 'settlement' &&
+        event.method === EventIdEnum.InstructionAutomaticallyAffirmed &&
+        processInstructionId(event.data[2]) === instructionId
+    );
+
+/**
+ * Reports an account holder the index has no identity for, which the chain requires of every
+ * holder, so no party or approval can be recorded for it.
+ */
+const recordUnresolvedHolder = (
+  { block, eventIdx }: HandlerArgs,
+  instructionId: string,
+  accountId: string | undefined,
+  consequence: string
+): Promise<void> =>
+  recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `instruction ${instructionId}'s holder ${accountId} has no identity in the index, though the chain requires one, so ${consequence}`,
+    block,
+    eventIdx,
+  });
+
+/** The holder an affirm, auto-affirm or withdraw event names. */
+const eventHolder = async (
+  rawHolder: Codec,
+  { block, blockId, blockEventId }: HandlerArgs
+): Promise<HolderRef> => {
+  const { identityId, accountId, portfolioId } = await getPortfolioOrAccount(
+    rawHolder,
+    block,
+    blockId,
+    blockEventId
+  );
+  return { identityId, accountId, portfolioId };
+};
+
+/** Records an affirm, auto-affirm or withdraw event on its holder's row and in the events. */
+const recordHolderEvent = async (
+  event: SubstrateEvent,
+  instructionEvent: InstructionEventEnum,
+  status: AffirmStatusEnum,
+  isAutomaticallyAffirmed: boolean
+): Promise<void> => {
+  const args = extractArgs(event);
+  const { extrinsic, block, blockEventId, eventIdx } = args;
+  const signerId = getSignerAddress(extrinsic);
+  const {
+    callerDid: rawCaller,
+    holder: rawHolder,
+    instructionId: rawInstructionId,
+  } = decodeEvent(event);
+
+  const instructionId = processInstructionId(rawInstructionId);
+  const holder = await eventHolder(rawHolder, args);
+  const callerDid = getTextValue(rawCaller);
+
+  const affirmation = await setHolderAffirmation(instructionId, holder, {
+    status,
+    isAutomaticallyAffirmed,
+    affirmedById: callerDid,
+    signerId,
+    blockEventId,
+  });
+
+  const writes = [
+    affirmation
+      ? affirmation.save()
+      : recordUnresolvedHolder(
+          args,
+          instructionId,
+          holder.accountId,
+          `its ${instructionEvent} is not recorded on an approval`
+        ),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: instructionEvent,
+      identityId: callerDid,
+      accountId: holder.accountId,
+      portfolioId: holder.portfolioId,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
+  ];
+  if (status === AffirmStatusEnum.Affirmed && !isAutomaticallyAffirmed) {
+    writes.push(addSignerToLegs({ blockEventId, block, eventIdx }, signerId, instructionId));
+  }
+
+  await Promise.all(writes);
 };
 
 /**
- * Maps the events -
- *   - InstructionAffirmed
+ * Maps the event - `settlement.InstructionAffirmed`
  */
-export const handleInstructionUpdate = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventIdx, blockId, block, blockEventId } = extractArgs(event);
-  const address = getSignerAddress(extrinsic);
-
-  const [, rawPortfolio, rawInstructionId] = params;
-
-  const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(
-    rawPortfolio,
-    block,
-    blockId
+export const handleInstructionUpdate = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.InstructionAffirmed,
+    AffirmStatusEnum.Affirmed,
+    false
   );
 
-  const partyId = getPartyId(instructionId, identity, account, false);
-
-  let affirmation = await InstructionAffirmation.get(partyId);
-
-  if (affirmation) {
-    addIfNotIncludes(affirmation.portfolios, portfolio);
-    affirmation.updatedBlockId = blockId;
-  } else {
-    affirmation = InstructionAffirmation.create({
-      id: partyId,
-      instructionId,
-      partyId,
-      account,
-      identity,
-      portfolios: [portfolio],
-      isMediator: false,
-      isAutomaticallyAffirmed: false,
-      status: AffirmStatusEnum.Affirmed,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-    });
+/** `updateLegs` for an event that names only the instruction, which is read for its leg count. */
+const addSignerToLegs = async (
+  at: Parameters<typeof updateLegs>[0],
+  address: string | undefined,
+  instructionId: string
+): Promise<void> => {
+  if (!address) {
+    return;
   }
 
-  const affirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionAffirmed,
-    eventIdx,
-    identity,
-    portfolio,
-    account,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
+  const instruction = await Instruction.get(instructionId);
 
-  await Promise.all([
-    affirmation.save(),
-    affirmationEvent.save(),
-    updateLegs(blockId, address, instructionId),
-  ]);
+  if (!instruction) {
+    await recordAnomaly({
+      kind: AnomalyKind.MissingReferencedEntity,
+      detail: `instruction ${instructionId} is not in the index to add its signer ${address} to its legs`,
+      block: at.block,
+      eventIdx: at.eventIdx,
+    });
+    return;
+  }
+
+  await updateLegs(at, address, instruction);
 };
 
 /**
  * Maps the event - `settlement.AffirmationWithdrawn`
  */
-export const handleAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, block, blockEventId } = extractArgs(event);
-
-  const [, rawPortfolio, rawInstructionId] = params;
-
-  const instructionId = processInstructionId(rawInstructionId);
-  const { identity, account, portfolio } = await getPortfolioOrAccount(
-    rawPortfolio,
-    block,
-    blockId
+export const handleAffirmationWithdrawn = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.AffirmationWithdrawn,
+    AffirmStatusEnum.Pending,
+    false
   );
 
-  const partyId = getPartyId(instructionId, identity, account, false);
-  const affirmation = await InstructionAffirmation.get(partyId);
-
-  const promises = [
-    InstructionEvent.create({
-      id: blockEventId,
-      instructionId,
-      event: InstructionEventEnum.AffirmationWithdrawn,
-      eventIdx,
-      identity,
-      account,
-      portfolio,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
-      createdEventId: blockEventId,
-    }).save(),
-  ];
-
-  if (affirmation) {
-    if (affirmation.portfolios.length === 1) {
-      // if only single PF is present remove the entire entity value
-      promises.push(InstructionAffirmation.remove(partyId));
-    } else {
-      // else remove the withdrawn portfolio from affirmed portfolio list
-      removeIfIncludes(affirmation.portfolios, portfolio);
-      affirmation.updatedBlockId = blockId;
-
-      promises.push(affirmation.save());
-    }
-  }
-
-  await Promise.all(promises);
-};
-
 /**
- * Maps the event - `settlement.InstructionAutomaticallyAffirmed
+ * Maps the event - `settlement.InstructionAutomaticallyAffirmed`, which runtimes 6.1.0 to 6.3.0
+ * emit before the instruction's creation; the creation keeps the row it writes.
  */
-export const handleAutomaticAffirmation = async (event: SubstrateEvent): Promise<void> => {
-  const {
-    params,
-    block,
-    blockId,
-    block: { specVersion },
-    eventIdx,
-    blockEventId,
-  } = extractArgs(event);
-
-  const specName = api.runtimeVersion.specName.toString();
-
-  /**
-   * Till spec version 6.3.1, InstructionAutomaticallyAffirmed was emitted before InstructionCreated event
-   * The below logic handles the case after 6.3.1 when ordering was correct and we can safely assume instruction exists here
-   */
-  if (specVersion >= 6003001 || specName === 'polymesh_private_dev') {
-    const [instructionEvent, instructionAffirmation] = await mapAutomaticAffirmation(
-      params,
-      block,
-      blockId,
-      eventIdx,
-      blockEventId
-    );
-    await Promise.all([instructionEvent.save(), instructionAffirmation.save()]);
-  }
-};
+export const handleAutomaticAffirmation = (event: SubstrateEvent): Promise<void> =>
+  recordHolderEvent(
+    event,
+    InstructionEventEnum.InstructionAutomaticallyAffirmed,
+    AffirmStatusEnum.Affirmed,
+    true
+  );
 
 /**
  * Maps the event - `settlement.InstructionRejected`
  */
 export const handleInstructionRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const { callerDid: rawCaller, instructionId: rawInstructionId } = decodeEvent(event);
 
-  const identityId = getTextValue(rawIdentityId);
+  const callerDid = getTextValue(rawCaller);
+  const signerId = getSignerAddress(extrinsic);
   const instructionId = processInstructionId(rawInstructionId);
 
+  // rejecting is a fact about the instruction, not any holder's approval, which keeps its state
   const instruction = await getInstruction(instructionId);
+  instruction.status = InstructionStatusEnum.Rejected;
+  instruction.rejectedById = callerDid;
+  instruction.rejectedBySignerId = signerId;
+  instruction.updatedEventId = blockEventId;
 
-  instruction.status = instructionStatusMap[eventId];
-  instruction.updatedBlockId = blockId;
-
-  const isMediator = instruction.mediators.includes(identityId);
-
-  const partyId = getPartyId(instructionId, identityId, undefined, isMediator);
-
-  const rejection = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId: partyId,
-    identity: identityId,
-    isMediator: isMediator,
-    isAutomaticallyAffirmed: false,
-    status: AffirmStatusEnum.Rejected,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
-
-  const rejectionEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.InstructionRejected,
-    eventIdx,
-    identity: identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
-
-  await Promise.all([instruction.save(), rejection.save(), rejectionEvent.save()]);
+  await Promise.all([
+    instruction.save(),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: InstructionEventEnum.InstructionRejected,
+      identityId: callerDid,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
+  ]);
 };
 
 /**
@@ -540,48 +571,52 @@ export const handleInstructionRejected = async (event: SubstrateEvent): Promise<
  *   - settlement.InstructionUnlocked
  */
 export const handleInstructionFinalizedEvent = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [, rawInstructionId] = params;
+  const { extrinsic, eventId, blockEventId, block, eventIdx } = extractArgs(event);
+  const { callerDid: rawCaller, instructionId: rawInstructionId } = decodeEvent(event);
 
   const address = getSignerAddress(extrinsic);
   const instructionId = processInstructionId(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
   instruction.status = instructionStatusMap[eventId];
-  instruction.updatedBlockId = blockId;
+  instruction.updatedEventId = blockEventId;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([
+  const writes = [
     instruction.save(),
-    finalizedEvent.save(),
-    updateLegs(blockId, address, instructionId),
-  ]);
+    updateLegs({ blockEventId, block, eventIdx }, address, instruction),
+  ];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        identityId: getTextValue(rawCaller),
+        signerId: address,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
 /**
  * Maps the event - `settlement.SettlementManuallyExecuted`
  */
 export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const { callerDid: rawIdentityId, instructionId: rawInstructionId } = decodeEvent(event);
 
   const manuallyExecutedEvent = InstructionEvent.create({
     id: blockEventId,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.SettlementManuallyExecuted,
-    eventIdx,
-    identity: getTextValue(rawIdentityId),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    identityId: getTextValue(rawIdentityId),
+    signerId: getSignerAddress(extrinsic),
     createdEventId: blockEventId,
   });
 
@@ -592,126 +627,139 @@ export const handleSettlementManuallyExecuted = async (event: SubstrateEvent): P
  * Maps the event `settlement.FailedToExecuteInstruction`
  */
 export const handleFailedToExecuteInstruction = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
-  const [rawInstructionId, rawDispatchError] = params;
+  const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
+  const { instructionId: rawInstructionId, error: rawDispatchError } = decodeEvent(event);
 
   const instructionId = processInstructionId(rawInstructionId);
   const instruction = await getInstruction(instructionId);
 
   const failureReason = getErrorDetails(rawDispatchError);
 
-  instruction.updatedBlockId = blockId;
+  instruction.updatedEventId = blockEventId;
   instruction.status = InstructionStatusEnum.Failed;
   instruction.failureReason = failureReason;
 
-  const finalizedEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: eventId as unknown as InstructionEventEnum,
-    eventIdx,
-    failureReason,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
+  const instructionEvent = await instructionEventFor(eventId, block, eventIdx);
 
-  await Promise.all([instruction.save(), finalizedEvent.save()]);
+  const writes = [instruction.save()];
+
+  if (instructionEvent) {
+    writes.push(
+      InstructionEvent.create({
+        id: blockEventId,
+        instructionId,
+        event: instructionEvent,
+        failureReason,
+        createdEventId: blockEventId,
+      }).save()
+    );
+  }
+
+  await Promise.all(writes);
 };
 
-export const handleMediatorAffirmationReceived = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId, expiryOpt] = params;
+interface MediatorChange {
+  instructionEvent: InstructionEventEnum;
+  status: AffirmStatusEnum;
+  rawMediator: Codec;
+  rawInstructionId: Codec;
+  expiry?: Date;
+}
 
-  const identityId = getTextValue(rawIdentityId);
+/** Records a mediator's affirmation or withdrawal on the mediator's row and in the events. */
+const recordMediatorEvent = async (
+  event: SubstrateEvent,
+  { instructionEvent, status, rawMediator, rawInstructionId, expiry }: MediatorChange
+): Promise<void> => {
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const signerId = getSignerAddress(extrinsic);
+
+  const mediator = getTextValue(rawMediator);
   const instructionId = processInstructionId(rawInstructionId);
-  const expiry = getDateValue(expiryOpt);
 
-  const partyId = getPartyId(instructionId, identityId, undefined, true);
-  const mediatorAffirmation = InstructionAffirmation.create({
-    id: partyId,
-    instructionId,
-    partyId,
-    identity: identityId,
-    isMediator: true,
-    status: AffirmStatusEnum.Affirmed,
-    isAutomaticallyAffirmed: false,
+  const affirmation = await setMediatorAffirmation(instructionId, mediator, {
+    status,
+    affirmedById: mediator,
+    signerId,
+    blockEventId,
     expiry,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-  });
-
-  const mediatorAffirmationEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId,
-    event: InstructionEventEnum.MediatorAffirmationReceived,
-    eventIdx,
-    identity: identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
-  });
-
-  await Promise.all([mediatorAffirmation.save(), mediatorAffirmationEvent.save()]);
-};
-
-export const handleMediatorAffirmationWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId] = params;
-  const identityId = getTextValue(rawIdentityId);
-  const instructionId = getTextValue(rawInstructionId);
-
-  const affirmationWithdrawnEvent = InstructionEvent.create({
-    id: blockEventId,
-    instructionId: processInstructionId(rawInstructionId),
-    event: InstructionEventEnum.MediatorAffirmationWithdrawn,
-    eventIdx,
-    identity: identityId,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    createdEventId: blockEventId,
   });
 
   await Promise.all([
-    InstructionAffirmation.remove(getPartyId(instructionId, identityId, undefined, true)),
-    affirmationWithdrawnEvent.save(),
+    affirmation.save(),
+    InstructionEvent.create({
+      id: blockEventId,
+      instructionId,
+      event: instructionEvent,
+      identityId: mediator,
+      signerId,
+      createdEventId: blockEventId,
+    }).save(),
   ]);
+};
+
+export const handleMediatorAffirmationReceived = (event: SubstrateEvent): Promise<void> => {
+  const { mediatorDid, instructionId, expiry } = decodeEvent(event);
+  return recordMediatorEvent(event, {
+    instructionEvent: InstructionEventEnum.MediatorAffirmationReceived,
+    status: AffirmStatusEnum.Affirmed,
+    rawMediator: mediatorDid,
+    rawInstructionId: instructionId,
+    expiry: getDateValue(expiry),
+  });
+};
+
+export const handleMediatorAffirmationWithdrawn = (event: SubstrateEvent): Promise<void> => {
+  const { mediatorDid, instructionId } = decodeEvent(event);
+  return recordMediatorEvent(event, {
+    instructionEvent: InstructionEventEnum.MediatorAffirmationWithdrawn,
+    status: AffirmStatusEnum.Pending,
+    rawMediator: mediatorDid,
+    rawInstructionId: instructionId,
+  });
 };
 
 /**
  * Maps the event - `settlement.InstructionMediators`
  */
 export const handleInstructionMediators = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawInstructionId, rawIdentityIds] = params;
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const signerId = getSignerAddress(extrinsic);
+  const { instructionId: rawInstructionId, mediators: rawIdentityIds } = decodeEvent(event);
+
   const instructionId = processInstructionId(rawInstructionId);
   const identityIds = getStringArrayValue(rawIdentityIds);
 
   const instruction = await getInstruction(instructionId);
 
   instruction.mediators = identityIds;
-  instruction.updatedBlockId = blockId;
+  instruction.updatedEventId = blockEventId;
 
   const mediatorEventPromises = identityIds.map((identity, index) => {
     return InstructionEvent.create({
       id: `${blockEventId}/${index}`,
       instructionId,
       event: InstructionEventEnum.InstructionMediators,
-      eventIdx,
-      identity,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
+      identityId: identity,
+      signerId,
       createdEventId: blockEventId,
     }).save();
   });
 
-  const parties = {};
-  identityIds.forEach(did => {
-    parties[did] = undefined;
-  });
+  // a mediator that has already affirmed keeps its row
+  const existing = await Promise.all(
+    identityIds.map(did => InstructionAffirmation.get(mediatorAffirmationId(instructionId, did)))
+  );
+  const pending = identityIds
+    .filter((_, index) => !existing[index])
+    .map(did => pendingMediatorAffirmation(instructionId, did, blockEventId));
+
+  const parties = new Map<string, PartyDetails>(identityIds.map(did => [did, { identityId: did }]));
 
   await Promise.all([
     instruction.save(),
-    createInstructionParty(instructionId, blockId, parties, true),
+    createInstructionParty(instructionId, blockEventId, parties, true),
+    ...pending.map(row => row.save()),
     ...mediatorEventPromises,
   ]);
 };
@@ -720,8 +768,15 @@ export const handleInstructionMediators = async (event: SubstrateEvent): Promise
  * Maps the event - `settlement.ReceiptClaimed`
  */
 export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, blockEventId } = extractArgs(event);
-  const [rawIdentityId, rawInstructionId, rawLegId, rawReceiptUid, rawSigner, rawMetadata] = params;
+  const { extrinsic, blockEventId } = extractArgs(event);
+  const {
+    callerDid: rawIdentityId,
+    instructionId: rawInstructionId,
+    legId: rawLegId,
+    receiptUid: rawReceiptUid,
+    signer: rawSigner,
+    metadata: rawMetadata,
+  } = decodeEvent(event);
   const identityId = getTextValue(rawIdentityId);
   const instructionId = processInstructionId(rawInstructionId);
   const legId = getNumberValue(rawLegId);
@@ -731,37 +786,35 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
   const receipt = OffChainReceipt.create({
     id: `${signer}/${uid}`,
     uid,
-    signer,
+    signerId: signer,
     legId: `${instructionId}/${legId}`,
     metadata: getTextValue(rawMetadata),
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   });
 
-  const partyId = getPartyId(instructionId, identityId, undefined, false);
+  const partyId = getPartyId(instructionId, identityId, false);
 
   const affirmation = InstructionAffirmation.create({
     id: `${partyId}/${signer}/${uid}`,
     isMediator: false,
     isAutomaticallyAffirmed: false,
     instructionId,
-    identity: identityId,
+    identityId: identityId,
     partyId,
     status: AffirmStatusEnum.Affirmed,
     offChainReceiptId: `${signer}/${uid}`,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   });
 
   const receiptEvent = InstructionEvent.create({
     id: `${blockEventId}/receipt/${legId}`,
     instructionId: processInstructionId(rawInstructionId),
     event: InstructionEventEnum.ReceiptClaimed,
-    eventIdx,
-    identity: identityId,
+    identityId: identityId,
+    signerId: getSignerAddress(extrinsic),
     offChainReceiptId: `${signer}/${uid}`,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
   });
 
@@ -777,9 +830,9 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
         id: partyId,
         instructionId,
         isMediator: false,
-        identity: identityId,
-        createdBlockId: blockId,
-        updatedBlockId: blockId,
+        identityId: identityId,
+        createdEventId: blockEventId,
+        updatedEventId: blockEventId,
       }).save(),
       ...promises,
     ]);
@@ -787,29 +840,33 @@ export const handleReceiptClaimed = async (event: SubstrateEvent): Promise<void>
 };
 
 export const handleFundsTransferred = async (event: SubstrateEvent): Promise<void> => {
-  const { params, extrinsic, blockId, block, blockEventId } = extractArgs(event);
-  const [, rawFromHolder, rawToHolder, rawFund] = params;
-
-  const address = getSignerAddress(extrinsic);
+  const { extrinsic, blockId, eventIdx, block, blockEventId } = extractArgs(event);
+  const { from: rawFromHolder, to: rawToHolder, fund: rawFund } = decodeEvent(event);
 
   const [fromHolder, toHolder] = await Promise.all([
-    rawAssetHolderToAssetHolder(rawFromHolder, block, blockId),
-    rawAssetHolderToAssetHolder(rawToHolder, block, blockId),
+    rawAssetHolderToAssetHolder(rawFromHolder, block, blockId, blockEventId),
+    rawAssetHolderToAssetHolder(rawToHolder, block, blockId, blockEventId),
   ]);
 
   const { description, memo } = JSON.parse(rawFund.toString());
   const assetType = Object.keys(description)[0];
   const fundDescription = description[assetType];
 
-  await mapAssetMovement({
+  const moved = await mapAssetMovement({
     blockEventId,
     blockId,
-    address,
+    eventIdx,
+    eventId: EventIdEnum.FundsTransferred,
+    address: getSignerAddress(extrinsic),
     fromHolder,
     toHolder,
     assetType,
     fundDescription,
-    memo: memo ? coerceHexToString(memo) : undefined,
+    memo: memoText(memo),
     block,
+    extrinsic,
   });
+
+  // only a transfer within one identity emits `FundsTransferred`, with no balance event of its own
+  await applyMoveWithinIdentity(moved, fromHolder, toHolder, blockEventId, block.specVersion);
 };

@@ -1,0 +1,210 @@
+/**
+ * Pre-v8 staking rewards and the account that received them.
+ *
+ * A large share of pre-v8 mainnet rewards were paid to a `Controller` or an explicit `Account`, not
+ * the stash, so `handleStakingEvent` reads `staking.payee(stash)` from chain storage at the reward
+ * block (`resolveLegacyRewardDestination`).
+ *
+ * These tests pin: the storage read resolves `Controller`/`Account`/`Staked`; and the
+ * `LegacyUnknown` placeholder still stands when the read is not possible (a pruned node), so it
+ * is never silently resolved to something wrong.
+ */
+
+import { SubstrateEvent } from '@subql/types';
+import { handleStakingEvent } from '../../src/mappings/entities/events/mapStakingEvent';
+import { __resetStakingCaches } from '../../src/utils/staking';
+
+const STASH = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+const PAYEE = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+const CONTROLLER = '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy';
+
+const storeSet = (): jest.Mock => (globalThis as any).store.set as jest.Mock;
+
+const mockPayee = (payee: any, bonded?: string) => {
+  (globalThis as any).api.query = {
+    staking: {
+      payee: jest.fn().mockResolvedValue({ toJSON: () => payee }),
+      bonded: jest.fn().mockResolvedValue({ toJSON: () => bonded ?? null }),
+    },
+  };
+};
+
+const codec = (value: string) => ({ toString: () => value, toJSON: () => value });
+
+const rewardEvent = (
+  method: 'Reward' | 'Rewarded',
+  data: any[],
+  specVersion: number
+): SubstrateEvent =>
+  ({
+    idx: 1,
+    block: {
+      block: { header: { number: { toString: () => '5000' } } },
+      timestamp: new Date('2022-01-01T00:00:00Z'),
+      specVersion,
+    },
+    event: {
+      section: 'staking',
+      method,
+      data,
+      meta: { fields: data.map(() => ({ name: { isSome: false }, typeName: { isSome: false } })) },
+    },
+    extrinsic: undefined,
+  } as unknown as SubstrateEvent);
+
+/**
+ * v8 `staking.Rewarded` is a real named-struct event (upstream `pallet-staking`), unlike the
+ * tuple-style pre-v8 one `rewardEvent` builds — the block's own metadata names every field, so
+ * `decodeEvent` resolves it directly rather than via the registered shape table (which only
+ * covers the pre-v8 tuple form).
+ */
+const rewardEventV8 = (fields: { stash: string; dest: any; amount: string }): SubstrateEvent =>
+  ({
+    idx: 1,
+    block: {
+      block: { header: { number: { toString: () => '5000' } } },
+      timestamp: new Date('2022-01-01T00:00:00Z'),
+      specVersion: 8_000_000,
+    },
+    event: {
+      section: 'staking',
+      method: 'Rewarded',
+      data: [codec(fields.stash), fields.dest, codec(fields.amount)],
+      meta: {
+        fields: ['stash', 'dest', 'amount'].map(name => ({
+          name: { isSome: true, unwrap: () => codec(name) },
+          typeName: { isSome: true, unwrap: () => codec('Dummy') },
+        })),
+      },
+    },
+    extrinsic: undefined,
+  } as unknown as SubstrateEvent);
+
+const savedStakingEvent = () =>
+  storeSet()
+    .mock.calls.filter(([entity]) => entity === 'StakingEvent')
+    .map(([, , row]) => row)
+    .at(-1);
+
+beforeEach(() => {
+  __resetStakingCaches();
+  (globalThis as any).api.runtimeVersion.specName = { toString: () => 'polymesh' };
+  (globalThis as any).api.query = {};
+});
+
+describe('pre-v8 reward destination', () => {
+  it('reads staking.payee and resolves a Controller payee to the controller account', async () => {
+    mockPayee('Controller', CONTROLLER);
+
+    await handleStakingEvent(
+      rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1000')], 7_004_001)
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Controller');
+    expect(row.rewardDestinationAccountId).toBe(CONTROLLER);
+    expect(row.stashId).toBe(STASH);
+  });
+
+  it('resolves an explicit Account payee', async () => {
+    mockPayee({ account: PAYEE });
+
+    await handleStakingEvent(
+      rewardEvent('Rewarded', [codec('0x00'), codec(STASH), codec('2000')], 7_000_000)
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Account');
+    expect(row.rewardDestinationAccountId).toBe(PAYEE);
+  });
+
+  it('resolves Staked/Stash to the stash itself', async () => {
+    mockPayee('Staked');
+
+    await handleStakingEvent(
+      rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1500')], 7_004_001)
+    );
+
+    expect(savedStakingEvent()).toMatchObject({
+      rewardDestination: 'Staked',
+      rewardDestinationAccountId: STASH,
+    });
+  });
+
+  it('resolves the object form staking.payee returns via .toJSON() ({ staked: null }) to the stash', async () => {
+    // `RewardDestination::Staked` renders as the lower-cased single-key object `{ staked: null }`
+    // through `.toJSON()`, not the bare string `"Staked"`.
+    mockPayee({ staked: null });
+
+    await handleStakingEvent(
+      rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1500')], 7_004_001)
+    );
+
+    expect(savedStakingEvent()).toMatchObject({
+      rewardDestination: 'Staked',
+      rewardDestinationAccountId: STASH,
+    });
+  });
+
+  it('falls back to LegacyUnknown when the payee read is not possible, never to the stash', async () => {
+    // api.query.staking absent — a pruned node or a runtime with no such storage
+    await handleStakingEvent(
+      rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1000')], 7_004_001)
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('LegacyUnknown');
+    expect(row.rewardDestinationAccountId).toBeUndefined();
+  });
+
+  it('propagates a failed payee read rather than recording LegacyUnknown', async () => {
+    // The storage exists but the read failed — a dropped connection, not a pruned node. Recording
+    // `LegacyUnknown` here would index a guess the retry of this block would not have made.
+    (globalThis as any).api.query = {
+      staking: {
+        payee: jest.fn().mockRejectedValue(new Error('WebSocket is not connected')),
+        bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
+      },
+    };
+
+    await expect(
+      handleStakingEvent(
+        rewardEvent('Reward', [codec('0x00'), codec(STASH), codec('1000')], 7_004_001)
+      )
+    ).rejects.toThrow('WebSocket is not connected');
+  });
+
+  it('v8 resolves the destination account for an explicit Account payee', async () => {
+    await handleStakingEvent(
+      rewardEventV8({
+        stash: STASH,
+        dest: { toJSON: () => ({ account: PAYEE }) },
+        amount: '3000',
+      })
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Account');
+    expect(row.rewardDestinationAccountId).toBe(PAYEE);
+  });
+
+  it('v8 resolves Staked/Stash to the stash itself', async () => {
+    await handleStakingEvent(
+      rewardEventV8({ stash: STASH, dest: { toJSON: () => 'Staked' }, amount: '4000' })
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Staked');
+    expect(row.rewardDestinationAccountId).toBe(STASH);
+  });
+
+  it('v8 resolves the object form of a Staked payee to the stash', async () => {
+    await handleStakingEvent(
+      rewardEventV8({ stash: STASH, dest: { toJSON: () => ({ staked: null }) }, amount: '4500' })
+    );
+
+    const row = savedStakingEvent();
+    expect(row.rewardDestination).toBe('Staked');
+    expect(row.rewardDestinationAccountId).toBe(STASH);
+  });
+});
