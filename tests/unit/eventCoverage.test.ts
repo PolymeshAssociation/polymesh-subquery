@@ -69,6 +69,27 @@ Object.entries(declared).forEach(([key, ranges]) => {
 });
 
 /**
+ * A released runtime no surveyed chain has upgraded to yet is known only from its arity fixture,
+ * captured from the release's metadata. Its events count as declared until the survey catches up.
+ */
+const ARITY_DIR = path.join(__dirname, '..', 'fixtures', 'event-arity');
+const surveyed = Math.max(
+  ...Object.values(history.chains).flatMap(chain => chain.runtimes.map(r => r.specVersion))
+);
+fs.readdirSync(ARITY_DIR)
+  .filter(name => name.endsWith('.json'))
+  .map(name => JSON.parse(fs.readFileSync(path.join(ARITY_DIR, name), 'utf8')))
+  .filter(({ specVersion }) => specVersion > surveyed)
+  .forEach(({ specVersion, modules }: { specVersion: number; modules: Record<string, object> }) =>
+    Object.entries(modules).forEach(([module, events]) => {
+      byModule[module] = byModule[module] ?? new Map();
+      Object.keys(events).forEach(event => {
+        if (!byModule[module].has(event)) byModule[module].set(event, specVersion);
+      });
+    })
+  );
+
+/**
  * Declared events a listed module has no entry for, with why. Everything else a listed module
  * declares must have an entry in `filters`, `[]` for "stored, no handler". A new runtime event that
  * is not here and has no entry fails the test; add it to `filters` if it matters to an entity, here

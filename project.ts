@@ -223,6 +223,9 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalFailedToExecute: [],
   },
   nft: {
+    // As for the asset pallet's: `NFTHoldingsUpdated`, emitted just before, records the movement.
+    ControllerTransfer: [],
+    ControllerTransferTo: [],
     IssuedNFT: ['handleLegacyNftIssued'],
     NFTApproval: ['handleNftApproval'],
     NFTApprovalForAll: ['handleNftApprovalForAll'],

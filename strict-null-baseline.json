@@ -1,6 +1,6 @@
 {
   "src/mappings/entities/assets/mapAsset.ts": 19,
-  "src/mappings/entities/assets/mapNfts.ts": 5,
+  "src/mappings/entities/assets/mapNfts.ts": 4,
   "src/mappings/entities/assets/mapStatistics.ts": 10,
   "src/mappings/entities/assets/mapTickers.ts": 4,
   "src/mappings/entities/assets/metadataKeyResolver.ts": 3,

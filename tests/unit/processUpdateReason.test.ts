@@ -20,13 +20,17 @@ const transferred = (instructionId: number | null = null) => ({
 
 describe('processUpdateReason', () => {
   describe('transferred without an instruction', () => {
-    it('uses the next event name when EventIdEnum has it', () => {
-      const events = [eventRecord('AssetBalanceUpdated'), eventRecord('ControllerTransfer')];
+    // the asset pallet reports both controller calls as `Transferred`, then names the call
+    it.each([EventIdEnum.ControllerTransfer, EventIdEnum.ControllerTransferTo])(
+      'uses the next event name when EventIdEnum has it: %s',
+      next => {
+        const events = [eventRecord('AssetBalanceUpdated'), eventRecord(next)];
 
-      const result = processUpdateReason('transferred', transferred(), BigInt(1), 0, events);
+        const result = processUpdateReason('transferred', transferred(), BigInt(1), 0, events);
 
-      expect(result.eventId).toBe(EventIdEnum.ControllerTransfer);
-    });
+        expect(result.eventId).toBe(next);
+      }
+    );
 
     it('falls back to Unknown when the next event name is not in EventIdEnum', () => {
       const events = [eventRecord('AssetBalanceUpdated'), eventRecord('NotARealEventName')];

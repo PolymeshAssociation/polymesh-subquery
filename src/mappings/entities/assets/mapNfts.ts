@@ -17,6 +17,7 @@ import {
   rawAssetHolderToAssetHolder,
 } from '../../../utils';
 import { recordAnomaly } from '../../../utils/anomaly';
+import { blockEvents } from '../../../utils/blockEvents';
 import { extractArgs, getAsset } from './../common';
 import { applyNftCountDelta, createAssetTransaction, getHolding } from './mapAsset';
 import { nftApprovalId } from './mapNftApprovals';
@@ -229,6 +230,44 @@ const redeemNfts = async ({
   await applyNftCountDelta(asset, holder, blockEventId, -ids.length, promises);
 };
 
+/** Moves tokens between holders: the token rows, their approvals, and both holding counts. */
+const transferNfts = async ({
+  asset,
+  fromHolder,
+  toHolder,
+  ids,
+  blockEventId,
+  promises,
+}: Omit<NftSupplyChange, 'holder'> & {
+  fromHolder?: AssetHolderDetails;
+  toHolder?: AssetHolderDetails;
+}): Promise<void> => {
+  const movedNfts = await Promise.all(
+    ids.map(nftId => moveNft(asset.id, nftId, toHolder, blockEventId))
+  );
+  promises.push(bulkUpdateNfts(movedNfts));
+  clearTokenApprovals(asset.id, ids, fromHolder, promises);
+  if (fromHolder) {
+    await applyNftCountDelta(asset, fromHolder, blockEventId, -ids.length, promises);
+  }
+  if (toHolder) {
+    await applyNftCountDelta(asset, toHolder, blockEventId, ids.length, promises);
+  }
+
+  asset.totalTransfers += BigInt(1);
+};
+
+/**
+ * From 8.1.3 the chain follows a controller transfer's holdings update with an event naming the
+ * call, as it does for fungible assets; before that, `controller_transfer_to` is indistinguishable.
+ */
+const controllerTransferEventId = (block: SubstrateBlock, eventIdx: number): EventIdEnum => {
+  const next = blockEvents(block)[eventIdx + 1]?.event;
+  return next?.section === 'nft' && next.method === 'ControllerTransferTo'
+    ? EventIdEnum.ControllerTransferTo
+    : EventIdEnum.ControllerTransfer;
+};
+
 export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, eventIdx, block, extrinsic, blockEventId } = extractArgs(event);
   const {
@@ -283,19 +322,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       promises,
     });
   } else if (reason === 'transferred' || reason === 'controllerTransfer') {
-    const movedNfts = await Promise.all(
-      ids.map(nftId => moveNft(assetId, nftId, toHolder, blockEventId))
-    );
-    promises.push(bulkUpdateNfts(movedNfts));
-    clearTokenApprovals(assetId, ids, fromHolder, promises);
-    if (fromHolder) {
-      await applyNftCountDelta(asset, fromHolder, blockEventId, -ids.length, promises);
-    }
-    if (toHolder) {
-      await applyNftCountDelta(asset, toHolder, blockEventId, ids.length, promises);
-    }
-
-    asset.totalTransfers += BigInt(1);
+    await transferNfts({ asset, fromHolder, toHolder, ids, blockEventId, promises });
 
     if (reason === 'transferred') {
       eventId = EventIdEnum.Transfer;
@@ -304,7 +331,7 @@ export const handleNftHoldingsUpdates = async (event: SubstrateEvent): Promise<v
       instructionId = padNumericId(details.instructionId);
       instructionMemo = memoText(details.instructionMemo);
     } else {
-      eventId = EventIdEnum.ControllerTransfer;
+      eventId = controllerTransferEventId(block, eventIdx);
     }
   }
 
