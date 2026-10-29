@@ -1918,6 +1918,7 @@ type EvmTransaction @entity {
   "Same ID as the `Extrinsic` that carried this transaction"
   id: ID!
   extrinsic: Extrinsic!
+  "The block the transaction was included in — the only direct link to one, as `Event` and `Extrinsic` also keep"
   block: Block! @index(unique: false)
   "The keccak256 of the RLP payload, i.e. the transaction hash an Ethereum wallet reports"
   ethTxHash: String! @index(unique: false)
@@ -1926,8 +1927,8 @@ type EvmTransaction @entity {
   callKind: EvmCallKindEnum!
   "Checksummed Ethereum address that signed the transaction"
   fromEthAddress: String! @index(unique: false)
-  "SS58 encoding of the `0xEE` padded account the runtime dispatched the call as"
-  fromAddress: String! @index(unique: false)
+  "The `0xEE` padded account the runtime dispatched the call as"
+  fromAccount: Account!
   "`null` for a contract deployment"
   toEthAddress: String @index(unique: false)
   "Address of the deployed contract, taken from `revive.Instantiated`"
@@ -1947,9 +1948,6 @@ type EvmTransaction @entity {
   "An Ethereum transaction always succeeds at the extrinsic level. This flags the ones that reverted"
   reverted: Boolean! @index(unique: false)
   revertReason: String
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -2291,14 +2289,10 @@ Represents `POLY`, the Ethereum based ERC-20 token, being converted to POLYX, th
 type BridgeEvent @entity {
   id: ID!
   identity: Identity!
-  recipient: String!
+  recipient: Account!
   amount: BigInt!
   txHash: String! @index(unique: false)
-  eventIdx: Int!
   createdEvent: Event!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
 }
 
 """
@@ -3149,16 +3143,38 @@ type CorporateBallotVote @entity {
 }
 
 """
+A standing fee-paying relationship from the `relayer` pallet: `payingAccount` pays transaction and
+protocol fees on `beneficiaryAccount`'s behalf, up to `allowance`. Renamed from "paying key" to
+"subsidy" at chain v8.0.0 — this entity covers both eras (id `userKey/payingKey`)
+"""
+type Subsidy @entity {
+  id: ID! # userKey/payingKey
+  "the subsidised key"
+  beneficiaryAccount: Account! @index
+  "pays the fees"
+  payingAccount: Account! @index
+  "current POLYX limit (remaining)"
+  allowance: BigInt!
+  "Cumulative `SubsidyDebited`. Null across the pre-v8 range, where the chain emitted nothing to accumulate — which is not the same fact as a subsidy that was never drawn on"
+  totalDebited: BigInt
+  "false = approved/authorized but not yet accepted"
+  isAccepted: Boolean!
+  isRemoved: Boolean!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
 Represents a vote on a governance proposal
 """
 type ProposalVote @entity {
   id: ID!
   proposal: Proposal!
-  account: String!
+  account: Account!
   vote: Boolean!
   weight: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3192,19 +3208,32 @@ type Proposer @jsonField {
 Represents a potential change to how the chain will operate. It will need gain sufficient "Aye" votes before having effect
 """
 type Proposal @entity {
+  "The chain's numeric PIP sequence, zero-padded to 10 digits so `ID` ordering is numeric. Filter by a literal id with the padded form."
   id: ID!
   proposer: Proposer!
   state: ProposalStateEnum!
-  owner: Identity!
+  "The proposer's identity; null for a PIP seeded from the chain that a committee proposed, as the chain doesn't keep which member"
+  owner: Identity
   balance: BigInt!
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
+  "Whether the PIP sits in the current snapshot queue; true from the snapshot that queued it until that snapshot is cleared or its results are enacted"
   snapshotted: Boolean!
+  "The snapshot the PIP is queued in, while it is. Null once the queue is cleared or its result enacted"
+  snapshotId: Int @index(unique: false)
+  "How many times the PIP has been skipped in a snapshot's results"
+  skippedCount: Int
+  "The block the PIP is scheduled to execute at, once it is scheduled"
+  executionScheduledAt: Int
+  "The block the PIP is scheduled to expire at, once it is scheduled"
+  expiresAt: Int
+  "The event that closed the PIP; null while it is open"
+  closedEvent: Event
   totalAyeWeight: BigInt!
   totalNayWeight: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3918,18 +3947,33 @@ enum SignerTypeEnum {
 
 """
 Represents a MultiSig
+
+A multisig *is* an account — it holds POLYX, holds assets, and signs — so it is linked to its
+`Account` row rather than carrying a bare address string. The account's address is the
+`MultiSig` id.
 """
 type MultiSig @entity {
   id: ID!
-  address: String! @index(unique: true)
-  creator: Identity!
-  creatorAccount: Account!
+  "The multisig's own account — `account.address` is the multisig address, `id` is the same string"
+  account: Account! @index(unique: true)
+  """
+  The identity that dispatched `create_multisig` (the `MultiSigCreated` event's `callerDid`).
+
+  NULL for a multisig that existed at genesis: the chain keeps no `creator` storage (only
+  `multiSig.adminDid` and `multiSig.payingDid`), so for a row not observed being created the
+  creator is unrecoverable. Do NOT read this as "who controls it" — that is `admins`, which is
+  mutable (`multiSig.adminDid`, changed via `add_admin` / `remove_admin`) — nor as "which identity
+  it acts for", which is `account.identity` (the multisig joined to an identity as a key).
+  """
+  creator: Identity
+  "The account that dispatched `create_multisig` (the event's `caller`). NULL for genesis rows."
+  creatorAccount: Account
   signaturesRequired: Int!
   signers: [MultiSigSigner]! @derivedFrom(field: "multisig")
   proposals: [MultiSigProposal]! @derivedFrom(field: "multisig")
   admins: [MultiSigAdmin!] @derivedFrom(field: "multisig")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3946,10 +3990,11 @@ Represents a MultiSig admin
 type MultiSigAdmin @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
-  identityId: String!
+  "The administering identity — from `multiSig.adminDid` (genesis) or `MultiSigAddedAdmin`"
+  admin: Identity! @index(unique: false)
   status: MultiSigAdminStatusEnum!
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3968,11 +4013,18 @@ type MultiSigSigner @entity {
   id: ID!
   multisig: MultiSig! @index(unique: false)
   signerType: SignerTypeEnum!
+  """
+  The canonical signer value. Kept as the source of truth: `SignerTypeEnum` is `Account | Identity`
+  and pre-7.x runtimes allowed identity signers, which a relation cannot point at, and the index
+  replays history from genesis.
+  """
   signerValue: String!
+  "The signer's account — set only when `signerType` is `Account`; a signer key is an account"
+  signerAccount: Account @index(unique: false)
   status: MultiSigSignerStatusEnum!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "signer")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -4023,17 +4075,13 @@ type MultiSigProposal @entity {
   multisig: MultiSig! @index(unique: false)
   proposalId: Int! @index(unique: false)
   creator: Identity
-  creatorAccount: String
+  creatorAccount: Account
   status: String! @index(unique: false)
   approvalCount: Int!
   rejectionCount: Int!
-  datetime: Date!
-  eventIdx: Int!
-  extrinsicIdx: Int
   params: MultiSigProposalParams!
   votes: [MultiSigProposalVote]! @derivedFrom(field: "proposal")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   extrinsic: Extrinsic
   createdEvent: Event!
 }
@@ -4054,11 +4102,7 @@ type MultiSigProposalVote @entity {
   proposal: MultiSigProposal! @index(unique: false)
   signer: MultiSigSigner! @index(unique: false)
   action: MultiSigProposalVoteActionEnum
-  datetime: Date!
-  eventIdx: Int!
-  extrinsicIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4105,11 +4149,27 @@ enum ConfidentialCurveTreeEnum {
 }
 
 """
-A mediator's confidential account public key and encryption key pair
+The part a key plays for a confidential asset
 """
-type MediatorKey @jsonField {
-  accountKey: String!
-  encryptionKey: String!
+enum ConfidentialKeyRole {
+  Auditor
+  Mediator
+}
+
+"""
+One key an asset names as an auditor or a mediator, as the asset last set them. A mediator is a
+confidential account and its encryption key; an auditor is an encryption key alone. An update
+removes the keys the asset drops and adds the ones it gains, so the rows are the asset's current
+keys and each keeps the event that added it.
+"""
+type ConfidentialAssetKey @entity {
+  id: ID! # assetId/Mediator/accountKey or assetId/Auditor/encryptionKey
+  asset: ConfidentialAsset!
+  role: ConfidentialKeyRole!
+  "The mediator's confidential account; null for an auditor"
+  account: ConfidentialAccount
+  encryptionKey: ConfidentialEncryptionKey!
+  createdEvent: Event!
 }
 
 """
@@ -4117,13 +4177,14 @@ Represents a confidential account (account public key)
 """
 type ConfidentialAccount @entity {
   id: ID!
-  account: String!
-  encryptionKey: String!
+  "The confidential account's public key, which is also its `id`. It is not a signing key, so it names no `Account`"
+  publicKey: String!
+  encryptionKey: ConfidentialEncryptionKey!
+  "The assets this account mediates"
+  mediatorOf: [ConfidentialAssetKey!]! @derivedFrom(field: "account")
   creator: Identity!
-  eventIdx: Int!
   assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4135,9 +4196,11 @@ type ConfidentialEncryptionKey @entity {
   id: ID!
   encryptionKey: String!
   creator: Identity!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The confidential accounts using this key"
+  accounts: [ConfidentialAccount!]! @derivedFrom(field: "encryptionKey")
+  "The assets this key audits or mediates"
+  assetRoles: [ConfidentialAssetKey!]! @derivedFrom(field: "encryptionKey")
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4152,13 +4215,11 @@ type ConfidentialAsset @entity {
   decimals: Int!
   data: String
   creator: Identity!
-  auditors: [String!]!
-  mediators: [MediatorKey!]!
+  "The asset's current auditor and mediator keys"
+  keys: [ConfidentialAssetKey!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
-  eventIdx: Int!
   holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4169,9 +4230,7 @@ type ConfidentialAccountAsset @entity {
   id: ID!
   account: ConfidentialAccount! @index(unique: false)
   asset: ConfidentialAsset! @index(unique: false)
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4185,13 +4244,11 @@ type ConfidentialSettlement @entity {
   """
   The block number of the asset curve tree root the settlement proof was built against
   """
-  assetRootBlock: Int!
+  assetRootBlock: Int
   legCount: Int!
   status: ConfidentialSettlementStatusEnum!
   legs: [ConfidentialLeg!]! @derivedFrom(field: "settlement")
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4207,8 +4264,7 @@ type ConfidentialLeg @entity {
   """
   encryptedData: String!
   affirmations: [ConfidentialLegAffirmation!]! @derivedFrom(field: "leg")
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4226,9 +4282,7 @@ type ConfidentialLegAffirmation @entity {
   """
   keyIndex: Int
   status: ConfidentialAffirmationStatusEnum!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -4244,9 +4298,7 @@ type ConfidentialCurveTreeLeaf @entity {
   The compressed leaf value commitment (hex)
   """
   value: String!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 

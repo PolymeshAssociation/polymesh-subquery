@@ -1,5 +1,6 @@
 import { Codec } from '@polkadot/types/types';
-import { SubstrateBlock, SubstrateEvent } from '@subql/types';
+import { SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
 import {
   CallIdEnum,
   ModuleIdEnum,
@@ -17,18 +18,36 @@ import {
   getFirstKeyFromJson,
   getMultiSigSigner,
   getNumberValue,
-  getPaginatedData,
+  getAllByFields,
   getTextValue,
   is7xChain,
-  padId,
 } from '../../../utils';
-import { extractArgs } from '../common';
+import { extractArgs, getOrAnomaly } from '../common';
+
+/** One call a proposal dispatches, from its `toHuman()` form */
+const callToProposalParam = (call: any): SingleProposal => ({
+  module: call.section.toLowerCase() as ModuleIdEnum,
+  call: camelToSnakeCase(call.method) as CallIdEnum,
+  args: JSON.stringify(call.args),
+});
+
+/** The calls a proposal dispatches, from its call's `toHuman()` form: a batch's calls, or the one */
+export const proposalParamsOf = (
+  call: any
+): Pick<MultiSigProposalParams, 'isBatch' | 'isBridge' | 'proposals'> =>
+  call?.method?.startsWith('batch')
+    ? // batch, batch_atomic, batch_all, batch_optimistic
+      { isBatch: true, isBridge: false, proposals: call?.args?.calls?.map(callToProposalParam) }
+    : { isBatch: false, isBridge: false, proposals: [callToProposalParam(call)] };
 
 export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, extrinsic, eventIdx, block, blockEventId, extrinsicId } =
-    extractArgs(event);
+  const { extrinsic, blockEventId, extrinsicId } = extractArgs(event);
 
-  const [rawDid, rawMultiSigAddress, rawProposalId] = params;
+  const {
+    callerDid: rawDid,
+    multisig: rawMultiSigAddress,
+    proposalId: rawProposalId,
+  } = decodeEvent(event);
 
   const creatorId = getTextValue(rawDid);
   const multisigId = getTextValue(rawMultiSigAddress);
@@ -41,14 +60,6 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
   };
 
   const args = (extrinsic?.extrinsic?.toHuman() as any).method.args;
-
-  const callToProposalParam = (call: any): SingleProposal => {
-    return {
-      module: call.section.toLowerCase() as ModuleIdEnum,
-      call: camelToSnakeCase(call.method) as CallIdEnum,
-      args: JSON.stringify(call.args),
-    };
-  };
 
   const underlyingCall = camelToSnakeCase(extrinsic?.extrinsic.method.method || 'default');
 
@@ -73,16 +84,8 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     // for extrinsic bridge.propose_bridge_tx
     proposalParams.bridge = [args.bridge_tx];
     proposalParams.isBridge = true;
-  } else if (args?.proposal?.method?.startsWith('batch')) {
-    // for batch, batch_atomic, batch_all, batch_optimistic
-    proposalParams.isBatch = true;
-    proposalParams.proposals = args?.proposal?.args?.calls?.map(callToProposalParam);
-    proposalParams.expiry = args.expiry;
-    proposalParams.autoClose = args.auto_close;
   } else {
-    const proposal: SingleProposal = callToProposalParam(args.proposal);
-
-    proposalParams.proposals = [proposal];
+    Object.assign(proposalParams, proposalParamsOf(args.proposal));
     proposalParams.expiry = args.expiry;
     proposalParams.autoClose = args.auto_close;
   }
@@ -92,18 +95,14 @@ export const handleMultiSigProposalAdded = async (event: SubstrateEvent): Promis
     multisigId,
     proposalId,
     creatorId,
-    creatorAccount,
+    creatorAccountId: creatorAccount,
     approvalCount: 0,
     rejectionCount: 0,
     params: proposalParams,
-    eventIdx,
-    extrinsicIdx: extrinsic?.idx,
-    datetime: block.timestamp,
     status: MultiSigProposalStatusEnum.Active,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
-    extrinsicId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
+    extrinsicId,
   }).save();
 };
 
@@ -111,7 +110,7 @@ const handleMultiSigProposalStatus = async (
   rawMultiSigAddress: Codec,
   rawProposalId: Codec,
   status: MultiSigProposalStatusEnum,
-  blockId: string
+  blockEventId: string
 ): Promise<void> => {
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalId = getNumberValue(rawProposalId);
@@ -119,20 +118,24 @@ const handleMultiSigProposalStatus = async (
   const proposal = await MultiSigProposal.get(`${multisigId}/${proposalId}`);
 
   proposal.status = status;
-  proposal.updatedBlockId = blockId;
+  proposal.updatedEventId = blockEventId;
 
   await proposal.save();
 };
 
+/**
+ * From v7 `ProposalApproved` means the proposal reached its threshold. Before v7 the same name was
+ * one signer's approving vote, which v7 calls `ProposalApprovalVote`, so it is counted as a vote.
+ */
 export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
   if (is7xChain(block)) {
-    const [, rawMultiSigAddress, rawProposalId] = params;
+    const { multisig: rawMultiSigAddress, proposalId: rawProposalId } = decodeEvent(event);
     await handleMultiSigProposalStatus(
       rawMultiSigAddress,
       rawProposalId,
       MultiSigProposalStatusEnum.Approved,
-      blockId
+      blockEventId
     );
   } else {
     await handleMultiSigVoteApproved(event);
@@ -140,20 +143,24 @@ export const handleMultiSigProposalApproved = async (event: SubstrateEvent): Pro
 };
 
 export const handleMultiSigProposalRejected = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
-  const [, rawMultiSigAddress, rawProposalId] = params;
+  const { blockEventId } = extractArgs(event);
+  const { multisig: rawMultiSigAddress, proposalId: rawProposalId } = decodeEvent(event);
   await handleMultiSigProposalStatus(
     rawMultiSigAddress,
     rawProposalId,
     MultiSigProposalStatusEnum.Rejected,
-    blockId
+    blockEventId
   );
 };
 
 export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, block } = extractArgs(event);
+  const { block, blockEventId } = extractArgs(event);
 
-  const [, rawMultiSigAddress, rawProposalId, rawSuccess] = params;
+  const {
+    multisig: rawMultiSigAddress,
+    proposalId: rawProposalId,
+    result: rawSuccess,
+  } = decodeEvent(event);
 
   let success: boolean;
   if (is7xChain(block)) {
@@ -167,15 +174,19 @@ export const handleMultiSigProposalExecuted = async (event: SubstrateEvent): Pro
     status = MultiSigProposalStatusEnum.Failed;
   }
 
-  await handleMultiSigProposalStatus(rawMultiSigAddress, rawProposalId, status, blockId);
+  await handleMultiSigProposalStatus(rawMultiSigAddress, rawProposalId, status, blockEventId);
 };
 
 const handleMultiSigProposalVoteAction = async (
   event: SubstrateEvent,
   action: MultiSigProposalVoteActionEnum
 ) => {
-  const { params, blockId, eventIdx, block, extrinsicIdx, blockEventId } = extractArgs(event);
-  const [, rawMultiSigAddress, rawSigner, rawProposalId] = params;
+  const { block, blockEventId } = extractArgs(event);
+  const {
+    multisig: rawMultiSigAddress,
+    signer: rawSigner,
+    proposalId: rawProposalId,
+  } = decodeEvent(event);
 
   const multisigId = getTextValue(rawMultiSigAddress);
   const proposalIndex = getNumberValue(rawProposalId);
@@ -186,9 +197,15 @@ const handleMultiSigProposalVoteAction = async (
   const voteId = `${proposalId}/${signerValue}`;
 
   const [proposal, previousVote] = await Promise.all([
-    MultiSigProposal.get(proposalId),
+    getOrAnomaly(id => MultiSigProposal.get(id), proposalId, 'MultiSigProposal', event),
     MultiSigProposalVote.get(voteId),
   ]);
+
+  // A vote counts toward a proposal, so without the proposal there is nothing to count it on —
+  // reported rather than left to fail the block on the first count.
+  if (!proposal) {
+    return;
+  }
 
   let vote = previousVote;
   if (vote) {
@@ -205,12 +222,8 @@ const handleMultiSigProposalVoteAction = async (
       proposalId,
       signerId,
       action,
-      datetime: block.timestamp,
-      eventIdx,
-      extrinsicIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     });
   }
 
@@ -231,38 +244,21 @@ export const handleMultiSigVoteRejected = async (event: SubstrateEvent): Promise
   await handleMultiSigProposalVoteAction(event, MultiSigProposalVoteActionEnum.Rejected);
 };
 
-// triggered on major chain upgrades only
-export const handleMultiSigProposalDeleted = async (block: SubstrateBlock): Promise<void> => {
-  const blockId = padId(block.block.header.number.toString());
-
-  const activeProposals = await getPaginatedData<MultiSigProposal, 'status'>(
-    'MultiSigProposal',
-    'status',
-    MultiSigProposalStatusEnum.Active
-  );
-
-  const is7 = is7xChain(block);
-  const query = is7 ? api.query.multiSig.proposalStates : api.query.multiSig.proposalDetail;
-
-  const queryMultiParams = activeProposals.map(proposal => [
-    query,
-    [proposal.multisigId, proposal.proposalId],
+/**
+ * Marks deleted every pending proposal. Multisig's `on_runtime_upgrade` clears every proposal, its
+ * votes and its state, with no event, when the upgrade raises the transaction version above the one
+ * it stored (v3.0.0 to v8.1.2); the caller decides that.
+ */
+export const deletePendingProposals = async (blockEventId: string): Promise<void> => {
+  const pending = await getAllByFields<MultiSigProposal>('MultiSigProposal', [
+    ['status', '=', MultiSigProposalStatusEnum.Active],
   ]);
 
-  const proposalDetails = await api.queryMulti(queryMultiParams as any);
-
-  const deletedProposals = [];
-  proposalDetails.forEach((proposal, index) => {
-    if (proposal.isEmpty) {
-      deletedProposals.push(activeProposals[index]);
-    }
-  });
-
-  if (deletedProposals.length) {
-    deletedProposals.forEach(proposal => {
+  if (pending.length) {
+    pending.forEach(proposal => {
       proposal.status = MultiSigProposalStatusEnum.Deleted;
-      proposal.updatedBlockId = blockId;
+      proposal.updatedEventId = blockEventId;
     });
-    await store.bulkUpdate('MultiSigProposal', deletedProposals);
+    await store.bulkUpdate('MultiSigProposal', pending);
   }
 };

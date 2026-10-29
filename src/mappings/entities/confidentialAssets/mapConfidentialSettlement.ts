@@ -9,8 +9,10 @@ import {
   ConfidentialSettlementStatusEnum,
   EventIdEnum,
 } from '../../../types';
-import { bytesToString, getNumberValue, getTextValue } from '../../../utils';
+import { getNumberValue, getTextValue } from '../../../utils';
+import { itemsOf } from '../../../utils/codec';
 import { extractArgs } from '../common';
+import { memoText } from '../../../utils/text';
 
 type LegRefDetails = {
   settlementId: string;
@@ -34,11 +36,11 @@ export const getLegRef = (item: Codec): LegRefDetails => {
  * chain prunes the leg data at settlement finalization
  */
 export const getEncryptedLegs = (item: Codec): string[] => {
-  return Array.from(item as unknown as Iterable<Codec>).map(leg => leg.toHex());
+  return itemsOf(item, 'the encrypted legs').map(leg => leg.toHex());
 };
 
 export const handleConfidentialSettlementCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [rawSettlementRef, rawMemo, rawAssetRootBlock, rawLegs] = params;
 
@@ -47,14 +49,12 @@ export const handleConfidentialSettlementCreated = async (event: SubstrateEvent)
 
   const settlementPromise = ConfidentialSettlement.create({
     id: settlementId,
-    memo: bytesToString(rawMemo),
+    memo: memoText(rawMemo),
     assetRootBlock: getNumberValue(rawAssetRootBlock),
     legCount: encryptedLegs.length,
     status: ConfidentialSettlementStatusEnum.Pending,
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 
   const legPromises = encryptedLegs.map((encryptedData, legId) =>
@@ -63,9 +63,8 @@ export const handleConfidentialSettlementCreated = async (event: SubstrateEvent)
       settlementId,
       legId,
       encryptedData,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save()
   );
 
@@ -75,7 +74,7 @@ export const handleConfidentialSettlementCreated = async (event: SubstrateEvent)
 export const handleConfidentialSettlementStatusUpdated = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [rawSettlementRef, rawStatus] = params;
 
@@ -89,7 +88,7 @@ export const handleConfidentialSettlementStatusUpdated = async (
 
   if (settlement) {
     settlement.status = status;
-    settlement.updatedBlockId = blockId;
+    settlement.updatedEventId = blockEventId;
 
     await settlement.save();
   }
@@ -154,7 +153,7 @@ const getPartyStatus = (eventId: EventIdEnum): PartyStatus => {
  * affirmation status of each party for a settlement leg
  */
 export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventId, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, eventId, blockEventId } = extractArgs(event);
 
   const [rawLegRef, rawKeyIndex] = params;
 
@@ -173,8 +172,7 @@ export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): 
 
   if (affirmation) {
     affirmation.status = status;
-    affirmation.eventIdx = eventIdx;
-    affirmation.updatedBlockId = blockId;
+    affirmation.updatedEventId = blockEventId;
 
     await affirmation.save();
   } else {
@@ -185,10 +183,8 @@ export const handleConfidentialLegPartyUpdated = async (event: SubstrateEvent): 
       party,
       keyIndex,
       status,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save();
   }
 };

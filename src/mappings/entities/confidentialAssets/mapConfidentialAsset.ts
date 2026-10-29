@@ -1,29 +1,69 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
-import { ConfidentialAccountAsset, ConfidentialAsset, MediatorKey } from '../../../types';
 import {
-  bytesToString,
+  ConfidentialAccountAsset,
+  ConfidentialAsset,
+  ConfidentialAssetKey,
+  ConfidentialKeyRole,
+} from '../../../types';
+import {
+  getAllByFields,
   getBigIntValue,
   getNumberValue,
   getStringArrayValue,
   getTextValue,
 } from '../../../utils';
 import { extractArgs } from '../common';
+import { storedText } from '../../../utils/text';
+
+type AssetKey = Pick<
+  ConfidentialAssetKey,
+  'id' | 'assetId' | 'role' | 'accountId' | 'encryptionKeyId'
+>;
 
 /**
- * Mediators are emitted as a map of confidential account public key -> encryption public key
+ * An asset's auditor and mediator keys, one row per key and role. Mediators are emitted as a map
+ * of confidential account public key -> encryption public key; auditors as encryption keys.
  */
-export const getMediators = (item: Codec): MediatorKey[] => {
-  const mediators = item.toJSON() as Record<string, string>;
+export const confidentialAssetKeys = (
+  assetId: string,
+  mediators: Record<string, string>,
+  auditors: string[]
+): AssetKey[] => [
+  ...Object.entries(mediators).map(([accountId, encryptionKeyId]) => ({
+    // the map is keyed by account, and two mediator accounts may share an encryption key
+    id: `${assetId}/${ConfidentialKeyRole.Mediator}/${accountId}`,
+    assetId,
+    role: ConfidentialKeyRole.Mediator,
+    accountId,
+    encryptionKeyId,
+  })),
+  ...auditors.map(encryptionKeyId => ({
+    id: `${assetId}/${ConfidentialKeyRole.Auditor}/${encryptionKeyId}`,
+    assetId,
+    role: ConfidentialKeyRole.Auditor,
+    accountId: undefined,
+    encryptionKeyId,
+  })),
+];
 
-  return Object.entries(mediators).map(([accountKey, encryptionKey]) => ({
-    accountKey,
-    encryptionKey,
-  }));
-};
+const assetKeysOf = (assetId: string, rawMediators: Codec, rawAuditors: Codec): AssetKey[] =>
+  confidentialAssetKeys(
+    assetId,
+    rawMediators.toJSON() as Record<string, string>,
+    getStringArrayValue(rawAuditors)
+  );
+
+const createAssetKeys = (keys: AssetKey[], blockEventId: string): Promise<void> =>
+  keys.length > 0
+    ? store.bulkCreate(
+        'ConfidentialAssetKey',
+        keys.map(key => ({ ...key, createdEventId: blockEventId }))
+      )
+    : Promise.resolve();
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [rawDid, rawAssetId, rawMediators, rawAuditors, rawName, rawSymbol, rawDecimals, rawData] =
     params;
@@ -33,39 +73,49 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
   await ConfidentialAsset.create({
     id: assetId,
     assetId: getNumberValue(rawAssetId),
-    name: bytesToString(rawName),
-    symbol: bytesToString(rawSymbol),
+    name: storedText(rawName),
+    symbol: storedText(rawSymbol),
     decimals: getNumberValue(rawDecimals),
-    data: bytesToString(rawData),
+    data: storedText(rawData),
     creatorId: getTextValue(rawDid),
-    mediators: getMediators(rawMediators),
-    auditors: getStringArrayValue(rawAuditors),
     totalSupply: BigInt(0),
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
+  await createAssetKeys(assetKeysOf(assetId, rawMediators, rawAuditors), blockEventId);
 };
 
 export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, rawMediators, rawAuditors] = params;
 
   const asset = await ConfidentialAsset.get(getTextValue(rawAssetId));
 
   if (asset) {
-    asset.mediators = getMediators(rawMediators);
-    asset.auditors = getStringArrayValue(rawAuditors);
-    asset.updatedBlockId = blockId;
+    const current = await getAllByFields<ConfidentialAssetKey>('ConfidentialAssetKey', [
+      ['assetId', '=', asset.id],
+    ]);
+    const keys = assetKeysOf(asset.id, rawMediators, rawAuditors);
+    // only what changed, so a key the update keeps keeps the event that added it
+    const kept = new Set(keys.map(key => key.id));
+    const existing = new Set(current.map(key => key.id));
+    const dropped = current.filter(key => !kept.has(key.id)).map(key => key.id);
+    if (dropped.length > 0) {
+      await store.bulkRemove('ConfidentialAssetKey', dropped);
+    }
+    await createAssetKeys(
+      keys.filter(key => !existing.has(key.id)),
+      blockEventId
+    );
 
+    asset.updatedEventId = blockEventId;
     await asset.save();
   }
 };
 
 export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAssetId, , rawTotalSupply] = params;
 
@@ -73,7 +123,7 @@ export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Prom
 
   if (asset) {
     asset.totalSupply = getBigIntValue(rawTotalSupply);
-    asset.updatedBlockId = blockId;
+    asset.updatedEventId = blockEventId;
 
     await asset.save();
   }
@@ -82,7 +132,7 @@ export const handleConfidentialAssetMinted = async (event: SubstrateEvent): Prom
 export const handleConfidentialAccountAssetRegistered = async (
   event: SubstrateEvent
 ): Promise<void> => {
-  const { params, eventIdx, blockId, blockEventId } = extractArgs(event);
+  const { params, blockEventId } = extractArgs(event);
 
   const [, rawAccount, rawAssetId] = params;
 
@@ -93,9 +143,7 @@ export const handleConfidentialAccountAssetRegistered = async (
     id: `${assetId}/${accountId}`,
     accountId,
     assetId,
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
 };
