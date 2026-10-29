@@ -19,18 +19,26 @@ fi
 
 npm run build ## This creates the project.yaml file
 
-(npm run sql || (sleep 3 && kill "$$")) &
-
 npm run migrations
 
 # Allow configuring node memory. It should be no more than 75% of available RAM.
 # Defaults to 3 GB (expecting at least 4 GB available).
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
 
-# The node is the project's own `@subql/node`, not the one in the base image, so it carries the
-# project's dependency patches (`.yarn/patches`) and the version its lockfile pins.
 NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
-	node /app/node_modules/@subql/node/bin/run --disable-historical=false \
+	/bin/run --disable-historical=false \
 	--db-schema=public "$@" &
 child=$!
+
+# `db/compat.sql` adds generated columns and expression indexes to tables the node creates, so it
+# has to run after the node has built the schema. It used to run in the background with a
+# `kill "$$"` on failure, which raced the node and reported nothing useful when it lost. It waits
+# for the schema itself, so it is run here in the foreground and its failure stops the container.
+if ! npm run sql; then
+	echo "Failed to apply db/compat.sql; stopping the indexer" >&2
+	kill -TERM "$child" 2>/dev/null
+	wait "$child" || true
+	exit 1
+fi
+
 wait "$child"

@@ -1,5 +1,27 @@
+# Upstream onfinality/subql-node images lag behind Node.js security releases, so
+# the indexer's JS install is lifted out of the upstream image and run on a
+# patched Node base. Bump NODE_IMAGE for Node fixes and SUBQL_NODE_IMAGE for
+# @subql/node upgrades.
+ARG NODE_IMAGE=node:24.22.1-alpine
+ARG SUBQL_NODE_IMAGE=onfinality/subql-node:v6.4.6
+# @subql/node 6.4.6 pins ~19.0.0, which keeps a fork block whose successor came from the canonical
+# chain (fixed in 19.2.0, #3016), exits on a fork found while registering an unfinalized block
+# (fixed in 19.4.0, #3052), and keeps every parsed dictionary query in memory, so a long sync grows
+# without bound (fixed in 19.4.0, #3048). Drop this once a @subql/node release depends on 19.4.0.
+ARG SUBQL_NODE_CORE_VERSION=19.4.0
+
+FROM ${SUBQL_NODE_IMAGE} AS subql-node
+ARG SUBQL_NODE_CORE_VERSION
+USER root
+RUN cd /tmp \
+  && npm pack --silent "@subql/node-core@${SUBQL_NODE_CORE_VERSION}" \
+  && rm -rf /node_modules/@subql/node-core \
+  && mkdir /node_modules/@subql/node-core \
+  && tar xzf subql-node-core-*.tgz -C /node_modules/@subql/node-core --strip-components 1 \
+  && rm -rf subql-node-core-*.tgz /root/.npm
+
 # Stage 1: Build Stage
-FROM node:lts-alpine3.17 AS builder
+FROM ${NODE_IMAGE} AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -26,19 +48,24 @@ RUN corepack enable \
   && rm -rf /root/.npm /root/.cache
 
 # Stage 2: Production Stage
-# The base image provides the runtime (Node.js and tini). The node itself runs from the project's
-# own `node_modules` (see `docker/docker-entrypoint.sh`), so it carries `.yarn/patches`.
-FROM onfinality/subql-node:v6.4.6 AS production
+FROM ${NODE_IMAGE} AS production
 
-USER root
+# Same runtime packages as the upstream image, plus bash and gettext for the entrypoint
+RUN apk add --no-cache tini curl git gettext bash
+
+ENV TZ=utc
+
+# @subql/node is installed at the filesystem root upstream, and /bin/run requires ../dist/main.js
+COPY --from=subql-node /package.json /yarn.lock /
+COPY --from=subql-node /bin/run /bin/run
+COPY --from=subql-node /dist /dist
+COPY --from=subql-node /node_modules /node_modules
+COPY --from=subql-node --chown=1000:1000 /.monitor /.monitor
 
 WORKDIR /app
 
 # Copy only necessary files from the build stage
 COPY --from=builder --chown=1000:1000 /app/builder/ ./
-
-# Install bash to run the entrypoint script
-RUN apk add --no-cache gettext bash
 
 # Switch to the non-root user
 USER 1000
