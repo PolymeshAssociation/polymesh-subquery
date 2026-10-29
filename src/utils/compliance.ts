@@ -1,19 +1,44 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
-import {
-  ClaimTypeEnum,
-  Compliance,
-  TransferComplianceExemption,
-  TransferManager,
-  TransferRestrictionTypeEnum,
-} from '../types';
+import { ClaimTypeEnum, Compliance, TransferComplianceExemption } from '../types';
 import { getAssetId } from './assets';
 import { capitalizeFirstLetter } from './common';
 
 /**
  * Parses a Vec<AssetCompliance>
  */
+/**
+ * Compliance JSON in the current form, whatever metadata decoded it: polkadot-js gives field names
+ * snake_case before metadata v14, and a claim type its bare name until 5.4 gave `ClaimType` a
+ * variant with data (`Custom`), `{ variant: null }` after. The bytes are the same either way.
+ */
+export const currentComplianceForm = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(currentComplianceForm);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, member]) => {
+      const name = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      if (name === 'specific' && Array.isArray(member)) {
+        return [
+          name,
+          member.map(claimType =>
+            typeof claimType === 'string'
+              ? { [`${claimType[0].toLowerCase()}${claimType.slice(1)}`]: null }
+              : claimType
+          ),
+        ];
+      }
+      return [name, currentComplianceForm(member)];
+    })
+  );
+};
+
 export const getComplianceValues = (
   requirements: Codec
 ): Pick<Compliance, 'complianceId' | 'data'>[] => {
@@ -21,7 +46,7 @@ export const getComplianceValues = (
 
   return compliances.map(({ id, ...data }) => ({
     complianceId: Number(id),
-    data: JSON.stringify(data),
+    data: JSON.stringify(currentComplianceForm(data)),
   }));
 };
 
@@ -34,33 +59,8 @@ export const getComplianceValue = (
   const { id, ...data } = JSON.parse(compliance.toString());
   return {
     complianceId: Number(id),
-    data: JSON.stringify(data),
+    data: JSON.stringify(currentComplianceForm(data)),
   };
-};
-
-/**
- * Parses AssetTransferManager
- */
-export const getTransferManagerValue = (
-  manager: Codec
-): Pick<TransferManager, 'type' | 'value'> => {
-  const { countTransferManager, percentageTransferManager } = JSON.parse(JSON.stringify(manager));
-
-  if (countTransferManager) {
-    return {
-      type: TransferRestrictionTypeEnum.Count,
-      value: Number(countTransferManager),
-    };
-  }
-
-  if (percentageTransferManager) {
-    return {
-      type: TransferRestrictionTypeEnum.Percentage,
-      value: Number(percentageTransferManager),
-    };
-  }
-
-  throw new Error('Unknown transfer restriction type found');
 };
 
 export const getExemptKeyValue = async (
