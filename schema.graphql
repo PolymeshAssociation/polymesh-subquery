@@ -2322,16 +2322,19 @@ type StakingEvent @entity {
 
 """
 Represents an administrative action on an Asset, e.g. tokens issued, compliance rules updated, document added, etc.
+
+`caller` (who invoked the action), not `identity` — deliberately asymmetric with `AssetAgent.identity`
+(who is an agent). This entity answers "what did this agent do", a different question from
+membership, which `AssetAgent` / `AssetAgentHistory` answer
 """
-type TickerExternalAgentAction @entity {
+type AssetAgentAction @entity {
   id: ID!
   asset: Asset! @index(unique: false)
   caller: Identity @index(unique: false)
-  palletName: String! @index(unique: false)
+  palletName: String!
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
-  eventIdx: Int!
-  createdBlock: Block! @index(unique: false)
-  updatedBlock: Block!
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -2459,34 +2462,44 @@ type Investment @entity {
 }
 
 """
-Represents an Identity authorized to perform actions on behalf of a company
+Current agent membership for an Asset — an Identity authorized to perform actions on its behalf.
+Memberships that have ended are `AssetAgentHistory`.
+
+It carries no group or permissions of its own. An agent's permissions live on the `AgentGroup` it
+belongs to, which is the chain's own arrangement, so a copy here would be a second source that goes
+stale the first time an agent is moved between groups. Reach the group through
+`AgentGroupMembership`, and read an agent's group and permission timeline from `AssetAgentHistory`.
 """
-type TickerExternalAgent @entity {
-  id: ID! # assetId/callerId
+type AssetAgent @entity @compositeIndexes(fields: [["asset", "identity"]]) {
+  id: ID! # assetId/did
   asset: Asset! @index(unique: false)
-  caller: Identity! @index(unique: false)
-  eventIdx: Int!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  identity: Identity! @index(unique: false)
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
 """
-Represents a change in the status of an external agent.
+Represents all possible kinds of `AssetAgentHistory` row
 
-"AgentAdded" and "AgentPermissionsChanged" will have `permissions` field. `AgentRemoved` will have an empty `permissions` value
+"AgentAdded" and "AgentPermissionsChanged" carry `permissions`; `AgentRemoved` and `GroupChanged` may not
 """
-type TickerExternalAgentHistory @entity {
+enum AgentHistoryType {
+  AgentAdded
+  AgentRemoved
+  AgentPermissionsChanged
+  GroupChanged
+}
+
+"""
+Append-only membership and permission history for an Asset's agents
+"""
+type AssetAgentHistory @entity {
   id: ID! #block_id/event_idx/did
   asset: Asset! @index(unique: false)
   identity: Identity! @index(unique: false)
-  datetime: Date!
-  type: String!
+  type: AgentHistoryType!
+  "The agent's extrinsic permissions as at this history row, JSON text in `AgentGroup.permissions`'s form; a built-in group's are written out the same way"
   permissions: String
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
   createdEvent: Event!
 }
 
@@ -2495,10 +2508,12 @@ Represents a set of agents authorized to perform actions for a given Asset
 """
 type AgentGroup @entity {
   id: ID! #assetId/group_id
+  asset: Asset! @index
+  "The group's extrinsic permissions as JSON text: `{\"whole\":null}`, or `these`/`except` a map by pallet name as in `TransactionPermissions`"
   permissions: String!
   members: [AgentGroupMembership!]! @derivedFrom(field: "group")
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -2506,10 +2521,10 @@ Represent membership in a group. Tracks which members belong to which groups
 """
 type AgentGroupMembership @entity {
   id: ID! #assetId/group_id/member
-  member: String! @index(unique: false)
+  member: Identity! @index(unique: false)
   group: AgentGroup! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """

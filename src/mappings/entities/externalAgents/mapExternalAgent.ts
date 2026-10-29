@@ -1,28 +1,37 @@
 import { SubstrateEvent } from '@subql/types';
-import { TickerExternalAgent } from '../../../types';
+import { decodeEvent } from '../../../decode';
+import { AssetAgent } from '../../../types';
 import { getAssetId, getTextValue } from '../../../utils';
 import { extractArgs } from '../common';
 
-export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
-  const { params, blockId, eventIdx, block, blockEventId } = extractArgs(event);
-  const callerId = getTextValue(params[0]);
-  const assetId = await getAssetId(params[1], block);
-
-  await TickerExternalAgent.create({
-    id: `${assetId}/${callerId}`,
+export const writeAssetAgent = (
+  assetId: string,
+  identityId: string,
+  blockEventId: string
+): Promise<void> =>
+  // The row records membership only. An agent's permissions belong to the `AgentGroup` it is in,
+  // so copying them here would be a second source going stale the first time `GroupChanged` moves
+  // the agent — `AssetAgentHistory` carries the group and permission timeline instead.
+  AssetAgent.create({
+    id: `${assetId}/${identityId}`,
     assetId,
-    callerId,
-    eventIdx,
-    datetime: block.timestamp,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
+    identityId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
+
+export const handleExternalAgentAdded = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockEventId } = extractArgs(event);
+  const { agentDid: did, assetId: rawAssetId } = decodeEvent(event);
+
+  await writeAssetAgent(await getAssetId(rawAssetId, block), getTextValue(did), blockEventId);
 };
 
 export const handleExternalAgentRemoved = async (event: SubstrateEvent): Promise<void> => {
-  const { params, block } = extractArgs(event);
-  const agent = params[2].toString();
-  const assetId = await getAssetId(params[1], block);
-  await TickerExternalAgent.remove(`${assetId}/${agent}`);
+  const { block } = extractArgs(event);
+  const { assetId: rawAssetId, agentDid } = decodeEvent(event);
+
+  const assetId = await getAssetId(rawAssetId, block);
+
+  await AssetAgent.remove(`${assetId}/${agentDid.toString()}`);
 };
