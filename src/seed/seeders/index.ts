@@ -1,0 +1,136 @@
+import { Seeder } from '../seeder';
+import {
+  agentGroupMembershipSeeder,
+  agentGroupSeeder,
+  assetAgentSeeder,
+  assetDocumentSeeder,
+  assetMandatoryMediatorSeeder,
+  assetMetadataSeeder,
+  assetSeeder,
+  checkpointScheduleSeeder,
+  checkpointSeeder,
+  customAssetTypeSeeder,
+  globalMetadataKeySeeder,
+  tickerReservationSeeder,
+} from './assets';
+import { accountBalanceSeeder } from './balances';
+import { authorizationSeeder, claimSeeder, customClaimTypeSeeder } from './claims';
+import {
+  complianceSeeder,
+  statTypeSeeder,
+  transferComplianceExemptionSeeder,
+  transferComplianceSeeder,
+  trustedClaimIssuerSeeder,
+} from './compliance';
+import {
+  assetAllowanceSeeder,
+  assetHolderSeeder,
+  holdingSeeder,
+  nftApprovalSeeder,
+  nftOperatorApprovalSeeder,
+  nftSeeder,
+} from './holdings';
+import {
+  instructionAffirmationSeeder,
+  instructionPartySeeder,
+  instructionSeeder,
+  legSeeder,
+  venueSeeder,
+} from './settlement';
+import {
+  corporateActionSeeder,
+  corporateBallotSeeder,
+  corporateBallotVoteSeeder,
+  distributionSeeder,
+  stoSeeder,
+} from './corporateActions';
+import {
+  multiSigAdminSeeder,
+  multiSigProposalSeeder,
+  multiSigProposalVoteSeeder,
+  multiSigSeeder,
+  multiSigSignerSeeder,
+  proposalSeeder,
+  proposalVoteSeeder,
+  subsidySeeder,
+} from './governance';
+import { eraSeeder, validatorEraSeeder } from './staking';
+import {
+  confidentialAccountAssetSeeder,
+  confidentialAccountSeeder,
+  confidentialAssetKeySeeder,
+  confidentialAssetSeeder,
+  confidentialCurveTreeLeafSeeder,
+  confidentialEncryptionKeySeeder,
+  confidentialLegAffirmationSeeder,
+  confidentialLegSeeder,
+  confidentialSettlementSeeder,
+} from './confidential';
+import { accountSeeder, identityKeySeeder, identitySeeder, portfolioSeeder } from './identities';
+
+/**
+ * Every seeder, which a start block's seed runs in this order. The order is only for the log: no
+ * seeder reads another's rows, and the index has no foreign keys to satisfy.
+ */
+export const SEEDERS: Seeder[] = [
+  identitySeeder,
+  accountSeeder,
+  identityKeySeeder,
+  portfolioSeeder,
+  accountBalanceSeeder,
+  customAssetTypeSeeder,
+  assetSeeder,
+  tickerReservationSeeder,
+  assetDocumentSeeder,
+  globalMetadataKeySeeder,
+  assetMetadataSeeder,
+  agentGroupSeeder,
+  assetAgentSeeder,
+  agentGroupMembershipSeeder,
+  checkpointSeeder,
+  checkpointScheduleSeeder,
+  assetMandatoryMediatorSeeder,
+  customClaimTypeSeeder,
+  claimSeeder,
+  authorizationSeeder,
+  statTypeSeeder,
+  transferComplianceSeeder,
+  transferComplianceExemptionSeeder,
+  complianceSeeder,
+  trustedClaimIssuerSeeder,
+  holdingSeeder,
+  assetHolderSeeder,
+  nftSeeder,
+  assetAllowanceSeeder,
+  nftApprovalSeeder,
+  nftOperatorApprovalSeeder,
+  venueSeeder,
+  instructionSeeder,
+  legSeeder,
+  instructionPartySeeder,
+  instructionAffirmationSeeder,
+  corporateActionSeeder,
+  distributionSeeder,
+  corporateBallotSeeder,
+  corporateBallotVoteSeeder,
+  stoSeeder,
+  multiSigSeeder,
+  multiSigSignerSeeder,
+  multiSigAdminSeeder,
+  multiSigProposalSeeder,
+  multiSigProposalVoteSeeder,
+  proposalSeeder,
+  proposalVoteSeeder,
+  subsidySeeder,
+  eraSeeder,
+  validatorEraSeeder,
+  confidentialEncryptionKeySeeder,
+  confidentialAccountSeeder,
+  confidentialAssetSeeder,
+  confidentialAssetKeySeeder,
+  confidentialAccountAssetSeeder,
+  confidentialSettlementSeeder,
+  confidentialLegSeeder,
+  confidentialLegAffirmationSeeder,
+  confidentialCurveTreeLeafSeeder,
+] as Seeder[];
