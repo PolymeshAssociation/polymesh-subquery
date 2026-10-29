@@ -19,11 +19,7 @@ export async function handleGenesis(block: SubstrateBlock): Promise<void> {
 }
 
 /** The first block of an index started after genesis, seeded the same way */
-export async function handleSeed(block: SubstrateBlock): Promise<void> {
-  await ensureTrueSpecVersion(block);
-  await handleStartup();
-  await startIndex(block);
-}
+export const handleSeed = handleGenesis;
 
 export async function handleMigration(substrateEvent: SubstrateEvent): Promise<void> {
   /**

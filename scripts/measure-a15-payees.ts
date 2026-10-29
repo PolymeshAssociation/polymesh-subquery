@@ -108,27 +108,32 @@ const tallyBlock = async (api: ApiPromise, block: number, tally: Tally): Promise
 
   const at = await api.at(hash);
 
-  for (const stash of rewardedStashes(events as never)) {
+  const fresh = rewardedStashes(events as never).filter(stash => {
     if (!stash || tally.seen.has(stash)) {
-      continue;
+      return false;
     }
     tally.seen.add(stash);
+    return true;
+  });
 
-    try {
-      const payee = (await at.query.staking.payee(stash)).toString();
+  await Promise.all(
+    fresh.map(async stash => {
+      try {
+        const payee = (await at.query.staking.payee(stash)).toString();
 
-      if (payee === 'Staked' || payee === 'Stash') {
-        tally.toStash += 1;
-      } else if (payee === 'None') {
-        tally.none += 1;
-      } else {
-        tally.elsewhere += 1;
-        tally.nonStash.push(`  block ${block} (spec ${specVersion}) ${stash} -> ${payee}`);
+        if (payee === 'Staked' || payee === 'Stash') {
+          tally.toStash += 1;
+        } else if (payee === 'None') {
+          tally.none += 1;
+        } else {
+          tally.elsewhere += 1;
+          tally.nonStash.push(`  block ${block} (spec ${specVersion}) ${stash} -> ${payee}`);
+        }
+      } catch {
+        tally.errors += 1;
       }
-    } catch {
-      tally.errors += 1;
-    }
-  }
+    })
+  );
 };
 
 const main = async (): Promise<void> => {
@@ -163,11 +168,15 @@ const main = async (): Promise<void> => {
     seen: new Set<string>(),
   };
 
-  for (const anchor of anchors) {
-    for (const block of await rewardBlocksAfter(dictionary, anchor, perAnchor)) {
+  // one block at a time, so a public endpoint is not flooded
+  await anchors.reduce(async (previous, anchor) => {
+    await previous;
+    const blocks = await rewardBlocksAfter(dictionary, anchor, perAnchor);
+    await blocks.reduce(async (done, block) => {
+      await done;
       await tallyBlock(api, block, tally);
-    }
-  }
+    }, Promise.resolve());
+  }, Promise.resolve());
 
   const { toStash, elsewhere, none, errors, nonStash } = tally;
 

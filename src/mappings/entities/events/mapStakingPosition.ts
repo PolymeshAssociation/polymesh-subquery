@@ -115,7 +115,8 @@ export const refreshPositionFromLedger = async (
   }));
 };
 
-export const handlePositionBonded = async (event: SubstrateEvent): Promise<void> => {
+/** Re-reads the stash's ledger into its position, on an event that changed it. */
+const refreshPositionOnEvent = async (event: SubstrateEvent): Promise<void> => {
   const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
   const stash = getTextValue(decodeEvent(event).stash);
 
@@ -138,58 +139,16 @@ export const handlePositionBonded = async (event: SubstrateEvent): Promise<void>
 
   await position.save();
 };
+
+export const handlePositionBonded = refreshPositionOnEvent;
 
 /**
  * `staking.Unbonded` — the unbonding queue keeps the total lock unchanged, only moving the
  * amount from `active` to `unlocking`, which only a chain read distinguishes.
  */
-export const handlePositionUnbonded = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
-  const stash = getTextValue(decodeEvent(event).stash);
+export const handlePositionUnbonded = refreshPositionOnEvent;
 
-  if (!stash) {
-    return;
-  }
-
-  const position = await getOrCreatePosition(
-    stash,
-    blockId,
-    blockTime(block),
-    blockEventId,
-    block,
-    eventIdx
-  );
-
-  await refreshPositionFromLedger(position, stash, event);
-
-  position.updatedEventId = blockEventId;
-
-  await position.save();
-};
-
-export const handlePositionWithdrawn = async (event: SubstrateEvent): Promise<void> => {
-  const { blockId, block, blockEventId, eventIdx } = extractArgs(event);
-  const stash = getTextValue(decodeEvent(event).stash);
-
-  if (!stash) {
-    return;
-  }
-
-  const position = await getOrCreatePosition(
-    stash,
-    blockId,
-    blockTime(block),
-    blockEventId,
-    block,
-    eventIdx
-  );
-
-  await refreshPositionFromLedger(position, stash, event);
-
-  position.updatedEventId = blockEventId;
-
-  await position.save();
-};
+export const handlePositionWithdrawn = refreshPositionOnEvent;
 
 /** The stash `controller`'s ledger names; `undefined` for none, or, with an anomaly, one that won't decode. */
 const readLedgerStash = (
