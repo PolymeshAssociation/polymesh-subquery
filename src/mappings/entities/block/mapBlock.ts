@@ -1,6 +1,6 @@
 import { SubstrateBlock } from '@subql/types';
 import { Block } from '../../../types';
-import { padId } from '../../../utils';
+import { blockTime, padId } from '../../../utils';
 
 export const mapBlock = (block: SubstrateBlock): Block => {
   const header = block.block.header;
@@ -21,7 +21,7 @@ export const mapBlock = (block: SubstrateBlock): Block => {
     countExtrinsicsSuccess: 0,
     countExtrinsicsError: 0,
     countEvents: block.events.length,
-    datetime: block.timestamp,
+    datetime: blockTime(block),
     specVersionId: block.specVersion,
   });
 };

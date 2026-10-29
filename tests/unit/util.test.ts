@@ -5,8 +5,10 @@ import {
   capitalizeFirstLetter,
   findTopLevelCommas,
   fromEntries,
+  hexToString,
   removeNullChars,
 } from '../../src/utils';
+import { inSandbox } from './sandbox';
 
 test('fromEntries', () => {
   expect(
@@ -49,4 +51,58 @@ test('findTopLevelCommas', () => {
   ).toStrictEqual([22, 116]);
 
   expect(() => findTopLevelCommas('Vec<i8>')).toThrowError();
+});
+
+/**
+ * Bytes the chain stores are UTF-8 text more often than not, and an event codec renders them as
+ * that text, so hex read from storage decodes the same way; bytes that are no UTF-8 keep a
+ * character per byte.
+ */
+describe('hexToString', () => {
+  it('decodes UTF-8, as an event codec renders the same bytes', () => {
+    expect(hexToString(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
+      'Café — 株式'
+    );
+  });
+
+  it('keeps a character per byte for bytes that are no UTF-8', () => {
+    expect(hexToString('0xff41')).toBe('ÿA');
+  });
+
+  it('drops the padding of a fixed-width value', () => {
+    expect(hexToString('0x4143000000')).toBe('AC');
+  });
+});
+
+/** A genesis lock id decodes inside the sandbox too. */
+describe('hexToString inside the mappings sandbox', () => {
+  const sandboxed = inSandbox(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('../../src/utils') as typeof import('../../src/utils')
+  );
+
+  it('decodes hex text without the host TextDecoder', () => {
+    const { hexToString } = sandboxed();
+    expect(hexToString('0x7374616b696e6720')).toBe('staking ');
+    expect(hexToString(`0x${Buffer.from('Café — 株式', 'utf8').toString('hex')}`)).toBe(
+      'Café — 株式'
+    );
+    expect(hexToString('0xff41')).toBe('ÿA');
+    expect(hexToString('0x4143000000')).toBe('AC');
+  });
+});
+
+describe('utf8Text inside the mappings sandbox', () => {
+  const sandboxed = inSandbox(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('../../src/utils/bytes') as typeof import('../../src/utils/bytes')
+  );
+
+  it('decodes bytes and hex, and rejects what is no UTF-8', () => {
+    const { utf8Text } = sandboxed();
+    expect(utf8Text(new Uint8Array([0xe2, 0x82, 0xac]))).toBe('€');
+    expect(utf8Text('0xf09f9880')).toBe('😀');
+    expect(utf8Text('0xc328')).toBeUndefined();
+    expect(utf8Text('0xeda080')).toBeUndefined();
+  });
 });
