@@ -1,6 +1,10 @@
 import '@subql/types-core/dist/global';
 import '@subql/types/dist/global';
-import { extractVenueSigners } from '../../src/mappings/entities/settlements/mapVenue';
+import {
+  extractVenueSigners,
+  handleVenueCreated,
+} from '../../src/mappings/entities/settlements/mapVenue';
+import { codec, mockStore, tupleEvent } from './helpers';
 
 /**
  * Regression tests for the `VenueSignersUpdated` chain 8.0.0 shape change: the `signers` param
@@ -28,5 +32,27 @@ describe('extractVenueSigners', () => {
 
   it('returns an empty array for an empty Vec', () => {
     expect(extractVenueSigners([] as any)).toStrictEqual([]);
+  });
+});
+
+/**
+ * `createVenue` takes the venue's first signers and announces them with no `VenueSignersUpdated`,
+ * so the new venue's signers are read from the chain.
+ */
+describe('a venue created with signers', () => {
+  it('has the signers the chain holds for it', async () => {
+    const db = mockStore();
+    const keys = jest.fn(async () => [{ args: [codec(7), codec('5Signer')] }]);
+    (globalThis as any).api.query = { settlement: { venueSigners: { keys } } };
+
+    await handleVenueCreated(
+      tupleEvent({
+        section: 'settlement',
+        method: 'VenueCreated',
+        data: [codec(TEST_DID), codec(7), codec('0x'), codec('Other')],
+      })
+    );
+
+    expect(db.Venue['0000000007']).toMatchObject({ signers: ['5Signer'] });
   });
 });
