@@ -3127,42 +3127,6 @@ type Migration @entity {
 }
 
 """
-Represents possible all possible balance types
-"""
-enum BalanceTypeEnum {
-  Free
-  Reserved
-  Bonded
-  Unbonded
-  Locked
-}
-
-"""
-Represents transactions involving POLYX
-"""
-type PolyxTransaction @entity {
-  id: ID!
-  identityId: String
-  address: String @index(unique: false)
-  toId: String
-  toAddress: String @index(unique: false)
-  amount: BigInt!
-  type: BalanceTypeEnum!
-  moduleId: ModuleIdEnum
-  moduleIdText: String
-  callId: CallIdEnum
-  callIdText: String
-  eventId: EventIdEnum
-  eventIdText: String
-  memo: String
-  extrinsic: Extrinsic
-  datetime: Date!
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
 Represents the parent child mapping for an Identity
 """
 type ChildIdentity @entity {
@@ -3173,6 +3137,50 @@ type ChildIdentity @entity {
   updatedBlock: Block!
 }
 
+# POLYX ledger
+
+"The two balance pools an account holds on chain. `Bonded`/`Unbonded`/`Locked` are not pools and are not represented here."
+enum PolyxPool {
+  Free
+  Reserved
+}
+
+"Which side of a movement an entry records."
+enum EntryDirection {
+  Debit
+  Credit
+}
+
+"Why POLYX is held in `reserved` under the v8 fungible-Holds API."
+enum HoldReason {
+  Staking
+  Session
+  Preimage
+  Revive
+  Unknown
+}
+
+"What an entry's movement represents. Denormalised onto the entry so aggregation does not need to traverse relations."
+enum MovementKind {
+  Transfer
+  Endowment
+  Fee
+  "The block author's receipt of a fee — every Polymesh runtime pays transaction and protocol fees to the block author. The payer's side is a `Fee`; this is where it went"
+  BlockAuthorFee
+  Tip
+  TreasuryDisbursement
+  TreasuryReimbursement
+  StakingReward
+  Slash
+  Mint
+  Burn
+  DustLost
+  ReserveRepatriation
+  Hold
+  Release
+  BalanceSetAdjustment
+}
+
 type KindTotal @jsonField {
   "a `MovementKind` value — jsonField members cannot be enum-typed, same as `Scope.type` etc."
   kind: String!
@@ -3181,6 +3189,107 @@ type KindTotal @jsonField {
   "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
   net: String!
   count: Int!
+}
+
+type LockEntry @jsonField {
+  lockId: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  amount: String!
+  reasons: String
+}
+
+type HoldEntry @jsonField {
+  "a `HoldReason` value — jsonField members cannot be enum-typed"
+  reason: String!
+  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
+  amount: String!
+}
+
+"""
+One row per (account, movement side). Append-only.
+Sibling entries of one on-chain movement share `movementId`.
+"""
+type PolyxEntry @entity {
+  "padId(block)/padId(eventIdx)/side"
+  id: ID!
+  movementId: String!
+
+  account: Account!
+  identity: Identity
+  "indexed in db/compat.sql as a plain btree; a declared index would be a GiST under historical mode"
+  counterpartyAddress: String
+  counterpartyIdentity: Identity
+
+  pool: PolyxPool!
+  "signed: negative = debit, positive = credit. SUM = net delta"
+  amount: BigInt!
+  "unsigned. SUM = gross volume"
+  amountAbs: BigInt!
+
+  kind: MovementKind!
+  "materialised — sign(amount) is not groupable"
+  direction: EntryDirection!
+  holdReason: HoldReason
+  memo: String
+
+  "balance after this entry — powers charts with no aggregation"
+  freeAfter: BigInt!
+  reservedAfter: BigInt!
+  frozenAfter: BigInt!
+
+  "denormalised — aggregation cannot traverse relations"
+  moduleId: ModuleIdEnum
+  callId: CallIdEnum
+  eventId: EventIdEnum!
+  specVersionId: Int!
+  "materialised time buckets — no date_trunc grouping exists. Indexed by the standalone `date` btree in db/compat.sql; a per-account series narrows by `account` first"
+  date: Date!
+  "indexed in db/compat.sql as a plain btree; a declared index would be a GiST under historical mode"
+  eraIndex: Int
+
+  "relation is `createdEvent` to avoid colliding with the denormalised `eventId` enum column, same as `AssetTransaction`"
+  createdEvent: Event!
+  extrinsic: Extrinsic
+  "denormalised block id, so the entries of one block can be filtered by equality. Not indexed"
+  blockId: String!
+}
+
+"""
+Materialised POLYX balance for one account. Versioned on `historical: 'height'`,
+so `accountBalance(id: X, blockHeight: N)` gives the balance at block N.
+"""
+type AccountBalance @entity {
+  "address"
+  id: ID!
+  account: Account!
+  identity: Identity @index
+
+  free: BigInt!
+  reserved: BigInt!
+  "MAX over active locks — maintained from `locks`, never summed"
+  frozen: BigInt!
+  total: BigInt!
+  "free - frozen, floored at 0"
+  transferable: BigInt!
+  bonded: BigInt!
+  otherReserved: BigInt!
+
+  "lifetime totals — free, this row is already versioned on these blocks"
+  totalReceived: BigInt!
+  totalSent: BigInt!
+  "Lifetime fees, net of refunds. From v8 it leaves out a fee that was not taken by a withdrawal of its own: an Ethereum transaction's fee, or one paid from withdrawals that also covered contract deposits. Its POLYX is in `Burn` entries, so the balance is right"
+  totalFeesPaid: BigInt!
+  totalRewards: BigInt!
+  totalSlashed: BigInt!
+  movementCount: Int!
+  lifetimeByKind: [KindTotal]
+
+  "per-lock detail — required because frozen is a MAX"
+  locks: [LockEntry]
+  "v8 only; SUM = reserved"
+  holds: [HoldEntry]
+
+  updatedEvent: Event!
 }
 
 """
