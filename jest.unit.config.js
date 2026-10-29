@@ -1,13 +1,7 @@
-/** @type {import('@ts-jest/dist/types').InitialOptionsTsJest} */
+/** @type {import('jest').Config} */
 // Unit test configuration - runs without Docker/integration setup
 // eslint-disable-next-line no-undef
 module.exports = {
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.test.json',
-    },
-  },
-
   // Setup file to initialize globals before tests
   setupFilesAfterEnv: ['<rootDir>/tests/unit/setupJest.ts'],
 
@@ -23,7 +17,7 @@ module.exports = {
   coverageProvider: 'v8',
 
   transform: {
-    '^.+\\.(ts|tsx)?$': 'ts-jest',
+    '^.+\\.(ts|tsx)?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: ['node_modules/(?!(@polkadot|@babel/runtime/helpers/esm|@subql)/)'],
