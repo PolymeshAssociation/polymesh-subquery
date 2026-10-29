@@ -8,7 +8,7 @@ describe('investments', () => {
       query: gql`
         query {
           investments(
-            filter: { offeringToken: { equalTo: "14TICKER" }, stoId: { equalTo: 0 } }
+            filter: { offeringToken: { equalTo: "14TICKER" }, sto: { stoId: { equalTo: 0 } } }
             orderBy: ID_ASC
           ) {
             totalCount
