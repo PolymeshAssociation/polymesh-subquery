@@ -30,16 +30,3 @@ export const getDistributionValue = async (
     expiresAt: BigInt(extractBigInt(rest, 'expires_at') || END_OF_TIME),
   };
 };
-
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const extractCorporateActionTicker = (args: any[]) => {
-  const value1AssetId = args[1]?.value?.ticker ?? args[1]?.value?.assetId;
-  if (value1AssetId !== undefined) {
-    return value1AssetId;
-  }
-  const value2AssetId = args[2]?.value?.ticker ?? args[2]?.value?.assetId;
-  if (value2AssetId !== undefined) {
-    return value2AssetId;
-  }
-  return null;
-};

@@ -1,21 +1,24 @@
 import { Codec } from '@polkadot/types/types';
 import { SubstrateBlock } from '@subql/types';
 import { Attributes } from '../mappings/entities/common';
-import { Sto } from '../types';
-import { getAssetId, getAssetIdWithTicker } from './assets';
+import { FundraiserTierJson, Sto } from '../types';
+import { AssetIdWithTicker, getAssetId, getAssetIdWithTicker } from './assets';
 import {
   capitalizeFirstLetter,
   extractBigInt,
   extractString,
   extractValue,
   getDateValue,
-  hexToString,
+  padNumericId,
 } from './common';
 import { getPortfolioId, meshPortfolioToAssetHolder } from './portfolios';
 
 export const getFundraiserDetails = async (
   item: Codec,
-  block: SubstrateBlock
+  block: SubstrateBlock,
+  // how the raising asset is named: the store for the handlers, the chain state for the seed
+  assetOf: (assetIdOrTicker: string) => Promise<AssetIdWithTicker> = assetIdOrTicker =>
+    getAssetIdWithTicker(assetIdOrTicker, block)
 ): Promise<Omit<Attributes<Sto>, 'stoId' | 'name'> | null> => {
   const { creator: creatorId, start, end, status, tiers, ...rest } = JSON.parse(item.toString());
 
@@ -32,9 +35,8 @@ export const getFundraiserDetails = async (
     stoStatus = capitalizeFirstLetter(Object.keys(status)[0]);
   }
 
-  const { assetId: raisingAssetId, ticker: raisingTicker } = await getAssetIdWithTicker(
-    extractString(rest, 'raising_asset'),
-    block
+  const { assetId: raisingAssetId, ticker: raisingTicker } = await assetOf(
+    extractString(rest, 'raising_asset')
   );
 
   return {
@@ -42,27 +44,27 @@ export const getFundraiserDetails = async (
     status: stoStatus,
     start: getDateValue(start),
     end: getDateValue(end),
-    tiers: tiers.map(tier => ({
-      price: BigInt(tier.price),
-      remaining: BigInt(tier.remaining),
-      total: BigInt(tier.total),
-    })),
+    tiers: tiers.map(
+      (tier: Record<string, string | number>): FundraiserTierJson => ({
+        price: BigInt(tier.price).toString(),
+        remaining: BigInt(tier.remaining).toString(),
+        total: BigInt(tier.total).toString(),
+      })
+    ),
     minimumInvestment: extractBigInt(rest, 'minimum_investment'),
-    offeringAssetId: await getAssetId(extractString(rest, 'offering_asset'), block),
+    offeringAssetId: await getOfferingAssetId(item, block),
     offeringPortfolioId: getPortfolioId(offeringPortfolio),
     raisingAssetId,
     offChainFundingEnabled: false,
     raisingTicker,
     raisingPortfolioId: getPortfolioId(raisingPortfolio),
-    venueId: extractString(rest, 'venue_id'),
+    // FK to the padded `Venue.id` — must carry the same zero-padding. `rest` comes from
+    // `JSON.parse`, so `venue_id` is a JS number (polkadot `Int.toJSON()` under 52 bits) — coerce
+    // before padding, or `padStart` throws.
+    venueId: padNumericId(String(extractString(rest, 'venue_id'))),
   };
 };
 
-export const getOfferingAsset = (item: Codec): string => {
-  const fundraiser = JSON.parse(item.toString());
-  return hexToString(extractValue(fundraiser, 'offering_asset'));
-};
-
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const extractOfferingAsset = (args: any[]) =>
-  extractString(args[3]?.value, 'offering_asset');
+/** The id of the asset a fundraiser offers, which before 7.x the fundraiser names by ticker. */
+export const getOfferingAssetId = (item: Codec, block: SubstrateBlock): Promise<string> =>
+  getAssetId(extractString(JSON.parse(item.toString()), 'offering_asset'), block);
