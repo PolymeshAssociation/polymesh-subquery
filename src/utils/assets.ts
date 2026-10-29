@@ -2,44 +2,81 @@ import { Codec } from '@polkadot/types/types';
 import { hexAddPrefix, hexHasPrefix, hexStripPrefix, stringToHex, u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { SubstrateBlock } from '@subql/types';
-import { Asset, AssetDocument, SecurityIdentifier } from '../types';
+import { AnomalyKind, Asset, AssetDocument, CustomAssetType, SecurityIdentifier } from '../types';
+import { recordAnomaly } from './anomaly';
 import {
   coerceHexToString,
   extractString,
   extractValue,
+  getNumberValue,
   getTextValue,
-  hexToString,
   is7xChain,
   serializeTicker,
 } from './common';
+import { requiredText, storedText } from './text';
+import { fieldOf } from './codec';
 
 export interface AssetIdWithTicker {
   assetId: string;
   ticker?: string;
 }
 
-export const getCustomType = async (rawCustomId: Codec): Promise<string> => {
-  const customType = await api.query.asset.customTypes(rawCustomId);
-  return hexToString(customType.toString());
+/**
+ * The name of a custom asset type, from the index, which the seed and `CustomAssetTypeRegistered`
+ * write.
+ *
+ * `undefined`, with an anomaly, when the index has no such type: the chain did not check a custom
+ * type id when an NFT collection was created, and testnet has collections naming id 0, never
+ * registered, and id 100 two million blocks before anyone registered it. The type is left unknown,
+ * and a later registration is not read back onto the asset: it was made by someone else, for their
+ * own meaning.
+ */
+export const getCustomType = async (
+  rawCustomId: Codec,
+  block: SubstrateBlock,
+  eventIdx?: number
+): Promise<string | undefined> => {
+  const id = getNumberValue(rawCustomId).toString();
+  const existing = await CustomAssetType.get(id);
+
+  if (existing) {
+    return existing.name;
+  }
+
+  // not awaited: an anomaly row is a diagnostic
+  void recordAnomaly({
+    kind: AnomalyKind.MissingReferencedEntity,
+    detail: `the asset type names CustomAssetType ${id}, and the index has no CustomAssetType ${id}`,
+    block,
+    eventIdx,
+  });
+
+  return undefined;
 };
 
-export const getAssetType = async (item: Codec): Promise<string> => {
+/** The custom type an `AssetType` names, its own or its NFT type's; `undefined` for a built-in one */
+export const customTypeIdOf = (item: Codec): Codec | undefined => {
   const anyItem: any = item;
-
   if (anyItem.isNonFungible) {
     const nftType = anyItem.asNonFungible;
-    if (nftType.type === 'Custom') {
-      return getCustomType(nftType.asCustom);
-    }
-
-    return nftType.type;
-  } else {
-    if (anyItem.isCustom) {
-      return getCustomType(anyItem.asCustom);
-    }
-
-    return getTextValue(item);
+    return nftType.type === 'Custom' ? nftType.asCustom : undefined;
   }
+  return anyItem.isCustom ? anyItem.asCustom : undefined;
+};
+
+/** A built-in `AssetType`'s name, or its NFT type's */
+export const builtInAssetType = (item: Codec): string => {
+  const anyItem: any = item;
+  return anyItem.isNonFungible ? anyItem.asNonFungible.type : getTextValue(item);
+};
+
+export const getAssetType = async (
+  item: Codec,
+  block: SubstrateBlock,
+  eventIdx?: number
+): Promise<string | undefined> => {
+  const custom = customTypeIdOf(item);
+  return custom ? getCustomType(custom, block, eventIdx) : builtInAssetType(item);
 };
 
 /**
@@ -65,10 +102,10 @@ export const getDocValue = (
   }
 
   return {
-    name: coerceHexToString(extractString(document, 'name')),
-    link: coerceHexToString(extractString(document, 'uri')),
+    name: requiredText(fieldOf(doc, 'name'), 'the document name'),
+    link: requiredText(fieldOf(doc, 'uri'), 'the document uri'),
     contentHash,
-    type: coerceHexToString(extractString(document, 'doc_type')),
+    type: storedText(fieldOf(doc, 'doc_type')),
     filedAt,
   };
 };
@@ -110,11 +147,27 @@ export const getAssetIdForLegacyTicker = async (ticker: Codec | string): Promise
   return u8aToHex(rawBytes);
 };
 
+/**
+ * Whether a raw asset identifier is already a migrated 16-byte asset ID, rather than a legacy
+ * ticker.
+ *
+ * The public chain switched `asset` events from carrying a 12-byte `Ticker` to a 16-byte
+ * `PolymeshPrimitivesAssetAssetId` at v7.0.0. The spec-version gate below would be enough if the
+ * block always reported its true runtime, which around an upgrade it does not. A byte-length
+ * test is immune to that: a `Ticker` is `[u8; 12]`, so any `0x`-prefixed value that decodes to
+ * 16 bytes is unambiguously a migrated asset ID whatever spec the block claims.
+ */
+export const isMigratedAssetId = (value: string | Codec): boolean => {
+  const hex = typeof value === 'string' ? value : value.toString();
+
+  return hexHasPrefix(hex) && hexStripPrefix(hex).length === 32;
+};
+
 export const getAssetId = async (
   assetId: string | Codec,
   block: SubstrateBlock
 ): Promise<string> => {
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(assetId) || is7xChain(block)) {
     return typeof assetId === 'string' ? assetId : assetId.toString();
   }
 
@@ -136,7 +189,7 @@ export const getAssetIdWithTicker = async (
 ): Promise<AssetIdWithTicker> => {
   let assetId: string;
   let ticker: string;
-  if (is7xChain(block)) {
+  if (isMigratedAssetId(assetIdOrTicker) || is7xChain(block)) {
     assetId = typeof assetIdOrTicker === 'string' ? assetIdOrTicker : assetIdOrTicker.toString();
 
     const asset = await Asset.get(assetId);

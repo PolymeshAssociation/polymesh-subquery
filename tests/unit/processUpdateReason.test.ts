@@ -51,6 +51,6 @@ describe('processUpdateReason', () => {
     const result = processUpdateReason('transferred', transferred(5), BigInt(1), 0, events);
 
     expect(result.eventId).toBe(EventIdEnum.Transfer);
-    expect(result.instructionId).toBe('5');
+    expect(result.instructionId).toBe('0000000005');
   });
 });

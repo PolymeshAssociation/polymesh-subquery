@@ -2547,35 +2547,6 @@ type Portfolio @entity {
   createdEvent: Event!
 }
 
-enum PortfolioMovementTypeEnum {
-  Fungible
-  NonFungible
-}
-
-"""
-Represents a transfer of fungible assets between a single identities portfolios.
-
-Note: transfers between identities are known as `Settlements`
-"""
-type PortfolioMovement @entity {
-  id: ID!
-  from: Portfolio @index(unique: false)
-  fromAccount: String @index(unique: false)
-  to: Portfolio @index(unique: false)
-  toAccount: String @index(unique: false)
-  identity: Identity @index(unique: false)
-  type: PortfolioMovementTypeEnum!
-  asset: Asset!
-  "the number of fungible tokens transferred. Defined if type == Fungible"
-  amount: BigInt
-  "the IDs of non-fungible tokens transferred. Defined if type == NonFungible"
-  nftIds: [BigInt]
-  memo: String
-  address: String!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
 """
 Represents a place to trade assets. This allows for additional mediation and control over the exchange of Assets
 
@@ -3062,27 +3033,126 @@ type Compliance @entity {
 }
 
 """
-Represents how much of a given Asset an Identity owns
+How much of one asset an identity holds across its portfolios and accounts: one rollup for both
+asset types, kept in step with its `holdings`. A fungible asset fills `amount`, an NFT collection
+`nftCount`; the token ids are under `holdings`. For identities still holding, filter
+`amount: { greaterThan: "0" }` or `nftCount: { greaterThan: 0 }`
 """
 type AssetHolder @entity {
   id: ID! # assetId/did
   identity: Identity! @index(unique: false)
   asset: Asset! @index(unique: false)
+  "Fungible balance across the identity's holdings"
   amount: BigInt!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "Tokens held across the identity's holdings"
+  nftCount: Int!
+  "The identity's portfolio and account holdings of this asset"
+  holdings: [Holding!] @derivedFrom(field: "assetHolder")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
-Represents what NFTs of a collection an Identity owns
+Discriminates the grain a `Holding` is keyed at: a portfolio (identity model) or a v8
+account-level holder.
 """
-type NftHolder @entity {
-  id: ID! #assetId/did
-  identity: Identity! @index(unique: false)
-  asset: Asset! @index(unique: false)
-  nftIds: [Int]
-  createdBlock: Block!
-  updatedBlock: Block!
+enum HolderKind {
+  Portfolio
+  Account
+}
+
+"""
+One row per individual non-fungible token — the authoritative per-token record.
+Provenance ("who owns NFT #42?", "where has it been?") is answered here.
+"""
+type Nft @entity {
+  id: ID! # assetId/padId(nftId)
+  "the collection this token belongs to"
+  asset: Asset!
+  "BigInt everywhere"
+  nftId: BigInt!
+  "The holding the token is in, which names its portfolio or account and identity. Null once burned; the redemption's `AssetTransaction` keeps where it was burned from"
+  holding: Holding
+  "Approvals to move this token"
+  approvals: [NftApproval!] @derivedFrom(field: "nft")
+  createdEvent: Event!
+  "null = still in circulation. Filter `burnedEventId: { isNull: true }` — Boolean cannot be indexed"
+  burnedEvent: Event
+  updatedEvent: Event!
+}
+
+"""
+A standing per-token approval: the one account allowed to move one NFT on its holder's behalf.
+
+The chain allows at most one spender per token and each approval replaces the last, so this is
+current state — one row per approved token, removed when the approval ends. It ends four ways:
+revoked (`NFTApproval` naming no spender), spent (`NFTApprovalSpent`), replaced, or — with no event
+at all — the token leaving the account that held it, which the NFT holdings handler clears. Only an
+account holder can grant one, so a token held in a portfolio never has a row here.
+"""
+type NftApproval @entity {
+  id: ID! # assetId/nftId — the same id as the token's `Nft` row
+  "Null only when the token is outside the index, which an arbitrary start block allows"
+  nft: Nft
+  asset: Asset! @index
+  "The account holding the token, which granted the approval — not necessarily the caller, since an operator can approve on the holder's behalf"
+  owner: Account! @index
+  spender: Account! @index
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A collection-wide operator approval: an account allowed to move every NFT the owner holds in one
+collection. Several can coexist, using one does not consume it, and it survives transfers, so a row
+exists exactly while the chain has the approval set.
+"""
+type NftOperatorApproval @entity {
+  id: ID! # assetId/owner/operator
+  asset: Asset! @index
+  owner: Account! @index
+  operator: Account! @index
+  createdEvent: Event!
+}
+
+"""
+One row per (asset, holder) at the finest grain the chain uses — a portfolio, or a v8
+account-level holder. Identity-level holdings are derived from these (see `AssetHolder`, kept as a
+maintained rollup), never stored as primary truth.
+
+A row is kept once the holding reaches zero, so its history stays queryable. For current holdings
+filter `amount: { greaterThan: "0" }` (fungible) or `nftCount: { greaterThan: 0 }` (NFTs).
+
+Indexes: `portfolio`, `account`, `identity` and `assetHolder` are indexed as relations; `asset` is
+trimmed (`db/trimIndexes.ts`), so filter it together with one of them.
+`assetHolder` serves one identity's holdings of one asset across its portfolios and accounts, the
+per-identity total the rollup has to agree with. There is no `(portfolio, asset)` composite: that
+pair is the id of a portfolio holding, so it is already a point lookup.
+"""
+type Holding @entity {
+  id: ID! # assetId/portfolioId  or  assetId/address
+  asset: Asset!
+  holderKind: HolderKind!
+  "set when `holderKind` is `Portfolio`"
+  portfolio: Portfolio
+  "set when `holderKind` is `Account` (v8 account-level holder)"
+  account: Account
+  "denormalised — makes the identity rollup a groupBy, not a join. Null when the holder account has no known identity"
+  identity: Identity
+  "The identity's rollup for this asset; null for an account with no known identity. Re-stamped with `identity`"
+  assetHolder: AssetHolder
+  "fungible balance held"
+  amount: BigInt!
+  "The part of `amount` the asset's agents have frozen, as the chain last set it. What the holder can move is `amount - frozen`, less any lock, so reading `amount` alone shows a balance the chain may refuse to send. The chain reports the resulting absolute value whichever call changed it, so this is replaced, never accumulated. Not summed into the identity rollup: the chain freezes a holder, never an identity"
+  frozen: BigInt!
+  "When the asset's agents froze this whole holder against transfers of the asset; null while it is not frozen. A timestamp rather than a Boolean so it can be filtered on (`frozenSince: { isNull: false }`), and unindexed because this table is already at its index limit"
+  frozenSince: Date
+  "count of non-fungible tokens held; the tokens are `nfts`"
+  nftCount: Int!
+  "The non-fungible tokens held, excluding any not yet seen by the index"
+  nfts: [Nft!] @derivedFrom(field: "holding")
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3105,39 +3175,82 @@ type AssetDocument @entity {
   link: String!
   contentHash: ContentHash
   type: String
+  "When the document was filed. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   filedAt: Date
   asset: Asset! @index(unique: false)
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
 Represents a tokenized Asset on the Polymesh chain. The central data structure for the ecosystem
 """
 type Asset @entity {
-  id: ID! # ticker
-  ticker: String @index(unique: false)
-  name: String @index(unique: false)
+  id: ID! # assetId
+  "the chain's own asset id — equal to `id`, so look it up by `id`; on 7.x+ the on-chain AssetId, the blake2-hashed legacy ticker before that"
+  assetId: String!
+  ticker: String
+  name: String
   isNftCollection: Boolean!
-  type: String @index(unique: false)
+  type: String
   fundingRound: String @index(unique: false)
   isDivisible: Boolean!
   isFrozen: Boolean!
-  isUniquenessRequired: Boolean!
+  "number of identities holding the asset: a non-zero balance, or for an NFT collection at least one token. Maintained where the identity's `AssetHolder` rollup starts or stops holding, so a key with no identity is not counted"
+  holderCount: Int!
   identifiers: [SecurityIdentifier]!
   owner: Identity!
   documents: [AssetDocument]! @derivedFrom(field: "asset")
   holders: [AssetHolder]! @derivedFrom(field: "asset")
+  holdings: [Holding!]! @derivedFrom(field: "asset")
+  nfts: [Nft!]! @derivedFrom(field: "asset")
+  metadata: [AssetMetadata!]! @derivedFrom(field: "asset")
+  "for a fungible asset, `asset.assets(id).totalSupply`; for an NFT collection, the number of NFTs in existence, `nft.nftsInCollection(id)` (the chain's `totalSupply` is 0 for a collection)"
   totalSupply: BigInt!
   totalTransfers: BigInt!
   isCompliancePaused: Boolean!
   compliance: [Compliance]! @derivedFrom(field: "asset")
-  transferManagers: [TransferManager]! @derivedFrom(field: "asset")
   trustedClaimIssuers: [TrustedClaimIssuer]! @derivedFrom(field: "asset")
   mandatoryMediators: [AssetMandatoryMediator]! @derivedFrom(field: "asset")
-  eventIdx: Int!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "The identities currently acting as agents for this asset. Past memberships are `AssetAgentHistory`"
+  agents: [AssetAgent!]! @derivedFrom(field: "asset")
+  "Every movement of this asset: issuances, redemptions, transfers and portfolio moves"
+  transactions: [AssetTransaction!] @derivedFrom(field: "asset")
+  "Distributions paid to holders of this asset"
+  distributions: [Distribution!] @derivedFrom(field: "asset")
+  "This asset's corporate actions"
+  corporateActions: [CorporateAction!] @derivedFrom(field: "asset")
+  "This asset's checkpoints"
+  checkpoints: [Checkpoint!] @derivedFrom(field: "asset")
+  "This asset's checkpoint schedules"
+  checkpointSchedules: [CheckpointSchedule!] @derivedFrom(field: "asset")
+  "This asset's corporate ballots"
+  ballots: [CorporateBallot!] @derivedFrom(field: "asset")
+  "Offerings selling this asset"
+  offerings: [Sto!] @derivedFrom(field: "offeringAsset")
+  "Statistics this asset tracks"
+  statTypes: [StatType!] @derivedFrom(field: "asset")
+  "This asset's transfer restrictions"
+  transferCompliances: [TransferCompliance!] @derivedFrom(field: "asset")
+  "Exemptions from this asset's transfer restrictions"
+  transferComplianceExemptions: [TransferComplianceExemption!] @derivedFrom(field: "asset")
+  "Actions this asset's agents took"
+  agentActions: [AssetAgentAction!] @derivedFrom(field: "asset")
+  "Every change to this asset's agents and their permissions"
+  agentHistory: [AssetAgentHistory!] @derivedFrom(field: "asset")
+  "This asset's custom agent permission groups"
+  agentGroups: [AgentGroup!] @derivedFrom(field: "asset")
+  "This asset's funding rounds"
+  fundings: [Funding!] @derivedFrom(field: "asset")
+  "Identities that pre-approved receiving this asset"
+  preApprovals: [AssetPreApproval!] @derivedFrom(field: "asset")
+  "Per-token approvals over this collection's NFTs"
+  nftApprovals: [NftApproval!] @derivedFrom(field: "asset")
+  "Operator approvals over this collection"
+  nftOperatorApprovals: [NftOperatorApproval!] @derivedFrom(field: "asset")
+  "Allowances over this asset"
+  allowances: [AssetAllowance!] @derivedFrom(field: "asset")
+  updatedEvent: Event!
   createdEvent: Event!
 }
 
@@ -3150,33 +3263,106 @@ type AssetTransaction @entity {
   "`fromPortfolioId` will be null in transactions where either the Asset was issued or the sender is an account"
   fromPortfolio: Portfolio
   "`fromAccount` will be populated when asset transaction has initiated directly from an account"
-  fromAccount: String
+  fromAccount: Account
   "`fromIdentityId` is the DID of the sender, present for transfers and redemptions. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   fromIdentity: Identity @index(unique: false)
   "`toPortfolioId` will be null in transactions where either the Asset was redeemed or the receiver is an account"
   toPortfolio: Portfolio
   "`toAccount` will be populated when asset transaction has settled directly into an account"
-  toAccount: String
+  toAccount: Account
   "`toIdentityId` is the DID of the receiver, present for issuances and transfers. Stored separately from portfolio/account to preserve historical queryability when accounts change identity"
   toIdentity: Identity @index(unique: false)
   "`amount` is the number of fungible tokens involved in this transaction"
   amount: BigInt
   "`nftIds` are the IDs of the non-fungible tokens involved in this transaction"
   nftIds: [BigInt]
+  "denormalised: the event type consumers filter and group this table by, which aggregation cannot reach through `createdEvent`"
   eventId: EventIdEnum!
-  eventIdx: Int!
-  "`extrinsicIdx` will be null for scheduled transactions"
-  extrinsicIdx: Int
   "`fundingRound` will only be present for the cases where Assets are issued with a fundingRound name"
   fundingRound: String
   "`instruction` will only be present for the cases where Assets are transferred once instruction is executed"
   instruction: Instruction
   "`instructionMemo` will only be present for the cases where memo is provided for the instruction which got executed"
   instructionMemo: String
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
+  "true when both sides belong to one Identity (a portfolio movement, or a settlement same-DID fast path); null for issuance and redemption. Not indexed — filter by plain equality"
+  isInternalTransfer: Boolean
+  "note attached to a portfolio movement or a settlement.transferFunds call"
+  memo: String
+  "the account that signed the extrinsic, for movements initiated directly by an account"
+  address: String
   createdEvent: Event!
+}
+
+"""
+The scope a metadata key is registered in: `Local` to one asset, or `Global` across the chain.
+"""
+enum MetadataScope {
+  Local
+  Global
+}
+
+"""
+A metadata key registered against an asset, with its current value. Global keys
+applied to an asset also land here; the chain-wide global key registry is `GlobalMetadataKey`.
+"""
+type AssetMetadata @entity {
+  id: ID! # assetId/scope/keyId
+  asset: Asset! @index(unique: false)
+  scope: MetadataScope!
+  "the numeric key id within its scope, as a string"
+  keyId: String!
+  "registered name of the key. For a Global key it is copied from `GlobalMetadataKey`, whose names the chain never changes"
+  name: String
+  "current value, once one has been set"
+  value: String
+  "true when the value was set Locked or LockedUntil. A LockedUntil lock ends at `lockedUntil` with no event, so compare that against the current time"
+  isLocked: Boolean!
+  "When a LockedUntil lock ends; null for Unlocked and Locked. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
+  lockedUntil: Date
+  "Value expiry, when the detail carried one. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
+  expiry: Date
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A chain-wide global metadata key registration (name and id). Asset-scoped applications of a
+global key are `AssetMetadata` rows.
+"""
+type GlobalMetadataKey @entity {
+  id: ID! # global key id
+  name: String! @index(unique: false)
+  "JSON of the metadata spec (url / description / typeDef), as last registered or updated"
+  spec: String
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+A registered custom asset type — the `u32` id the chain assigns and the human name.
+"""
+type CustomAssetType @entity {
+  id: ID! # custom type id
+  name: String!
+  createdEvent: Event!
+  updatedEvent: Event!
+}
+
+"""
+An ERC20-style spending allowance one account has granted another over an asset.
+v8 account-level layer — keyed by `AccountId`, outside the identity/portfolio model.
+"""
+type AssetAllowance @entity {
+  id: ID! # assetId/owner/spender
+  asset: Asset! @index(unique: false)
+  owner: Account! @index(unique: false)
+  spender: Account! @index(unique: false)
+  "remaining allowance — taken from the chain's own computed value, never derived by subtraction"
+  amount: BigInt!
+  "lifetime total spent against this allowance"
+  totalSpent: BigInt!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
 
 """
@@ -3188,9 +3374,6 @@ type Funding @entity {
   fundingRound: String! @index(unique: false)
   amount: BigInt!
   totalFundingAmount: BigInt!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
   createdEvent: Event!
 }
 
@@ -3731,14 +3914,16 @@ type AssetPreApproval @entity {
 }
 
 """
-Represents a ticker reservation. If linked to an Asset `asset` will be set
+A ticker registered to an identity. Once linked to an asset, `asset` is set and the reservation
+no longer expires; unlinking it frees the ticker, and the reservation goes.
 """
 type TickerReservation @entity {
   id: ID!
   ticker: String!
   asset: Asset
   identity: Identity! @index(unique: false)
+  "When the ticker reservation lapses; null once it is linked to an asset. UTC, serialised with no timezone marker — parse as UTC (e.g. append 'Z'), not local time"
   expiry: Date
-  createdBlock: Block!
-  updatedBlock: Block!
+  createdEvent: Event!
+  updatedEvent: Event!
 }
