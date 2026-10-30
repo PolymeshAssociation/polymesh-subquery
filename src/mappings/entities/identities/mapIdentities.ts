@@ -291,6 +291,8 @@ interface UnlinkArgs {
   blockEventId: string;
   block: SubstrateBlock;
   eventIdx: number;
+  /** Only unlinks a key of this identity when given. */
+  identityId?: string;
 }
 
 /**
@@ -305,7 +307,7 @@ interface UnlinkArgs {
  */
 const unlinkAccount = async (
   address: string,
-  { eventId, blockEventId, block, eventIdx }: UnlinkArgs
+  { eventId, blockEventId, block, eventIdx, identityId }: UnlinkArgs
 ): Promise<void> => {
   const account = await Account.get(address);
 
@@ -320,6 +322,10 @@ const unlinkAccount = async (
     return;
   }
 
+  if (identityId !== undefined && account.identityId !== identityId) {
+    return;
+  }
+
   account.identityId = undefined;
   account.keyRole = AccountKeyRole.Unlinked;
   account.updatedEventId = blockEventId;
@@ -330,15 +336,18 @@ const unlinkAccount = async (
 
 export const handleSecondaryKeysRemoved = async (event: SubstrateEvent): Promise<void> => {
   const { eventId, blockEventId, block, eventIdx } = extractArgs(event);
-  const { removedKeys: rawAccounts } = decodeEvent(event);
+  const { did: rawDid, removedKeys: rawAccounts } = decodeEvent(event);
 
+  // The chain emits the event even for keys the removing identity doesn't hold, and leaves those
+  // keys where they are
+  const identityId = getTextValue(rawDid);
   const addresses = legacyRemovedAddresses(rawAccounts);
 
   await Promise.all(
     addresses.flatMap(address => [
-      unlinkAccount(address, { eventId, blockEventId, block, eventIdx }),
+      unlinkAccount(address, { eventId, blockEventId, block, eventIdx, identityId }),
       closeIdentityKeys(
-        { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId },
+        { address, role: IdentityKeyRole.SecondaryKey, removedReason: eventId, identityId },
         blockEventId
       ),
     ])

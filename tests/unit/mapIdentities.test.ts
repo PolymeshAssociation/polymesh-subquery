@@ -13,6 +13,7 @@ import {
 } from '../../src/mappings/entities/identities/mapIdentities';
 
 const DID = '0x01'.padEnd(66, '0');
+const OTHER_DID = '0x02'.padEnd(66, '0');
 const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 
 const codec = (value: string) => ({ toString: () => value, toJSON: () => value });
@@ -32,6 +33,18 @@ const leftIdentityEvent = (): SubstrateEvent =>
       meta: { fields: [{ name: { isSome: false } }, { name: { isSome: false } }] },
     },
   } as unknown as SubstrateEvent);
+
+const openKeyRow = (identityId: string) => ({
+  id: `${identityId}/${SECONDARY}/0000800000/0001`,
+  identityId,
+  accountId: SECONDARY,
+  role: 'SecondaryKey',
+  validFromBlockId: '0000800000',
+  validToBlockId: null,
+  addedReason: 'SecondaryKeysAdded',
+  createdEventId: '0000800000/0001',
+  updatedEventId: '0000800000/0001',
+});
 
 const removedEvent = (): SubstrateEvent =>
   ({
@@ -114,6 +127,47 @@ describe('handleSecondaryKeysRemoved', () => {
     expect(account.identityId).toBeUndefined();
     expect(account.keyRole).toBe(AccountKeyRole.Unlinked);
     expect(save).toHaveBeenCalled();
+  });
+
+  it("closes the removing identity's open membership", async () => {
+    jest.spyOn(Account, 'get').mockResolvedValue({
+      id: SECONDARY,
+      identityId: DID,
+      keyRole: AccountKeyRole.SecondaryKey,
+      save: jest.fn().mockResolvedValue(undefined),
+    } as any);
+    (store.getByFields as jest.Mock).mockImplementation(async (entity: string) =>
+      entity === 'IdentityKey' ? [openKeyRow(DID)] : []
+    );
+
+    await handleSecondaryKeysRemoved(removedEvent());
+
+    expect(store.bulkUpdate).toHaveBeenCalledWith('IdentityKey', [
+      expect.objectContaining({ identityId: DID, validToBlockId: '0000900001' }),
+    ]);
+  });
+
+  it('leaves a key of another identity linked', async () => {
+    // The chain ignores a removal naming a key the caller's identity doesn't hold, but still
+    // emits the event
+    const save = jest.fn().mockResolvedValue(undefined);
+    const account: any = {
+      id: SECONDARY,
+      identityId: OTHER_DID,
+      keyRole: AccountKeyRole.SecondaryKey,
+      save,
+    };
+    jest.spyOn(Account, 'get').mockResolvedValue(account);
+    (store.getByFields as jest.Mock).mockImplementation(async (entity: string) =>
+      entity === 'IdentityKey' ? [openKeyRow(OTHER_DID)] : []
+    );
+
+    await handleSecondaryKeysRemoved(removedEvent());
+
+    expect(account.identityId).toBe(OTHER_DID);
+    expect(account.keyRole).toBe(AccountKeyRole.SecondaryKey);
+    expect(save).not.toHaveBeenCalled();
+    expect(store.bulkUpdate).not.toHaveBeenCalled();
   });
 
   it('records an anomaly when the removed key was never indexed', async () => {

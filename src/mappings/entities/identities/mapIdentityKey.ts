@@ -98,15 +98,21 @@ interface CloseArgs {
   address: string;
   role?: IdentityKeyRole;
   removedReason: EventIdEnum;
+  identityId?: string;
 }
 
-/** Closes every open interval for an account (optionally of one role); returns the rows it closed. */
+/**
+ * Closes every open interval for an account (optionally of one role, or on one identity); returns
+ * the rows it closed.
+ */
 export const closeIdentityKeys = async (
-  { address, role, removedReason }: CloseArgs,
+  { address, role, removedReason, identityId }: CloseArgs,
   blockEventId: string
 ): Promise<IdentityKey[]> => {
   const blockId = blockEventId.split('/')[0];
-  const open = await openIntervals(address, role);
+  const open = (await openIntervals(address, role)).filter(
+    row => identityId === undefined || row.identityId === identityId
+  );
 
   if (open.length === 0) {
     return open;
