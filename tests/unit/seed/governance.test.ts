@@ -210,7 +210,6 @@ describe('from 8.0', () => {
       proposer: { type: 'Community', value: PROPOSER },
       ownerId: OWNER,
       state: 'Pending',
-      balance: '2000',
       url: 'https://pip',
       expiresAt: 900,
       totalAyeWeight: '3000',

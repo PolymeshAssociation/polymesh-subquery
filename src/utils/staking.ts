@@ -554,35 +554,6 @@ export const readEraRewardPoints = async (
 };
 
 /**
- * Whether `identityId` is a permissioned validator identity at the block being indexed.
- *
- * The storage moved pallets at v8: `staking.permissionedIdentity` before, `validators.permissionedIdentity`
- * from v8 on. `api` decodes against the block's own runtime, so whichever pallet that runtime has is
- * the one present — both are tried rather than gating on a spec version. The value is
- * `Option<PermissionedIdentityPrefs>`: any `Some` means permissioned.
- *
- * `undefined` when neither pallet has the storage, which the caller treats as "not known to be
- * permissioned" rather than guessing. Throws `UndecodableStateError` when the value doesn't decode.
- */
-export const readPermissionedIdentity = async (
-  identityId: string
-): Promise<boolean | undefined> => {
-  for (const pallet of ['validators', 'staking']) {
-    const read = findStorage(pallet, 'permissionedIdentity');
-
-    if (read) {
-      const prefs = await readStorage(`${pallet}.permissionedIdentity of ${identityId}`, async () =>
-        (await read(identityId)).toJSON()
-      );
-
-      return prefs !== null && prefs !== undefined;
-    }
-  }
-
-  return undefined;
-};
-
-/**
  * Total POLYX staked across all validators for `eraIndex` — `staking.erasTotalStake(eraIndex)`.
  * Throws `UndecodableStateError` when the value doesn't decode.
  */

@@ -12,14 +12,11 @@ import {
   Identity,
   IdentityKey,
   IdentityKeyRole,
-  StakingPosition,
   AccountBalance,
-  Validator,
 } from '../types';
 import { EXPLICIT_NULL, extractString, getTextValue, padId } from './common';
 import { evmAddressFromSs58, isEthDerivedAddress } from './eth';
 import { legacyQuery } from './legacyQuery';
-import { readPermissionedIdentity } from './staking';
 
 export const serializeAccount = (item: Codec): string | undefined => {
   const s = item.toString();
@@ -187,43 +184,25 @@ export const identityOfKey = async (
 };
 
 /**
- * Carries an account's identity onto its balance, the staking position and the validator it is the
- * stash of.
+ * Carries an account's identity onto its balance.
  *
- * `AccountBalance.identity`, `StakingPosition.identity` and `Validator.identity` are copied from the
- * `Account` so each can be listed by identity without a join, which makes the account the source of
- * truth and each field a copy that has to follow it. They are updated here, where the account's
- * identity changes, rather than re-read on every balance or staking event: identity changes are
- * rare, and those events are not. A validator is permissioned as its identity is.
+ * `AccountBalance.identity` is copied from the `Account` so balances can be listed by identity
+ * without a join, which makes the account the source of truth and the field a copy that has to
+ * follow it. It is updated here, where the account's identity changes, rather than re-read on every
+ * balance event: identity changes are rare, and balance events are not.
  */
 export const restampIdentityCopies = async (
   address: string,
   identityId: string | undefined,
   blockEventId: string
 ): Promise<void> => {
-  const [position, balance, validator] = await Promise.all([
-    StakingPosition.get(address),
-    AccountBalance.get(address),
-    Validator.get(address),
-  ]);
+  const balance = await AccountBalance.get(address);
 
-  const copies: (StakingPosition | AccountBalance | Validator)[] = [];
-  [position, balance, validator].forEach(
-    row => row && row.identityId !== identityId && copies.push(row)
-  );
-  if (validator && copies.includes(validator)) {
-    validator.isPermissioned = identityId
-      ? (await readPermissionedIdentity(identityId)) ?? false
-      : false;
+  if (balance && balance.identityId !== identityId) {
+    balance.identityId = identityId;
+    balance.updatedEventId = blockEventId;
+    await balance.save();
   }
-
-  await Promise.all(
-    copies.map(row => {
-      row.identityId = identityId;
-      row.updatedEventId = blockEventId;
-      return row.save();
-    })
-  );
 };
 
 /**

@@ -80,9 +80,9 @@ export const mockStore = (db: MockDb = {}): MockDb => {
  * Baseline chain reads `ledgerAccount`/`getOrCreateAccount` needs to create an `Account` row for
  * an address the indexer hasn't linked to an identity yet: `identity.keyRecords` reporting "no
  * record" and `api.registry.chainSS58` for key-type detection. `mockStore` doesn't set these up on
- * its own — most handlers never touch `ledgerAccount` — so any handler that does (directly, or via
- * `getOrCreatePosition`/`getOrCreateValidator`) needs a test to call this too, merging its result
- * into a fuller `api.query` mock: `{ ...mockLedgerAccountQuery(), staking: {...} }`.
+ * its own — most handlers never touch `ledgerAccount` — so any handler that does needs a test to
+ * call this too, merging its result into a fuller `api.query` mock:
+ * `{ ...mockLedgerAccountQuery(), staking: {...} }`.
  *
  * Returns a fresh object each call — `resetMocks: true` wipes a `jest.fn()`'s implementation
  * before every test, so a mock built once at module scope would already be empty by the time a
@@ -96,7 +96,7 @@ export const mockLedgerAccountQuery = (): { identity: { keyRecords: jest.Mock } 
 
 /**
  * `staking.bonded` reporting no controller, so `resolveController` treats a stash as its own
- * controller. Creating or refreshing a `StakingPosition` reads it.
+ * controller.
  */
 export const mockSelfControlled = (): { bonded: jest.Mock } => ({
   bonded: jest.fn().mockResolvedValue({ toJSON: () => null }),
@@ -109,7 +109,7 @@ export const mockSelfControlled = (): { bonded: jest.Mock } => ({
  * Returns **plain rows**, exactly as the real store primitive does. It used to staple a fake
  * `.save()` onto each one, which made `row.save()` appear to work in tests while it was a
  * `TypeError` in production — `handleNominated` crashed a genesis resync at block 555,566 on
- * precisely that, with `mapValidator` and `mapEra` carrying the same call. `getAllByFields` now
+ * precisely that, with `mapEra` carrying the same call. `getAllByFields` now
  * rebuilds each row into its generated model, so the `.save()` a handler calls is the real one,
  * routed through `store.set` and therefore through `mockStore`'s own wiring.
  *

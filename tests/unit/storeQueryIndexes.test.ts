@@ -252,7 +252,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
 
   it('reads the entries it checks', () => {
     expect(trimmed.length).toBeGreaterThan(50);
-    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(53);
+    expect(trimmed.filter(trim => trim.standIn)).toHaveLength(46);
     expect(trimmed.filter(trim => !declared.has(trim.table))).toEqual([]);
   });
 
@@ -309,7 +309,7 @@ describe('GiST trim in db/trimIndexes.ts', () => {
   it('trims the event stamps of small tables and every relation index of the big ones', () => {
     expect(dropped('claims', ['created_event_id'])).toBe(true);
     expect(dropped('identity_keys', ['valid_from_block_id'])).toBe(true);
-    expect(dropped('staking_positions', ['stash_id'])).toBe(true);
+    expect(dropped('polyx_entries', ['extrinsic_id'])).toBe(true);
     expect(dropped('account_balances', ['account_id'])).toBe(true);
   });
 

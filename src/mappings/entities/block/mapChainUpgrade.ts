@@ -4,7 +4,6 @@ import { padId } from '../../../utils';
 import { removeIdentitySigners } from '../multiSig/mapMultiSig';
 import { deletePendingProposals } from '../multiSig/mapMultiSigProposal';
 import { migrateToAssetIds, unlinkTickersOfMissingAssets } from '../../migrations/assetIdMigration';
-import { migrateStoredSchedules } from '../../migrations/checkpointScheduleMigration';
 import { migrateOffChainLegs } from '../../migrations/offChainLegMigration';
 import { migrateTransferManagers } from '../../migrations/statisticsMigration';
 
@@ -56,7 +55,7 @@ export interface ChainUpgradeCrossing {
 /** The first runtime whose transfer restrictions are statistics, not transfer managers */
 const STATISTICS_FROM = 5_000_000;
 
-/** The first runtime with off-chain legs, and whose checkpoint schedules list their moments */
+/** The first runtime with off-chain legs */
 const OFF_CHAIN_LEGS_FROM = 6_000_000;
 
 /** The first runtime that names assets by id, and whose multisigs have only account signers */
@@ -88,7 +87,6 @@ const onUpgradeCrossed = async (crossing: ChainUpgradeCrossing): Promise<void> =
 
   if (crossed(OFF_CHAIN_LEGS_FROM)) {
     await migrateOffChainLegs(blockEventId);
-    await migrateStoredSchedules();
   }
 
   if (crossed(ASSET_IDS_FROM)) {

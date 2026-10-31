@@ -7,7 +7,7 @@ import {
 } from '../../src/mappings/entities/assets/mapCheckpoint';
 import { IndexerAnomaly } from '../../src/types';
 import { getAssetId } from '../../src/utils';
-import { codec, mockGetByFields, mockStore, tupleEvent } from './helpers';
+import { codec, mockStore, tupleEvent } from './helpers';
 
 const PRE_V6_SPEC = 5_004_003;
 const V6_SPEC = 6_000_001;
@@ -74,159 +74,6 @@ describe('handleCheckpointCreated', () => {
     expect(db.Checkpoint).toBeUndefined();
     expect(anomaly).toHaveBeenCalled();
   });
-
-  /**
-   * `CheckpointCreated` names the moment but not the schedule, and two schedules can fall due at the
-   * same moment — so the timestamp alone is ambiguous. The chain emits them in ascending schedule
-   * order, which is what makes the pairing exact.
-   */
-  describe('linking the schedule that produced it', () => {
-    const MOMENT = 1_700_000_000_000;
-
-    const params = (checkpointId: number, did: unknown) => [
-      did,
-      codec(RAW_ASSET_ID),
-      codec(checkpointId),
-      codec(1_000),
-      codec(MOMENT),
-    ];
-
-    const created = (checkpointId: number, did: unknown, idx: number, events: unknown[] = []) =>
-      tupleEvent({
-        section: 'checkpoint',
-        method: 'CheckpointCreated',
-        data: params(checkpointId, did),
-        idx,
-        events,
-      });
-
-    /** The block's own event list, which is what the schedule pairing counts its position against. */
-    const inBlock = (...emitted: [number, unknown][]) =>
-      emitted.map(([checkpointId, did]) => ({
-        event: {
-          section: 'checkpoint',
-          method: 'CheckpointCreated',
-          data: params(checkpointId, did),
-        },
-      }));
-
-    const seedSchedules = async (assetId: string) => {
-      const db = mockStore({
-        CheckpointSchedule: {
-          [`${assetId}/3`]: {
-            id: `${assetId}/3`,
-            assetId,
-            scheduleId: 3,
-            scheduledCheckpoints: [new Date(MOMENT)],
-          },
-          [`${assetId}/1`]: {
-            id: `${assetId}/1`,
-            assetId,
-            scheduleId: 1,
-            scheduledCheckpoints: [new Date(MOMENT)],
-          },
-        },
-      });
-      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
-
-      return db;
-    };
-
-    it('assigns two schedules due at one moment in ascending schedule order', async () => {
-      const assetId = await assetIdAt(8_000_000);
-      const db = await seedSchedules(assetId);
-      // Both fall due in the same block, which is what makes the position exact.
-      const records = inBlock([5, codec(undefined)], [6, codec(undefined)]);
-
-      await handleCheckpointCreated(created(5, codec(undefined), 0, records));
-      await handleCheckpointCreated(created(6, codec(undefined), 1, records));
-
-      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBe(`${assetId}/1`);
-      expect(db.Checkpoint[`${assetId}/6`].scheduleId).toBe(`${assetId}/3`);
-    });
-
-    /**
-     * A list of timestamps round-trips through the store as JSON, so the `Date`s written on the way
-     * in come back out as ISO strings. That is the shape the pairing sees on a live index, and a
-     * comparison that assumed a `Date` threw on the first schedule that declared its own moments.
-     */
-    it('pairs a schedule whose moments came back from the store as strings', async () => {
-      const assetId = await assetIdAt(8_000_000);
-      const db = mockStore({
-        CheckpointSchedule: {
-          [`${assetId}/1`]: {
-            id: `${assetId}/1`,
-            assetId,
-            scheduleId: 1,
-            scheduledCheckpoints: [new Date(MOMENT).toISOString()],
-          },
-        },
-      });
-      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
-
-      await handleCheckpointCreated(created(5, codec(undefined), 0));
-
-      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBe(`${assetId}/1`);
-    });
-
-    it('leaves a manually created checkpoint unlinked', async () => {
-      const assetId = await assetIdAt(8_000_000);
-      const db = await seedSchedules(assetId);
-
-      await handleCheckpointCreated(created(5, codec(TEST_DID), 0));
-
-      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBeUndefined();
-    });
-
-    /**
-     * A pre-v6 schedule carries a period, a start and a count — never the moments themselves — so a
-     * checkpoint from that era has nothing to be paired against. Left unlinked, and silently: one
-     * anomaly per scheduled checkpoint across the whole pre-v6 range would be noise, not a finding.
-     */
-    it('leaves a pre-v6 scheduled checkpoint unlinked without reporting it', async () => {
-      const assetId = await assetIdAt(8_000_000);
-      const db = mockStore({
-        CheckpointSchedule: {
-          [`${assetId}/1`]: {
-            id: `${assetId}/1`,
-            assetId,
-            scheduleId: 1,
-            period: '{"unit":"Month","amount":1}',
-            remaining: 4,
-          },
-        },
-      });
-      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
-      const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
-
-      await handleCheckpointCreated(created(5, codec(undefined), 0));
-
-      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBeUndefined();
-      expect(anomaly).not.toHaveBeenCalled();
-    });
-
-    it('records an anomaly and leaves it null when a declaring schedule does not match', async () => {
-      const assetId = await assetIdAt(8_000_000);
-      const db = mockStore({
-        CheckpointSchedule: {
-          [`${assetId}/1`]: {
-            id: `${assetId}/1`,
-            assetId,
-            scheduleId: 1,
-            // declares a different moment, so the pairing genuinely fails
-            scheduledCheckpoints: [new Date(MOMENT + 60_000)],
-          },
-        },
-      });
-      mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
-      const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
-
-      await handleCheckpointCreated(created(5, codec(undefined), 0));
-
-      expect(db.Checkpoint[`${assetId}/5`].scheduleId).toBeUndefined();
-      expect(anomaly).toHaveBeenCalled();
-    });
-  });
 });
 
 describe('parseSchedule', () => {
@@ -257,8 +104,8 @@ describe('parseSchedule', () => {
     const parsed = parseSchedule(decodeEvent(preV6Event), PRE_V6_SPEC);
 
     expect(parsed.scheduleId).toBe(7);
-    expect(parsed.remaining).toBe(4);
-    expect(parsed.nextCheckpointAt).toEqual(new Date(2_000));
+    expect(parsed.period).toBe('{"unit":"Month","amount":1}');
+    expect(parsed.start).toEqual(new Date(1_000));
     expect(parsed.scheduledCheckpoints).toBeUndefined();
   });
 
@@ -312,7 +159,7 @@ describe('parseSchedule', () => {
 });
 
 describe('handleScheduleCreated / handleScheduleRemoved', () => {
-  it('creates a pre-v6 schedule with period/remaining populated and scheduledCheckpoints null', async () => {
+  it('creates a pre-v6 schedule with its period and start, and scheduledCheckpoints null', async () => {
     const db = mockStore();
     const assetId = await assetIdAt(PRE_V6_SPEC);
 
@@ -336,7 +183,7 @@ describe('handleScheduleCreated / handleScheduleRemoved', () => {
 
     const schedule = db.CheckpointSchedule[`${assetId}/7`];
 
-    expect(schedule).toMatchObject({ assetId, scheduleId: 7, remaining: 4 });
+    expect(schedule).toMatchObject({ assetId, scheduleId: 7, start: new Date(1_000) });
     expect(schedule.scheduledCheckpoints).toBeUndefined();
   });
 
@@ -370,101 +217,5 @@ describe('handleScheduleCreated / handleScheduleRemoved', () => {
     );
 
     expect(db.CheckpointSchedule[`${assetId}/9`].removedEventId).toBeDefined();
-  });
-});
-
-/**
- * The chain drops a schedule once its last checkpoint fires, with no event to say so. From v6 a
- * schedule declares its moments, so the last is known; before v6 the asset's schedules are read
- * back after a scheduled checkpoint fires.
- */
-describe('a schedule its last checkpoint completes', () => {
-  const M1 = 1_700_000_000_000;
-  const M2 = 1_700_000_600_000;
-
-  const scheduled = (checkpointId: number, moment: number, specVersion: number) =>
-    tupleEvent({
-      section: 'checkpoint',
-      method: 'CheckpointCreated',
-      specVersion,
-      blockNumber: '900',
-      idx: 2,
-      data: [
-        codec(undefined),
-        codec(RAW_ASSET_ID),
-        codec(checkpointId),
-        codec(1_000),
-        codec(moment),
-      ],
-    });
-
-  const withSchedule = (assetId: string, schedule: object, checkpoints: object = {}) => {
-    const db = mockStore({
-      CheckpointSchedule: {
-        [`${assetId}/1`]: { id: `${assetId}/1`, assetId, scheduleId: 1, ...schedule },
-      },
-      Checkpoint: checkpoints,
-    });
-    mockGetByFields(db, ['CheckpointSchedule', 'Checkpoint']);
-    return db;
-  };
-
-  it('is completed by the checkpoint at the last moment it declared', async () => {
-    const assetId = await assetIdAt(8_000_000);
-    const db = withSchedule(
-      assetId,
-      { scheduledCheckpoints: [new Date(M1), new Date(M2)] },
-      { [`${assetId}/4`]: { id: `${assetId}/4`, assetId, scheduleId: `${assetId}/1` } }
-    );
-
-    await handleCheckpointCreated(scheduled(5, M2, 8_000_000));
-
-    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBe('0000000900/0000000002');
-  });
-
-  it('is still active while it has moments to come', async () => {
-    const assetId = await assetIdAt(8_000_000);
-    const db = withSchedule(assetId, { scheduledCheckpoints: [new Date(M1), new Date(M2)] });
-
-    await handleCheckpointCreated(scheduled(4, M1, 8_000_000));
-
-    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBeUndefined();
-  });
-
-  it('is completed before v6 when the chain no longer holds it', async () => {
-    const assetId = await assetIdAt(PRE_V6_SPEC);
-    const db = withSchedule(assetId, { period: '{"unit":"Week","amount":1}', remaining: 1 });
-    (globalThis as any).api.query = { checkpoint: { schedules: jest.fn(async () => codec([])) } };
-
-    await handleCheckpointCreated(scheduled(5, M1, PRE_V6_SPEC));
-
-    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBe('0000000900/0000000002');
-  });
-
-  it('takes its next moment and count from the chain before v6 while it runs on', async () => {
-    const assetId = await assetIdAt(PRE_V6_SPEC);
-    const db = withSchedule(assetId, { period: '{"unit":"Week","amount":1}', remaining: 3 });
-    (globalThis as any).api.query = {
-      checkpoint: {
-        schedules: jest.fn(async () =>
-          codec([
-            {
-              schedule: { start: M1, period: { unit: 'Week', amount: 1 } },
-              id: 1,
-              at: M2,
-              remaining: 2,
-            },
-          ])
-        ),
-      },
-    };
-
-    await handleCheckpointCreated(scheduled(5, M1, PRE_V6_SPEC));
-
-    expect(db.CheckpointSchedule[`${assetId}/1`]).toMatchObject({
-      remaining: 2,
-      nextCheckpointAt: new Date(M2),
-    });
-    expect(db.CheckpointSchedule[`${assetId}/1`].completedEventId).toBeUndefined();
   });
 });

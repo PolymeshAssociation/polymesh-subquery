@@ -6,7 +6,6 @@ import {
   assetDocumentSeeder,
   assetMandatoryMediatorSeeder,
   assetMetadataSeeder,
-  assetPreApprovalSeeder,
   assetSeeder,
   checkpointScheduleSeeder,
   checkpointSeeder,
@@ -23,7 +22,6 @@ import {
   transferComplianceSeeder,
   trustedClaimIssuerSeeder,
 } from './compliance';
-import { evmAccountMappingSeeder } from './evm';
 import {
   assetAllowanceSeeder,
   assetHolderSeeder,
@@ -40,7 +38,6 @@ import {
   venueSeeder,
 } from './settlement';
 import {
-  corporateActionDefaultConfigSeeder,
   corporateActionSeeder,
   corporateBallotSeeder,
   corporateBallotVoteSeeder,
@@ -57,12 +54,7 @@ import {
   proposalVoteSeeder,
   subsidySeeder,
 } from './governance';
-import {
-  eraSeeder,
-  stakingPositionSeeder,
-  validatorEraSeeder,
-  validatorSeeder,
-} from './staking';
+import { eraSeeder, validatorEraSeeder } from './staking';
 import {
   confidentialAccountAssetSeeder,
   confidentialAccountSeeder,
@@ -86,7 +78,6 @@ export const SEEDERS: Seeder[] = [
   identityKeySeeder,
   portfolioSeeder,
   accountBalanceSeeder,
-  evmAccountMappingSeeder,
   customAssetTypeSeeder,
   assetSeeder,
   tickerReservationSeeder,
@@ -99,7 +90,6 @@ export const SEEDERS: Seeder[] = [
   checkpointSeeder,
   checkpointScheduleSeeder,
   assetMandatoryMediatorSeeder,
-  assetPreApprovalSeeder,
   customClaimTypeSeeder,
   claimSeeder,
   authorizationSeeder,
@@ -120,7 +110,6 @@ export const SEEDERS: Seeder[] = [
   instructionPartySeeder,
   instructionAffirmationSeeder,
   corporateActionSeeder,
-  corporateActionDefaultConfigSeeder,
   distributionSeeder,
   corporateBallotSeeder,
   corporateBallotVoteSeeder,
@@ -133,8 +122,6 @@ export const SEEDERS: Seeder[] = [
   proposalSeeder,
   proposalVoteSeeder,
   subsidySeeder,
-  stakingPositionSeeder,
-  validatorSeeder,
   eraSeeder,
   validatorEraSeeder,
   confidentialEncryptionKeySeeder,

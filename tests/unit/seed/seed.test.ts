@@ -72,10 +72,10 @@ describe('seed', () => {
   it('counts the fields every seeder counts from the start block', () => {
     expect(
       relativeFields([
-        { entity: 'StakingPosition', reads: [], relative: ['totalRewarded'], rows: pagesOf() },
+        { entity: 'Subsidy', reads: [], relative: ['totalDebited'], rows: pagesOf() },
         { entity: 'Asset', reads: [], relative: ['totalTransfers'], rows: pagesOf() },
       ])
-    ).toEqual(['Asset.totalTransfers', 'StakingPosition.totalRewarded']);
+    ).toEqual(['Asset.totalTransfers', 'Subsidy.totalDebited']);
   });
 
   it('counts the fields a seeder counts from the start block on some of its rows', () => {

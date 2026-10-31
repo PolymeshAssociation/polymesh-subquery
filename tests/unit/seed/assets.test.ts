@@ -34,7 +34,6 @@ const ASSET_ENTITIES = [
   'Checkpoint',
   'CheckpointSchedule',
   'AssetMandatoryMediator',
-  'AssetPreApproval',
 ];
 
 const seedAssets = async (chain: FakeChain) => {
@@ -133,12 +132,8 @@ describe('from 7.0', () => {
     chain.put('checkpoint.timestamps', [ASSET, 2], 1_700_000_600_000);
     chain.put('checkpoint.totalSupply', [ASSET, 2], 1_000);
     chain.put('checkpoint.scheduledCheckpoints', [ASSET, 1], { pending: [1_800_000_000_000] });
-    chain.put('checkpoint.schedulePoints', [ASSET, 1], [2]);
 
     chain.put('asset.mandatoryMediators', [ASSET], [AGENT]);
-    chain.put('asset.preApprovedAsset', [HOLDER, ASSET], true);
-    // a pre-approval of an asset id no asset has, which the handler records too
-    chain.put('asset.preApprovedAsset', [HOLDER, NFTS.replace('fe', 'aa')], true);
 
     await seedAssets(chain);
   });
@@ -250,19 +245,16 @@ describe('from 7.0', () => {
     expect(Object.keys(rows('AgentGroupMembership'))).toEqual([`${ASSET}/1/${AGENT}`]);
   });
 
-  it('seeds the checkpoints, linked to the schedule the chain still holds', () => {
+  it('seeds the checkpoints, and the schedule the chain still holds', () => {
     expect(rows('Checkpoint')[`${ASSET}/1`]).toMatchObject({ checkpointId: 1, totalSupply: '900' });
-    expect(rows('Checkpoint')[`${ASSET}/1`].scheduleId).toBeUndefined();
-    expect(rows('Checkpoint')[`${ASSET}/2`]).toMatchObject({ scheduleId: `${ASSET}/1` });
     expect(rows('CheckpointSchedule')[`${ASSET}/1`]).toMatchObject({
       scheduleId: 1,
       scheduledCheckpoints: [new Date(1_800_000_000_000).toISOString()],
     });
   });
 
-  it('seeds the mandatory mediators, and the pre-approvals even of an asset id no asset has', () => {
+  it('seeds the mandatory mediators', () => {
     expect(Object.keys(rows('AssetMandatoryMediator'))).toEqual([`${ASSET}/${AGENT}`]);
-    expect(Object.keys(rows('AssetPreApproval'))).toHaveLength(2);
   });
 });
 
@@ -294,7 +286,6 @@ describe('before 7.0', () => {
     });
     chain.put('asset.tickers', [ticker('ACME')], { owner: OWNER, expiry: null });
     chain.put('asset.tickers', [ticker('SPARE')], { owner: HOLDER, expiry: null });
-    chain.put('asset.preApprovedTicker', [HOLDER, ticker('ACME')], true);
     chain.put('asset.balanceOf', [ticker('ACME'), OWNER], 5);
     await seedAssets(chain);
 
@@ -307,7 +298,6 @@ describe('before 7.0', () => {
     });
     expect(byId(chain.rows('TickerReservation')).ACME).toMatchObject({ assetId });
     expect(byId(chain.rows('TickerReservation')).SPARE.assetId).toBeUndefined();
-    expect(Object.keys(byId(chain.rows('AssetPreApproval')))).toEqual([`${assetId}/${HOLDER}`]);
   });
 
   it("seeds an agent group's permissions in the form the index stores them", async () => {
@@ -358,8 +348,6 @@ describe('before 6.0', () => {
       scheduleId: 1,
       period: JSON.stringify({ unit: 'Week', amount: 4 }),
       start: new Date(1_640_011_451_564).toISOString(),
-      remaining: 3,
-      nextCheckpointAt: new Date(1_640_011_451_000).toISOString(),
     });
     expect(schedule.scheduledCheckpoints).toBeUndefined();
   });

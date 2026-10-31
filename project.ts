@@ -49,11 +49,11 @@ const filters: Record<string, Record<string, string[]>> = {
     Issued: ['handleIssued', 'handleAssetIssuedStatistics'],
     LocalMetadataKeyDeleted: ['handleLocalMetadataKeyDeleted'],
     MetadataValueDeleted: ['handleMetadataValueDeleted'],
-    PreApprovedAsset: ['handlePreApprovedAsset'],
+    PreApprovedAsset: [],
     RegisterAssetMetadataGlobalType: ['handleRegisterAssetMetadataGlobalType'],
     RegisterAssetMetadataLocalType: ['handleRegisterAssetMetadataLocalType'],
     RemoveAssetAffirmationExemption: [],
-    RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
+    RemovePreApprovedAsset: [],
     Redeemed: ['handleRedeemed'],
     SetAccountFreeze: ['handleSetAccountFreeze'],
     SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
@@ -150,9 +150,9 @@ const filters: Record<string, Record<string, string[]>> = {
     CAInitiated: ['handleCaInitiated'],
     CALinkedToDoc: ['handleCaLinkedToDoc'],
     CARemoved: ['handleCaRemoved'],
-    DefaultTargetIdentitiesChanged: ['handleDefaultTargetIdentitiesChanged'],
-    DefaultWithholdingTaxChanged: ['handleDefaultWithholdingTaxChanged'],
-    DidWithholdingTaxChanged: ['handleDidWithholdingTaxChanged'],
+    DefaultTargetIdentitiesChanged: [],
+    DefaultWithholdingTaxChanged: [],
+    DidWithholdingTaxChanged: [],
     MaxDetailsLengthChanged: [], // chain config, no entity
     RecordDateChanged: ['handleRecordDateChanged'],
     // pre-6.0 CAA transfers — superseded by external agents, not indexed
@@ -215,7 +215,7 @@ const filters: Record<string, Record<string, string[]>> = {
     ProposalAdded: ['handleMultiSigProposalAdded'],
     ProposalApprovalVote: ['handleMultiSigVoteApproved'],
     ProposalApproved: ['handleMultiSigProposalApproved'],
-    ProposalExecuted: ['handleMultiSigProposalExecuted', 'handlePositionAfterProposal'],
+    ProposalExecuted: ['handleMultiSigProposalExecuted'],
     ProposalExecutionFailed: [],
     ProposalRejected: ['handleMultiSigProposalRejected'],
     ProposalRejectionVote: ['handleMultiSigVoteRejected'],
@@ -255,7 +255,7 @@ const filters: Record<string, Record<string, string[]>> = {
     PipClosed: ['handlePipClosed'],
     PipSkipped: ['handlePipSkipped'],
     ProposalCreated: ['handleProposalCreated', 'handlePipsDeposit'],
-    ProposalRefund: ['handleProposalRefund', 'handleProposalRefunded'],
+    ProposalRefund: ['handleProposalRefund'],
     ProposalStateUpdated: ['handleProposalStateUpdated'],
     SnapshotCleared: ['handleSnapshotCleared'],
     SnapshotResultsEnacted: ['handleSnapshotResultsEnacted'],
@@ -313,6 +313,7 @@ const filters: Record<string, Record<string, string[]>> = {
     InstructionRescheduled: ['handleInstructionRescheduled'],
     InstructionUnlocked: ['handleInstructionFinalizedEvent'],
     LegFailedExecution: [],
+    MandatoryReceiverAffirmationSet: [],
     MediatorAffirmationReceived: ['handleMediatorAffirmationReceived'],
     MediatorAffirmationWithdrawn: ['handleMediatorAffirmationWithdrawn'],
     ReceiptClaimed: ['handleReceiptClaimed'],
@@ -328,13 +329,11 @@ const filters: Record<string, Record<string, string[]>> = {
     VenueUnauthorized: [],
   },
   staking: {
-    // `handlePositionBonded` must run before `handleStakingEvent` — the latter stamps
-    // `StakingEvent.position` from a `StakingPosition` row the former is what creates.
-    Bonded: ['handlePositionBonded', 'handleStakingEvent', 'handleBonded'],
+    Bonded: ['handleStakingEvent', 'handleBonded'],
     Chilled: [],
     ControllerBatchDeprecated: [],
     CommissionCapUpdated: [],
-    CurrencyMigrated: ['handleCurrencyMigrated', 'handlePositionCurrencyMigrated'],
+    CurrencyMigrated: ['handleCurrencyMigrated'],
     EraPaid: ['handleEraPaid'],
     // pre-v7.0 name for EraPaid, same (era, validatorPayout, remainder) payload
     EraPayout: ['handleEraPaid'],
@@ -346,8 +345,8 @@ const filters: Record<string, Record<string, string[]>> = {
     OldSlashingReportDiscarded: [],
     // supplies the `eraIndex` that `Rewarded` lacks; consumed by the POLYX ledger's handleReward
     PayoutStarted: ['handlePayoutStarted'],
-    PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
-    PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
+    PermissionedIdentityAdded: [],
+    PermissionedIdentityRemoved: [],
     Reward: ['handleStakingEvent', 'handleReward'],
     Rewarded: ['handleStakingEvent', 'handleReward'],
     RewardPaymentSchedulingInterrupted: [],
@@ -362,9 +361,9 @@ const filters: Record<string, Record<string, string[]>> = {
     // pre-v7.0 name for StakersElected: emitted after CurrentEra and ErasStakers are written
     StakingElection: ['handleStakersElected'],
     StakingElectionFailed: [],
-    Unbonded: ['handlePositionUnbonded', 'handleStakingEvent', 'handleUnbonded'],
-    ValidatorPrefsSet: ['handleValidatorPrefsSet'],
-    Withdrawn: ['handleWithdrawn', 'handlePositionWithdrawn'],
+    Unbonded: ['handleStakingEvent', 'handleUnbonded'],
+    ValidatorPrefsSet: [],
+    Withdrawn: ['handleWithdrawn'],
   },
   statistics: {
     AssetStatsUpdated: [],
@@ -418,8 +417,8 @@ const filters: Record<string, Record<string, string[]>> = {
     CommissionCapUpdated: [],
     InvalidatedNominators: [],
     Nominated: ['handleStakingEvent'],
-    PermissionedIdentityAdded: ['handlePermissionedIdentityAdded'],
-    PermissionedIdentityRemoved: ['handlePermissionedIdentityRemoved'],
+    PermissionedIdentityAdded: [],
+    PermissionedIdentityRemoved: [],
     RewardPaymentSchedulingInterrupted: [],
     SlashingAllowedForChanged: [],
   },
@@ -614,44 +613,7 @@ const project: SubstrateProject = {
       startBlock,
       mapping: {
         file: './dist/index.js',
-        handlers: [
-          ...eventSpecificHandlers,
-          manualExecutionFailure,
-          // Changes that arrive with no event of their own, caught by the call that makes them.
-          // Filtered to the one call each, which the dictionary indexes like an event, so empty
-          // blocks are still skipped.
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleSetController',
-            filter: { module: 'staking', method: 'setController', success: true },
-          },
-          {
-            kind: SubstrateHandlerKind.Call,
-            handler: 'handleRebond',
-            filter: { module: 'staking', method: 'rebond', success: true },
-          },
-          ...['preApproveTicker', 'removeTickerPreApproval'].map(
-            (method): SubstrateCallHandler => ({
-              kind: SubstrateHandlerKind.Call,
-              handler: 'handleSilentAssetPreApproval',
-              filter: { module: 'asset', method, success: true },
-            })
-          ),
-          ...[
-            'batch',
-            'batchAll',
-            'batchAtomic',
-            'batchOptimistic',
-            'forceBatch',
-            'asDerivative',
-          ].map(
-            (method): SubstrateCallHandler => ({
-              kind: SubstrateHandlerKind.Call,
-              handler: 'handleBatchedStakingCalls',
-              filter: { module: 'utility', method, success: true },
-            })
-          ),
-        ],
+        handlers: [...eventSpecificHandlers, manualExecutionFailure],
       },
     },
   ],

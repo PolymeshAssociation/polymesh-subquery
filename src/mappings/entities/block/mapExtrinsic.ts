@@ -3,9 +3,7 @@ import { AnomalyKind, CallIdEnum, EvmTransaction, Extrinsic, ModuleIdEnum } from
 import {
   blockTime,
   camelToSnakeCase,
-  evmAddressFromSs58,
   getOrCreateAccount,
-  getSignerAddress,
   padId,
   ResolvedEthTransact,
   resolveEthTransact,
@@ -14,7 +12,6 @@ import { recordAnomaly } from '../../../utils/anomaly';
 import { argumentsJson, tryCallArgs } from '../../args/encode';
 import { toEnum } from '../common';
 import { postUneventedTransactionFee } from '../identities/preV54Fees';
-import { upsertEvmAccountMapping } from '../revive/mapEvmAccountMapping';
 
 /** Events a batch deposits when a call in it failed; a batch that fully succeeded deposits none */
 const BATCH_FAILURE_EVENTS = new Set([
@@ -136,41 +133,7 @@ const createEvmTransaction = (
 };
 
 /**
- * `revive.mapAccount` and `revive.unmapAccount` emit no event of their own, so the mapping they
- * maintain can only be picked up from the extrinsic itself
- */
-const handleEvmAccountMapping = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
-  const address = getSignerAddress(extrinsic);
-  if (!address) {
-    return;
-  }
-  const evmAddress = evmAddressFromSs58(address, extrinsic.extrinsic.registry.chainSS58);
-
-  if (!evmAddress) {
-    return;
-  }
-
-  return upsertEvmAccountMapping({
-    evmAddress,
-    address,
-    mapped: camelToSnakeCase(extrinsic.extrinsic.method.method) === 'map_account',
-    datetime: blockTime(extrinsic.block),
-    blockId: padId(extrinsic.block.block.header.number.toString()),
-  });
-};
-
-const isAccountMappingCall = (extrinsic: SubstrateExtrinsic): boolean => {
-  if (extrinsic.extrinsic.method.section !== 'revive' || !extrinsic.success) {
-    return false;
-  }
-  const callId = camelToSnakeCase(extrinsic.extrinsic.method.method);
-
-  return callId === 'map_account' || callId === 'unmap_account';
-};
-
-/**
- * Persists the extrinsic, along with the decoded Ethereum transaction it carried and any EVM
- * account mapping it registered
+ * Persists the extrinsic, along with the decoded Ethereum transaction it carried
  */
 export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
   const resolved = resolveEthTransact(extrinsic);
@@ -190,7 +153,5 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
       padId(extrinsic.block.block.header.number.toString()),
       blockTime(extrinsic.block)
     );
-  } else if (isAccountMappingCall(extrinsic)) {
-    await handleEvmAccountMapping(extrinsic);
   }
 };

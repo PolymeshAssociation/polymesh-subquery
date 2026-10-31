@@ -1955,24 +1955,6 @@ type EvmTransaction @entity {
 }
 
 """
-Mapping between an Ethereum address and its original `AccountId32`, registered with `revive.mapAccount`
-"""
-type EvmAccountMapping @entity {
-  "Same ID as `evmAddress`"
-  id: ID!
-  "Checksummed Ethereum address the account is reachable at inside `pallet_revive`. Same value as `id`"
-  evmAddress: String!
-  "SS58 address of the account that registered the mapping"
-  address: String! @index(unique: true)
-  account: Account
-  "`false` once the mapping has been removed with `revive.unmapAccount`"
-  mapped: Boolean!
-  datetime: Date!
-  createdBlock: Block!
-  updatedBlock: Block!
-}
-
-"""
 Information of a chain state transition on. For most use cases a more specific entity should be queried
 """
 type Event @entity @compositeIndexes(fields: [["moduleId", "eventId"]]) {
@@ -2131,6 +2113,8 @@ type Account @entity {
   keyAssignments: [IdentityKey!]! @derivedFrom(field: "account")
   "Set when this account is a multisig — the account IS the multisig"
   multiSig: MultiSig @derivedFrom(field: "account")
+  "The account's POLYX balance"
+  balance: AccountBalance @derivedFrom(field: "account")
   "One per asset this account has held as a v8 account-level holder"
   holdings: [Holding!] @derivedFrom(field: "account")
   "Settlement legs sending from this account, including assets it has never held"
@@ -2143,6 +2127,10 @@ type Account @entity {
   transfersIn: [AssetTransaction!] @derivedFrom(field: "toAccount")
   "Staking events whose stash is this account"
   stakingEvents: [StakingEvent!] @derivedFrom(field: "stash")
+  "This account's per-era records as an elected validator: stake, commission and points"
+  validatorEras: [ValidatorEra!] @derivedFrom(field: "validator")
+  "Slashes for this account's offences as a validator, on it and on its nominators"
+  validatorSlashes: [Slash!] @derivedFrom(field: "validator")
   "Authorizations targeting this key, including invitations to join an identity"
   authorizationsReceived: [Authorization!] @derivedFrom(field: "toAccount")
   "This account's POLYX ledger entries"
@@ -2216,6 +2204,8 @@ type Identity @entity {
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
+  "The custom agent groups this identity is a member of, across assets"
+  agentGroups: [AgentGroupMembership!] @derivedFrom(field: "member")
   """
   Every key membership this Identity has held, current and historical — see `IdentityKey`.
 
@@ -2320,67 +2310,9 @@ type StakingEvent @entity {
   transactionId: String
   "from the PayoutStarted preceding a Reward/Rewarded in the same block — shares its cache and caveat with PolyxEntry.eraIndex (see mapPolyxLedger.ts's currentPayoutEra)"
   eraIndex: Int
-  "the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
-  validator: Validator @index
-  position: StakingPosition
+  "the stash of the validator whose payout paid a reward, from v7.0, where `PayoutStarted` names it; null before"
+  validator: Account @index
   createdEvent: Event!
-}
-
-"""
-An unbonding chunk still in the queue, not yet withdrawable — `staking.ledger(controller).unlocking`
-"""
-type UnlockChunk @jsonField {
-  "a decimal string (a BigInt in a JSON column would be stored as `<digits>n`)"
-  amount: String!
-  era: Int!
-}
-
-"""
-Current staking position for a stash — how much is bonded/unbonding. Who it nominates is not
-indexed: from 8.0 nominating emits no event, so read `staking.nominators` instead. `bonded`
-mirrors the same `staking.ledger`/hold read `AccountBalance.bonded`/`.locks`/`.holds` already
-track (`readStakingLock` in `src/utils/staking.ts`) — this is a second view onto the same number,
-not an independently accumulated one, so the two cannot drift apart
-"""
-type StakingPosition @entity {
-  id: ID! # stash address
-  stash: Account! @index
-  controller: Account
-  identity: Identity @index
-  "currently bonded (active in the staking ledger), same source as AccountBalance.bonded"
-  bonded: BigInt!
-  "in the unbonding queue, not yet withdrawable"
-  unbonding: BigInt!
-  "unbonding chunks with their unlock eras"
-  unlocking: [UnlockChunk]
-  rewardDestination: String
-  rewardDestinationAccount: Account
-  totalRewarded: BigInt!
-  totalSlashed: BigInt!
-  createdEvent: Event!
-  updatedEvent: Event!
-}
-
-"""
-A validator stash. `isPermissioned` is read from chain when the row is created, and kept current
-afterwards by `PermissionedIdentityAdded`/`Removed` — which name an Identity rather than a stash,
-so they can only update rows that already exist for it
-"""
-type Validator @entity {
-  id: ID! # stash address
-  account: Account! @index
-  identity: Identity @index
-  commission: BigInt
-  blocked: Boolean!
-  isPermissioned: Boolean!
-  "queried by StakersElected to clear the prior era's set — needs its own index (PG 18, see subql-schema-constraints)"
-  isActive: Boolean! @index
-  "This validator's per-era records"
-  eras: [ValidatorEra!] @derivedFrom(field: "validator")
-  "Slashes for this validator's offences, on it and on its nominators"
-  slashes: [Slash!] @derivedFrom(field: "validator")
-  createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """
@@ -2417,13 +2349,14 @@ type ValidatorEra
   id: ID! # padId(eraIndex)/stash
   era: Era!
   eraIndex: Int! @index
-  validator: Validator!
+  "the validator's stash"
+  validator: Account!
   "the operator's identity when the era was planned"
   identity: Identity @index
   ownStake: BigInt!
   totalStake: BigInt!
   nominatorCount: Int!
-  "Perbill parts, as `Validator.commission`"
+  "Perbill parts"
   commission: BigInt
   blocked: Boolean
   "null until the era is paid"
@@ -2441,7 +2374,8 @@ Null when the deferred slash could not be read, which records an anomaly
 type Slash @entity {
   id: ID! # blockEventId
   account: Account! @index
-  validator: Validator @index
+  "the offending validator's stash"
+  validator: Account @index
   "the era the slash was applied in"
   eraIndex: Int @index
   "the era of the offence: exact from v7.0, null before, where the chain keeps only the era it was reported in"
@@ -3046,22 +2980,6 @@ type CorporateAction @entity @compositeIndexes(fields: [["asset", "kind"]]) {
 }
 
 """
-Asset-level corporate action defaults — `corporateAction.DefaultTargetIdentitiesChanged`,
-`DefaultWithholdingTaxChanged` and `DidWithholdingTaxChanged` set these ahead of any specific CA
-"""
-type CorporateActionDefaultConfig @entity {
-  id: ID! # assetId
-  asset: Asset! @index
-  targetIdentities: [String!]
-  targetTreatment: TargetTreatment
-  "Withholding tax as a `Permill` — parts per million, so 10000 is 1%"
-  defaultWithholdingTax: BigInt
-  didWithholdingTax: [DidTax]
-  createdEvent: Event!
-  updatedEvent: Event!
-}
-
-"""
 A balance-at-record-date snapshot for an Asset, from `checkpoint.CheckpointCreated`. Makes a
 linked `CorporateAction`'s distribution amounts verifiable
 """
@@ -3071,35 +2989,29 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   checkpointId: Int!
   totalSupply: BigInt!
   datetime: Date!
-  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
-  schedule: CheckpointSchedule
   "Corporate actions recorded against this checkpoint"
   corporateActions: [CorporateAction!] @derivedFrom(field: "checkpoint")
   createdEvent: Event!
 }
 
 """
-A recurring checkpoint schedule for an Asset, from `checkpoint.ScheduleCreated`. The pre-v6
-period-based model (`period`/`start`/`remaining`) and the v6+ explicit-timestamp model
-(`pendingCheckpoints`) are mutually exclusive on one row, era implicit in which is null
+A checkpoint schedule for an Asset, as `checkpoint.ScheduleCreated` declared it, until
+`ScheduleRemoved`. The chain drops a schedule with no event once its last checkpoint fires, so a
+row stays open after it ran out: a moment still to come is pending unless the schedule was removed.
+Which checkpoints a schedule created is `checkpoint.schedulePoints(asset, scheduleId)`
 """
 type CheckpointSchedule @entity {
   id: ID! # assetId/scheduleId
   asset: Asset! @index
   scheduleId: Int!
-  "v6+ — the checkpoint timestamps this schedule declared when it was created. Not decremented as they fire, and not cleared on removal, where it records what was cancelled. Still-pending is this set minus `checkpoints`"
+  "v6+: the checkpoint moments the schedule declared when it was created. Not cleared on removal, where it records what was cancelled"
   scheduledCheckpoints: [Date!]
-  "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
+  "pre-v6 only: the period it was created with. Null from v6"
   period: String
+  "pre-v6 only: the moment it was created to start at. Null from v6"
   start: Date
-  remaining: Int
-  nextCheckpointAt: Date
-  "The checkpoints this schedule has actually created"
-  checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
   "Set when an agent removes the schedule; null otherwise"
   removedEvent: Event
-  "The scheduled checkpoint after which the chain dropped the schedule, its last; null while checkpoints are still to come. The chain emits nothing when a schedule runs out"
-  completedEvent: Event
   createdEvent: Event!
 }
 
@@ -3224,7 +3136,6 @@ type Proposal @entity {
   state: ProposalStateEnum!
   "The proposer's identity; null for a PIP seeded from the chain that a committee proposed, as the chain doesn't keep which member"
   owner: Identity
-  balance: BigInt!
   url: String
   description: String
   votes: [ProposalVote]! @derivedFrom(field: "proposal")
@@ -3627,8 +3538,6 @@ type Asset @entity {
   agentGroups: [AgentGroup!] @derivedFrom(field: "asset")
   "This asset's funding rounds"
   fundings: [Funding!] @derivedFrom(field: "asset")
-  "Identities that pre-approved receiving this asset"
-  preApprovals: [AssetPreApproval!] @derivedFrom(field: "asset")
   "Per-token approvals over this collection's NFTs"
   nftApprovals: [NftApproval!] @derivedFrom(field: "asset")
   "Operator approvals over this collection"
@@ -3930,6 +3839,7 @@ type AccountBalance @entity {
   total: BigInt!
   "free - frozen, floored at 0"
   transferable: BigInt!
+  "the staking lock: bonded plus unbonding, until withdrawn. Its unbonding chunks are `staking.ledger(controller).unlocking`"
   bonded: BigInt!
   otherReserved: BigInt!
 
@@ -4316,17 +4226,6 @@ type ConfidentialCurveTreeLeaf @entity {
   value: String!
   updatedEvent: Event!
   createdEvent: Event!
-}
-
-"""
-Represent asset pre-approvals from an Identity. These entries will not require an affirmation when the identity is receiving them
-"""
-type AssetPreApproval @entity {
-  id: ID!
-  asset: Asset! @index(unique: false)
-  identity: Identity! @index(unique: false)
-  createdEvent: Event!
-  updatedEvent: Event!
 }
 
 """

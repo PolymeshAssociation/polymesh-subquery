@@ -1,16 +1,12 @@
 import { Codec } from '@polkadot/types/types';
 import { corporateActionRow } from '../../mappings/entities/assets/mapCorporateAction';
 import { ballotRow, ballotVotesOf } from '../../mappings/entities/assets/mapCorporateBallot';
-import { toEnum } from '../../mappings/entities/common';
 import {
   CorporateAction,
-  CorporateActionDefaultConfig,
   CorporateBallot,
   CorporateBallotVote,
-  DidTax,
   Distribution,
   Sto,
-  TargetTreatment,
 } from '../../types';
 import { coerceHexToString, getTextValue } from '../../utils/common';
 import { getDistributionValue } from '../../utils/distributions';
@@ -101,62 +97,6 @@ export const corporateActionSeeder: Seeder<CorporateAction> = {
         ];
       });
     }
-  },
-};
-
-const DEFAULT_ITEMS = [
-  ['targets', 'corporateAction.defaultTargetIdentities'],
-  ['tax', 'corporateAction.defaultWithholdingTax'],
-  ['didTaxes', 'corporateAction.didWithholdingTax'],
-] as const;
-
-type DefaultParts = Partial<Record<(typeof DEFAULT_ITEMS)[number][0], Codec>>;
-
-/** An asset's default targets and withholding taxes, where it set any */
-export const corporateActionDefaultConfigSeeder: Seeder<CorporateActionDefaultConfig> = {
-  entity: 'CorporateActionDefaultConfig',
-  reads: DEFAULT_ITEMS.map(([, item]) => item),
-  async *rows(snap, ctx) {
-    // each item read whole, its asset ids looked up together, and the parts merged by asset
-    const parts = await Promise.all(
-      DEFAULT_ITEMS.map(async ([part, item]) => {
-        const present = [...(await snap.map(item)).values()].filter(
-          (entry): entry is Entry & { value: Codec } => Boolean(entry.value)
-        );
-        return Promise.all(
-          present.map(async ({ args, value }) => ({
-            part,
-            assetId: await assetIdOf(args[0]),
-            value,
-          }))
-        );
-      })
-    );
-    const byAsset = new Map<string, DefaultParts>();
-    parts.flat().forEach(({ part, assetId, value }) => {
-      byAsset.set(assetId, { ...byAsset.get(assetId), [part]: value });
-    });
-    yield [...byAsset].map(([assetId, { targets, tax, didTaxes }]) => {
-      const target = targets?.toJSON() as { identities: string[]; treatment: string } | undefined;
-      return CorporateActionDefaultConfig.create({
-        id: assetId,
-        assetId,
-        targetIdentities: target?.identities,
-        targetTreatment: target
-          ? toEnum(TargetTreatment, target.treatment, undefined, {
-              enumName: 'TargetTreatment',
-              block: ctx.block,
-            })
-          : undefined,
-        defaultWithholdingTax: tax ? BigInt(tax.toJSON() as number) : undefined,
-        didWithholdingTax: didTaxes
-          ? (didTaxes.toJSON() as [string, number][]).map(
-              ([did, value]): DidTax => ({ did, tax: BigInt(value).toString() })
-            )
-          : undefined,
-        ...created(ctx),
-      });
-    });
   },
 };
 

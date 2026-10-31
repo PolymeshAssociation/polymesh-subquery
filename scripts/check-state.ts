@@ -14,11 +14,6 @@
  *   5. each portfolio's `Holding.nftCount` equals its count in `portfolio.portfolioNFT`, and each
  *      account's (v8, and v7.4's `AccountId` portfolios) its entries in `nft.nftHolder`.
  *
- * Staking, for every stash:
- *   6. each `StakingPosition`'s `bonded` equals its `staking.ledger` `active`, its `unbonding`
- *      equals `total - active`, and its controller equals `staking.bonded`; every stash with a
- *      ledger has a position.
- *
  * Locks and holds, for every account:
  *   7. each lock in `AccountBalance.locks` equals `balances.locks` by id, each hold in `holds`
  *      equals `balances.holds` by reason (from v8, read raw, so testnet's undecodable `contracts`
@@ -309,59 +304,6 @@ const chainHoldings = async (at: ApiDecoration<'promise'>, staging: boolean) => 
   return { amounts, nfts };
 };
 
-interface Position {
-  bonded: bigint;
-  unbonding: bigint;
-  controller?: string;
-}
-
-const indexedPositions = async (db: DataSource, block: number) => {
-  const rows: { id: string; bonded: string; unbonding: string; controller_id: string | null }[] =
-    await db.query(
-      `SELECT id, bonded, unbonding, controller_id FROM staking_positions
-        WHERE _block_range @> $1::int8`,
-      [block]
-    );
-
-  return new Map<string, Position>(
-    rows.map(row => [
-      row.id,
-      {
-        bonded: big(row.bonded),
-        unbonding: big(row.unbonding),
-        controller: row.controller_id ?? undefined,
-      },
-    ])
-  );
-};
-
-/** Every stash's ledger, keyed by the stash it names, and every stash's controller. */
-const chainPositions = async (at: ApiDecoration<'promise'>) => {
-  const [ledgers, bonded] = await Promise.all([
-    at.query.staking.ledger.entries(),
-    at.query.staking.bonded.entries(),
-  ]);
-
-  const positions = new Map<string, Position>();
-  ledgers.forEach(([, raw]) => {
-    const ledger = raw.toJSON() as {
-      stash?: string;
-      total?: string | number;
-      active?: string | number;
-    } | null;
-    if (ledger?.stash) {
-      const active = big(ledger.active);
-      positions.set(ledger.stash, { bonded: active, unbonding: big(ledger.total) - active });
-    }
-  });
-
-  const controllers = new Map<string, string>(
-    bonded.map(([key, controller]) => [key.args[0].toString(), controller.toString()])
-  );
-
-  return { positions, controllers };
-};
-
 // ---------------------------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------------------------
@@ -417,35 +359,6 @@ const checkHoldings = async (
   );
 
   return { out, holdings: indexed.size, chain };
-};
-
-const checkStaking = async (db: DataSource, at: ApiDecoration<'promise'>, block: number) => {
-  const out: Difference[] = [];
-  const [indexed, chain] = await Promise.all([indexedPositions(db, block), chainPositions(at)]);
-
-  indexed.forEach((position, stash) => {
-    const onChain = chain.positions.get(stash);
-    differ(out, '6 position bonded', stash, position.bonded, onChain?.bonded);
-    differ(out, '6 position unbonding', stash, position.unbonding, onChain?.unbonding);
-
-    const controller = chain.controllers.get(stash);
-    if (controller && position.controller !== controller) {
-      out.push({
-        check: '6 position controller',
-        id: stash,
-        index: position.controller ?? 'none',
-        chain: controller,
-      });
-    }
-  });
-
-  chain.positions.forEach((position, stash) => {
-    if (!indexed.has(stash) && position.bonded + position.unbonding > BigInt(0)) {
-      differ(out, '6 bonded stash has no position', stash, undefined, position.bonded);
-    }
-  });
-
-  return { out, positions: indexed.size };
 };
 
 /** Each account's staking lock and `Staking` hold in the index, as of `block` */
@@ -720,14 +633,12 @@ const main = async (): Promise<void> => {
 
   const polyx = await checkPolyx(db, at, block);
   const holdings = await checkHoldings(db, at, block, staging);
-  const staking = await checkStaking(db, at, block);
   const parts = await checkBalanceParts(db, api, at, hash, block, polyx.chain);
   const assets = await checkAssets(db, at, block, staging, holdings.chain);
   const approvals = await checkApprovals(db, at, block);
   const differences = [
     ...polyx.out,
     ...holdings.out,
-    ...staking.out,
     ...parts.out,
     ...assets.out,
     ...approvals.out,
@@ -735,7 +646,7 @@ const main = async (): Promise<void> => {
 
   console.log(
     `${polyx.accounts} balances with their locks and holds, ${holdings.holdings} holdings, ` +
-      `${staking.positions} staking positions, ${assets.assets} assets and ` +
+      `${assets.assets} assets and ` +
       `${approvals.instructions} open and ${approvals.closed} closed instructions checked`
   );
 

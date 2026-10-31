@@ -1,22 +1,17 @@
-import { getRewardDestinationAccount } from '../../mappings/entities/events/mapStakingEvent';
-import { Era, StakingPosition, Validator, ValidatorEra } from '../../types';
+import { Era, ValidatorEra } from '../../types';
 import { padId } from '../../utils/common';
-import { ledgerSnapshot, readRewardDestination } from '../../utils/staking';
 import { SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, StorageRef } from '../snapshot';
 import { storedKeys } from './keys';
 
 /**
- * Staking: each bonded stash's position, the validators that declared their intent, and the active era with its elected set. What a stash was paid or slashed, and earlier
- * eras, are history.
+ * Staking: the active era with its elected set. Earlier eras are history.
  */
 
 const created = (ctx: SeedContext) => ({
   createdEventId: ctx.eventId,
   updatedEventId: ctx.eventId,
 });
-
-type LedgerJson = Parameters<typeof ledgerSnapshot>[0] & { stash?: string };
 
 const KEYS: StorageRef[] = [
   'identity.keyRecords',
@@ -28,62 +23,6 @@ const KEY_SHAPES = {
   'identity.keyToIdentityIds': [3000],
   'identity.didRecords': [3000],
   'multiSig.keyToMultiSig': [3000],
-};
-
-/**
- * Each bonded stash's position from its ledger: keyed by its controller before 8.0, by the stash
- * from it, which the ledger names either way.
- */
-export const stakingPositionSeeder: Seeder<StakingPosition> = {
-  entity: 'StakingPosition',
-  // a fully unbonded stash stays indexed
-  terminal: ({ bonded, unbonding }) =>
-    BigInt(bonded) === BigInt(0) && BigInt(unbonding) === BigInt(0),
-  reads: ['staking.ledger', 'staking.payee', ...KEYS],
-  oldShapes: {
-    'staking.ledger': [3000],
-    'staking.payee': [3000],
-    ...KEY_SHAPES,
-  },
-  accounts: ['stashId', 'controllerId', 'rewardDestinationAccountId'],
-  relative: ['totalRewarded', 'totalSlashed'],
-  async *rows(snap, ctx) {
-    const [payees, keys] = await Promise.all([snap.map('staking.payee'), storedKeys(snap)]);
-    for await (const page of snap.pages('staking.ledger')) {
-      yield page.flatMap(({ args, value }) => {
-        const ledger = value?.toJSON() as LedgerJson | undefined;
-        if (!ledger) {
-          return [];
-        }
-        const controller = args[0].toString();
-        const stash = ledger.stash ?? controller;
-        const snapshot = ledgerSnapshot(ledger);
-        const payee = payees.get(stash)?.value;
-        const destination = payee ? readRewardDestination(payee.toJSON()) : undefined;
-        return [
-          StakingPosition.create({
-            id: stash,
-            stashId: stash,
-            controllerId: controller,
-            identityId: keys.get(stash)?.did,
-            bonded: snapshot.active,
-            unbonding: snapshot.total - snapshot.active,
-            unlocking: snapshot.unlocking.map(chunk => ({
-              ...chunk,
-              amount: chunk.amount.toString(),
-            })),
-            rewardDestination: destination?.destination,
-            rewardDestinationAccountId: destination
-              ? getRewardDestinationAccount(destination.destination, destination.account, stash)
-              : undefined,
-            totalRewarded: BigInt(0),
-            totalSlashed: BigInt(0),
-            ...created(ctx),
-          }),
-        ];
-      });
-    }
-  },
 };
 
 /**
@@ -152,16 +91,6 @@ const exposuresOf = (snap: ChainSnapshot, era: number): Promise<Exposure[]> =>
       ? await read('staking.erasStakersOverview')
       : [];
     return overview.length ? overview : read('staking.erasStakers');
-  });
-
-/** The stashes the latest election chose */
-const latestElected = (snap: ChainSnapshot): Promise<ReadonlySet<string>> =>
-  snap.derive('latestElected', async () => {
-    const eras = await electedEras(snap);
-    const latest = eras.at(-1);
-    return new Set(
-      latest === undefined ? [] : (await exposuresOf(snap, latest)).map(({ stash }) => stash)
-    );
   });
 
 const ERA_READS: StorageRef[] = [
@@ -248,67 +177,6 @@ export const validatorEraSeeder: Seeder<ValidatorEra> = {
           blocked: pref?.blocked,
           ...created(ctx),
         });
-      });
-    }
-  },
-};
-
-/**
- * A stash that declared its intent to validate, with its prefs, whether its identity is
- * permissioned (`validators.permissionedIdentity` from 8.0, `staking.` before), and whether the
- * latest election chose it, which is when the index marks it active.
- */
-export const validatorSeeder: Seeder<Validator> = {
-  entity: 'Validator',
-  // a validator that stopped validating stays indexed
-  terminal: ({ isActive }) => !isActive,
-  reads: [
-    'staking.validators',
-    'validators.permissionedIdentity',
-    'staking.permissionedIdentity',
-    ...ERA_READS,
-    ...KEYS,
-  ],
-  oldShapes: {
-    'staking.validators': [3000],
-    'staking.permissionedIdentity': [3000],
-    ...ERA_SHAPES,
-    ...KEY_SHAPES,
-  },
-  accounts: ['accountId'],
-  async *rows(snap, ctx) {
-    const [permissioned, elected, keys] = await Promise.all([
-      snap.map(
-        snap.has('validators.permissionedIdentity')
-          ? 'validators.permissionedIdentity'
-          : 'staking.permissionedIdentity'
-      ),
-      latestElected(snap),
-      storedKeys(snap),
-    ]);
-    for await (const page of snap.pages('staking.validators')) {
-      yield page.flatMap(({ args, value }) => {
-        if (!value) {
-          return [];
-        }
-        const stash = args[0].toString();
-        const { commission, blocked } = value.toJSON() as {
-          commission?: number;
-          blocked?: boolean;
-        };
-        const identityId = keys.get(stash)?.did;
-        return [
-          Validator.create({
-            id: stash,
-            accountId: stash,
-            identityId,
-            commission: commission === undefined ? undefined : BigInt(commission),
-            blocked: Boolean(blocked),
-            isPermissioned: identityId ? permissioned.has(identityId) : false,
-            isActive: elected.has(stash),
-            ...created(ctx),
-          }),
-        ];
       });
     }
   },

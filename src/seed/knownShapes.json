@@ -68,12 +68,6 @@
     "[[\"[u8;12]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]"
   ],
-  "asset.preApprovedAsset": [
-    "[[\"[u8;32]\",\"[u8;16]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
-  ],
-  "asset.preApprovedTicker": [
-    "[[\"[u8;32]\",\"[u8;12]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
-  ],
   "asset.tickerAssetId": [
     "[[\"[u8;12]\"],\"[u8;16]\",[\"Blake2_128Concat\"]]"
   ],
@@ -97,10 +91,6 @@
   "capitalDistribution.distributions": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"from\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"currency\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"perShare\\\":\\\"u128\\\",\\\"amount\\\":\\\"u128\\\",\\\"remaining\\\":\\\"u128\\\",\\\"reclaimed\\\":\\\"bool\\\",\\\"paymentAt\\\":\\\"u64\\\",\\\"expiresAt\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"ticker\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"from\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"currency\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"perShare\\\":\\\"u128\\\",\\\"amount\\\":\\\"u128\\\",\\\"remaining\\\":\\\"u128\\\",\\\"reclaimed\\\":\\\"bool\\\",\\\"paymentAt\\\":\\\"u64\\\",\\\"expiresAt\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]"
-  ],
-  "checkpoint.schedulePoints": [
-    "[[\"[u8;12]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
-    "[[\"[u8;16]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
   ],
   "checkpoint.scheduledCheckpoints": [
     "[[\"[u8;12]\",\"u64\"],\"{\\\"pending\\\":\\\"BTreeSet<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
@@ -185,21 +175,9 @@
     "[[\"[u8;12]\",\"u32\"],\"{\\\"kind\\\":\\\"PalletCorporateActionsCaKind\\\",\\\"declDate\\\":\\\"u64\\\",\\\"recordDate\\\":\\\"Option<PalletCorporateActionsRecordDate>\\\",\\\"targets\\\":\\\"PalletCorporateActionsTargetIdentities\\\",\\\"defaultWithholdingTax\\\":\\\"Permill\\\",\\\"withholdingTax\\\":\\\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"u32\"],\"{\\\"kind\\\":\\\"PalletCorporateActionsCaKind\\\",\\\"declDate\\\":\\\"u64\\\",\\\"recordDate\\\":\\\"Option<PalletCorporateActionsRecordDate>\\\",\\\"targets\\\":\\\"PalletCorporateActionsTargetIdentities\\\",\\\"defaultWithholdingTax\\\":\\\"Permill\\\",\\\"withholdingTax\\\":\\\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
   ],
-  "corporateAction.defaultTargetIdentities": [
-    "[[\"[u8;12]\"],\"{\\\"identities\\\":\\\"Vec<PolymeshPrimitivesIdentityId>\\\",\\\"treatment\\\":\\\"PalletCorporateActionsTargetTreatment\\\"}\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"{\\\"identities\\\":\\\"Vec<PolymeshPrimitivesIdentityId>\\\",\\\"treatment\\\":\\\"PalletCorporateActionsTargetTreatment\\\"}\",[\"Blake2_128Concat\"]]"
-  ],
-  "corporateAction.defaultWithholdingTax": [
-    "[[\"[u8;12]\"],\"Permill\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"Permill\",[\"Blake2_128Concat\"]]"
-  ],
   "corporateAction.details": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Bytes\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"ticker\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"Bytes\",[\"Blake2_128Concat\"]]"
-  ],
-  "corporateAction.didWithholdingTax": [
-    "[[\"[u8;12]\"],\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\",[\"Blake2_128Concat\"]]",
-    "[[\"[u8;16]\"],\"Vec<(PolymeshPrimitivesIdentityId,Permill)>\",[\"Blake2_128Concat\"]]"
   ],
   "corporateBallot.metas": [
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"title\\\":\\\"Bytes\\\",\\\"motions\\\":\\\"Vec<PalletCorporateActionsBallotMotion>\\\"}\",[\"Blake2_128Concat\"]]",
@@ -380,9 +358,6 @@
   "relayer.subsidies": [
     "[[\"AccountId32\"],\"{\\\"payingKey\\\":\\\"AccountId32\\\",\\\"remaining\\\":\\\"u128\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "revive.originalAccount": [
-    "[[\"H160\"],\"AccountId32\",[\"Identity\"]]"
-  ],
   "settlement.affirmsReceived": [
     "[[\"u64\",\"{\\\"_enum\\\":{\\\"Portfolio\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]",
     "[[\"u64\",\"{\\\"did\\\":\\\"PolymeshPrimitivesIdentityId\\\",\\\"kind\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioKind\\\"}\"],\"{\\\"_enum\\\":[\\\"Unknown\\\",\\\"Pending\\\",\\\"Affirmed\\\"]}\",[\"Twox64Concat\",\"Twox64Concat\"]]"
@@ -455,19 +430,6 @@
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"claimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"stash\\\":\\\"AccountId32\\\",\\\"total\\\":\\\"Compact<u128>\\\",\\\"active\\\":\\\"Compact<u128>\\\",\\\"unlocking\\\":\\\"Vec<PalletStakingUnlockChunk>\\\",\\\"legacyClaimedRewards\\\":\\\"Vec<u32>\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "staking.payee": [
-    "[[\"AccountId\"],\"RewardDestination\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\",\\\"None\\\":\\\"Null\\\"}}\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"_enum\\\":{\\\"Staked\\\":\\\"Null\\\",\\\"Stash\\\":\\\"Null\\\",\\\"Controller\\\":\\\"Null\\\",\\\"Account\\\":\\\"AccountId32\\\"}}\",[\"Twox64Concat\"]]"
-  ],
-  "staking.permissionedIdentity": [
-    "[[\"IdentityId\"],\"PermissionedIdentityPrefs\",[\"Twox64Concat\"]]",
-    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
-  ],
-  "staking.validators": [
-    "[[\"AccountId\"],\"ValidatorPrefs\",[\"Twox64Concat\"]]",
-    "[[\"AccountId32\"],\"{\\\"commission\\\":\\\"Compact<Perbill>\\\",\\\"blocked\\\":\\\"bool\\\"}\",[\"Twox64Concat\"]]"
-  ],
   "statistics.activeAssetStats": [
     "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"_enum\\\":{\\\"Ticker\\\":\\\"PolymeshPrimitivesTicker\\\"}}\"],\"BTreeSet<PolymeshPrimitivesStatisticsStatType>\",[\"Blake2_128Concat\"]]"
@@ -495,8 +457,5 @@
     "[[\"AccountId\"],\"AccountInfo\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PalletBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"AccountId32\"],\"{\\\"nonce\\\":\\\"u32\\\",\\\"consumers\\\":\\\"u32\\\",\\\"providers\\\":\\\"u32\\\",\\\"sufficients\\\":\\\"u32\\\",\\\"data\\\":\\\"PolymeshCommonUtilitiesBalancesAccountData\\\"}\",[\"Blake2_128Concat\"]]"
-  ],
-  "validators.permissionedIdentity": [
-    "[[\"[u8;32]\"],\"{\\\"intendedCount\\\":\\\"u32\\\",\\\"runningCount\\\":\\\"u32\\\"}\",[\"Twox64Concat\"]]"
   ]
 }

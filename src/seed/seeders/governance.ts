@@ -342,7 +342,7 @@ const proposerOfBytes = (
 };
 
 /**
- * A PIP still on chain: its proposer and owner, deposit, metadata, state, result and place in the
+ * A PIP still on chain: its proposer and owner, metadata, state, result and place in the
  * snapshot queue. A finished PIP is there only while the chain doesn't prune them. A committee's
  * PIP has no owner: which member proposed it isn't kept.
  */
@@ -398,7 +398,6 @@ export const proposalSeeder: Seeder<Proposal> = {
           return [];
         }
         const community = proposer.type === 'Community';
-        const deposit = community ? deposits.get(`${id}/${proposer.value}`)?.value : undefined;
         const pipMeta = metadata.get(id)?.value as unknown as Record<string, Codec> | undefined;
         const expiry = pipMeta?.expiry?.toJSON() as { some?: number } | null | undefined;
         const totals = results.get(id)?.value?.toJSON() as
@@ -412,9 +411,6 @@ export const proposalSeeder: Seeder<Proposal> = {
             proposer,
             state: state ? (getTextValue(state) as ProposalStateEnum) : ProposalStateEnum.Pending,
             ownerId: community ? keys.get(proposer.value)?.did : undefined,
-            balance: deposit
-              ? BigInt((deposit.toJSON() as { amount: number | string }).amount)
-              : BigInt(0),
             url: storedText(pipMeta?.url),
             description: storedText(pipMeta?.description),
             snapshotted,

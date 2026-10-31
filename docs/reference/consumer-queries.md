@@ -153,7 +153,7 @@ Direct consequences:
 - `CheckpointSchedule.pendingCheckpoints` is renamed `scheduledCheckpoints`, because it was never decremented as checkpoints fired. Still-pending is `scheduledCheckpoints` minus the new `CheckpointSchedule.checkpoints`.
 - `Subsidy.totalDebited` is nullable and null across the pre-v8 range, where the chain emitted nothing to accumulate. A zero now means "nothing was drawn"; it used to also mean "not knowable".
 - `TransferRestrictionTypeEnum` is removed with the pre-v5 transfer-manager events, which are no longer mapped onto the statistics model. The partial mapping wrote exemptions against restrictions it never created; neither consumer reads that era, and the SDK reads transfer restrictions from chain state.
-- `CorporateAction.targetTreatment` / `CorporateActionDefaultConfig.targetTreatment` are left null on a treatment value the schema does not know, rather than defaulting to `Exclude`. `Include` and `Exclude` are opposites, so the old fallback could invert who an action applied to.
+- `CorporateAction.targetTreatment` is left null on a treatment value the schema does not know, rather than defaulting to `Exclude`. `Include` and `Exclude` are opposites, so the old fallback could invert who an action applied to.
 
 The two consumers will need coordinated updates. The SDK's 27 connections and the portal's 6 are a bounded, enumerable surface — this document is the checklist.
 
@@ -381,6 +381,20 @@ Master trimmed a user's text when the event decoded it as `Text` (before metadat
 
 Tickers and memos keep their rule: text without the NUL padding.
 
+### 9.12 State read from the chain instead (2026-10-27)
+
+What the chain answers in one read, and the index added nothing to, is no longer indexed.
+
+| Entity | Was | Now |
+|---|---|---|
+| `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
+| `CorporateActionDefaultConfig` | an asset's default targets and withholding taxes | `corporateAction.defaultTargetIdentities`, `defaultWithholdingTax` and `didWithholdingTax`, each by asset; every corporate action keeps the values it was declared with |
+| `EvmAccountMapping` | whether `revive.map_account` registered an account, by its H160 | `Account.evmAddress` (indexed) for the H160 of any account; `revive.originalAccount(h160)` for whether it is mapped |
+| `StakingPosition` | a stash's bond, unbonding chunks, controller, payee and lifetime totals | `AccountBalance.bonded` (now also `Account.balance`) for the bond and unbonding together, by account or identity and at any block; `staking.ledger(controller).unlocking` for the chunks; `staking.bonded(stash)` and `staking.payee(stash)` for the controller and payee; `AccountBalance.totalRewards` and `totalSlashed` for the totals. Each reward's receiver stays on `StakingEvent.rewardDestinationAccount` |
+| `Validator` | a stash's commission, blocked flag, whether its identity is permissioned, and whether it is in the active set | the latest `ValidatorEra` rows: an era's rows are its elected set, with each validator's commission, blocked flag and identity; `staking.validators` for the candidates' prefs; `validators.permissionedIdentity(did)` (`staking.` before 8.0). `ValidatorEra.validator`, `Slash.validator` and `StakingEvent.validator` are the stash's `Account`, which reaches them as `validatorEras` and `validatorSlashes` |
+| `CheckpointSchedule`, `Checkpoint.schedule` | which checkpoints a schedule created, whether it completed, and before v6 its remaining count and next moment | `checkpoint.schedulePoints(asset, scheduleId)` for its checkpoints, and `checkpoint.scheduledCheckpoints` for what it still has to fire; a schedule keeps the moments, or before v6 the period and start, it was created with, and when it was removed |
+| `AssetPreApproval`, `Asset.preApprovals` | an identity's pre-approval of an asset | whether a receiver must affirm: the runtime API `settlementApi.getReceiverAffirmationRequirement(receiver, assetId)`, which the SDK already calls, which combines the receiver's opt-in, the asset's exemption, and the identity's and portfolio's pre-approvals; `asset.preApprovedAsset(did, assetId)` for the pre-approval alone. What an instruction did is `InstructionAffirmation.isAutomaticallyAffirmed`. The changes stay as `Event` rows |
+
 ## 10. Reads that scan, because their index is trimmed
 
 Under historical mode every relation is a GiST `(field, _block_range)`, and `db/trimIndexes.ts` replaces the ones no reader needs with an empty stand-in (see `../implementation/13-historical-scoping.md`). A filter or reverse relation on a trimmed column still returns the right rows; it scans the table instead of probing an index, which only matters on the big tables.
@@ -395,8 +409,7 @@ Big tables (every relation index trimmed):
 | `PolyxEntry` | `extrinsic`, `createdEvent` | none; filter by `account` or `identity`, which stay indexed |
 | `PolyxEntry` | `counterpartyIdentity` | `counterpartyAddress`, which has its own btree |
 | `AccountBalance` | `account`, `identity`, `updatedEvent` | look up by `id`, which is the account's address |
-| `StakingPosition` | `stash`, `controller`, `identity`, `rewardDestinationAccount`, `createdEvent`, `updatedEvent` | for `stash`, look up by `id`, which is the stash; none for the rest |
-| `StakingEvent` | `validator`, `position`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
+| `StakingEvent` | `validator`, `rewardDestinationAccount`, `createdEvent` | `stash` and `identity` filters, which stay indexed |
 
 Small tables (only the event and extrinsic stamps are trimmed; no alternative is needed unless the table grows):
 

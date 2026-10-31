@@ -22,10 +22,6 @@ const READS: Record<string, [number, string]> = {
     2,
     'name and funding round: not in events before 5.1',
   ],
-  'src/mappings/entities/assets/mapCheckpoint.ts': [
-    1,
-    "a schedule's remaining checkpoints before 6.0: no event says it completed",
-  ],
   'src/mappings/entities/assets/mapNfts.ts': [
     1,
     "a collection's ticker before 6.0: an issuance names only the collection",
@@ -33,10 +29,6 @@ const READS: Record<string, [number, string]> = {
   'src/mappings/entities/block/mapChainUpgrade.ts': [
     2,
     'the runtime an upgrade installed, and the one it replaced: CodeUpdated carries neither',
-  ],
-  'src/mappings/entities/events/mapStakingPosition.ts': [
-    1,
-    "a controller's stash: the event names only the controller",
   ],
   'src/mappings/entities/identities/feePayer.ts': [
     4,
@@ -49,10 +41,6 @@ const READS: Record<string, [number, string]> = {
   'src/mappings/entities/identities/preV8Ledger.ts': [
     1,
     'whether an identity is a child (6.1–6.x): DidCreated does not say',
-  ],
-  'src/mappings/entities/pips/mapProposal.ts': [
-    1,
-    "whether an 8.x refund batch returned the proposer's deposit: ProposalRefund gives only a total",
   ],
   'src/mappings/entities/relayer/mapSubsidy.ts': [
     3,
@@ -80,7 +68,7 @@ const READS: Record<string, [number, string]> = {
     'slashes held back until their era: applying one emits nothing',
   ],
   'src/utils/staking.ts': [
-    13,
+    12,
     "an era's exposures, prefs, points and stake, and a payee's ledger: events carry totals only",
   ],
 };
