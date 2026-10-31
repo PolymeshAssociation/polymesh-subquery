@@ -423,37 +423,14 @@ export const agentGroupMembershipSeeder: Seeder<AgentGroupMembership> = {
     }),
 };
 
-/**
- * A checkpoint, with its moment and total supply, linked to the schedule that produced it while
- * the chain still holds that schedule.
- */
+/** A checkpoint, with its moment and total supply */
 export const checkpointSeeder: Seeder<Checkpoint> = {
   entity: 'Checkpoint',
-  relative: ['scheduleId'],
-  reads: [
-    'checkpoint.timestamps',
-    'checkpoint.totalSupply',
-    'checkpoint.schedulePoints',
-    'checkpoint.scheduledCheckpoints',
-  ],
+  reads: ['checkpoint.timestamps', 'checkpoint.totalSupply'],
   async *rows(snap, ctx) {
-    const [supplies, points, schedules] = await Promise.all([
-      snap.map('checkpoint.totalSupply'),
-      snap.map('checkpoint.schedulePoints'),
-      snap.map('checkpoint.scheduledCheckpoints'),
-    ]);
-    const scheduleOf = new Map<string, string>();
-    for (const { args, value } of points.values()) {
-      const schedule = args.map(String).join('/');
-      if (schedules.has(schedule)) {
-        ((value?.toJSON() as number[] | null) ?? []).forEach(checkpointId =>
-          scheduleOf.set(`${args[0].toString()}/${checkpointId}`, args[1].toString())
-        );
-      }
-    }
+    const supplies = await snap.map('checkpoint.totalSupply');
     yield* byAsset(snap, 'checkpoint.timestamps', ({ args, value }, assetId) => {
       const key = args.map(String).join('/');
-      const scheduleId = scheduleOf.get(key);
       return [
         Checkpoint.create({
           id: `${assetId}/${args[1].toString()}`,
@@ -461,7 +438,6 @@ export const checkpointSeeder: Seeder<Checkpoint> = {
           checkpointId: Number(args[1].toString()),
           totalSupply: BigInt(supplies.get(key)?.value?.toString() ?? 0),
           datetime: new Date(Number(value.toString())),
-          scheduleId: scheduleId ? `${assetId}/${scheduleId}` : undefined,
           createdEventId: ctx.eventId,
         }),
       ];
@@ -474,15 +450,16 @@ const isStoredSchedules = (json: unknown): json is StoredScheduleJson[] =>
 
 /**
  * A checkpoint schedule the chain still holds. From 6.0 it lists the moments it has still to fire;
- * those it fired, which an index lists from its creation, are history. Before 6.0 it is a period
- * and a count, an asset's schedules held in one list.
+ * those it fired, which an index lists from its creation, are history. Before 6.0 it is a period,
+ * an asset's schedules held in one list.
  */
 export const checkpointScheduleSeeder: Seeder<CheckpointSchedule> = {
   entity: 'CheckpointSchedule',
   reads: ['checkpoint.scheduledCheckpoints', 'checkpoint.schedules'],
   oldShapes: { 'checkpoint.schedules': [3000, 5000002] },
   relative: ['scheduledCheckpoints'],
-  terminal: ({ removedEventId, completedEventId }) => Boolean(removedEventId || completedEventId),
+  // the chain drops a schedule that ran out with no event, which the index can't tell apart
+  terminal: () => true,
   rows: (snap, ctx) => {
     const scheduleRow = (assetId: string, schedule: ParsedSchedule) =>
       CheckpointSchedule.create({

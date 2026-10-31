@@ -2987,35 +2987,29 @@ type Checkpoint @entity @compositeIndexes(fields: [["asset", "checkpointId"]]) {
   checkpointId: Int!
   totalSupply: BigInt!
   datetime: Date!
-  "The schedule that produced this checkpoint. Null for a manual `checkpoint.createCheckpoint`, for the pre-v6 era where a schedule carries a period rather than the moments themselves, and where the index could not pair a scheduled one to a declared moment"
-  schedule: CheckpointSchedule
   "Corporate actions recorded against this checkpoint"
   corporateActions: [CorporateAction!] @derivedFrom(field: "checkpoint")
   createdEvent: Event!
 }
 
 """
-A recurring checkpoint schedule for an Asset, from `checkpoint.ScheduleCreated`. The pre-v6
-period-based model (`period`/`start`/`remaining`) and the v6+ explicit-timestamp model
-(`pendingCheckpoints`) are mutually exclusive on one row, era implicit in which is null
+A checkpoint schedule for an Asset, as `checkpoint.ScheduleCreated` declared it, until
+`ScheduleRemoved`. The chain drops a schedule with no event once its last checkpoint fires, so a
+row stays open after it ran out: a moment still to come is pending unless the schedule was removed.
+Which checkpoints a schedule created is `checkpoint.schedulePoints(asset, scheduleId)`
 """
 type CheckpointSchedule @entity {
   id: ID! # assetId/scheduleId
   asset: Asset! @index
   scheduleId: Int!
-  "v6+ — the checkpoint timestamps this schedule declared when it was created. Not decremented as they fire, and not cleared on removal, where it records what was cancelled. Still-pending is this set minus `checkpoints`"
+  "v6+: the checkpoint moments the schedule declared when it was created. Not cleared on removal, where it records what was cancelled"
   scheduledCheckpoints: [Date!]
-  "pre-v6 only — the period-based model (`CheckpointSchedule`). Null from v6 onward"
+  "pre-v6 only: the period it was created with. Null from v6"
   period: String
+  "pre-v6 only: the moment it was created to start at. Null from v6"
   start: Date
-  remaining: Int
-  nextCheckpointAt: Date
-  "The checkpoints this schedule has actually created"
-  checkpoints: [Checkpoint!]! @derivedFrom(field: "schedule")
   "Set when an agent removes the schedule; null otherwise"
   removedEvent: Event
-  "The scheduled checkpoint after which the chain dropped the schedule, its last; null while checkpoints are still to come. The chain emits nothing when a schedule runs out"
-  completedEvent: Event
   createdEvent: Event!
 }
 

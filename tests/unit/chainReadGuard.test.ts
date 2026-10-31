@@ -22,10 +22,6 @@ const READS: Record<string, [number, string]> = {
     2,
     'name and funding round: not in events before 5.1',
   ],
-  'src/mappings/entities/assets/mapCheckpoint.ts': [
-    1,
-    "a schedule's remaining checkpoints before 6.0: no event says it completed",
-  ],
   'src/mappings/entities/assets/mapNfts.ts': [
     1,
     "a collection's ticker before 6.0: an issuance names only the collection",

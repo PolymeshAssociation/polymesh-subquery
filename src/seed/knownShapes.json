@@ -98,10 +98,6 @@
     "[[\"{\\\"assetId\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"from\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"currency\\\":\\\"PolymeshPrimitivesAssetAssetId\\\",\\\"perShare\\\":\\\"u128\\\",\\\"amount\\\":\\\"u128\\\",\\\"remaining\\\":\\\"u128\\\",\\\"reclaimed\\\":\\\"bool\\\",\\\"paymentAt\\\":\\\"u64\\\",\\\"expiresAt\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]",
     "[[\"{\\\"ticker\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"localId\\\":\\\"u32\\\"}\"],\"{\\\"from\\\":\\\"PolymeshPrimitivesIdentityIdPortfolioId\\\",\\\"currency\\\":\\\"PolymeshPrimitivesTicker\\\",\\\"perShare\\\":\\\"u128\\\",\\\"amount\\\":\\\"u128\\\",\\\"remaining\\\":\\\"u128\\\",\\\"reclaimed\\\":\\\"bool\\\",\\\"paymentAt\\\":\\\"u64\\\",\\\"expiresAt\\\":\\\"Option<u64>\\\"}\",[\"Blake2_128Concat\"]]"
   ],
-  "checkpoint.schedulePoints": [
-    "[[\"[u8;12]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
-    "[[\"[u8;16]\",\"u64\"],\"Vec<u64>\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
-  ],
   "checkpoint.scheduledCheckpoints": [
     "[[\"[u8;12]\",\"u64\"],\"{\\\"pending\\\":\\\"BTreeSet<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]",
     "[[\"[u8;16]\",\"u64\"],\"{\\\"pending\\\":\\\"BTreeSet<u64>\\\"}\",[\"Blake2_128Concat\",\"Twox64Concat\"]]"
