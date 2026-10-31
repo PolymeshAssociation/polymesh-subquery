@@ -313,6 +313,7 @@ const filters: Record<string, Record<string, string[]>> = {
     InstructionRescheduled: ['handleInstructionRescheduled'],
     InstructionUnlocked: ['handleInstructionFinalizedEvent'],
     LegFailedExecution: [],
+    MandatoryReceiverAffirmationSet: [],
     MediatorAffirmationReceived: ['handleMediatorAffirmationReceived'],
     MediatorAffirmationWithdrawn: ['handleMediatorAffirmationWithdrawn'],
     ReceiptClaimed: ['handleReceiptClaimed'],

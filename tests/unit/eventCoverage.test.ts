@@ -157,7 +157,6 @@ const WITHOUT_ENTRY: Record<string, Record<string, string>> = {
     Instantiated: 'Contract deployment is not indexed.',
   },
   settlement: {
-    MandatoryReceiverAffirmationSet: 'Confidential-asset flag with no entity.',
     ReceiptUnclaimed: 'Receipts are tracked through ReceiptClaimed only.',
     ReceiptValidityChanged: 'Receipt validity is not tracked.',
   },
