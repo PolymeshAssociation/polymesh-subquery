@@ -2204,6 +2204,8 @@ type Identity @entity {
   portfolios: [Portfolio!]! @derivedFrom(field: "identity")
   "The assets this identity is currently an agent for. Past memberships are `AssetAgentHistory`"
   agentOf: [AssetAgent!]! @derivedFrom(field: "identity")
+  "The custom agent groups this identity is a member of, across assets"
+  agentGroups: [AgentGroupMembership!] @derivedFrom(field: "member")
   """
   Every key membership this Identity has held, current and historical — see `IdentityKey`.
 
