@@ -9,7 +9,6 @@ import {
   AssetHolder,
   AssetAllowance,
   AssetMandatoryMediator,
-  AssetPreApproval,
   AssetTransaction,
   CallIdEnum,
   EventIdEnum,
@@ -41,7 +40,6 @@ import {
   is7xChain,
   isMigratedAssetId,
   ledgerAccount,
-  padId,
   padNumericId,
   rawAssetHolderToAssetHolder,
   serializeTicker,
@@ -52,10 +50,6 @@ import { recordAnomaly } from '../../../utils/anomaly';
 import { processInstructionId } from '../settlements/mapSettlement';
 import { extractArgs, getAsset, getAssetOrAnomaly, toEnum } from './../common';
 import { memoText, storedText } from '../../../utils/text';
-import { identityOfKey } from '../../../utils/accounts';
-import { indexClosingEvent } from '../block/closingEvent';
-import { preApprovesSilently } from '../settlements/silentPreApprovals';
-import { ensureTrueSpecVersion } from '../../trueSpec';
 import { moveTickerWithAsset } from './mapTickers';
 
 export const createFunding = (
@@ -1015,69 +1009,6 @@ export const handleAssetMediatorsRemoved = async (event: SubstrateEvent): Promis
   await Promise.all(
     mediators.map(mediator => AssetMandatoryMediator.remove(`${assetId}/${mediator}`))
   );
-};
-
-export const handlePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { block, blockEventId } = extractArgs(event);
-  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
-
-  const identityId = getTextValue(did);
-  const assetId = await getAssetId(rawAssetId, block);
-
-  await AssetPreApproval.create({
-    id: `${assetId}/${identityId}`,
-    assetId,
-    identityId,
-    createdEventId: blockEventId,
-    updatedEventId: blockEventId,
-  }).save();
-};
-
-/**
- * 6.0.0 and 6.0.1 pre-approve a ticker, and take the pre-approval away, with no event
- * (`PreApprovedAsset` and `RemovePreApprovedAsset` arrived in 6.1.0), so the call stands in. The
- * dictionary has no spec to query a call by, so the handler checks it.
- */
-export const handleSilentAssetPreApproval = async (
-  extrinsic: SubstrateExtrinsic
-): Promise<void> => {
-  const { block } = extrinsic;
-  await ensureTrueSpecVersion(block);
-  if (!preApprovesSilently(api.runtimeVersion.specName.toString(), block.specVersion)) {
-    return;
-  }
-
-  const blockId = padId(block.block.header.number.toString());
-  const identityId = await identityOfKey(extrinsic.extrinsic.signer.toString(), blockId);
-  const closing = identityId ? await indexClosingEvent(extrinsic) : undefined;
-  if (!identityId || !closing) {
-    return;
-  }
-
-  const assetId = await getAssetId(extrinsic.extrinsic.method.args[0], block);
-  const id = `${assetId}/${identityId}`;
-  if (extrinsic.extrinsic.method.method === 'preApproveTicker') {
-    const { blockEventId } = extractArgs(closing);
-    await AssetPreApproval.create({
-      id,
-      assetId,
-      identityId,
-      createdEventId: blockEventId,
-      updatedEventId: blockEventId,
-    }).save();
-  } else {
-    await AssetPreApproval.remove(id);
-  }
-};
-
-export const handleRemovePreApprovedAsset = async (event: SubstrateEvent): Promise<void> => {
-  const { block } = extractArgs(event);
-  const { callerDid: did, assetId: rawAssetId } = decodeEvent(event);
-
-  const identityId = getTextValue(did);
-  const assetId = await getAssetId(rawAssetId, block);
-
-  await AssetPreApproval.remove(`${assetId}/${identityId}`);
 };
 
 const getAssetAllowance = async (

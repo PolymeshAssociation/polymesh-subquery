@@ -68,12 +68,6 @@
     "[[\"[u8;12]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]",
     "[[\"[u8;16]\"],\"BTreeSet<PolymeshPrimitivesIdentityId>\",[\"Blake2_128Concat\"]]"
   ],
-  "asset.preApprovedAsset": [
-    "[[\"[u8;32]\",\"[u8;16]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
-  ],
-  "asset.preApprovedTicker": [
-    "[[\"[u8;32]\",\"[u8;12]\"],\"bool\",[\"Identity\",\"Blake2_128Concat\"]]"
-  ],
   "asset.tickerAssetId": [
     "[[\"[u8;12]\"],\"[u8;16]\",[\"Blake2_128Concat\"]]"
   ],

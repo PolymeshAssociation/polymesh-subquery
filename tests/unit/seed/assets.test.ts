@@ -34,7 +34,6 @@ const ASSET_ENTITIES = [
   'Checkpoint',
   'CheckpointSchedule',
   'AssetMandatoryMediator',
-  'AssetPreApproval',
 ];
 
 const seedAssets = async (chain: FakeChain) => {
@@ -135,9 +134,6 @@ describe('from 7.0', () => {
     chain.put('checkpoint.scheduledCheckpoints', [ASSET, 1], { pending: [1_800_000_000_000] });
 
     chain.put('asset.mandatoryMediators', [ASSET], [AGENT]);
-    chain.put('asset.preApprovedAsset', [HOLDER, ASSET], true);
-    // a pre-approval of an asset id no asset has, which the handler records too
-    chain.put('asset.preApprovedAsset', [HOLDER, NFTS.replace('fe', 'aa')], true);
 
     await seedAssets(chain);
   });
@@ -257,9 +253,8 @@ describe('from 7.0', () => {
     });
   });
 
-  it('seeds the mandatory mediators, and the pre-approvals even of an asset id no asset has', () => {
+  it('seeds the mandatory mediators', () => {
     expect(Object.keys(rows('AssetMandatoryMediator'))).toEqual([`${ASSET}/${AGENT}`]);
-    expect(Object.keys(rows('AssetPreApproval'))).toHaveLength(2);
   });
 });
 
@@ -291,7 +286,6 @@ describe('before 7.0', () => {
     });
     chain.put('asset.tickers', [ticker('ACME')], { owner: OWNER, expiry: null });
     chain.put('asset.tickers', [ticker('SPARE')], { owner: HOLDER, expiry: null });
-    chain.put('asset.preApprovedTicker', [HOLDER, ticker('ACME')], true);
     chain.put('asset.balanceOf', [ticker('ACME'), OWNER], 5);
     await seedAssets(chain);
 
@@ -304,7 +298,6 @@ describe('before 7.0', () => {
     });
     expect(byId(chain.rows('TickerReservation')).ACME).toMatchObject({ assetId });
     expect(byId(chain.rows('TickerReservation')).SPARE.assetId).toBeUndefined();
-    expect(Object.keys(byId(chain.rows('AssetPreApproval')))).toEqual([`${assetId}/${HOLDER}`]);
   });
 
   it("seeds an agent group's permissions in the form the index stores them", async () => {

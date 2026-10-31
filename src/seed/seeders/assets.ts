@@ -15,7 +15,6 @@ import {
   AssetDocument,
   AssetMandatoryMediator,
   AssetMetadata,
-  AssetPreApproval,
   Checkpoint,
   CheckpointSchedule,
   CustomAssetType,
@@ -501,35 +500,4 @@ export const assetMandatoryMediatorSeeder: Seeder<AssetMandatoryMediator> = {
         })
       )
     ),
-};
-
-/**
- * An identity's pre-approval of an asset: `asset.preApprovedAsset` from 7.0, before it
- * `asset.preApprovedTicker`, both keyed by identity, then asset. Written even for a ticker that is
- * no asset, as the handler writes it.
- */
-export const assetPreApprovalSeeder: Seeder<AssetPreApproval> = {
-  entity: 'AssetPreApproval',
-  reads: ['asset.preApprovedAsset', 'asset.preApprovedTicker'],
-  async *rows(snap, ctx) {
-    const item = snap.has('asset.preApprovedAsset')
-      ? 'asset.preApprovedAsset'
-      : 'asset.preApprovedTicker';
-    yield* byAsset(
-      snap,
-      item,
-      ({ args, value }, assetId) =>
-        value.toJSON() === true
-          ? [
-              AssetPreApproval.create({
-                id: `${assetId}/${args[0].toString()}`,
-                assetId,
-                identityId: args[0].toString(),
-                ...created(ctx),
-              }),
-            ]
-          : [],
-      1
-    );
-  },
 };

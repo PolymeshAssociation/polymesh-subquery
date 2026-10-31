@@ -49,11 +49,11 @@ const filters: Record<string, Record<string, string[]>> = {
     Issued: ['handleIssued', 'handleAssetIssuedStatistics'],
     LocalMetadataKeyDeleted: ['handleLocalMetadataKeyDeleted'],
     MetadataValueDeleted: ['handleMetadataValueDeleted'],
-    PreApprovedAsset: ['handlePreApprovedAsset'],
+    PreApprovedAsset: [],
     RegisterAssetMetadataGlobalType: ['handleRegisterAssetMetadataGlobalType'],
     RegisterAssetMetadataLocalType: ['handleRegisterAssetMetadataLocalType'],
     RemoveAssetAffirmationExemption: [],
-    RemovePreApprovedAsset: ['handleRemovePreApprovedAsset'],
+    RemovePreApprovedAsset: [],
     Redeemed: ['handleRedeemed'],
     SetAccountFreeze: ['handleSetAccountFreeze'],
     SetAssetMetadataValue: ['handleSetAssetMetadataValue'],
@@ -612,20 +612,7 @@ const project: SubstrateProject = {
       startBlock,
       mapping: {
         file: './dist/index.js',
-        handlers: [
-          ...eventSpecificHandlers,
-          manualExecutionFailure,
-          // Changes that arrive with no event of their own, caught by the call that makes them.
-          // Filtered to the one call each, which the dictionary indexes like an event, so empty
-          // blocks are still skipped.
-          ...['preApproveTicker', 'removeTickerPreApproval'].map(
-            (method): SubstrateCallHandler => ({
-              kind: SubstrateHandlerKind.Call,
-              handler: 'handleSilentAssetPreApproval',
-              filter: { module: 'asset', method, success: true },
-            })
-          ),
-        ],
+        handlers: [...eventSpecificHandlers, manualExecutionFailure],
       },
     },
   ],
