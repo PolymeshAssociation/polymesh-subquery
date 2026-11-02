@@ -295,7 +295,7 @@ export const handleInstructionCreated = async (event: SubstrateEvent): Promise<v
   } else if (args.eventId === EventIdEnum.InstructionV2Created) {
     legs = await getLegV2Values(rawLegs, block);
   } else {
-    legs = await getLegsValue(rawLegs, block);
+    legs = await getLegsValue(rawLegs, block, blockId, blockEventId);
   }
 
   const instructionId = processInstructionId(rawInstructionId);

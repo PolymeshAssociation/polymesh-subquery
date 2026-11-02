@@ -125,6 +125,20 @@ describe('handleStakersElected', () => {
     });
   });
 
+  it('credits a stash with no Account row yet to the election that first named it', async () => {
+    const db = mockStore();
+    mockElection(5, [VAL_NEW]);
+
+    await handleStakersElected(
+      namedEvent({ section: 'staking', method: 'StakersElected', fields: {}, idx: 7 })
+    );
+
+    expect(db.Account[VAL_NEW]).toMatchObject({
+      createdEventId: '0000001000/0000000007',
+      updatedEventId: '0000001000/0000000007',
+    });
+  });
+
   /** v8 writes only `erasStakersOverview`, so reading `erasStakers` found nobody elected. */
   it('reads a v8 election from erasStakersOverview', async () => {
     const db = mockStore();

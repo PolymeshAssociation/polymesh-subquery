@@ -64,7 +64,7 @@ export async function handleEvent(substrateEvent: SubstrateEvent): Promise<void>
   if (extrinsic && !context.handledExtrinsics.has(extrinsic.idx)) {
     context.handledExtrinsics.add(extrinsic.idx);
 
-    promises.push(handleExtrinsic(extrinsic));
+    promises.push(handleExtrinsic(extrinsic, substrateEvent.idx));
   }
 
   const event = await handleToolingEvent(substrateEvent);

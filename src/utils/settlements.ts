@@ -11,7 +11,6 @@ import {
   getFirstKeyFromJson,
   getFirstValueFromJson,
   hexToString,
-  padId,
 } from '../utils';
 import { Leg } from './../types';
 import { InstructionTypeEnum } from './../types/enums';
@@ -141,7 +140,9 @@ export const instructionPartiesOf = (legs: LegSides[]): Map<string, PartyDetails
 export const getLegsValue = async (
   item: Codec,
   block: SubstrateBlock,
-  lookups: LegLookups = storeLookups(block, padId(block.block.header.number.toString()))
+  blockId: string,
+  blockEventId: string,
+  lookups: LegLookups = storeLookups(block, blockId, blockEventId)
 ): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
 
@@ -176,7 +177,7 @@ export interface LegLookups {
 const storeLookups = (
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string
+  blockEventId: string
 ): LegLookups => ({
   holderOf: value => extractAssetHolder(value, block, blockId, blockEventId),
   assetOf: assetIdOrTicker => getAssetIdWithTicker(assetIdOrTicker, block),
@@ -218,7 +219,7 @@ export const getSettlementLeg = async (
   item: Codec,
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string,
+  blockEventId: string,
   lookups: LegLookups = storeLookups(block, blockId, blockEventId)
 ): Promise<LegDetails[]> => {
   const legs: any[] = JSON.parse(item.toString());
@@ -280,7 +281,7 @@ export const getPortfolioOrAccount = async (
   rawItem: Codec,
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string
+  blockEventId: string
 ): Promise<{
   identityId: string;
   accountId?: string;

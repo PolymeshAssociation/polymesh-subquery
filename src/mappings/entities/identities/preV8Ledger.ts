@@ -788,7 +788,7 @@ const ensureBalanceRow = async (
   datetime: Date,
   blockEventId: string
 ): Promise<void> => {
-  await ledgerAccount(address, blockId, datetime);
+  await ledgerAccount(address, blockId, datetime, blockEventId);
   const balance = await loadBalance(address, undefined, blockEventId);
   await balance.save();
 };

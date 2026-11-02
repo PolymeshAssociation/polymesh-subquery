@@ -293,13 +293,10 @@ export const getOrCreateAccount = async (
   blockId: string,
   datetime: Date,
   /**
-   * The event this account is being created in response to. Every asset-holder-resolution call
-   * site (`meshAssetHolderToAssetHolder` and up) now threads its real `blockEventId` through; the
-   * fallback below covers the few callers that still don't have one to give — an account
-   * discovered by a genuinely event-less path (the genesis/seed scan) has no single causing event
-   * at all. The block-granularity caveat on `updatedEvent` applies either way.
+   * The event this account is being created in response to. The block-granularity caveat on
+   * `updatedEvent` applies.
    */
-  createdEventId = `${blockId}/${padId('0')}`
+  createdEventId: string
 ): Promise<Account | undefined> => {
   const existing = await Account.get(address);
 
@@ -402,7 +399,7 @@ export const ledgerAccount = async (
   address: string,
   blockId: string,
   datetime: Date,
-  createdEventId = `${blockId}/${padId('0')}`
+  createdEventId: string
 ): Promise<Account> => {
   const resolved = await getOrCreateAccount(address, blockId, datetime, createdEventId);
 

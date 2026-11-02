@@ -3792,3 +3792,40 @@ describe('held balance burned or moved, and a lock raised (v8)', () => {
     expect(entries()).toHaveLength(0);
   });
 });
+
+describe('an account the ledger is the first to name', () => {
+  beforeEach(() => {
+    storeGet().mockImplementation((entity: string, id: string) => {
+      const row = db[entity]?.[id];
+      return Promise.resolve(row ? clone(row) : undefined);
+    });
+    (globalThis as any).api.query = {
+      identity: { keyRecords: jest.fn().mockResolvedValue({ isEmpty: true }) },
+      balances: { locks: jest.fn().mockResolvedValue({ toJSON: () => [] }) },
+    };
+  });
+
+  it.each([
+    [
+      'a movement',
+      () => handleBalanceMinted(balancesEvent('Minted', { who: ALICE, amount: '1000' })),
+    ],
+    ['a lock', () => handleBalanceLocked(balancesEvent('Locked', { who: ALICE, amount: '400' }))],
+    [
+      'a BalanceSet',
+      () => handleBalanceSet(balancesEvent('BalanceSet', { who: ALICE, free: '5' })),
+    ],
+    [
+      'a pre-v8 PIPs deposit',
+      () =>
+        handlePipsDeposit(tupleEvent('pips', 'Voted', ['0xdid', ALICE, '7', 'true', '2000'], 3000)),
+    ],
+  ])('credits it to the event, for %s', async (_, handle) => {
+    await handle();
+
+    expect(db['Account'][ALICE]).toMatchObject({
+      createdEventId: '0001000001/0000000004',
+      updatedEventId: '0001000001/0000000004',
+    });
+  });
+});

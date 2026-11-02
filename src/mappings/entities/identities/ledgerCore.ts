@@ -641,7 +641,7 @@ const writeMovementSide = async (
   const { address, pool } = side.endpoint;
   const signed = side.direction === EntryDirection.Credit ? transition.amount : -transition.amount;
 
-  const account = await ledgerAccount(address, blockId, block.timestamp);
+  const account = await ledgerAccount(address, blockId, block.timestamp, blockEventId);
   const balance = await loadBalance(address, account.identityId, blockEventId);
 
   advanceBalance(balance, side, transition, signed, isInternal);

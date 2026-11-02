@@ -13,6 +13,8 @@ import { mockStore } from './helpers';
 
 const DID = `0x${'11'.repeat(32)}`;
 const OTHER = `0x${'22'.repeat(32)}`;
+const BLOCK_ID = '0000000001';
+const BLOCK_EVENT_ID = '0000000001/0000000000';
 // `ACME` as a 12-byte `Ticker`
 const TICKER = `0x${Buffer.from('ACME').toString('hex').padEnd(24, '0')}`;
 
@@ -37,7 +39,12 @@ describe('getLegsValue', () => {
   });
 
   it('reads a v5 Leg, its ticker and amount beside its portfolios', async () => {
-    const [leg] = await getLegsValue(raw([{ from, to, asset: TICKER, amount: 1_000_000 }]), block);
+    const [leg] = await getLegsValue(
+      raw([{ from, to, asset: TICKER, amount: 1_000_000 }]),
+      block,
+      BLOCK_ID,
+      BLOCK_EVENT_ID
+    );
 
     expect(leg).toMatchObject({
       legIndex: 0,
@@ -57,7 +64,12 @@ describe('getLegsValue', () => {
    */
   it('reads a v5 Leg of a ticker that is no asset as off-chain, as 6.0 migrated it', async () => {
     const other = `0x${Buffer.from('NOPE').toString('hex').padEnd(24, '0')}`;
-    const [leg] = await getLegsValue(raw([{ from, to, asset: other, amount: 5 }]), block);
+    const [leg] = await getLegsValue(
+      raw([{ from, to, asset: other, amount: 5 }]),
+      block,
+      BLOCK_ID,
+      BLOCK_EVENT_ID
+    );
 
     expect(leg).toMatchObject({
       fromId: DID,

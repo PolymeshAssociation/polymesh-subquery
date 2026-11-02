@@ -298,7 +298,7 @@ const bundleOf = async (
     .map(({ value: leg }) => leg?.toJSON());
   const legsCodec = { toString: () => JSON.stringify(legValues) } as never;
   const legDetails = views.beforeV6
-    ? await getLegsValue(legsCodec, ctx.block, views.lookups)
+    ? await getLegsValue(legsCodec, ctx.block, ctx.blockId, ctx.eventId, views.lookups)
     : await getSettlementLeg(legsCodec, ctx.block, ctx.blockId, ctx.eventId, views.lookups);
   const mediators: Mediator[] = (views.mediatorsOf.get(id) ?? []).map(
     ({ args: key, value: approval }) => ({ did: key[1].toString(), json: approval?.toJSON() })

@@ -105,7 +105,7 @@ Both directions produce wrong compliance answers with no error anywhere. This sh
 
 ## 4. Entities unobserved by either consumer
 
-Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction` and `EvmAccountMapping`, new in PR #342, are not yet queried by either). Grouped by what that likely means:
+Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction`, new in PR #342, is not yet queried by either). Grouped by what that likely means:
 
 | Group | Entities | Read |
 |---|---|---|
@@ -114,7 +114,7 @@ Roughly 41 of 69 entities are not queried by the SDK or portal (`EvmTransaction`
 | **Governance** | `Proposal`, `ProposalVote` | Unobserved. Lowers the priority of the PIP lifecycle gaps — worth confirming nothing external depends on them. |
 | **Identity extras** | `AccountHistory`, `ChildIdentity`, `MultiSig`, `MultiSigAdmin`, `MultiSigSigner`, `AgentGroup`, `AgentGroupMembership` | Unobserved. `IdentityKey` replacing `AccountHistory` is near-zero-risk. [04](../implementation/04-identity-keys.md) also relinks `MultiSig` / `MultiSigAdmin` and adds a nullable `MultiSigSigner.signerAccount` — re-checked, still unqueried, so still near-zero-risk. |
 | **Confidential (8)** | all `Confidential*` | Newest domain; consumers likely not built yet. |
-| **Other** | `BridgeEvent`, `Funding`, `AssetMandatoryMediator`, `AssetPreApproval`, `TickerReservation`, `Migration` | Mixed. |
+| **Other** | `BridgeEvent`, `Funding`, `AssetMandatoryMediator`, `TickerReservation`, `Migration` | Mixed. |
 
 **Do not delete anything on this basis alone** — it establishes *low observed risk*, not *no risk*. But it does mean the redesign has far more freedom than the entity count suggested.
 
@@ -149,8 +149,8 @@ Direct consequences:
 - An agent's group move is now recorded as `AgentHistoryType.GroupChanged`, where it used to be written as `AgentPermissionsChanged`. The new value is the more accurate one — a group move is not a permissions edit — but a group move *does* change the agent's effective permissions, so anything rebuilding a permission timeline has to read both members, not just `AgentPermissionsChanged`.
 - `AssetAgent` no longer carries `group` or `permissions`. Both were always null: an agent's permissions belong to the `AgentGroup`, and copying them onto the membership row would go stale the first time the agent moved groups. Read the group through `AgentGroupMembership`, and the group/permission timeline from `AssetAgentHistory`.
 - `AssetAgent` is reachable from both sides now: `Asset.agents` and `Identity.agentOf`. Both list *current* memberships only — ended ones are `AssetAgentHistory`.
-- `Distribution.corporateAction` is new, and `CorporateAction.distribution` / `.ballot` derive the other way. A distribution and a ballot are each a corporate action plus extra data, keyed on the same `CAId`.
-- `CheckpointSchedule.pendingCheckpoints` is renamed `scheduledCheckpoints`, because it was never decremented as checkpoints fired. Still-pending is `scheduledCheckpoints` minus the new `CheckpointSchedule.checkpoints`.
+- `Distribution.corporateAction` is new, and a corporate action reaches its distribution and ballot the other way, through the connections `CorporateAction.distributions` and `corporateBallots`, each with at most one row. A distribution and a ballot are each a corporate action plus extra data, keyed on the same `CAId`.
+- `CheckpointSchedule.pendingCheckpoints` is renamed `scheduledCheckpoints`, because it was never decremented as checkpoints fired. Still to fire is `checkpoint.scheduledCheckpoints` on chain (§9.12).
 - `Subsidy.totalDebited` is nullable and null across the pre-v8 range, where the chain emitted nothing to accumulate. A zero now means "nothing was drawn"; it used to also mean "not knowable".
 - `TransferRestrictionTypeEnum` is removed with the pre-v5 transfer-manager events, which are no longer mapped onto the statistics model. The partial mapping wrote exemptions against restrictions it never created; neither consumer reads that era, and the SDK reads transfer restrictions from chain state.
 - `CorporateAction.targetTreatment` is left null on a treatment value the schema does not know, rather than defaulting to `Exclude`. `Include` and `Exclude` are opposites, so the old fallback could invert who an action applied to.
@@ -254,7 +254,7 @@ Recorded here rather than only in the defect log (B9) because it is the kind of 
 
 ### 9.5 Approvals have no history
 
-`assetPreApprovals` exists; there is nothing for `asset.allowances`. Current state is readable from the chain, but **there is no history at all** — a holder cannot see when an approval was granted, by which key, or what it was before it changed. For a permission that lets someone else move your assets, "when did I grant this" is worth being able to answer.
+There is nothing for `asset.allowances`. Current state is readable from the chain, but **there is no history at all** — a holder cannot see when an approval was granted, by which key, or what it was before it changed. For a permission that lets someone else move your assets, "when did I grant this" is worth being able to answer.
 
 `AssetAllowance` in plan [03](../implementation/03-holdings-nfts.md) closes it (G11 — `Approval` and `AllowanceSpent` are absent from `project.ts` entirely **[V]**).
 
@@ -307,7 +307,6 @@ The generated API gives every relation a collection on the entity it points at, 
 |---|---|---|
 | `Asset` | `assetTransactions` | `transactions` |
 | `Asset` | `stosByOfferingAssetId` | `offerings` |
-| `Asset` | `assetPreApprovals` | `preApprovals` |
 | `Distribution` | `distributionPayments` | `payments` |
 | `Identity` | `assetTransactionsByFromIdentityId`, `assetTransactionsByToIdentityId` | `transfersOut`, `transfersIn` |
 | `Identity` | `assetsByOwnerId` | `assetsOwned` |
@@ -390,7 +389,7 @@ What the chain answers in one read, and the index added nothing to, is no longer
 | `Proposal` | `balance`, the proposer's deposit | `pips.deposits(pipId, proposer)`; a community proposer's deposit is also its `ProposalVote` |
 | `CorporateActionDefaultConfig` | an asset's default targets and withholding taxes | `corporateAction.defaultTargetIdentities`, `defaultWithholdingTax` and `didWithholdingTax`, each by asset; every corporate action keeps the values it was declared with |
 | `EvmAccountMapping` | whether `revive.map_account` registered an account, by its H160 | `Account.evmAddress` (indexed) for the H160 of any account; `revive.originalAccount(h160)` for whether it is mapped |
-| `StakingPosition` | a stash's bond, unbonding chunks, controller, payee and lifetime totals | `AccountBalance.bonded` (now also `Account.balance`) for the bond and unbonding together, by account or identity and at any block; `staking.ledger(controller).unlocking` for the chunks; `staking.bonded(stash)` and `staking.payee(stash)` for the controller and payee; `AccountBalance.totalRewards` and `totalSlashed` for the totals. Each reward's receiver stays on `StakingEvent.rewardDestinationAccount` |
+| `StakingPosition` | a stash's bond, unbonding chunks, controller, payee and lifetime totals | `AccountBalance.bonded` for the bond and unbonding together, read with `accountBalance(id: <address>)`, or by identity (which scans, §10), and at any block; `staking.ledger(controller).unlocking` for the chunks; `staking.bonded(stash)` and `staking.payee(stash)` for the controller and payee; `AccountBalance.totalRewards` and `totalSlashed` for the totals. Each reward's receiver stays on `StakingEvent.rewardDestinationAccount` |
 | `Validator` | a stash's commission, blocked flag, whether its identity is permissioned, and whether it is in the active set | the latest `ValidatorEra` rows: an era's rows are its elected set, with each validator's commission, blocked flag and identity; `staking.validators` for the candidates' prefs; `validators.permissionedIdentity(did)` (`staking.` before 8.0). `ValidatorEra.validator`, `Slash.validator` and `StakingEvent.validator` are the stash's `Account`, which reaches them as `validatorEras` and `validatorSlashes` |
 | `CheckpointSchedule`, `Checkpoint.schedule` | which checkpoints a schedule created, whether it completed, and before v6 its remaining count and next moment | `checkpoint.schedulePoints(asset, scheduleId)` for its checkpoints, and `checkpoint.scheduledCheckpoints` for what it still has to fire; a schedule keeps the moments, or before v6 the period and start, it was created with, and when it was removed |
 | `AssetPreApproval`, `Asset.preApprovals` | an identity's pre-approval of an asset | whether a receiver must affirm: the runtime API `settlementApi.getReceiverAffirmationRequirement(receiver, assetId)`, which the SDK already calls, which combines the receiver's opt-in, the asset's exemption, and the identity's and portfolio's pre-approvals; `asset.preApprovedAsset(did, assetId)` for the pre-approval alone. What an instruction did is `InstructionAffirmation.isAutomaticallyAffirmed`. The changes stay as `Event` rows |

@@ -1,8 +1,7 @@
 /**
  * The asset-holder resolution chain (`rawAssetHolderToAssetHolder` ->
- * `extractAssetHolder` -> `meshAssetHolderToAssetHolder`) now threads the real `blockEventId`
- * through to `getOrCreateAccount`, rather than always taking its block-event-0 default. A caller
- * with no event to give (none currently; kept as a fallback) still gets the old behaviour.
+ * `extractAssetHolder` -> `meshAssetHolderToAssetHolder`) threads the real `blockEventId` through
+ * to `getOrCreateAccount`.
  */
 
 import { Codec } from '@polkadot/types/types';
@@ -46,17 +45,6 @@ describe('meshAssetHolderToAssetHolder', () => {
       '0000012345',
       expect.any(Date),
       BLOCK_EVENT_ID
-    );
-  });
-
-  it('passes undefined through when no blockEventId is given, so getOrCreateAccount falls back on its own default', async () => {
-    await meshAssetHolderToAssetHolder({ account: ADDRESS }, '0000012345', new Date());
-
-    expect(getOrCreateAccount).toHaveBeenCalledWith(
-      ADDRESS,
-      '0000012345',
-      expect.any(Date),
-      undefined
     );
   });
 });

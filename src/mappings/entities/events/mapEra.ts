@@ -120,7 +120,12 @@ export const recordElection = async (
 
   await Promise.all(
     exposures.map(async exposure => {
-      const { identityId } = await ledgerAccount(exposure.stash, blockId, blockTime(block));
+      const { identityId } = await ledgerAccount(
+        exposure.stash,
+        blockId,
+        blockTime(block),
+        blockEventId
+      );
 
       await validatorEra(
         eraIndex,

@@ -133,9 +133,13 @@ const createEvmTransaction = (
 };
 
 /**
- * Persists the extrinsic, along with the decoded Ethereum transaction it carried
+ * Persists the extrinsic, along with the decoded Ethereum transaction it carried. `eventIdx` is the
+ * stored event that first reached this extrinsic.
  */
-export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<void> => {
+export const handleExtrinsic = async (
+  extrinsic: SubstrateExtrinsic,
+  eventIdx: number
+): Promise<void> => {
   const resolved = resolveEthTransact(extrinsic);
 
   await createExtrinsic(extrinsic).save();
@@ -148,10 +152,13 @@ export const handleExtrinsic = async (extrinsic: SubstrateExtrinsic): Promise<vo
     await createEvmTransaction(extrinsic, resolved);
 
     // Only indexes the sender once it is attached to an Identity, as with every other account
+    const blockId = padId(extrinsic.block.block.header.number.toString());
+
     await getOrCreateAccount(
       resolved.fromAddress,
-      padId(extrinsic.block.block.header.number.toString()),
-      blockTime(extrinsic.block)
+      blockId,
+      blockTime(extrinsic.block),
+      `${blockId}/${padId(eventIdx.toString())}`
     );
   }
 };

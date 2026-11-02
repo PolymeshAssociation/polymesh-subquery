@@ -89,7 +89,7 @@ const lockChange =
     }
 
     // Ensure the balance row exists so the lock has somewhere to live.
-    await ledgerAccount(who, blockId, block.timestamp);
+    await ledgerAccount(who, blockId, block.timestamp, blockEventId);
     const balance = await loadBalance(who, undefined, blockEventId);
     await balance.save();
 
@@ -766,7 +766,7 @@ export const handleBalanceSet = async (event: SubstrateEvent): Promise<void> => 
     return;
   }
 
-  const account = await ledgerAccount(who, blockId, datetime);
+  const account = await ledgerAccount(who, blockId, datetime, blockEventId);
   const balance = await loadBalance(who, account.identityId, blockEventId);
 
   const deltas = applyBalanceSet(balance, newFree, newReserved);

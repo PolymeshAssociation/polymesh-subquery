@@ -113,7 +113,7 @@ export const meshAssetHolderToAssetHolder = async (
   meshAssetHolder: MeshAssetHolder,
   blockId: string,
   datetime: Date,
-  blockEventId?: string
+  blockEventId: string
 ): Promise<AssetHolderDetails> => {
   if ('account' in meshAssetHolder) {
     const account = await getOrCreateAccount(
@@ -145,7 +145,7 @@ export const extractAssetHolder = async (
   value: MeshAssetHolder | MeshPortfolio,
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string
+  blockEventId: string
 ): Promise<AssetHolderDetails> => {
   if (is8xChain(block)) {
     return await meshAssetHolderToAssetHolder(
@@ -167,7 +167,7 @@ export const rawAssetHolderToAssetHolder = async (
   rawItem: Codec,
   block: SubstrateBlock,
   blockId: string,
-  blockEventId?: string
+  blockEventId: string
 ): Promise<AssetHolderDetails> => {
   const item = JSON.parse(rawItem.toString());
   return extractAssetHolder(item, block, blockId, blockEventId);

@@ -237,6 +237,7 @@ describe('createExtrinsic', () => {
 
 describe('handleExtrinsic', () => {
   const DID = '0x0100000000000000000000000000000000000000000000000000000000000000';
+  const EVENT_IDX = 3;
 
   beforeEach(() => {
     __resetBlockContext();
@@ -260,7 +261,7 @@ describe('handleExtrinsic', () => {
     const extrinsic = mockExtrinsic({ payload: payloads.deploy });
     const expectedId = `0000004242/${`${extrinsic.idx}`.padStart(10, '0')}`;
 
-    await handleExtrinsic(extrinsic);
+    await handleExtrinsic(extrinsic, EVENT_IDX);
 
     expect(saved('Extrinsic')).toHaveLength(1);
 
@@ -283,14 +284,14 @@ describe('handleExtrinsic', () => {
   });
 
   it('should not save an EvmTransaction when the payload cannot be decoded', async () => {
-    await handleExtrinsic(mockExtrinsic({ payload: '0xdeadbeef' }));
+    await handleExtrinsic(mockExtrinsic({ payload: '0xdeadbeef' }), EVENT_IDX);
 
     expect(saved('Extrinsic')).toHaveLength(1);
     expect(saved('EvmTransaction')).toHaveLength(0);
   });
 
   it('should not index an account for a sender with no on-chain key record', async () => {
-    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }));
+    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }), EVENT_IDX);
 
     expect(saved('Account')).toHaveLength(0);
   });
@@ -303,7 +304,7 @@ describe('handleExtrinsic', () => {
 
     // A different block from the case above: account resolution is cached per block, negatives
     // included, so the same address cannot answer differently within one block
-    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL, blockNumber: 4243 }));
+    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL, blockNumber: 4243 }), EVENT_IDX);
 
     expect(saved('Account')).toMatchObject([
       {
@@ -312,6 +313,7 @@ describe('handleExtrinsic', () => {
         identityId: DID,
         keyType: 'ethereum',
         evmAddress: FROM_ETH,
+        createdEventId: '0000004243/0000000003',
       },
     ]);
   });

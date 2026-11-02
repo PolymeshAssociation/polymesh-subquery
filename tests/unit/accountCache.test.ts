@@ -17,6 +17,7 @@ jest.mock('../../src/mappings/entities/identities/mapPortfolio', () => ({
 const ADDRESS = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
 const OTHER = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 const DID = '0x01'.padEnd(66, '0');
+const EVENT_ID = '0000000100/0000000000';
 
 const keyRecords = () => (api.query as any).identity.keyRecords as jest.Mock;
 
@@ -57,9 +58,9 @@ describe('getOrCreateAccount block cache', () => {
   it('reads the chain once for an address it has already failed to resolve', async () => {
     const blockId = freshBlockId();
 
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
 
     expect(keyRecords()).toHaveBeenCalledTimes(1);
   });
@@ -67,23 +68,23 @@ describe('getOrCreateAccount block cache', () => {
   it('still returns undefined on a cached negative', async () => {
     const blockId = freshBlockId();
 
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
 
-    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toBeUndefined();
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID)).resolves.toBeUndefined();
   });
 
   it('caches per address, so a second unknown address is still resolved', async () => {
     const blockId = freshBlockId();
 
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
-    await getOrCreateAccount(OTHER, blockId, datetime);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
+    await getOrCreateAccount(OTHER, blockId, datetime, EVENT_ID);
 
     expect(keyRecords()).toHaveBeenCalledTimes(2);
   });
 
   it('re-reads the chain on the next block, so a key record added since is picked up', async () => {
-    await getOrCreateAccount(ADDRESS, freshBlockId(), datetime);
-    await getOrCreateAccount(ADDRESS, freshBlockId(), datetime);
+    await getOrCreateAccount(ADDRESS, freshBlockId(), datetime, EVENT_ID);
+    await getOrCreateAccount(ADDRESS, freshBlockId(), datetime, EVENT_ID);
 
     expect(keyRecords()).toHaveBeenCalledTimes(2);
   });
@@ -94,8 +95,8 @@ describe('getOrCreateAccount block cache', () => {
 
     const blockId = freshBlockId();
 
-    const first = await getOrCreateAccount(ADDRESS, blockId, datetime);
-    const second = await getOrCreateAccount(ADDRESS, blockId, datetime);
+    const first = await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
+    const second = await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
 
     expect(first).toBe(existing);
     expect(second).toBe(existing);
@@ -110,12 +111,12 @@ describe('getOrCreateAccount block cache', () => {
   it('sees a row another handler wrote after a negative was already cached', async () => {
     const blockId = freshBlockId();
 
-    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toBeUndefined();
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID)).resolves.toBeUndefined();
 
     const written = { id: ADDRESS, identityId: '0xdid' } as unknown as Account;
     (Account.get as jest.Mock).mockResolvedValue(written);
 
-    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toBe(written);
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID)).resolves.toBe(written);
     // still only the one chain read: that answer cannot change within the block
     expect(keyRecords()).toHaveBeenCalledTimes(1);
   });
@@ -128,7 +129,7 @@ describe('getOrCreateAccount block cache', () => {
       identityId: '0xdid',
     } as unknown as Account);
 
-    const before = await getOrCreateAccount(ADDRESS, blockId, datetime);
+    const before = await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
     expect(before?.identityId).toBe('0xdid');
 
     (Account.get as jest.Mock).mockResolvedValue({
@@ -136,7 +137,7 @@ describe('getOrCreateAccount block cache', () => {
       identityId: undefined,
     } as unknown as Account);
 
-    const after = await getOrCreateAccount(ADDRESS, blockId, datetime);
+    const after = await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
     expect(after?.identityId).toBeUndefined();
   });
 });
@@ -155,7 +156,9 @@ describe('getOrCreateAccount for a multisig signer key', () => {
    * an `Identity` keyed by it.
    */
   it('indexes no account, and above all no identity keyed by the multisig address', async () => {
-    await expect(getOrCreateAccount(ADDRESS, freshBlockId(), datetime)).resolves.toBeUndefined();
+    await expect(
+      getOrCreateAccount(ADDRESS, freshBlockId(), datetime, EVENT_ID)
+    ).resolves.toBeUndefined();
 
     expect(createIdentity).not.toHaveBeenCalled();
   });
@@ -208,8 +211,8 @@ describe('getOrCreateAccount for keys of one unindexed identity resolved concurr
     const blockId = freshBlockId();
 
     await Promise.all([
-      getOrCreateAccount(OTHER, blockId, datetime),
-      getOrCreateAccount(ADDRESS, blockId, datetime),
+      getOrCreateAccount(OTHER, blockId, datetime, EVENT_ID),
+      getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID),
     ]);
 
     expect(identities[DID].primaryAccountId).toBe(ADDRESS);
@@ -284,11 +287,11 @@ describe('getOrCreateAccount for a bare row', () => {
     (api as any).query = { identity: { keyRecords: jest.fn().mockResolvedValue(emptyRecord) } };
     const blockId = freshBlockId();
 
-    await expect(getOrCreateAccount(ADDRESS, blockId, datetime)).resolves.toMatchObject({
+    await expect(getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID)).resolves.toMatchObject({
       identityId: undefined,
       keyRole: AccountKeyRole.Unlinked,
     });
-    await getOrCreateAccount(ADDRESS, blockId, datetime);
+    await getOrCreateAccount(ADDRESS, blockId, datetime, EVENT_ID);
 
     expect(save).not.toHaveBeenCalled();
     expect(keyRecords()).toHaveBeenCalledTimes(1);
@@ -316,7 +319,7 @@ describe('getOrCreateAccount for a 5.x or 6.x secondary key', () => {
     jest.spyOn(Account.prototype, 'save').mockResolvedValue(undefined);
     jest.spyOn(Identity, 'get').mockResolvedValue({ id: DID, primaryAccountId: ADDRESS } as never);
 
-    const account = await getOrCreateAccount(OTHER, freshBlockId(), datetime);
+    const account = await getOrCreateAccount(OTHER, freshBlockId(), datetime, EVENT_ID);
 
     expect(account).toMatchObject({ identityId: DID, keyRole: AccountKeyRole.SecondaryKey });
   });
