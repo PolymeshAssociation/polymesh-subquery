@@ -1,6 +1,9 @@
 import { hexToU8a } from '@polkadot/util';
+import { __resetBlockContext } from '../../src/mappings/blockContext';
 import { SubstrateExtrinsic } from '@subql/types';
 import { createExtrinsic, handleExtrinsic } from '../../src/mappings/entities/block/mapExtrinsic';
+import { IndexerAnomaly } from '../../src/types';
+import { callOf } from './helpers';
 
 /** signed by 0x4c0883a6...2318, whose address is `FROM_ETH` */
 const FROM_ETH = '0x2c7536E3605D9C16a7a3D7b1898e529396a65c23';
@@ -15,7 +18,7 @@ const payloads = {
     '0x02f85983190d5a07808477359400825208808084deadbeefc001a0678b44834b3ccc478253db225af42f9fc25d27e18453338d164b3ce62816aa4fa01c8f9951ee084d5e707172f7c5bce88b578db99d730c4d19e972aa4c487adc0e',
 };
 
-const INNER_CALL = { section: 'asset', method: 'issue', args: { asset_id: '0x1234' } };
+const INNER_CALL = callOf('asset', 'issue', [['asset_id', 'u128', 7]]);
 
 interface MockOptions {
   section?: string;
@@ -23,7 +26,7 @@ interface MockOptions {
   payload?: string;
   events?: { section: string; method: string; data: any[] }[];
   success?: boolean;
-  innerCall?: { section: string; method: string; args: Record<string, unknown> };
+  innerCall?: ReturnType<typeof callOf>;
   idx?: number;
   blockNumber?: number;
   signer?: string;
@@ -71,16 +74,11 @@ const mockExtrinsic = ({
           if (!innerCall) {
             throw new Error('unable to decode');
           }
-          return {
-            section: innerCall.section,
-            method: innerCall.method,
-            toHuman: () => ({ args: innerCall.args }),
-          };
+          return innerCall;
         },
       },
-      method: { section, method },
+      method: callOf(section, method, [['payload', 'Bytes', payload]]),
       args: [{ toU8a: () => hexToU8a(payload) }],
-      toHuman: () => ({ method: { args: { payload } } }),
     },
   } as unknown as SubstrateExtrinsic);
 
@@ -98,6 +96,26 @@ describe('createExtrinsic', () => {
     expect(extrinsic.nonce).toEqual(99);
     expect(extrinsic.ethAddress).toBeUndefined();
     expect(extrinsic.ethTxHash).toBeUndefined();
+    // RLP is not UTF-8, so the payload stays hex
+    expect(extrinsic.args).toEqual({ payload: payloads.runtimeCall });
+  });
+
+  it('should store no args and record an anomaly when an argument is not its declared type', () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+    const extrinsic = mockExtrinsic({ section: 'balances', method: 'transferWithMemo' });
+    const call = extrinsic.extrinsic.method as unknown as { args: unknown[] };
+    call.args[0] = { toRawType: () => 'Option<u32>', toString: () => '' };
+    call.args.length = 1;
+    (extrinsic.extrinsic.method as unknown as { meta: unknown }).meta = {
+      args: [{ name: 'payload', type: 'Option<u32>' }],
+    };
+
+    const created = createExtrinsic(extrinsic);
+
+    expect(created.args).toBeUndefined();
+    expect(anomaly).toHaveBeenCalledTimes(1);
+    expect(anomaly.mock.instances[0]).toMatchObject({ kind: 'UnreadableValue' });
+    anomaly.mockRestore();
   });
 
   it('should attribute an eth_transact to the signing Ethereum key while staying unsigned', () => {
@@ -120,24 +138,24 @@ describe('createExtrinsic', () => {
     expect(extrinsic.moduleIdText).toEqual('asset');
     expect(extrinsic.callId).toEqual('issue');
     expect(extrinsic.callIdText).toEqual('issue');
-    expect(extrinsic.paramsTxt).toEqual(JSON.stringify(INNER_CALL.args));
+    expect(extrinsic.args).toEqual({ assetId: '7' });
   });
 
   it('should use the Ethereum nonce rather than the (always zero) extrinsic nonce', () => {
     expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).nonce).toEqual(7);
   });
 
-  it('should omit the init code from paramsTxt, since EvmTransaction stores it', () => {
+  it('should omit the init code from args, since EvmTransaction stores it', () => {
     const extrinsic = createExtrinsic(mockExtrinsic({ payload: payloads.deploy }));
 
     expect(extrinsic.callId).toEqual('eth_instantiate_with_code');
-    expect(JSON.parse(extrinsic.paramsTxt)).toEqual({
+    expect(extrinsic.args).toEqual({
       to: null,
       value: '0',
       gasLimit: '21000',
       nonce: '7',
     });
-    expect(extrinsic.paramsTxt).not.toContain('deadbeef');
+    expect(JSON.stringify(extrinsic.args)).not.toContain('deadbeef');
   });
 
   it('should mark a reverted transaction as unsuccessful despite the extrinsic succeeding', () => {
@@ -158,6 +176,50 @@ describe('createExtrinsic', () => {
     expect(extrinsic.success).toEqual(0);
   });
 
+  describe('batchFailed', () => {
+    const batch = (...methods: string[]) =>
+      createExtrinsic(
+        mockExtrinsic({
+          section: 'utility',
+          method: 'batch',
+          events: methods.map(method => ({ section: 'utility', method, data: [] })),
+        })
+      );
+
+    it('is true when a batch was interrupted, though the extrinsic succeeded', () => {
+      const extrinsic = batch('BatchInterrupted');
+
+      expect(extrinsic.success).toEqual(1);
+      expect(extrinsic.batchFailed).toBe(true);
+    });
+
+    it.each(['BatchInterruptedOld', 'BatchOptimisticFailed'])('is true on %s', method => {
+      expect(batch(method).batchFailed).toBe(true);
+    });
+
+    it('is true when a force_batch carried on past failing calls', () => {
+      expect(batch('ItemCompleted', 'ItemFailed', 'BatchCompletedWithErrors').batchFailed).toBe(
+        true
+      );
+    });
+
+    it('is false for a batch whose every call succeeded', () => {
+      expect(batch('ItemCompleted', 'ItemCompleted', 'BatchCompleted').batchFailed).toBe(false);
+    });
+
+    it('is false for an extrinsic that is not a batch', () => {
+      expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).batchFailed).toBe(false);
+    });
+
+    it('ignores an event of the same name from another pallet', () => {
+      const extrinsic = createExtrinsic(
+        mockExtrinsic({ events: [{ section: 'scheduler', method: 'ItemFailed', data: [] }] })
+      );
+
+      expect(extrinsic.batchFailed).toBe(false);
+    });
+  });
+
   it('should keep success 1 when nothing reverted', () => {
     expect(createExtrinsic(mockExtrinsic({ innerCall: INNER_CALL })).success).toEqual(1);
   });
@@ -175,8 +237,10 @@ describe('createExtrinsic', () => {
 
 describe('handleExtrinsic', () => {
   const DID = '0x0100000000000000000000000000000000000000000000000000000000000000';
+  const EVENT_IDX = 3;
 
   beforeEach(() => {
+    __resetBlockContext();
     (globalThis as any).store = {
       get: jest.fn().mockResolvedValue(undefined),
       set: jest.fn().mockResolvedValue(undefined),
@@ -197,7 +261,7 @@ describe('handleExtrinsic', () => {
     const extrinsic = mockExtrinsic({ payload: payloads.deploy });
     const expectedId = `0000004242/${`${extrinsic.idx}`.padStart(10, '0')}`;
 
-    await handleExtrinsic(extrinsic);
+    await handleExtrinsic(extrinsic, EVENT_IDX);
 
     expect(saved('Extrinsic')).toHaveLength(1);
 
@@ -205,10 +269,11 @@ describe('handleExtrinsic', () => {
     expect(evmTransaction).toMatchObject({
       id: expectedId,
       extrinsicId: expectedId,
+      blockId: '0000004242',
       callKind: 'instantiate',
       ethTxType: 2,
       fromEthAddress: FROM_ETH,
-      fromAddress: FROM_SS58,
+      fromAccountId: FROM_SS58,
       toEthAddress: undefined,
       value: '0',
       ethNonce: BigInt(7),
@@ -219,14 +284,14 @@ describe('handleExtrinsic', () => {
   });
 
   it('should not save an EvmTransaction when the payload cannot be decoded', async () => {
-    await handleExtrinsic(mockExtrinsic({ payload: '0xdeadbeef' }));
+    await handleExtrinsic(mockExtrinsic({ payload: '0xdeadbeef' }), EVENT_IDX);
 
     expect(saved('Extrinsic')).toHaveLength(1);
     expect(saved('EvmTransaction')).toHaveLength(0);
   });
 
   it('should not index an account for a sender with no on-chain key record', async () => {
-    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }));
+    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }), EVENT_IDX);
 
     expect(saved('Account')).toHaveLength(0);
   });
@@ -234,10 +299,12 @@ describe('handleExtrinsic', () => {
   it('should index the recovered sender as an Ethereum account when it holds a key record', async () => {
     (globalThis as any).api.query.identity.keyRecords = jest.fn().mockResolvedValue({
       isEmpty: false,
-      toJSON: () => ({ primaryKey: DID }),
+      unwrap: () => ({ isPrimaryKey: true, asPrimaryKey: { toString: () => DID } }),
     });
 
-    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL }));
+    // A different block from the case above: account resolution is cached per block, negatives
+    // included, so the same address cannot answer differently within one block
+    await handleExtrinsic(mockExtrinsic({ innerCall: INNER_CALL, blockNumber: 4243 }), EVENT_IDX);
 
     expect(saved('Account')).toMatchObject([
       {
@@ -246,81 +313,8 @@ describe('handleExtrinsic', () => {
         identityId: DID,
         keyType: 'ethereum',
         evmAddress: FROM_ETH,
+        createdEventId: '0000004243/0000000003',
       },
     ]);
-  });
-
-  it('should record a successful revive.mapAccount', async () => {
-    await handleExtrinsic(
-      mockExtrinsic({
-        section: 'revive',
-        method: 'mapAccount',
-        signer: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-        ss58Format: 42,
-      })
-    );
-
-    expect(saved('EvmAccountMapping')).toMatchObject([
-      {
-        // keccak256(<Alice's public key>)[12..], as `AddressMapper::to_address` derives it
-        id: '0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D',
-        address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-        mapped: true,
-      },
-    ]);
-  });
-
-  it('should record revive.unmapAccount as no longer mapped', async () => {
-    await handleExtrinsic(
-      mockExtrinsic({
-        section: 'revive',
-        method: 'unmapAccount',
-        signer: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-        ss58Format: 42,
-      })
-    );
-
-    expect(saved('EvmAccountMapping')[0]).toMatchObject({ mapped: false });
-  });
-
-  it('should update an existing mapping rather than creating a second row', async () => {
-    const id = '0x9621DDe636dE098B43Efb0fA9b61fAcFE328F99D';
-    // as if seeded from the genesis `mapped_accounts` config
-    (globalThis as any).store.get = jest.fn().mockResolvedValue({
-      id,
-      evmAddress: id,
-      address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-      mapped: true,
-      datetime: new Date(0),
-      createdBlockId: '0000000000',
-      updatedBlockId: '0000000000',
-    });
-
-    await handleExtrinsic(
-      mockExtrinsic({
-        section: 'revive',
-        method: 'unmapAccount',
-        signer: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
-        ss58Format: 42,
-      })
-    );
-
-    expect(saved('EvmAccountMapping')).toMatchObject([
-      {
-        id,
-        mapped: false,
-        // the genesis creation block is preserved, only the update block moves
-        createdBlockId: '0000000000',
-        updatedBlockId: '0000004242',
-      },
-    ]);
-  });
-
-  it('should ignore a failed mapping call', async () => {
-    await handleExtrinsic(
-      mockExtrinsic({ section: 'revive', method: 'mapAccount', signer: 'x', success: false })
-    );
-
-    expect(saved('EvmAccountMapping')).toHaveLength(0);
   });
 });

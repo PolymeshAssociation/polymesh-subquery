@@ -62,6 +62,7 @@ metadata.json
 .project-cid
 
 .env
-.yarn/*
-# dependency patches, explained in .yarn/patches/README.md
-!.yarn/patches/
+.yarn/
+
+# reconcile-polyx progress, one file per database
+.reconcile-polyx.*checkpoint.json

@@ -1,0 +1,478 @@
+/**
+ * `IdentityKey` — the time-bounded key membership record.
+ *
+ * The headline case: a secondary key added, removed, then re-added produces a queryable history
+ * with no gaps or overlaps — the first interval is closed before the second opens, and the two
+ * do not share a block.
+ */
+
+import { Codec } from '@polkadot/types/types';
+import { SubstrateBlock } from '@subql/types';
+import { EventIdEnum, IndexerAnomaly, IdentityKeyRole } from '../../src/types';
+import {
+  closeIdentityKeys,
+  openIdentityKey,
+  rotateIdentityKey,
+} from '../../src/mappings/entities/identities/mapIdentityKey';
+import {
+  legacyPermissionsUpdatedAddress,
+  legacyRemovedAddresses,
+  legacySecondaryKeyEntries,
+  legacySignerLeftAddress,
+} from '../../src/decode/legacy';
+
+const DID = '0x01'.padEnd(66, '0');
+const OTHER_DID = '0x02'.padEnd(66, '0');
+
+/** Only what `recordAnomaly` reads off a block. */
+const block = {
+  block: { header: { number: { toString: () => '9' } } },
+  timestamp: new Date(0),
+} as unknown as SubstrateBlock;
+const PRIMARY = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+const SECONDARY = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
+
+type Row = Record<string, any>;
+let db: Record<string, Row>;
+
+const matches = (row: Row, [field, op, value]: [string, string, unknown]): boolean => {
+  const actual = row[field];
+  if (op === '=') return actual === value;
+  if (op === '!=') return actual !== value;
+  throw new Error(`unhandled operator ${op}`);
+};
+
+beforeEach(() => {
+  db = {};
+
+  (store.get as jest.Mock).mockImplementation((_entity: string, id: string) =>
+    Promise.resolve(db[id] ? { ...db[id] } : undefined)
+  );
+  (store.set as jest.Mock).mockImplementation((_entity: string, id: string, data: Row) => {
+    db[id] = { ...data };
+    return Promise.resolve();
+  });
+  (store.getByFields as jest.Mock).mockImplementation((_entity: string, filter: any[]) =>
+    Promise.resolve(Object.values(db).filter(row => filter.every(f => matches(row, f))))
+  );
+  (store.bulkUpdate as jest.Mock).mockImplementation((_entity: string, updated: Row[]) => {
+    updated.forEach(row => {
+      db[row.id] = { ...row };
+    });
+    return Promise.resolve();
+  });
+});
+
+const rows = (): Row[] => Object.values(db);
+const openRows = (): Row[] => rows().filter(r => r.validToBlockId == null);
+
+describe('openIdentityKey', () => {
+  /**
+   * An event that names a key resolves its account from chain state at the end of the block, which
+   * may already hold the key a later event of the block adds: a 7.x multisig made a secondary key
+   * (MultiSigCreated, then SecondaryKeysAdded). The lookup opened an interval with no permissions;
+   * the event's own opening replaces it (testnet 16,253,776, 136 keys by 8.0).
+   */
+  it("replaces the interval an account lookup opened earlier in the block for the event's key", async () => {
+    const lazy = `${DID}/${SECONDARY}/0016253776/0000000000`;
+    db[lazy] = {
+      id: lazy,
+      identityId: DID,
+      accountId: SECONDARY,
+      role: IdentityKeyRole.SecondaryKey,
+      validFromBlockId: '0016253776',
+      validToBlockId: null,
+      addedReason: EventIdEnum.AccountCreated,
+    };
+    (store.remove as jest.Mock).mockImplementation((_entity: string, id: string) => {
+      delete db[id];
+      return Promise.resolve();
+    });
+    const permissions = {
+      assets: { type: 'whole', values: null },
+      portfolios: { type: 'whole' },
+      transactions: { type: 'whole', values: null },
+      transactionGroups: [],
+    };
+
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: permissions as never,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 5,
+      },
+      '0016253776/0000000005'
+    );
+
+    expect(openRows()).toEqual([
+      expect.objectContaining({
+        id: `${DID}/${SECONDARY}/0016253776/0000000005`,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        permissions,
+      }),
+    ]);
+  });
+
+  it('opens an interval with null validTo / removedReason', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: PRIMARY,
+        role: IdentityKeyRole.PrimaryKey,
+        addedReason: EventIdEnum.DidCreated,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toMatchObject({
+      identityId: DID,
+      accountId: PRIMARY,
+      role: IdentityKeyRole.PrimaryKey,
+      validFromBlockId: '0000001',
+      addedReason: EventIdEnum.DidCreated,
+    });
+    expect(rows()[0].validToBlockId).toBeNull();
+    expect(rows()[0].removedReason).toBeUndefined();
+  });
+
+  it('carries the granted permissions on the row itself', async () => {
+    const permissions = {
+      transactions: { type: 'These', values: ['identity.add_claim'] },
+      transactionGroups: [],
+    };
+
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 1,
+      },
+      '0000004'
+    );
+
+    expect(rows()[0].permissions).toEqual(permissions);
+  });
+});
+
+describe('closeIdentityKeys', () => {
+  it('closes only the open interval of the named role', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: PRIMARY,
+        role: IdentityKeyRole.PrimaryKey,
+        addedReason: EventIdEnum.DidCreated,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000002'
+    );
+
+    const closed = await closeIdentityKeys(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        removedReason: EventIdEnum.SecondaryKeysRemoved,
+      },
+      '0000005'
+    );
+
+    expect(closed).toHaveLength(1);
+    expect(openRows().map(r => r.accountId)).toEqual([PRIMARY]);
+    const secondary = rows().find(r => r.accountId === SECONDARY);
+    expect(secondary).toMatchObject({
+      validToBlockId: '0000005',
+      removedReason: EventIdEnum.SecondaryKeysRemoved,
+    });
+  });
+
+  it('is a no-op when nothing is open', async () => {
+    const closed = await closeIdentityKeys(
+      { address: SECONDARY, removedReason: EventIdEnum.SecondaryKeyLeftIdentity },
+      '0000009'
+    );
+    expect(closed).toHaveLength(0);
+  });
+});
+
+describe('rotateIdentityKey', () => {
+  it("reads only the open interval, however long the key's history", async () => {
+    // testnet block 1,056,718: one key re-permissioned 100 times after 1,400 earlier changes, each
+    // change reading every interval the key ever had
+    for (let i = 0; i < 250; i += 1) {
+      db[`closed-${i}`] = {
+        id: `closed-${i}`,
+        identityId: DID,
+        accountId: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        validFromBlockId: '0000001',
+        validToBlockId: '0000002',
+      };
+    }
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: { transactionGroups: [] },
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000003/0000000000'
+    );
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 1,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000004/0000000001'
+    );
+
+    expect((store.getByFields as jest.Mock).mock.calls[0][1]).toContainEqual([
+      'validToBlockId',
+      '=',
+      null,
+    ]);
+    const open = Object.values(db).filter(row => row.validToBlockId === null);
+    expect(open).toHaveLength(1);
+    expect(open[0].permissions).toEqual({ transactionGroups: ['Portfolio'] });
+  });
+
+  it('closes the current interval and opens a fresh one carrying the new permissions', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        permissions: { transactionGroups: [] },
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000002'
+    );
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    const history = rows()
+      .filter(r => r.accountId === SECONDARY)
+      .sort((a, b) => a.validFromBlockId.localeCompare(b.validFromBlockId));
+
+    expect(history).toHaveLength(2);
+    // no gap and no overlap: the old interval ends exactly where the new one begins
+    expect(history[0].validToBlockId).toBe('0000007');
+    expect(history[1].validFromBlockId).toBe('0000007');
+    expect(history[1].validToBlockId).toBeNull();
+    expect(history[1].permissions).toEqual({ transactionGroups: ['Portfolio'] });
+  });
+
+  /**
+   * The close covers every open interval, so reopening only the first would silently drop the
+   * rest of the key's memberships.
+   */
+  it('reopens one interval per interval it closed', async () => {
+    for (const [identityId, eventIdx] of [
+      [DID, 0],
+      [OTHER_DID, 1],
+    ] as const) {
+      await openIdentityKey(
+        {
+          identityId,
+          address: SECONDARY,
+          role: IdentityKeyRole.SecondaryKey,
+          addedReason: EventIdEnum.SecondaryKeysAdded,
+          eventIdx,
+        },
+        '0000002'
+      );
+    }
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    const active = rows().filter(r => r.accountId === SECONDARY && !r.validToBlockId);
+
+    expect(active.map(r => r.identityId).sort()).toEqual([DID, OTHER_DID].sort());
+  });
+
+  it('records an anomaly instead of returning silently with nothing to carry forward', async () => {
+    const anomaly = jest.spyOn(IndexerAnomaly.prototype, 'save').mockResolvedValue(undefined);
+
+    await rotateIdentityKey(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        reason: EventIdEnum.SecondaryKeyPermissionsUpdated,
+        eventIdx: 3,
+        permissions: { transactionGroups: ['Portfolio'] },
+        block,
+      },
+      '0000007'
+    );
+
+    expect(anomaly).toHaveBeenCalled();
+    expect(rows().filter(r => r.accountId === SECONDARY)).toHaveLength(0);
+  });
+});
+
+describe('active secondary keys exclude the primary', () => {
+  it('a primary and a secondary on one identity filter apart by role', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: PRIMARY,
+        role: IdentityKeyRole.PrimaryKey,
+        addedReason: EventIdEnum.DidCreated,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000001'
+    );
+
+    const activeSecondary = rows().filter(
+      r =>
+        r.identityId === DID && r.role === IdentityKeyRole.SecondaryKey && r.validToBlockId == null
+    );
+
+    expect(activeSecondary.map(r => r.accountId)).toEqual([SECONDARY]);
+    expect(activeSecondary.some(r => r.accountId === PRIMARY)).toBe(false);
+  });
+});
+
+describe('add → remove → re-add', () => {
+  it('produces a two-interval history with the first closed before the second opens', async () => {
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000010'
+    );
+    await closeIdentityKeys(
+      {
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        removedReason: EventIdEnum.SecondaryKeysRemoved,
+      },
+      '0000020'
+    );
+    await openIdentityKey(
+      {
+        identityId: DID,
+        address: SECONDARY,
+        role: IdentityKeyRole.SecondaryKey,
+        addedReason: EventIdEnum.SecondaryKeysAdded,
+        eventIdx: 0,
+      },
+      '0000030'
+    );
+
+    const history = rows()
+      .filter(r => r.accountId === SECONDARY)
+      .sort((a, b) => a.validFromBlockId.localeCompare(b.validFromBlockId));
+
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatchObject({ validFromBlockId: '0000010', validToBlockId: '0000020' });
+    expect(history[1].validFromBlockId).toBe('0000030');
+    expect(history[1].validToBlockId).toBeNull();
+    // no overlap: interval 1 closes (block 20) strictly before interval 2 opens (block 30)
+    expect(history[0].validToBlockId < history[1].validFromBlockId).toBe(true);
+    expect(openRows()).toHaveLength(1);
+  });
+});
+
+// The pre-5.0 payload unwrapping (src/decode/legacy.ts)
+
+const codec = (json: unknown): Codec =>
+  ({
+    toString: () => (typeof json === 'string' ? json : JSON.stringify(json)),
+    toJSON: () => json,
+  } as unknown as Codec);
+
+describe('legacy identity payloads', () => {
+  it('legacyRemovedAddresses reads both the pre-5.0 Signatory and 5.0+ AccountId forms', () => {
+    expect(legacyRemovedAddresses(codec([{ account: PRIMARY }, { account: SECONDARY }]))).toEqual([
+      PRIMARY,
+      SECONDARY,
+    ]);
+    expect(legacyRemovedAddresses(codec([PRIMARY, SECONDARY]))).toEqual([PRIMARY, SECONDARY]);
+  });
+
+  it('legacySignerLeftAddress reads both forms', () => {
+    expect(legacySignerLeftAddress(codec({ account: PRIMARY }))).toBe(PRIMARY);
+    expect(legacySignerLeftAddress(codec(PRIMARY))).toBe(PRIMARY);
+  });
+
+  it('legacyPermissionsUpdatedAddress reads the 5.0+ AccountId form', () => {
+    expect(legacyPermissionsUpdatedAddress(codec(SECONDARY))).toBe(SECONDARY);
+  });
+
+  it('legacyPermissionsUpdatedAddress unwraps the pre-5.0 SecondaryKey struct', () => {
+    const struct = new Map<string, Codec>([['signer', codec({ account: SECONDARY })]]);
+    expect(legacyPermissionsUpdatedAddress(struct as unknown as Codec)).toBe(SECONDARY);
+  });
+
+  it('legacySecondaryKeyEntries reads the 5.0+ `key` and pre-5.0 `signer` entries', () => {
+    const post = codec([{ key: SECONDARY, permissions: { foo: 1 } }]);
+    expect(legacySecondaryKeyEntries(post)).toEqual([
+      { address: SECONDARY, permissions: { foo: 1 } },
+    ]);
+
+    const pre = codec([{ signer: { account: SECONDARY }, permissions: { foo: 1 } }]);
+    expect(legacySecondaryKeyEntries(pre)).toEqual([
+      { address: SECONDARY, permissions: { foo: 1 } },
+    ]);
+  });
+});

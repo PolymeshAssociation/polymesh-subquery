@@ -1,0 +1,79 @@
+import { SubstrateEvent } from '@subql/types';
+import { decodeEvent } from '../../../decode';
+import { AnomalyKind, Slash } from '../../../types';
+import { blockTime } from '../../../utils';
+import { ledgerAccount } from '../../../utils/accounts';
+import { recordAnomaly } from '../../../utils/anomaly';
+import {
+  activeEraAt,
+  APPLY_ERA_KEYS_FROM,
+  deferredSlashesBefore,
+  dueEraAt,
+  placeSlash,
+} from '../../../utils/deferredSlashes';
+import { extractArgs } from '../common';
+import { amountOf, stakingStash } from '../identities/ledgerCore';
+
+/**
+ * `staking.Slash` (before v7) / `staking.Slashed` (from v7): one stash's stake slashed.
+ *
+ * The event names only the stash and the amount. Polymesh defers every slash (mainnet and testnet
+ * by 14 eras), and applying one takes it out of `staking.unappliedSlashes`, so the slash it came
+ * from is in the state the block started from: that gives the offending validator, whose own slash
+ * is `own` and whose nominators' are `others`.
+ *
+ * `eraIndex` is the active era, which is the era the slash is applied in on every runtime. The
+ * offence era is the deferred slash's key less the defer duration and one, but only from v7.0:
+ * earlier runtimes key it by the era it was reported in and keep no offence era.
+ */
+export const handleSlash = async (event: SubstrateEvent): Promise<void> => {
+  const { block, blockId, blockEventId, eventIdx, moduleId, eventId } = extractArgs(event);
+  const decoded = decodeEvent(event);
+  const stash = stakingStash(decoded);
+  const amount = amountOf(decoded);
+
+  if (!stash) {
+    return;
+  }
+
+  const [account, deferred, activeEra] = await Promise.all([
+    ledgerAccount(stash, blockId, blockTime(block), blockEventId),
+    deferredSlashesBefore(block),
+    activeEraAt(block, { eventIdx, moduleId, eventId }),
+  ]);
+  const dueEra = dueEraAt(block, activeEra);
+  // from v7.0 a slash is placed against the active era alone, so one whose era is unreadable is
+  // left unplaced, and that was recorded when it was read
+  const eraUnreadable = dueEra === undefined && block.specVersion >= APPLY_ERA_KEYS_FROM;
+  const applied = deferred
+    ? placeSlash(deferred, block, eventIdx, stash, amount, dueEra)
+    : undefined;
+
+  if (!applied && !eraUnreadable) {
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `staking.${eventId} of ${amount} on ${stash} matches no deferred slash${
+        deferred ? '' : ' (the deferred slashes could not be read)'
+      }, so its validator and offence era are unknown`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+  }
+
+  const offenceEraIndex =
+    applied && block.specVersion >= APPLY_ERA_KEYS_FROM
+      ? applied.slash.era - api.consts.staking.slashDeferDuration.toNumber() - 1
+      : undefined;
+
+  await Slash.create({
+    id: blockEventId,
+    accountId: account.id,
+    validatorId: applied?.slash.validator,
+    eraIndex: activeEra,
+    offenceEraIndex,
+    amount,
+    createdEventId: blockEventId,
+  }).save();
+};
