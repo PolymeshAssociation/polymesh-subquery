@@ -10,6 +10,7 @@ import {
   Identity,
   Permissions,
   PermissionsJson,
+  Portfolio,
   PortfolioPermissions,
   TransactionPermissions,
 } from '../../../types';
@@ -23,7 +24,7 @@ import {
 } from '../../../utils';
 import { getAccountKeyType } from '../../../utils/accounts';
 import { Attributes, extractArgs } from './../common';
-import { createPortfolio, getPortfolio } from './mapPortfolio';
+import { createPortfolio } from './mapPortfolio';
 
 const createHistoryEntry = async (
   eventId: EventIdEnum,
@@ -153,11 +154,6 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
     identity.eventId = eventId;
     identity.datetime = datetime;
     await identity.save();
-
-    const portfolio = await getPortfolio({ identityId: did, number: 0 });
-
-    portfolio.updatedBlockId = blockId;
-    defaultPortfolio = portfolio.save();
   } else {
     await createIdentity(
       {
@@ -169,7 +165,14 @@ export const handleDidCreated = async (event: SubstrateEvent): Promise<void> => 
       },
       blockId
     );
+  }
 
+  // An identity found through its key by `getOrCreateAccount` has no default portfolio yet
+  const portfolio = await Portfolio.get(`${did}/0`);
+  if (portfolio) {
+    portfolio.updatedBlockId = blockId;
+    defaultPortfolio = portfolio.save();
+  } else {
     defaultPortfolio = createPortfolio(
       {
         identityId: did,
