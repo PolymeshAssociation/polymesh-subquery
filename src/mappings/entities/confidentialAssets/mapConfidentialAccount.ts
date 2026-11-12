@@ -3,24 +3,28 @@ import { ConfidentialAccount, ConfidentialEncryptionKey } from '../../../types';
 import { getTextValue } from '../../../utils';
 import { extractArgs, HandlerArgs } from '../common';
 
-const createEncryptionKey = (
+/** A key can be seen twice, by each event that names it: the first one created it */
+const createEncryptionKey = async (
   encryptionKey: string,
   creatorId: string,
-  { eventIdx, blockId, blockEventId }: Pick<HandlerArgs, 'eventIdx' | 'blockId' | 'blockEventId'>
-): Promise<void> =>
-  ConfidentialEncryptionKey.create({
+  { blockEventId }: Pick<HandlerArgs, 'eventIdx' | 'blockId' | 'blockEventId'>
+): Promise<void> => {
+  if (await ConfidentialEncryptionKey.get(encryptionKey)) {
+    return;
+  }
+
+  await ConfidentialEncryptionKey.create({
     id: encryptionKey,
     encryptionKey,
     creatorId,
-    eventIdx,
-    createdBlockId: blockId,
-    updatedBlockId: blockId,
     createdEventId: blockEventId,
+    updatedEventId: blockEventId,
   }).save();
+};
 
 export const handleConfidentialAccountRegistered = async (event: SubstrateEvent): Promise<void> => {
   const args = extractArgs(event);
-  const { params, eventIdx, blockId, blockEventId } = args;
+  const { params, blockEventId } = args;
 
   const [rawDid, rawAccount, rawEncryptionKey] = params;
 
@@ -31,13 +35,11 @@ export const handleConfidentialAccountRegistered = async (event: SubstrateEvent)
   await Promise.all([
     ConfidentialAccount.create({
       id: account,
-      account,
-      encryptionKey,
+      publicKey: account,
+      encryptionKeyId: encryptionKey,
       creatorId,
-      eventIdx,
-      createdBlockId: blockId,
-      updatedBlockId: blockId,
       createdEventId: blockEventId,
+      updatedEventId: blockEventId,
     }).save(),
     createEncryptionKey(encryptionKey, creatorId, args),
   ]);

@@ -1,0 +1,22 @@
+{
+  "src/mappings/entities/assets/mapAsset.ts": 12,
+  "src/mappings/entities/assets/mapNfts.ts": 2,
+  "src/mappings/entities/assets/mapStatistics.ts": 10,
+  "src/mappings/entities/assets/mapTickers.ts": 4,
+  "src/mappings/entities/assets/metadataKeyResolver.ts": 3,
+  "src/mappings/entities/block/mapExtrinsic.ts": 1,
+  "src/mappings/entities/externalAgents/mapExternalAgentHistory.ts": 1,
+  "src/mappings/entities/identities/ledgerCore.ts": 1,
+  "src/mappings/entities/identities/mapAuthorization.ts": 1,
+  "src/mappings/entities/identities/mapIdentities.ts": 1,
+  "src/mappings/entities/identities/mapIdentityKey.ts": 1,
+  "src/mappings/entities/identities/mapPolyxLedger.ts": 27,
+  "src/mappings/entities/identities/mapPortfolio.ts": 4,
+  "src/mappings/entities/identities/repairAuthorizations.ts": 1,
+  "src/mappings/entities/settlements/mapSettlement.ts": 3,
+  "src/mappings/entities/stos/mapSto.ts": 4,
+  "src/utils/assets.ts": 3,
+  "src/utils/common.ts": 7,
+  "src/utils/ethExtrinsic.ts": 3,
+  "src/utils/settlements.ts": 2
+}

@@ -1,0 +1,151 @@
+import { SubstrateBlock } from '@subql/types';
+import { AnomalyKind, EventIdEnum, IndexerAnomaly, ModuleIdEnum } from '../types';
+import { blockTime, padId } from './common';
+import { UndecodableStateError } from './storageAtParent';
+
+export interface AnomalyInput {
+  kind: AnomalyKind;
+  /** What was expected against what was seen. Read by a human reviewing the table, so be specific */
+  detail: string;
+  block: SubstrateBlock;
+  /** Index of the event the anomaly is attributable to. Omitted for block level anomalies */
+  eventIdx?: number;
+  moduleId?: ModuleIdEnum;
+  eventId?: EventIdEnum;
+  /**
+   * When set, only the first anomaly carrying this key is written by this process.
+   *
+   * A value the chain emits a million times is worth one row. Callers on an unbounded path - an
+   * enum member the schema has never known - pass a key; callers reporting a specific block's data
+   * do not.
+   */
+  dedupeKey?: string;
+}
+
+/**
+ * Sequence numbers handed out within one block, keyed by `blockId/eventIdx`.
+ *
+ * A single event can produce more than one anomaly - a decoder that does not match reports the
+ * miss and then the arity it fell back to - so the event id alone is not unique. The map is
+ * dropped whenever the block changes, which bounds it to one block's events.
+ *
+ * This is block scoped rather than process scoped on purpose: a worker thread indexes a whole
+ * block, so two workers never hand out sequence numbers for the same block.
+ */
+let sequenceBlockId: string | undefined;
+let sequences = new Map<string, number>();
+
+/** Keys already written by this process. Diagnostic only - see `AnomalyInput.dedupeKey` */
+const seenDedupeKeys = new Set<string>();
+
+const nextSequence = (blockId: string, eventKey: string): number => {
+  if (sequenceBlockId !== blockId) {
+    sequenceBlockId = blockId;
+    sequences = new Map();
+  }
+
+  const seq = sequences.get(eventKey) ?? 0;
+  sequences.set(eventKey, seq + 1);
+
+  return seq;
+};
+
+/**
+ * Records something the indexer could not decode or resolve.
+ *
+ * Returns the write so an async caller can await it. Callers on a synchronous path - `toEnum`,
+ * the decode layer's field lookup - may drop it with `void`: an anomaly row is a diagnostic, and
+ * losing one never loses index data.
+ */
+export const recordAnomaly = async ({
+  kind,
+  detail,
+  block,
+  eventIdx,
+  moduleId,
+  eventId,
+  dedupeKey,
+}: AnomalyInput): Promise<void> => {
+  if (dedupeKey !== undefined) {
+    if (seenDedupeKeys.has(dedupeKey)) {
+      return;
+    }
+    seenDedupeKeys.add(dedupeKey);
+  }
+
+  const blockId = padId(block.block.header.number.toString());
+  const eventKey = padId((eventIdx ?? 0).toString());
+  const seq = nextSequence(blockId, eventKey);
+
+  logger.warn(
+    `Indexer anomaly ${kind} at ${blockId}/${eventKey} (${moduleId ?? '-'}.${
+      eventId ?? '-'
+    }): ${detail}`
+  );
+
+  await IndexerAnomaly.create({
+    id: `${blockId}/${eventKey}/${padId(seq.toString())}`,
+    kind,
+    moduleId,
+    eventId,
+    detail,
+    specVersionId: block.specVersion,
+    blockId,
+    createdAt: blockTime(block),
+  }).save();
+};
+
+/**
+ * Runs a chain storage read, and if the value doesn't decode with the block's metadata, records
+ * an `UnreadableValue` anomaly and returns `fallback` instead.
+ *
+ * Retrying a block fails identically on a value that can't be decoded, so failing the block would
+ * stop the indexer for good. `fallback` should stand for "what the index already has": the caller
+ * leaves it unchanged rather than zeroing or guessing. `consequence` completes "…, so ", saying
+ * what was left undone. Any other error (an RPC failure) propagates, failing the block to be
+ * retried.
+ *
+ * Without a `block` (a seed run) nothing can be recorded, so the error propagates too.
+ */
+type ReadContext = Pick<AnomalyInput, 'eventIdx' | 'moduleId' | 'eventId'> & {
+  block: SubstrateBlock | undefined;
+};
+
+export async function readOrAnomaly<T>(
+  context: ReadContext,
+  consequence: string,
+  run: () => Promise<T>,
+  fallback: T
+): Promise<T>;
+export async function readOrAnomaly<T>(
+  context: ReadContext,
+  consequence: string,
+  run: () => Promise<T>
+): Promise<T | undefined>;
+export async function readOrAnomaly<T>(
+  context: ReadContext,
+  consequence: string,
+  run: () => Promise<T>,
+  fallback?: T
+): Promise<T | undefined> {
+  try {
+    return await run();
+  } catch (error) {
+    const { block, eventIdx, moduleId, eventId } = context;
+
+    if (!(error instanceof UndecodableStateError) || !block) {
+      throw error;
+    }
+
+    await recordAnomaly({
+      kind: AnomalyKind.UnreadableValue,
+      detail: `${error.message}, so ${consequence}`,
+      block,
+      eventIdx,
+      moduleId,
+      eventId,
+    });
+
+    return fallback;
+  }
+}

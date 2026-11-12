@@ -22,7 +22,6 @@ exports[`proposals should get proposal by id 1`] = `
 Object {
   "proposal": Object {
     "__typename": "Proposal",
-    "balance": "10000000000",
     "description": "second",
     "id": "1",
     "ownerId": "0xedd49e576a031a5240a3707849bf862b40279e485fb789bb0298b5372624a098",
@@ -55,7 +54,6 @@ Object {
     "nodes": Array [
       Object {
         "__typename": "Proposal",
-        "balance": "9000000000",
         "description": "first",
         "id": "0",
         "lastStateUpdatedAt": "214",
@@ -79,7 +77,6 @@ Object {
       },
       Object {
         "__typename": "Proposal",
-        "balance": "10000000000",
         "description": "second",
         "id": "1",
         "lastStateUpdatedAt": "216",

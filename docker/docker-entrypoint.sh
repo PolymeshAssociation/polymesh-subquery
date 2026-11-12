@@ -3,7 +3,12 @@
 set -xe -o pipefail
 _term() {
 	echo "Caught SIGTERM signal!"
-	kill -TERM "$child" 2>/dev/null
+	terminating=1
+	# either may have exited already, which isn't a failure here
+	kill -TERM "$child" 2>/dev/null || true
+	if [[ -n ${sql:-} ]]; then
+		kill -TERM "$sql" 2>/dev/null || true
+	fi
 }
 trap _term SIGTERM
 
@@ -19,18 +24,40 @@ fi
 
 npm run build ## This creates the project.yaml file
 
-(npm run sql || (sleep 3 && kill "$$")) &
-
 npm run migrations
 
 # Allow configuring node memory. It should be no more than 75% of available RAM.
 # Defaults to 3 GB (expecting at least 4 GB available).
 NODE_SPACE=${MAX_OLD_SPACE_SIZE:-3072}
 
-# The node is the project's own `@subql/node`, not the one in the base image, so it carries the
-# project's dependency patches (`.yarn/patches`) and the version its lockfile pins.
 NODE_OPTIONS=--max_old_space_size="$NODE_SPACE" \
-	node /app/node_modules/@subql/node/bin/run --disable-historical=false \
+	/bin/run --disable-historical=false \
 	--db-schema=public "$@" &
 child=$!
-wait "$child"
+
+# `db/compat.sql` adds generated columns and expression indexes to tables the node creates, so it
+# has to run after the node has built the schema. It used to run in the background with a
+# `kill "$$"` on failure, which raced the node and reported nothing useful when it lost. It waits
+# for the schema itself, and its failure stops the container. It is waited on in the background
+# because bash holds a trapped SIGTERM until a foreground command ends, and this step can be long.
+npm run sql &
+sql=$!
+if ! wait "$sql"; then
+	if [[ -n ${terminating:-} ]]; then
+		wait "$child" || true
+		exit 143
+	fi
+	echo "Failed to apply db/compat.sql; stopping the indexer" >&2
+	kill -TERM "$child" 2>/dev/null
+	wait "$child" || true
+	exit 1
+fi
+
+# A trapped SIGTERM interrupts `wait`, so the node is waited on again until it has shut down.
+status=0
+wait "$child" || status=$?
+if [[ -n ${terminating:-} ]]; then
+	wait "$child" || true
+	exit 143
+fi
+exit "$status"
