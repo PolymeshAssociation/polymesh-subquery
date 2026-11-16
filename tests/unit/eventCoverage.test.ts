@@ -199,6 +199,8 @@ const UNLISTED_MODULES = [
   'testUtils',
   'upgradeCommittee',
   'upgradeCommitteeMembership',
+  // registers worker protocols and uploads their code (8.2): chain infrastructure, nothing indexed
+  'workerModules',
 ];
 
 /**

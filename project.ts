@@ -232,6 +232,9 @@ const filters: Record<string, Record<string, string[]>> = {
     NFTApprovalSpent: ['handleNftApprovalSpent'],
     NFTPortfolioUpdated: ['handleNftHoldingsUpdates'],
     NFTHoldingsUpdated: ['handleNftHoldingsUpdates'],
+    // A per-holder freeze of single NFTs (8.2). The index doesn't model it, so it stays queryable as
+    // the raw `Event`.
+    NFTsFrozenStatusUpdated: [],
     NftCollectionCreated: ['handleNftCollectionCreated'],
     RedeemedNFT: ['handleLegacyNftRedeemed'],
   },
@@ -446,6 +449,13 @@ const filters: Record<string, Record<string, string[]>> = {
     FeeAccountDeposited: [],
     FeeAccountWithdrawn: [],
     RelayerBatchedProofs: [],
+    // From 8.2: asset freezes, the claim a role needs, and an encryption key shared with an asset's
+    // parties. None is modelled; each stays queryable as the raw `Event`.
+    AssetFrozen: [],
+    AssetUnfrozen: [],
+    RequiredClaimSet: [],
+    RequiredClaimRemoved: [],
+    EncryptionKeyDistributed: [],
   },
   didRegistrars: {},
   polymeshTransactionPayment: {},
