@@ -123,3 +123,31 @@ describe('from 8.0', () => {
     });
   });
 });
+
+describe('from 8.2', () => {
+  it("seeds an asset's mediators from the set of accounts the keys hold", async () => {
+    const chain = fakeChain(8_002_000);
+    chain.put('confidentialAssets.accountEncryptionKey', [ACCOUNT], KEY);
+    chain.put('confidentialAssets.keys', [3], { encKeys: [KEY], mediators: [ACCOUNT] });
+    await seed(
+      snapshotAtParent(chain.block),
+      {
+        block: chain.block,
+        blockId: '0000001000',
+        eventId: SEED_EVENT_ID,
+        datetime: new Date(0),
+        specVersion: 8_002_000,
+      },
+      {
+        seeders: SEEDERS.filter(({ entity }) => entity === 'ConfidentialAssetKey'),
+        accountRows,
+      }
+    );
+
+    expect(byId(chain.rows('ConfidentialAssetKey'))[`3/Mediator/${ACCOUNT}`]).toMatchObject({
+      role: 'Mediator',
+      accountId: ACCOUNT,
+      encryptionKeyId: KEY,
+    });
+  });
+});

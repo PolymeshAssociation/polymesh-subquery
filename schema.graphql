@@ -78,6 +78,9 @@ enum ModuleIdEnum {
   unknown
   "Synthetic module for the one seed Event written before the indexer's start block. Not a chain module — permanently in sync-metadata's `notInRuntime` list, like `unknown`."
   seeding
+
+  ## added by scripts/sync-metadata.ts ##
+  workermodules
 }
 
 """
@@ -874,10 +877,18 @@ enum EventIdEnum {
 
   ## added by scripts/sync-metadata.ts ##
   ControllerTransferTo
+  EncryptionKeyDistributed
   FrozenBalanceSet
   NFTApproval
   NFTApprovalForAll
   NFTApprovalSpent
+  NFTsFrozenStatusUpdated
+  ProtocolModuleCodeUploaded
+  ProtocolModuleConfigUploaded
+  ProtocolModuleContextUploaded
+  ProtocolRegistered
+  RequiredClaimRemoved
+  RequiredClaimSet
   SetAccountFreeze
 }
 
@@ -1776,11 +1787,20 @@ enum CallIdEnum {
 
   ## added by scripts/sync-metadata.ts ##
   controller_transfer_to
+  distribute_encryption_key
   freeze_partial_tokens
+  register_protocol
+  remove_required_claim
   set_approval_for_all
   set_frozen_tokens
   set_holder_frozen
+  set_nfts_frozen
+  set_required_claim
   unfreeze_partial_tokens
+  update_asset_keys
+  upload_protocol_module_code
+  upload_protocol_module_config
+  upload_protocol_module_context
 }
 
 """

@@ -114,7 +114,8 @@ export const confidentialAssetSeeder: Seeder<ConfidentialAsset> = {
 
 /**
  * An asset's auditors and mediators, as the creation handler writes them: storage keys a mediator
- * by account, whose encryption key is the account's own.
+ * by account, whose encryption key is the account's own. Before 8.2 the mediators are a map by
+ * account; from 8.2 a set of accounts.
  */
 export const confidentialAssetKeySeeder: Seeder<ConfidentialAssetKey> = {
   entity: 'ConfidentialAssetKey',
@@ -124,12 +125,13 @@ export const confidentialAssetKeySeeder: Seeder<ConfidentialAssetKey> = {
     yield* rowsOf(snap, 'confidentialAssets.keys', ({ args, value }) => {
       const { encKeys, mediators } = value.toJSON() as {
         encKeys: string[];
-        mediators: Record<string, number>;
+        mediators: Record<string, number> | string[] | null;
       };
+      const mediatorAccounts = Array.isArray(mediators) ? mediators : Object.keys(mediators ?? {});
       return confidentialAssetKeys(
         args[0].toString(),
         Object.fromEntries(
-          Object.keys(mediators ?? {}).map(account => [
+          mediatorAccounts.map(account => [
             account,
             encryptionKeys.get(account)?.value?.toString() ?? '',
           ])
