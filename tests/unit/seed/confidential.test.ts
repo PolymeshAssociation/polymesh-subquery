@@ -124,30 +124,71 @@ describe('from 8.0', () => {
   });
 });
 
-describe('from 8.2', () => {
+const OTHER_KEY = `0x${'0d'.repeat(32)}`;
+
+/** Seeds only the asset keys from `chain`, at `specVersion`. */
+const seedAssetKeys = async (chain: FakeChain, specVersion: number) => {
+  await seed(
+    snapshotAtParent(chain.block),
+    {
+      block: chain.block,
+      blockId: '0000001000',
+      eventId: SEED_EVENT_ID,
+      datetime: new Date(0),
+      specVersion,
+    },
+    {
+      seeders: SEEDERS.filter(({ entity }) => entity === 'ConfidentialAssetKey'),
+      accountRows,
+    }
+  );
+  return byId(chain.rows('ConfidentialAssetKey'));
+};
+
+describe('asset keys before 8.2', () => {
+  it("takes a mediator's key from its index in the keys, not from the account", async () => {
+    const chain = fakeChain(8_001_020);
+    chain.put('confidentialAssets.accountEncryptionKey', [ACCOUNT], OTHER_KEY);
+    chain.put('confidentialAssets.keys', [3], {
+      encKeys: [KEY, OTHER_KEY],
+      mediators: { [ACCOUNT]: 0 },
+    });
+
+    const keys = await seedAssetKeys(chain, 8_001_020);
+
+    expect(keys[`3/Mediator/${ACCOUNT}`]).toMatchObject({
+      accountId: ACCOUNT,
+      encryptionKeyId: KEY,
+    });
+    expect(Object.keys(keys).sort()).toEqual(
+      [`3/Auditor/${KEY}`, `3/Auditor/${OTHER_KEY}`, `3/Mediator/${ACCOUNT}`].sort()
+    );
+  });
+});
+
+describe('asset keys from 8.2', () => {
   it("seeds an asset's mediators from the set of accounts the keys hold", async () => {
     const chain = fakeChain(8_002_000);
     chain.put('confidentialAssets.accountEncryptionKey', [ACCOUNT], KEY);
     chain.put('confidentialAssets.keys', [3], { encKeys: [KEY], mediators: [ACCOUNT] });
-    await seed(
-      snapshotAtParent(chain.block),
-      {
-        block: chain.block,
-        blockId: '0000001000',
-        eventId: SEED_EVENT_ID,
-        datetime: new Date(0),
-        specVersion: 8_002_000,
-      },
-      {
-        seeders: SEEDERS.filter(({ entity }) => entity === 'ConfidentialAssetKey'),
-        accountRows,
-      }
-    );
 
-    expect(byId(chain.rows('ConfidentialAssetKey'))[`3/Mediator/${ACCOUNT}`]).toMatchObject({
+    const keys = await seedAssetKeys(chain, 8_002_000);
+
+    expect(keys[`3/Mediator/${ACCOUNT}`]).toMatchObject({
       role: 'Mediator',
       accountId: ACCOUNT,
       encryptionKeyId: KEY,
     });
+  });
+
+  it('takes a key shared with the mediator when its own key is not among the keys', async () => {
+    const chain = fakeChain(8_002_000);
+    chain.put('confidentialAssets.accountEncryptionKey', [ACCOUNT], KEY);
+    chain.put('confidentialAssets.sharedKeyRecipients', [OTHER_KEY], [KEY]);
+    chain.put('confidentialAssets.keys', [3], { encKeys: [OTHER_KEY], mediators: [ACCOUNT] });
+
+    const keys = await seedAssetKeys(chain, 8_002_000);
+
+    expect(keys[`3/Mediator/${ACCOUNT}`]).toMatchObject({ encryptionKeyId: OTHER_KEY });
   });
 });

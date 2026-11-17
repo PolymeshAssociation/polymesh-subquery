@@ -165,6 +165,9 @@
   "confidentialAssets.settlementState": [
     "[[\"[u8;32]\"],\"{\\\"_enum\\\":[\\\"Pending\\\",\\\"Executed\\\",\\\"Rejected\\\",\\\"Finalized\\\"]}\",[\"Identity\"]]"
   ],
+  "confidentialAssets.sharedKeyRecipients": [
+    "[[\"[u8;32]\"],\"BTreeSet<PolymeshDartBpKeysEncryptionPublicKey>\",[\"Twox64Concat\"]]"
+  ],
   "confidentialAssets.symbols": [
     "[[\"u32\"],\"Text\",[\"Twox64Concat\"]]"
   ],
