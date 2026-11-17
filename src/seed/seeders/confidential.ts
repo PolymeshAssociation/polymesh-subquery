@@ -113,31 +113,50 @@ export const confidentialAssetSeeder: Seeder<ConfidentialAsset> = {
 };
 
 /**
- * An asset's auditors and mediators, as the creation handler writes them: storage keys a mediator
- * by account, whose encryption key is the account's own. Before 8.2 the mediators are a map by
- * account; from 8.2 a set of accounts.
+ * An asset's auditors and mediators. Storage holds one set of encryption keys covering both roles,
+ * and the mediators by account:
+ * - before 8.2 each mediator maps to the index of its key in that set, so the key is exact;
+ * - from 8.2 the mediators are a set of accounts, and a mediator's key is either the account's
+ *   own or one shared with it (a key whose recipients hold the account's own key).
+ *
+ * The set can't show whether a mediator's key is also an auditor's, and assets usually use the
+ * mediator's key for both, so every key in it is seeded as an auditor. A key only a mediator uses
+ * gets an Auditor row the creation handler doesn't write.
  */
 export const confidentialAssetKeySeeder: Seeder<ConfidentialAssetKey> = {
   entity: 'ConfidentialAssetKey',
-  reads: ['confidentialAssets.keys', 'confidentialAssets.accountEncryptionKey'],
+  reads: [
+    'confidentialAssets.keys',
+    'confidentialAssets.accountEncryptionKey',
+    'confidentialAssets.sharedKeyRecipients',
+  ],
   async *rows(snap, ctx) {
-    const encryptionKeys = await snap.map('confidentialAssets.accountEncryptionKey');
+    const [encryptionKeys, sharedKeyRecipients] = await Promise.all([
+      snap.map('confidentialAssets.accountEncryptionKey'),
+      snap.map('confidentialAssets.sharedKeyRecipients'),
+    ]);
     yield* rowsOf(snap, 'confidentialAssets.keys', ({ args, value }) => {
       const { encKeys, mediators } = value.toJSON() as {
-        encKeys: string[];
+        encKeys: string[] | null;
         mediators: Record<string, number> | string[] | null;
       };
-      const mediatorAccounts = Array.isArray(mediators) ? mediators : Object.keys(mediators ?? {});
-      return confidentialAssetKeys(
-        args[0].toString(),
-        Object.fromEntries(
-          mediatorAccounts.map(account => [
-            account,
-            encryptionKeys.get(account)?.value?.toString() ?? '',
-          ])
-        ),
-        encKeys ?? []
-      ).map(key => ConfidentialAssetKey.create({ ...key, createdEventId: ctx.eventId }));
+      const keys = encKeys ?? [];
+      const keyOf = (account: string): string => {
+        const own = encryptionKeys.get(account)?.value?.toString() ?? '';
+        if (keys.includes(own)) {
+          return own;
+        }
+        const shared = keys.find(key =>
+          ((sharedKeyRecipients.get(key)?.value?.toJSON() as string[] | null) ?? []).includes(own)
+        );
+        return shared ?? own;
+      };
+      const mediatorKeys = Array.isArray(mediators)
+        ? mediators.map(account => [account, keyOf(account)])
+        : Object.entries(mediators ?? {}).map(([account, index]) => [account, keys[index] ?? '']);
+      return confidentialAssetKeys(args[0].toString(), Object.fromEntries(mediatorKeys), keys).map(
+        key => ConfidentialAssetKey.create({ ...key, createdEventId: ctx.eventId })
+      );
     });
   },
 };

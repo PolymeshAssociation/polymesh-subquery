@@ -450,7 +450,8 @@ const filters: Record<string, Record<string, string[]>> = {
     FeeAccountWithdrawn: [],
     RelayerBatchedProofs: [],
     // From 8.2: asset freezes, the claim a role needs, and an encryption key shared with an asset's
-    // parties. None is modelled; each stays queryable as the raw `Event`.
+    // parties. None is modelled; each stays queryable as the raw `Event`. `AssetFrozen` and
+    // `AssetUnfrozen` share their event ids with the `asset` pallet's, so filter on the module too.
     AssetFrozen: [],
     AssetUnfrozen: [],
     RequiredClaimSet: [],
