@@ -215,6 +215,13 @@ type AssetMovementArgs = {
 };
 
 /**
+ * The NFT ids a move within one identity actually moved. The chain does not reject a repeated id
+ * on these moves: the token moves once, but the event lists the ids as submitted. Counting them
+ * as listed would move each holder's `nftCount` by more than the chain did.
+ */
+const distinctNftIds = (ids: number[]): number[] => [...new Set(ids)];
+
+/**
  * Shared writer for the fund-description movement events (`FundsMovedBetweenPortfolios`,
  * `settlement.FundsTransferred`). Writes one `AssetTransaction` row; `createAssetTransaction`
  * classifies `isInternalTransfer` from the two holders.
@@ -244,7 +251,7 @@ export const mapAssetMovement = async ({
   } else if (assetType === 'nonFungible') {
     const description = fundDescription as { ticker?: string; assetId?: string; ids: number[] };
     assetId = await getAssetId(description.ticker ?? description.assetId, block);
-    nftIds = description.ids.map(BigInt);
+    nftIds = distinctNftIds(description.ids).map(BigInt);
   } else {
     return undefined;
   }
@@ -389,13 +396,14 @@ export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): P
 
   const nfts = rawNfts.toJSON() as { ticker?: string; assetId?: string; ids: number[] };
   const assetId = await getAssetId(nfts.ticker ?? nfts.assetId, block);
+  const ids = distinctNftIds(nfts.ids);
 
   await createAssetTransaction(
     {
       assetId,
       fromHolder,
       toHolder,
-      nftIds: nfts.ids.map(BigInt),
+      nftIds: ids.map(BigInt),
       memo: memoText(rawMemo),
       address: getSignerAddress(extrinsic),
     },
@@ -403,5 +411,5 @@ export const handleNftsMovedBetweenPortfolios = async (event: SubstrateEvent): P
     EventIdEnum.NFTsMovedBetweenPortfolios,
     extrinsic
   );
-  await moveNftsWithinIdentity(assetId, nfts.ids, fromHolder, toHolder, blockEventId);
+  await moveNftsWithinIdentity(assetId, ids, fromHolder, toHolder, blockEventId);
 };

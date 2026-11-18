@@ -507,4 +507,120 @@ describe('Holding from pre-v6 events and portfolio moves', () => {
     expect(holding(DID, 1).nftCount).toBe(1);
     expect(db.Nft[`${ASSET_ID}/${padId('1')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
   });
+
+  /**
+   * A move within one identity does not reject a repeated id: the token moves once, but the event
+   * lists the ids as submitted.
+   */
+  describe('a repeated NFT id in a move within one identity', () => {
+    beforeEach(() => {
+      db.Holding = {
+        [`${ASSET_ID}/${DID}/0`]: {
+          id: `${ASSET_ID}/${DID}/0`,
+          assetId: ASSET_ID,
+          amount: BigInt(0),
+          nftCount: 1,
+        },
+      };
+      db.Nft = {
+        [`${ASSET_ID}/${padId('2')}`]: {
+          id: `${ASSET_ID}/${padId('2')}`,
+          holdingId: `${ASSET_ID}/${DID}/0`,
+        },
+      };
+      (globalThis as any).store.bulkUpdate = jest.fn((entity: string, rows: any[]) => {
+        rows.forEach(row => (db[entity][row.id] = { ...row }));
+        return Promise.resolve();
+      });
+    });
+
+    it('counts the token once on FundsMovedBetweenPortfolios', async () => {
+      await handleFundsMovedBetweenPortfolios(
+        tupleEvent({
+          section: 'portfolio',
+          method: 'FundsMovedBetweenPortfolios',
+          data: [
+            codec(DID),
+            portfolio(DID, 0),
+            portfolio(DID, 1),
+            codec({ nonFungible: { assetId: ASSET_ID, ids: [2, 2] } }),
+            codec(null),
+          ],
+        })
+      );
+
+      expect(holding(DID, 0).nftCount).toBe(0);
+      expect(holding(DID, 1).nftCount).toBe(1);
+      expect(db.Nft[`${ASSET_ID}/${padId('2')}`].holdingId).toBe(`${ASSET_ID}/${DID}/1`);
+      expect(Object.values(db.AssetTransaction)).toEqual([
+        expect.objectContaining({ nftIds: [BigInt(2)] }),
+      ]);
+    });
+
+    it("counts the token once on v5.3's NFTsMovedBetweenPortfolios", async () => {
+      await handleNftsMovedBetweenPortfolios(
+        tupleEvent({
+          section: 'portfolio',
+          method: 'NFTsMovedBetweenPortfolios',
+          data: [
+            codec(DID),
+            portfolio(DID, 0),
+            portfolio(DID, 1),
+            codec({ assetId: ASSET_ID, ids: [2, 2] }),
+            codec(null),
+          ],
+          specVersion: 5_003_001,
+        })
+      );
+
+      expect(holding(DID, 0).nftCount).toBe(0);
+      expect(holding(DID, 1).nftCount).toBe(1);
+      expect(Object.values(db.AssetTransaction)).toEqual([
+        expect.objectContaining({ nftIds: [BigInt(2)] }),
+      ]);
+    });
+
+    it('counts the token once on a v8 FundsTransferred between two accounts', async () => {
+      const FROM = '5EvJiDAzd4AiwUhAFLQ6DTfBxYjhVNWKxLqrT2XHB9RiWuqn';
+      const TO = '5E2cWPmkRZD9Ph4AV2yzLK4JYmYWDkZhpqGNYxkvh1BcpCD2';
+      const account = (address: string) => codec({ account: address });
+      db.Holding = {
+        [`${ASSET_ID}/${FROM}`]: {
+          id: `${ASSET_ID}/${FROM}`,
+          assetId: ASSET_ID,
+          amount: BigInt(0),
+          nftCount: 1,
+        },
+      };
+      db.Account = {
+        [FROM]: { id: FROM, identityId: DID },
+        [TO]: { id: TO, identityId: DID },
+      };
+      db.Nft[`${ASSET_ID}/${padId('2')}`].holdingId = `${ASSET_ID}/${FROM}`;
+
+      await handleFundsTransferred(
+        tupleEvent({
+          section: 'settlement',
+          method: 'FundsTransferred',
+          data: [
+            codec(DID),
+            account(FROM),
+            account(TO),
+            codec({
+              description: { nonFungible: { assetId: ASSET_ID, ids: [2, 2] } },
+              memo: null,
+            }),
+          ],
+          specVersion: 8_001_010,
+        })
+      );
+
+      expect(db.Holding[`${ASSET_ID}/${FROM}`].nftCount).toBe(0);
+      expect(db.Holding[`${ASSET_ID}/${TO}`].nftCount).toBe(1);
+      expect(db.Nft[`${ASSET_ID}/${padId('2')}`].holdingId).toBe(`${ASSET_ID}/${TO}`);
+      expect(Object.values(db.AssetTransaction)).toEqual([
+        expect.objectContaining({ fromAccountId: FROM, toAccountId: TO, nftIds: [BigInt(2)] }),
+      ]);
+    });
+  });
 });
