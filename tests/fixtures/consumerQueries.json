@@ -21,15 +21,15 @@
   },
   {
     "name": "sdk.assetHolders(identity)",
-    "query": "query AssetHoldersQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      amount\n      asset {\n        id\n        ticker\n      }\n    }\n  }\n}\n"
+    "query": "query AssetHoldersQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}, asset: {isNftCollection: {equalTo: false}}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      amount\n      asset {\n        id\n        ticker\n      }\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.nftHolders(identity)",
-    "query": "query NftHolderQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}, nftCount: {greaterThan: 0}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      asset {\n        id\n        ticker\n      }\n      nftCount\n    }\n  }\n}\n"
+    "query": "query NftHolderQuery($start: Int, $size: Int, $identityId: String!) {\n  assetHolders(\n    filter: {identityId: {equalTo: $identityId}, asset: {isNftCollection: {equalTo: true}}, nftCount: {greaterThan: 0}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      asset {\n        id\n        ticker\n      }\n      nftCount\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.nftHolders(identity).nfts",
-    "query": "query NftHolderNftsQuery($start: Int, $size: Int, $identityId: String!) {\n  nfts(\n    filter: {holding: {identityId: {equalTo: $identityId}}}\n    first: $size\n    offset: $start\n    orderBy: [ASSET_ID_ASC, NFT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      assetId\n      nftId\n    }\n  }\n}\n"
+    "query": "query NftHolderNftsQuery($start: Int, $size: Int, $identityId: String!, $assetId: String!) {\n  nfts(\n    filter: {assetId: {equalTo: $assetId}, holding: {identityId: {equalTo: $identityId}}}\n    first: $size\n    offset: $start\n    orderBy: [NFT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      nftId\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.assetTransactions(asset)",
@@ -38,10 +38,6 @@
   {
     "name": "sdk.nftCollectionHolders",
     "query": "query NftCollectionHolders($assetId: String!, $size: Int, $start: Int) {\n  assetHolders(\n    first: $size\n    offset: $start\n    filter: {assetId: {equalTo: $assetId}, nftCount: {greaterThan: 0}}\n    orderBy: [IDENTITY_ID_DESC]\n  ) {\n    nodes {\n      identityId\n      nftCount\n    }\n    totalCount\n  }\n}\n"
-  },
-  {
-    "name": "sdk.nftCollectionHolders.nfts",
-    "query": "query NftCollectionHoldersNfts($assetId: String!, $identityIds: [String!]!, $size: Int, $start: Int) {\n  nfts(\n    filter: {assetId: {equalTo: $assetId}, holding: {identityId: {in: $identityIds}}}\n    first: $size\n    offset: $start\n    orderBy: [NFT_ID_ASC]\n  ) {\n    totalCount\n    nodes {\n      nftId\n      holding {\n        identityId\n      }\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.authorizations(toId)",
@@ -65,7 +61,7 @@
   },
   {
     "name": "sdk.trustingAssets",
-    "query": "query TrustedClaimIssuerQuery($issuer: String!) {\n  trustedClaimIssuers(\n    filter: {issuerId: {equalTo: $issuer}}\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    nodes {\n      asset {\n        id\n        ticker\n      }\n    }\n  }\n}\n"
+    "query": "query TrustedClaimIssuerQuery($issuer: String!) {\n  trustedClaimIssuers(\n    filter: {issuerId: {equalTo: $issuer}}\n    orderBy: [ASSET_ID_ASC]\n  ) {\n    nodes {\n      asset {\n        id\n        ticker\n        isNftCollection\n      }\n    }\n  }\n}\n"
   },
   {
     "name": "sdk.customClaimTypes",
