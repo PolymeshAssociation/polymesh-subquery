@@ -10,10 +10,11 @@ import { Codec } from '@polkadot/types/types';
 import { SubstrateEvent } from '@subql/types';
 import {
   handleConfidentialAccountRegistered,
+  handleConfidentialEncryptionKeyDistributed,
   handleConfidentialEncryptionKeyRegistered,
 } from '../../src/mappings/entities/confidentialAssets/mapConfidentialAccount';
 import {
-  confidentialAssetKeys,
+  confidentialAssetKeyRows,
   handleConfidentialAccountAssetRegistered,
   handleConfidentialAssetCreated,
   handleConfidentialAssetMinted,
@@ -113,6 +114,49 @@ describe('confidential account handlers', () => {
   });
 });
 
+describe('shared key distribution', () => {
+  const SHARED_KEY = `0x${'44'.repeat(32)}`;
+
+  it('records each key a shared key was distributed to', async () => {
+    await handleConfidentialEncryptionKeyDistributed(
+      mockEvent('EncryptionKeyDistributed', [
+        mockCodec(TEST_DID),
+        mockCodec(SHARED_KEY),
+        mockCodec({
+          publicKey: SHARED_KEY,
+          recipientPks: [ENCRYPTION_KEY, MEDIATOR_ENCRYPTION_KEY],
+          inner: '0x00',
+        }),
+      ])
+    );
+
+    expect(store.bulkCreate).toHaveBeenCalledWith('ConfidentialSharedKeyRecipient', [
+      {
+        id: `${SHARED_KEY}/${ENCRYPTION_KEY}`,
+        sharedKeyId: SHARED_KEY,
+        recipientId: ENCRYPTION_KEY,
+        createdEventId: blockEventId,
+      },
+      expect.objectContaining({
+        id: `${SHARED_KEY}/${MEDIATOR_ENCRYPTION_KEY}`,
+        recipientId: MEDIATOR_ENCRYPTION_KEY,
+      }),
+    ]);
+  });
+
+  it('throws on a proof without recipients', async () => {
+    await expect(
+      handleConfidentialEncryptionKeyDistributed(
+        mockEvent('EncryptionKeyDistributed', [
+          mockCodec(TEST_DID),
+          mockCodec(SHARED_KEY),
+          mockCodec({ publicKey: SHARED_KEY }),
+        ])
+      )
+    ).rejects.toThrow('KeyDistributionProof did not have the expected shape');
+  });
+});
+
 describe('confidential asset handlers', () => {
   const assetCreatedParams = (): Codec[] => [
     mockCodec(TEST_DID),
@@ -125,36 +169,22 @@ describe('confidential asset handlers', () => {
     mockCodec('0x7b7d'), // "{}"
   ];
 
-  it('gives each mediator its account and key, and each auditor its key alone', () => {
-    expect(confidentialAssetKeys('A1', { '0xacc': '0xenc1' }, ['0xenc2'])).toEqual([
-      {
-        id: 'A1/Mediator/0xacc',
-        assetId: 'A1',
-        role: 'Mediator',
-        accountId: '0xacc',
-        encryptionKeyId: '0xenc1',
-      },
-      {
-        id: 'A1/Auditor/0xenc2',
-        assetId: 'A1',
-        role: 'Auditor',
-        accountId: undefined,
-        encryptionKeyId: '0xenc2',
-      },
-    ]);
-  });
-
-  it('keeps two mediators sharing an encryption key apart', () => {
+  it('keeps each encryption key and each mediator once', () => {
     expect(
-      confidentialAssetKeys('A1', { '0xacc1': '0xenc', '0xacc2': '0xenc' }, []).map(row => row.id)
-    ).toEqual(['A1/Mediator/0xacc1', 'A1/Mediator/0xacc2']);
+      confidentialAssetKeyRows('A1', ['0xenc1', '0xenc2', '0xenc1'], ['0xacc', '0xacc'])
+    ).toEqual({
+      encryptionKeys: [
+        { id: 'A1/0xenc1', assetId: 'A1', encryptionKeyId: '0xenc1' },
+        { id: 'A1/0xenc2', assetId: 'A1', encryptionKeyId: '0xenc2' },
+      ],
+      mediators: [{ id: 'A1/0xacc', assetId: 'A1', accountId: '0xacc' }],
+    });
   });
 
-  it('keeps one row per role when a key is both auditor and mediator', () => {
-    expect(confidentialAssetKeys('A1', { '0xacc': '0xenc' }, ['0xenc']).map(row => row.id)).toEqual(
-      ['A1/Mediator/0xacc', 'A1/Auditor/0xenc']
-    );
-  });
+  const created = (entity: string): { id: string }[] =>
+    ((store.bulkCreate as jest.Mock).mock.calls.find(([name]) => name === entity)?.[1] ?? []) as {
+      id: string;
+    }[];
 
   it('should create a ConfidentialAsset on AssetCreated', async () => {
     await handleConfidentialAssetCreated(mockEvent('AssetCreated', assetCreatedParams()));
@@ -176,39 +206,81 @@ describe('confidential asset handlers', () => {
     expect(
       storeSet().mock.calls.find(([entity]) => entity === 'ConfidentialAsset')[2]
     ).not.toHaveProperty('auditors');
-    expect(store.bulkCreate).toHaveBeenCalledWith('ConfidentialAssetKey', [
-      expect.objectContaining({
-        id: `42/Mediator/${ACCOUNT_KEY}`,
-        role: 'Mediator',
-        accountId: ACCOUNT_KEY,
-        encryptionKeyId: MEDIATOR_ENCRYPTION_KEY,
+    expect(store.bulkCreate).toHaveBeenCalledWith('ConfidentialAssetEncryptionKey', [
+      {
+        id: `42/${ENCRYPTION_KEY}`,
+        assetId: '42',
+        encryptionKeyId: ENCRYPTION_KEY,
         createdEventId: blockEventId,
-      }),
-      expect.objectContaining({ id: `42/Auditor/${ENCRYPTION_KEY}`, role: 'Auditor' }),
+      },
+      expect.objectContaining({ id: `42/${MEDIATOR_ENCRYPTION_KEY}` }),
+    ]);
+    expect(store.bulkCreate).toHaveBeenCalledWith('ConfidentialAssetMediator', [
+      {
+        id: `42/${ACCOUNT_KEY}`,
+        assetId: '42',
+        accountId: ACCOUNT_KEY,
+        createdEventId: blockEventId,
+      },
     ]);
   });
 
-  it('replaces the asset’s keys on AssetUpdated, dropping the ones it no longer names', async () => {
-    storeGet().mockResolvedValueOnce({ id: '42' });
-    ((globalThis as any).store.getByFields as jest.Mock).mockResolvedValueOnce([
-      { id: `42/Mediator/${MEDIATOR_ENCRYPTION_KEY}` },
+  it('gives a key named as an auditor and as a mediator’s key one row', async () => {
+    const params = assetCreatedParams();
+    params[3] = mockCodec([MEDIATOR_ENCRYPTION_KEY, ENCRYPTION_KEY]);
+
+    await handleConfidentialAssetCreated(mockEvent('AssetCreated', params));
+
+    expect(created('ConfidentialAssetEncryptionKey').map(({ id }) => id)).toEqual([
+      `42/${MEDIATOR_ENCRYPTION_KEY}`,
+      `42/${ENCRYPTION_KEY}`,
     ]);
+  });
+
+  it('gives a mediator-only key the same row as a key also named as an auditor', async () => {
+    const params = assetCreatedParams();
+    params[3] = mockCodec([]);
+
+    await handleConfidentialAssetCreated(mockEvent('AssetCreated', params));
+
+    expect(created('ConfidentialAssetEncryptionKey').map(({ id }) => id)).toEqual([
+      `42/${MEDIATOR_ENCRYPTION_KEY}`,
+    ]);
+  });
+
+  it('writes no rows for an asset with neither auditors nor mediators', async () => {
+    const params = assetCreatedParams();
+    params[2] = mockCodec({});
+    params[3] = mockCodec([]);
+
+    await handleConfidentialAssetCreated(mockEvent('AssetCreated', params));
+
+    expect(store.bulkCreate).not.toHaveBeenCalled();
+  });
+
+  it('replaces the asset’s keys and mediators on AssetUpdated, dropping the ones it no longer names', async () => {
+    storeGet().mockResolvedValueOnce({ id: '42' });
+    ((globalThis as any).store.getByFields as jest.Mock)
+      .mockResolvedValueOnce([{ id: `42/${MEDIATOR_ENCRYPTION_KEY}` }])
+      .mockResolvedValueOnce([{ id: `42/${ACCOUNT_KEY}` }]);
 
     await handleConfidentialAssetUpdated(
       mockEvent('AssetUpdated', [
         mockCodec(TEST_DID),
         mockCodec('42'),
         mockCodec({}),
-        mockCodec([ENCRYPTION_KEY, MEDIATOR_ENCRYPTION_KEY]),
+        mockCodec([ENCRYPTION_KEY]),
       ])
     );
 
-    expect(store.bulkRemove).toHaveBeenCalledWith('ConfidentialAssetKey', [
-      `42/Mediator/${MEDIATOR_ENCRYPTION_KEY}`,
+    expect(store.bulkRemove).toHaveBeenCalledWith('ConfidentialAssetEncryptionKey', [
+      `42/${MEDIATOR_ENCRYPTION_KEY}`,
     ]);
-    expect(store.bulkCreate).toHaveBeenCalledWith('ConfidentialAssetKey', [
-      expect.objectContaining({ id: `42/Auditor/${ENCRYPTION_KEY}` }),
-      expect.objectContaining({ id: `42/Auditor/${MEDIATOR_ENCRYPTION_KEY}` }),
+    expect(store.bulkRemove).toHaveBeenCalledWith('ConfidentialAssetMediator', [
+      `42/${ACCOUNT_KEY}`,
+    ]);
+    expect(created('ConfidentialAssetEncryptionKey')).toEqual([
+      expect.objectContaining({ id: `42/${ENCRYPTION_KEY}`, createdEventId: blockEventId }),
     ]);
     expect(storeSet()).toHaveBeenCalledWith(
       'ConfidentialAsset',
@@ -217,25 +289,26 @@ describe('confidential asset handlers', () => {
     );
   });
 
-  it('leaves a key the update keeps alone, so it keeps the event that added it', async () => {
+  it('leaves a key or mediator the update keeps alone, so it keeps the event that added it', async () => {
     storeGet().mockResolvedValueOnce({ id: '42' });
-    ((globalThis as any).store.getByFields as jest.Mock).mockResolvedValueOnce([
-      { id: `42/Auditor/${ENCRYPTION_KEY}` },
-    ]);
+    ((globalThis as any).store.getByFields as jest.Mock)
+      .mockResolvedValueOnce([{ id: `42/${ENCRYPTION_KEY}` }])
+      .mockResolvedValueOnce([{ id: `42/${ACCOUNT_KEY}` }]);
 
     await handleConfidentialAssetUpdated(
       mockEvent('AssetUpdated', [
         mockCodec(TEST_DID),
         mockCodec('42'),
-        mockCodec({}),
-        mockCodec([ENCRYPTION_KEY, MEDIATOR_ENCRYPTION_KEY]),
+        mockCodec({ [ACCOUNT_KEY]: MEDIATOR_ENCRYPTION_KEY }),
+        mockCodec([ENCRYPTION_KEY]),
       ])
     );
 
-    const removed = ((store.bulkRemove as jest.Mock).mock.calls[0]?.[1] ?? []) as string[];
-    const created = ((store.bulkCreate as jest.Mock).mock.calls[0]?.[1] ?? []) as { id: string }[];
-    expect(removed).not.toContain(`42/Auditor/${ENCRYPTION_KEY}`);
-    expect(created.map(key => key.id)).toEqual([`42/Auditor/${MEDIATOR_ENCRYPTION_KEY}`]);
+    expect(store.bulkRemove).not.toHaveBeenCalled();
+    expect(created('ConfidentialAssetEncryptionKey').map(({ id }) => id)).toEqual([
+      `42/${MEDIATOR_ENCRYPTION_KEY}`,
+    ]);
+    expect(created('ConfidentialAssetMediator')).toEqual([]);
   });
 
   it('should update total supply on AssetMinted', async () => {

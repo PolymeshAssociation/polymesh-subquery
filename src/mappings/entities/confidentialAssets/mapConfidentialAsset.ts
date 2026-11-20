@@ -3,8 +3,8 @@ import { SubstrateEvent } from '@subql/types';
 import {
   ConfidentialAccountAsset,
   ConfidentialAsset,
-  ConfidentialAssetKey,
-  ConfidentialKeyRole,
+  ConfidentialAssetEncryptionKey,
+  ConfidentialAssetMediator,
 } from '../../../types';
 import {
   getAllByFields,
@@ -16,51 +16,84 @@ import {
 import { extractArgs } from '../common';
 import { storedText } from '../../../utils/text';
 
-type AssetKey = Pick<
-  ConfidentialAssetKey,
-  'id' | 'assetId' | 'role' | 'accountId' | 'encryptionKeyId'
+type AssetEncryptionKey = Pick<
+  ConfidentialAssetEncryptionKey,
+  'id' | 'assetId' | 'encryptionKeyId'
 >;
+type AssetMediator = Pick<ConfidentialAssetMediator, 'id' | 'assetId' | 'accountId'>;
 
 /**
- * An asset's auditor and mediator keys, one row per key and role. Mediators are emitted as a map
- * of confidential account public key -> encryption public key; auditors as encryption keys.
+ * An asset's encryption keys and mediators, as the chain stores them. The keys are every auditor
+ * key plus every mediator's key, deduplicated: the chain keeps them as one set and doesn't record
+ * which came from which argument. The mediators are the accounts alone; the chain stops holding
+ * which key each one was paired with.
  */
-export const confidentialAssetKeys = (
+export const confidentialAssetKeyRows = (
   assetId: string,
-  mediators: Record<string, string>,
-  auditors: string[]
-): AssetKey[] => [
-  ...Object.entries(mediators).map(([accountId, encryptionKeyId]) => ({
-    // the map is keyed by account, and two mediator accounts may share an encryption key
-    id: `${assetId}/${ConfidentialKeyRole.Mediator}/${accountId}`,
+  encryptionKeys: string[],
+  mediators: string[]
+): { encryptionKeys: AssetEncryptionKey[]; mediators: AssetMediator[] } => ({
+  encryptionKeys: [...new Set(encryptionKeys)].map(encryptionKeyId => ({
+    id: `${assetId}/${encryptionKeyId}`,
     assetId,
-    role: ConfidentialKeyRole.Mediator,
+    encryptionKeyId,
+  })),
+  mediators: [...new Set(mediators)].map(accountId => ({
+    id: `${assetId}/${accountId}`,
+    assetId,
     accountId,
-    encryptionKeyId,
   })),
-  ...auditors.map(encryptionKeyId => ({
-    id: `${assetId}/${ConfidentialKeyRole.Auditor}/${encryptionKeyId}`,
-    assetId,
-    role: ConfidentialKeyRole.Auditor,
-    accountId: undefined,
-    encryptionKeyId,
-  })),
-];
+});
 
-const assetKeysOf = (assetId: string, rawMediators: Codec, rawAuditors: Codec): AssetKey[] =>
-  confidentialAssetKeys(
+/**
+ * The rows an `AssetCreated` or `AssetUpdated` names. Mediators come as a map of confidential
+ * account public key -> encryption public key, auditors as encryption keys.
+ */
+const assetKeyRowsOf = (assetId: string, rawMediators: Codec, rawAuditors: Codec) => {
+  const mediators = (rawMediators.toJSON() ?? {}) as Record<string, string>;
+  return confidentialAssetKeyRows(
     assetId,
-    rawMediators.toJSON() as Record<string, string>,
-    getStringArrayValue(rawAuditors)
+    [...getStringArrayValue(rawAuditors), ...Object.values(mediators)],
+    Object.keys(mediators)
   );
+};
 
-const createAssetKeys = (keys: AssetKey[], blockEventId: string): Promise<void> =>
-  keys.length > 0
+type AssetKeyEntity = 'ConfidentialAssetEncryptionKey' | 'ConfidentialAssetMediator';
+
+const createAssetRows = (
+  entity: AssetKeyEntity,
+  rows: { id: string }[],
+  blockEventId: string
+): Promise<void> =>
+  rows.length > 0
     ? store.bulkCreate(
-        'ConfidentialAssetKey',
-        keys.map(key => ({ ...key, createdEventId: blockEventId }))
+        entity,
+        rows.map(row => ({ ...row, createdEventId: blockEventId }))
       )
     : Promise.resolve();
+
+/**
+ * Makes the asset's rows of `entity` the ones given, from the `current` ones: removes those it no
+ * longer names and adds the new ones, so a row the update keeps keeps the event that added it.
+ */
+const replaceAssetRows = async (
+  entity: AssetKeyEntity,
+  current: { id: string }[],
+  rows: { id: string }[],
+  blockEventId: string
+): Promise<void> => {
+  const kept = new Set(rows.map(({ id }) => id));
+  const existing = new Set(current.map(({ id }) => id));
+  const dropped = current.filter(({ id }) => !kept.has(id)).map(({ id }) => id);
+  if (dropped.length > 0) {
+    await store.bulkRemove(entity, dropped);
+  }
+  await createAssetRows(
+    entity,
+    rows.filter(({ id }) => !existing.has(id)),
+    blockEventId
+  );
+};
 
 export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Promise<void> => {
   const { params, blockEventId } = extractArgs(event);
@@ -82,7 +115,10 @@ export const handleConfidentialAssetCreated = async (event: SubstrateEvent): Pro
     createdEventId: blockEventId,
     updatedEventId: blockEventId,
   }).save();
-  await createAssetKeys(assetKeysOf(assetId, rawMediators, rawAuditors), blockEventId);
+
+  const { encryptionKeys, mediators } = assetKeyRowsOf(assetId, rawMediators, rawAuditors);
+  await createAssetRows('ConfidentialAssetEncryptionKey', encryptionKeys, blockEventId);
+  await createAssetRows('ConfidentialAssetMediator', mediators, blockEventId);
 };
 
 export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Promise<void> => {
@@ -93,21 +129,22 @@ export const handleConfidentialAssetUpdated = async (event: SubstrateEvent): Pro
   const asset = await ConfidentialAsset.get(getTextValue(rawAssetId));
 
   if (asset) {
-    const current = await getAllByFields<ConfidentialAssetKey>('ConfidentialAssetKey', [
-      ['assetId', '=', asset.id],
-    ]);
-    const keys = assetKeysOf(asset.id, rawMediators, rawAuditors);
-    // only what changed, so a key the update keeps keeps the event that added it
-    const kept = new Set(keys.map(key => key.id));
-    const existing = new Set(current.map(key => key.id));
-    const dropped = current.filter(key => !kept.has(key.id)).map(key => key.id);
-    if (dropped.length > 0) {
-      await store.bulkRemove('ConfidentialAssetKey', dropped);
-    }
-    await createAssetKeys(
-      keys.filter(key => !existing.has(key.id)),
+    const { encryptionKeys, mediators } = assetKeyRowsOf(asset.id, rawMediators, rawAuditors);
+    const currentKeys = await getAllByFields<ConfidentialAssetEncryptionKey>(
+      'ConfidentialAssetEncryptionKey',
+      [['assetId', '=', asset.id]]
+    );
+    const currentMediators = await getAllByFields<ConfidentialAssetMediator>(
+      'ConfidentialAssetMediator',
+      [['assetId', '=', asset.id]]
+    );
+    await replaceAssetRows(
+      'ConfidentialAssetEncryptionKey',
+      currentKeys,
+      encryptionKeys,
       blockEventId
     );
+    await replaceAssetRows('ConfidentialAssetMediator', currentMediators, mediators, blockEventId);
 
     asset.updatedEventId = blockEventId;
     await asset.save();
