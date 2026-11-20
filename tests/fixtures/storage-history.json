@@ -1016,6 +1016,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -1036,6 +1037,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -2744,6 +2746,24 @@
    }
   ]
  },
+ "confidentialAssets.assetFrozen": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "u32"
+    ],
+    "value": "{\"_enum\":[\"Issuer\",\"Root\"]}",
+    "hashers": [
+     "Twox64Concat"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
  "confidentialAssets.assetInnerNodes": {
   "ranges": [
    {
@@ -2787,6 +2807,20 @@
     "to": null,
     "keys": [],
     "value": "Bytes",
+    "hashers": [],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "confidentialAssets.cachedDartParametersVersion": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [],
+    "value": "{\"major\":\"u16\",\"minor\":\"u16\",\"patch\":\"u16\"}",
     "hashers": [],
     "chains": [
      "testnet"
@@ -3046,7 +3080,7 @@
   "ranges": [
    {
     "from": 8000000,
-    "to": null,
+    "to": 8001030,
     "keys": [
      "[u8;32]"
     ],
@@ -3082,11 +3116,25 @@
   "ranges": [
    {
     "from": 8000000,
-    "to": null,
+    "to": 8001030,
     "keys": [
      "u32"
     ],
     "value": "{\"encKeys\":\"BTreeSet<PolymeshDartBpKeysEncryptionPublicKey>\",\"mediators\":\"BTreeMap<PolymeshDartBpKeysAccountPublicKey, u8>\"}",
+    "hashers": [
+     "Twox64Concat"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   },
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "u32"
+    ],
+    "value": "{\"encKeys\":\"BTreeSet<PolymeshDartBpKeysEncryptionPublicKey>\",\"mediators\":\"BTreeSet<PolymeshDartBpKeysAccountPublicKey>\"}",
     "hashers": [
      "Twox64Concat"
     ],
@@ -3146,6 +3194,26 @@
    }
   ],
   "pruned": "Removed once the settlement is finalized or rejected (confidential-assets settlement.rs, 8.x); confidentialAssets.settlementState keeps its final status."
+ },
+ "confidentialAssets.legMediators": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "[u8;32]",
+     "u8"
+    ],
+    "value": "{\"mediators\":\"BTreeSet<PolymeshDartBpKeysAccountPublicKey>\"}",
+    "hashers": [
+     "Identity",
+     "Identity"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
  },
  "confidentialAssets.names": {
   "ranges": [
@@ -3219,6 +3287,38 @@
     "value": "Null",
     "hashers": [
      "Twox64Concat",
+     "Twox64Concat"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "confidentialAssets.relayerSubmitExtensionMarker": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [],
+    "value": "Null",
+    "hashers": [],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "confidentialAssets.requiredClaims": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "{\"_enum\":[\"AssetCreator\",\"Auditor\",\"Mediator\"]}"
+    ],
+    "value": "{\"claim\":\"PolymeshPrimitivesIdentityClaimClaim\",\"trustedIssuers\":\"Vec<PolymeshPrimitivesIdentityId>\"}",
+    "hashers": [
      "Twox64Concat"
     ],
     "chains": [
@@ -3335,6 +3435,24 @@
     "value": "{\"_enum\":[\"Pending\",\"Executed\",\"Rejected\",\"Finalized\"]}",
     "hashers": [
      "Identity"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "confidentialAssets.sharedKeyRecipients": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "[u8;32]"
+    ],
+    "value": "BTreeSet<PolymeshDartBpKeysEncryptionPublicKey>",
+    "hashers": [
+     "Twox64Concat"
     ],
     "chains": [
      "testnet"
@@ -4113,6 +4231,26 @@
     ],
     "chains": [
      "mainnet",
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "externalAgents.agentAuthCutoff": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "[u8;16]",
+     "[u8;32]"
+    ],
+    "value": "u64",
+    "hashers": [
+     "Blake2_128Concat",
+     "Twox64Concat"
+    ],
+    "chains": [
      "testnet"
     ]
    }
@@ -5792,6 +5930,28 @@
    }
   ]
  },
+ "nft.frozenNFT": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "[u8;16]",
+     "{\"_enum\":{\"Portfolio\":\"PolymeshPrimitivesIdentityIdPortfolioId\",\"Account\":\"AccountId32\"}}",
+     "u64"
+    ],
+    "value": "bool",
+    "hashers": [
+     "Blake2_128Concat",
+     "Blake2_128Concat",
+     "Blake2_128Concat"
+    ],
+    "chains": [
+     "testnet"
+    ]
+   }
+  ]
+ },
  "nft.metadataValue": {
   "ranges": [
    {
@@ -5896,6 +6056,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -6034,6 +6195,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -6090,6 +6252,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -6514,6 +6677,25 @@
   ],
   "pruned": "Removed when a finished PIP is pruned, which the runtime does only while pips.pruneHistoricalPips is set (every runtime surveyed)."
  },
+ "pips.proposalProposers": {
+  "ranges": [
+   {
+    "from": 8001030,
+    "to": null,
+    "keys": [
+     "u32"
+    ],
+    "value": "{\"_enum\":{\"Community\":\"AccountId32\",\"Committee\":\"PalletPipsCommittee\"}}",
+    "hashers": [
+     "Twox64Concat"
+    ],
+    "chains": [
+     "mainnet",
+     "testnet"
+    ]
+   }
+  ]
+ },
  "pips.proposalResult": {
   "ranges": [
    {
@@ -6873,6 +7055,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -7088,6 +7271,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -7258,6 +7442,7 @@
      "Blake2_128Concat"
     ],
     "chains": [
+     "mainnet",
      "testnet"
     ]
    }
@@ -7417,6 +7602,21 @@
      "Blake2_128Concat",
      "Blake2_128Concat"
     ],
+    "chains": [
+     "mainnet",
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "relayer.relayReentry": {
+  "ranges": [
+   {
+    "from": 8001030,
+    "to": null,
+    "keys": [],
+    "value": "bool",
+    "hashers": [],
     "chains": [
      "mainnet",
      "testnet"
@@ -12080,6 +12280,26 @@
     "hashers": [],
     "chains": [
      "mainnet",
+     "testnet"
+    ]
+   }
+  ]
+ },
+ "validators.identityValidatorStashes": {
+  "ranges": [
+   {
+    "from": 8002000,
+    "to": null,
+    "keys": [
+     "[u8;32]",
+     "AccountId32"
+    ],
+    "value": "Null",
+    "hashers": [
+     "Twox64Concat",
+     "Blake2_128Concat"
+    ],
+    "chains": [
      "testnet"
     ]
    }

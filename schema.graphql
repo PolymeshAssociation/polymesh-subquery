@@ -78,6 +78,9 @@ enum ModuleIdEnum {
   unknown
   "Synthetic module for the one seed Event written before the indexer's start block. Not a chain module — permanently in sync-metadata's `notInRuntime` list, like `unknown`."
   seeding
+
+  ## added by scripts/sync-metadata.ts ##
+  workermodules
 }
 
 """
@@ -874,10 +877,18 @@ enum EventIdEnum {
 
   ## added by scripts/sync-metadata.ts ##
   ControllerTransferTo
+  EncryptionKeyDistributed
   FrozenBalanceSet
   NFTApproval
   NFTApprovalForAll
   NFTApprovalSpent
+  NFTsFrozenStatusUpdated
+  ProtocolModuleCodeUploaded
+  ProtocolModuleConfigUploaded
+  ProtocolModuleContextUploaded
+  ProtocolRegistered
+  RequiredClaimRemoved
+  RequiredClaimSet
   SetAccountFreeze
 }
 
@@ -1776,11 +1787,20 @@ enum CallIdEnum {
 
   ## added by scripts/sync-metadata.ts ##
   controller_transfer_to
+  distribute_encryption_key
   freeze_partial_tokens
+  register_protocol
+  remove_required_claim
   set_approval_for_all
   set_frozen_tokens
   set_holder_frozen
+  set_nfts_frozen
+  set_required_claim
   unfreeze_partial_tokens
+  update_asset_keys
+  upload_protocol_module_code
+  upload_protocol_module_config
+  upload_protocol_module_context
 }
 
 """
@@ -4054,26 +4074,42 @@ enum ConfidentialCurveTreeEnum {
 }
 
 """
-The part a key plays for a confidential asset
+A key the asset's new legs are encrypted to: every key the asset names as an auditor's and every
+mediator's key, which the chain keeps as one set without recording which is which. Holding the key
+means being able to decrypt those legs; it doesn't mean the key's identity holds an auditor claim.
+An update removes the keys the asset drops and adds the ones it gains, so the rows are the asset's
+current keys and each keeps the event that added it. Existing settlements keep the keys they were
+created with.
 """
-enum ConfidentialKeyRole {
-  Auditor
-  Mediator
+type ConfidentialAssetEncryptionKey @entity {
+  id: ID! # assetId/encryptionKey
+  asset: ConfidentialAsset!
+  encryptionKey: ConfidentialEncryptionKey!
+  createdEvent: Event!
 }
 
 """
-One key an asset names as an auditor or a mediator, as the asset last set them. A mediator is a
-confidential account and its encryption key; an auditor is an encryption key alone. An update
-removes the keys the asset drops and adds the ones it gains, so the rows are the asset's current
-keys and each keeps the event that added it.
+A confidential account whose affirmation the asset's new legs need, as the asset last set its
+mediators. The key it decrypts with is among the asset's encryption keys. From 8.2 the chain
+requires that key to be the account's own or a shared key distributed to it; before 8.2 it didn't
+check.
 """
-type ConfidentialAssetKey @entity {
-  id: ID! # assetId/Mediator/accountKey or assetId/Auditor/encryptionKey
+type ConfidentialAssetMediator @entity {
+  id: ID! # assetId/accountKey
   asset: ConfidentialAsset!
-  role: ConfidentialKeyRole!
-  "The mediator's confidential account; null for an auditor"
-  account: ConfidentialAccount
-  encryptionKey: ConfidentialEncryptionKey!
+  account: ConfidentialAccount!
+  createdEvent: Event!
+}
+
+"""
+An encryption key a shared key was distributed to (from 8.2). The chain never changes a shared
+key's recipients once it is distributed. A recipient can itself be a shared key, so a key holder
+can reach a shared key through more than one of these.
+"""
+type ConfidentialSharedKeyRecipient @entity {
+  id: ID! # sharedKey/recipientKey
+  sharedKey: ConfidentialEncryptionKey!
+  recipient: ConfidentialEncryptionKey!
   createdEvent: Event!
 }
 
@@ -4086,7 +4122,7 @@ type ConfidentialAccount @entity {
   publicKey: String!
   encryptionKey: ConfidentialEncryptionKey!
   "The assets this account mediates"
-  mediatorOf: [ConfidentialAssetKey!]! @derivedFrom(field: "account")
+  mediatorOf: [ConfidentialAssetMediator!]! @derivedFrom(field: "account")
   creator: Identity!
   assets: [ConfidentialAccountAsset!]! @derivedFrom(field: "account")
   updatedEvent: Event!
@@ -4094,8 +4130,8 @@ type ConfidentialAccount @entity {
 }
 
 """
-Represents a registered encryption key. Registered either with a confidential account or
-standalone for mediators/auditors
+Represents a registered encryption key: registered with a confidential account, standalone, or as
+a shared key distributed to other keys
 """
 type ConfidentialEncryptionKey @entity {
   id: ID!
@@ -4103,8 +4139,12 @@ type ConfidentialEncryptionKey @entity {
   creator: Identity!
   "The confidential accounts using this key"
   accounts: [ConfidentialAccount!]! @derivedFrom(field: "encryptionKey")
-  "The assets this key audits or mediates"
-  assetRoles: [ConfidentialAssetKey!]! @derivedFrom(field: "encryptionKey")
+  "The assets whose new legs this key can decrypt"
+  assets: [ConfidentialAssetEncryptionKey!]! @derivedFrom(field: "encryptionKey")
+  "The keys this shared key was distributed to; empty for a key that isn't shared"
+  recipients: [ConfidentialSharedKeyRecipient!]! @derivedFrom(field: "sharedKey")
+  "The shared keys distributed to this key"
+  receivedKeys: [ConfidentialSharedKeyRecipient!]! @derivedFrom(field: "recipient")
   updatedEvent: Event!
   createdEvent: Event!
 }
@@ -4120,8 +4160,10 @@ type ConfidentialAsset @entity {
   decimals: Int!
   data: String
   creator: Identity!
-  "The asset's current auditor and mediator keys"
-  keys: [ConfidentialAssetKey!]! @derivedFrom(field: "asset")
+  "The keys the asset's new legs are encrypted to"
+  encryptionKeys: [ConfidentialAssetEncryptionKey!]! @derivedFrom(field: "asset")
+  "The accounts whose affirmation the asset's new legs need"
+  mediators: [ConfidentialAssetMediator!]! @derivedFrom(field: "asset")
   totalSupply: BigInt!
   holders: [ConfidentialAccountAsset!]! @derivedFrom(field: "asset")
   updatedEvent: Event!
