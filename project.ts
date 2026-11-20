@@ -449,14 +449,15 @@ const filters: Record<string, Record<string, string[]>> = {
     FeeAccountDeposited: [],
     FeeAccountWithdrawn: [],
     RelayerBatchedProofs: [],
-    // From 8.2: asset freezes, the claim a role needs, and an encryption key shared with an asset's
-    // parties. None is modelled; each stays queryable as the raw `Event`. `AssetFrozen` and
-    // `AssetUnfrozen` share their event ids with the `asset` pallet's, so filter on the module too.
+    // From 8.2: asset freezes and the claim a role needs. Neither is modelled; each stays queryable
+    // as the raw `Event`. `AssetFrozen` and `AssetUnfrozen` share their event ids with the `asset`
+    // pallet's, so filter on the module too.
     AssetFrozen: [],
     AssetUnfrozen: [],
     RequiredClaimSet: [],
     RequiredClaimRemoved: [],
-    EncryptionKeyDistributed: [],
+    // From 8.2: a shared encryption key and the keys it was distributed to
+    EncryptionKeyDistributed: ['handleConfidentialEncryptionKeyDistributed'],
   },
   didRegistrars: {},
   polymeshTransactionPayment: {},

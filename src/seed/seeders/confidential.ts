@@ -1,12 +1,13 @@
 import { Codec } from '@polkadot/types/types';
-import { confidentialAssetKeys } from '../../mappings/entities/confidentialAssets/mapConfidentialAsset';
+import { confidentialAssetKeyRows } from '../../mappings/entities/confidentialAssets/mapConfidentialAsset';
 import {
   AffirmingPartyEnum,
   ConfidentialAccount,
   ConfidentialAccountAsset,
   ConfidentialAffirmationStatusEnum,
   ConfidentialAsset,
-  ConfidentialAssetKey,
+  ConfidentialAssetEncryptionKey,
+  ConfidentialAssetMediator,
   ConfidentialCurveTreeEnum,
   ConfidentialCurveTreeLeaf,
   ConfidentialEncryptionKey,
@@ -14,15 +15,18 @@ import {
   ConfidentialLegAffirmation,
   ConfidentialSettlement,
   ConfidentialSettlementStatusEnum,
+  ConfidentialSharedKeyRecipient,
 } from '../../types';
-import { fieldOf, isObject, variantOf } from '../../utils/codec';
+import { codecBytes } from '../../utils/bytes';
+import { fieldOf, isObject, optionOf, variantOf } from '../../utils/codec';
 import { memoText, storedText } from '../../utils/text';
 import { SeedContext, Seeder } from '../seeder';
 import { ChainSnapshot, Entry, StorageRef } from '../snapshot';
 
 /**
- * Confidential assets (the `confidentialAssets` pallet, testnet from 8.0): encryption keys,
- * accounts, assets with their auditor and mediator keys, registrations, settlements still in flight
+ * Confidential assets (the `confidentialAssets` pallet, testnet from 8.0): encryption keys and
+ * the keys shared keys were distributed to, accounts, assets with their encryption keys and
+ * mediators, registrations, settlements still in flight
  * with their legs and the affirmations made so far, and the curve-tree leaves. A runtime without
  * the pallet has nothing to seed. A finalized settlement's legs are pruned, so only settlements
  * whose legs the chain holds are seeded, and the asset root a settlement's proof used isn't kept.
@@ -112,53 +116,86 @@ export const confidentialAssetSeeder: Seeder<ConfidentialAsset> = {
   },
 };
 
+interface StoredAssetKeys {
+  encKeys: string[] | null;
+  mediators: Record<string, number> | string[] | null;
+}
+
 /**
- * An asset's auditors and mediators. Storage holds one set of encryption keys covering both roles,
- * and the mediators by account:
- * - before 8.2 each mediator maps to the index of its key in that set, so the key is exact;
- * - from 8.2 the mediators are a set of accounts, and a mediator's key is either the account's
- *   own or one shared with it (a key whose recipients hold the account's own key).
- *
- * The set can't show whether a mediator's key is also an auditor's, and assets usually use the
- * mediator's key for both, so every key in it is seeded as an auditor. A key only a mediator uses
- * gets an Auditor row the creation handler doesn't write.
+ * Before 8.2 the asset's keys held each mediator with the index of its key; 8.2 migrated them to a
+ * set of accounts. An asset the migration skipped (an invalid or oversized entry) keeps the old
+ * encoding, which 8.2's types misread, so its bytes are read with the old type.
  */
-export const confidentialAssetKeySeeder: Seeder<ConfidentialAssetKey> = {
-  entity: 'ConfidentialAssetKey',
-  reads: [
-    'confidentialAssets.keys',
-    'confidentialAssets.accountEncryptionKey',
-    'confidentialAssets.sharedKeyRecipients',
-  ],
-  async *rows(snap, ctx) {
-    const [encryptionKeys, sharedKeyRecipients] = await Promise.all([
-      snap.map('confidentialAssets.accountEncryptionKey'),
-      snap.map('confidentialAssets.sharedKeyRecipients'),
-    ]);
-    yield* rowsOf(snap, 'confidentialAssets.keys', ({ args, value }) => {
-      const { encKeys, mediators } = value.toJSON() as {
-        encKeys: string[] | null;
-        mediators: Record<string, number> | string[] | null;
-      };
-      const keys = encKeys ?? [];
-      const keyOf = (account: string): string => {
-        const own = encryptionKeys.get(account)?.value?.toString() ?? '';
-        if (keys.includes(own)) {
-          return own;
-        }
-        const shared = keys.find(key =>
-          ((sharedKeyRecipients.get(key)?.value?.toJSON() as string[] | null) ?? []).includes(own)
-        );
-        return shared ?? own;
-      };
-      const mediatorKeys = Array.isArray(mediators)
-        ? mediators.map(account => [account, keyOf(account)])
-        : Object.entries(mediators ?? {}).map(([account, index]) => [account, keys[index] ?? '']);
-      return confidentialAssetKeys(args[0].toString(), Object.fromEntries(mediatorKeys), keys).map(
-        key => ConfidentialAssetKey.create({ ...key, createdEventId: ctx.eventId })
+const LEGACY_ASSET_KEYS = '{"encKeys":"BTreeSet<[u8;32]>","mediators":"BTreeMap<[u8;32],u8>"}';
+
+/** An asset's encryption keys and mediator accounts from its stored keys, in either encoding */
+const assetKeysOf = ({ value, raw }: Entry): { encryptionKeys: string[]; mediators: string[] } => {
+  const stored = value ? undefined : optionOf(raw, "the stored asset's keys");
+  const { encKeys, mediators } = (
+    value ??
+    (stored && api.registry.createType(LEGACY_ASSET_KEYS, codecBytes(stored)))
+  )?.toJSON() as unknown as StoredAssetKeys;
+  return {
+    encryptionKeys: encKeys ?? [],
+    mediators: Array.isArray(mediators) ? mediators : Object.keys(mediators ?? {}),
+  };
+};
+
+/** Rows `build` makes of each asset's stored keys */
+async function* assetKeyRows<T>(
+  snap: ChainSnapshot,
+  build: (assetId: string, keys: ReturnType<typeof assetKeysOf>) => T[]
+): AsyncGenerator<T[]> {
+  for await (const page of snap.pages('confidentialAssets.keys')) {
+    yield page.flatMap(entry => build(entry.args[0].toString(), assetKeysOf(entry)));
+  }
+}
+
+/**
+ * The keys an asset's new legs are encrypted to: the one set the chain stores for its auditors
+ * and mediators together, which doesn't record which key came from which.
+ */
+export const confidentialAssetEncryptionKeySeeder: Seeder<ConfidentialAssetEncryptionKey> = {
+  entity: 'ConfidentialAssetEncryptionKey',
+  raw: ['confidentialAssets.keys'],
+  reads: ['confidentialAssets.keys'],
+  rows: (snap, ctx) =>
+    assetKeyRows(snap, (assetId, { encryptionKeys }) =>
+      confidentialAssetKeyRows(assetId, encryptionKeys, []).encryptionKeys.map(row =>
+        ConfidentialAssetEncryptionKey.create({ ...row, createdEventId: ctx.eventId })
+      )
+    ),
+};
+
+/** The accounts whose affirmation an asset's new legs need */
+export const confidentialAssetMediatorSeeder: Seeder<ConfidentialAssetMediator> = {
+  entity: 'ConfidentialAssetMediator',
+  raw: ['confidentialAssets.keys'],
+  reads: ['confidentialAssets.keys'],
+  rows: (snap, ctx) =>
+    assetKeyRows(snap, (assetId, { mediators }) =>
+      confidentialAssetKeyRows(assetId, [], mediators).mediators.map(row =>
+        ConfidentialAssetMediator.create({ ...row, createdEventId: ctx.eventId })
+      )
+    ),
+};
+
+/** The keys each shared key was distributed to (from 8.2; a runtime before it has none) */
+export const confidentialSharedKeyRecipientSeeder: Seeder<ConfidentialSharedKeyRecipient> = {
+  entity: 'ConfidentialSharedKeyRecipient',
+  reads: ['confidentialAssets.sharedKeyRecipients'],
+  rows: (snap, ctx) =>
+    rowsOf(snap, 'confidentialAssets.sharedKeyRecipients', ({ args, value }) => {
+      const sharedKeyId = args[0].toString();
+      return ((value.toJSON() as string[] | null) ?? []).map(recipientId =>
+        ConfidentialSharedKeyRecipient.create({
+          id: `${sharedKeyId}/${recipientId}`,
+          sharedKeyId,
+          recipientId,
+          createdEventId: ctx.eventId,
+        })
       );
-    });
-  },
+    }),
 };
 
 export const confidentialAccountAssetSeeder: Seeder<ConfidentialAccountAsset> = {
