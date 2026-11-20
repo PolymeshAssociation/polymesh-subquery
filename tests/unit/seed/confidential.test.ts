@@ -215,6 +215,16 @@ describe('asset keys from 8.2', () => {
     expect(Object.keys(seeded.ConfidentialAssetEncryptionKey)).toEqual([`3/${KEY}`]);
     expect(Object.keys(seeded.ConfidentialAssetMediator)).toEqual([`3/${ACCOUNT}`]);
   });
+
+  it('fails on stored keys that decode with neither encoding', async () => {
+    const chain = fakeChain(8_002_000);
+    // the old encoding of one key and one mediator, with a byte left over
+    chain.putRaw('confidentialAssets.keys', [3], `0x04${KEY.slice(2)}04${ACCOUNT.slice(2)}00ff`);
+
+    await expect(seedAssetKeys(chain)).rejects.toThrow(
+      "asset 3's keys decode with neither the 8.2 nor the old encoding"
+    );
+  });
 });
 
 const codec = (value: unknown): Codec =>
