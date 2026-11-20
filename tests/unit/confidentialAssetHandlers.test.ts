@@ -144,7 +144,7 @@ describe('shared key distribution', () => {
     ]);
   });
 
-  it('throws on a proof without recipients', async () => {
+  it('throws on a proof that has no recipient keys field', async () => {
     await expect(
       handleConfidentialEncryptionKeyDistributed(
         mockEvent('EncryptionKeyDistributed', [

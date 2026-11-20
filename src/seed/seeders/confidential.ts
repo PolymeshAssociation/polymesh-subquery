@@ -128,13 +128,24 @@ interface StoredAssetKeys {
  */
 const LEGACY_ASSET_KEYS = '{"encKeys":"BTreeSet<[u8;32]>","mediators":"BTreeMap<[u8;32],u8>"}';
 
+/** The old encoding of an asset's stored keys, which must account for every stored byte */
+const legacyAssetKeysOf = ({ args, raw }: Entry): Codec => {
+  const stored = optionOf(raw, "the stored asset's keys");
+  const bytes = stored ? codecBytes(stored) : new Uint8Array();
+  const legacy = api.registry.createType(LEGACY_ASSET_KEYS, bytes);
+  if (!stored || legacy.encodedLength !== bytes.length) {
+    throw new Error(
+      `asset ${args[0].toString()}'s keys decode with neither the 8.2 nor the old encoding`
+    );
+  }
+  return legacy;
+};
+
 /** An asset's encryption keys and mediator accounts from its stored keys, in either encoding */
-const assetKeysOf = ({ value, raw }: Entry): { encryptionKeys: string[]; mediators: string[] } => {
-  const stored = value ? undefined : optionOf(raw, "the stored asset's keys");
+const assetKeysOf = (entry: Entry): { encryptionKeys: string[]; mediators: string[] } => {
   const { encKeys, mediators } = (
-    value ??
-    (stored && api.registry.createType(LEGACY_ASSET_KEYS, codecBytes(stored)))
-  )?.toJSON() as unknown as StoredAssetKeys;
+    entry.value ?? legacyAssetKeysOf(entry)
+  ).toJSON() as unknown as StoredAssetKeys;
   return {
     encryptionKeys: encKeys ?? [],
     mediators: Array.isArray(mediators) ? mediators : Object.keys(mediators ?? {}),
